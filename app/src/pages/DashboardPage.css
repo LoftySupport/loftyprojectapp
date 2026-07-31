@@ -1,0 +1,200 @@
+/* The prototype's dashboard layout, kept as it was: greeting row, then a
+   three-column grid — identity and figures left, job cards centre, attention
+   panels right. Measurements are the prototype's, on Vibe's tokens. */
+
+.pd-shell { max-width: 1560px; }
+
+.pd-greeting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-20);
+  flex-wrap: wrap;
+  padding: var(--space-24) 0 var(--space-20) 0;
+  border-bottom: 1px solid var(--layout-border-color);
+  margin-bottom: var(--space-20);
+}
+.pd-greeting { display: flex; align-items: center; gap: var(--space-12); }
+.pd-greeting-title {
+  margin: 0;
+  font: var(--font-h1-bold);
+  letter-spacing: var(--letter-spacing-h1);
+  color: var(--primary-text-color);
+}
+.pd-centre-title { font: var(--font-text1-medium); color: var(--secondary-text-color); }
+.pd-team { display: flex; align-items: center; gap: var(--space-8); }
+.pd-team-label { font: var(--font-text2-normal); color: var(--secondary-text-color); }
+.pd-avatars { display: flex; gap: var(--space-4); }
+
+.pd-grid {
+  display: grid;
+  grid-template-columns: minmax(230px, 0.8fr) minmax(0, 1.5fr) minmax(250px, 1fr);
+  gap: var(--space-20);
+  align-items: start;
+}
+@media (max-width: 1180px) { .pd-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+@media (max-width: 780px)  { .pd-grid { grid-template-columns: minmax(0, 1fr); } }
+
+.pd-col { display: flex; flex-direction: column; gap: var(--space-16); min-width: 0; }
+
+/* Middle column lays its cards out as a wrapping grid, so they keep a sensible
+   width instead of stretching to whatever the column happens to be. */
+.pd-col.pd-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 300px));
+  gap: var(--space-16);
+  align-content: start;
+}
+
+.pd-team-pill {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  background: var(--primary-background-color);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-pill);
+  padding: var(--space-8) var(--space-16) var(--space-8) var(--space-12);
+}
+.pd-team-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--border-radius-medium);
+  background: var(--lofty-orange-tint);
+  border: 1px solid var(--lofty-orange-strong);
+  flex-shrink: 0;
+}
+.pd-team-name { font: var(--font-text2-bold); }
+.pd-team-sub { font: var(--font-text3-normal); color: var(--secondary-text-color); margin-top: 2px; }
+
+.pd-hero { padding: var(--space-8) var(--space-4) var(--space-4) var(--space-4); }
+.pd-hero-num {
+  font-family: var(--title-font-family);
+  font-size: 48px;
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+  letter-spacing: var(--letter-spacing-h1);
+  color: var(--primary-text-color);
+}
+.pd-hero-lbl { font: var(--font-text2-normal); color: var(--secondary-text-color); margin-top: var(--space-8); }
+
+/* The one saturated block on the page — brand green rather than the prototype's
+   gold, so the single loud surface is a Lofty colour. */
+.pd-activity {
+  background: var(--primary-color);
+  border-radius: var(--border-radius-medium);
+  padding: var(--space-16);
+}
+.pd-activity-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  margin-bottom: var(--space-12);
+  font: var(--font-text2-bold);
+  color: var(--text-color-on-primary);
+}
+.pd-activity-tag {
+  font: var(--font-text3-medium);
+  background: rgba(0, 0, 0, 0.16);
+  color: var(--text-color-on-primary);
+  border-radius: var(--border-radius-small);
+  padding: 2px var(--space-8);
+}
+.pd-activity-stats { display: flex; gap: var(--space-8); }
+.pd-activity-stats > div { flex: 1; min-width: 0; }
+.pd-stat-num {
+  font-family: var(--title-font-family);
+  font-size: var(--font-size-50);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-color-on-primary);
+  letter-spacing: var(--letter-spacing-h2);
+}
+.pd-stat-lbl { font: var(--font-text3-normal); color: var(--text-color-on-primary); opacity: 0.85; margin-top: 2px; }
+
+.pd-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 232px;
+  background: var(--primary-background-color);
+  border: 1px dashed var(--ui-border-color);
+  border-radius: var(--border-radius-medium);
+  padding: var(--space-16);
+}
+.pd-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+.pd-card-title { font: var(--font-text1-medium); min-width: 0; }
+.pd-card-no { font: var(--font-text3-normal); color: var(--secondary-text-color); margin-top: 2px; }
+.pd-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: var(--space-12);
+  margin-top: var(--space-16);
+  padding-top: var(--space-12);
+  border-top: 1px solid var(--layout-border-color);
+}
+.pd-lbl { display: block; font: var(--font-text3-normal); color: var(--secondary-text-color); margin-bottom: var(--space-4); }
+.pd-val { display: block; font: var(--font-text2-medium); }
+.pd-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  margin-top: auto;
+  padding-top: var(--space-16);
+}
+.pd-phase-tag {
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+  background: var(--allgrey-background-color);
+  border-radius: var(--border-radius-small);
+  padding: var(--space-4) var(--space-8);
+}
+
+.pd-panel {
+  background: var(--primary-background-color);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-medium);
+  padding: var(--space-16);
+}
+.pd-panel-head { display: flex; align-items: center; gap: var(--space-8); margin-bottom: var(--space-8); }
+.pd-panel-head h3 { margin: 0; font: var(--font-h3-medium); letter-spacing: var(--letter-spacing-h3); }
+.pd-panel-mark {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warning-color-hover);
+  flex-shrink: 0;
+}
+.pd-panel-mark.incoming { background: var(--primary-color); }
+.pd-panel-mark.mention { background: var(--lofty-orange-strong); }
+
+.pd-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: var(--space-12) 0;
+  border-bottom: 1px solid var(--layout-border-color);
+}
+.pd-list-row:last-child { border-bottom: none; padding-bottom: 2px; }
+.pd-list-main { min-width: 0; }
+.pd-list-title { font: var(--font-text2-medium); }
+.pd-list-sub { font: var(--font-text3-normal); color: var(--secondary-text-color); margin-top: 2px; }
+.pd-mention-quote {
+  font: var(--font-text3-normal);
+  background: var(--allgrey-background-color);
+  border-left: 2px solid var(--lofty-orange-strong);
+  border-radius: 0 var(--border-radius-medium) var(--border-radius-medium) 0;
+  padding: var(--space-8);
+  margin-top: var(--space-8);
+}
+
+.pd-empty { font: var(--font-text2-normal); color: var(--secondary-text-color); padding: var(--space-4) 0 2px 0; }
+
+/* The greeting avatar wears the logo orange, as it did in the prototype.
+   Dark ink on it, not white — #f47e63 is 2.6:1 against white. */
+.pd-avatar > * { background: var(--lofty-orange) !important; color: var(--fixed-dark-color) !important; }

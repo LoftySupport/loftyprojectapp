@@ -330,6 +330,12 @@
   }
 
   * { box-sizing: border-box; }
+  /* Full height: the page fills the viewport and the footer sits at the bottom
+     of it rather than partway up when a view is short. */
+  html { height: 100%; }
+  body { min-height: 100%; display: flex; flex-direction: column; }
+  main#mainContent { flex: 1 0 auto; display: flex; flex-direction: column; }
+  footer.page-foot { flex-shrink: 0; margin-top: auto; }
   /* Vibe base: text2 (14/20) is the app's default size, Figtree throughout,
      Poppins on headings, with Vibe's own smoothing and heading tracking. */
   body {
@@ -7649,15 +7655,15 @@ function renderSettingsPage() {
           <h4>Your details</h4>
           <div class="prop-row locked">
             <span class="prop-label">Signed in as<span class="prop-hint">from Entra ID in the real build</span></span>
-            <span class="prop-static">${escapeHtml(currentUser)}</span>
+            <span class="prop-static">{{users.full_name}}</span>
           </div>
           <div class="prop-row locked">
             <span class="prop-label">Role<span class="prop-hint">set by an admin, not by you</span></span>
-            <span class="prop-static">${escapeHtml(caps.label)}</span>
+            <span class="prop-static">{{users.role}}</span>
           </div>
           <div class="prop-row locked">
             <span class="prop-label">Team</span>
-            <span class="prop-static">${escapeHtml(currentUserTeam() || "—")}</span>
+            <span class="prop-static">{{teams.name}}</span>
           </div>
           ${field("Display name", "displayName")}
           ${field("Email", "email")}
@@ -9006,11 +9012,11 @@ function renderUserDashboard() {
     <div class="pd-greeting-row">
       <div class="pd-greeting">
         <span class="avatar pd-avatar">${initials(me)}</span>
-        <h2>Hi, ${escapeHtml(me.split(" ")[0])}!</h2>
+        <h2>Hi, {{users.full_name}}!</h2>
       </div>
       <div class="pd-centre-title">Your jobs today</div>
       <div class="pd-team">
-        <span class="pd-team-label">${escapeHtml(myTeam)}</span>
+        <span class="pd-team-label">{{teams.name}}</span>
         <div class="pd-avatars">
           ${teammates.slice(0, 3).map(n => `<span class="avatar pd-mini" data-tooltip="${escapeHtml(n)}">${initials(n)}</span>`).join("")}
           ${teammates.length > 3 ? `<span class="avatar pd-mini pd-more">+${teammates.length - 3}</span>` : ""}
@@ -9023,8 +9029,8 @@ function renderUserDashboard() {
         <div class="pd-team-pill">
           <span class="pd-team-mark">${vibeIcon("Team", { size: 16 })}</span>
           <div>
-            <div class="pd-team-name">${escapeHtml(myTeam)}</div>
-            <div class="pd-team-sub">${myJobs.length} job${myJobs.length === 1 ? "" : "s"} assigned to you</div>
+            <div class="pd-team-name">{{teams.name}}</div>
+            <div class="pd-team-sub">{{count(jobs)}} jobs assigned to you</div>
           </div>
         </div>
 
@@ -9064,7 +9070,7 @@ function renderUserDashboard() {
           <div class="pd-panel-head"><span class="pd-panel-mark incoming"></span><h3>Heading to your team</h3></div>
           ${incoming.length
             ? incoming.slice(0, 4).map(j => listRow(j, escapeHtml(j.owner))).join("")
-            : empty(`Nothing due to hand over to ${escapeHtml(myTeam)}.`)}
+            : empty(`Nothing due to hand over to {{teams.name}}.`)}
         </div>
 
         <div class="pd-panel">

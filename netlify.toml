@@ -1,25 +1,26 @@
-# Build the React app in app/, not the prototype at the repo root.
+# What gets deployed:
 #
-# Without this, Netlify publishes the repo root — which is index.html, the
-# prototype — and the app never gets built at all.
+#   /             the prototype with every data property tokenised — the whole
+#                 app, every page, the filters and the job panel, with
+#                 {{table.column}} wherever a value will come from Supabase.
+#                 This is the reference the React build is working towards.
+#   /app/         the React build in progress, reading through the data seam.
+#   /prototype.html   the original prototype, with its dummy data, for comparison.
 #
-# No `base` is set on purpose. When base is set, Netlify resolves `publish`
-# relative to it, and the two together are a reliable way to end up pointing at
-# app/app/dist. Running the build from the root with an explicit path is
-# unambiguous, at the cost of installing dependencies in the command.
+# build.sh assembles all three into dist/.
 
 [build]
-  command = "cd app && npm ci && npm run build"
-  publish = "app/dist"
+  command = "./build.sh"
+  publish = "dist"
 
 [build.environment]
   NODE_VERSION = "22"
 
-# React Router does client-side routing, so every path has to reach index.html.
-# Without this, /jobs and /wiring 404 on a hard refresh or a shared link.
+# The React app does client-side routing under /app/, so its paths have to reach
+# its own index.html. The root is a single static file and needs nothing.
 [[redirects]]
-  from = "/*"
-  to = "/index.html"
+  from = "/app/*"
+  to = "/app/index.html"
   status = 200
 
 # Not for the public while it is V0. These do not replace auth — Supabase Auth
