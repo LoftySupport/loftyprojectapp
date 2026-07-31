@@ -1,8 +1,23 @@
+/* The page is a flex column from html down, so the footer lands at the bottom of a
+   short viewport instead of floating mid-screen, and the scrollbar belongs to the
+   page rather than to an inner div. */
+html, body, #root { height: 100%; }
+/* ThemeProvider renders its own wrapper between #root and the shell, so the flex
+   column has to pass through it — otherwise the footer stops halfway up a short
+   page because nothing below #root is actually full height. */
+#root, #root > * {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  min-width: 0;
+}
+
 .app-header {
   background: var(--lofty-header-bg);
   color: var(--fixed-light-color);
   padding: var(--space-12) var(--space-24);
   border-bottom: 4px solid var(--lofty-orange);
+  flex-shrink: 0;
 }
 .app-logo { height: 24px; width: auto; display: block; }
 
@@ -19,10 +34,42 @@
   transition: background-color var(--motion-productive-medium) var(--motion-timing-transition);
 }
 .app-nav-item:hover { color: var(--fixed-light-color); background: rgba(255, 255, 255, 0.12); }
+/* Dark ink on the light pill — white on white is the obvious failure here. */
 .app-nav-item.is-active { color: #00393f; background: var(--fixed-light-color); }
 
-.app-main { padding: var(--space-24); min-height: 60vh; }
-.app-foot { padding: var(--space-24); text-align: center; }
+.app-header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  flex-shrink: 0;
+}
+.app-user { display: flex; align-items: center; gap: var(--space-8); }
+
+/* The binding notice. Fixed dark ink because the band is a fixed light yellow in
+   every theme — the theme's own text colour would invert to white on it. */
+.app-banner {
+  background: #ffcb00;
+  color: var(--fixed-dark-color);
+  padding: var(--space-8) var(--space-24);
+  flex-shrink: 0;
+}
+/* The Text component sets its own colour from the theme, which inverts to white
+   in dark and black — on a band that stays yellow in every theme. Pin the ink to
+   the band, not to the theme. */
+.app-banner, .app-banner * { color: var(--fixed-dark-color); }
+.app-banner .sb-token { background: rgba(0, 0, 0, 0.08); }
+
+.app-main {
+  flex: 1 0 auto;
+  padding: var(--space-24);
+  min-width: 0;
+}
+.app-foot {
+  flex-shrink: 0;
+  margin-top: auto;
+  padding: var(--space-24);
+  text-align: center;
+}
 
 .skip-link {
   position: absolute;
@@ -48,44 +95,7 @@
   }
 }
 
-/* ---- shared page furniture ---- */
-.page-head { margin-bottom: var(--space-16); }
-.panel {
-  background: var(--primary-background-color);
-  border: 1px solid var(--layout-border-color);
-  border-radius: var(--border-radius-medium);
-  padding: var(--space-16);
-}
-.board {
-  display: flex;
-  gap: var(--space-16);
-  align-items: flex-start;
-  overflow-x: auto;
-  padding-bottom: var(--space-16);
-}
-.board-column {
-  min-width: 300px;
-  max-width: 300px;
-  flex-shrink: 0;
-  background: var(--primary-background-color);
-  border: 1px solid var(--layout-border-color);
-  border-top: 4px solid var(--primary-color);
-  border-radius: var(--border-radius-medium);
-  padding: var(--space-12);
-}
-.board-column-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-8);
-  padding-bottom: var(--space-12);
-  border-bottom: 1px solid var(--layout-border-color);
-  margin-bottom: var(--space-12);
-}
-.board-column-empty {
-  padding: var(--space-16) 0;
-  text-align: center;
-}
+/* The wiring checklist keeps its own table styling. */
 .wiring-table { width: 100%; border-collapse: collapse; }
 .wiring-table th {
   height: 40px;

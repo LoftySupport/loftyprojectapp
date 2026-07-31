@@ -7,8 +7,11 @@ import { AppShell } from "./shell/AppShell";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { JobsPage } from "./pages/JobsPage";
+import { ReportsPage } from "./pages/ReportsPage";
+import { TemplatesPage } from "./pages/TemplatesPage";
+import { AdminPage } from "./pages/AdminPage";
+import { SettingsPage } from "./pages/SettingsPage";
 import { WiringPage } from "./pages/WiringPage";
-import { AdminPage, ReportsPage, SettingsPage } from "./pages/SimplePages";
 
 const THEME_KEY = "lofty-theme";
 
@@ -30,15 +33,20 @@ export default function App() {
   return (
     <ThemeProvider themeConfig={loftyTheme} systemTheme={theme}>
       <DataProvider>
-        <BrowserRouter>
+        {/* Served from /app/, so the router has to know that is the root. */}
+        <BrowserRouter basename={import.meta.env.BASE_URL}>
           <Routes>
-            <Route element={<AppShell theme={theme} onThemeChange={setTheme} />}>
+            <Route element={<AppShell />}>
               <Route index element={<DashboardPage />} />
               <Route path="projects" element={<ProjectsPage />} />
               <Route path="jobs" element={<JobsPage />} />
               <Route path="reports" element={<ReportsPage />} />
+              <Route path="templates" element={<TemplatesPage />} />
               <Route path="admin" element={<AdminPage />} />
-              <Route path="settings" element={<SettingsPage />} />
+              <Route
+                path="settings"
+                element={<SettingsPage theme={theme} onThemeChange={setTheme} />}
+              />
               <Route path="wiring" element={<WiringPage />} />
             </Route>
           </Routes>

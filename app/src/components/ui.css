@@ -1,0 +1,340 @@
+/* ---------------------------------------------------------------------------
+   Shared furniture, on Vibe tokens.
+
+   Every measurement here is a Vibe spacing/radius/type token rather than a
+   number, so the whole app moves together when the system does. The only raw
+   values are the ones Vibe has no token for — card min-widths and the board
+   column width, which are layout decisions, not design-system ones.
+   --------------------------------------------------------------------------- */
+
+/* An unbound value, shown as the column it will come from. */
+.sb-token {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+  padding: 0 var(--space-4);
+  color: var(--lofty-orange-strong);
+  background: var(--lofty-orange-tint);
+  border-radius: var(--border-radius-small);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: bottom;
+}
+
+/* ---- toolbar -------------------------------------------------------------
+   Wraps rather than scrolls. A scrolling toolbar creates a clipping context,
+   which cuts the top off every popover the controls open. */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  flex-wrap: wrap;
+  overflow: visible;
+  padding: var(--space-12) 0;
+  border-bottom: 1px solid var(--layout-border-color);
+  margin-bottom: var(--space-16);
+}
+.toolbar-field { display: flex; align-items: center; gap: var(--space-8); }
+.toolbar-label {
+  font: var(--font-text2-normal);
+  color: var(--secondary-text-color);
+  white-space: nowrap;
+}
+.toolbar-control { min-width: 160px; }
+.toolbar-spacer { margin-left: auto; }
+.toolbar-count { font: var(--font-text2-normal); color: var(--secondary-text-color); }
+
+.filter-chips { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; }
+
+/* ---- page furniture ------------------------------------------------------ */
+.page-head { margin-bottom: var(--space-16); }
+.page-head-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-16);
+  flex-wrap: wrap;
+}
+
+.panel {
+  background: var(--primary-background-color);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-medium);
+  padding: var(--space-16);
+}
+.panel + .panel { margin-top: var(--space-16); }
+/* Wraps rather than truncates. In a 460px drawer a title and its caption cannot
+   share a row, and half a sentence is worse than two lines. */
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-8);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-12);
+}
+
+.stack { display: flex; flex-direction: column; gap: var(--space-16); }
+.stack-tight { display: flex; flex-direction: column; gap: var(--space-8); }
+.muted { color: var(--secondary-text-color); }
+
+/* ---- board --------------------------------------------------------------- */
+.board {
+  display: flex;
+  gap: var(--space-16);
+  align-items: flex-start;
+  overflow-x: auto;
+  padding-bottom: var(--space-16);
+}
+.board-column {
+  width: 300px;          /* the card width cap, held across every board */
+  flex-shrink: 0;
+  background: var(--primary-background-color);
+  border: 1px solid var(--layout-border-color);
+  border-top: 4px solid var(--primary-color);
+  border-radius: var(--border-radius-medium);
+  padding: var(--space-12);
+}
+.board-column-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding-bottom: var(--space-12);
+  border-bottom: 1px solid var(--layout-border-color);
+  margin-bottom: var(--space-12);
+}
+.board-column-empty { padding: var(--space-16) 0; text-align: center; }
+
+/* ---- record cards -------------------------------------------------------- */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  width: 100%;
+  text-align: left;
+  background: var(--primary-background-color);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-medium);
+  padding: var(--space-12);
+  cursor: pointer;
+  transition:
+    box-shadow var(--motion-productive-medium) var(--motion-timing-transition),
+    border-color var(--motion-productive-medium) var(--motion-timing-transition);
+}
+.card:hover { box-shadow: var(--box-shadow-small); border-color: var(--ui-border-color); }
+.card + .card { margin-top: var(--space-8); }
+.card--unbound { border-style: dashed; }
+.card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+.card-divider { height: 1px; background: var(--layout-border-color); }
+.card-meta {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-4) var(--space-8);
+  margin: 0;
+  align-items: baseline;
+}
+.card-meta dt, .card-meta dd { margin: 0; min-width: 0; }
+.card-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin-top: auto;
+  padding-top: var(--space-8);
+  min-width: 0;
+}
+.card-who { display: flex; align-items: center; gap: var(--space-8); min-width: 0; }
+.card-who > div { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 340px));
+  gap: var(--space-16);
+  align-items: start;
+}
+
+/* ---- status ------------------------------------------------------------- */
+.status-pill {
+  display: inline-block;
+  font: var(--font-text3-medium);
+  padding: 2px var(--space-8);
+  border-radius: var(--border-radius-small);
+  white-space: nowrap;
+}
+.status-pill.on-track { background: var(--positive-color-selected); color: var(--positive-ink); }
+.status-pill.at-risk { background: var(--warning-color-selected); color: var(--warning-ink); }
+.status-pill.stale { background: var(--negative-color-selected); color: var(--negative-ink); }
+
+/* ---- tables -------------------------------------------------------------- */
+.data-table-wrap { overflow-x: auto; }
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table th {
+  height: 40px;
+  padding: 0 var(--space-12);
+  text-align: left;
+  white-space: nowrap;
+  font: var(--font-text3-medium);
+  color: var(--secondary-text-color);
+  background: var(--allgrey-background-color);
+  border-bottom: 1px solid var(--layout-border-color);
+}
+.data-table td {
+  padding: var(--space-8) var(--space-12);
+  font: var(--font-text2-normal);
+  border-bottom: 1px solid var(--layout-border-color);
+  vertical-align: top;
+}
+.data-table tbody tr:hover { background: var(--primary-background-hover-color); }
+.data-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ---- property slots ------------------------------------------------------
+   The definition-driven fields, grouped by the stage that captures them. */
+.slot-stage + .slot-stage { margin-top: var(--space-16); }
+.slot-stage-head {
+  font: var(--font-text3-bold);
+  color: var(--secondary-text-color);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--layout-border-color);
+  margin-bottom: var(--space-8);
+}
+.slot-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-16);
+  padding: var(--space-8) 0;
+}
+.slot-row + .slot-row { border-top: 1px dashed var(--layout-border-color); }
+.slot-label { min-width: 0; }
+.slot-sub { font: var(--font-text3-normal); color: var(--secondary-text-color); margin-top: 2px; }
+.slot-required {
+  display: inline-block;
+  font: var(--font-text3-normal);
+  font-size: 11px;
+  color: var(--secondary-text-color);
+  background: var(--allgrey-background-color);
+  border-radius: var(--border-radius-small);
+  padding: 0 var(--space-4);
+  margin-left: var(--space-8);
+}
+.slot-value { text-align: right; min-width: 0; }
+
+/* ---- stat tiles and bars ------------------------------------------------- */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-12);
+}
+.stat-tile {
+  background: var(--primary-background-color);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-medium);
+  padding: var(--space-16);
+}
+.stat-num {
+  font-family: var(--title-font-family);
+  font-size: var(--font-size-50);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.1;
+  letter-spacing: var(--letter-spacing-h2);
+}
+.stat-lbl { font: var(--font-text3-normal); color: var(--secondary-text-color); margin-top: var(--space-4); }
+
+.bar-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr) auto;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-4) 0;
+}
+.bar-track {
+  height: 8px;
+  border-radius: var(--border-radius-small);
+  background: var(--ui-background-color);
+  overflow: hidden;
+}
+.bar-fill { height: 100%; background: var(--primary-color); border-radius: var(--border-radius-small); }
+.bar-num { font: var(--font-text3-normal); color: var(--secondary-text-color); font-variant-numeric: tabular-nums; }
+
+/* ---- drawer -------------------------------------------------------------- */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 40;
+}
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(460px, 100vw);
+  z-index: 41;
+  display: flex;
+  flex-direction: column;
+  background: var(--primary-background-color);
+  border-left: 1px solid var(--layout-border-color);
+  box-shadow: var(--box-shadow-large);
+}
+.drawer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-12);
+  padding: var(--space-16);
+  border-bottom: 1px solid var(--layout-border-color);
+}
+.drawer-body { flex: 1; overflow-y: auto; padding: var(--space-16); }
+
+/* ---- template phases ----------------------------------------------------- */
+.phase-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-16);
+  align-items: start;
+}
+.phase-card {
+  background: var(--primary-background-color);
+  border: 1px solid var(--layout-border-color);
+  border-top: 4px solid var(--primary-color);
+  border-radius: var(--border-radius-medium);
+  padding: var(--space-16);
+}
+.checkpoint {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-4) 0;
+}
+
+/* ---- settings rows ------------------------------------------------------- */
+.field-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-16);
+  padding: var(--space-12) 0;
+  flex-wrap: wrap;
+}
+.field-row + .field-row { border-top: 1px dashed var(--layout-border-color); }
+.field-label { min-width: 0; }
+.field-hint { font: var(--font-text3-normal); color: var(--secondary-text-color); margin-top: 2px; }
+.field-control { min-width: 220px; }
+
+/* ---- accessibility corrections on Vibe defaults --------------------------
+   Vibe's text avatar paints white on #66ccff — 1.8:1, well under AA, and it is
+   the initials that carry the meaning. Repaint it in the brand pair, which is
+   already contrast-checked in both directions: white on the green in light,
+   dark ink on the lightened green in dark. Attribute selectors because Vibe
+   hashes its class names, but keeps the readable prefix. */
+[class*="circleText"] { background: var(--primary-color) !important; }
+[class*="circleText"] [class*="contentText"] { color: var(--text-color-on-primary) !important; }

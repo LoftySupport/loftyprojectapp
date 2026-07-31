@@ -195,6 +195,7 @@
 
 .pd-empty { font: var(--font-text2-normal); color: var(--secondary-text-color); padding: var(--space-4) 0 2px 0; }
 
-/* The greeting avatar wears the logo orange, as it did in the prototype.
-   Dark ink on it, not white — #f47e63 is 2.6:1 against white. */
-.pd-avatar > * { background: var(--lofty-orange) !important; color: var(--fixed-dark-color) !important; }
+/* The greeting avatar used to wear the logo orange. It now takes the same brand
+   pair as every other avatar (ui.css) — one treatment reads as a system, and the
+   orange needed a hand-placed ink override to clear AA that the shared rule then
+   fought with. The logo still carries the orange, which is where it belongs. */

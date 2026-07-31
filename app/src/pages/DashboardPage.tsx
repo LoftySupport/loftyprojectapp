@@ -1,6 +1,6 @@
 import { Avatar, Text } from "@vibe/core";
 import { useQuery } from "../data/DataProvider";
-import { Token } from "../components/PlaceholderCards";
+import { Token } from "../components/Token";
 import { PageShell } from "./Placeholder";
 import "./DashboardPage.css";
 

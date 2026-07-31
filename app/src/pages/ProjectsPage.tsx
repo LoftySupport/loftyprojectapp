@@ -1,33 +1,173 @@
-import { Text } from "@vibe/core";
+import { useMemo, useState } from "react";
+import { Button, Heading, Text } from "@vibe/core";
 import { useQuery } from "../data/DataProvider";
-import { PlaceholderProjectCard, UnboundNote } from "../components/PlaceholderCards";
-import { PageShell } from "./Placeholder";
+import { HEALTH_LABELS, HEALTH_STATUSES, JOB_TYPES, STAGE_NAMES, TEAMS } from "../data/lookups";
+import { SHAPE_PROJECTS, type ShapeProject } from "../data/placeholderShape";
+import { ProjectCard, StatusPill } from "../components/RecordCards";
+import { PropertySlots } from "../components/PropertySlots";
+import { Token } from "../components/Token";
+import { Toolbar, type ToolbarFilter, type View } from "../components/Toolbar";
+import { toOptions } from "../components/Select";
+import "../components/ui.css";
 
+/**
+ * Projects, and one project in detail.
+ *
+ * "Group by Project" is deliberately absent from this screen's toolbar — a project
+ * cannot be grouped by itself, and offering it would be a control that does nothing.
+ * Everything else in the toolbar reads the same as it does on Jobs.
+ */
 export function ProjectsPage() {
   const { data: projects, loading } = useQuery(r => r.listProjects(), []);
+  const [view, setView] = useState<View>("Board");
+  const [filters, setFilters] = useState<ToolbarFilter[]>([]);
+  const [open, setOpen] = useState<ShapeProject | null>(null);
+
   const unbound = !loading && projects.length === 0;
+  const rows = useMemo(() => (unbound ? SHAPE_PROJECTS : []), [unbound]);
+  const jobCount = rows.reduce((n, p) => n + p.jobs.length, 0);
+
+  const optionsFor = (field: string) => {
+    switch (field) {
+      case "Stage": return toOptions(STAGE_NAMES);
+      case "Team": return toOptions(TEAMS);
+      case "Status": return HEALTH_STATUSES.map(s => ({ value: s, label: HEALTH_LABELS[s] }));
+      case "Type": return toOptions(JOB_TYPES);
+      default: return [];
+    }
+  };
+
+  if (open) return <ProjectDetail project={open} onBack={() => setOpen(null)} />;
 
   return (
-    <PageShell
-      title="Projects"
-      subtitle={
-        loading ? "Loading…" : unbound ? "Every project, and the jobs inside it." : `${projects.length} projects`
-      }
-    >
-      {loading ? (
-        <Text type="text2" color="secondary">Loading…</Text>
-      ) : unbound ? (
-        <UnboundNote table="projects">
-          <div className="ph-grid ph-grid--wide">
-            <PlaceholderProjectCard />
-            <PlaceholderProjectCard />
-          </div>
-        </UnboundNote>
+    <>
+      <div className="page-head">
+        <Heading type="h2" weight="bold">Projects</Heading>
+        <Text type="text2" color="secondary">
+          {loading ? "Loading…" : `${rows.length} projects · ${jobCount} jobs`}
+        </Text>
+      </div>
+
+      <Toolbar
+        views={["Board", "Table"]}
+        view={view}
+        onViewChange={setView}
+        filters={filters}
+        onFiltersChange={setFilters}
+        optionsFor={optionsFor}
+        count={`Showing ${rows.length} of ${rows.length} projects`}
+        actions={<Button size="small">+ New project</Button>}
+      />
+
+      {view === "Board" ? (
+        <div className="card-grid">
+          {rows.map(p => (
+            <ProjectCard
+              key={p.projectNumber}
+              projectNumber={p.projectNumber}
+              jobNumbers={p.jobs.map(j => j.jobNumber)}
+              status={p.status}
+              onOpen={() => setOpen(p)}
+            />
+          ))}
+        </div>
       ) : (
-        <div className="panel">
-          <Text type="text2">{projects.length} projects</Text>
+        <div className="panel data-table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Project</th><th>Name</th><th>Suburb</th><th>Client</th>
+                <th>Manager</th><th className="num">Jobs</th><th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(p => (
+                <tr key={p.projectNumber} onClick={() => setOpen(p)}>
+                  <td>{p.projectNumber}</td>
+                  <td><Token>projects.name</Token></td>
+                  <td><Token>projects.suburb</Token></td>
+                  <td><Token>projects.client</Token></td>
+                  <td><Token>users.full_name</Token></td>
+                  <td className="num">{p.jobs.length}</td>
+                  <td><StatusPill status={p.status} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
-    </PageShell>
+    </>
+  );
+}
+
+function ProjectDetail({ project, onBack }: { project: ShapeProject; onBack: () => void }) {
+  return (
+    <>
+      <div className="page-head page-head-row">
+        <div>
+          <Button kind="tertiary" size="small" onClick={onBack}>← Projects</Button>
+          <Heading type="h2" weight="bold"><Token>projects.name</Token></Heading>
+          <Text type="text2" color="secondary">
+            Project {project.projectNumber} · {project.jobs.length} jobs
+          </Text>
+        </div>
+        <StatusPill status={project.status} />
+      </div>
+
+      <div className="stack">
+        <section className="panel">
+          <div className="panel-head">
+            <Text type="text2" weight="bold">Project properties</Text>
+          </div>
+          <div className="field-row">
+            <div className="field-label">
+              <Text type="text2">Project number</Text>
+              <div className="field-hint">immutable once assigned</div>
+            </div>
+            <Text type="text2" weight="medium">{project.projectNumber}</Text>
+          </div>
+          {[
+            ["Name", "projects.name"],
+            ["Client", "projects.client"],
+            ["Suburb", "projects.suburb"],
+            ["Council area", "projects.council_area"],
+            ["Manager", "users.full_name"],
+            ["Notes", "projects.notes"]
+          ].map(([label, token]) => (
+            <div className="field-row" key={label}>
+              <div className="field-label"><Text type="text2">{label}</Text></div>
+              <Token>{token}</Token>
+            </div>
+          ))}
+        </section>
+
+        {/* Project-level fields, in the stage that captures each one. */}
+        <PropertySlots scope="project" />
+
+        <section className="panel">
+          <div className="panel-head">
+            <Text type="text2" weight="bold">Jobs on this project ({project.jobs.length})</Text>
+          </div>
+          <div className="data-table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr><th>Job</th><th>Address</th><th>Stage</th><th>Team</th><th>Status</th></tr>
+              </thead>
+              <tbody>
+                {project.jobs.map(j => (
+                  <tr key={j.jobNumber}>
+                    <td>{j.jobNumber}</td>
+                    <td><Token>jobs.address</Token></td>
+                    <td>{j.stage}</td>
+                    <td>{j.team}</td>
+                    <td><StatusPill status={j.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </>
   );
 }
