@@ -1,0 +1,72 @@
+/* The card's real geometry — same as the prototype's, so the structure being
+   previewed is the structure that ships. Dashed border and tinted tokens mark
+   it as unbound without changing any of the measurements. */
+.ph-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  background: var(--primary-background-color);
+  border: 1px dashed var(--ui-border-color);
+  border-radius: var(--border-radius-medium);
+  padding: var(--space-12);
+  margin-bottom: var(--space-8);
+}
+
+.ph-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.ph-card-project { display: block; }
+.ph-card-address { min-width: 0; }
+
+.ph-card-divider {
+  height: 1px;
+  background: var(--layout-border-color);
+}
+
+.ph-card-meta {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-4) var(--space-8);
+  margin: 0;
+  align-items: baseline;
+}
+.ph-card-meta dt { margin: 0; }
+.ph-card-meta dd { margin: 0; min-width: 0; }
+
+.ph-card-activity {
+  padding-left: var(--space-8);
+  border-left: 2px solid var(--layout-border-color);
+}
+
+/* Stacked, not side by side: at 300px the three footer tokens collide when
+   they share a row. */
+.ph-card-foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: auto;
+  padding-top: var(--space-8);
+  min-width: 0;
+}
+.ph-card-who { display: flex; align-items: center; gap: var(--space-8); min-width: 0; }
+.ph-card-who > div { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+
+/* Every unbound field, tinted so a missed binding is visible rather than
+   shipping as literal braces. Same treatment as the binding template. */
+.sb-token {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+  padding: 0 var(--space-4);
+  color: var(--lofty-orange-strong);
+  background: var(--lofty-orange-tint);
+  border-radius: var(--border-radius-small);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-block;
+  max-width: 100%;
+}
