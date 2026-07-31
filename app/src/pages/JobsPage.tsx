@@ -1,6 +1,7 @@
 import { Counter, Text } from "@vibe/core";
 import { useQuery } from "../data/DataProvider";
 import { PlaceholderJobCard } from "../components/PlaceholderJobCard";
+import { UnboundNote } from "../components/PlaceholderCards";
 import { PageShell } from "./Placeholder";
 
 /**
@@ -24,10 +25,12 @@ export function JobsPage() {
         loading
           ? "Loading…"
           : unbound
-            ? `${stages.length} stages · cards show the structure, not data — jobs is not wired yet`
+            ? `${stages.length} stages`
             : `${jobs.length} jobs across ${stages.length} stages`
       }
     >
+      {unbound && <UnboundNote table="jobs">{null}</UnboundNote>}
+
       <div className="board">
         {stages.map(stage => {
           const inStage = jobs.filter(() => false); // wired when job_stages lands

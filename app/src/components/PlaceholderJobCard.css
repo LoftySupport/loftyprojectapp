@@ -70,3 +70,33 @@
   display: inline-block;
   max-width: 100%;
 }
+
+/* Project cards carry a nested job list, so they get more room than the 300px
+   board card. Everything else about them is identical. */
+.ph-card--wide { max-width: 420px; }
+
+.ph-card-nested {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-8);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-small);
+  min-width: 0;
+}
+
+.ph-note { display: block; margin-bottom: var(--space-12); }
+.ph-note code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 0 var(--space-4);
+  background: var(--ui-background-color);
+  border-radius: var(--border-radius-small);
+}
+
+.ph-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 300px));
+  gap: var(--space-16);
+  align-items: start;
+}
+.ph-grid--wide { grid-template-columns: repeat(auto-fill, minmax(320px, 420px)); }
