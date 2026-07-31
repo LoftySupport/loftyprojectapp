@@ -51,11 +51,13 @@ export function SettingsPage({
           <div className="panel-head">
             <Text type="text2" weight="bold">Your details</Text>
           </div>
-          <Locked label="Signed in as" hint="from Entra ID in the real build" token="users.full_name" />
-          <Locked label="Role" hint="set by an admin, not by you" token="users.role" />
-          <Locked label="Team" token="teams.name" />
-          <Locked label="Email" token="users.email" />
-          <Locked label="Job title" token="users.job_title" />
+          <Locked label="First name" hint="from Entra ID in the real build" token="profiles.first_name" />
+          <Locked label="Last name" token="profiles.last_name" />
+          <Locked label="Goes by" hint="only if different from your first name" token="profiles.preferred_name" />
+          <Locked label="Permission" hint="set by an admin, not by you" token="profiles.permission" />
+          <Locked label="Teams" hint="you can sit in more than one" token="profile_teams[].teams.name" />
+          <Locked label="Email" token="profiles.email" />
+          <Locked label="Job title" token="profiles.job_title" />
         </section>
 
         <section className="panel">

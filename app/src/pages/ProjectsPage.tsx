@@ -87,7 +87,7 @@ export function ProjectsPage() {
                   <td><Token>projects.name</Token></td>
                   <td><Token>projects.suburb</Token></td>
                   <td><Token>projects.client</Token></td>
-                  <td><Token>users.full_name</Token></td>
+                  <td><Token>profiles.full_name</Token></td>
                   <td className="num">{p.jobs.length}</td>
                   <td><StatusPill status={p.status} /></td>
                 </tr>
@@ -131,7 +131,7 @@ function ProjectDetail({ project, onBack }: { project: ShapeProject; onBack: () 
             ["Client", "projects.client"],
             ["Suburb", "projects.suburb"],
             ["Council area", "projects.council_area"],
-            ["Manager", "users.full_name"],
+            ["Manager", "profiles.full_name"],
             ["Notes", "projects.notes"]
           ].map(([label, token]) => (
             <div className="field-row" key={label}>

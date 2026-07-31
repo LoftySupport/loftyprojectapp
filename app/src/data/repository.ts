@@ -1,4 +1,4 @@
-import type { Job, JobStage, Project, Stage, UserProfile } from "./types";
+import type { Job, JobStage, Project, Stage, Profile } from "./types";
 
 /**
  * The seam.
@@ -25,8 +25,8 @@ export interface Repository {
   listStages(): Promise<Stage[]>;
   listJobStages(opts?: { jobId?: string; projectId?: string }): Promise<JobStage[]>;
 
-  listUsers(): Promise<UserProfile[]>;
-  currentUser(): Promise<UserProfile | null>;
+  listProfiles(): Promise<Profile[]>;
+  currentProfile(): Promise<Profile | null>;
 }
 
 export type RepositoryMethod = Exclude<keyof Repository, "name" | "wired">;
@@ -38,8 +38,8 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "getJob",
   "listStages",
   "listJobStages",
-  "listUsers",
-  "currentUser"
+  "listProfiles",
+  "currentProfile"
 ];
 
 /** Human labels for the wiring checklist on the Status page. */
@@ -50,6 +50,6 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   getJob: "jobs",
   listStages: "stages",
   listJobStages: "job_stages",
-  listUsers: "user_profiles",
-  currentUser: "user_profiles"
+  listProfiles: "profiles",
+  currentProfile: "profiles"
 };

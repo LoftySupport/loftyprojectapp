@@ -66,7 +66,7 @@ export function JobCard({
           <Avatar size="small" type="text" text="SB" aria-label="Assignee, unbound" />
           <div>
             <Text type="text3" weight="medium">{team}</Text>
-            <Text type="text3" color="secondary"><Token>users.full_name</Token></Text>
+            <Text type="text3" color="secondary"><Token>profiles.full_name</Token></Text>
           </div>
         </div>
       </footer>
@@ -114,7 +114,7 @@ export function ProjectCard({
         <dt><Text type="text3" color="secondary">Client</Text></dt>
         <dd><Text type="text3"><Token>projects.client</Token></Text></dd>
         <dt><Text type="text3" color="secondary">Manager</Text></dt>
-        <dd><Text type="text3"><Token>users.full_name</Token></Text></dd>
+        <dd><Text type="text3"><Token>profiles.full_name</Token></Text></dd>
       </dl>
 
       <div className="card-divider" />

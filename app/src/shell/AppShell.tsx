@@ -58,7 +58,7 @@ export function AppShell() {
             />
             <span className="app-user">
               <Avatar size="small" type="text" text="SB" aria-label="Signed in" />
-              <Token>users.full_name</Token>
+              <Token>profiles.full_name</Token>
             </span>
           </div>
         </Flex>

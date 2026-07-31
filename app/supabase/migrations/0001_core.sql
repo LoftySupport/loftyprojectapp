@@ -29,16 +29,59 @@ insert into stages (id, name, position) values
   (7, 'Post-construction & closeout',  7),
   (8, 'Handover & maintenance',        8);
 
--- ---------------------------------------------------------- user_profiles
--- Identity comes from the IdP; role and team are owned here, not in Entra.
-create table user_profiles (
-  id          uuid primary key references auth.users(id) on delete cascade,
-  full_name   text not null,
-  email       text not null unique,
-  -- + fields (team_id, role_id, job_title, phone, …)
-  active      boolean not null default true,
-  created_at  timestamptz not null default now()
+-- ------------------------------------------------------ permission_level
+-- An enum, not a lookup table: a fixed ladder rather than data anyone maintains.
+-- Postgres orders enum values by declaration, so `permission >= 'manager'` is a valid
+-- comparison — which is how the RLS policies want to read. Adding a rung later is
+-- `alter type … add value`, which does not lock the table. Intended to map onto
+-- Microsoft Teams permission levels when that sync lands.
+create type permission_level as enum ('viewer', 'user', 'manager', 'admin', 'superadmin');
+
+-- ---------------------------------------------------------- profiles
+-- `profiles`, not `users` — `auth.users` is Supabase's table, populated by Microsoft
+-- Entra. This is the row Lofty owns beside it: same person, but the parts the app
+-- decides rather than the IdP. Role and team are owned here, not in Entra.
+create table profiles (
+  id             uuid primary key references auth.users(id) on delete cascade,
+
+  -- Two fields, not one. People change names, and a single `full_name` makes that a
+  -- string edit that has to be got exactly right. It is also the only way to greet
+  -- someone by first name, which is most of where a name appears.
+  first_name     text not null,
+  last_name      text not null,
+  -- Generated, so it cannot drift from its parts.
+  full_name      text generated always as (first_name || ' ' || last_name) stored,
+  -- Null means "use first_name". Never store a copy of it here.
+  preferred_name text,
+
+  email          text not null unique,
+  -- Least privilege by default: read and nothing else until an admin promotes them.
+  permission     permission_level not null default 'viewer',
+  -- + fields (job_title, phone, source, …)
+  active         boolean not null default true,
+  created_at     timestamptz not null default now(),
+  updated_at     timestamptz not null default now()
 );
+
+-- People sit in more than one team, so membership is its own table, not a column.
+-- `is_primary` exists because some screens need a single answer — which team the
+-- dashboard watches, what the board filters to by default. The partial unique index
+-- stops two primaries; nothing forces one, because a new joiner has none yet.
+create table profile_teams (
+  profile_id uuid references profiles(id) on delete cascade,
+  team_id    uuid not null,                 -- fk added with the teams table
+  is_primary boolean not null default false,
+  joined_at  timestamptz not null default now(),
+  primary key (profile_id, team_id)
+);
+create unique index profile_one_primary_team
+  on profile_teams (profile_id) where is_primary;
+create index on profile_teams (team_id);
+
+-- What the app greets you with, in one place so "Hi, …" is never assembled ad hoc.
+create view profile_display as
+  select id, coalesce(preferred_name, first_name) as greeting_name, full_name
+  from profiles;
 
 -- --------------------------------------------------------------- projects
 create table projects (
@@ -144,12 +187,12 @@ create unique index job_stages_one_current
 alter table projects      enable row level security;
 alter table jobs          enable row level security;
 alter table job_stages    enable row level security;
-alter table user_profiles enable row level security;
+alter table profiles enable row level security;
 alter table stages        enable row level security;
 
 create policy "read stages"        on stages        for select to authenticated using (true);
 create policy "read projects"      on projects      for select to authenticated using (true);
 create policy "read jobs"          on jobs          for select to authenticated using (true);
 create policy "read job_stages"    on job_stages    for select to authenticated using (true);
-create policy "read own profile"   on user_profiles for select to authenticated using (id = auth.uid());
-create policy "update own profile" on user_profiles for update to authenticated using (id = auth.uid());
+create policy "read own profile"   on profiles for select to authenticated using (id = auth.uid());
+create policy "update own profile" on profiles for update to authenticated using (id = auth.uid());

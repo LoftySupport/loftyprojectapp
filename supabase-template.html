@@ -5003,7 +5003,7 @@ const stages = [
 const jobs = [
   {
     no: "LFT-24118", address: "{{jobs.address}}",
-    stage: "Sales & acquisition", owner: "Sales Admin", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Sales & acquisition", owner: "Sales Admin", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: null, tags: [], days: 3, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
     notes: "{{jobs.notes}}",
@@ -5017,7 +5017,7 @@ const jobs = [
   },
   {
     no: "LFT-24065", address: "{{jobs.address}}",
-    stage: "Sales & acquisition", owner: "Acquisition & Development", assignee: "{{users.full_name}}", type: "Development",
+    stage: "Sales & acquisition", owner: "Acquisition & Development", assignee: "{{profiles.full_name}}", type: "Development",
     buildStage: null, tags: ["IF"], days: 9, status: "at-risk", source: "{{jobs.source_system}}", conflict: false,
     requested: "{{jobs.requested_note}}",
     contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5032,7 +5032,7 @@ const jobs = [
   },
   {
     no: "LFT-24051", address: "{{jobs.address}}",
-    stage: "Sales & acquisition", owner: "Acquisition & Development", assignee: "{{users.full_name}}", type: "Development",
+    stage: "Sales & acquisition", owner: "Acquisition & Development", assignee: "{{profiles.full_name}}", type: "Development",
     buildStage: null, tags: [], days: 16, status: "stale", source: "{{jobs.source_system}}", conflict: false,
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
     notes: "{{jobs.notes}}",
@@ -5043,7 +5043,7 @@ const jobs = [
   },
   {
     no: "LFT-24102", address: "{{jobs.address}}",
-    stage: "Planning & Engineering", owner: "Design", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Planning & Engineering", owner: "Design", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: null, tags: [], days: 5, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
     notes: "{{jobs.notes}}",
@@ -5057,7 +5057,7 @@ const jobs = [
   },
   {
     no: "LFT-24087", address: "{{jobs.address}}",
-    stage: "Planning & Engineering", owner: "Design", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Planning & Engineering", owner: "Design", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: null, tags: ["IF"], days: 11, status: "at-risk", source: "{{jobs.source_system}}", conflict: true,
     requested: "{{jobs.requested_note}}",
     contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5073,7 +5073,7 @@ const jobs = [
   },
   {
     no: "LFT-23998", address: "{{jobs.address}}",
-    stage: "Preconstruction", owner: "Scheduling", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Preconstruction", owner: "Scheduling", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: null, tags: [], days: 4, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
     notes: "{{jobs.notes}}",
@@ -5085,7 +5085,7 @@ const jobs = [
   },
   {
     no: "LFT-24039", address: "{{jobs.address}}",
-    stage: "Scheduling & Estimating", owner: "Estimating", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Scheduling & Estimating", owner: "Estimating", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: null, tags: [], days: 6, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
     notes: "{{jobs.notes}}",
@@ -5099,7 +5099,7 @@ const jobs = [
   },
   {
     no: "LFT-24022", address: "{{jobs.address}}",
-    stage: "Scheduling & Estimating", owner: "Estimating", assignee: "{{users.full_name}}", type: "Commercial",
+    stage: "Scheduling & Estimating", owner: "Estimating", assignee: "{{profiles.full_name}}", type: "Commercial",
     buildStage: null, tags: ["Council hold"], days: 13, status: "at-risk", source: "{{jobs.source_system}}", conflict: false,
     requested: "{{jobs.requested_note}}",
     contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5114,7 +5114,7 @@ const jobs = [
   },
   {
     no: "LFT-23971", address: "{{jobs.address}}",
-    stage: "Construction & execution", owner: "Construction", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Construction & execution", owner: "Construction", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: "Frame stage", tags: [], days: 8, status: "on-track", source: "{{jobs.source_system}}", conflict: true,
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
     notes: "{{jobs.notes}}",
@@ -5129,7 +5129,7 @@ const jobs = [
   },
   {
     no: "LFT-23944", address: "{{jobs.address}}",
-    stage: "Construction & execution", owner: "Construction", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Construction & execution", owner: "Construction", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: "Lock-up stage", tags: [], days: 5, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
     notes: "{{jobs.notes}}",
@@ -5142,7 +5142,7 @@ const jobs = [
   },
   {
     no: "LFT-23901", address: "{{jobs.address}}",
-    stage: "Post-construction & closeout", owner: "Construction Admin", assignee: "{{users.full_name}}", type: "Commercial",
+    stage: "Post-construction & closeout", owner: "Construction Admin", assignee: "{{profiles.full_name}}", type: "Commercial",
     buildStage: "Practical completion", tags: [], days: 2, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     requested: "{{jobs.requested_note}}",
     contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5157,7 +5157,7 @@ const jobs = [
   },
   {
     no: "LFT-23887", address: "{{jobs.address}}",
-    stage: "Handover & maintenance", owner: "Maintenance", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Handover & maintenance", owner: "Maintenance", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: "Handed over", tags: [], days: 21, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
     notes: "{{jobs.notes}}",
@@ -5172,7 +5172,7 @@ const jobs = [
   },
   {
     no: "LFT-24356", address: "{{jobs.address}}",
-    stage: "Sales & acquisition", owner: "Sales Admin", assignee: "{{users.full_name}}", type: "Development",
+    stage: "Sales & acquisition", owner: "Sales Admin", assignee: "{{profiles.full_name}}", type: "Development",
     buildStage: null, tags: [], days: 11, status: "at-risk", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5186,7 +5186,7 @@ const jobs = [
   },
   {
     no: "LFT-24316", address: "{{jobs.address}}",
-    stage: "Sales & acquisition", owner: "Sales Admin", assignee: "{{users.full_name}}", type: "Development",
+    stage: "Sales & acquisition", owner: "Sales Admin", assignee: "{{profiles.full_name}}", type: "Development",
     buildStage: null, tags: ["Council hold"], days: 3, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5198,7 +5198,7 @@ const jobs = [
   },
   {
     no: "LFT-24334", address: "{{jobs.address}}",
-    stage: "Sales & acquisition", owner: "Acquisition & Development", assignee: "{{users.full_name}}", type: "Development",
+    stage: "Sales & acquisition", owner: "Acquisition & Development", assignee: "{{profiles.full_name}}", type: "Development",
     buildStage: null, tags: [], days: 8, status: "at-risk", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5211,7 +5211,7 @@ const jobs = [
   },
   {
     no: "LFT-24156", address: "{{jobs.address}}",
-    stage: "Planning & Engineering", owner: "Design", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Planning & Engineering", owner: "Design", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: null, tags: [], days: 5, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5227,7 +5227,7 @@ const jobs = [
   },
   {
     no: "LFT-24172", address: "{{jobs.address}}",
-    stage: "Planning & Engineering", owner: "Design", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Planning & Engineering", owner: "Design", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: null, tags: ["IF", "Design variation"], days: 3, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: "{{jobs.requested_note}}", contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5241,7 +5241,7 @@ const jobs = [
   },
   {
     no: "LFT-24231", address: "{{jobs.address}}",
-    stage: "Working Drawings & Contracts", owner: "Pre-Construction Admin", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Working Drawings & Contracts", owner: "Pre-Construction Admin", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: null, tags: [], days: 8, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5255,7 +5255,7 @@ const jobs = [
   },
   {
     no: "LFT-24175", address: "{{jobs.address}}",
-    stage: "Working Drawings & Contracts", owner: "Pre-Construction Admin", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Working Drawings & Contracts", owner: "Pre-Construction Admin", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: null, tags: [], days: 6, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: "{{jobs.requested_note}}", contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5269,7 +5269,7 @@ const jobs = [
   },
   {
     no: "LFT-24257", address: "{{jobs.address}}",
-    stage: "Working Drawings & Contracts", owner: "Pre-Construction Admin", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Working Drawings & Contracts", owner: "Pre-Construction Admin", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: null, tags: [], days: 26, status: "stale", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: "{{jobs.requested_note}}", contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5281,7 +5281,7 @@ const jobs = [
   },
   {
     no: "LFT-24264", address: "{{jobs.address}}",
-    stage: "Preconstruction", owner: "Scheduling", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Preconstruction", owner: "Scheduling", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: null, tags: [], days: 8, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5295,7 +5295,7 @@ const jobs = [
   },
   {
     no: "LFT-24178", address: "{{jobs.address}}",
-    stage: "Preconstruction", owner: "Selections", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Preconstruction", owner: "Selections", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: null, tags: [], days: 9, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5309,7 +5309,7 @@ const jobs = [
   },
   {
     no: "LFT-24389", address: "{{jobs.address}}",
-    stage: "Preconstruction", owner: "Scheduling", assignee: "{{users.full_name}}", type: "Development",
+    stage: "Preconstruction", owner: "Scheduling", assignee: "{{profiles.full_name}}", type: "Development",
     buildStage: null, tags: [], days: 1, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5323,7 +5323,7 @@ const jobs = [
   },
   {
     no: "LFT-24160", address: "{{jobs.address}}",
-    stage: "Preconstruction", owner: "Selections", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Preconstruction", owner: "Selections", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: null, tags: ["Supply shortage"], days: 9, status: "at-risk", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5339,7 +5339,7 @@ const jobs = [
   },
   {
     no: "LFT-24265", address: "{{jobs.address}}",
-    stage: "Scheduling & Estimating", owner: "Estimating", assignee: "{{users.full_name}}", type: "Commercial",
+    stage: "Scheduling & Estimating", owner: "Estimating", assignee: "{{profiles.full_name}}", type: "Commercial",
     buildStage: null, tags: [], days: 2, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: ["LFT-24051"],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5353,7 +5353,7 @@ const jobs = [
   },
   {
     no: "LFT-24275", address: "{{jobs.address}}",
-    stage: "Scheduling & Estimating", owner: "Estimating", assignee: "{{users.full_name}}", type: "Commercial",
+    stage: "Scheduling & Estimating", owner: "Estimating", assignee: "{{profiles.full_name}}", type: "Commercial",
     buildStage: null, tags: [], days: 19, status: "stale", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: ["LFT-24065"],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5365,7 +5365,7 @@ const jobs = [
   },
   {
     no: "LFT-24197", address: "{{jobs.address}}",
-    stage: "Scheduling & Estimating", owner: "Estimating", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Scheduling & Estimating", owner: "Estimating", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: null, tags: [], days: 18, status: "at-risk", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5377,7 +5377,7 @@ const jobs = [
   },
   {
     no: "LFT-24348", address: "{{jobs.address}}",
-    stage: "Scheduling & Estimating", owner: "Estimating", assignee: "{{users.full_name}}", type: "Commercial",
+    stage: "Scheduling & Estimating", owner: "Estimating", assignee: "{{profiles.full_name}}", type: "Commercial",
     buildStage: null, tags: ["Supply shortage"], days: 16, status: "stale", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5391,7 +5391,7 @@ const jobs = [
   },
   {
     no: "LFT-24375", address: "{{jobs.address}}",
-    stage: "Scheduling & Estimating", owner: "Estimating", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Scheduling & Estimating", owner: "Estimating", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: null, tags: [], days: 9, status: "at-risk", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5405,7 +5405,7 @@ const jobs = [
   },
   {
     no: "LFT-24300", address: "{{jobs.address}}",
-    stage: "Construction & execution", owner: "Construction", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Construction & execution", owner: "Construction", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: "Slab stage", tags: ["Supply shortage"], days: 5, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: ["LFT-24065"],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5419,7 +5419,7 @@ const jobs = [
   },
   {
     no: "LFT-24298", address: "{{jobs.address}}",
-    stage: "Construction & execution", owner: "Construction", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Construction & execution", owner: "Construction", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: "Fixing and fit-out", tags: [], days: 6, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: ["LFT-24051"],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5433,7 +5433,7 @@ const jobs = [
   },
   {
     no: "LFT-24378", address: "{{jobs.address}}",
-    stage: "Construction & execution", owner: "Construction", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Construction & execution", owner: "Construction", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: "Frame stage", tags: [], days: 1, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: ["LFT-24102"],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5447,7 +5447,7 @@ const jobs = [
   },
   {
     no: "LFT-24177", address: "{{jobs.address}}",
-    stage: "Construction & execution", owner: "Construction", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Construction & execution", owner: "Construction", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: "Slab stage", tags: ["IF"], days: 11, status: "at-risk", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: ["LFT-24102"],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5463,7 +5463,7 @@ const jobs = [
   },
   {
     no: "LFT-24302", address: "{{jobs.address}}",
-    stage: "Construction & execution", owner: "Construction", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Construction & execution", owner: "Construction", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: "Lock-up stage", tags: [], days: 2, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5477,7 +5477,7 @@ const jobs = [
   },
   {
     no: "LFT-24258", address: "{{jobs.address}}",
-    stage: "Construction & execution", owner: "Construction", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Construction & execution", owner: "Construction", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: "Frame stage", tags: [], days: 2, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: "{{jobs.requested_note}}", contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5490,7 +5490,7 @@ const jobs = [
   },
   {
     no: "LFT-24354", address: "{{jobs.address}}",
-    stage: "Construction & execution", owner: "Construction", assignee: "{{users.full_name}}", type: "Commercial",
+    stage: "Construction & execution", owner: "Construction", assignee: "{{profiles.full_name}}", type: "Commercial",
     buildStage: "Fixing and fit-out", tags: ["IF"], days: 15, status: "stale", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5504,7 +5504,7 @@ const jobs = [
   },
   {
     no: "LFT-24182", address: "{{jobs.address}}",
-    stage: "Construction & execution", owner: "Construction", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Construction & execution", owner: "Construction", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: "Fixing and fit-out", tags: [], days: 10, status: "at-risk", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5518,7 +5518,7 @@ const jobs = [
   },
   {
     no: "LFT-24155", address: "{{jobs.address}}",
-    stage: "Construction & execution", owner: "Construction", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Construction & execution", owner: "Construction", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: "Lock-up stage", tags: [], days: 2, status: "on-track", source: "{{jobs.source_system}}", conflict: true,
     dependsOn: [],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5532,7 +5532,7 @@ const jobs = [
   },
   {
     no: "LFT-24332", address: "{{jobs.address}}",
-    stage: "Construction & execution", owner: "Construction", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Construction & execution", owner: "Construction", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: "Frame stage", tags: ["IF"], days: 10, status: "at-risk", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5546,7 +5546,7 @@ const jobs = [
   },
   {
     no: "LFT-24361", address: "{{jobs.address}}",
-    stage: "Construction & execution", owner: "Construction", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Construction & execution", owner: "Construction", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: "Fixing and fit-out", tags: ["IF"], days: 9, status: "at-risk", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5558,7 +5558,7 @@ const jobs = [
   },
   {
     no: "LFT-24377", address: "{{jobs.address}}",
-    stage: "Construction & execution", owner: "Construction", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Construction & execution", owner: "Construction", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: "Frame stage", tags: ["Insurance claim"], days: 5, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5573,7 +5573,7 @@ const jobs = [
   },
   {
     no: "LFT-24369", address: "{{jobs.address}}",
-    stage: "Post-construction & closeout", owner: "Construction Admin", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Post-construction & closeout", owner: "Construction Admin", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: "Practical completion", tags: [], days: 7, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5585,7 +5585,7 @@ const jobs = [
   },
   {
     no: "LFT-24234", address: "{{jobs.address}}",
-    stage: "Post-construction & closeout", owner: "Finance", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Post-construction & closeout", owner: "Finance", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: "Practical completion", tags: [], days: 8, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5601,7 +5601,7 @@ const jobs = [
   },
   {
     no: "LFT-24146", address: "{{jobs.address}}",
-    stage: "Post-construction & closeout", owner: "Finance", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Post-construction & closeout", owner: "Finance", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: "Practical completion", tags: [], days: 1, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5613,7 +5613,7 @@ const jobs = [
   },
   {
     no: "LFT-24200", address: "{{jobs.address}}",
-    stage: "Post-construction & closeout", owner: "Construction Admin", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Post-construction & closeout", owner: "Construction Admin", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: "Practical completion", tags: [], days: 2, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: "{{jobs.requested_note}}", contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5629,7 +5629,7 @@ const jobs = [
   },
   {
     no: "LFT-24380", address: "{{jobs.address}}",
-    stage: "Handover & maintenance", owner: "Maintenance", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Handover & maintenance", owner: "Maintenance", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: "Handed over", tags: ["Council hold"], days: 12, status: "at-risk", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5643,7 +5643,7 @@ const jobs = [
   },
   {
     no: "LFT-24287", address: "{{jobs.address}}",
-    stage: "Handover & maintenance", owner: "Maintenance", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Handover & maintenance", owner: "Maintenance", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: "Handed over", tags: [], days: 9, status: "at-risk", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5658,7 +5658,7 @@ const jobs = [
   },
   {
     no: "LFT-24366", address: "{{jobs.address}}",
-    stage: "Handover & maintenance", owner: "Maintenance", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Handover & maintenance", owner: "Maintenance", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: "Handed over", tags: [], days: 1, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5673,7 +5673,7 @@ const jobs = [
   },
   {
     no: "LFT-24346", address: "{{jobs.address}}",
-    stage: "Handover & maintenance", owner: "Maintenance", assignee: "{{users.full_name}}", type: "Commercial",
+    stage: "Handover & maintenance", owner: "Maintenance", assignee: "{{profiles.full_name}}", type: "Commercial",
     buildStage: "Handed over", tags: [], days: 7, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: null, contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5686,7 +5686,7 @@ const jobs = [
   },
   {
     no: "LFT-24262", address: "{{jobs.address}}",
-    stage: "Handover & maintenance", owner: "Maintenance", assignee: "{{users.full_name}}", type: "Residential",
+    stage: "Handover & maintenance", owner: "Maintenance", assignee: "{{profiles.full_name}}", type: "Residential",
     buildStage: "Handed over", tags: [], days: 9, status: "on-track", source: "{{jobs.source_system}}", conflict: false,
     dependsOn: [],
     requested: "{{jobs.requested_note}}", contract: "{{jobs.contract_status}}", deposit: "{{jobs.deposit_status}}", drawings: "{{jobs.drawings_status}}",
@@ -5699,7 +5699,7 @@ const jobs = [
 ];
 
 function initials(name) {
-  // An avatar cannot take initials from "{{users.full_name}}" — bound records will.
+  // An avatar cannot take initials from "{{profiles.full_name}}" — bound records will.
   if (typeof name === "string" && name.indexOf("{{") === 0) return "SB";
   return String(name).split(" ").map(p => p[0]).join("").slice(0,2).toUpperCase();
 }
@@ -5971,7 +5971,7 @@ const jobsByProject = {};
       suburb: "{{projects.suburb}}",
       type: dominant,
       division: dominant === "Development" ? "Land" : dominant === "Commercial" ? "Commercial" : "Residential",
-      manager: "{{users.full_name}}",
+      manager: "{{profiles.full_name}}",
       client: "{{projects.client}}",
       lotCount: members.length,
       councilArea: "{{projects.council_area}}",
@@ -7722,11 +7722,11 @@ function renderSettingsPage() {
           <h4>Your details</h4>
           <div class="prop-row locked">
             <span class="prop-label">Signed in as<span class="prop-hint">from Entra ID in the real build</span></span>
-            <span class="prop-static">{{users.full_name}}</span>
+            <span class="prop-static">{{profiles.full_name}}</span>
           </div>
           <div class="prop-row locked">
             <span class="prop-label">Role<span class="prop-hint">set by an admin, not by you</span></span>
-            <span class="prop-static">{{users.role}}</span>
+            <span class="prop-static">{{profiles.role}}</span>
           </div>
           <div class="prop-row locked">
             <span class="prop-label">Team</span>
@@ -9132,7 +9132,7 @@ function renderUserDashboard() {
     <div class="pd-greeting-row">
       <div class="pd-greeting">
         <span class="avatar pd-avatar">${initials(me)}</span>
-        <h2>Hi, {{users.full_name}}!</h2>
+        <h2>Hi, {{profiles.first_name}}!</h2>
       </div>
       <div class="pd-centre-title">Your jobs today</div>
       <div class="pd-team">

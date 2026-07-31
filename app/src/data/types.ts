@@ -71,17 +71,57 @@ export interface JobStage {
 // ------------------------------------------------------------ user profile
 
 /**
- * Profile rows are keyed to auth.users.id. Identity comes from the IdP; role and team
- * are owned here, not in Entra — which is what the prototype's Admin page already says.
+ * `profiles`, not `users` — `auth.users` is Supabase's table, populated by Microsoft
+ * Entra. This is the row Lofty owns beside it, keyed to it: the same person, but the
+ * parts the app decides. Role and team live here, not in Entra.
  */
-export interface UserProfile {
+export interface Profile {
   id: Uuid;
+  /** Two fields, not one — people change names, and greetings use the first. */
+  firstName: string;
+  lastName: string;
+  /** Generated in Postgres from the two above. Read-only: never write to it. */
   fullName: string;
+  /** Only when someone goes by something else. Null means "use firstName". */
+  preferredName: string | null;
   email: string;
+  /**
+   * The permission ladder, in order — a comparison, not a set. `viewer` reads,
+   * `user` works their own jobs, `manager` reads across teams, `admin` edits
+   * definitions, `superadmin` manages teams and can delete. Maps onto Microsoft
+   * Teams permission levels when that sync lands.
+   */
+  permission: PermissionLevel;
   // + fields
   active: boolean;
   createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
 }
+
+/** Declaration order is the ladder; Postgres compares enum values by it. */
+export const PERMISSION_LEVELS = ["viewer", "user", "manager", "admin", "superadmin"] as const;
+export type PermissionLevel = (typeof PERMISSION_LEVELS)[number];
+
+/** `atLeast(p, "manager")` reads the way the RLS predicate does. */
+export const atLeast = (have: PermissionLevel, need: PermissionLevel): boolean =>
+  PERMISSION_LEVELS.indexOf(have) >= PERMISSION_LEVELS.indexOf(need);
+
+/**
+ * Team membership is many-to-many — people sit in more than one team.
+ *
+ * `isPrimary` is what the screens that need a single answer use: which team the
+ * dashboard watches, what the board filters to by default. At most one per person,
+ * and a new joiner legitimately has none.
+ */
+export interface ProfileTeam {
+  profileId: Uuid;
+  teamId: Uuid;
+  isPrimary: boolean;
+  joinedAt: IsoDateTime;
+}
+
+/** What goes after "Hi, ". One place, so the decision is never re-made ad hoc. */
+export const greetingName = (p: Profile): string => p.preferredName ?? p.firstName;
 
 // ------------------------------------------------------------------ lookup
 

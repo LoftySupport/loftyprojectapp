@@ -48,22 +48,25 @@ function Users() {
       <div className="panel-head">
         <Text type="text2" weight="bold">Users</Text>
         <Text type="text3" color="secondary">
-          Identity comes from Entra ID; role and team are owned here, not in Entra.
+          Identity and sign-in come from Microsoft Entra via <code>auth.users</code>.
+          Permission and team membership are owned here, in <code>profiles</code>.
         </Text>
       </div>
       <div className="data-table-wrap">
         <table className="data-table">
           <thead>
-            <tr><th>Name</th><th>Email</th><th>Team</th><th>Role</th><th>Source</th><th>Active</th></tr>
+            <tr><th>First name</th><th>Last name</th><th>Email</th><th>Teams</th><th>Permission</th><th>Source</th><th>Active</th></tr>
           </thead>
           <tbody>
             <tr>
-              <td><Token>users.full_name</Token></td>
-              <td><Token>users.email</Token></td>
-              <td><Token>teams.name</Token></td>
-              <td><Token>users.role</Token></td>
-              <td><Token>users.source</Token></td>
-              <td><Token>users.active</Token></td>
+              <td><Token>profiles.first_name</Token></td>
+              <td><Token>profiles.last_name</Token></td>
+              <td><Token>profiles.email</Token></td>
+              {/* Many-to-many now — one person, one row per team they sit in. */}
+              <td><Token>profile_teams[].teams.name</Token></td>
+              <td><Token>profiles.permission</Token></td>
+              <td><Token>profiles.source</Token></td>
+              <td><Token>profiles.active</Token></td>
             </tr>
           </tbody>
         </table>
@@ -96,7 +99,7 @@ function Teams() {
                   <td><strong>{t}</strong></td>
                   <td className="muted">{owned.join(", ") || "—"}</td>
                   <td className="num">{held}</td>
-                  <td><Token>users.full_name</Token></td>
+                  <td><Token>profiles.full_name</Token></td>
                 </tr>
               );
             })}
@@ -155,7 +158,10 @@ function Properties() {
   );
 }
 
-const ROLES = ["Team member", "Department lead", "Manager", "Admin", "Super admin"];
+/** The `permission_level` enum, in ladder order. Read left to right: each rung has
+ *  everything the one before it has. Maps onto Microsoft Teams permission levels when
+ *  that sync lands. */
+const PERMISSIONS = ["viewer", "user", "manager", "admin", "superadmin"];
 const OBJECTS = ["Project", "Job", "Checklist", "Comment", "Report"];
 
 function Permissions() {
@@ -164,7 +170,8 @@ function Permissions() {
       <div className="panel-head">
         <Text type="text2" weight="bold">Permission grants</Text>
         <Text type="text3" color="secondary">
-          Read down a column to see one role’s version of the app.
+          A ladder, not a set — each rung has everything to its left. Read down a column
+          to see one permission level’s version of the app.
         </Text>
       </div>
       <div className="data-table-wrap">
@@ -172,14 +179,14 @@ function Permissions() {
           <thead>
             <tr>
               <th>Object</th>
-              {ROLES.map(r => <th key={r}>{r}</th>)}
+              {PERMISSIONS.map(r => <th key={r}>{r}</th>)}
             </tr>
           </thead>
           <tbody>
             {OBJECTS.map(o => (
               <tr key={o}>
                 <td><strong>{o}</strong></td>
-                {ROLES.map(r => (
+                {PERMISSIONS.map(r => (
                   <td key={r}><Token>permission_grants.action</Token></td>
                 ))}
               </tr>

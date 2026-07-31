@@ -69,7 +69,7 @@ export function JobDrawer({ job, onClose }: { job: ShapeJob; onClose: () => void
               <Avatar size="small" type="text" text="SB" aria-label="Assignee, unbound" />
               <div>
                 <Text type="text3" weight="medium">{job.team}</Text>
-                <Text type="text3" color="secondary"><Token>users.full_name</Token></Text>
+                <Text type="text3" color="secondary"><Token>profiles.full_name</Token></Text>
               </div>
             </div>
           </section>

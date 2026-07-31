@@ -35,7 +35,7 @@ export function DashboardPage() {
         <div className="pd-greeting">
           <Avatar size="large" type="text" text="SB" aria-label="You" className="pd-avatar" />
           <h2 className="pd-greeting-title">
-            Hi, <Token>users.full_name</Token>!
+            Hi, <Token>profiles.first_name</Token>!
           </h2>
         </div>
         <div className="pd-centre-title">Your jobs today</div>

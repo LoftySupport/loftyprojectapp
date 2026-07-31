@@ -53,7 +53,7 @@ export function JobsPage() {
       : grouping === "Project" ? j.projectNumber
       : grouping === "Team" ? j.team
       : grouping === "Status" ? HEALTH_LABELS[j.status]
-      : "{{users.full_name}}";
+      : "{{profiles.full_name}}";
 
     const order: string[] =
       grouping === "Stage" ? STAGE_NAMES
@@ -146,7 +146,7 @@ export function JobsPage() {
                   <td><Token>jobs.type</Token></td>
                   <td>{j.stage}</td>
                   <td>{j.team}</td>
-                  <td><Token>users.full_name</Token></td>
+                  <td><Token>profiles.full_name</Token></td>
                   <td className="num">{j.daysInStage}</td>
                   <td><StatusPill status={j.status} /></td>
                 </tr>

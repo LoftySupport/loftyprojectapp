@@ -36,14 +36,14 @@ so you can still check the formatting you're preserving.
 | `{{jobs.drawings_status}}` | `jobs.drawings_status` | `text` | " |
 | `{{jobs.notes}}` | `jobs.notes` | `text` | |
 | `{{jobs.requested_note}}` | `jobs.requested_note` | `text` | Nullable. Non-null is what makes a card show the amber "waiting" flag |
-| `{{users.full_name}}` | `users.full_name` | `text not null` | Used for assignee, project manager and comment authors |
+| `{{profiles.full_name}}` | `profiles.full_name` | `text not null` | Used for assignee, project manager and comment authors |
 | `{{projects.name}}` | `projects.name` | `text not null` | |
 | `{{projects.suburb}}` | `projects.suburb` | `text` | |
 | `{{projects.client}}` | `projects.client` | `text` | |
 | `{{projects.council_area}}` | `projects.council_area` | `text` | |
 | `{{projects.notes}}` | `projects.notes` | `text` | |
 | `{{activity.description}}` | `activity.description` | `text not null` | One feed for jobs and projects |
-| `{{comments.author_name}}` | join to `users.full_name` | — | Store `author_id uuid`, not a name |
+| `{{comments.author_name}}` | join to `profiles.full_name` | — | Store `author_id uuid`, not a name |
 | `{{comments.body}}` | `comments.body` | `text not null` | |
 
 ---
@@ -64,7 +64,12 @@ create table build_stages     (id smallint primary key, name text unique not nul
 create table job_types        (id smallint primary key, name text unique not null);
 create table health_statuses  (id text primary key, label text not null);   -- 'on-track' | 'at-risk' | 'stale'
 create table tags             (id uuid primary key default gen_random_uuid(), name text unique not null);
-create table roles            (id text primary key, name text not null, description text);
+-- Permission is an enum, not a lookup table. It is a fixed ladder rather than data
+-- anyone maintains, and Postgres orders enum values by declaration — so `permission >=
+-- 'manager'` is a valid comparison, which is exactly how the policies want to read.
+-- Adding a rung later is `alter type … add value`, which does not lock the table.
+-- Intended to map onto Microsoft Teams permission levels when that sync lands.
+create type permission_level as enum ('viewer', 'user', 'manager', 'admin', 'superadmin');
 ```
 
 **Seed data, taken from the prototype:**
@@ -89,25 +94,99 @@ create table roles            (id text primary key, name text not null, descript
 - **job_types** — Residential, Commercial, Development
 - **health_statuses** — `on-track` "On track" · `at-risk` "At risk" · `stale` "Stalled"
 - **tags** — IF, Council hold, Design variation, Insurance claim, Supply shortage
-- **roles** — system_admin "System Admin" · division_manager "Division Manager" ·
-  department_lead "Department Lead" · team_member "Team Member" · finance "Finance" ·
-  read_only "Read-only Auditor"
+- **permission_level** *(enum, no seed needed — the type is the data)* — in order:
+  `viewer` read-only · `user` works their own jobs · `manager` reads across teams and
+  reports · `admin` edits projects, jobs and property definitions · `superadmin` also
+  manages teams and can delete
+
+  The prototype predates this decision and still shows its own six roles. They map on
+  like this:
+
+  | Prototype role | `permission_level` |
+  | --- | --- |
+  | Read-only Auditor | `viewer` |
+  | Team Member | `user` |
+  | Department Lead | `manager` |
+  | Division Manager | `manager` |
+  | System Admin | `superadmin` |
+  | Finance | **does not map** |
+
+  **Finance is the one that does not fit, and it is worth knowing why.** A ladder says
+  *how much* you can do; Finance says *what* you own — commercial fields — while sitting
+  at an ordinary level everywhere else. You cannot express that as a rung without giving
+  Finance either too much (`admin` over everything) or too little (`user`, locked out of
+  the fields that are their job).
+
+  Two ways out, and this needs deciding before the policies are written:
+
+  1. **A separate capability flag** — `permission_level` for how far you reach, plus
+     something like `owns_commercial boolean` for what you own. Keeps the ladder clean.
+  2. **Property-level grants** — since properties are already rows, a
+     `property_grants(property_def_id, permission, can_edit)` table lets any team own
+     any field. More machinery, but it generalises past Finance the moment a second
+     team wants the same thing.
+
+  My read: **(2)**, because Selections and Estimating will want it next, and (1) then
+  becomes a column per team.
 
 ### Core records
 
 ```sql
-create table users (
+-- `profiles`, not `users` — `auth.users` is Supabase's table, populated by Microsoft
+-- Entra. This is the row Lofty owns beside it: the same person, but the parts the app
+-- decides rather than the IdP. One row per login, keyed to it, gone when it is.
+create table profiles (
   id            uuid primary key references auth.users(id) on delete cascade,
-  full_name     text not null,
+
+  -- Two fields, not one. People change names — marriage, deed poll, a misspelling on
+  -- day one — and a single `full_name` makes that a string edit that has to be got
+  -- exactly right. It is also the only way to greet someone by first name, which is
+  -- most of where a name appears.
+  first_name    text not null,
+  last_name     text not null,
+  -- Generated, so it cannot drift from its parts. Update either half and every card,
+  -- comment byline and report line follows on the next read.
+  full_name     text generated always as (first_name || ' ' || last_name) stored,
+  -- Only when someone goes by something other than their first name. Null means
+  -- "use first_name" — never store a copy of it here.
+  preferred_name text,
+
   email         text unique not null,
-  team_id       uuid references teams(id),
-  role_id       text references roles(id) not null default 'team_member',
+  -- Least privilege by default. Someone arriving from Entra can read and nothing else
+  -- until an admin promotes them — the alternative is a new joiner with edit rights
+  -- on every project on their first morning.
+  permission    permission_level not null default 'viewer',
   job_title     text,
   phone         text,
   active        boolean not null default true,
   source        text,                      -- 'Entra ID' once SCIM is live
-  created_at    timestamptz not null default now()
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
 );
+
+-- People sit in more than one team, so team membership is its own table rather than a
+-- column. One row per person per team.
+--
+-- `is_primary` exists because several screens need a single answer: which team the
+-- dashboard's "Heading to your team" panel watches, and what the board filters to by
+-- default. Without it those screens have to guess. The partial unique index is what
+-- stops someone having two primaries; nothing forces them to have one, because a new
+-- joiner legitimately has none yet.
+create table profile_teams (
+  profile_id uuid references profiles(id) on delete cascade,
+  team_id    uuid references teams(id)    on delete cascade,
+  is_primary boolean not null default false,
+  joined_at  timestamptz not null default now(),
+  primary key (profile_id, team_id)
+);
+create unique index profile_one_primary_team
+  on profile_teams (profile_id) where is_primary;
+create index on profile_teams (team_id);
+
+-- What the app greets you with. One place, so "Hi, …" is never assembled ad hoc.
+create view profile_display as
+  select id, coalesce(preferred_name, first_name) as greeting_name, full_name
+  from profiles;
 
 create table projects (
   id                 uuid primary key default gen_random_uuid(),
@@ -118,7 +197,7 @@ create table projects (
   client             text,
   type_id            smallint references job_types(id),
   division_id        uuid references divisions(id),
-  manager_id         uuid references users(id),
+  manager_id         uuid references profiles(id),
   start_date         date,
   target_completion  date,
   notes              text,
@@ -134,7 +213,7 @@ create table jobs (
   build_stage_id    smallint references build_stages(id),
   type_id           smallint references job_types(id),
   owning_team_id    uuid references teams(id) not null,
-  assignee_id       uuid references users(id),
+  assignee_id       uuid references profiles(id),
   status            text references health_statuses(id) not null default 'on-track',
   source_system     text,
   contract_status   text,
@@ -172,7 +251,7 @@ create table activity (
   subject_id    uuid not null,
   kind          text not null check (kind in ('event','comment')),
   description   text not null,             -- {{activity.description}} / {{comments.body}}
-  author_id     uuid references users(id), -- null for system events
+  author_id     uuid references profiles(id), -- null for system events
   department    text,
   occurred_at   timestamptz not null default now(),
   mentions      uuid[] default '{}'        -- @mentions, for the notification fan-out
@@ -239,7 +318,7 @@ create table property_values (
   subject_type    text not null check (subject_type in ('project','job')),
   subject_id      uuid not null,
   value           jsonb,                         -- shape is enforced against property_defs.format
-  set_by          uuid references users(id),
+  set_by          uuid references profiles(id),
   set_at          timestamptz not null default now(),
   primary key (property_def_id, subject_type, subject_id)
 );
@@ -266,15 +345,15 @@ check constraint on `property_defs.scope` is what stops a project field being se
 
 ```sql
 create table permission_grants (
-  role_id text references roles(id),
+  permission permission_level,
   object  text not null check (object in ('project','job','checklist','comment','report')),
   action  text not null check (action in ('read','update','transition','export')),
   scope   text not null check (scope in ('none','own','team','team_hierarchy','division','all')),
-  primary key (role_id, object, action)
+  primary key (permission, object, action)
 );
 
 create table notification_prefs (
-  user_id    uuid references users(id) on delete cascade,
+  user_id    uuid references profiles(id) on delete cascade,
   event_type text not null,   -- overdue | stalled | mention | blocked | requested | conflict | incoming
   channel    text not null check (channel in ('inApp','email','teams')),
   enabled    boolean not null default false,
@@ -282,7 +361,7 @@ create table notification_prefs (
 );
 
 create table user_preferences (
-  user_id             uuid primary key references users(id) on delete cascade,
+  user_id             uuid primary key references profiles(id) on delete cascade,
   landing_page        text default 'dashboard',
   default_job_view    text default 'board',      -- board | table | gantt | calendar
   default_project_view text default 'board',
@@ -339,14 +418,22 @@ The scope model maps onto policies almost one-to-one. `team_hierarchy` is the on
 needs care — a recursive CTE inside a policy runs per row unless you wrap it:
 
 ```sql
+-- Seeded from every team the signed-in person belongs to, not one — `profile_teams`
+-- is the membership, and someone in two teams sees both trees.
 create or replace function visible_team_ids()
 returns setof uuid language sql stable security definer as $$
   with recursive tree as (
-    select t.id from teams t
-      join users u on u.team_id = t.id and u.id = auth.uid()
+    select pt.team_id as id from profile_teams pt where pt.profile_id = auth.uid()
     union all
     select c.id from teams c join tree on c.parent_team_id = tree.id
-  ) select id from tree;
+  ) select distinct id from tree;
+$$;
+
+-- The person's own teams, without walking the hierarchy. Separate because `team` and
+-- `team_hierarchy` are different scopes and conflating them widens `team` silently.
+create or replace function my_team_ids()
+returns setof uuid language sql stable security definer as $$
+  select team_id from profile_teams where profile_id = auth.uid();
 $$;
 ```
 
@@ -356,10 +443,14 @@ Then, per scope:
 | --- | --- |
 | `none` | `false` |
 | `own` | `assignee_id = auth.uid()` |
-| `team` | `owning_team_id = (select team_id from users where id = auth.uid())` |
+| `team` | `owning_team_id in (select my_team_ids())` |
 | `team_hierarchy` | `owning_team_id in (select visible_team_ids())` |
-| `division` | `project_id in (select id from projects where division_id = (select t.division_id from users u join teams t on t.id = u.team_id where u.id = auth.uid()))` |
+| `division` | `project_id in (select id from projects where division_id in (select t.division_id from teams t where t.id in (select my_team_ids())))` |
 | `all` | `true` |
+
+Every one of these went from `=` to `in` when membership stopped being a column. That
+is the whole cost of multi-team, and it is worth paying up front — retro-fitting it
+means revisiting every policy at a point where real data is already behind them.
 
 The app's `can()` checks — `editJob`, `pushToJobs`, `canDelete`, `manageTeams` — hide
 controls. They are not security. Every one needs a matching policy or it is decoration.

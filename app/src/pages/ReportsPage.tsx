@@ -93,7 +93,7 @@ export function ReportsPage() {
                       <td><Token>jobs.address</Token></td>
                       <td>{j.stage}</td>
                       <td>{j.team}</td>
-                      <td><Token>users.full_name</Token></td>
+                      <td><Token>profiles.full_name</Token></td>
                       <td className="num">{j.daysInStage}</td>
                       <td><StatusPill status={j.status} /></td>
                     </tr>

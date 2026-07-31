@@ -1,5 +1,5 @@
 import type { Repository, RepositoryMethod } from "./repository";
-import type { Job, JobStage, Project, Stage, UserProfile } from "./types";
+import type { Job, JobStage, Project, Stage, Profile } from "./types";
 
 /**
  * The starting point: structure, no data.
@@ -39,7 +39,7 @@ export function createStubRepository(): Repository {
     async listStages(): Promise<Stage[]> { return SEED_STAGES; },
     async listJobStages(): Promise<JobStage[]> { return []; },
 
-    async listUsers(): Promise<UserProfile[]> { return []; },
-    async currentUser(): Promise<UserProfile | null> { return null; }
+    async listProfiles(): Promise<Profile[]> { return []; },
+    async currentProfile(): Promise<Profile | null> { return null; }
   };
 }

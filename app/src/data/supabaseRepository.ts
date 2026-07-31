@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Repository, RepositoryMethod } from "./repository";
 import { createStubRepository, SEED_STAGES } from "./stubRepository";
-import type { Job, JobStage, Project, Stage, UserProfile } from "./types";
+import type { Job, JobStage, Project, Stage, Profile } from "./types";
 
 /**
  * Wire one table at a time.
@@ -78,12 +78,12 @@ export function createSupabaseRepository(): Repository {
     },
 
     // ---- user profiles --------------------------------------------------
-    async listUsers(): Promise<UserProfile[]> {
-      return stub.listUsers();
+    async listProfiles(): Promise<Profile[]> {
+      return stub.listProfiles();
     },
 
-    async currentUser(): Promise<UserProfile | null> {
-      return stub.currentUser();
+    async currentProfile(): Promise<Profile | null> {
+      return stub.currentProfile();
     }
   };
 }
