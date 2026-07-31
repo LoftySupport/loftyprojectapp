@@ -5858,7 +5858,7 @@ let currentDrilldown = null;
 // A project is the parent record: a land release, an estate stage, or a single dwelling. Every
 // job belongs to exactly one project (one project → many jobs, one job → one project), and a
 // job's number is derived from its project's, so the relationship reads straight off the number
-// — LFT-2404-03 is the third job on project LFT-2404.
+// — PRJ-001-03 is the third job on project PRJ-001.
 //
 // Built here by grouping the seed jobs on suburb, because the seed data has no project column.
 // In the real schema this is a `projects` table with its own primary key and the job carrying a
@@ -5866,8 +5866,8 @@ let currentDrilldown = null;
 // Two identifiers on every record, deliberately.
 //   id  — the machine key. A UUID in the real build; a stable fake one here. Never shown on a
 //         card, never typed by a person, never changes.
-//   no  — the friendly key people quote. Projects get a short number (1201); a job's is composed
-//         from its parent's plus a sequence (1201-03), so the parent reads straight off the child.
+//   no  — the friendly key people quote. Projects get a short number (PRJ-001); a job's is composed
+//         from its parent's plus a sequence (PRJ-001-03), so the parent reads straight off the child.
 // Both friendly keys are immutable once assigned. In Supabase `no` is UNIQUE NOT NULL with
 // UPDATE revoked at the column level and a trigger as a second guard.
 function fakeUuid(seed) {
@@ -5885,17 +5885,47 @@ function fakeUuid(seed) {
   return `${block(8)}-${block(4)}-4${block(3)}-a${block(3)}-${block(12)}`;
 }
 
+// The friendly keys are placeholders, not Lofty numbers. PRJ-001 for a project,
+// PRJ-001-02 for its second job — the same parent-plus-sequence shape the real
+// numbering has, so the relationship still reads off the number, but no one can
+// mistake one of these for a job that exists.
+//   projects.lofty_project_number       PRJ-001
+//   jobs.job_number                     02
+//   jobs.combined_lofty_job_number      PRJ-001-02   (generated, UNIQUE)
+function placeholderProjectNo(idx) { return "PRJ-" + String(idx + 1).padStart(3, "0"); }
+
 // Project-level properties are a deliberately different set from job-level ones. A few overlap
 // by name (type, division, manager) and those are the ones that can be pushed down to jobs.
+// Five projects, one to three jobs each. Enough to show every relationship the schema
+// has — a project carrying several jobs, a project carrying one, jobs sitting at
+// different points in the pipeline — without a wall of rows that reads as real data.
+// The sizes are the shape; change this array and everything downstream follows.
+const PROJECT_SIZES = [3, 2, 2, 3, 1];
+
 const projects = [];
 const jobsByProject = {};
 (function buildProjects() {
   // The prototype derived projects from job addresses. In Supabase a job carries a
   // project_id and this whole function disappears — projects are their own table.
+  //
+  // Trim the seed to PROJECT_SIZES first, taking one job per stage before topping up,
+  // so the board still shows the whole pipeline rather than a pile in one column.
+  const wanted = PROJECT_SIZES.reduce((a, b) => a + b, 0);
+  const picked = [];
+  stages.forEach(s => {
+    const j = jobs.find(j => j.stage === s && picked.indexOf(j) < 0);
+    if (j) picked.push(j);
+  });
+  jobs.forEach(j => { if (picked.length < wanted && picked.indexOf(j) < 0) picked.push(j); });
+  jobs.length = 0;
+  Array.prototype.push.apply(jobs, picked.slice(0, wanted));
+
   const bySuburb = {};
-  jobs.forEach((j, i) => {
-    const suburb = "Group " + String(Math.floor(i / 2) + 1);
-    (bySuburb[suburb] = bySuburb[suburb] || []).push(j);
+  let cursor = 0;
+  PROJECT_SIZES.forEach((size, p) => {
+    const members = jobs.slice(cursor, cursor + size);
+    cursor += size;
+    if (members.length) bySuburb["Group " + String(p + 1).padStart(2, "0")] = members;
   });
 
   // Job numbers change here, so keep a map and rewrite dependsOn once every job is renumbered.
@@ -5904,7 +5934,7 @@ const jobsByProject = {};
 
   Object.keys(bySuburb).sort().forEach((suburb, idx) => {
     const members = bySuburb[suburb];
-    const projectNo = String(1201 + idx);          // friendly, short, human-quotable
+    const projectNo = placeholderProjectNo(idx);   // PRJ-001 — obviously a placeholder
     const types = uniqueSorted(members.map(m => m.type));
     const isMulti = members.length > 1;
     const dominant = types.length === 1 ? types[0] : "Mixed";
@@ -5939,8 +5969,10 @@ const jobsByProject = {};
     jobsByProject[projectNo] = members;
   });
 
+  // Renumber the dependencies too, and drop any pointing at a job the trim removed —
+  // a dangling reference would render as a blocker that does not exist.
   jobs.forEach(j => {
-    j.dependsOn = (j.dependsOn || []).map(old => renumber[old] || old);
+    j.dependsOn = (j.dependsOn || []).map(old => renumber[old]).filter(Boolean);
   });
 })();
 
@@ -7309,7 +7341,7 @@ function updateNewJobDraft(key, value) {
 
 // The number the job will get if created now — shown live so the hierarchy is visible up front.
 function nextJobNumberFor(projectNo) {
-  if (projectNo === "__new__") return String(1201 + projects.length) + "-01";
+  if (projectNo === "__new__") return placeholderProjectNo(projects.length) + "-01";
   const siblings = jobs.filter(j => j.projectNo === projectNo);
   return `${projectNo}-${String(siblings.length + 1).padStart(2, "0")}`;
 }
@@ -7414,7 +7446,7 @@ function createJobFromTemplate() {
   if (projectNo === "__new__") {
     const name = d.newProjectName.trim();
     if (!name) return;
-    projectNo = String(1201 + projects.length);
+    projectNo = placeholderProjectNo(projects.length);
     projects.push({
       id: fakeUuid("project" + projectNo), no: projectNo, name,
       suburb: (d.address.split(", ")[1] || "").trim(),
@@ -8335,7 +8367,7 @@ function updateNewProjectDraft(key, value) { newProjectDraft[key] = value; rende
 
 function renderNewProjectModal() {
   const d = newProjectDraft;
-  const nextNo = String(1201 + projects.length);
+  const nextNo = placeholderProjectNo(projects.length);
   const ready = d.name.trim() && d.suburb.trim();
   const f = (label, key, options) => `
     <label class="prop-row stacked">
@@ -8390,7 +8422,7 @@ function renderNewProjectModal() {
 function createProject() {
   const d = newProjectDraft;
   if (!d.name.trim() || !d.suburb.trim()) return;
-  const no = String(1201 + projects.length);
+  const no = placeholderProjectNo(projects.length);
   projects.push({
     id: fakeUuid("project" + no), no, name: d.name.trim(), suburb: d.suburb.trim(),
     type: d.type, division: d.division, manager: d.manager, client: d.client,
