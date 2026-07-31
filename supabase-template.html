@@ -619,6 +619,30 @@
   .prop-row:last-child { border-bottom: none; }
   .prop-label { font-size: 12px; color: var(--text-muted); }
   .prop-hint { display: block; font-size: 12px; opacity: 0.8; margin-top: 2px; }
+
+  /* Definition-driven fields, grouped by the stage that captures them. */
+  .prop-stage-block { margin-top: var(--space-12); }
+  .prop-stage-block:first-of-type { margin-top: var(--space-8); }
+  .prop-stage-head {
+    font: var(--font-text3-bold);
+    color: var(--secondary-text-color);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding-bottom: var(--space-4);
+    border-bottom: 1px solid var(--layout-border-color);
+    margin-bottom: var(--space-4);
+  }
+  .prop-req {
+    display: inline-block;
+    font: var(--font-text3-normal);
+    font-size: 11px;
+    color: var(--secondary-text-color);
+    background: var(--allgrey-background-color);
+    border-radius: var(--border-radius-small);
+    padding: 0 var(--space-4);
+    margin-left: var(--space-8);
+    vertical-align: middle;
+  }
   .prop-input {
     font-family: inherit;
     font-size: 14px;
@@ -6069,13 +6093,24 @@ jobs.filter(j => j.stage === "Scheduling & Estimating").forEach(job => {
   });
 });
 
-// ---- Which department owns which phase ----
-// Derived from the seed data rather than hand-listed, so the two can't drift apart. Captured
-// once at startup, before any drag-and-drop or panel edit can move a job and skew the mapping.
-const PHASE_DEPARTMENTS = {};
-stages.forEach(stage => {
-  PHASE_DEPARTMENTS[stage] = uniqueSorted(jobs.filter(j => j.stage === stage).map(j => j.owner));
-});
+// ---- Which team owns which phase ----
+// A lookup, not a derivation. This used to be read off the seed jobs, which worked while there
+// were fifty of them and stopped working the moment there were eleven — a team with no job in
+// view vanished from the model entirely. It is `template_phases.owning_team_id` in Supabase, so
+// it is stated here the same way: independent of whatever jobs happen to exist.
+const PHASE_DEPARTMENTS = {
+  "Sales & acquisition":          ["Acquisition & Development", "Sales Admin"],
+  "Planning & Engineering":       ["Design"],
+  "Working Drawings & Contracts": ["Pre-Construction Admin"],
+  "Preconstruction":              ["Scheduling", "Selections"],
+  "Scheduling & Estimating":      ["Estimating"],
+  "Construction & execution":     ["Construction"],
+  "Post-construction & closeout": ["Construction Admin", "Finance"],
+  "Handover & maintenance":       ["Maintenance"]
+};
+
+// Every team, whether or not it currently holds a job. The `teams` table.
+const allTeams = uniqueSorted(stages.flatMap(s => PHASE_DEPARTMENTS[s] || []));
 
 // The job fields each department actually works with — what the Departments tab shows for them.
 const DEPARTMENT_FIELDS = {
@@ -6137,7 +6172,7 @@ const teamMembers = uniqueSorted(jobs.map(j => j.assignee));
 // Build a name -> department lookup from the job data itself (no separate roster to maintain)
 const assigneeDeptMap = {};
 jobs.forEach(j => { assigneeDeptMap[j.assignee] = j.owner; });
-const allDepartments = uniqueSorted(jobs.map(j => j.owner));
+const allDepartments = allTeams;   // the lookup, not "teams that happen to hold a demo job"
 
 // ---- Roles and capabilities (demo) ----
 // Four demo accounts, one per role, so the difference between them can be shown by switching
@@ -7798,7 +7833,10 @@ const ADMIN_TABS = [
 // level it lives at, which stage captures it, whether it is required to leave that stage, and
 // what automation it triggers. Adding one here is the prototype's version of three inserts.
 const PROPERTY_FORMATS = ["text", "number", "date", "single select", "multi select", "checkbox", "currency", "person", "file"];
-const PROPERTY_SCOPES = ["project", "job", "stage"];
+// Two levels, not three. "stage" was a scope here, which conflated where a field is captured
+// with what it hangs off — a pour date is a property OF A JOB that happens to be filled in at
+// Scheduling & Estimating. Stage is context on the definition, not a level of its own.
+const PROPERTY_SCOPES = ["project", "job"];
 const PROPERTY_AUTOMATIONS = [
   "—",
   "Notify owning team on change",
@@ -7809,18 +7847,25 @@ const PROPERTY_AUTOMATIONS = [
   "Recalculate dependent dates"
 ];
 
+// A property IS a field — the two words mean the same thing here. Every one of them says:
+//   scope  which level it lives at   — project or job
+//   stage  where in the pipeline it gets captured
+//   team   who captures it           — one of the teams that owns that stage
+// scope + stage + team is the whole of the context a field carries. Because these are rows and
+// not columns, there is no fixed number of them: add a row, the UI renders one more. That is
+// why the template has no {{field_1}}, {{field_2}} placeholders — a count would be a fiction.
 const propertyDefs = [
-  { id: fakeUuid("prop-address"),  key: "address",     label: "Site address",     scope: "job",     stage: "Sales & acquisition",          format: "text",          required: true,  automation: "—" },
-  { id: fakeUuid("prop-type"),     key: "type",        label: "Project type",     scope: "project", stage: "Sales & acquisition",          format: "single select", required: true,  automation: "Recalculate dependent dates" },
-  { id: fakeUuid("prop-contract"), key: "contract",    label: "Contract status",  scope: "job",     stage: "Working Drawings & Contracts", format: "single select", required: true,  automation: "Block stage exit until set" },
-  { id: fakeUuid("prop-deposit"),  key: "deposit",     label: "Deposit status",   scope: "job",     stage: "Sales & acquisition",          format: "single select", required: true,  automation: "Notify owning team on change" },
-  { id: fakeUuid("prop-drawings"), key: "drawings",    label: "Drawings status",  scope: "job",     stage: "Planning & Engineering",       format: "single select", required: true,  automation: "Block stage exit until set" },
-  { id: fakeUuid("prop-eer"),      key: "final_eer",   label: "Final EER",        scope: "stage",   stage: "Planning & Engineering",       format: "file",          required: true,  automation: "Block stage exit until set" },
-  { id: fakeUuid("prop-supplier"), key: "temp_fence",  label: "Temp fence supplier", scope: "stage", stage: "Scheduling & Estimating",     format: "text",          required: false, automation: "Start SLA clock when set" },
-  { id: fakeUuid("prop-pour"),     key: "pour_date",   label: "Pour date",        scope: "stage",   stage: "Scheduling & Estimating",      format: "date",          required: true,  automation: "Recalculate dependent dates" },
-  { id: fakeUuid("prop-hold"),     key: "council_hold",label: "Council hold",     scope: "job",     stage: "Preconstruction",              format: "checkbox",      required: false, automation: "Notify owning team on change" },
-  { id: fakeUuid("prop-value"),    key: "contract_val",label: "Contract value",   scope: "project", stage: "Working Drawings & Contracts", format: "currency",      required: false, automation: "—" },
-  { id: fakeUuid("prop-pc"),       key: "pc_date",     label: "Practical completion", scope: "job", stage: "Construction & execution",     format: "date",          required: true,  automation: "Notify assignee when set" }
+  { id: fakeUuid("prop-address"),  key: "address",     label: "Site address",     scope: "job",     stage: "Sales & acquisition",          team: "Sales Admin",            format: "text",          required: true,  automation: "—" },
+  { id: fakeUuid("prop-type"),     key: "type",        label: "Project type",     scope: "project", stage: "Sales & acquisition",          team: "Acquisition & Development", format: "single select", required: true,  automation: "Recalculate dependent dates" },
+  { id: fakeUuid("prop-contract"), key: "contract",    label: "Contract status",  scope: "job",     stage: "Working Drawings & Contracts", team: "Pre-Construction Admin", format: "single select", required: true,  automation: "Block stage exit until set" },
+  { id: fakeUuid("prop-deposit"),  key: "deposit",     label: "Deposit status",   scope: "job",     stage: "Sales & acquisition",          team: "Sales Admin",            format: "single select", required: true,  automation: "Notify owning team on change" },
+  { id: fakeUuid("prop-drawings"), key: "drawings",    label: "Drawings status",  scope: "job",     stage: "Planning & Engineering",       team: "Design",                 format: "single select", required: true,  automation: "Block stage exit until set" },
+  { id: fakeUuid("prop-eer"),      key: "final_eer",   label: "Final EER",        scope: "job",     stage: "Planning & Engineering",       team: "Design",                 format: "file",          required: true,  automation: "Block stage exit until set" },
+  { id: fakeUuid("prop-supplier"), key: "temp_fence",  label: "Temp fence supplier", scope: "job",  stage: "Scheduling & Estimating",      team: "Estimating",             format: "text",          required: false, automation: "Start SLA clock when set" },
+  { id: fakeUuid("prop-pour"),     key: "pour_date",   label: "Pour date",        scope: "job",     stage: "Scheduling & Estimating",      team: "Estimating",             format: "date",          required: true,  automation: "Recalculate dependent dates" },
+  { id: fakeUuid("prop-hold"),     key: "council_hold",label: "Council hold",     scope: "job",     stage: "Preconstruction",              team: "Scheduling",             format: "checkbox",      required: false, automation: "Notify owning team on change" },
+  { id: fakeUuid("prop-value"),    key: "contract_val",label: "Contract value",   scope: "project", stage: "Working Drawings & Contracts", team: "Pre-Construction Admin", format: "currency",      required: false, automation: "—" },
+  { id: fakeUuid("prop-pc"),       key: "pc_date",     label: "Practical completion", scope: "job", stage: "Construction & execution",     team: "Construction",           format: "date",          required: true,  automation: "Notify assignee when set" }
 ];
 
 function updatePropertyDef(id, key, value) {
@@ -7835,7 +7880,8 @@ function addPropertyDef() {
   propertyDefs.push({
     id: fakeUuid("prop-new" + propertyDefs.length),
     key: "new_property", label: "New property", scope: "job",
-    stage: stages[0], format: "text", required: false, automation: "—"
+    stage: stages[0], team: PHASE_DEPARTMENTS[stages[0]][0],
+    format: "text", required: false, automation: "—"
   });
   renderPage();
 }
@@ -7907,6 +7953,40 @@ const adminGrants = {};
 })();
 
 function setAdminTab(tab) { adminTab = tab; renderPage(); }
+
+// ---- The definition-driven fields ----
+// Everything in Admin → Properties that does not already have a column of its own, rendered
+// where it will actually live. One slot per definition, grouped by the stage that captures it
+// and labelled with the team that captures it, value tokenised to {{property_values.value}}.
+//
+// This is the placeholder set. There is no fixed number of slots because there is no fixed
+// number of fields — add a row in Admin → Properties and one more appears here. Bind it by
+// joining property_values on (property_def_id, subject_type, subject_id); the row disappears
+// from "unbound" on its own once it returns a value.
+const BOUND_PROPERTY_KEYS = ["address", "type", "contract", "deposit", "drawings"];
+
+function definedPropertiesHtml(scope) {
+  const defs = propertyDefs.filter(d => d.scope === scope && BOUND_PROPERTY_KEYS.indexOf(d.key) < 0);
+  if (!defs.length) return "";
+  const byStage = {};
+  defs.forEach(d => { (byStage[d.stage] = byStage[d.stage] || []).push(d); });
+
+  return `
+    <div class="prop-group">
+      <h4>Captured through the pipeline
+        <span class="prop-hint">${defs.length} field${defs.length === 1 ? "" : "s"} defined in Admin → Properties</span>
+      </h4>
+      ${stages.filter(st => byStage[st]).map(st => `
+        <div class="prop-stage-block">
+          <div class="prop-stage-head">${escapeHtml(st)}</div>
+          ${byStage[st].map(d => `
+            <div class="prop-row locked">
+              <span class="prop-label">${escapeHtml(d.label)}${d.required ? `<span class="prop-req" title="Required to leave this stage">required</span>` : ""}<span class="prop-hint">${escapeHtml(d.team)} · ${escapeHtml(d.format)}</span></span>
+              <span class="prop-static">{{property_values.value}}</span>
+            </div>`).join("")}
+        </div>`).join("")}
+    </div>`;
+}
 
 // Destructive actions sit behind super_admin, and are the only place the prototype asks before
 // acting — everything else here is reversible by setting the value back.
@@ -7991,9 +8071,10 @@ function renderAdminPage() {
       <div class="prop-group wide">
         <h4>Property definitions (${propertyDefs.length})</h4>
         <p class="prop-intro">Properties are <strong>rows, not columns</strong> — which is what lets a
-          department add what it captures without a schema migration. Each definition says what level
-          the property lives at, which stage captures it, what shape the value takes, whether it is
-          required to leave that stage, and what it triggers.
+          team add what it captures without a schema migration. Each definition says what level the
+          property lives at — <strong>project or job</strong> — then which stage captures it and
+          which team captures it, what shape the value takes, whether it is required to leave that
+          stage, and what it triggers. Property and field mean the same thing here.
           ${canEdit ? "" : `<strong>Your role can read these but not change them.</strong>`}</p>
         ${stages.filter(st => byStage[st]).map(st => `
           <div class="perm-role">
@@ -8002,7 +8083,7 @@ function renderAdminPage() {
               <span class="muted">${byStage[st].length} propert${byStage[st].length === 1 ? "y" : "ies"} captured here</span>
             </div>
             <table class="admin-table compact">
-              <thead><tr><th>Label</th><th>Key</th><th>Level</th><th>Format</th><th>Required</th><th>Automation</th><th></th></tr></thead>
+              <thead><tr><th>Label</th><th>Key</th><th>Level</th><th>Team</th><th>Format</th><th>Required</th><th>Automation</th><th></th></tr></thead>
               <tbody>
                 ${byStage[st].map(d => `
                   <tr>
@@ -8016,6 +8097,11 @@ function renderAdminPage() {
                            ${PROPERTY_SCOPES.map(o => `<option ${o === d.scope ? "selected" : ""}>${o}</option>`).join("")}
                          </select>`
                       : escapeHtml(d.scope)}</td>
+                    <td>${canEdit
+                      ? `<select class="prop-input compact" onchange="updatePropertyDef('${d.id}','team',this.value)">
+                           ${(PHASE_DEPARTMENTS[st] || allTeams).map(o => `<option ${o === d.team ? "selected" : ""}>${escapeHtml(o)}</option>`).join("")}
+                         </select>`
+                      : escapeHtml(d.team || "—")}</td>
                     <td>${canEdit
                       ? `<select class="prop-input compact" onchange="updatePropertyDef('${d.id}','format',this.value)">
                            ${PROPERTY_FORMATS.map(o => `<option ${o === d.format ? "selected" : ""}>${o}</option>`).join("")}
@@ -8526,6 +8612,8 @@ function renderProjectDetail(project) {
       </div>
 
       <div>
+        ${definedPropertiesHtml("project")}
+
         <div class="prop-group">
           <h4>Jobs on this project (${members.length})</h4>
           ${members.length ? members.map(j => `
@@ -10362,6 +10450,8 @@ function openDrawer(job, stageName) {
         <span class="prop-static">${escapeHtml(job.source)}</span>
       </div>
     </div>
+
+    ${definedPropertiesHtml("job")}
 
     <div class="prop-group">
       <h4>Notes</h4>

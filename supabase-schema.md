@@ -206,6 +206,62 @@ create table job_checkpoints (
 );
 ```
 
+### Properties (a.k.a. fields)
+
+Property and field are the same thing. Every one lives at **project** or **job** level, and
+carries two pieces of context: **which stage** captures it and **which team** captures it.
+
+They are rows, not columns. That is the whole point — a team adds what it captures without a
+migration, and "what does Design fill in at Planning & Engineering" is a `where` clause rather
+than a schema question. It is also why the binding template has no `{{field_1}}`, `{{field_2}}`
+placeholders: the count is data. Add a row, the UI renders one more slot.
+
+```sql
+create table property_defs (
+  id             uuid primary key default gen_random_uuid(),
+  key            text unique not null,           -- 'pour_date' — stable, referenced by automations
+  label          text not null,                  -- 'Pour date' — what people see, renameable
+  scope          text not null check (scope in ('project','job')),
+  stage_id       smallint references stages(id) not null,   -- where it gets captured
+  owning_team_id uuid references teams(id) not null,        -- who captures it
+  format         text not null check (format in
+                   ('text','number','currency','date','checkbox','file',
+                    'single select','multi select','person','link')),
+  required       boolean not null default false, -- required to LEAVE stage_id, not to create
+  automation     text,                           -- what setting it triggers
+  position       smallint,
+  archived_at    timestamptz                     -- retire a field without losing its history
+);
+
+-- One row per (property, record). Sparse by design: an unset field has no row.
+create table property_values (
+  property_def_id uuid references property_defs(id) on delete cascade not null,
+  subject_type    text not null check (subject_type in ('project','job')),
+  subject_id      uuid not null,
+  value           jsonb,                         -- shape is enforced against property_defs.format
+  set_by          uuid references users(id),
+  set_at          timestamptz not null default now(),
+  primary key (property_def_id, subject_type, subject_id)
+);
+create index on property_values (subject_type, subject_id);
+```
+
+`subject_type` + `subject_id` rather than two nullable FKs keeps one table for both levels; the
+check constraint on `property_defs.scope` is what stops a project field being set on a job.
+
+**Still to settle** — these are the questions the field lists will answer:
+
+- **Related properties.** A field whose value is another record (`person`, `link` above are the
+  start of this). If those relationships get rich, some of them stop being properties and become
+  their own tables — that is the call to make per field, not up front.
+- **Select options.** `single select` / `multi select` need an options table
+  (`property_options(property_def_id, value, label, colour, position)`), unless the options come
+  from an existing lookup — in which case the def points at the lookup instead.
+- **Required semantics.** `required` currently means "cannot leave this stage without it". Some
+  fields will instead mean "cannot create the record without it". Those are different columns.
+- **History.** `property_values` holds current values only. If any field needs an audit trail,
+  it wants a `property_value_history` table rather than a version column.
+
 ### Permissions and preferences
 
 ```sql
