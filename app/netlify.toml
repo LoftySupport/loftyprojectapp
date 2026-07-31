@@ -1,0 +1,39 @@
+# Config for the loftyprojectapp site.
+#
+# This file lives in app/ deliberately, NOT at the repo root. A root netlify.toml
+# would be read by *both* sites and would hijack the prototype's configuration —
+# the prototype site has no build and publishes the repo root, and it must stay
+# that way.
+#
+# In the new Netlify site's settings:
+#   Base directory .......... app
+#   Build command ........... (leave blank — comes from here)
+#   Publish directory ....... (leave blank — comes from here)
+#
+# With base set to "app", Netlify reads this file and resolves the paths below
+# relative to it. Do not add `base` here as well, or it resolves to app/app.
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# React Router does client-side routing, so every path has to reach index.html.
+# Without this, /jobs and /wiring 404 on a hard refresh or a shared link.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# The app is not for the public while it is V0. These do not replace auth —
+# Supabase Auth is what actually protects it once step one lands — but they keep
+# it out of search results in the meantime.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"

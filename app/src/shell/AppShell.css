@@ -1,0 +1,103 @@
+.app-header {
+  background: var(--lofty-header-bg);
+  color: var(--fixed-light-color);
+  padding: var(--space-12) var(--space-24);
+  border-bottom: 4px solid var(--lofty-orange);
+}
+.app-logo { height: 24px; width: auto; display: block; }
+
+.app-nav { display: flex; gap: var(--space-4); flex: 1; flex-wrap: wrap; }
+.app-nav-item {
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 var(--space-16);
+  font: var(--font-text2-medium);
+  color: var(--lofty-header-text-muted);
+  text-decoration: none;
+  border-radius: var(--border-radius-small);
+  transition: background-color var(--motion-productive-medium) var(--motion-timing-transition);
+}
+.app-nav-item:hover { color: var(--fixed-light-color); background: rgba(255, 255, 255, 0.12); }
+.app-nav-item.is-active { color: #00393f; background: var(--fixed-light-color); }
+
+.app-main { padding: var(--space-24); min-height: 60vh; }
+.app-foot { padding: var(--space-24); text-align: center; }
+
+.skip-link {
+  position: absolute;
+  left: var(--space-8);
+  top: -64px;
+  z-index: 100;
+  padding: var(--space-8) var(--space-16);
+  font: var(--font-text2-medium);
+  color: var(--text-color-on-primary);
+  background: var(--primary-color);
+  border-radius: var(--border-radius-small);
+  transition: top var(--motion-productive-long) var(--motion-timing-transition);
+}
+.skip-link:focus { top: var(--space-8); }
+
+:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+.app-header :focus-visible { outline-color: var(--fixed-light-color); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* ---- shared page furniture ---- */
+.page-head { margin-bottom: var(--space-16); }
+.panel {
+  background: var(--primary-background-color);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-medium);
+  padding: var(--space-16);
+}
+.board {
+  display: flex;
+  gap: var(--space-16);
+  align-items: flex-start;
+  overflow-x: auto;
+  padding-bottom: var(--space-16);
+}
+.board-column {
+  min-width: 300px;
+  max-width: 300px;
+  flex-shrink: 0;
+  background: var(--primary-background-color);
+  border: 1px solid var(--layout-border-color);
+  border-top: 4px solid var(--primary-color);
+  border-radius: var(--border-radius-medium);
+  padding: var(--space-12);
+}
+.board-column-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding-bottom: var(--space-12);
+  border-bottom: 1px solid var(--layout-border-color);
+  margin-bottom: var(--space-12);
+}
+.board-column-empty {
+  padding: var(--space-16) 0;
+  text-align: center;
+}
+.wiring-table { width: 100%; border-collapse: collapse; }
+.wiring-table th {
+  height: 40px;
+  padding: 0 var(--space-12);
+  text-align: left;
+  font: var(--font-text3-medium);
+  color: var(--secondary-text-color);
+  background: var(--allgrey-background-color);
+  border-bottom: 1px solid var(--layout-border-color);
+}
+.wiring-table td {
+  padding: var(--space-8) var(--space-12);
+  font: var(--font-text2-normal);
+  border-bottom: 1px solid var(--layout-border-color);
+}

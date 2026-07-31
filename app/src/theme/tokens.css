@@ -1,0 +1,41 @@
+/* Vibe requires border-box globally. */
+*, *::before, *::after { box-sizing: border-box; }
+
+/* ---------------------------------------------------------------------------
+   The Lofty values ThemeProvider cannot carry.
+   It themes 11 primary/brand tokens; these are the rest, and they are the ones
+   with contrast decisions behind them. Numbers are in design-system-evaluation.md.
+   --------------------------------------------------------------------------- */
+:root {
+  --lofty-orange: #f47e63;          /* logo and decorative fills only — 2.6:1 on white */
+  --lofty-orange-strong: #b8482a;   /* anything that carries text or meaning — 5.3:1 */
+  --lofty-orange-tint: #fdeee9;
+
+  /* Vibe ships -selected tints but no ink to sit on them; these are the darkest
+     member of each family that clears 4.5:1 on its own tint. */
+  --positive-ink: #005c35;
+  --negative-ink: #a32436;
+  --warning-ink: #6b5000;
+
+  --lofty-header-bg: #00393f;
+  --lofty-header-text-muted: #a9c6c8;
+}
+
+.dark-app-theme {
+  --lofty-orange-strong: #ff9478;
+  --lofty-orange-tint: #3d2a24;
+  --positive-ink: #7ce8bd;
+  --negative-ink: #ffb3bc;
+  --warning-ink: #ffdf80;
+  --lofty-header-bg: #12141f;
+  /* Vibe's own #9699a6 is 4.38:1 on its dark grey — just under AA */
+  --secondary-text-color: #a8abb8;
+}
+
+html, body, #root { height: 100%; margin: 0; }
+body {
+  font-family: Figtree, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--allgrey-background-color);
+  color: var(--primary-text-color);
+  -webkit-font-smoothing: antialiased;
+}
