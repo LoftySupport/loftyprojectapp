@@ -16,13 +16,101 @@ export type IsoDateTime = string;  // timestamptz
 
 // ---------------------------------------------------------------- projects
 
+export const AU_STATES = ["SA", "NSW", "VIC", "QLD", "WA", "NT", "TAS", "ACT"] as const;
+export type AuState = (typeof AU_STATES)[number];
+
+/**
+ * An address is a record, not a string on another record.
+ *
+ * They get corrected and they get changed — a lot renumbered by council, a street
+ * renamed, a typo found at handover — and everything pointing at one should follow
+ * without being edited individually. So projects and jobs hold an id, not text.
+ *
+ * Lot and street numbers are strings: "12A", "5-7", "Lot 3" are as common as 12.
+ */
+export interface Address {
+  id: Uuid;
+  lotNumber: string | null;
+  streetNumber: string | null;
+  street1: string;
+  street2: string | null;
+  suburb: string;
+  state: AuState;
+  country: "AU";
+  councilId: Uuid | null;
+  /** Generated in Postgres. Read-only: never write to it. */
+  consolidatedAddress: string;
+  createdAt: IsoDateTime;
+  createdBy: Uuid | null;
+  updatedAt: IsoDateTime;
+  updatedBy: Uuid | null;
+}
+
+export interface CouncilRegion {
+  id: Uuid;
+  name: string;
+  state: AuState;
+  active: boolean;
+}
+
+/**
+ * Two addresses, not one. `original` is where the project started and never moves —
+ * it is what contracts and old paperwork refer to. `current` is what every card, board
+ * and search shows. They are the same until something changes, and a blank `current`
+ * falls back to `original` in the database rather than in every caller.
+ */
+export const PROJECT_TYPES = ["residential", "commercial", "development"] as const;
+export type ProjectType = (typeof PROJECT_TYPES)[number];
+
+/**
+ * Snake_case because these are codes, not copy — `PROJECT_STATUS_LABELS` holds what a
+ * person reads. Storing the display string would make every rename a data migration.
+ */
+export const PROJECT_STATUSES = [
+  "on_track", "at_risk", "behind_schedule", "on_hold",
+  "completed", "cancelled", "archived"
+] as const;
+export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
+
+export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
+  on_track: "On track",
+  at_risk: "At risk",
+  behind_schedule: "Behind schedule",
+  on_hold: "On hold",
+  completed: "Completed",
+  cancelled: "Cancelled",
+  archived: "Archived"
+};
+
 export interface Project {
   id: Uuid;
-  /** Lofty Project Number — unique, human-facing, e.g. "1201" */
-  loftyProjectNumber: string;
-  name: string | null;
+  /** Sequential from 1000, four digits minimum, unique. Overridable by hand. */
+  projectNo: number;
+  originalAddressId: Uuid | null;
+  currentAddressId: Uuid;
+  projectType: ProjectType | null;
+  status: ProjectStatus;
+  startDate: IsoDate | null;
+  targetCompletion: IsoDate | null;
+  /** Actual, as opposed to target. */
+  endDate: IsoDate | null;
   // + fields
   createdAt: IsoDateTime;
+  createdBy: Uuid | null;
+  updatedAt: IsoDateTime;
+  updatedBy: Uuid | null;
+}
+
+/** The joined shape the cards read — `project_display`. */
+export interface ProjectDisplay {
+  id: Uuid;
+  projectNo: number;
+  projectType: ProjectType | null;
+  status: ProjectStatus;
+  currentAddress: string;
+  originalAddress: string | null;
+  suburb: string;
+  councilId: Uuid | null;
 }
 
 // -------------------------------------------------------------------- jobs
@@ -32,17 +120,20 @@ export interface Job {
   /** FK to projects.id — the real relationship */
   projectId: Uuid;
   /**
-   * Lofty Project Number, denormalised from the parent so the combined number can be
+   * The project's number, denormalised from the parent so the combined number can be
    * a generated column. Kept in sync by a trigger; never edited directly.
    */
-  loftyProjectNumber: string;
+  projectNo: number;
   /** Job number within the project, e.g. "01" */
   jobNumber: string;
-  /** Generated: loftyProjectNumber || '-' || jobNumber. Unique. e.g. "1201-01" */
-  combinedLoftyJobNumber: string;
-  address: string | null;
+  /** Generated: projectNo || '-' || jobNumber. Unique. e.g. "1000-01" */
+  combinedJobNumber: string;
+  /** Same pair as projects, for the same reason. */
+  originalAddressId: Uuid | null;
+  currentAddressId: Uuid;
   // + fields
   createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
 }
 
 // ------------------------------------------------------- project/job/stage

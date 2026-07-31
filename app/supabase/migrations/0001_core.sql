@@ -83,15 +83,156 @@ create view profile_display as
   select id, coalesce(preferred_name, first_name) as greeting_name, full_name
   from profiles;
 
--- --------------------------------------------------------------- projects
-create table projects (
-  id                    uuid primary key default gen_random_uuid(),
-  lofty_project_number  text not null unique,     -- '1201'
-  name                  text,
-  -- + fields (suburb, council_area, client, type, division, manager_id, dates, …)
-  created_at            timestamptz not null default now(),
-  updated_at            timestamptz not null default now()
+
+-- ---------------------------------------------------- address enums + lookup
+-- Eight states and territories — the whole list, so a genuine enum.
+create type au_state as enum ('SA', 'NSW', 'VIC', 'QLD', 'WA', 'NT', 'TAS', 'ACT');
+
+-- One value today. An enum rather than text so adding a second country later is
+-- `alter type … add value`, not a data-cleaning exercise.
+create type country_code as enum ('AU');
+-- Project type and status. Both closed sets that only a schema change should widen,
+-- so enums rather than lookup tables.
+--
+-- Labels are snake_case because they are code, not copy — the app maps them to
+-- "On track", "Behind schedule" for display. Storing the display string means every
+-- rename is a data migration.
+create type project_type as enum ('residential', 'commercial', 'development');
+create type project_status as enum (
+  'on_track', 'at_risk', 'behind_schedule', 'on_hold',
+  'completed', 'cancelled', 'archived'
 );
+
+
+-- Councils are a table, not an enum. SA alone has 68 and Australia about 537; they
+-- amalgamate, split and get renamed, and enum values cannot be renamed or removed
+-- without rebuilding the type. A table also carries the state, so a picker can filter
+-- to the state already chosen on the address.
+create table council_regions (
+  id      uuid primary key default gen_random_uuid(),
+  name    text not null,
+  state   au_state not null,
+  active  boolean not null default true,
+  unique (name, state)
+);
+create index on council_regions (state);
+
+-- ------------------------------------------------------------- addresses
+-- An address is a record, not a string on another record. Addresses get corrected and
+-- changed — a lot renumbered by council, a street renamed, a typo found at handover —
+-- and everything pointing at one should follow without being edited individually.
+create table addresses (
+  id             uuid primary key default gen_random_uuid(),
+
+  -- Text, not numbers: lot and street numbers are "12A", "5-7", "Lot 3" as often as
+  -- they are 12, and an integer column has to be migrated the first time one arrives.
+  lot_number     text,
+  street_number  text,
+  street_1       text not null,        -- street name and type
+  street_2       text,                 -- unit, level, building
+  suburb         text not null,
+  state          au_state not null default 'SA',
+  country        country_code not null default 'AU',
+  council_id     uuid references council_regions(id),
+
+  -- Assembled once, in the database, so every card, export and search reads the same
+  -- string. `||` with coalesce rather than concat_ws: concat_ws is only STABLE and a
+  -- generated column needs IMMUTABLE. The enum-to-text casts are immutable.
+  consolidated_address text generated always as (
+    coalesce(street_2 || ', ', '') ||
+    coalesce(street_number || ' ', '') ||
+    street_1 || ', ' ||
+    suburb || ' ' || state::text || ', ' || country::text
+  ) stored,
+
+  created_at     timestamptz not null default now(),
+  created_by     uuid references profiles(id),
+  updated_at     timestamptz not null default now(),
+  updated_by     uuid references profiles(id)
+);
+create index on addresses (suburb);
+create index on addresses (council_id);
+
+-- --------------------------------------------------------------- projects
+-- Sequential from 1000, four digits minimum, overridable by hand.
+create sequence if not exists project_no_seq start with 1000;
+
+create table projects (
+  id                  uuid primary key default gen_random_uuid(),
+
+  -- The sequence supplies the default, the check enforces the four-digit floor, and
+  -- the trigger below stops a hand-typed override colliding with the sequence later.
+  project_no          integer not null unique default nextval('project_no_seq')
+                        check (project_no >= 1000),
+
+  -- Two addresses, not one. `original` is where the project started and never moves —
+  -- it is what contracts and old paperwork refer to. `current` is what every card,
+  -- board and search shows. Identical until something changes.
+  original_address_id uuid references addresses(id),
+  current_address_id  uuid not null references addresses(id),
+
+  project_type        project_type,
+  status              project_status not null default 'on_track',
+
+  start_date          date,
+  target_completion   date,
+  end_date            date,           -- actual, as opposed to target
+
+  created_at          timestamptz not null default now(),
+  created_by          uuid references profiles(id),
+  updated_at          timestamptz not null default now(),
+  updated_by          uuid references profiles(id)
+);
+create index on projects (current_address_id);
+
+-- A blank current address falls back to the original, and vice versa, so a caller only
+-- has to supply one. Without it, "current not null" means every insert must set both.
+create or replace function default_current_address() returns trigger
+language plpgsql as $$
+begin
+  if new.current_address_id is null then
+    new.current_address_id := new.original_address_id;
+  end if;
+  if new.original_address_id is null then
+    new.original_address_id := new.current_address_id;
+  end if;
+  return new;
+end $$;
+
+create trigger projects_default_current_address
+  before insert or update on projects
+  for each row execute function default_current_address();
+
+-- A hand-typed project_no above the sequence would be handed out again later and fail
+-- on the unique index — months after the override, which is the worst time to find
+-- out. Push the sequence past it instead.
+create or replace function bump_project_no_seq() returns trigger
+language plpgsql as $$
+begin
+  if new.project_no >= nextval('project_no_seq') then
+    perform setval('project_no_seq', new.project_no);
+  end if;
+  return new;
+end $$;
+
+create trigger projects_bump_no_seq
+  after insert or update of project_no on projects
+  for each row execute function bump_project_no_seq();
+
+-- What the cards read. The consolidated address cannot be a generated column here —
+-- generated columns cannot reach another table — so it is a view.
+create view project_display as
+  select p.id,
+         p.project_no,
+         p.project_type,
+         p.status,
+         cur.consolidated_address  as current_address,
+         orig.consolidated_address as original_address,
+         cur.suburb,
+         cur.council_id
+  from projects p
+    join addresses cur       on cur.id  = p.current_address_id
+    left join addresses orig on orig.id = p.original_address_id;
 
 -- ------------------------------------------------------------------- jobs
 create table jobs (
@@ -101,31 +242,41 @@ create table jobs (
   -- Denormalised from the parent so the combined number can be generated. A
   -- generated column cannot reach across tables, so this is kept in sync by the
   -- trigger below rather than written by the app.
-  lofty_project_number  text not null,
+  project_no            integer not null,
 
   job_number            text not null,            -- '01', within the project
 
   -- The number people actually quote. Generated, so it can never drift from its parts.
-  combined_lofty_job_number text
-    generated always as (lofty_project_number || '-' || job_number) stored,
+  combined_job_number   text
+    generated always as (project_no::text || '-' || job_number) stored,
 
-  address               text,
+  -- Same address pair as projects, for the same reason: a job's address is corrected
+  -- and renumbered more often than a project's, and it is what people search on.
+  original_address_id   uuid references addresses(id),
+  current_address_id    uuid not null references addresses(id),
+
   -- + fields (type, owning_team_id, assignee_id, status, contract/deposit/drawings, …)
   created_at            timestamptz not null default now(),
   updated_at            timestamptz not null default now(),
 
   unique (project_id, job_number),
-  unique (combined_lofty_job_number)
+  unique (combined_job_number)
 );
 
 create index jobs_project_id_idx on jobs (project_id);
+create index on jobs (current_address_id);
+
+-- Jobs inherit the same blank-current-address fallback as projects.
+create trigger jobs_default_current_address
+  before insert or update on jobs
+  for each row execute function default_current_address();
 
 -- Keep the denormalised project number true, on insert and if a project is ever
 -- renumbered. Without this the combined number silently goes stale.
 create or replace function sync_job_project_number() returns trigger
 language plpgsql as $$
 begin
-  select p.lofty_project_number into new.lofty_project_number
+  select p.project_no into new.project_no
   from projects p where p.id = new.project_id;
   return new;
 end $$;
@@ -137,15 +288,15 @@ create trigger jobs_sync_project_number
 create or replace function cascade_project_renumber() returns trigger
 language plpgsql as $$
 begin
-  if new.lofty_project_number is distinct from old.lofty_project_number then
-    update jobs set lofty_project_number = new.lofty_project_number
+  if new.project_no is distinct from old.project_no then
+    update jobs set project_no = new.project_no
     where project_id = new.id;
   end if;
   return new;
 end $$;
 
 create trigger projects_cascade_renumber
-  after update of lofty_project_number on projects
+  after update of project_no on projects
   for each row execute function cascade_project_renumber();
 
 -- ------------------------------------------------- job_stages (composite)

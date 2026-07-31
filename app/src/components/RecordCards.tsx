@@ -48,8 +48,8 @@ export function JobCard({
       </header>
 
       <div>
-        <Token>projects.name</Token>
-        <div><Token>jobs.address</Token></div>
+        <Token>project_display.current_address</Token>
+        <div><Token>addresses.consolidated_address</Token></div>
       </div>
 
       <div className="card-divider" />
@@ -104,17 +104,17 @@ export function ProjectCard({
         <StatusPill status={status} />
       </header>
 
-      <Text type="text1" weight="medium"><Token>projects.name</Token></Text>
+      <Text type="text1" weight="medium"><Token>project_display.current_address</Token></Text>
 
       <div className="card-divider" />
 
       <dl className="card-meta">
         <dt><Text type="text3" color="secondary">Suburb</Text></dt>
-        <dd><Text type="text3"><Token>projects.suburb</Token></Text></dd>
-        <dt><Text type="text3" color="secondary">Client</Text></dt>
-        <dd><Text type="text3"><Token>projects.client</Token></Text></dd>
-        <dt><Text type="text3" color="secondary">Manager</Text></dt>
-        <dd><Text type="text3"><Token>profiles.full_name</Token></Text></dd>
+        <dd><Text type="text3"><Token>addresses.suburb</Token></Text></dd>
+        <dt><Text type="text3" color="secondary">Type</Text></dt>
+        <dd><Text type="text3"><Token>projects.project_type</Token></Text></dd>
+        <dt><Text type="text3" color="secondary">Target</Text></dt>
+        <dd><Text type="text3"><Token>projects.target_completion</Token></Text></dd>
       </dl>
 
       <div className="card-divider" />
@@ -126,7 +126,7 @@ export function ProjectCard({
         {jobNumbers.map(no => (
           <div key={no}>
             <Text type="text3" weight="medium" element="span">{no}</Text>{" "}
-            <Token>jobs.address</Token>
+            <Token>addresses.consolidated_address</Token>
           </div>
         ))}
       </div>

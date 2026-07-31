@@ -76,18 +76,18 @@ export function ProjectsPage() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Project</th><th>Name</th><th>Suburb</th><th>Client</th>
-                <th>Manager</th><th className="num">Jobs</th><th>Status</th>
+                <th>Project</th><th>Address</th><th>Suburb</th><th>Type</th>
+                <th>Target completion</th><th className="num">Jobs</th><th>Status</th>
               </tr>
             </thead>
             <tbody>
               {rows.map(p => (
                 <tr key={p.projectNumber} onClick={() => setOpen(p)}>
                   <td>{p.projectNumber}</td>
-                  <td><Token>projects.name</Token></td>
-                  <td><Token>projects.suburb</Token></td>
-                  <td><Token>projects.client</Token></td>
-                  <td><Token>profiles.full_name</Token></td>
+                  <td><Token>project_display.current_address</Token></td>
+                  <td><Token>addresses.suburb</Token></td>
+                  <td><Token>projects.project_type</Token></td>
+                  <td><Token>projects.target_completion</Token></td>
                   <td className="num">{p.jobs.length}</td>
                   <td><StatusPill status={p.status} /></td>
                 </tr>
@@ -106,7 +106,7 @@ function ProjectDetail({ project, onBack }: { project: ShapeProject; onBack: () 
       <div className="page-head page-head-row">
         <div>
           <Button kind="tertiary" size="small" onClick={onBack}>← Projects</Button>
-          <Heading type="h2" weight="bold"><Token>projects.name</Token></Heading>
+          <Heading type="h2" weight="bold"><Token>project_display.current_address</Token></Heading>
           <Text type="text2" color="secondary">
             Project {project.projectNumber} · {project.jobs.length} jobs
           </Text>
@@ -127,12 +127,17 @@ function ProjectDetail({ project, onBack }: { project: ShapeProject; onBack: () 
             <Text type="text2" weight="medium">{project.projectNumber}</Text>
           </div>
           {[
-            ["Name", "projects.name"],
-            ["Client", "projects.client"],
-            ["Suburb", "projects.suburb"],
-            ["Council area", "projects.council_area"],
-            ["Manager", "profiles.full_name"],
-            ["Notes", "projects.notes"]
+            /* The simplified `projects`: a number, two addresses, a type, a status and
+               three dates. Client, notes and the rest are property definitions now — they
+               render in the slot list below rather than as columns here. */
+            ["Current address", "project_display.current_address"],
+            ["Original address", "project_display.original_address"],
+            ["Suburb", "addresses.suburb"],
+            ["Council region", "council_regions.name"],
+            ["Type", "projects.project_type"],
+            ["Start date", "projects.start_date"],
+            ["Target completion", "projects.target_completion"],
+            ["End date", "projects.end_date"]
           ].map(([label, token]) => (
             <div className="field-row" key={label}>
               <div className="field-label"><Text type="text2">{label}</Text></div>
@@ -157,7 +162,7 @@ function ProjectDetail({ project, onBack }: { project: ShapeProject; onBack: () 
                 {project.jobs.map(j => (
                   <tr key={j.jobNumber}>
                     <td>{j.jobNumber}</td>
-                    <td><Token>jobs.address</Token></td>
+                    <td><Token>addresses.consolidated_address</Token></td>
                     <td>{j.stage}</td>
                     <td>{j.team}</td>
                     <td><StatusPill status={j.status} /></td>

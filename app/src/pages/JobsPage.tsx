@@ -142,7 +142,7 @@ export function JobsPage() {
                 <tr key={j.jobNumber} onClick={() => setOpenJob(j)}>
                   <td>{j.jobNumber}</td>
                   <td>{j.projectNumber}</td>
-                  <td><Token>jobs.address</Token></td>
+                  <td><Token>addresses.consolidated_address</Token></td>
                   <td><Token>jobs.type</Token></td>
                   <td>{j.stage}</td>
                   <td>{j.team}</td>

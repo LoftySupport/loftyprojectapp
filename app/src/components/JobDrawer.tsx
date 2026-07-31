@@ -48,10 +48,10 @@ export function JobDrawer({ job, onClose }: { job: ShapeJob; onClose: () => void
               <BreadcrumbItem text={job.jobNumber} isCurrent />
             </BreadcrumbsBar>
             <Heading type="h3" weight="medium">
-              <Token>jobs.address</Token>
+              <Token>addresses.consolidated_address</Token>
             </Heading>
             <Text type="text3" color="secondary">
-              {job.jobNumber} · <Token>projects.name</Token> · {job.projectNumber}
+              {job.jobNumber} · <Token>project_display.current_address</Token> · {job.projectNumber}
             </Text>
           </div>
           <Button kind="tertiary" size="small" onClick={onClose} aria-label="Close">
