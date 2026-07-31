@@ -1,0 +1,3144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lofty Job Oversight Board — Prototype v3 (Dummy Data)</title>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --border: #e2e4e9;
+    --text: #1f2430;
+    --text-muted: #6b7280;
+    --on-track-bg: #e6f4ea; --on-track-text: #1e7a34;
+    --at-risk-bg: #fef3e2;  --at-risk-text: #b25e00;
+    --stale-bg: #fdeaea;    --stale-text: #b3261e;
+    --conflict-bg: #fdeaea; --conflict-text: #b3261e; --conflict-border: #e8a3a0;
+    --accent: #2f5fd8;
+    --accent-bg: #eaf0fe;
+    --tag-bg: #eef0f4; --tag-text: #444b58;
+    --tag-if-bg: #fff0d6; --tag-if-text: #8a5800;
+    --requested-bg: #fff8e6; --requested-text: #7a5800; --requested-border: #f0d998;
+    --header-bg: #191d27;
+    --header-text: #f4f5f7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header.top {
+    background: var(--header-bg);
+    color: var(--header-text);
+    padding: 18px 28px;
+  }
+  header.top .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  header.top h1 {
+    font-size: 18px;
+    margin: 0 0 4px 0;
+    font-weight: 600;
+  }
+  header.top p {
+    margin: 0;
+    font-size: 13px;
+    color: #b7bccb;
+  }
+  .dummy-badge {
+    background: #fff0d6;
+    color: #7a4a00;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 5px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 10px 28px;
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-muted);
+    align-items: center;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .dot.on-track { background: var(--on-track-text); }
+  .dot.at-risk { background: var(--at-risk-text); }
+  .dot.stale { background: var(--stale-text); }
+  .dot.conflict-dot { background: var(--conflict-text); }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+    padding: 12px 28px;
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+  }
+  .toolbar .field-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .toolbar label {
+    font-size: 11.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+  }
+  .toolbar select,
+  .toolbar input[type="date"] {
+    font-family: inherit;
+    font-size: 12.5px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #fafbfc;
+    color: var(--text);
+  }
+  .toolbar .clear-btn {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--accent-bg);
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .toolbar .clear-btn:hover { background: #dbe6fd; }
+  .toolbar .result-count {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-left: auto;
+  }
+  .toolbar .drag-hint {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+  .type-chip {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    padding: 2px 7px;
+    border-radius: 5px;
+    background: #f0f1f4;
+    color: #4a4f59;
+    border: 1px solid var(--border);
+    margin-bottom: 7px;
+  }
+  .meta-line {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin: -3px 0 7px 0;
+  }
+
+  .board {
+    display: flex;
+    gap: 14px;
+    padding: 18px 28px 40px 28px;
+    overflow-x: auto;
+    align-items: flex-start;
+  }
+  .column {
+    background: #eceef2;
+    border-radius: 10px;
+    min-width: 268px;
+    max-width: 268px;
+    padding: 10px;
+    flex-shrink: 0;
+    transition: background 0.15s ease, box-shadow 0.15s ease;
+  }
+  .column.drag-over {
+    background: #dbe6fd;
+    box-shadow: inset 0 0 0 2px var(--accent);
+  }
+  .card.dragging {
+    opacity: 0.4;
+  }
+  .card[draggable="true"] {
+    cursor: grab;
+  }
+  .column-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 4px 6px 10px 6px;
+  }
+  .column-head .phase-num {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+  .column-head h2 {
+    font-size: 13px;
+    margin: 2px 0 0 0;
+    font-weight: 700;
+  }
+  .column-head .count {
+    font-size: 12px;
+    color: var(--text-muted);
+    background: #dde0e7;
+    border-radius: 999px;
+    padding: 2px 8px;
+  }
+  .column-head-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .expand-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #fff;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+  .expand-btn:hover { background: var(--accent-bg); color: var(--accent); border-color: var(--accent); }
+  .expand-btn:active { transform: translateY(1px); }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: box-shadow 0.15s ease, transform 0.15s ease;
+  }
+  .card:hover {
+    box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+    transform: translateY(-1px);
+  }
+  .card.conflict {
+    border-color: var(--conflict-border);
+    background: linear-gradient(0deg, var(--conflict-bg) 0%, #ffffff 22%);
+  }
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .job-no {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+  .status-pill {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 999px;
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+  .status-pill.on-track { background: var(--on-track-bg); color: var(--on-track-text); }
+  .status-pill.at-risk { background: var(--at-risk-bg); color: var(--at-risk-text); }
+  .status-pill.stale { background: var(--stale-bg); color: var(--stale-text); }
+  .address {
+    font-size: 13.5px;
+    font-weight: 600;
+    margin: 6px 0 8px 0;
+    line-height: 1.3;
+  }
+  .card-divider {
+    border-top: 1px solid var(--border);
+    margin: 2px 0 8px 0;
+  }
+  .card-stage-type {
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+  .stt-label { font-weight: 700; }
+  .card-team-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+  }
+  .days-in-stage {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .team-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .avatar {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: #eef0f3;
+    color: #383e4a;
+    border: 1px solid var(--border);
+    font-size: 9.5px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .team-text { font-size: 11.5px; line-height: 1.3; }
+  .owner-badge { font-weight: 600; color: var(--text); }
+  .assignee-name { color: var(--text-muted); }
+  .build-stage-badge {
+    display: inline-block;
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--text);
+    background: #eef0f3;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 2px 7px;
+    margin-bottom: 7px;
+  }
+  .tags-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 7px;
+  }
+  .tag-chip {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 5px;
+    background: var(--tag-bg);
+    color: var(--tag-text);
+  }
+  .tag-chip.if-tag {
+    background: var(--tag-if-bg);
+    color: var(--tag-if-text);
+  }
+  .requested-flag {
+    font-size: 10.5px;
+    color: var(--requested-text);
+    background: var(--requested-bg);
+    border: 1px solid var(--requested-border);
+    border-radius: 5px;
+    padding: 4px 7px;
+    margin-bottom: 7px;
+    line-height: 1.3;
+  }
+  .card-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+  .source-tag {
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+  .conflict-note {
+    font-size: 10.5px;
+    color: var(--conflict-text);
+    font-weight: 600;
+    margin-top: 4px;
+  }
+  .dependency-flag {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 5px;
+    margin: 2px 4px 7px 0;
+  }
+  .dependency-flag.blocked {
+    color: var(--conflict-text);
+    background: var(--conflict-bg);
+  }
+  .dependency-flag.clear {
+    color: var(--on-track-text);
+    background: var(--on-track-bg);
+  }
+
+  /* Drawer */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(20,22,30,0.35);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    z-index: 40;
+  }
+  .overlay.open { opacity: 1; pointer-events: auto; }
+
+  /* Column drill-down modal */
+  /* ---- Breadcrumb drill-down page (replaces the old popup modal) ---- */
+  .breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    padding: 18px 0 4px 0;
+  }
+  .breadcrumbs a {
+    color: var(--accent);
+    cursor: pointer;
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .breadcrumbs a:hover { text-decoration: underline; }
+  .crumb-sep { color: var(--text-muted); }
+  .crumb-current { color: var(--text-muted); }
+  .drilldown-head { padding: 6px 0 18px 0; }
+  .drilldown-head h2 { margin: 2px 0 4px 0; font-size: 22px; }
+  .drilldown-head p { margin: 0; font-size: 12.5px; color: var(--text-muted); }
+
+  /* ---- Scheduling & Estimating detailed checklist ---- */
+  .sched-job-detail {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    padding: 4px 16px;
+  }
+  .sched-job-detail summary {
+    cursor: pointer;
+    padding: 12px 0;
+    font-size: 13px;
+    font-weight: 700;
+    list-style: none;
+  }
+  .sched-job-detail summary::-webkit-details-marker { display: none; }
+  .sched-job-detail summary::before { content: "▸ "; color: var(--text-muted); }
+  .sched-job-detail[open] summary::before { content: "▾ "; }
+  .sched-progress { font-weight: 500; color: var(--text-muted); font-size: 11.5px; margin-left: 8px; }
+  .sched-detail-body {
+    display: flex;
+    gap: 24px;
+    padding: 4px 0 16px 0;
+    flex-wrap: wrap;
+  }
+  .sched-detail-col { flex: 1; min-width: 220px; }
+  .sched-detail-col.wide { flex: 2.4; min-width: 420px; }
+  .sched-detail-col h5 {
+    margin: 0 0 10px 0;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+  }
+  .sel-steps { display: flex; flex-direction: column; gap: 7px; }
+  .sel-step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .sel-step.done { color: var(--text); }
+  .sel-dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--border);
+    flex-shrink: 0;
+  }
+  .sel-step.done .sel-dot { background: var(--on-track-text); }
+  .sel-label { flex: 1; }
+  .sel-date { font-size: 11px; color: var(--text-muted); }
+  .sched-fields-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 16px;
+  }
+  .sched-field {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 11.5px;
+    padding: 4px 0;
+    border-bottom: 1px dashed var(--border);
+  }
+  .sched-field-name { color: var(--text-muted); }
+  .sched-field-value { font-weight: 600; text-align: right; }
+  .sched-field.done .sched-field-value { color: var(--on-track-text); }
+  .gm-stats-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+  }
+  .gm-stat {
+    background: #f7f8fa;
+    border-radius: 8px;
+    padding: 10px 14px;
+    min-width: 100px;
+  }
+  .gm-stat .gm-num { font-size: 19px; font-weight: 800; }
+  .gm-stat .gm-lbl { font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+
+  .drawer {
+    position: fixed;
+    top: 0; right: 0;
+    width: 420px;
+    max-width: 92vw;
+    height: 100%;
+    background: #fff;
+    box-shadow: -8px 0 24px rgba(0,0,0,0.14);
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+    z-index: 41;
+    display: flex;
+    flex-direction: column;
+  }
+  .drawer.open { transform: translateX(0); }
+  .drawer-head {
+    padding: 20px 22px 14px 22px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .drawer-head .close-btn {
+    position: absolute;
+    top: 16px; right: 18px;
+    background: none;
+    border: none;
+    font-size: 20px;
+    color: var(--text-muted);
+    cursor: pointer;
+    line-height: 1;
+  }
+  .drawer-head .job-no-lg { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+  .drawer-head h3 { margin: 4px 0 10px 0; font-size: 18px; }
+  .drawer-head .phase-line {
+    font-size: 12.5px;
+    color: var(--accent);
+    font-weight: 600;
+    background: var(--accent-bg);
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 6px;
+    margin-bottom: 4px;
+  }
+  .drawer-body {
+    padding: 16px 22px 90px 22px;
+    overflow-y: auto;
+    flex: 1;
+  }
+  .section-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin: 20px 0 10px 0;
+  }
+  .section-title:first-child { margin-top: 0; }
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 14px;
+    font-size: 12.5px;
+  }
+  .info-grid .label { color: var(--text-muted); font-size: 11px; margin-bottom: 2px; }
+  .info-grid .value { font-weight: 600; }
+  .team-block {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #f7f8fa;
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .team-block .avatar { width: 30px; height: 30px; font-size: 12px; }
+  .team-block .who { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 4px; }
+  .team-block .role { font-size: 11.5px; color: var(--text-muted); }
+  .access-count-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: var(--stale-text);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .drawer-select {
+    width: 100%;
+    padding: 7px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 12.5px;
+    font-family: inherit;
+    background: #fff;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .drawer-field-row {
+    display: flex;
+    gap: 10px;
+  }
+  .drawer-field { flex: 1; }
+  .drawer-field .label {
+    color: var(--text-muted);
+    font-size: 11px;
+    margin-bottom: 4px;
+  }
+  .open-file-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 7px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 10px;
+  }
+  .open-file-btn:hover { background: #244bb0; }
+  .drawer-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .request-access-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #fff;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 8px 14px;
+    border-radius: 7px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 10px;
+  }
+  .request-access-btn:hover { background: var(--accent-bg); }
+  .request-access-btn.requested {
+    background: var(--on-track-bg);
+    color: var(--on-track-text);
+    border-color: var(--on-track-text);
+    cursor: default;
+  }
+  .comment-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .comment-form .mention-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .mention-btn {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--accent-bg);
+    border: none;
+    border-radius: 5px;
+    padding: 3px 8px;
+    cursor: pointer;
+  }
+  .mention-btn:hover { background: #dbe6fd; }
+  .comment-form textarea {
+    font-family: inherit;
+    font-size: 12.5px;
+    padding: 8px 10px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    resize: vertical;
+    min-height: 60px;
+  }
+  .comment-form .post-comment-btn {
+    align-self: flex-end;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 7px 14px;
+    border-radius: 7px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .comment-form .post-comment-btn:hover { background: #244bb0; }
+  .mention-chip {
+    color: var(--accent);
+    font-weight: 700;
+    background: var(--accent-bg);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+  .activity-item {
+    display: flex;
+    gap: 10px;
+    padding: 9px 0;
+    border-bottom: 1px solid #f0f1f4;
+    font-size: 12.5px;
+  }
+  .activity-item:last-child { border-bottom: none; }
+  .activity-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin-top: 6px;
+    flex-shrink: 0;
+  }
+  .activity-text { flex: 1; line-height: 1.4; }
+  .activity-date { color: var(--text-muted); font-size: 11px; margin-top: 2px; }
+  .activity-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 2px;
+    flex-wrap: wrap;
+  }
+  .activity-author { font-weight: 700; color: var(--text); }
+  .activity-dept {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: #f0f1f4;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 1px 6px;
+  }
+  .requested-by {
+    font-size: 11px;
+    color: var(--requested-text);
+    margin: -4px 0 7px 0;
+  }
+  .comment {
+    background: #f7f8fa;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    font-size: 12.5px;
+  }
+  .comment-head {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+  }
+  .comment-author { font-weight: 700; }
+  .comment-date { color: var(--text-muted); font-size: 11px; }
+  .comment-body { line-height: 1.4; color: var(--text); }
+
+  footer.page-foot {
+    text-align: center;
+    font-size: 11.5px;
+    color: var(--text-muted);
+    padding: 10px 20px 30px 20px;
+  }
+
+  /* Dashboard view */
+  .dash-kpi-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .dash-kpi {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .dash-kpi .dk-num { font-size: 26px; font-weight: 800; line-height: 1.1; }
+  .dash-kpi .dk-lbl { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+  .dash-kpi.warn .dk-num { color: var(--at-risk-text); }
+  .dash-kpi.bad .dk-num { color: var(--stale-text); }
+  .dash-kpi.good .dk-num { color: var(--on-track-text); }
+  .dash-panels {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .dash-panel {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .dash-panel h4 {
+    margin: 0 0 12px 0;
+    font-size: 12.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+  }
+  .dash-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 9px;
+    font-size: 12px;
+  }
+  .dash-bar-label {
+    width: 168px;
+    flex-shrink: 0;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .dash-bar-track {
+    flex: 1;
+    height: 14px;
+    background: #f0f1f4;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .dash-bar-fill { height: 100%; }
+  .dash-bar-count { width: 26px; text-align: right; color: var(--text-muted); font-size: 11px; flex-shrink: 0; }
+  .dash-attention-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #f0f1f4;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .dash-attention-row:last-child { border-bottom: none; }
+  .dash-attention-row:hover { background: #fafbfd; }
+  .dash-attention-row .da-addr { font-weight: 600; }
+  .dash-attention-row .da-meta { color: var(--text-muted); font-size: 11px; }
+
+  /* Table view */
+  .job-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: 12.5px;
+  }
+  .job-table th {
+    text-align: left;
+    background: #f7f8fa;
+    color: var(--text-muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .job-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #f0f1f4;
+    vertical-align: top;
+  }
+  .job-table tr:last-child td { border-bottom: none; }
+  .job-table tr.row-clickable { cursor: pointer; }
+  .job-table tr.row-clickable:hover { background: #fafbfd; }
+  .job-table .status-pill { display: inline-block; }
+
+  /* Gantt view — calendar-style project schedule */
+  .gantt-info-strip {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    padding: 10px 16px;
+    font-size: 11.5px;
+  }
+  .gantt-info-strip .gi-label { color: var(--text-muted); margin-right: 4px; }
+  .gantt-info-strip .gi-value { font-weight: 700; color: var(--text); }
+  .gantt-legend-note {
+    font-size: 11px;
+    color: var(--text-muted);
+    padding: 8px 16px 14px 16px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+  }
+  .gantt-scroll {
+    overflow-x: auto;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    background: #fff;
+  }
+  .gantt-scroll-inner {
+    position: relative;
+  }
+  .gantt-table {
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+  .gantt-table th, .gantt-table td {
+    border-right: 1px solid #eef0f3;
+    border-bottom: 1px solid #eef0f3;
+    box-sizing: border-box;
+  }
+  .gantt-table thead th {
+    background: #f7f8fa;
+    color: var(--text-muted);
+    font-weight: 700;
+    text-align: center;
+    position: sticky;
+    z-index: 3;
+  }
+  .gantt-table thead th.gt-week {
+    top: 0;
+    height: 22px;
+  }
+  .gantt-table thead th.gt-day {
+    top: 22px;
+    height: 26px;
+    font-weight: 600;
+  }
+  .gantt-table thead th.gt-day.weekend { background: #eef0f3; }
+  .gantt-table thead th.gt-fixed {
+    left: 0;
+    text-align: left;
+    padding: 5px 8px;
+  }
+  .gantt-table .gt-sticky-col {
+    position: sticky;
+    background: #fff;
+    z-index: 2;
+    padding: 5px 8px;
+    text-align: left;
+    vertical-align: middle;
+  }
+  .gantt-table .gt-phase-row td {
+    color: #fff;
+    font-weight: 700;
+    font-size: 11.5px;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.25);
+  }
+  .gantt-table .gt-phase-label {
+    position: sticky;
+    left: 8px;
+    padding-left: 2px;
+  }
+  .gantt-table .gt-progress-cell { text-align: center; }
+  .gantt-table .gt-mini-dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    margin-right: 4px;
+  }
+  .gt-timeline-cell { padding: 0 !important; }
+  .gt-row-track {
+    position: relative;
+    height: 28px;
+  }
+  .gt-bar-full {
+    position: absolute;
+    top: 5px;
+    height: 18px;
+    border-radius: 4px;
+    border: 1px solid rgba(0,0,0,0.12);
+    overflow: hidden;
+  }
+  .gt-bar-progress {
+    height: 100%;
+  }
+  .gantt-today-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #dc2626;
+    z-index: 4;
+    pointer-events: none;
+  }
+  .gantt-today-line::before {
+    content: "Today";
+    position: absolute;
+    top: -18px;
+    left: -14px;
+    font-size: 9.5px;
+    font-weight: 700;
+    color: #dc2626;
+    white-space: nowrap;
+  }
+  #ganttSvg {
+    position: absolute;
+    top: 0; left: 0;
+    pointer-events: none;
+    z-index: 3;
+  }
+  .gantt-dep-note {
+    font-size: 9.5px;
+    margin-top: 1px;
+  }
+  .gantt-dep-note.blocked { color: var(--conflict-text); font-weight: 700; }
+  .gantt-dep-note.clear { color: var(--on-track-text); font-weight: 700; }
+
+  /* ---- Report view ---- */
+  .report-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 20px 0 16px 0;
+    border-bottom: 2px solid var(--text);
+    margin-bottom: 18px;
+  }
+  .report-title { margin: 0 0 4px 0; font-size: 20px; }
+  .report-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .report-disclaimer { font-size: 11px; color: var(--stale-text); font-weight: 600; margin-top: 6px; }
+  .print-report-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 9px 16px;
+    border-radius: 7px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .print-report-btn:hover { background: #244bb0; }
+  .report-section { margin-bottom: 26px; }
+  .report-section-head {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text);
+    background: #eef0f4;
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+  }
+  .report-section-count { font-weight: 500; color: var(--text-muted); text-transform: none; letter-spacing: 0; margin-left: 6px; }
+  .report-job {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .report-job-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .report-job-no { font-weight: 700; font-size: 12.5px; }
+  .report-job-addr { font-size: 13px; color: var(--text); }
+  .report-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px 14px;
+    font-size: 12px;
+    margin-bottom: 10px;
+  }
+  .report-grid .label { color: var(--text-muted); font-size: 10.5px; margin-bottom: 2px; }
+  .report-grid .value { font-weight: 600; }
+  .report-status-update {
+    background: var(--requested-bg);
+    color: var(--requested-text);
+    border: 1px solid var(--requested-border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+  .report-notes { font-size: 11.5px; color: var(--text-muted); }
+  .report-notes .label { color: var(--text-muted); font-weight: 700; margin-right: 4px; }
+
+  @media print {
+    .top, .legend, .toolbar, .page-foot, .print-report-btn, .overlay, .drawer, .group-modal-overlay {
+      display: none !important;
+    }
+    #reportView { padding: 0 !important; }
+    body { background: #fff !important; }
+    .report-job { border: 1px solid #999; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="row">
+    <div>
+      <h1>Lofty Job Oversight Board — Concept Prototype</h1>
+      <p>Illustrative Kanban view of a job's journey from first enquiry through to post-handover maintenance</p>
+    </div>
+    <span class="dummy-badge">Dummy data — for concept review only, not live</span>
+  </div>
+</header>
+
+<div class="legend">
+  <div class="legend-item"><span class="dot on-track"></span> On track</div>
+  <div class="legend-item"><span class="dot at-risk"></span> At risk</div>
+  <div class="legend-item"><span class="dot stale"></span> Stalled</div>
+  <div class="legend-item"><span class="dot conflict-dot"></span> Ownership conflict flagged</div>
+  <div class="legend-item">Click any card to open the job detail panel</div>
+</div>
+
+<div class="toolbar">
+  <div class="field-group">
+    <label for="viewModeSelect">View</label>
+    <select id="viewModeSelect" onchange="renderBoard()">
+      <option value="board">Board (Kanban)</option>
+      <option value="table">Table</option>
+      <option value="gantt">Gantt</option>
+      <option value="dashboard">Dashboard</option>
+      <option value="report">Report</option>
+    </select>
+  </div>
+  <div class="field-group">
+    <label for="groupBySelect">Group by</label>
+    <select id="groupBySelect" onchange="renderBoard()">
+      <option value="phase">Project status (phase)</option>
+      <option value="team">Team</option>
+      <option value="member">Team member</option>
+      <option value="type">Project type</option>
+      <option value="status">Health status</option>
+    </select>
+  </div>
+  <div class="field-group">
+    <label for="typeFilter">Project type</label>
+    <select id="typeFilter" onchange="renderBoard()">
+      <option value="all">All types</option>
+      <option value="Residential">Residential</option>
+      <option value="Commercial">Commercial</option>
+      <option value="Development">Development</option>
+    </select>
+  </div>
+  <div class="field-group">
+    <label for="dateFilterStart">Active between</label>
+    <input type="date" id="dateFilterStart" onchange="renderBoard()">
+    <span style="font-size:11.5px;color:var(--text-muted);">and</span>
+    <input type="date" id="dateFilterEnd" onchange="renderBoard()">
+  </div>
+  <div class="field-group">
+    <label for="myTasksSelect">My tasks</label>
+    <select id="myTasksSelect" onchange="renderBoard()">
+      <option value="all">All jobs</option>
+    </select>
+  </div>
+  <button class="clear-btn" onclick="clearFilters()">Clear filters</button>
+  <span class="drag-hint" id="dragHint">Drag cards between columns when grouped by phase</span>
+  <span class="result-count" id="resultCount"></span>
+</div>
+
+<div class="board" id="board"></div>
+<div id="tableView" style="display:none; padding: 0 28px 40px 28px;"></div>
+<div id="ganttView" style="display:none; padding: 0 28px 40px 28px;"></div>
+<div id="dashboardView" style="display:none; padding: 0 28px 40px 28px;"></div>
+<div id="reportView" style="display:none; padding: 0 28px 40px 28px;"></div>
+<div id="drilldownView" style="display:none; padding: 0 28px 40px 28px;"></div>
+
+<footer class="page-foot">
+  Prototype only, not connected to live data. Built by AI &amp; Automation with Amber to support the Lofty data architecture concept spec.
+</footer>
+
+<div class="overlay" id="overlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-head" id="drawerHead" style="position:relative;"></div>
+  <div class="drawer-body" id="drawerBody"></div>
+</div>
+
+<script>
+// ---- Confirmed pipeline structure ----
+// Sales & acquisition (merges former Sales + Land development)
+// Planning & Engineering
+// Working Drawings & Contracts
+// Preconstruction
+// Scheduling & Estimating
+// Construction & execution (site prep -> slab -> frame -> lock-up -> fixing & fit-out -> practical completion)
+// Post-construction & closeout
+// Handover & maintenance
+const stages = [
+  "Sales & acquisition",
+  "Planning & Engineering",
+  "Working Drawings & Contracts",
+  "Preconstruction",
+  "Scheduling & Estimating",
+  "Construction & execution",
+  "Post-construction & closeout",
+  "Handover & maintenance"
+];
+
+const jobs = [
+  {
+    no: "LFT-24118", address: "14 Wattle Crescent, Mawson Lakes",
+    stage: "Sales & acquisition", owner: "Sales Admin", assignee: "Priya Nair", type: "Residential",
+    buildStage: null, tags: [], days: 3, status: "on-track", source: "HubSpot", conflict: false,
+    requested: null, contract: "Not yet signed", deposit: "Awaiting", drawings: "N/A",
+    notes: "New enquiry, site inspection booked.",
+    activity: [
+      { date: "2026-07-15", text: "Sales enquiry logged in HubSpot" },
+      { date: "2026-07-16", text: "Site inspection booked for 14 Wattle Crescent" }
+    ],
+    comments: [
+      { author: "Priya Nair", date: "2026-07-16", text: "Client keen on a fast turnaround, flagging to design team early." }
+    ]
+  },
+  {
+    no: "LFT-24065", address: "8 Silverwood Drive, Blakeview",
+    stage: "Sales & acquisition", owner: "Acquisition & Development", assignee: "Marcus Webb", type: "Development",
+    buildStage: null, tags: ["IF"], days: 9, status: "at-risk", source: "SharePoint", conflict: false,
+    requested: "Waiting on council pre-lodgement meeting outcome before proceeding to contract.",
+    contract: "Pending council feedback", deposit: "N/A", drawings: "Concept only",
+    notes: "Land parcel under option, subject to feasibility.",
+    activity: [
+      { date: "2026-07-08", text: "Land parcel identified, feasibility started" },
+      { date: "2026-07-12", text: "Pre-lodgement meeting requested with council" }
+    ],
+    comments: [
+      { author: "Marcus Webb", date: "2026-07-14", text: "Council running slow this month — chasing a response, may push timeline." }
+    ]
+  },
+  {
+    no: "LFT-24051", address: "22 Ironbark Road, Andrews Farm",
+    stage: "Sales & acquisition", owner: "Acquisition & Development", assignee: "Marcus Webb", type: "Development",
+    buildStage: null, tags: [], days: 16, status: "stale", source: "Trello", conflict: false,
+    requested: null, contract: "Draft in review", deposit: "N/A", drawings: "N/A",
+    notes: "No movement recorded in over two weeks.",
+    activity: [
+      { date: "2026-07-01", text: "Draft acquisition contract sent to legal" }
+    ],
+    comments: []
+  },
+  {
+    no: "LFT-24102", address: "5 Magnolia Street, Angle Vale",
+    stage: "Planning & Engineering", owner: "Design", assignee: "Han Le", type: "Residential",
+    buildStage: null, tags: [], days: 5, status: "on-track", source: "SiteBook", conflict: false,
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Preliminary plans in progress",
+    notes: "Standard design package, no custom variations requested.",
+    activity: [
+      { date: "2026-07-12", text: "Design brief finalised with client" },
+      { date: "2026-07-15", text: "Preliminary floor plan drafted" }
+    ],
+    comments: [
+      { author: "Han Le", date: "2026-07-15", text: "Client happy with layout direction, moving to working drawings next." }
+    ]
+  },
+  {
+    no: "LFT-24087", address: "19 Banksia Avenue, Gawler East",
+    stage: "Planning & Engineering", owner: "Design", assignee: "Han Le", type: "Residential",
+    buildStage: null, tags: ["IF"], days: 11, status: "at-risk", source: "SharePoint", conflict: true,
+    requested: "Client hasn't approved the revised floor plan — sent 11 days ago, two follow-ups unanswered.",
+    contract: "Signed", deposit: "Paid", drawings: "Awaiting client sign-off",
+    notes: "Design and Scheduling both editing this file this week — flagged as overlap.",
+    activity: [
+      { date: "2026-07-05", text: "Revised floor plan sent to client for approval" },
+      { date: "2026-07-10", text: "Follow-up email sent, no response" },
+      { date: "2026-07-15", text: "Scheduling team requested draft timeline despite unapproved plan" }
+    ],
+    comments: [
+      { author: "Han Le", date: "2026-07-15", text: "Can't lock working drawings until this is approved — holding up downstream." }
+    ]
+  },
+  {
+    no: "LFT-23998", address: "3 Coral Terrace, Munno Para",
+    stage: "Preconstruction", owner: "Scheduling", assignee: "Todd Ferris", type: "Residential",
+    buildStage: null, tags: [], days: 4, status: "on-track", source: "SiteBook", conflict: false,
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Baseline schedule and risk plan being drafted.",
+    activity: [
+      { date: "2026-07-13", text: "Working drawings approved, moved to preconstruction" },
+      { date: "2026-07-16", text: "Draft schedule and trade partner list started" }
+    ],
+    comments: []
+  },
+  {
+    no: "LFT-24039", address: "41 Redgum Way, Smithfield Plains",
+    stage: "Scheduling & Estimating", owner: "Estimating", assignee: "Priya Nair", type: "Residential",
+    buildStage: null, tags: [], days: 6, status: "on-track", source: "Trello", conflict: false,
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Purchase orders being raised against the approved estimate.",
+    activity: [
+      { date: "2026-07-10", text: "Estimate finalised and approved" },
+      { date: "2026-07-14", text: "First round of purchase orders issued" }
+    ],
+    comments: [
+      { author: "Priya Nair", date: "2026-07-14", text: "Frame supplier confirmed lead time, on track for scheduled start." }
+    ]
+  },
+  {
+    no: "LFT-24022", address: "12 Bloodwood Place, Two Wells",
+    stage: "Scheduling & Estimating", owner: "Estimating", assignee: "Renee Cho", type: "Commercial",
+    buildStage: null, tags: ["Council hold"], days: 13, status: "at-risk", source: "SharePoint", conflict: false,
+    requested: "Awaiting supplier quote for structural steel before purchase orders can be finalised.",
+    contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Also has an outstanding council condition on stormwater — noted separately.",
+    activity: [
+      { date: "2026-07-04", text: "Estimate sent for supplier quotes" },
+      { date: "2026-07-11", text: "Steel supplier quote still outstanding, chased again" }
+    ],
+    comments: [
+      { author: "Renee Cho", date: "2026-07-16", text: "Two suppliers non-responsive, escalating to alternate vendor list." }
+    ]
+  },
+  {
+    no: "LFT-23971", address: "27 Stringybark Street, Craigmore",
+    stage: "Construction & execution", owner: "Construction", assignee: "Dave Okafor", type: "Residential",
+    buildStage: "Frame stage", tags: [], days: 8, status: "on-track", source: "SiteBook", conflict: true,
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Site team and scheduling both have open edits logged this week.",
+    activity: [
+      { date: "2026-07-06", text: "Slab poured and cured" },
+      { date: "2026-07-11", text: "Frame delivery received on site" },
+      { date: "2026-07-15", text: "Frame erection in progress, on schedule" }
+    ],
+    comments: [
+      { author: "Dave Okafor", date: "2026-07-15", text: "Frame ahead of schedule, weather has cooperated this week." }
+    ]
+  },
+  {
+    no: "LFT-23944", address: "9 Wandoo Court, Elizabeth Vale",
+    stage: "Construction & execution", owner: "Construction", assignee: "Dave Okafor", type: "Residential",
+    buildStage: "Lock-up stage", tags: [], days: 5, status: "on-track", source: "SiteBook", conflict: false,
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Windows and external doors being fitted this week.",
+    activity: [
+      { date: "2026-07-08", text: "Frame stage signed off" },
+      { date: "2026-07-13", text: "Roof coverings completed" },
+      { date: "2026-07-16", text: "Windows and external doors being installed" }
+    ],
+    comments: []
+  },
+  {
+    no: "LFT-23901", address: "16 Boronia Grove, Salisbury Downs",
+    stage: "Post-construction & closeout", owner: "Construction Admin", assignee: "Renee Cho", type: "Commercial",
+    buildStage: "Practical completion", tags: [], days: 2, status: "on-track", source: "HubSpot", conflict: false,
+    requested: "Handover booked for next week — final invoice and defect walkthrough still pending.",
+    contract: "Signed", deposit: "Paid", drawings: "As-built",
+    notes: "Reconciling quoted vs actual spend before final invoice is issued.",
+    activity: [
+      { date: "2026-07-14", text: "Practical completion inspection passed" },
+      { date: "2026-07-15", text: "Handover date confirmed with client for next week" }
+    ],
+    comments: [
+      { author: "Renee Cho", date: "2026-07-15", text: "One minor defect noted on inspection, rectification booked before handover." }
+    ]
+  },
+  {
+    no: "LFT-23887", address: "2 Peppermint Court, Paralowie",
+    stage: "Handover & maintenance", owner: "Maintenance", assignee: "Aisha Khan", type: "Residential",
+    buildStage: "Handed over", tags: [], days: 21, status: "on-track", source: "HubSpot", conflict: false,
+    requested: null, contract: "Closed", deposit: "N/A", drawings: "As-built (final)",
+    notes: "Within statutory warranty period, one maintenance callback logged.",
+    activity: [
+      { date: "2026-06-26", text: "Keys handed over to client" },
+      { date: "2026-07-09", text: "Client raised minor tap leak via maintenance request" },
+      { date: "2026-07-12", text: "Plumber scheduled for warranty callback" }
+    ],
+    comments: [
+      { author: "Aisha Khan", date: "2026-07-12", text: "Standard warranty item, tradesperson booked, no cost to client." }
+    ]
+  },
+  {
+    no: "LFT-24356", address: "3 Wattle Drive, Smithfield Plains",
+    stage: "Sales & acquisition", owner: "Sales Admin", assignee: "Priya Nair", type: "Development",
+    buildStage: null, tags: [], days: 11, status: "at-risk", source: "SharePoint", conflict: false,
+    dependsOn: [],
+    requested: null, contract: "Not yet signed", deposit: "N/A", drawings: "In progress",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-06-29", text: "Contract sent for review" },
+      { date: "2026-07-10", text: "Offer submitted" },
+      { date: "2026-07-16", text: "Site inspection completed" }
+    ],
+    comments: []
+  },
+  {
+    no: "LFT-24316", address: "39 Stringybark Crescent, Waterloo Corner",
+    stage: "Sales & acquisition", owner: "Sales Admin", assignee: "Jordan Blake", type: "Development",
+    buildStage: null, tags: ["Council hold"], days: 3, status: "on-track", source: "Trello", conflict: false,
+    dependsOn: [],
+    requested: null, contract: "Pending council feedback", deposit: "N/A", drawings: "In progress",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-07-04", text: "Enquiry logged" }
+    ],
+    comments: []
+  },
+  {
+    no: "LFT-24334", address: "18 Hakea Close, Blakeview",
+    stage: "Sales & acquisition", owner: "Acquisition & Development", assignee: "Marcus Webb", type: "Development",
+    buildStage: null, tags: [], days: 8, status: "at-risk", source: "HubSpot", conflict: false,
+    dependsOn: [],
+    requested: null, contract: "Pending council feedback", deposit: "N/A", drawings: "In progress",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-07-05", text: "Feasibility review started" },
+      { date: "2026-07-10", text: "Enquiry logged" }
+    ],
+    comments: []
+  },
+  {
+    no: "LFT-24156", address: "21 Melaleuca Court, Andrews Farm",
+    stage: "Planning & Engineering", owner: "Design", assignee: "Han Le", type: "Residential",
+    buildStage: null, tags: [], days: 5, status: "on-track", source: "SharePoint", conflict: false,
+    dependsOn: [],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "In progress",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-06-24", text: "Council submission prepared" },
+      { date: "2026-07-06", text: "Council submission prepared" },
+      { date: "2026-07-10", text: "Council submission prepared" }
+    ],
+    comments: [
+      { author: "Marcus Webb", date: "2026-07-10", text: "Following up with the client this week for confirmation." }
+    ]
+  },
+  {
+    no: "LFT-24172", address: "25 Melaleuca Avenue, Evanston Park",
+    stage: "Planning & Engineering", owner: "Design", assignee: "Sophie Grant", type: "Residential",
+    buildStage: null, tags: ["IF", "Design variation"], days: 3, status: "on-track", source: "SharePoint", conflict: false,
+    dependsOn: [],
+    requested: "Client has an outstanding question, awaiting reply.", contract: "Signed", deposit: "Paid", drawings: "In progress",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-06-23", text: "Design brief drafted" },
+      { date: "2026-06-25", text: "Engineering review requested" },
+      { date: "2026-07-16", text: "Working drawings started" }
+    ],
+    comments: []
+  },
+  {
+    no: "LFT-24231", address: "33 Golden Wattle Drive, Riverlea Park",
+    stage: "Working Drawings & Contracts", owner: "Pre-Construction Admin", assignee: "Isla Ward", type: "Residential",
+    buildStage: null, tags: [], days: 8, status: "on-track", source: "SiteBook", conflict: false,
+    dependsOn: [],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "In progress",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-06-27", text: "Floor plan sent to client" },
+      { date: "2026-06-30", text: "Working drawings started" },
+      { date: "2026-07-10", text: "Floor plan sent to client" }
+    ],
+    comments: []
+  },
+  {
+    no: "LFT-24175", address: "35 Tussock Road, Gawler East",
+    stage: "Working Drawings & Contracts", owner: "Pre-Construction Admin", assignee: "Isla Ward", type: "Residential",
+    buildStage: null, tags: [], days: 6, status: "on-track", source: "SiteBook", conflict: false,
+    dependsOn: [],
+    requested: "Client has an outstanding question, awaiting reply.", contract: "Signed", deposit: "Paid", drawings: "In progress",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-06-30", text: "Engineering review requested" },
+      { date: "2026-07-08", text: "Council submission prepared" },
+      { date: "2026-07-11", text: "Floor plan sent to client" }
+    ],
+    comments: []
+  },
+  {
+    no: "LFT-24257", address: "38 Bloodwood Crescent, Andrews Farm",
+    stage: "Working Drawings & Contracts", owner: "Pre-Construction Admin", assignee: "Isla Ward", type: "Residential",
+    buildStage: null, tags: [], days: 26, status: "stale", source: "SharePoint", conflict: false,
+    dependsOn: [],
+    requested: "Awaiting client sign-off before proceeding.", contract: "Signed", deposit: "Paid", drawings: "In progress",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-07-09", text: "Design brief drafted" }
+    ],
+    comments: []
+  },
+  {
+    no: "LFT-24264", address: "31 Mallee Terrace, Smithfield Plains",
+    stage: "Preconstruction", owner: "Scheduling", assignee: "Todd Ferris", type: "Residential",
+    buildStage: null, tags: [], days: 8, status: "on-track", source: "Trello", conflict: false,
+    dependsOn: [],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-07-02", text: "Baseline schedule drafted" },
+      { date: "2026-07-03", text: "Baseline schedule drafted" },
+      { date: "2026-07-05", text: "Baseline schedule drafted" }
+    ],
+    comments: []
+  },
+  {
+    no: "LFT-24178", address: "29 Mallee Way, Angle Vale",
+    stage: "Preconstruction", owner: "Selections", assignee: "Mia Chapman", type: "Residential",
+    buildStage: null, tags: [], days: 9, status: "on-track", source: "SiteBook", conflict: false,
+    dependsOn: [],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-06-22", text: "Risk register reviewed" },
+      { date: "2026-07-14", text: "Risk register reviewed" },
+      { date: "2026-07-16", text: "Site survey completed" }
+    ],
+    comments: []
+  },
+  {
+    no: "LFT-24389", address: "10 Redgum Court, Smithfield Plains",
+    stage: "Preconstruction", owner: "Scheduling", assignee: "Todd Ferris", type: "Development",
+    buildStage: null, tags: [], days: 1, status: "on-track", source: "SiteBook", conflict: false,
+    dependsOn: [],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-06-23", text: "Trade partner list confirmed" },
+      { date: "2026-06-29", text: "Baseline schedule drafted" },
+      { date: "2026-07-15", text: "Baseline schedule drafted" }
+    ],
+    comments: []
+  },
+  {
+    no: "LFT-24160", address: "40 Ironbark Terrace, Uleybury",
+    stage: "Preconstruction", owner: "Selections", assignee: "Mia Chapman", type: "Residential",
+    buildStage: null, tags: ["Supply shortage"], days: 9, status: "at-risk", source: "Trello", conflict: false,
+    dependsOn: [],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-07-06", text: "Trade partner list confirmed" },
+      { date: "2026-07-08", text: "Risk register reviewed" },
+      { date: "2026-07-10", text: "Trade partner list confirmed" }
+    ],
+    comments: [
+      { author: "Marcus Webb", date: "2026-07-10", text: "All good here, no action needed from anyone else." }
+    ]
+  },
+  {
+    no: "LFT-24265", address: "24 Wandoo Road, Evanston Park",
+    stage: "Scheduling & Estimating", owner: "Estimating", assignee: "Renee Cho", type: "Commercial",
+    buildStage: null, tags: [], days: 2, status: "on-track", source: "Trello", conflict: false,
+    dependsOn: ["LFT-24051"],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-06-26", text: "Estimate finalised" },
+      { date: "2026-06-27", text: "Supplier quote requested" },
+      { date: "2026-07-07", text: "Estimate finalised" }
+    ],
+    comments: []
+  },
+  {
+    no: "LFT-24275", address: "33 Acacia Court, Concordia",
+    stage: "Scheduling & Estimating", owner: "Estimating", assignee: "Renee Cho", type: "Commercial",
+    buildStage: null, tags: [], days: 19, status: "stale", source: "Trello", conflict: false,
+    dependsOn: ["LFT-24065"],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-07-14", text: "Subcontractor engaged" }
+    ],
+    comments: []
+  },
+  {
+    no: "LFT-24197", address: "5 Native Pine Rise, Concordia",
+    stage: "Scheduling & Estimating", owner: "Estimating", assignee: "Owen Pratt", type: "Residential",
+    buildStage: null, tags: [], days: 18, status: "at-risk", source: "Trello", conflict: false,
+    dependsOn: [],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-07-05", text: "Purchase orders issued" }
+    ],
+    comments: []
+  },
+  {
+    no: "LFT-24348", address: "40 Sheoak Road, Roseworthy",
+    stage: "Scheduling & Estimating", owner: "Estimating", assignee: "Owen Pratt", type: "Commercial",
+    buildStage: null, tags: ["Supply shortage"], days: 16, status: "stale", source: "Trello", conflict: false,
+    dependsOn: [],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-07-11", text: "Subcontractor engaged" }
+    ],
+    comments: [
+      { author: "Grace Tan", date: "2026-07-11", text: "Flagging this for visibility, may need a decision soon." }
+    ]
+  },
+  {
+    no: "LFT-24375", address: "23 Wandoo Street, Two Wells",
+    stage: "Scheduling & Estimating", owner: "Estimating", assignee: "Renee Cho", type: "Residential",
+    buildStage: null, tags: [], days: 9, status: "at-risk", source: "SharePoint", conflict: false,
+    dependsOn: [],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-07-04", text: "Supplier quote requested" }
+    ],
+    comments: [
+      { author: "Todd Ferris", date: "2026-07-04", text: "Flagging this for visibility, may need a decision soon." }
+    ]
+  },
+  {
+    no: "LFT-24300", address: "28 Callistemon Way, Angle Vale",
+    stage: "Construction & execution", owner: "Construction", assignee: "Dave Okafor", type: "Residential",
+    buildStage: "Slab stage", tags: ["Supply shortage"], days: 5, status: "on-track", source: "SiteBook", conflict: false,
+    dependsOn: ["LFT-24065"],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-07-08", text: "Fixing trades commenced" },
+      { date: "2026-07-10", text: "Roof covering completed" },
+      { date: "2026-07-15", text: "Site established" }
+    ],
+    comments: []
+  },
+  {
+    no: "LFT-24298", address: "43 Grevillea Place, Brahma Lodge",
+    stage: "Construction & execution", owner: "Construction", assignee: "Ben Sultana", type: "Residential",
+    buildStage: "Fixing and fit-out", tags: [], days: 6, status: "on-track", source: "SiteBook", conflict: false,
+    dependsOn: ["LFT-24051"],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-07-03", text: "Fixing trades commenced" },
+      { date: "2026-07-10", text: "Roof covering completed" },
+      { date: "2026-07-12", text: "Fixing trades commenced" }
+    ],
+    comments: []
+  },
+  {
+    no: "LFT-24378", address: "29 Hakea Close, Smithfield Plains",
+    stage: "Construction & execution", owner: "Construction", assignee: "Ben Sultana", type: "Residential",
+    buildStage: "Frame stage", tags: [], days: 1, status: "on-track", source: "HubSpot", conflict: false,
+    dependsOn: ["LFT-24102"],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-06-25", text: "Frame delivery received" },
+      { date: "2026-07-11", text: "Lock-up inspection passed" },
+      { date: "2026-07-14", text: "Fixing trades commenced" }
+    ],
+    comments: []
+  },
+  {
+    no: "LFT-24177", address: "30 Grevillea Close, One Tree Hill",
+    stage: "Construction & execution", owner: "Construction", assignee: "Dave Okafor", type: "Residential",
+    buildStage: "Slab stage", tags: ["IF"], days: 11, status: "at-risk", source: "SiteBook", conflict: false,
+    dependsOn: ["LFT-24102"],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-07-01", text: "Slab poured" },
+      { date: "2026-07-04", text: "Fixing trades commenced" },
+      { date: "2026-07-09", text: "Fixing trades commenced" }
+    ],
+    comments: [
+      { author: "Renee Cho", date: "2026-07-09", text: "@Han Le can you confirm timing on this when you get a chance?" }
+    ]
+  },
+  {
+    no: "LFT-24302", address: "29 Callistemon Rise, Concordia",
+    stage: "Construction & execution", owner: "Construction", assignee: "Dave Okafor", type: "Residential",
+    buildStage: "Lock-up stage", tags: [], days: 2, status: "on-track", source: "HubSpot", conflict: false,
+    dependsOn: [],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-06-23", text: "Roof covering completed" },
+      { date: "2026-07-02", text: "Roof covering completed" },
+      { date: "2026-07-11", text: "Frame delivery received" }
+    ],
+    comments: []
+  },
+  {
+    no: "LFT-24258", address: "25 Bottlebrush Road, Virginia",
+    stage: "Construction & execution", owner: "Construction", assignee: "Dave Okafor", type: "Residential",
+    buildStage: "Frame stage", tags: [], days: 2, status: "on-track", source: "SiteBook", conflict: false,
+    dependsOn: [],
+    requested: "Waiting on supplier confirmation.", contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-07-03", text: "Lock-up inspection passed" },
+      { date: "2026-07-06", text: "Roof covering completed" }
+    ],
+    comments: []
+  },
+  {
+    no: "LFT-24354", address: "35 Sheoak Rise, Kudla",
+    stage: "Construction & execution", owner: "Construction", assignee: "Ben Sultana", type: "Commercial",
+    buildStage: "Fixing and fit-out", tags: ["IF"], days: 15, status: "stale", source: "HubSpot", conflict: false,
+    dependsOn: [],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-07-01", text: "Slab poured" }
+    ],
+    comments: [
+      { author: "Grace Tan", date: "2026-07-01", text: "Progressing as expected, no concerns at this time." }
+    ]
+  },
+  {
+    no: "LFT-24182", address: "42 Grevillea Road, Riverlea Park",
+    stage: "Construction & execution", owner: "Construction", assignee: "Dave Okafor", type: "Residential",
+    buildStage: "Fixing and fit-out", tags: [], days: 10, status: "at-risk", source: "HubSpot", conflict: false,
+    dependsOn: [],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-07-08", text: "Roof covering completed" }
+    ],
+    comments: [
+      { author: "Todd Ferris", date: "2026-07-08", text: "Flagging this for visibility, may need a decision soon." }
+    ]
+  },
+  {
+    no: "LFT-24155", address: "16 Redgum Crescent, Playford",
+    stage: "Construction & execution", owner: "Construction", assignee: "Ben Sultana", type: "Residential",
+    buildStage: "Lock-up stage", tags: [], days: 2, status: "on-track", source: "HubSpot", conflict: true,
+    dependsOn: [],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-07-01", text: "Fixing trades commenced" }
+    ],
+    comments: [
+      { author: "Marcus Webb", date: "2026-07-01", text: "@Priya Nair can you confirm timing on this when you get a chance?" }
+    ]
+  },
+  {
+    no: "LFT-24332", address: "26 Bottlebrush Street, Andrews Farm",
+    stage: "Construction & execution", owner: "Construction", assignee: "Dave Okafor", type: "Residential",
+    buildStage: "Frame stage", tags: ["IF"], days: 10, status: "at-risk", source: "SiteBook", conflict: false,
+    dependsOn: [],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-06-24", text: "Frame delivery received" },
+      { date: "2026-07-09", text: "Fixing trades commenced" },
+      { date: "2026-07-13", text: "Lock-up inspection passed" }
+    ],
+    comments: []
+  },
+  {
+    no: "LFT-24361", address: "24 Correa Grove, Virginia",
+    stage: "Construction & execution", owner: "Construction", assignee: "Ben Sultana", type: "Residential",
+    buildStage: "Fixing and fit-out", tags: ["IF"], days: 9, status: "at-risk", source: "HubSpot", conflict: false,
+    dependsOn: [],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-06-23", text: "Lock-up inspection passed" }
+    ],
+    comments: []
+  },
+  {
+    no: "LFT-24377", address: "37 Callistemon Close, Brahma Lodge",
+    stage: "Construction & execution", owner: "Construction", assignee: "Ben Sultana", type: "Residential",
+    buildStage: "Frame stage", tags: ["Insurance claim"], days: 5, status: "on-track", source: "HubSpot", conflict: false,
+    dependsOn: [],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-07-06", text: "Roof covering completed" },
+      { date: "2026-07-11", text: "Slab poured" }
+    ],
+    comments: [
+      { author: "Marcus Webb", date: "2026-07-11", text: "Flagging this for visibility, may need a decision soon." }
+    ]
+  },
+  {
+    no: "LFT-24369", address: "2 Ironbark Court, Two Wells",
+    stage: "Post-construction & closeout", owner: "Construction Admin", assignee: "Grace Tan", type: "Residential",
+    buildStage: "Practical completion", tags: [], days: 7, status: "on-track", source: "SiteBook", conflict: false,
+    dependsOn: [],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-07-07", text: "Final invoice prepared" }
+    ],
+    comments: []
+  },
+  {
+    no: "LFT-24234", address: "13 Redgum Rise, Gawler South",
+    stage: "Post-construction & closeout", owner: "Finance", assignee: "Callum Reed", type: "Residential",
+    buildStage: "Practical completion", tags: [], days: 8, status: "on-track", source: "HubSpot", conflict: false,
+    dependsOn: [],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-06-22", text: "Final invoice prepared" },
+      { date: "2026-06-27", text: "Practical completion inspection held" },
+      { date: "2026-06-30", text: "Defect list issued" }
+    ],
+    comments: [
+      { author: "Marcus Webb", date: "2026-06-30", text: "Following up with the client this week for confirmation." }
+    ]
+  },
+  {
+    no: "LFT-24146", address: "37 Wandoo Grove, Gawler South",
+    stage: "Post-construction & closeout", owner: "Finance", assignee: "Callum Reed", type: "Residential",
+    buildStage: "Practical completion", tags: [], days: 1, status: "on-track", source: "SiteBook", conflict: false,
+    dependsOn: [],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-07-15", text: "Final invoice prepared" }
+    ],
+    comments: []
+  },
+  {
+    no: "LFT-24200", address: "36 Tussock Terrace, Playford",
+    stage: "Post-construction & closeout", owner: "Construction Admin", assignee: "Grace Tan", type: "Residential",
+    buildStage: "Practical completion", tags: [], days: 2, status: "on-track", source: "HubSpot", conflict: false,
+    dependsOn: [],
+    requested: "Waiting on supplier confirmation.", contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-06-22", text: "Client walkthrough completed" },
+      { date: "2026-06-30", text: "Client walkthrough completed" },
+      { date: "2026-07-09", text: "Client walkthrough completed" }
+    ],
+    comments: [
+      { author: "Marcus Webb", date: "2026-07-09", text: "@Marcus Webb can you confirm timing on this when you get a chance?" }
+    ]
+  },
+  {
+    no: "LFT-24380", address: "19 Silverwood Street, Elizabeth Vale",
+    stage: "Handover & maintenance", owner: "Maintenance", assignee: "Aisha Khan", type: "Residential",
+    buildStage: "Handed over", tags: ["Council hold"], days: 12, status: "at-risk", source: "HubSpot", conflict: false,
+    dependsOn: [],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-06-25", text: "Warranty request logged" },
+      { date: "2026-07-02", text: "Maintenance callback scheduled" },
+      { date: "2026-07-14", text: "Warranty request logged" }
+    ],
+    comments: []
+  },
+  {
+    no: "LFT-24287", address: "29 Magnolia Grove, Virginia",
+    stage: "Handover & maintenance", owner: "Maintenance", assignee: "Noah Fitch", type: "Residential",
+    buildStage: "Handed over", tags: [], days: 9, status: "at-risk", source: "SharePoint", conflict: false,
+    dependsOn: [],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-06-30", text: "12-month inspection booked" },
+      { date: "2026-07-08", text: "12-month inspection booked" }
+    ],
+    comments: [
+      { author: "Todd Ferris", date: "2026-07-08", text: "@Han Le can you confirm timing on this when you get a chance?" }
+    ]
+  },
+  {
+    no: "LFT-24366", address: "18 Coral Avenue, Elizabeth Park",
+    stage: "Handover & maintenance", owner: "Maintenance", assignee: "Aisha Khan", type: "Residential",
+    buildStage: "Handed over", tags: [], days: 1, status: "on-track", source: "SharePoint", conflict: false,
+    dependsOn: [],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-07-01", text: "Maintenance callback scheduled" },
+      { date: "2026-07-14", text: "12-month inspection booked" }
+    ],
+    comments: [
+      { author: "Dave Okafor", date: "2026-07-14", text: "Progressing as expected, no concerns at this time." }
+    ]
+  },
+  {
+    no: "LFT-24346", address: "33 Kurrajong Crescent, Uleybury",
+    stage: "Handover & maintenance", owner: "Maintenance", assignee: "Noah Fitch", type: "Commercial",
+    buildStage: "Handed over", tags: [], days: 7, status: "on-track", source: "SharePoint", conflict: false,
+    dependsOn: [],
+    requested: null, contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-07-03", text: "Warranty request logged" },
+      { date: "2026-07-15", text: "Maintenance callback scheduled" }
+    ],
+    comments: []
+  },
+  {
+    no: "LFT-24262", address: "11 Wandoo Way, Mawson Lakes",
+    stage: "Handover & maintenance", owner: "Maintenance", assignee: "Aisha Khan", type: "Residential",
+    buildStage: "Handed over", tags: [], days: 9, status: "on-track", source: "HubSpot", conflict: false,
+    dependsOn: [],
+    requested: "Waiting on internal approval to proceed.", contract: "Signed", deposit: "Paid", drawings: "Approved",
+    notes: "Dummy record generated for prototype volume testing.",
+    activity: [
+      { date: "2026-07-09", text: "Keys handed over" }
+    ],
+    comments: []
+  }
+];
+
+function initials(name) {
+  return name.split(" ").map(p => p[0]).join("").slice(0,2).toUpperCase();
+}
+function statusLabel(s) {
+  if (s === "on-track") return "On track";
+  if (s === "at-risk") return "At risk";
+  if (s === "stale") return "Stalled";
+  return s;
+}
+function latestActivityDate(job) {
+  if (!job.activity.length) return null;
+  return job.activity.map(a => a.date).sort().slice(-1)[0];
+}
+
+const statusOrder = ["on-track", "at-risk", "stale"];
+
+function uniqueSorted(values) {
+  return [...new Set(values)].sort();
+}
+
+// Returns { groupKeyFn, order, columnLabel(key, idx) } for a given group-by mode
+function getGrouping(mode) {
+  if (mode === "team") {
+    return {
+      keyFn: j => j.owner,
+      order: uniqueSorted(jobs.map(j => j.owner)),
+      label: key => key
+    };
+  }
+  if (mode === "member") {
+    return {
+      keyFn: j => j.assignee,
+      order: uniqueSorted(jobs.map(j => j.assignee)),
+      label: key => key
+    };
+  }
+  if (mode === "type") {
+    return {
+      keyFn: j => j.type,
+      order: ["Residential", "Commercial", "Development"],
+      label: key => key
+    };
+  }
+  if (mode === "status") {
+    return {
+      keyFn: j => j.status,
+      order: statusOrder,
+      label: key => statusLabel(key)
+    };
+  }
+  // default: phase
+  return {
+    keyFn: j => j.stage,
+    order: stages,
+    label: key => key
+  };
+}
+
+const TODAY_STR = "2026-07-17";
+const accessRequestedSet = new Set();
+// How many access requests have been raised for each person, across all their jobs —
+// shown as a small numbered badge next to their name in the drawer.
+const accessRequestCounts = {};
+let currentDrawerJobNo = null;
+
+// Normalise dependsOn so every job has the field, even hand-authored ones from earlier versions
+jobs.forEach(j => { if (!j.dependsOn) j.dependsOn = []; });
+
+// ---- Scheduling & Estimating detailed checklist (dummy data) ----
+// Real Lofty scheduling coordinators track granular site-start milestones per job (selections,
+// temp fencing, footings, slab, frame, roof, etc). This is a worked example of what that level of
+// detail could look like in the drill-down, attached to every job currently in that phase.
+const SELECTIONS_STEPS = [
+  "Selections Finalised", "Quotes Requested", "Orders Stage 1 Requested", "Stage 1 Orders Complete",
+  "Orders Stage 2 Requested", "Orders Complete", "Footing Schedule", "Site Start", "Pour Date"
+];
+
+const SCHEDULING_FIELDS = [
+  "Temp Fence Supplier", "Temp Fence Booked", "Site Toilet Supplier", "Site Toilet Booked",
+  "Site Bin Supplier", "Site Bin Booked", "Retaining Wall Contractor", "Retaining Walls Booked",
+  "Concrete Checklist", "Footing Contractor", "Vegetation Scrape", "Sitecut/ Benching",
+  "Trench Digging", "Engineers Trench Inspection", "Plumber - Underfloor",
+  "Slab Steel Materials - Delivery", "Footing Contractor - Slab Steel Up", "Engineer - Steel Inspection",
+  "Electrical - Underslab", "White Ant Treatment - Penetrations", "Council Pre Pour Notice - Sent",
+  "Footing Contractor - Pour", "Plumber Contractor", "Stormwater & Drains", "Electrical - Undergrounds",
+  "Underground Gas", "Final Trim", "Brick/Hebel Pre-Load (Supplier)", "Brick/Hebel Pre-Load (Delivery)",
+  "Rainwater Tank Delivery", "Single or Double", "Structural Steel Supplier", "Structural Steel - Install",
+  "Timber/Steel Supplier", "LWF", "FF", "UWF", "LRF", "URF", "Truss Dates",
+  "Party/Boundary Wall Supplier", "Party Wall Delivery", "Carpenter", "Carpenter Lower Frame / Floor",
+  "Frame Complete", "Window Supplier", "Windows Lower Floor Delivery", "Windows Upper Delivery",
+  "Roof Contractor", "Fascias & Gutters", "Roof Cover", "Release to Slab Pour", "Slab Pour to Frame Start"
+];
+
+const DUMMY_SUPPLIERS = [
+  "Statewide Fencing", "SA Site Services", "Adelaide Bins & Skips", "Southern Retaining Co",
+  "Precision Concreting", "Metro Earthworks", "Hills Plumbing Group", "Steelfix Reinforcing",
+  "Direct Electrical", "Barrier Pest Control", "Cross Country Civil", "Coastal Brick & Hebel",
+  "Aqua Tanks SA", "Framecraft Carpentry", "Vista Windows", "Apex Roofing", "Trussmasters SA"
+];
+
+// A field counts as a "supplier" field if it names a supplier/contractor directly, rather than
+// being a date/status/delivery checkpoint.
+function isSchedulingSupplierField(field) {
+  return /supplier|contractor/i.test(field);
+}
+
+// jobByNo / hashStr are declared as function statements further down, but function declarations
+// are hoisted within this script, so they're safe to use here at initial data-build time.
+jobs.filter(j => j.stage === "Scheduling & Estimating").forEach(job => {
+  const progressRatio = Math.min(0.92, 0.22 + (job.days / 40));
+
+  const selectionsCompleteCount = Math.round(progressRatio * SELECTIONS_STEPS.length);
+  job.selectionsTracker = SELECTIONS_STEPS.map((step, i) => ({
+    step,
+    done: i < selectionsCompleteCount,
+    date: i < selectionsCompleteCount ? addDays(TODAY_STR, -((selectionsCompleteCount - i) * 4)) : null
+  }));
+
+  const fieldCompleteCount = Math.round(progressRatio * SCHEDULING_FIELDS.length);
+  job.schedulingChecklist = SCHEDULING_FIELDS.map((field, i) => {
+    const done = i < fieldCompleteCount;
+    let value;
+    if (isSchedulingSupplierField(field)) {
+      value = done ? DUMMY_SUPPLIERS[hashStr(job.no + field) % DUMMY_SUPPLIERS.length] : "Not yet assigned";
+    } else {
+      value = done ? "✓ Complete" : "Pending";
+    }
+    return { field, value, done };
+  });
+});
+
+function jobByNo(no) {
+  return jobs.find(j => j.no === no);
+}
+
+// A dependency is considered "blocked" while the parent job is still sitting in
+// Sales & acquisition (i.e. land/contract not yet cleared) — otherwise treated as clear.
+function getDependencyInfo(job) {
+  if (!job.dependsOn.length) return { hasDeps: false, blocked: false, parents: [] };
+  const parents = job.dependsOn.map(no => jobByNo(no)).filter(Boolean);
+  const blocked = parents.some(p => stages.indexOf(p.stage) <= 0);
+  return { hasDeps: true, blocked, parents };
+}
+
+const teamMembers = uniqueSorted(jobs.map(j => j.assignee));
+
+// Build a name -> department lookup from the job data itself (no separate roster to maintain)
+const assigneeDeptMap = {};
+jobs.forEach(j => { assigneeDeptMap[j.assignee] = j.owner; });
+const allDepartments = uniqueSorted(jobs.map(j => j.owner));
+
+function hashStr(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  }
+  return h;
+}
+
+// Deterministic (not random-per-render) business-hours time, derived from a seed string
+function deterministicTime(seed) {
+  const h = hashStr(seed);
+  const hour = 8 + (h % 10); // 08:00 - 17:xx
+  const minute = [0, 15, 30, 45][(h >> 4) % 4];
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+// Who logged a given activity entry — defaults to the job's own assignee/department,
+// but for jobs flagged as a conflict, the most recent entry is attributed to a different
+// department to make the "multiple teams touching this job" story visible in the log.
+function getActivityAttribution(job, entry, idx) {
+  // Entries created live in this session (drag-move, comment, access request) carry their own attribution
+  if (entry.author) {
+    return { author: entry.author, department: entry.department || "This session", time: entry.time || "just now" };
+  }
+  const isMostRecent = idx === job.activity.length - 1;
+  if (job.conflict && isMostRecent) {
+    const otherDept = allDepartments.find(d => d !== job.owner) || job.owner;
+    const otherPerson = teamMembers.find(n => assigneeDeptMap[n] === otherDept) || job.assignee;
+    return { author: otherPerson, department: otherDept, time: deterministicTime(job.no + entry.date + idx + "alt") };
+  }
+  return { author: job.assignee, department: job.owner, time: deterministicTime(job.no + entry.date + idx) };
+}
+
+// Infer a plausible requester for the "If requested" blocker banner from its wording
+function deriveRequester(job) {
+  if (!job.requested) return null;
+  const text = job.requested.toLowerCase();
+  if (text.includes("client")) return { name: "Client", department: "External — client" };
+  if (text.includes("council")) return { name: "Local Council", department: "External — council" };
+  if (text.includes("supplier") || text.includes("quote")) return { name: "Supplier", department: "External — supplier" };
+  // Otherwise treat it as a cross-team internal request from a different department
+  const otherDept = allDepartments.find(d => d !== job.owner) || job.owner;
+  const otherPerson = teamMembers.find(n => assigneeDeptMap[n] === otherDept) || job.assignee;
+  return { name: otherPerson, department: otherDept };
+}
+
+// Populate "My tasks" filter once, without wiping the toolbar's other controls
+(function initMyTasksOptions() {
+  const sel = document.getElementById("myTasksSelect");
+  teamMembers.forEach(name => {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = `My tasks — ${name}`;
+    sel.appendChild(opt);
+  });
+})();
+
+function clearFilters() {
+  document.getElementById("viewModeSelect").value = "board";
+  document.getElementById("groupBySelect").value = "phase";
+  document.getElementById("typeFilter").value = "all";
+  document.getElementById("dateFilterStart").value = "";
+  document.getElementById("dateFilterEnd").value = "";
+  document.getElementById("myTasksSelect").value = "all";
+  renderBoard();
+}
+
+function getVisibleJobs() {
+  const typeFilter = document.getElementById("typeFilter").value;
+  const dateStart = document.getElementById("dateFilterStart").value;
+  const dateEnd = document.getElementById("dateFilterEnd").value;
+  const myTasksFilter = document.getElementById("myTasksSelect").value;
+
+  let visible = jobs.slice();
+  if (typeFilter !== "all") {
+    visible = visible.filter(j => j.type === typeFilter);
+  }
+  if (dateStart || dateEnd) {
+    visible = visible.filter(j => {
+      const latest = latestActivityDate(j);
+      if (!latest) return false;
+      if (dateStart && latest < dateStart) return false;
+      if (dateEnd && latest > dateEnd) return false;
+      return true;
+    });
+  }
+  if (myTasksFilter !== "all") {
+    visible = visible.filter(j => j.assignee === myTasksFilter);
+  }
+  return visible;
+}
+
+function renderBoard() {
+  const viewMode = document.getElementById("viewModeSelect").value;
+  const groupMode = document.getElementById("groupBySelect").value;
+  const visibleJobs = getVisibleJobs();
+
+  document.getElementById("resultCount").textContent =
+    `Showing ${visibleJobs.length} of ${jobs.length} jobs`;
+  document.getElementById("dragHint").style.visibility =
+    (viewMode === "board" && groupMode === "phase") ? "visible" : "hidden";
+
+  // Any normal render (view switch, group-by change, filter change) exits a drill-down page.
+  document.getElementById("drilldownView").style.display = "none";
+  document.getElementById("board").style.display = viewMode === "board" ? "flex" : "none";
+  document.getElementById("tableView").style.display = viewMode === "table" ? "block" : "none";
+  document.getElementById("ganttView").style.display = viewMode === "gantt" ? "block" : "none";
+  document.getElementById("dashboardView").style.display = viewMode === "dashboard" ? "block" : "none";
+  document.getElementById("reportView").style.display = viewMode === "report" ? "block" : "none";
+
+  if (viewMode === "table") {
+    renderTable(visibleJobs);
+  } else if (viewMode === "gantt") {
+    renderGantt(visibleJobs);
+  } else if (viewMode === "dashboard") {
+    renderDashboard(visibleJobs);
+  } else if (viewMode === "report") {
+    renderReport(visibleJobs);
+  } else {
+    renderKanban(visibleJobs, groupMode);
+  }
+}
+
+function renderKanban(visibleJobs, groupMode) {
+  const board = document.getElementById("board");
+  board.innerHTML = "";
+
+  const grouping = getGrouping(groupMode);
+  const dragEnabled = groupMode === "phase";
+
+  grouping.order.forEach((key, idx) => {
+    const groupJobs = visibleJobs.filter(j => grouping.keyFn(j) === key);
+    if (!groupJobs.length) return; // skip empty groups so filters/other groupings don't leave blank columns
+
+    const col = document.createElement("div");
+    col.className = "column";
+
+    if (dragEnabled) {
+      col.addEventListener("dragover", e => {
+        e.preventDefault();
+        col.classList.add("drag-over");
+      });
+      col.addEventListener("dragleave", () => col.classList.remove("drag-over"));
+      col.addEventListener("drop", e => {
+        e.preventDefault();
+        col.classList.remove("drag-over");
+        const jobNo = e.dataTransfer.getData("text/plain");
+        moveJobToStage(jobNo, key);
+      });
+    }
+
+    const head = document.createElement("div");
+    head.className = "column-head";
+    head.innerHTML = `
+      <div>
+        <div class="phase-num">${groupMode === "phase" ? "Stage" : groupMode === "team" ? "Team" : groupMode === "member" ? "Team member" : groupMode === "type" ? "Project type" : "Health status"}</div>
+        <h2>${grouping.label(key)}</h2>
+      </div>
+      <div class="column-head-right">
+        <span class="count">${groupJobs.length}</span>
+        <button class="expand-btn" title="See everything in ${grouping.label(key)}">▸</button>
+      </div>
+    `;
+    head.querySelector(".expand-btn").addEventListener("click", () => openGroupDrilldown(groupMode, key, grouping.label(key), groupJobs));
+    col.appendChild(head);
+
+    groupJobs.forEach(job => {
+      const card = document.createElement("div");
+      card.className = "card" + (job.conflict ? " conflict" : "");
+
+      if (dragEnabled) {
+        card.setAttribute("draggable", "true");
+        card.addEventListener("dragstart", e => {
+          e.dataTransfer.setData("text/plain", job.no);
+          card.classList.add("dragging");
+        });
+        card.addEventListener("dragend", () => card.classList.remove("dragging"));
+      }
+
+      let tagsHtml = "";
+      if (job.tags.length) {
+        tagsHtml = `<div class="tags-row">` + job.tags.map(t =>
+          `<span class="tag-chip${t === "IF" ? " if-tag" : ""}">${t}</span>`
+        ).join("") + `</div>`;
+      }
+
+      // Every card always shows a status-update line in the yellow flag — the job's
+      // pending request/blocker if there is one, otherwise the most recent activity entry.
+      const latestActivityText = job.activity.length ? job.activity[job.activity.length - 1].text : "No recent update logged.";
+      const cardStatusText = job.requested || latestActivityText;
+      let requestedHtml = `<div class="requested-flag">${job.requested ? "⏳ " : ""}${cardStatusText}</div>`;
+
+      let conflictHtml = job.conflict
+        ? `<div class="conflict-note">⚠ Multiple teams editing this job</div>`
+        : "";
+
+      const depInfo = getDependencyInfo(job);
+      let dependencyHtml = "";
+      if (depInfo.hasDeps) {
+        const depClass = depInfo.blocked ? "blocked" : "clear";
+        const depIcon = depInfo.blocked ? "⛓ Blocked by" : "⛓ Depends on";
+        dependencyHtml = `<div class="dependency-flag ${depClass}">${depIcon} ${job.dependsOn.join(", ")}</div>`;
+      }
+
+      // "Stage" on the card face shows the finer build stage when there is one (e.g. "Frame stage"),
+      // otherwise falls back to the phase/column name — always meaningful, even outside the phase grouping.
+      const stageValue = job.buildStage || job.stage;
+
+      card.innerHTML = `
+        <div class="card-top">
+          <span class="job-no">${job.no}</span>
+          <span class="status-pill ${job.status}">${statusLabel(job.status)}</span>
+        </div>
+        <div class="address">${job.address}</div>
+        <div class="card-divider"></div>
+        <div class="card-stage-type">
+          <div><span class="stt-label">Stage:</span> ${stageValue}</div>
+          <div><span class="stt-label">Type:</span> ${job.type}</div>
+        </div>
+        ${tagsHtml}
+        ${dependencyHtml}
+        ${requestedHtml}
+        ${conflictHtml}
+        <div class="card-team-foot">
+          <div class="team-row">
+            <span class="avatar">${initials(job.assignee)}</span>
+            <span class="team-text"><span class="owner-badge">${job.owner}</span><br><span class="assignee-name">${job.assignee}</span></span>
+          </div>
+          <span class="days-in-stage">${job.days} day${job.days === 1 ? "" : "s"} in stage</span>
+        </div>
+      `;
+
+      card.addEventListener("click", () => openDrawer(job, job.stage));
+      col.appendChild(card);
+    });
+
+    board.appendChild(col);
+  });
+
+  if (!board.children.length) {
+    board.innerHTML = `<div style="padding:30px;color:var(--text-muted);font-size:13px;">No jobs match the current filters.</div>`;
+  }
+}
+
+// ---- Column drill-down: click the expand arrow on a column head to see everything in that
+// team/stage/etc as a full breadcrumb page (Board > [group]) — not just a narrow kanban column,
+// and not a popup. Works the same way for every grouping mode (phase/team/member/type/status). ----
+function openGroupDrilldown(groupMode, key, label, groupJobs) {
+  const dimensionLabel = groupMode === "phase" ? "Stage" : groupMode === "team" ? "Team" : groupMode === "member" ? "Team member" : groupMode === "type" ? "Project type" : "Health status";
+
+  const onTrack = groupJobs.filter(j => j.status === "on-track").length;
+  const atRisk = groupJobs.filter(j => j.status === "at-risk").length;
+  const stale = groupJobs.filter(j => j.status === "stale").length;
+  const avgDays = groupJobs.length ? Math.round(groupJobs.reduce((s, j) => s + j.days, 0) / groupJobs.length) : 0;
+
+  const sorted = groupJobs.slice().sort((a, b) => stages.indexOf(a.stage) - stages.indexOf(b.stage) || b.days - a.days);
+
+  const rows = sorted.map(job => `
+    <tr class="row-clickable" onclick='openDrawerByNo("${job.no}")'>
+      <td>${job.no}</td>
+      <td>${job.address}</td>
+      <td>${job.stage}</td>
+      <td>${job.buildStage || "—"}</td>
+      <td>${job.owner}</td>
+      <td>${job.assignee}</td>
+      <td><span class="status-pill ${job.status}">${statusLabel(job.status)}</span></td>
+      <td>${job.days}</td>
+    </tr>
+  `).join("");
+
+  // Scheduling & Estimating gets an additional, more granular checklist breakdown per job —
+  // a worked example of how much detail a real drill-down could surface for a specific team.
+  const isSchedulingPhase = groupMode === "phase" && key === "Scheduling & Estimating";
+  const schedulingDetailHtml = isSchedulingPhase ? renderSchedulingDetail(sorted) : "";
+
+  const wrap = document.getElementById("drilldownView");
+  wrap.innerHTML = `
+    <div class="breadcrumbs">
+      <a onclick="closeDrilldown()">Board</a>
+      <span class="crumb-sep">›</span>
+      <span class="crumb-current">${label}</span>
+    </div>
+    <div class="drilldown-head">
+      <h2>${label}</h2>
+      <p>${dimensionLabel} — ${groupJobs.length} job${groupJobs.length === 1 ? "" : "s"} in view right now (respects your current filters)</p>
+    </div>
+    <div class="gm-stats-row">
+      <div class="gm-stat"><div class="gm-num">${groupJobs.length}</div><div class="gm-lbl">Total jobs</div></div>
+      <div class="gm-stat"><div class="gm-num" style="color:var(--on-track-text);">${onTrack}</div><div class="gm-lbl">On track</div></div>
+      <div class="gm-stat"><div class="gm-num" style="color:var(--at-risk-text);">${atRisk}</div><div class="gm-lbl">At risk</div></div>
+      <div class="gm-stat"><div class="gm-num" style="color:var(--stale-text);">${stale}</div><div class="gm-lbl">Stalled</div></div>
+      <div class="gm-stat"><div class="gm-num">${avgDays}</div><div class="gm-lbl">Avg days in stage</div></div>
+    </div>
+    <table class="job-table">
+      <thead>
+        <tr><th>Job no</th><th>Address</th><th>Stage</th><th>Build stage</th><th>Team</th><th>Assignee</th><th>Status</th><th>Days</th></tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+    ${schedulingDetailHtml}
+  `;
+
+  document.getElementById("board").style.display = "none";
+  document.getElementById("tableView").style.display = "none";
+  document.getElementById("ganttView").style.display = "none";
+  document.getElementById("dashboardView").style.display = "none";
+  document.getElementById("reportView").style.display = "none";
+  wrap.style.display = "block";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+// Renders the extra Selections-tracker + site-prep checklist panels for jobs that have
+// been pre-populated with schedulingChecklist data (see the Scheduling & Estimating
+// checklist generator near the top of this script).
+function renderSchedulingDetail(jobsInGroup) {
+  const withChecklist = jobsInGroup.filter(j => j.schedulingChecklist);
+  if (!withChecklist.length) return "";
+
+  const jobBlocksHtml = withChecklist.map(job => {
+    const selectionsHtml = job.selectionsTracker.map(s => `
+      <div class="sel-step ${s.done ? "done" : ""}">
+        <span class="sel-dot"></span>
+        <span class="sel-label">${s.step}</span>
+        <span class="sel-date">${s.date || "—"}</span>
+      </div>
+    `).join("");
+
+    const fieldsHtml = job.schedulingChecklist.map(f => `
+      <div class="sched-field ${f.done ? "done" : ""}">
+        <span class="sched-field-name">${f.field}</span>
+        <span class="sched-field-value">${f.value}</span>
+      </div>
+    `).join("");
+
+    const completeCount = job.schedulingChecklist.filter(f => f.done).length;
+
+    return `
+      <details class="sched-job-detail">
+        <summary>${job.no} — ${job.address}<span class="sched-progress">${completeCount}/${job.schedulingChecklist.length} site-prep items complete</span></summary>
+        <div class="sched-detail-body">
+          <div class="sched-detail-col">
+            <h5>Selections tracker</h5>
+            <div class="sel-steps">${selectionsHtml}</div>
+          </div>
+          <div class="sched-detail-col wide">
+            <h5>Site-prep &amp; scheduling checklist</h5>
+            <div class="sched-fields-grid">${fieldsHtml}</div>
+          </div>
+        </div>
+      </details>
+    `;
+  }).join("");
+
+  return `
+    <div class="section-title" style="margin-top:24px;">Scheduling detail (per job)</div>
+    <p style="font-size:12px;color:var(--text-muted);margin:-6px 0 14px 0;">Click a job to expand its full site-prep and selections checklist — an example of the granular tracking this concept could support.</p>
+    ${jobBlocksHtml}
+  `;
+}
+
+function closeDrilldown() {
+  renderBoard();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function moveJobToStage(jobNo, newStage) {
+  const job = jobs.find(j => j.no === jobNo);
+  if (!job || job.stage === newStage) return;
+  const oldStage = job.stage;
+  job.stage = newStage;
+  job.days = 0;
+  job.activity.push({ date: TODAY_STR, text: `Moved from "${oldStage}" to "${newStage}" (drag and drop on board)`, author: "You", department: "This session", time: "just now" });
+  renderBoard();
+}
+
+function renderTable(visibleJobs) {
+  const wrap = document.getElementById("tableView");
+  const sorted = visibleJobs.slice().sort((a, b) => {
+    const diff = stages.indexOf(a.stage) - stages.indexOf(b.stage);
+    return diff !== 0 ? diff : b.days - a.days;
+  });
+
+  const rows = sorted.map(job => `
+    <tr class="row-clickable" onclick='openDrawerByNo("${job.no}")'>
+      <td>${job.no}</td>
+      <td>${job.address}</td>
+      <td>${job.stage}</td>
+      <td>${job.buildStage || "—"}</td>
+      <td>${job.owner}</td>
+      <td>${job.assignee}</td>
+      <td>${job.type}</td>
+      <td><span class="status-pill ${job.status}">${statusLabel(job.status)}</span></td>
+      <td>${job.days}</td>
+      <td>${job.tags.length ? job.tags.join(", ") : "—"}</td>
+      <td>${job.source}</td>
+    </tr>
+  `).join("");
+
+  wrap.innerHTML = `
+    <table class="job-table">
+      <thead>
+        <tr>
+          <th>Job no</th><th>Address</th><th>Phase</th><th>Build stage</th>
+          <th>Team</th><th>Assignee</th><th>Type</th><th>Status</th>
+          <th>Days</th><th>Tags</th><th>Source</th>
+        </tr>
+      </thead>
+      <tbody>${rows || `<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:24px;">No jobs match the current filters.</td></tr>`}</tbody>
+    </table>
+  `;
+}
+
+function renderDashboard(visibleJobs) {
+  const wrap = document.getElementById("dashboardView");
+  if (!visibleJobs.length) {
+    wrap.innerHTML = `<div style="padding:30px;color:var(--text-muted);font-size:13px;">No jobs match the current filters.</div>`;
+    return;
+  }
+
+  const total = visibleJobs.length;
+  const onTrack = visibleJobs.filter(j => j.status === "on-track").length;
+  const atRisk = visibleJobs.filter(j => j.status === "at-risk").length;
+  const stale = visibleJobs.filter(j => j.status === "stale").length;
+  const blocked = visibleJobs.filter(j => getDependencyInfo(j).blocked).length;
+  const conflicts = visibleJobs.filter(j => j.conflict).length;
+  const avgDays = Math.round(visibleJobs.reduce((s, j) => s + j.days, 0) / total);
+
+  // ---- Breakdown by phase ----
+  const phaseCounts = stages.map(s => ({ label: s, count: visibleJobs.filter(j => j.stage === s).length, color: PHASE_COLORS[s].fill }))
+    .filter(p => p.count > 0);
+  const maxPhaseCount = Math.max(...phaseCounts.map(p => p.count), 1);
+
+  // ---- Breakdown by team ----
+  const teamNames = uniqueSorted(visibleJobs.map(j => j.owner));
+  const teamCounts = teamNames.map(t => ({ label: t, count: visibleJobs.filter(j => j.owner === t).length }))
+    .sort((a, b) => b.count - a.count);
+  const maxTeamCount = Math.max(...teamCounts.map(t => t.count), 1);
+
+  // ---- Needs attention: at-risk/stale jobs, longest in stage first ----
+  const attention = visibleJobs.filter(j => j.status !== "on-track")
+    .sort((a, b) => b.days - a.days)
+    .slice(0, 8);
+
+  const phaseBarsHtml = phaseCounts.map(p => `
+    <div class="dash-bar-row">
+      <div class="dash-bar-label">${p.label}</div>
+      <div class="dash-bar-track"><div class="dash-bar-fill" style="width:${(p.count / maxPhaseCount) * 100}%; background:${p.color};"></div></div>
+      <div class="dash-bar-count">${p.count}</div>
+    </div>
+  `).join("");
+
+  const teamBarsHtml = teamCounts.map(t => `
+    <div class="dash-bar-row">
+      <div class="dash-bar-label">${t.label}</div>
+      <div class="dash-bar-track"><div class="dash-bar-fill" style="width:${(t.count / maxTeamCount) * 100}%; background:var(--accent);"></div></div>
+      <div class="dash-bar-count">${t.count}</div>
+    </div>
+  `).join("");
+
+  const attentionHtml = attention.length ? attention.map(j => `
+    <div class="dash-attention-row" onclick='openDrawerByNo("${j.no}")'>
+      <div>
+        <div class="da-addr">${j.no} — ${j.address}</div>
+        <div class="da-meta">${j.stage} · ${j.owner} · ${j.assignee}</div>
+      </div>
+      <span class="status-pill ${j.status}">${statusLabel(j.status)}</span>
+    </div>
+  `).join("") : `<div style="font-size:12px;color:var(--text-muted);">Nothing needs attention right now — everything in view is on track.</div>`;
+
+  wrap.innerHTML = `
+    <div class="dash-kpi-row">
+      <div class="dash-kpi"><div class="dk-num">${total}</div><div class="dk-lbl">Jobs in view</div></div>
+      <div class="dash-kpi good"><div class="dk-num">${onTrack}</div><div class="dk-lbl">On track (${Math.round(onTrack/total*100)}%)</div></div>
+      <div class="dash-kpi warn"><div class="dk-num">${atRisk}</div><div class="dk-lbl">At risk</div></div>
+      <div class="dash-kpi bad"><div class="dk-num">${stale}</div><div class="dk-lbl">Stalled</div></div>
+      <div class="dash-kpi"><div class="dk-num">${avgDays}</div><div class="dk-lbl">Avg days in stage</div></div>
+      <div class="dash-kpi warn"><div class="dk-num">${blocked}</div><div class="dk-lbl">Blocked by dependency</div></div>
+      <div class="dash-kpi bad"><div class="dk-num">${conflicts}</div><div class="dk-lbl">Ownership conflicts</div></div>
+    </div>
+    <div class="dash-panels">
+      <div class="dash-panel">
+        <h4>Jobs by stage</h4>
+        ${phaseBarsHtml}
+      </div>
+      <div class="dash-panel">
+        <h4>Jobs by team</h4>
+        ${teamBarsHtml}
+      </div>
+    </div>
+    <div class="dash-panel">
+      <h4>Needs attention (at risk or stalled, longest-running first)</h4>
+      ${attentionHtml}
+    </div>
+  `;
+}
+
+// Builds the filter-summary line shown at the top of the Report view, so it's
+// clear on a printed page exactly what subset of jobs the report covers.
+function describeActiveFilters() {
+  const parts = [];
+  const type = document.getElementById("typeFilter").value;
+  if (type !== "all") parts.push(`Type: ${type}`);
+  const start = document.getElementById("dateFilterStart").value;
+  const end = document.getElementById("dateFilterEnd").value;
+  if (start || end) parts.push(`Active between: ${start || "any"} – ${end || "any"}`);
+  const myTasks = document.getElementById("myTasksSelect").value;
+  if (myTasks !== "all") parts.push(`Assigned to: ${myTasks}`);
+  return parts.length ? parts.join(" · ") : "No filters applied — showing all jobs.";
+}
+
+function renderReport(visibleJobs) {
+  const wrap = document.getElementById("reportView");
+  if (!visibleJobs.length) {
+    wrap.innerHTML = `<div style="padding:30px;color:var(--text-muted);font-size:13px;">No jobs match the current filters.</div>`;
+    return;
+  }
+
+  const generatedAt = `${TODAY_STR}`;
+
+  const sectionsHtml = stages.map(stage => {
+    const stageJobs = visibleJobs.filter(j => j.stage === stage);
+    if (!stageJobs.length) return "";
+
+    const rowsHtml = stageJobs.map(job => {
+      const latestActivityText = job.activity.length ? job.activity[job.activity.length - 1].text : "No recent update logged.";
+      const statusUpdateText = job.requested || latestActivityText;
+      const depInfo = getDependencyInfo(job);
+      const tagsText = job.tags.length ? job.tags.join(", ") : "None";
+      const depText = depInfo.hasDeps
+        ? `${depInfo.blocked ? "Blocked by" : "Depends on"} ${job.dependsOn.join(", ")}`
+        : "None";
+
+      return `
+        <div class="report-job">
+          <div class="report-job-top">
+            <span class="report-job-no">${job.no}</span>
+            <span class="status-pill ${job.status}">${statusLabel(job.status)}</span>
+            <span class="report-job-addr">${job.address}</span>
+            ${job.conflict ? `<span class="conflict-note" style="margin-left:auto;">⚠ Multiple teams editing this job</span>` : ""}
+          </div>
+          <div class="report-grid">
+            <div><div class="label">Build stage</div><div class="value">${job.buildStage || "—"}</div></div>
+            <div><div class="label">Type</div><div class="value">${job.type}</div></div>
+            <div><div class="label">Owner team</div><div class="value">${job.owner}</div></div>
+            <div><div class="label">Assignee</div><div class="value">${job.assignee}</div></div>
+            <div><div class="label">Days in stage</div><div class="value">${job.days}</div></div>
+            <div><div class="label">Tags</div><div class="value">${tagsText}</div></div>
+            <div><div class="label">Dependencies</div><div class="value">${depText}</div></div>
+            <div><div class="label">Contract</div><div class="value">${job.contract}</div></div>
+            <div><div class="label">Deposit</div><div class="value">${job.deposit}</div></div>
+            <div><div class="label">Drawings</div><div class="value">${job.drawings}</div></div>
+          </div>
+          <div class="report-status-update">${job.requested ? "⏳ " : "🕓 "}${statusUpdateText}</div>
+          ${job.notes ? `<div class="report-notes"><span class="label">Notes</span> ${job.notes}</div>` : ""}
+        </div>
+      `;
+    }).join("");
+
+    return `
+      <div class="report-section">
+        <div class="report-section-head">${stage} <span class="report-section-count">${stageJobs.length} job${stageJobs.length === 1 ? "" : "s"}</span></div>
+        ${rowsHtml}
+      </div>
+    `;
+  }).join("");
+
+  wrap.innerHTML = `
+    <div class="report-header">
+      <div>
+        <h2 class="report-title">Job Oversight Report</h2>
+        <div class="report-meta">Generated ${generatedAt} · Showing ${visibleJobs.length} of ${jobs.length} jobs</div>
+        <div class="report-meta">${describeActiveFilters()}</div>
+        <div class="report-disclaimer">Dummy data for prototype purposes only — not a live report.</div>
+      </div>
+      <button class="print-report-btn" onclick="window.print()">🖨 Print report</button>
+    </div>
+    ${sectionsHtml}
+  `;
+}
+
+// ---- Gantt date helpers ----
+const MONTH_ABBR = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const WEEKDAY_LETTERS = ["S","M","T","W","T","F","S"];
+
+function parseD(dateStr) { return new Date(dateStr + "T00:00:00"); }
+function fmtD(d) { return d.toISOString().slice(0, 10); }
+function addDays(dateStr, n) { const d = parseD(dateStr); d.setDate(d.getDate() + n); return fmtD(d); }
+function dayDiff(a, b) { return Math.round((parseD(b) - parseD(a)) / 86400000); }
+function formatShort(dateStr) { const d = parseD(dateStr); return MONTH_ABBR[d.getMonth()] + " " + d.getDate(); }
+function weekdayLetter(dateStr) { return WEEKDAY_LETTERS[parseD(dateStr).getDay()]; }
+function isWeekend(dateStr) { const dow = parseD(dateStr).getDay(); return dow === 0 || dow === 6; }
+function mondayOnOrBefore(dateStr) { const d = parseD(dateStr); const dow = (d.getDay() + 6) % 7; d.setDate(d.getDate() - dow); return fmtD(d); }
+
+// Typical duration used to draw the "planned" length of each bar — illustrative, not a real schedule
+const BUILD_STAGE_DAYS = {
+  "Site preparation": 10, "Slab stage": 10, "Frame stage": 28,
+  "Lock-up stage": 35, "Fixing and fit-out": 90, "Practical completion": 7, "Handed over": 30
+};
+const PHASE_DAYS = {
+  "Sales & acquisition": 21, "Planning & Engineering": 24, "Working Drawings & Contracts": 18,
+  "Preconstruction": 14, "Scheduling & Estimating": 21, "Construction & execution": 30,
+  "Post-construction & closeout": 10, "Handover & maintenance": 30
+};
+function estimatedDurationDays(job) {
+  if (job.buildStage && BUILD_STAGE_DAYS[job.buildStage]) return BUILD_STAGE_DAYS[job.buildStage];
+  return PHASE_DAYS[job.stage] || 21;
+}
+
+const PHASE_COLORS = {
+  "Sales & acquisition":            { bg: "#ede9fe", fill: "#7c3aed" },
+  "Planning & Engineering":         { bg: "#fce7f3", fill: "#db2777" },
+  "Working Drawings & Contracts":   { bg: "#ccfbf1", fill: "#0d9488" },
+  "Preconstruction":                { bg: "#cffafe", fill: "#0891b2" },
+  "Scheduling & Estimating":        { bg: "#dbeafe", fill: "#2563eb" },
+  "Construction & execution":       { bg: "#fef9c3", fill: "#ca8a04" },
+  "Post-construction & closeout":   { bg: "#e0e7ff", fill: "#4f46e5" },
+  "Handover & maintenance":         { bg: "#e2e8f0", fill: "#475569" }
+};
+
+const GT_COLS = [
+  { key: "item", label: "Item", width: 34 },
+  { key: "task", label: "Job / address", width: 230 },
+  { key: "assigned", label: "Assigned to", width: 108 },
+  { key: "progress", label: "Progress", width: 58 },
+  { key: "start", label: "Start", width: 66 },
+  { key: "end", label: "End", width: 66 },
+  { key: "workdays", label: "Work days", width: 62 }
+];
+const GT_DAY_WIDTH = 24;
+
+function renderGantt(visibleJobs) {
+  const wrap = document.getElementById("ganttView");
+  if (!visibleJobs.length) {
+    wrap.innerHTML = `<div style="padding:30px;color:var(--text-muted);font-size:13px;">No jobs match the current filters.</div>`;
+    return;
+  }
+
+  const sorted = visibleJobs.slice().sort((a, b) => {
+    const diff = stages.indexOf(a.stage) - stages.indexOf(b.stage);
+    return diff !== 0 ? diff : a.no.localeCompare(b.no);
+  });
+
+  // Compute each job's illustrative start/end and overall date range for the chart
+  const jobDates = {};
+  sorted.forEach(job => {
+    const start = job.activity.length ? job.activity.map(a => a.date).sort()[0] : TODAY_STR;
+    const duration = estimatedDurationDays(job);
+    const end = addDays(start, duration);
+    jobDates[job.no] = { start, end, duration };
+  });
+
+  let rangeStart = mondayOnOrBefore(sorted.reduce((min, j) => jobDates[j.no].start < min ? jobDates[j.no].start : min, TODAY_STR));
+  let rangeEndRaw = sorted.reduce((max, j) => jobDates[j.no].end > max ? jobDates[j.no].end : max, TODAY_STR);
+  rangeEndRaw = addDays(rangeEndRaw, 4); // small trailing buffer so the last bar isn't flush against the edge
+  const totalDays = dayDiff(rangeStart, rangeEndRaw) + 1;
+  const totalWeeks = Math.ceil(totalDays / 7);
+
+  const fixedColsWidth = GT_COLS.reduce((sum, c) => sum + c.width, 0);
+  let cumLeft = 0;
+  const colLefts = GT_COLS.map(c => { const left = cumLeft; cumLeft += c.width; return left; });
+
+  // ---- Header: week row + day row ----
+  let weekHeaderHtml = GT_COLS.map((c, i) =>
+    `<th class="gt-week gt-fixed gt-sticky-col" style="left:${colLefts[i]}px; width:${c.width}px;">${i === 0 ? "" : ""}</th>`
+  ).join("");
+  for (let w = 0; w < totalWeeks; w++) {
+    const weekStart = addDays(rangeStart, w * 7);
+    const daysInWeek = Math.min(7, totalDays - w * 7);
+    weekHeaderHtml += `<th class="gt-week" colspan="${daysInWeek}" style="width:${daysInWeek * GT_DAY_WIDTH}px;">${formatShort(weekStart)}</th>`;
+  }
+
+  let dayHeaderHtml = GT_COLS.map((c, i) =>
+    `<th class="gt-day gt-fixed gt-sticky-col" style="left:${colLefts[i]}px; width:${c.width}px; top:22px;">${c.label}</th>`
+  ).join("");
+  for (let d = 0; d < totalDays; d++) {
+    const dateStr = addDays(rangeStart, d);
+    dayHeaderHtml += `<th class="gt-day${isWeekend(dateStr) ? " weekend" : ""}" style="width:${GT_DAY_WIDTH}px;">${weekdayLetter(dateStr)}<br>${parseD(dateStr).getDate()}</th>`;
+  }
+
+  // ---- Body: phase band + job rows ----
+  let bodyHtml = "";
+  stages.forEach(stage => {
+    const stageJobs = sorted.filter(j => j.stage === stage);
+    if (!stageJobs.length) return;
+    const colors = PHASE_COLORS[stage];
+
+    bodyHtml += `<tr class="gt-phase-row" style="background:${colors.fill};">
+      <td colspan="${GT_COLS.length + totalDays}"><span class="gt-phase-label">${stage} — ${stageJobs.length} job${stageJobs.length === 1 ? "" : "s"}</span></td>
+    </tr>`;
+
+    stageJobs.forEach((job, idx) => {
+      const { start, end, duration } = jobDates[job.no];
+      const startOffset = dayDiff(rangeStart, start) * GT_DAY_WIDTH;
+      const barWidth = Math.max(duration * GT_DAY_WIDTH, GT_DAY_WIDTH);
+      const elapsed = Math.max(0, dayDiff(start, TODAY_STR));
+      const progressPct = Math.max(0, Math.min(100, Math.round((elapsed / duration) * 100)));
+      const workDays = Math.max(1, Math.round(duration * 5 / 7));
+
+      const depInfo = getDependencyInfo(job);
+      const depNoteHtml = depInfo.hasDeps
+        ? `<div class="gantt-dep-note ${depInfo.blocked ? "blocked" : "clear"}">⛓ ${depInfo.blocked ? "Blocked by" : "Depends on"} ${job.dependsOn.join(", ")}</div>`
+        : "";
+
+      const rowBg = colors.bg;
+      const cells = [
+        `<td class="gt-sticky-col" style="left:${colLefts[0]}px; width:${GT_COLS[0].width}px; background:${rowBg};">${idx + 1}</td>`,
+        `<td class="gt-sticky-col" style="left:${colLefts[1]}px; width:${GT_COLS[1].width}px; background:${rowBg}; cursor:pointer;" onclick='openDrawerByNo("${job.no}")'>
+           <span class="gt-mini-dot" style="background:var(--${job.status === "on-track" ? "on-track-text" : job.status === "at-risk" ? "at-risk-text" : "stale-text"});"></span>${job.no}<br><span style="font-weight:600;">${job.address}</span>${depNoteHtml}
+         </td>`,
+        `<td class="gt-sticky-col" style="left:${colLefts[2]}px; width:${GT_COLS[2].width}px; background:${rowBg};">${job.assignee}<br><span style="color:var(--text-muted);font-size:10px;">${job.owner}</span></td>`,
+        `<td class="gt-sticky-col gt-progress-cell" style="left:${colLefts[3]}px; width:${GT_COLS[3].width}px; background:${rowBg};">${progressPct}%</td>`,
+        `<td class="gt-sticky-col" style="left:${colLefts[4]}px; width:${GT_COLS[4].width}px; background:${rowBg};">${formatShort(start)}</td>`,
+        `<td class="gt-sticky-col" style="left:${colLefts[5]}px; width:${GT_COLS[5].width}px; background:${rowBg};">${formatShort(end)}</td>`,
+        `<td class="gt-sticky-col" style="left:${colLefts[6]}px; width:${GT_COLS[6].width}px; background:${rowBg};">${workDays}</td>`
+      ].join("");
+
+      const timelineCell = `<td class="gt-timeline-cell" colspan="${totalDays}">
+        <div class="gt-row-track">
+          <div class="gt-bar-full" data-bar="${job.no}" style="left:${startOffset}px; width:${barWidth}px; background:${colors.bg};">
+            <div class="gt-bar-progress" style="width:${progressPct}%; background:${colors.fill};"></div>
+          </div>
+        </div>
+      </td>`;
+
+      bodyHtml += `<tr>${cells}${timelineCell}</tr>`;
+    });
+  });
+
+  const tableWidth = fixedColsWidth + totalDays * GT_DAY_WIDTH;
+  const todayOffset = fixedColsWidth + dayDiff(rangeStart, TODAY_STR) * GT_DAY_WIDTH;
+
+  wrap.innerHTML = `
+    <div class="gantt-info-strip">
+      <div><span class="gi-label">Portfolio:</span><span class="gi-value">Lofty active jobs (dummy)</span></div>
+      <div><span class="gi-label">Today:</span><span class="gi-value">${TODAY_STR}</span></div>
+      <div><span class="gi-label">Jobs shown:</span><span class="gi-value">${sorted.length}</span></div>
+      <div><span class="gi-label">Range:</span><span class="gi-value">${formatShort(rangeStart)} → ${formatShort(rangeEndRaw)}</span></div>
+    </div>
+    <div class="gantt-scroll">
+      <div class="gantt-scroll-inner" id="ganttRowsWrap">
+        <table class="gantt-table" style="width:${tableWidth}px;">
+          <thead>
+            <tr>${weekHeaderHtml}</tr>
+            <tr>${dayHeaderHtml}</tr>
+          </thead>
+          <tbody>${bodyHtml}</tbody>
+        </table>
+        <div class="gantt-today-line" style="left:${todayOffset}px; height:100%;"></div>
+        <svg id="ganttSvg"></svg>
+      </div>
+    </div>
+    <div class="gantt-legend-note">Bars show an illustrative planned duration per phase/build stage (not a real construction programme) with the darker fill showing progress elapsed so far. Dashed red connectors show a job waiting on a land/acquisition dependency to clear; grey connectors show a dependency that's already cleared. Row colour = current phase; the small dot on each job = health status (green/amber/red).</div>
+  `;
+
+  requestAnimationFrame(() => drawDependencyLines(sorted));
+}
+
+function drawDependencyLines(sorted) {
+  const rowsWrap = document.getElementById("ganttRowsWrap");
+  const svg = document.getElementById("ganttSvg");
+  if (!rowsWrap || !svg) return;
+
+  const wrapRect = rowsWrap.getBoundingClientRect();
+  svg.setAttribute("width", wrapRect.width);
+  svg.setAttribute("height", wrapRect.height);
+  svg.style.width = wrapRect.width + "px";
+  svg.style.height = wrapRect.height + "px";
+  svg.innerHTML = "";
+
+  sorted.forEach(job => {
+    const depInfo = getDependencyInfo(job);
+    if (!depInfo.hasDeps) return;
+
+    job.dependsOn.forEach(parentNo => {
+      const fromBar = rowsWrap.querySelector(`[data-bar="${parentNo}"]`);
+      const toBar = rowsWrap.querySelector(`[data-bar="${job.no}"]`);
+      if (!fromBar || !toBar) return; // parent job filtered out of current view
+
+      const fromRect = fromBar.getBoundingClientRect();
+      const toRect = toBar.getBoundingClientRect();
+      const x1 = fromRect.right - wrapRect.left;
+      const y1 = fromRect.top + fromRect.height / 2 - wrapRect.top;
+      const x2 = toRect.left - wrapRect.left;
+      const y2 = toRect.top + toRect.height / 2 - wrapRect.top;
+
+      const parent = jobByNo(parentNo);
+      const blocked = parent && stages.indexOf(parent.stage) <= 0;
+      const color = blocked ? "#b3261e" : "#8a919e";
+      const dash = blocked ? "4,3" : "0";
+
+      const midX = (x1 + x2) / 2;
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", `M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`);
+      path.setAttribute("fill", "none");
+      path.setAttribute("stroke", color);
+      path.setAttribute("stroke-width", "1.5");
+      path.setAttribute("stroke-dasharray", dash);
+      svg.appendChild(path);
+
+      const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      dot.setAttribute("cx", x2);
+      dot.setAttribute("cy", y2);
+      dot.setAttribute("r", "2.5");
+      dot.setAttribute("fill", color);
+      svg.appendChild(dot);
+    });
+  });
+}
+
+window.addEventListener("resize", () => {
+  if (document.getElementById("viewModeSelect") && document.getElementById("viewModeSelect").value === "gantt") {
+    renderBoard();
+  }
+});
+
+function openDrawerByNo(jobNo) {
+  const job = jobs.find(j => j.no === jobNo);
+  if (job) openDrawer(job, job.stage);
+}
+
+renderBoard();
+
+function openDummySharePoint(job) {
+  const win = window.open("", "_blank");
+  win.document.write(`
+    <!DOCTYPE html>
+    <html><head><title>${job.no} — SharePoint (dummy)</title>
+    <style>
+      body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin:0; background:#faf9f8; color:#242424; }
+      .topbar { background:#0f6cbd; color:#fff; padding:14px 24px; font-size:14px; font-weight:600; }
+      .banner { background:#fff4ce; color:#5c4400; padding:8px 24px; font-size:12.5px; border-bottom:1px solid #e8d999; }
+      .crumb { padding:14px 24px 0 24px; font-size:12.5px; color:#616161; }
+      .content { padding:20px 24px 40px 24px; max-width:760px; }
+      h1 { font-size:20px; margin:6px 0 20px 0; }
+      .field { display:flex; padding:10px 0; border-bottom:1px solid #edebe9; font-size:13.5px; }
+      .field .k { width:180px; color:#616161; }
+      .field .v { font-weight:600; }
+    </style></head>
+    <body>
+      <div class="topbar">Lofty Homes &nbsp;|&nbsp; Job Files</div>
+      <div class="banner">This is a dummy page for prototype purposes only — not a real SharePoint site or live data.</div>
+      <div class="crumb">Job Files &gt; Active Jobs &gt; ${job.stage} &gt; ${job.no}</div>
+      <div class="content">
+        <h1>${job.address}</h1>
+        <div class="field"><span class="k">Job number</span><span class="v">${job.no}</span></div>
+        <div class="field"><span class="k">Current phase</span><span class="v">${job.stage}</span></div>
+        <div class="field"><span class="k">Build stage</span><span class="v">${job.buildStage || "N/A"}</span></div>
+        <div class="field"><span class="k">Team</span><span class="v">${job.owner} — ${job.assignee}</span></div>
+        <div class="field"><span class="k">Contract</span><span class="v">${job.contract}</span></div>
+        <div class="field"><span class="k">Deposit</span><span class="v">${job.deposit}</span></div>
+        <div class="field"><span class="k">Drawings</span><span class="v">${job.drawings}</span></div>
+        <div class="field"><span class="k">Notes</span><span class="v">${job.notes}</span></div>
+      </div>
+    </body></html>
+  `);
+  win.document.close();
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function formatCommentText(text) {
+  let escaped = escapeHtml(text);
+  // Longest names first so multi-word names match before a shorter substring would
+  const names = teamMembers.slice().sort((a, b) => b.length - a.length);
+  names.forEach(name => {
+    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp("@" + escapedName, "g");
+    escaped = escaped.replace(re, `<span class="mention-chip">@${name}</span>`);
+  });
+  return escaped;
+}
+
+function openDrawer(job, stageName) {
+  currentDrawerJobNo = job.no;
+  const head = document.getElementById("drawerHead");
+  const body = document.getElementById("drawerBody");
+
+  head.innerHTML = `
+    <button class="close-btn" onclick="closeDrawer()">×</button>
+    <div class="job-no-lg">${job.no}</div>
+    <h3>${job.address}</h3>
+    <div class="phase-line">${stageName}${job.buildStage ? " — " + job.buildStage : ""}</div><br>
+    <span class="status-pill ${job.status}">${statusLabel(job.status)}</span>
+  `;
+
+  let tagsHtml = job.tags.length
+    ? `<div class="tags-row">` + job.tags.map(t => `<span class="tag-chip${t === "IF" ? " if-tag" : ""}">${t}</span>`).join("") + `</div>`
+    : `<div style="font-size:12px;color:var(--text-muted);">No tags on this job.</div>`;
+
+  const requester = deriveRequester(job);
+  let requestedHtml = job.requested
+    ? `<div class="requested-flag">⏳ ${job.requested}</div>` +
+      (requester ? `<div class="requested-by">Requested by <strong>${requester.name}</strong> · ${requester.department}</div>` : "")
+    : `<div style="font-size:12px;color:var(--text-muted);">Nothing currently pending or requested.</div>`;
+
+  let activityHtml = job.activity.length
+    ? job.activity.slice().reverse().map((a, revIdx) => {
+        const idx = job.activity.length - 1 - revIdx;
+        const attr = getActivityAttribution(job, a, idx);
+        return `
+        <div class="activity-item">
+          <span class="activity-dot"></span>
+          <div class="activity-text">
+            <div class="activity-meta"><span class="activity-author">${attr.author}</span><span class="activity-dept">${attr.department}</span></div>
+            ${a.text}
+            <div class="activity-date">${a.date} at ${attr.time}</div>
+          </div>
+        </div>`;
+      }).join("")
+    : `<div style="font-size:12px;color:var(--text-muted);">No activity logged yet.</div>`;
+
+  let commentsHtml = job.comments.length
+    ? job.comments.map(c => `
+        <div class="comment">
+          <div class="comment-head"><span class="comment-author">${c.author}</span><span class="comment-date">${c.date}</span></div>
+          <div class="comment-body">${formatCommentText(c.text)}</div>
+        </div>`).join("")
+    : `<div style="font-size:12px;color:var(--text-muted);">No comments yet.</div>`;
+
+  const requested = accessRequestedSet.has(job.no);
+  const requestAccessBtnHtml = requested
+    ? `<button class="request-access-btn requested" disabled>✓ Access requested</button>`
+    : `<button class="request-access-btn" onclick="requestAccess('${job.no}')">🔑 Request access</button>`;
+
+  const mentionButtonsHtml = teamMembers.map(name =>
+    `<button type="button" class="mention-btn" onclick="insertMention('${name}')">@${name}</button>`
+  ).join("");
+
+  const accessCount = accessRequestCounts[job.assignee] || 0;
+  const accessBadgeHtml = accessCount
+    ? `<span class="access-count-badge" title="${accessCount} access request${accessCount === 1 ? "" : "s"} for ${job.assignee}">${accessCount}</span>`
+    : "";
+
+  const assigneeSelectHtml = `<select class="drawer-select" style="width:auto;flex:1;" onchange="reassignJob('${job.no}', this.value)">
+    ${teamMembers.map(name => `<option value="${name}" ${name === job.assignee ? "selected" : ""}>${name}</option>`).join("")}
+  </select>`;
+
+  const buildStageOptions = Object.keys(BUILD_STAGE_DAYS);
+  const stageSelectHtml = `<select class="drawer-select" onchange="updateJobBuildStage('${job.no}', this.value)">
+    ${!job.buildStage ? `<option value="" selected disabled>— not set —</option>` : ""}
+    ${buildStageOptions.map(s => `<option value="${s}" ${s === job.buildStage ? "selected" : ""}>${s}</option>`).join("")}
+  </select>`;
+
+  const typeOptions = ["Residential", "Commercial", "Development"];
+  const typeSelectHtml = `<select class="drawer-select" onchange="updateJobType('${job.no}', this.value)">
+    ${typeOptions.map(t => `<option value="${t}" ${t === job.type ? "selected" : ""}>${t}</option>`).join("")}
+  </select>`;
+
+  body.innerHTML = `
+    <div class="section-title">Which team it's with</div>
+    <div class="team-block">
+      <span class="avatar">${initials(job.assignee)}</span>
+      <div style="flex:1;">
+        <div class="who">${assigneeSelectHtml}${accessBadgeHtml}</div>
+        <div class="role">${job.owner} team</div>
+      </div>
+    </div>
+    <div class="drawer-actions">
+      <button class="open-file-btn" onclick="openDummySharePoint(${JSON.stringify(job).replace(/"/g, '&quot;')})">📁 Open job file</button>
+      ${requestAccessBtnHtml}
+    </div>
+
+    <div class="section-title">Stage &amp; type</div>
+    <div class="drawer-field-row">
+      <div class="drawer-field">
+        <div class="label">Stage</div>
+        ${stageSelectHtml}
+      </div>
+      <div class="drawer-field">
+        <div class="label">Type</div>
+        ${typeSelectHtml}
+      </div>
+    </div>
+
+    <div class="section-title">Tags</div>
+    ${tagsHtml}
+
+    <div class="section-title">Dependencies</div>
+    ${(() => {
+      const depInfo = getDependencyInfo(job);
+      if (!depInfo.hasDeps) {
+        return `<div style="font-size:12px;color:var(--text-muted);">No dependencies on other jobs.</div>`;
+      }
+      const depClass = depInfo.blocked ? "blocked" : "clear";
+      const rows = depInfo.parents.map(p => `
+        <div class="dependency-flag ${stages.indexOf(p.stage) <= 0 ? "blocked" : "clear"}" style="display:block; margin-bottom:6px;">
+          ${p.no} — ${p.address} (${p.stage})
+        </div>`).join("");
+      return rows + `<div style="font-size:11.5px;color:var(--text-muted);">${depInfo.blocked ? "This job is waiting on a land/acquisition dependency to clear before it can proceed with confidence." : "Dependency has progressed past Sales & acquisition — considered clear."}</div>`;
+    })()}
+
+    <div class="section-title">If requested</div>
+    ${requestedHtml}
+
+    <div class="section-title">Job details</div>
+    <div class="info-grid">
+      <div><div class="label">Contract</div><div class="value">${job.contract}</div></div>
+      <div><div class="label">Deposit</div><div class="value">${job.deposit}</div></div>
+      <div><div class="label">Drawings</div><div class="value">${job.drawings}</div></div>
+      <div><div class="label">Days in stage</div><div class="value">${job.days}</div></div>
+    </div>
+
+    <div class="section-title">Activity log</div>
+    ${activityHtml}
+
+    <div class="section-title">Comments</div>
+    <div class="comment-form">
+      <textarea id="commentInput" placeholder="Add a comment... use the buttons below to @mention someone"></textarea>
+      <div class="mention-row">${mentionButtonsHtml}</div>
+      <button type="button" class="post-comment-btn" onclick="postComment('${job.no}')">Post comment</button>
+    </div>
+    ${commentsHtml}
+  `;
+
+  document.getElementById("drawer").classList.add("open");
+  document.getElementById("overlay").classList.add("open");
+}
+
+function insertMention(name) {
+  const box = document.getElementById("commentInput");
+  if (!box) return;
+  const mention = `@${name} `;
+  const start = box.selectionStart ?? box.value.length;
+  const end = box.selectionEnd ?? box.value.length;
+  box.value = box.value.slice(0, start) + mention + box.value.slice(end);
+  box.focus();
+  const caret = start + mention.length;
+  box.setSelectionRange(caret, caret);
+}
+
+function postComment(jobNo) {
+  const job = jobs.find(j => j.no === jobNo);
+  const box = document.getElementById("commentInput");
+  if (!job || !box) return;
+  const text = box.value.trim();
+  if (!text) return;
+
+  job.comments.push({ author: "You", date: TODAY_STR, text: text });
+  job.activity.push({ date: TODAY_STR, text: "Comment added" + (/@\S/.test(text) ? " with a mention" : ""), author: "You", department: "This session", time: "just now" });
+
+  openDrawer(job, job.stage); // re-render drawer with the new comment
+  renderBoard();
+}
+
+function requestAccess(jobNo) {
+  const job = jobs.find(j => j.no === jobNo);
+  if (!job || accessRequestedSet.has(jobNo)) return;
+  accessRequestedSet.add(jobNo);
+  accessRequestCounts[job.assignee] = (accessRequestCounts[job.assignee] || 0) + 1;
+  job.activity.push({ date: TODAY_STR, text: `Access requested for job file (${job.no})`, author: "You", department: "This session", time: "just now" });
+  openDrawer(job, job.stage);
+  renderBoard();
+}
+
+function reassignJob(jobNo, newAssignee) {
+  const job = jobs.find(j => j.no === jobNo);
+  if (!job || !newAssignee || job.assignee === newAssignee) return;
+  const oldAssignee = job.assignee;
+  job.assignee = newAssignee;
+  if (assigneeDeptMap[newAssignee]) job.owner = assigneeDeptMap[newAssignee];
+  job.activity.push({ date: TODAY_STR, text: `Reassigned from ${oldAssignee} to ${newAssignee}`, author: "You", department: "This session", time: "just now" });
+  openDrawer(job, job.stage);
+  renderBoard();
+}
+
+function updateJobBuildStage(jobNo, newBuildStage) {
+  const job = jobs.find(j => j.no === jobNo);
+  if (!job || job.buildStage === newBuildStage) return;
+  const oldStage = job.buildStage || "(not set)";
+  job.buildStage = newBuildStage;
+  job.activity.push({ date: TODAY_STR, text: `Stage updated from ${oldStage} to ${newBuildStage}`, author: "You", department: "This session", time: "just now" });
+  openDrawer(job, job.stage);
+  renderBoard();
+}
+
+function updateJobType(jobNo, newType) {
+  const job = jobs.find(j => j.no === jobNo);
+  if (!job || job.type === newType) return;
+  const oldType = job.type;
+  job.type = newType;
+  job.activity.push({ date: TODAY_STR, text: `Type changed from ${oldType} to ${newType}`, author: "You", department: "This session", time: "just now" });
+  openDrawer(job, job.stage);
+  renderBoard();
+}
+
+function closeDrawer() {
+  document.getElementById("drawer").classList.remove("open");
+  document.getElementById("overlay").classList.remove("open");
+  currentDrawerJobNo = null;
+}
+</script>
+
+</body>
+</html>
