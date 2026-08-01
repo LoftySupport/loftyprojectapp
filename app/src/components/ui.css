@@ -168,9 +168,15 @@
   border-radius: var(--border-radius-small);
   white-space: nowrap;
 }
-.status-pill.on-track { background: var(--positive-color-selected); color: var(--positive-ink); }
-.status-pill.at-risk { background: var(--warning-color-selected); color: var(--warning-ink); }
-.status-pill.stale { background: var(--negative-color-selected); color: var(--negative-ink); }
+/* Seven statuses onto four tones. The inks are the ones already contrast-checked in
+   tokens.css rather than a second palette invented here. */
+.status-pill.on_track        { background: var(--positive-color-selected); color: var(--positive-ink); }
+.status-pill.completed       { background: var(--positive-color-selected); color: var(--positive-ink); }
+.status-pill.at_risk         { background: var(--warning-color-selected);  color: var(--warning-ink); }
+.status-pill.behind_schedule { background: var(--negative-color-selected); color: var(--negative-ink); }
+.status-pill.cancelled       { background: var(--negative-color-selected); color: var(--negative-ink); }
+.status-pill.on_hold         { background: var(--allgrey-background-color); color: var(--secondary-text-color); }
+.status-pill.archived        { background: var(--allgrey-background-color); color: var(--secondary-text-color); }
 
 /* ---- tables -------------------------------------------------------------- */
 .data-table-wrap { overflow-x: auto; }

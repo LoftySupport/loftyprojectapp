@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Button, Heading, Text } from "@vibe/core";
 import { useQuery } from "../data/DataProvider";
-import { HEALTH_LABELS, HEALTH_STATUSES, JOB_TYPES, STAGE_NAMES, TEAMS } from "../data/lookups";
+import { RECORD_STATUS_LABELS, RECORD_STATUSES, PROJECT_TYPES, STAGE_NAMES, TEAMS } from "../data/lookups";
 import { SHAPE_PROJECTS, type ShapeProject } from "../data/placeholderShape";
 import { ProjectCard, StatusPill } from "../components/RecordCards";
 import { PropertySlots } from "../components/PropertySlots";
@@ -31,8 +31,8 @@ export function ProjectsPage() {
     switch (field) {
       case "Stage": return toOptions(STAGE_NAMES);
       case "Team": return toOptions(TEAMS);
-      case "Status": return HEALTH_STATUSES.map(s => ({ value: s, label: HEALTH_LABELS[s] }));
-      case "Type": return toOptions(JOB_TYPES);
+      case "Status": return RECORD_STATUSES.map(s => ({ value: s, label: RECORD_STATUS_LABELS[s] }));
+      case "Type": return toOptions(PROJECT_TYPES);
       default: return [];
     }
   };

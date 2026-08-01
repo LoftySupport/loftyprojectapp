@@ -1,5 +1,5 @@
 import { Avatar, Text } from "@vibe/core";
-import { HEALTH_LABELS, type HealthStatus } from "../data/lookups";
+import { RECORD_STATUS_LABELS, type RecordStatus } from "../data/lookups";
 import { Token } from "./Token";
 import "./ui.css";
 
@@ -11,21 +11,21 @@ import "./ui.css";
  * shape when they bind, it just stops showing braces.
  */
 
-export function StatusPill({ status }: { status: HealthStatus }) {
-  return <span className={`status-pill ${status}`}>{HEALTH_LABELS[status]}</span>;
+export function StatusPill({ status }: { status: RecordStatus }) {
+  return <span className={`status-pill ${status}`}>{RECORD_STATUS_LABELS[status]}</span>;
 }
 
 export function JobCard({
   jobNumber,
   stageName,
   team,
-  status = "on-track",
+  status = "on_track",
   onOpen
 }: {
   jobNumber: string;
   stageName: string;
   team: string;
-  status?: HealthStatus;
+  status?: RecordStatus;
   onOpen?: () => void;
 }) {
   return (
@@ -56,7 +56,7 @@ export function JobCard({
 
       <dl className="card-meta">
         <dt><Text type="text3" color="secondary">Type</Text></dt>
-        <dd><Text type="text3"><Token>jobs.type</Token></Text></dd>
+        <dd><Text type="text3"><Token>job_display.project_type</Token></Text></dd>
         <dt><Text type="text3" color="secondary">Stage</Text></dt>
         <dd><Text type="text3">{stageName}</Text></dd>
       </dl>
@@ -77,12 +77,12 @@ export function JobCard({
 export function ProjectCard({
   projectNumber,
   jobNumbers,
-  status = "on-track",
+  status = "on_track",
   onOpen
 }: {
   projectNumber: string;
   jobNumbers: string[];
-  status?: HealthStatus;
+  status?: RecordStatus;
   onOpen?: () => void;
 }) {
   return (

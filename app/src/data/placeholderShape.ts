@@ -1,4 +1,4 @@
-import { PHASE_TEAMS, STAGE_NAMES, type HealthStatus } from "./lookups";
+import { PHASE_TEAMS, STAGE_NAMES, type RecordStatus } from "./lookups";
 
 /**
  * Layout scaffolding for the unbound state — **not data**.
@@ -24,19 +24,22 @@ export interface ShapeJob {
   projectNumber: string;
   stage: string;
   team: string;
-  status: HealthStatus;
+  status: RecordStatus;
   daysInStage: number;
 }
 
 export interface ShapeProject {
   projectNumber: string;
   jobs: ShapeJob[];
-  status: HealthStatus;
+  status: RecordStatus;
 }
 
-const STATUS_CYCLE: HealthStatus[] = [
-  "on-track", "on-track", "on-track", "at-risk", "on-track",
-  "on-track", "stale", "on-track", "at-risk", "on-track", "on-track"
+/** Spread across the enum so the board shows what each status looks like, not just
+ *  the happy one. Completed and cancelled are in there deliberately — they are what
+ *  is_current() filters out. */
+const STATUS_CYCLE: RecordStatus[] = [
+  "on_track", "on_track", "at_risk", "on_track", "behind_schedule",
+  "on_track", "on_hold", "completed", "at_risk", "cancelled", "on_track"
 ];
 
 export const SHAPE_PROJECTS: ShapeProject[] = (() => {
@@ -66,11 +69,11 @@ export const SHAPE_PROJECTS: ShapeProject[] = (() => {
       projectNumber,
       jobs,
       // A project is only as healthy as its worst job — derived, never stored.
-      status: jobs.some(j => j.status === "stale")
-        ? "stale"
-        : jobs.some(j => j.status === "at-risk")
-          ? "at-risk"
-          : "on-track"
+      status: jobs.some(j => j.status === "behind_schedule")
+        ? "behind_schedule"
+        : jobs.some(j => j.status === "at_risk")
+          ? "at_risk"
+          : "on_track"
     });
   });
 

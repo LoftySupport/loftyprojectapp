@@ -60,8 +60,6 @@ create table teams            (id uuid primary key default gen_random_uuid(),
 create table stages           (id smallint primary key, name text unique not null, position smallint not null);
 create table build_stages     (id smallint primary key, name text unique not null, position smallint not null,
                                typical_days smallint);
-create table job_types        (id smallint primary key, name text unique not null);
-create table health_statuses  (id text primary key, label text not null);   -- 'on-track' | 'at-risk' | 'stale'
 create table tags             (id uuid primary key default gen_random_uuid(), name text unique not null);
 -- Permission is an enum, not a lookup table. It is a fixed ladder rather than data
 -- anyone maintains, and Postgres orders enum values by declaration — so `permission >=
@@ -76,17 +74,32 @@ create type au_state as enum ('SA', 'NSW', 'VIC', 'QLD', 'WA', 'NT', 'TAS', 'ACT
 -- One value today. An enum rather than a text column so the day a second country
 -- appears it is `alter type … add value`, not a data-cleaning exercise.
 create type country_code as enum ('AU');
--- Project type and status. Both closed sets that only a schema change should widen,
--- so enums rather than lookup tables.
---
--- Labels are snake_case because they are code, not copy — the app maps them to
--- "On track", "Behind schedule" for display. Storing the display string means every
--- rename is a data migration.
+-- One type, set on the project. Jobs inherit it rather than carrying their own — a
+-- commercial project does not contain residential jobs, so a second column would only
+-- ever be a chance to disagree with the first.
 create type project_type as enum ('residential', 'commercial', 'development');
-create type project_status as enum (
+
+-- One status, used on both projects and jobs. A record is in exactly one of these at
+-- a time, which is what makes it an enum rather than a set of flags.
+--
+-- This is NOT health. Health is a separate, calculated thing — on schedule? over
+-- budget? an issue raised? — assembled from several inputs still to be decided, and
+-- it is deliberately left out of the schema until those inputs are known. Status is
+-- what someone sets; health is what the system works out.
+--
+-- Labels are snake_case because they are codes, not copy — the app maps them to
+-- "On track", "Behind schedule" for display, so a rename is not a data migration.
+create type record_status as enum (
   'on_track', 'at_risk', 'behind_schedule', 'on_hold',
   'completed', 'cancelled', 'archived'
 );
+
+-- "Current" means not finished and not abandoned. Derived from status wherever it is
+-- needed, never stored — a stored copy is one more thing to keep true.
+create or replace function is_current(s record_status) returns boolean
+language sql immutable as $$
+  select s not in ('completed', 'cancelled', 'archived');
+$$;
 
 
 -- Councils are a TABLE, not an enum, and this is the one place I have not done what
@@ -128,8 +141,6 @@ create index on council_regions (state);
 - **build_stages** (ordered, with the prototype's typical durations in days)
   Site preparation 10 · Slab stage 10 · Frame stage 28 · Lock-up stage 35 ·
   Fixing and fit-out 90 · Practical completion 7 · Handed over 30
-- **job_types** — Residential, Commercial, Development
-- **health_statuses** — `on-track` "On track" · `at-risk` "At risk" · `stale` "Stalled"
 - **tags** — IF, Council hold, Design variation, Insurance claim, Supply shortage
 - **council_regions** — seed the 68 South Australian councils first, `state = 'SA'`.
   The list is published by the Local Government Association of SA; it wants importing
@@ -286,7 +297,7 @@ create table projects (
   current_address_id  uuid not null references addresses(id),
 
   project_type       project_type,
-  status             project_status not null default 'on_track',
+  status             record_status not null default 'on_track',
 
   start_date         date,
   target_completion  date,
@@ -375,10 +386,14 @@ create table jobs (
 
   stage_id          smallint references stages(id) not null,
   build_stage_id    smallint references build_stages(id),
-  type_id           smallint references job_types(id),
+  -- No type column. A job's type is its project's type — a commercial project does not
+  -- contain residential jobs, so a second column would only ever be a chance to
+  -- disagree with the first. Read it through job_display.
   owning_team_id    uuid references teams(id) not null,
   assignee_id       uuid references profiles(id),
-  status            text references health_statuses(id) not null default 'on-track',
+  -- The same status as projects, from the same enum. Not health: health is calculated
+  -- from inputs still to be decided and is deliberately absent until they are.
+  status            record_status not null default 'on_track',
   source_system     text,
   contract_status   text,
   deposit_status    text,
@@ -402,6 +417,24 @@ create table job_dependencies (
   check (job_id <> depends_on_job_id)
 );
 ```
+
+-- A job's type, address and parent number in one place. The type is the project's —
+-- inherited, not copied — so there is nowhere for the two to disagree.
+create view job_display as
+  select j.id,
+         j.combined_job_number,
+         j.project_id,
+         p.project_no,
+         p.project_type,                     -- inherited from the project
+         j.status,
+         is_current(j.status) as is_current, -- derived, never stored
+         cur.consolidated_address  as current_address,
+         orig.consolidated_address as original_address,
+         cur.suburb
+  from jobs j
+    join projects p           on p.id    = j.project_id
+    join addresses cur        on cur.id  = j.current_address_id
+    left join addresses orig  on orig.id = j.original_address_id;
 
 ### One activity feed
 
@@ -427,7 +460,7 @@ create index on activity (subject_type, subject_id, occurred_at desc);
 
 ```sql
 create table templates             (id uuid primary key default gen_random_uuid(),
-                                    type_id smallint references job_types(id) unique not null);
+                                    project_type project_type unique not null);
 create table template_phases       (id uuid primary key default gen_random_uuid(),
                                     template_id uuid references templates(id) on delete cascade,
                                     stage_id smallint references stages(id),

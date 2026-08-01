@@ -2,9 +2,9 @@ import { useMemo, useState } from "react";
 import { Button, Counter, Heading, Text } from "@vibe/core";
 import { useQuery } from "../data/DataProvider";
 import {
-  HEALTH_LABELS,
-  HEALTH_STATUSES,
-  JOB_TYPES,
+  RECORD_STATUS_LABELS,
+  RECORD_STATUSES,
+  PROJECT_TYPES,
   PHASE_EXPECTED_DAYS,
   STAGE_NAMES,
   TEAMS
@@ -40,8 +40,8 @@ export function JobsPage() {
     switch (field) {
       case "Stage": return toOptions(STAGE_NAMES);
       case "Team": return toOptions(TEAMS);
-      case "Status": return HEALTH_STATUSES.map(s => ({ value: s, label: HEALTH_LABELS[s] }));
-      case "Type": return toOptions(JOB_TYPES);
+      case "Status": return RECORD_STATUSES.map(s => ({ value: s, label: RECORD_STATUS_LABELS[s] }));
+      case "Type": return toOptions(PROJECT_TYPES);
       default: return [];
     }
   };
@@ -52,13 +52,13 @@ export function JobsPage() {
       grouping === "Stage" ? j.stage
       : grouping === "Project" ? j.projectNumber
       : grouping === "Team" ? j.team
-      : grouping === "Status" ? HEALTH_LABELS[j.status]
+      : grouping === "Status" ? RECORD_STATUS_LABELS[j.status]
       : "{{profiles.full_name}}";
 
     const order: string[] =
       grouping === "Stage" ? STAGE_NAMES
       : grouping === "Team" ? TEAMS
-      : grouping === "Status" ? HEALTH_STATUSES.map(s => HEALTH_LABELS[s])
+      : grouping === "Status" ? RECORD_STATUSES.map(s => RECORD_STATUS_LABELS[s])
       : [...new Set(rows.map(keyOf))];
 
     return order.map(key => ({ key, jobs: rows.filter(j => keyOf(j) === key) }));
@@ -143,7 +143,7 @@ export function JobsPage() {
                   <td>{j.jobNumber}</td>
                   <td>{j.projectNumber}</td>
                   <td><Token>addresses.consolidated_address</Token></td>
-                  <td><Token>jobs.type</Token></td>
+                  <td><Token>job_display.project_type</Token></td>
                   <td>{j.stage}</td>
                   <td>{j.team}</td>
                   <td><Token>profiles.full_name</Token></td>

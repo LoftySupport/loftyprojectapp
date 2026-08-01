@@ -5,14 +5,14 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-108 properties across 21 tables.
+111 properties across 22 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 42 | Specified here, not yet in the migration |
-| Created | 62 | In the migration and the types |
-| Updates required | 4 | Built or specified, but a decision is outstanding |
-| Merged | 0 | Folded into another property |
+| Created | 66 | In the migration and the types |
+| Updates required | 1 | Built or specified, but a decision is outstanding |
+| Merged | 2 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
 
 ---
@@ -73,7 +73,15 @@
 
 | Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `health_statuses.id` | Health status | on-track, at-risk or stale. Job-level health, distinct from projects.status. | `text` | Primary key. | Referenced by jobs.status. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
+| `health_statuses.id` | Health status | PARKED — deliberately not built yet. Health is calculated, not set: is it on schedule, is it over budget, has an issue been raised. The inputs are still to be decided, and inventing a column before they are known would bake in the wrong answer. Distinct from status, which is what a person sets. | `text` | Not in the schema. Awaiting the list of inputs it is calculated from. | Will be derived, not stored — no column until the calculation is settled. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
+
+## `job_display`
+
+| Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `job_display.project_type` | Job type (inherited) | The job's type, which is its project's type. Inherited through the view rather than copied onto the job, so there is nowhere for the two to disagree. | `view` | Read-only. | jobs ⋈ projects on project_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `job_display.is_current` | Is current | Whether the job is still live — not completed, cancelled or archived. Derived from status every time it is read, never stored. | `view` | Read-only. is_current(jobs.status). | Mirrors the isCurrent() helper in the app. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `job_display.current_address` | Job address (current) | The consolidated current address, joined for the board and for search. | `view` | Read-only. | jobs ⋈ addresses on current_address_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `job_stages`
 
@@ -85,13 +93,13 @@
 | `job_stages.stage_id` | Stage | Which phase. | `integer` | Not null. | FK → stages(id). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `job_stages.entered_at` | Entered on | When the job reached this stage. Null until it does. | `timestamptz` | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `job_stages.exited_at` | Exited on | When it left. Null while it is still here. | `timestamptz` | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `job_stages.is_current` | Is current | Marks the one live stage row. | `boolean` | Not null, default false. Partial unique index — one current stage per job. | OPEN QUESTION: duplicates jobs.stage_id. One of the two should be authoritative and the other derived. | Updates required | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `job_stages.is_current` | Is current (removed) | Removed. Which stage a job is in now is jobs.stage_id; whether the job itself is current is is_current(status) — anything not completed, cancelled or archived. The open stage row is simply the one with exited_at null, guaranteed by a partial unique index. A third copy of that fact was a third thing to keep true. | `boolean` | Dropped from the schema. | Superseded by jobs.stage_id and the is_current(record_status) function. | Merged | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `job_types`
 
 | Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `job_types.id` | Job type | Residential, Commercial or Development at job level. | `integer` | Primary key. | Referenced by jobs.type_id. OPEN QUESTION: projects use the project_type enum instead — these two should probably be the same thing. | Updates required | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
+| `job_types.id` | Job type (merged) | Merged into the project_type enum. A job's type is its project's type — a commercial project does not contain residential jobs, so a second column would only ever be a chance to disagree with the first. Read it through job_display.project_type. | `integer` | Table dropped. | Superseded by projects.project_type, inherited by jobs through the job_display view. | Merged | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 
 ## `jobs`
 
@@ -104,10 +112,10 @@
 | `jobs.combined_job_number` | Job number (full) | What people actually quote — '1000-01'. The parent reads straight off the child. | `generated text` | GENERATED ALWAYS AS (project_no::text \|\| '-' \|\| job_number) STORED. Unique. | Derived from jobs.project_no + jobs.job_number. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `jobs.original_address_id` | Original address | The job's address as first recorded. | `uuid` | Nullable. | FK → addresses(id). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `jobs.current_address_id` | Current address | What the board shows and what people search on. | `uuid` | Not null. Falls back to the original in a trigger. Indexed. | FK → addresses(id). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `jobs.stage_id` | Stage | Which of the eight pipeline phases the job is in now. | `integer` | Not null. | FK → stages(id). Duplicated by job_stages.is_current — see the open question there. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
+| `jobs.stage_id` | Stage | Which of the eight pipeline phases the job is in now. The single answer to that question — job_stages carries the history, not the current position. | `integer` | Not null. | FK → stages(id). job_stages.is_current was removed in favour of this. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `jobs.owning_team_id` | Owning team | The one team holding the job right now. "One job, one team at a time" is the whole model. | `uuid` | Not null. | FK → teams(id). | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `jobs.assignee_id` | Assigned to | The person responsible inside the owning team. | `uuid` | Nullable. | FK → profiles(id). | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
-| `jobs.status` | Health status | On track, at risk or stalled. Distinct from projects.status, which has a wider set. | `text` | Not null, default 'on-track'. | FK → health_statuses(id). | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
+| `jobs.status` | Status | Where the job stands — the same seven values as a project, from the same enum. What someone sets, not what the system works out. | `enum` | record_status. Not null, default 'on_track'. | Feeds is_current(status). Exposed by job_display.status and job_display.is_current. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `jobs.source_system` | Source system | Where the record originated — HubSpot, SharePoint, SiteBook, Trello. | `text` | Nullable. | — | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `jobs.contract_status` | Contract status | Where the contract is up to. Free text today; a lookup once the states settle. | `text` | Nullable. | — | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `jobs.deposit_status` | Deposit status | Whether the deposit has been received. | `text` | Nullable. | — | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
@@ -166,7 +174,7 @@
 | `projects.original_address_id` | Original address | Where the project started. Never moves — it is what contracts and old paperwork refer to. | `uuid` | Nullable. Falls back from current_address_id via the projects_default_current_address trigger. | FK → addresses(id). Exposed by project_display.original_address. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `projects.current_address_id` | Current address | What every card, board and search shows. Identical to the original until something changes. | `uuid` | Not null. A blank value falls back to original_address_id in a trigger, so a caller only has to supply one. Indexed. | FK → addresses(id). Exposed by project_display.current_address. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `projects.project_type` | Project type | Residential, commercial or development. | `enum` | project_type. Nullable. Values: residential, commercial, development. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `projects.status` | Project status | Where the project stands: on track, at risk, behind schedule, on hold, completed, cancelled or archived. | `enum` | project_status. Not null, default 'on_track'. Labels are snake_case because they are codes, not copy — the app maps them for display, so a rename is not a data migration. | OPEN QUESTION: on_track / at_risk / behind_schedule are derivable from the jobs underneath, while on_hold / completed / cancelled / archived are lifecycle states only a person sets. Stored as one column a project can read "On track" while three of its jobs are stalled. | Updates required | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `projects.status` | Status | Where the project stands. A record is in exactly one of these at a time: on track, at risk, behind schedule, on hold, completed, cancelled or archived. This is what someone sets — it is not health. | `enum` | record_status. Not null, default 'on_track'. The same enum as jobs.status. Labels are snake_case because they are codes, not copy — the app maps them for display, so a rename is not a data migration. | Feeds is_current(status) — anything not completed, cancelled or archived is current. Exposed by project_display.status. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `projects.start_date` | Start date | When work began. | `date` | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `projects.target_completion` | Target completion | The date being worked towards. | `date` | Nullable. | Drives the Gantt and the overdue calculation. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `projects.end_date` | End date | When the project actually finished, as opposed to the target. | `date` | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |

@@ -91,17 +91,32 @@ create type au_state as enum ('SA', 'NSW', 'VIC', 'QLD', 'WA', 'NT', 'TAS', 'ACT
 -- One value today. An enum rather than text so adding a second country later is
 -- `alter type … add value`, not a data-cleaning exercise.
 create type country_code as enum ('AU');
--- Project type and status. Both closed sets that only a schema change should widen,
--- so enums rather than lookup tables.
---
--- Labels are snake_case because they are code, not copy — the app maps them to
--- "On track", "Behind schedule" for display. Storing the display string means every
--- rename is a data migration.
+-- One type, set on the project. Jobs inherit it rather than carrying their own — a
+-- commercial project does not contain residential jobs, so a second column would only
+-- ever be a chance to disagree with the first.
 create type project_type as enum ('residential', 'commercial', 'development');
-create type project_status as enum (
+
+-- One status, used on both projects and jobs. A record is in exactly one of these at
+-- a time, which is what makes it an enum rather than a set of flags.
+--
+-- This is NOT health. Health is a separate, calculated thing — on schedule? over
+-- budget? an issue raised? — assembled from several inputs still to be decided, and
+-- it is deliberately left out of the schema until those inputs are known. Status is
+-- what someone sets; health is what the system works out.
+--
+-- Labels are snake_case because they are codes, not copy — the app maps them to
+-- "On track", "Behind schedule" for display, so a rename is not a data migration.
+create type record_status as enum (
   'on_track', 'at_risk', 'behind_schedule', 'on_hold',
   'completed', 'cancelled', 'archived'
 );
+
+-- "Current" means not finished and not abandoned. Derived from status wherever it is
+-- needed, never stored — a stored copy is one more thing to keep true.
+create or replace function is_current(s record_status) returns boolean
+language sql immutable as $$
+  select s not in ('completed', 'cancelled', 'archived');
+$$;
 
 
 -- Councils are a table, not an enum. SA alone has 68 and Australia about 537; they
@@ -172,7 +187,7 @@ create table projects (
   current_address_id  uuid not null references addresses(id),
 
   project_type        project_type,
-  status              project_status not null default 'on_track',
+  status              record_status not null default 'on_track',
 
   start_date          date,
   target_completion   date,
@@ -255,7 +270,12 @@ create table jobs (
   original_address_id   uuid references addresses(id),
   current_address_id    uuid not null references addresses(id),
 
-  -- + fields (type, owning_team_id, assignee_id, status, contract/deposit/drawings, …)
+  -- The same status enum as projects. Not health — health is calculated from inputs
+  -- still to be decided and is deliberately absent until they are.
+  status                record_status not null default 'on_track',
+
+  -- No type column: a job's type is its project's type, read through job_display.
+  -- + fields (stage_id, owning_team_id, assignee_id, contract/deposit/drawings, …)
   created_at            timestamptz not null default now(),
   updated_at            timestamptz not null default now(),
 
@@ -299,6 +319,24 @@ create trigger projects_cascade_renumber
   after update of project_no on projects
   for each row execute function cascade_project_renumber();
 
+-- A job's type, address and parent number in one place. The type is the project's —
+-- inherited, not copied — so there is nowhere for the two to disagree.
+create view job_display as
+  select j.id,
+         j.combined_job_number,
+         j.project_id,
+         p.project_no,
+         p.project_type,                     -- inherited from the project
+         j.status,
+         is_current(j.status) as is_current, -- derived, never stored
+         cur.consolidated_address  as current_address,
+         orig.consolidated_address as original_address,
+         cur.suburb
+  from jobs j
+    join projects p           on p.id    = j.project_id
+    join addresses cur        on cur.id  = j.current_address_id
+    left join addresses orig  on orig.id = j.original_address_id;
+
 -- ------------------------------------------------- job_stages (composite)
 -- One row per job per stage. A single stage_id on the job would only say where
 -- something is now — not when it got there, how long it sat, or what it skipped.
@@ -312,7 +350,10 @@ create table job_stages (
 
   entered_at  timestamptz,       -- null until the job reaches this stage
   exited_at   timestamptz,       -- null while it is still here
-  is_current  boolean not null default false,
+  -- No is_current flag. Which stage a job is in now is jobs.stage_id, and whether the
+  -- job itself is current is is_current(jobs.status) — anything not completed,
+  -- cancelled or archived. A third copy of that fact is a third thing to keep true.
+  -- The open stage row is simply the one with exited_at null.
   -- + fields (owning_team_id, assignee_id, sla_days, notes, …)
 
   unique (job_id, stage_id),
@@ -327,9 +368,10 @@ alter table jobs add constraint jobs_id_project_id_key unique (id, project_id);
 create index job_stages_job_idx     on job_stages (job_id);
 create index job_stages_project_idx on job_stages (project_id);
 
--- Exactly one current stage per job.
-create unique index job_stages_one_current
-  on job_stages (job_id) where is_current;
+-- At most one open stage row per job — the one it has entered and not yet left.
+-- Replaces the old is_current flag: the same guarantee, without storing the fact.
+create unique index job_stages_one_open
+  on job_stages (job_id) where exited_at is null;
 
 -- ------------------------------------------------------------------- RLS
 -- On from the start, so nothing is ever built against an open table. These are

@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { Chips, Counter, Heading, Text } from "@vibe/core";
 import {
-  JOB_TYPES,
+  PROJECT_TYPES,
   PHASE_CHECKPOINTS,
   PHASE_EXPECTED_DAYS,
   PHASE_TEAMS,
   STAGE_NAMES,
-  slotsFor
+  slotsFor,
+  type ProjectType
 } from "../data/lookups";
 import "../components/ui.css";
 
@@ -18,7 +19,7 @@ import "../components/ui.css";
  * a job from a template is what keeps every job's data consistent enough to report on.
  */
 export function TemplatesPage() {
-  const [type, setType] = useState(JOB_TYPES[0]);
+  const [type, setType] = useState<ProjectType>(PROJECT_TYPES[0]);
   const checkpointCount = STAGE_NAMES.reduce(
     (n, s) => n + (PHASE_CHECKPOINTS[s]?.length ?? 0),
     0
@@ -42,7 +43,7 @@ export function TemplatesPage() {
 
       <div className="toolbar">
         <span className="toolbar-label">Template</span>
-        {JOB_TYPES.map(t => (
+        {PROJECT_TYPES.map(t => (
           <Chips
             key={t}
             label={t}

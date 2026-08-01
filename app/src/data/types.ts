@@ -62,17 +62,30 @@ export interface CouncilRegion {
 export const PROJECT_TYPES = ["residential", "commercial", "development"] as const;
 export type ProjectType = (typeof PROJECT_TYPES)[number];
 
+export const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
+  residential: "Residential",
+  commercial: "Commercial",
+  development: "Development"
+};
+
 /**
- * Snake_case because these are codes, not copy — `PROJECT_STATUS_LABELS` holds what a
- * person reads. Storing the display string would make every rename a data migration.
+ * One status, on both projects and jobs — a record is in exactly one of these at a time.
+ *
+ * This is NOT health. Health is a separate, calculated thing (on schedule? over budget?
+ * an issue raised?) assembled from inputs still to be decided, and it is deliberately
+ * absent from the schema until they are known. Status is what someone sets; health is
+ * what the system works out.
+ *
+ * Snake_case because these are codes, not copy — `RECORD_STATUS_LABELS` holds what a
+ * person reads, so a rename is not a data migration.
  */
-export const PROJECT_STATUSES = [
+export const RECORD_STATUSES = [
   "on_track", "at_risk", "behind_schedule", "on_hold",
   "completed", "cancelled", "archived"
 ] as const;
-export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
+export type RecordStatus = (typeof RECORD_STATUSES)[number];
 
-export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
+export const RECORD_STATUS_LABELS: Record<RecordStatus, string> = {
   on_track: "On track",
   at_risk: "At risk",
   behind_schedule: "Behind schedule",
@@ -82,6 +95,10 @@ export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
   archived: "Archived"
 };
 
+/** Not finished and not abandoned. Mirrors the is_current() function in Postgres. */
+export const isCurrent = (s: RecordStatus): boolean =>
+  s !== "completed" && s !== "cancelled" && s !== "archived";
+
 export interface Project {
   id: Uuid;
   /** Sequential from 1000, four digits minimum, unique. Overridable by hand. */
@@ -89,7 +106,7 @@ export interface Project {
   originalAddressId: Uuid | null;
   currentAddressId: Uuid;
   projectType: ProjectType | null;
-  status: ProjectStatus;
+  status: RecordStatus;
   startDate: IsoDate | null;
   targetCompletion: IsoDate | null;
   /** Actual, as opposed to target. */
@@ -106,7 +123,7 @@ export interface ProjectDisplay {
   id: Uuid;
   projectNo: number;
   projectType: ProjectType | null;
-  status: ProjectStatus;
+  status: RecordStatus;
   currentAddress: string;
   originalAddress: string | null;
   suburb: string;
@@ -131,9 +148,32 @@ export interface Job {
   /** Same pair as projects, for the same reason. */
   originalAddressId: Uuid | null;
   currentAddressId: Uuid;
+  /** The same enum as projects. Not health — health is calculated, and not yet built. */
+  status: RecordStatus;
+  /**
+   * No `projectType`. A job's type is its project's type, read through `job_display` —
+   * a commercial project does not contain residential jobs, so a second field would
+   * only ever be a chance to disagree with the first.
+   */
   // + fields
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
+}
+
+/** The joined shape the board reads — `job_display`. Carries the inherited type. */
+export interface JobDisplay {
+  id: Uuid;
+  combinedJobNumber: string;
+  projectId: Uuid;
+  projectNo: number;
+  /** Inherited from the project, never stored on the job. */
+  projectType: ProjectType | null;
+  status: RecordStatus;
+  /** Derived from status — not finished and not abandoned. */
+  isCurrent: boolean;
+  currentAddress: string;
+  originalAddress: string | null;
+  suburb: string;
 }
 
 // ------------------------------------------------------- project/job/stage
@@ -153,9 +193,13 @@ export interface JobStage {
   stageId: number;
   /** Null until the job reaches this stage */
   enteredAt: IsoDateTime | null;
-  /** Null while the job is still in this stage */
+  /** Null while the job is still in this stage — which is what makes it the open one. */
   exitedAt: IsoDateTime | null;
-  isCurrent: boolean;
+  /**
+   * No `isCurrent` flag. Which stage a job is in now is `jobs.stageId`; whether the job
+   * itself is current is `isCurrent(job.status)`. A third copy of that fact is a third
+   * thing to keep true.
+   */
   // + fields
 }
 

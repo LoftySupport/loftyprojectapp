@@ -51,16 +51,20 @@ export const PHASE_EXPECTED_DAYS: Record<string, number> = {
   "Handover & maintenance": 21
 };
 
-export const HEALTH_STATUSES = ["on-track", "at-risk", "stale"] as const;
-export type HealthStatus = (typeof HEALTH_STATUSES)[number];
-
-export const HEALTH_LABELS: Record<HealthStatus, string> = {
-  "on-track": "On track",
-  "at-risk": "At risk",
-  stale: "Stalled"
-};
-
-export const JOB_TYPES = ["Residential", "Commercial", "Development"];
+/**
+ * Status and type both live in types.ts now — status because projects and jobs share
+ * one enum, type because a job inherits its project's rather than carrying its own.
+ * Re-exported here so screens have one import for "the lists a filter needs".
+ */
+export {
+  RECORD_STATUSES,
+  RECORD_STATUS_LABELS,
+  PROJECT_TYPES,
+  PROJECT_TYPE_LABELS,
+  isCurrent,
+  type RecordStatus,
+  type ProjectType
+} from "./types";
 
 // ------------------------------------------------------------- properties
 
