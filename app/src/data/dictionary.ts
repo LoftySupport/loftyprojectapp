@@ -324,9 +324,11 @@ export const DICTIONARY: DictionaryEntry[] = [
     "merged", PROPOSED),
   e("build_stages.id", "Build stage", "The construction sub-stage inside Construction & execution — slab, frame, lock-up and so on.", "integer", "Primary key.", "Referenced by jobs.build_stage_id.", "to_do", PROPOSED),
   e("tags.id", "Tag", "A free label on a job — IF, Council hold, Design variation.", "uuid", "Primary key.", "Many-to-many with jobs via job_tags.", "to_do", PROPOSED),
-  e("divisions.id", "Division", "Residential, Commercial or Land, above the team.", "uuid", "Primary key.",
-    "OPEN QUESTION: projects.division_id was removed when projects were simplified, and the 'division' permission scope hung off it. Either the scope goes or division moves to the address/council.",
-    "updates_required", PROPOSED),
+  e("divisions.id", "Division (removed)",
+    "Removed — it was never a Lofty concept. Division appears nowhere in the concept spec; the prototype invented it and derived it from the project type (Development became \"Land\", everything else kept its name), so it was a second word for something that already existed. The table, projects.division_id, teams.division_id and the 'division' permission scope are all gone.",
+    "uuid", "Table dropped.",
+    "Superseded by projects.project_type. \"Everything of this type\" is project_type; \"everything in these teams\" is the team_hierarchy scope.",
+    "merged"),
 
   // ------------------------------------------------------------------ activity
   e("activity.id", "Activity ID", "One feed for both events and comments — the UI interleaves them, so the schema should not keep them apart.", "uuid", "Primary key.", "—", "to_do", PROPOSED),
@@ -341,7 +343,11 @@ export const DICTIONARY: DictionaryEntry[] = [
   e("template_phases.expected_days", "Expected days", "How long a phase should take. What the Gantt measures actual time in stage against.", "integer", "Nullable.", "FK context: template_phases → templates, stages, teams.", "to_do", PROPOSED),
   e("template_checkpoints.label", "Checkpoint", "One thing a phase expects done before handover. Instantiated per job as job_checkpoints.", "text", "Not null.", "Copied to job_checkpoints.label when a job is created from a template.", "to_do", PROPOSED),
   e("permission_grants.permission", "Permission", "Which rung of the ladder this grant applies to.", "enum", "permission_level. Part of the composite primary key.", "Keyed off the permission_level enum rather than a roles table.", "to_do", PROPOSED),
-  e("permission_grants.scope", "Scope", "How wide the grant reaches — none, own, team, team_hierarchy, division, all.", "text", "Not null, CHECK against the scope list.", "Each value maps to an RLS predicate. 'team' and 'team_hierarchy' both read profile_teams now that membership is many-to-many.", "to_do", PROPOSED)
+  e("permission_grants.scope", "Scope",
+    "How wide the grant reaches — none, own, team, team_hierarchy, all. There is no 'division' scope: divisions were a prototype invention, not a Lofty concept.",
+    "text", "Not null, CHECK against the scope list.",
+    "Each value maps to an RLS predicate. 'team' and 'team_hierarchy' both read profile_teams now that membership is many-to-many.",
+    "to_do", PROPOSED)
 ];
 
 // ---------------------------------------------------------------- derived views

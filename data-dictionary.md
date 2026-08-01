@@ -11,8 +11,8 @@
 | --- | --- | --- |
 | To do | 42 | Specified here, not yet in the migration |
 | Created | 66 | In the migration and the types |
-| Updates required | 1 | Built or specified, but a decision is outstanding |
-| Merged | 2 | Folded into another property |
+| Updates required | 0 | Built or specified, but a decision is outstanding |
+| Merged | 3 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
 
 ---
@@ -67,7 +67,7 @@
 
 | Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `divisions.id` | Division | Residential, Commercial or Land, above the team. | `uuid` | Primary key. | OPEN QUESTION: projects.division_id was removed when projects were simplified, and the 'division' permission scope hung off it. Either the scope goes or division moves to the address/council. | Updates required | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
+| `divisions.id` | Division (removed) | Removed — it was never a Lofty concept. Division appears nowhere in the concept spec; the prototype invented it and derived it from the project type (Development became "Land", everything else kept its name), so it was a second word for something that already existed. The table, projects.division_id, teams.division_id and the 'division' permission scope are all gone. | `uuid` | Table dropped. | Superseded by projects.project_type. "Everything of this type" is project_type; "everything in these teams" is the team_hierarchy scope. | Merged | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `health_statuses`
 
@@ -129,7 +129,7 @@
 | Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `permission_grants.permission` | Permission | Which rung of the ladder this grant applies to. | `enum` | permission_level. Part of the composite primary key. | Keyed off the permission_level enum rather than a roles table. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
-| `permission_grants.scope` | Scope | How wide the grant reaches — none, own, team, team_hierarchy, division, all. | `text` | Not null, CHECK against the scope list. | Each value maps to an RLS predicate. 'team' and 'team_hierarchy' both read profile_teams now that membership is many-to-many. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
+| `permission_grants.scope` | Scope | How wide the grant reaches — none, own, team, team_hierarchy, all. There is no 'division' scope: divisions were a prototype invention, not a Lofty concept. | `text` | Not null, CHECK against the scope list. | Each value maps to an RLS predicate. 'team' and 'team_hierarchy' both read profile_teams now that membership is many-to-many. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 
 ## `profile_teams`
 

@@ -14,7 +14,7 @@ Not everything on screen is a placeholder, and the distinction is deliberate:
 
 | Left as real values | Why |
 | --- | --- |
-| Stage, status, type, team, build stage, division, tag names | **Closed lookup sets.** These aren't dummy content — they're the business process, and they belong in Supabase as seeded lookup tables. They're listed below as the seed data. |
+| Stage, status, type, team, build stage, tag names | **Closed lookup sets.** These aren't dummy content — they're the business process, and they belong in Supabase as seeded lookup tables. They're listed below as the seed data. |
 | Job numbers (`1000-01`), project numbers (`1000`) | **Join keys.** They wire the board, drill-downs, dependencies and the drawer together. Tokenising them would break navigation and hide nothing useful. |
 | Dates, day counts, progress percentages | **Drive layout and arithmetic.** The Gantt, the calendar and the "days in stage" colouring all compute from them. Most are derived and shouldn't be stored at all — see *Derived, don't store* below. |
 | Everything a human reads as content | **Tokenised.** Addresses, names, notes, comments, activity text, statuses of contract/deposit/drawings, source system. |
@@ -52,11 +52,9 @@ so you can still check the formatting you're preserving.
 ### Lookups — seed these first
 
 ```sql
-create table divisions        (id uuid primary key default gen_random_uuid(), name text unique not null);
 create table teams            (id uuid primary key default gen_random_uuid(),
                                name text unique not null,
-                               parent_team_id uuid references teams(id),   -- team_hierarchy scope needs this
-                               division_id uuid references divisions(id));
+                               parent_team_id uuid references teams(id));  -- team_hierarchy scope needs this
 create table stages           (id smallint primary key, name text unique not null, position smallint not null);
 create table build_stages     (id smallint primary key, name text unique not null, position smallint not null,
                                typical_days smallint);
@@ -124,7 +122,6 @@ create index on council_regions (state);
 
 **Seed data, taken from the prototype:**
 
-- **divisions** — Residential, Commercial, Land
 - **teams** — Acquisition & Development, Sales Admin, Design, Pre-Construction Admin,
   Scheduling, Selections, Estimating, Construction, Construction Admin, Finance,
   Maintenance *(set `parent_team_id` where a lead owns more than one — that hierarchy is
@@ -545,7 +542,7 @@ create table permission_grants (
   permission permission_level,
   object  text not null check (object in ('project','job','checklist','comment','report')),
   action  text not null check (action in ('read','update','transition','export')),
-  scope   text not null check (scope in ('none','own','team','team_hierarchy','division','all')),
+  scope   text not null check (scope in ('none','own','team','team_hierarchy','all')),
   primary key (permission, object, action)
 );
 
@@ -569,16 +566,25 @@ create table user_preferences (
 );
 ```
 
-**Seed `permission_grants` from the prototype's matrix:**
+**Seed `permission_grants`.** Rewritten against the five-rung ladder — the prototype's
+matrix was keyed off six roles that no longer exist, and one of its scopes (`division`)
+referenced a table that turned out not to be a real concept.
 
-| Role | read | update | transition | export |
+| Permission | read | update | transition | export |
 | --- | --- | --- | --- | --- |
-| system_admin | all | all | all | all |
-| division_manager | division | division | division | division |
-| department_lead | team_hierarchy | team_hierarchy | team_hierarchy | none |
-| team_member | team | own | own | none |
-| finance | all | none | none | all |
-| read_only | all | none | none | all |
+| `viewer` | team_hierarchy | none | none | none |
+| `user` | team_hierarchy | own | own | none |
+| `manager` | all | team | team | all |
+| `admin` | all | all | all | all |
+| `superadmin` | all | all | all | all |
+
+`superadmin` reads the same as `admin` here; what separates them is not in this table —
+it is managing teams and deleting records, which the app gates directly on the rung.
+
+**This matrix wants confirming rather than inheriting.** It is my reading of the five
+definitions, not a decision anyone has made: whether a `viewer` should see their own
+team's tree or the whole portfolio, and whether a `manager` should be able to move a job
+between stages, are both judgement calls about how Lofty works.
 
 ---
 
@@ -642,12 +648,17 @@ Then, per scope:
 | `own` | `assignee_id = auth.uid()` |
 | `team` | `owning_team_id in (select my_team_ids())` |
 | `team_hierarchy` | `owning_team_id in (select visible_team_ids())` |
-| `division` | `project_id in (select id from projects where division_id in (select t.division_id from teams t where t.id in (select my_team_ids())))` |
 | `all` | `true` |
 
 Every one of these went from `=` to `in` when membership stopped being a column. That
 is the whole cost of multi-team, and it is worth paying up front — retro-fitting it
 means revisiting every policy at a point where real data is already behind them.
+
+**There is no `division` scope.** Divisions were a prototype invention, not a Lofty
+concept — the prototype derived them from the project type (Development became "Land",
+everything else kept its name), so they were a second word for something that already
+existed. The table, the column and the scope are all gone; "everything of this type" is
+`project_type`, and "everything in these teams" is `team_hierarchy`.
 
 The app's `can()` checks — `editJob`, `pushToJobs`, `canDelete`, `manageTeams` — hide
 controls. They are not security. Every one needs a matching policy or it is decoration.
