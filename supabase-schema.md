@@ -655,10 +655,12 @@ is the whole cost of multi-team, and it is worth paying up front — retro-fitti
 means revisiting every policy at a point where real data is already behind them.
 
 **There is no `division` scope.** Divisions were a prototype invention, not a Lofty
-concept — the prototype derived them from the project type (Development became "Land",
-everything else kept its name), so they were a second word for something that already
-existed. The table, the column and the scope are all gone; "everything of this type" is
-`project_type`, and "everything in these teams" is `team_hierarchy`.
+concept — the prototype derived them from the project type and relabelled one of them,
+calling development work "Land". That label was wrong as well as redundant: the correct
+term is **development**, and it is what `project_type` has always used. So divisions were
+a second, less accurate word for something that already existed. The table, the column
+and the scope are all gone; "everything of this type" is `project_type`, and "everything
+in these teams" is `team_hierarchy`.
 
 The app's `can()` checks — `editJob`, `pushToJobs`, `canDelete`, `manageTeams` — hide
 controls. They are not security. Every one needs a matching policy or it is decoration.

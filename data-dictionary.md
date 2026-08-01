@@ -67,7 +67,7 @@
 
 | Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `divisions.id` | Division (removed) | Removed — it was never a Lofty concept. Division appears nowhere in the concept spec; the prototype invented it and derived it from the project type (Development became "Land", everything else kept its name), so it was a second word for something that already existed. The table, projects.division_id, teams.division_id and the 'division' permission scope are all gone. | `uuid` | Table dropped. | Superseded by projects.project_type. "Everything of this type" is project_type; "everything in these teams" is the team_hierarchy scope. | Merged | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `divisions.id` | Division (removed) | Removed — it was never a Lofty concept. Division appears nowhere in the concept spec; the prototype invented it, derived it from the project type, and relabelled development work as "Land" — a term that is wrong as well as redundant. The correct word is development, which is what project_type has always used. The table, projects.division_id, teams.division_id and the 'division' permission scope are all gone. | `uuid` | Table dropped. | Superseded by projects.project_type. "Everything of this type" is project_type; "everything in these teams" is the team_hierarchy scope. | Merged | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `health_statuses`
 

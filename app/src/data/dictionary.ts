@@ -325,7 +325,7 @@ export const DICTIONARY: DictionaryEntry[] = [
   e("build_stages.id", "Build stage", "The construction sub-stage inside Construction & execution — slab, frame, lock-up and so on.", "integer", "Primary key.", "Referenced by jobs.build_stage_id.", "to_do", PROPOSED),
   e("tags.id", "Tag", "A free label on a job — IF, Council hold, Design variation.", "uuid", "Primary key.", "Many-to-many with jobs via job_tags.", "to_do", PROPOSED),
   e("divisions.id", "Division (removed)",
-    "Removed — it was never a Lofty concept. Division appears nowhere in the concept spec; the prototype invented it and derived it from the project type (Development became \"Land\", everything else kept its name), so it was a second word for something that already existed. The table, projects.division_id, teams.division_id and the 'division' permission scope are all gone.",
+    "Removed — it was never a Lofty concept. Division appears nowhere in the concept spec; the prototype invented it, derived it from the project type, and relabelled development work as \"Land\" — a term that is wrong as well as redundant. The correct word is development, which is what project_type has always used. The table, projects.division_id, teams.division_id and the 'division' permission scope are all gone.",
     "uuid", "Table dropped.",
     "Superseded by projects.project_type. \"Everything of this type\" is project_type; \"everything in these teams\" is the team_hierarchy scope.",
     "merged"),
