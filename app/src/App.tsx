@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { ThemeProvider } from "@vibe/core";
 import { loftyTheme, type SystemTheme } from "./theme/loftyTheme";
 import { DataProvider } from "./data/DataProvider";
+import { PermissionProvider } from "./data/PermissionProvider";
 import { AppShell } from "./shell/AppShell";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
@@ -11,6 +12,7 @@ import { ReportsPage } from "./pages/ReportsPage";
 import { TemplatesPage } from "./pages/TemplatesPage";
 import { AdminPage } from "./pages/AdminPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { DictionaryPage } from "./pages/DictionaryPage";
 import { WiringPage } from "./pages/WiringPage";
 
 const THEME_KEY = "lofty-theme";
@@ -32,6 +34,7 @@ export default function App() {
 
   return (
     <ThemeProvider themeConfig={loftyTheme} systemTheme={theme}>
+      <PermissionProvider>
       <DataProvider>
         {/* Served from /app/, so the router has to know that is the root. */}
         <BrowserRouter basename={import.meta.env.BASE_URL}>
@@ -47,11 +50,13 @@ export default function App() {
                 path="settings"
                 element={<SettingsPage theme={theme} onThemeChange={setTheme} />}
               />
+              <Route path="dictionary" element={<DictionaryPage />} />
               <Route path="wiring" element={<WiringPage />} />
             </Route>
           </Routes>
         </BrowserRouter>
       </DataProvider>
+      </PermissionProvider>
     </ThemeProvider>
   );
 }

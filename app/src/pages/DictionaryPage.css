@@ -1,0 +1,62 @@
+/* The dictionary is a wide, dense table — it earns its own measurements. */
+
+.dict-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+  white-space: nowrap;
+}
+
+.dict-type {
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+  background: var(--allgrey-background-color);
+  border-radius: var(--border-radius-small);
+  padding: 2px var(--space-8);
+  white-space: nowrap;
+}
+
+/* Definitions are sentences, not labels. Give them room and let them wrap. */
+.dict-table .dict-definition { min-width: 320px; max-width: 520px; }
+.dict-rules { min-width: 220px; max-width: 380px; font-size: 12px; }
+
+/* The status tiles double as filters, so they have to look pressable and show
+   which one is on. */
+.dict-stat {
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition:
+    border-color var(--motion-productive-medium) var(--motion-timing-transition),
+    box-shadow var(--motion-productive-medium) var(--motion-timing-transition);
+}
+.dict-stat:hover { border-color: var(--ui-border-color); }
+.dict-stat.is-active {
+  border-color: var(--primary-color);
+  box-shadow: inset 0 0 0 1px var(--primary-color);
+}
+
+/* Status pills. The tones reuse the semantic inks already contrast-checked in
+   tokens.css rather than inventing a second palette. */
+.status-pill.dict-neutral  { background: var(--allgrey-background-color); color: var(--secondary-text-color); }
+.status-pill.dict-positive { background: var(--positive-color-selected); color: var(--positive-ink); }
+.status-pill.dict-warning  { background: var(--warning-color-selected);  color: var(--warning-ink); }
+.status-pill.dict-negative { background: var(--negative-color-selected);  color: var(--negative-ink); }
+
+.dict-detail > td { background: var(--allgrey-background-color); }
+.dict-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-16);
+  padding: var(--space-8) 0;
+}
+
+.dict-note { margin-bottom: var(--space-16); }
+.dict-note code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--allgrey-background-color);
+  border-radius: var(--border-radius-small);
+  padding: 0 var(--space-4);
+}
+
+.dict-search { flex: 1; min-width: 240px; }

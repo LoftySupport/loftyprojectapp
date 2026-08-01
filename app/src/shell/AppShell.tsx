@@ -1,6 +1,9 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { Avatar, Flex, Label, Text } from "@vibe/core";
 import { useRepository } from "../data/DataProvider";
+import { usePermission } from "../data/PermissionProvider";
+import { PERMISSION_LEVELS, type PermissionLevel } from "../data/types";
+import { Select } from "../components/Select";
 import { Token } from "../components/Token";
 import "./AppShell.css";
 
@@ -12,6 +15,7 @@ const PAGES = [
   { to: "/templates", label: "Templates" },
   { to: "/admin", label: "Admin" },
   { to: "/settings", label: "Settings" },
+  { to: "/dictionary", label: "Dictionary" },
   { to: "/wiring", label: "Wiring" }
 ];
 
@@ -27,6 +31,7 @@ const PAGES = [
  */
 export function AppShell() {
   const repo = useRepository();
+  const { permission, setPermission } = usePermission();
 
   return (
     <>
@@ -56,6 +61,18 @@ export function AppShell() {
               text="Unbound"
               aria-label={`Reading through the ${repo.name} repository`}
             />
+            {/* With no auth there is no honest way to know a permission level, and
+                defaulting to superadmin would quietly hide every gate in the app —
+                which is the thing that needs reviewing. Switchable, and visible.
+                It disappears when Supabase Auth lands. */}
+            <span className="app-permission">
+              <Select
+                aria-label="Signed in as (demo)"
+                options={PERMISSION_LEVELS.map(p => ({ value: p, label: p }))}
+                value={permission}
+                onChange={v => setPermission(v as PermissionLevel)}
+              />
+            </span>
             <span className="app-user">
               <Avatar size="small" type="text" text="SB" aria-label="Signed in" />
               <Token>profiles.full_name</Token>
