@@ -1,0 +1,255 @@
+# Handoff
+
+Everything a new session needs to pick this up. Read this first, then
+`data-dictionary.md`.
+
+Last updated: 2026-08-01.
+
+---
+
+## What this is
+
+`amberbeaumont/loftyprojectapp` — the V0 build of Lofty's job pipeline board. React,
+Vibe (monday.com's design system) and Supabase.
+
+Nothing is connected to Supabase yet. Every value that will come from a table renders as
+a `{{table.column}}` token, so an unbound field is visible rather than silently blank.
+The schema is being designed one table at a time, and the app is built ahead of it.
+
+**The prototype it grew from is a different repo** — `amberbeaumont/loftyprojectboard`,
+frozen, still deployed at `loftyprojectboard.netlify.app` for showing people. Nothing in
+this work touches it. Its PR #11 was closed unmerged as superseded.
+
+## The working rule: one branch and PR per table
+
+Each schema decision touches four things that must move together:
+
+1. `supabase-schema.md` — the doc
+2. `app/supabase/migrations/0001_core.sql` — the migration
+3. `app/src/data/types.ts` — the TypeScript
+4. `app/src/data/dictionary.ts` — the dictionary (then `npm run dictionary`)
+
+Landing those on `main` separately is how they drift. So: a branch per table, all four in
+one PR, Netlify builds a deploy preview, merge when it looks right.
+
+```bash
+git checkout -b claude/<table>-schema
+# … all four …
+cd app && npm run dictionary && npx tsc -b && cd ..
+./build.sh
+git commit && git push -u origin claude/<table>-schema
+```
+
+## Where it is deployed
+
+| URL | What |
+| --- | --- |
+| `loftyprojectapp.netlify.app` | 302 → `/app/` |
+| `…/app/` | The build |
+| `…/app/dictionary` | The data dictionary, permission-gated |
+| `…/binding-template` | The tokenised prototype — **layout** reference only |
+| `…/prototype.html` | The original, dummy data |
+
+`binding-template` still shows the pre-simplification project (name, division, client,
+manager) and the old six roles. **It is deliberately not swept forward** — keeping the
+same decisions in two codebases is the drift this whole setup exists to avoid. It is the
+layout reference. The React app is the field reference.
+
+---
+
+## Schema: what is decided
+
+Three tables are designed and in the migration. Full detail in `data-dictionary.md`;
+this is the reasoning, which is the part that does not survive in a column list.
+
+### `profiles` — not `users`
+
+`auth.users` is Supabase's table, populated by Microsoft Entra. `profiles` is the row
+Lofty owns beside it: same person, the parts the app decides.
+
+- **`first_name` + `last_name`, not `full_name`.** People change names, and a single
+  field makes that a string edit that has to be got exactly right. `full_name` survives
+  as a **generated column** so it cannot drift. `preferred_name` is nullable and means
+  only "goes by something else"; null means use the first name. A `profile_display` view
+  puts that `coalesce` in one place so "Hi, …" is never assembled ad hoc.
+- **`permission` is an enum**, not a lookup table: `viewer | user | manager | admin |
+  superadmin`. Postgres orders enum values by declaration, so `permission >= 'manager'`
+  is a valid comparison — which is how the RLS policies want to read. Defaults to
+  `viewer`: least privilege, so a new joiner from Entra reads and nothing else until
+  promoted. Intended to sync with Microsoft Teams permission levels.
+- **Team membership is many-to-many** — `profile_teams`, because people sit in more than
+  one team. `is_primary` carries the single answer some screens need (which team the
+  dashboard watches, what the board filters to), with a partial unique index stopping two
+  primaries and nothing forcing one. Every RLS predicate went from `=` to `in` as a
+  result.
+
+### `addresses` — a record, not a string
+
+Addresses get corrected and changed: a lot renumbered by council, a street renamed, a
+typo found at handover. Everything pointing at one should follow without being edited
+individually, so projects and jobs hold an id.
+
+- **`consolidated_address` is a generated column**, so every card, export and search
+  reads the same string. Built with `||` and `coalesce`, **not `concat_ws`** —
+  `concat_ws` is only `STABLE` and a generated column requires `IMMUTABLE`. It fails at
+  `create table` otherwise.
+- **Lot and street numbers are `text`.** "12A", "5-7" and "Lot 3" are as common as 12.
+- **Councils are a table, not an enum** — the one place the spec was not followed
+  literally. SA has 68 and Australia about 537; they amalgamate, split and get renamed,
+  and enum values cannot be renamed or removed without rebuilding the type. The table
+  also carries `state`, so a picker can filter to the state already chosen.
+
+### `projects` — deliberately simple
+
+- **`project_no`** is an integer from a sequence starting at 1000, unique, with a check
+  for the four-digit floor. Hand overrides are allowed, and **a trigger pushes the
+  sequence past them** — without it the same number is handed out again months later and
+  fails on the unique index, which is the worst possible time to find out.
+- **Two addresses.** `original` never moves (contracts, old paperwork); `current` is what
+  every card and search shows. A blank `current` falls back to `original` in a trigger
+  rather than in every caller.
+- Lost `name`, `division`, `manager`, `client`, `suburb`, `council_area`, `notes`.
+  `client` and `notes` were repointed at `property_values` — they are exactly what a
+  property definition is for. The rest come from the address.
+
+### Status and health are different things
+
+`record_status` — `on_track | at_risk | behind_schedule | on_hold | completed |
+cancelled | archived` — sits on **both** projects and jobs. **Status is what someone
+sets.**
+
+**Health is what the system works out** — on schedule? over budget? issue raised? — from
+inputs still to be decided. It is deliberately **absent from the schema** rather than
+half-modelled. Inventing a column before the inputs are known bakes in the wrong answer.
+
+`is_current(status)` is an `IMMUTABLE` function: anything not completed, cancelled or
+archived. Derived wherever needed, never stored.
+
+### Properties are rows, not columns
+
+A property **is** a field — the two words mean the same thing. Every one lives at
+**project** or **job** level and carries two pieces of context: which **stage** captures
+it and which **team** captures it.
+
+Stage is *not* a third level. A pour date is a property of a *job* that happens to be
+filled in at Scheduling & Estimating.
+
+Because they are rows, **there is no fixed number of field slots** — which is why nothing
+in this app has `{{field_1}}`, `{{field_2}}`. Add a definition and one more slot renders,
+everywhere the scope matches. The slots are live in the job drawer and on project detail,
+grouped by stage.
+
+### Things removed, and why
+
+Kept in the dictionary as **Merged** rather than deleted, so the questions are not
+re-asked in six months:
+
+| Removed | Why |
+| --- | --- |
+| `divisions` | Never a Lofty concept. Appears nowhere in the concept spec; the prototype invented it, derived it from project type, and relabelled development work as "Land" — wrong as well as redundant |
+| `job_types` | A job's type is its project's type. A commercial project does not contain residential jobs, so a second column was only a chance to disagree |
+| `job_stages.is_current` | Which stage a job is in now is `jobs.stage_id`; whether the job is current is `is_current(status)`. A third copy was a third thing to keep true |
+| `health_statuses` | Health is calculated, not set. Parked until the inputs are known |
+
+---
+
+## What needs a decision (not mine to make)
+
+1. **The `permission_grants` matrix.** I rewrote it against the five rungs, but it is my
+   reading of the definitions, not a decision. Two genuine judgement calls: should a
+   `viewer` see their own team's tree or the whole portfolio, and should a `manager` be
+   able to move a job between stages? In `supabase-schema.md`.
+2. **Health status inputs.** When known, it gets built as a calculation.
+3. **Property questions**, in `supabase-schema.md` under Properties: related properties
+   (a field whose value is another record — some stop being properties and become their
+   own tables); select options (an options table, or point at an existing lookup);
+   whether `required` means "cannot leave this stage" or "cannot create the record";
+   and whether any field needs history.
+4. **Finance is not a rung.** A ladder says *how much* you can do; Finance says *what you
+   own* — commercial fields — at an ordinary level everywhere else. Recommendation is
+   property-level grants (`property_grants(property_def_id, permission, can_edit)`),
+   since properties are already rows and Selections and Estimating will want the same.
+
+---
+
+## Next: `jobs`
+
+The table is sketched in `supabase-schema.md` and its columns are in the dictionary as
+**To do**. What is already settled: `project_no` denormalised with a sync trigger,
+`combined_job_number` generated, the two address ids, `status` from `record_status`, and
+no type column (inherited via `job_display`).
+
+What is not: `stage_id` vs `job_stages` authority, `owning_team_id`, `assignee_id`, the
+contract/deposit/drawings fields (free text today, a lookup if the states settle), tags,
+and dependencies.
+
+After that: `teams`, `property_defs` / `property_values`, `activity`, templates,
+permissions.
+
+---
+
+## The app: things worth knowing before changing it
+
+### The repository seam, and where it is currently broken
+
+`app/src/data/repository.ts` is the interface every screen reads through, so tables can be
+wired one at a time. Its stated rule: **no component may import the Supabase client; if a
+screen needs data that is not here, add a method.**
+
+**Nine files currently break it.** `PROPERTY_DEFS`, `TEAMS`, `PHASE_TEAMS` and
+`PHASE_CHECKPOINTS` are module constants in `app/src/data/lookups.ts`, imported directly
+by nine files. They are real Supabase tables. When they come online, all nine change —
+the exact rewrite the seam exists to prevent.
+
+**This is the highest-value cleanup outstanding.** It is mechanical now and painful later.
+Widening `Repository` at the same time also makes the Wiring page an honest checklist.
+
+### Vibe defaults that fail accessibility
+
+Two, both fixed, both worth knowing because they will recur:
+
+- **The text avatar paints white on `#66ccff` — 1.8:1**, and the initials are the content.
+  Overridden app-wide in `ui.css` via `[class*="circleText"]` (Vibe hashes class names but
+  keeps readable prefixes). A Vibe component rendering its own avatar outside that
+  selector will fail again.
+- **`ThemeProvider` only themes 11 primary/brand tokens.** Everything else Lofty needs —
+  the accessible orange sibling, the semantic inks — lives in `app/src/theme/tokens.css`,
+  because it cannot go through the theme.
+
+The contrast audit composites alpha against the painted backdrop before measuring. Eyeballing does not catch these.
+
+### Other things that will bite
+
+- **`Select.tsx` narrows Vibe's `Dropdown` once** so its generics are not fought at forty
+  call sites. Use it rather than `Dropdown` directly. Only controls that can genuinely
+  hold nothing are `clearable` — a filter, not a view.
+- **Vibe's `title` prop renders a visible label.** In a table that is noise on every row;
+  use `aria-label`.
+- **`TextArea` hands back the event; `TextField` hands back the value.**
+- **The layout is a flex column from `html` down**, and it has to pass through
+  ThemeProvider's own wrapper (`#root, #root > *`) or the footer floats mid-page.
+- **`placeholderShape.ts` is layout scaffolding, not data** — five projects, one to three
+  jobs each, shown only while the repository returns empty. It disappears on its own.
+
+### The demo permission switcher
+
+`app/src/data/PermissionProvider.tsx` plus a `<Select>` in the header. With no auth there
+is no honest way to know a level, and defaulting to `superadmin` would quietly hide every
+gate — which is the thing that needs reviewing. It goes when Supabase Auth lands and the
+level comes from `profiles.permission`; nothing consuming `can()` changes.
+
+---
+
+## Verification that is expected before a PR
+
+Not optional, and all scripted against a real browser rather than assumed:
+
+```bash
+cd app && npx tsc -b        # must be clean
+cd .. && ./build.sh          # must be clean
+cd app && npm run dictionary # regenerate; commit the result
+```
+
+Then, in a browser against `dist/`: every page renders, the footer sits at the bottom, no
+horizontal overflow, no console errors, and **zero AA contrast failures across light, dark
+and black**. Every commit in the history states what was verified — keep that up.

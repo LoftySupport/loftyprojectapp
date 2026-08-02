@@ -1,5 +1,18 @@
 # Moving to the real build — React, Vibe and Supabase
 
+> ## ⚠️ Historical — superseded
+>
+> Written **before** the schema decisions of 1 August 2026. Its table shapes, role model
+> and field names are out of date: `users` became `profiles`, roles became the
+> `permission_level` enum, `1201`-style numbers became `PRJ-`/sequential, divisions and
+> job types are gone, and addresses became their own table.
+>
+> **Current sources of truth:** `HANDOFF.md`, `data-dictionary.md`, `supabase-schema.md`.
+>
+> Kept because the reasoning about *approach* — the seam, the build order, the Vibe
+> component mapping — still holds, and because it records what was thought at the time.
+
+
 The prototype applied Vibe's *system* to a single static HTML file with fifty hard-coded
 jobs. The real build is a React application using Vibe's actual components, with Supabase
 as the backend.
