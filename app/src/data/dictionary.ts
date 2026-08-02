@@ -239,7 +239,7 @@ export const DICTIONARY: DictionaryEntry[] = [
     "integer", "Not null.", "Maintained by the jobs_sync_project_number and projects_cascade_renumber triggers.", "created"),
   e("jobs.job_sequence", "Job sequence",
     "The counter within the project — 01, 02, 03. Allocated automatically: insert a job without one and a trigger assigns the next. NOT what Lofty calls the job number — that is jobs.job_number, the combined value.",
-    "text", "Not null. Unique with project_id. Zero-padded to two digits, and wider than two past 99 rather than truncating.",
+    "text", "Not null. Unique with project_id. Zero-padded to two digits, and wider than two past 99 rather than truncating. CHECK (>= 1) — there is no zeroth job, and the check is on the column rather than only in the trigger because a hand-written insert can supply its own sequence.",
     "Assigned by the jobs_assign_sequence trigger, which locks the parent project row first — two concurrent inserts would otherwise read the same max and collide on the unique index. Feeds job_number.",
     "created"),
   e("jobs.job_number", "Job number",

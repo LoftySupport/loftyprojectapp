@@ -16,13 +16,13 @@ export function StatusPill({ status }: { status: RecordStatus }) {
 }
 
 export function JobCard({
-  jobSequence,
+  jobNumber,
   stageName,
   team,
   status = "on_track",
   onOpen
 }: {
-  jobSequence: string;
+  jobNumber: string;
   stageName: string;
   team: string;
   status?: RecordStatus;
@@ -40,10 +40,10 @@ export function JobCard({
           onOpen();
         }
       }}
-      aria-label={`Job ${jobSequence}`}
+      aria-label={`Job ${jobNumber}`}
     >
       <header className="card-top">
-        <Text type="text3" color="secondary">{jobSequence}</Text>
+        <Text type="text3" color="secondary">{jobNumber}</Text>
         <StatusPill status={status} />
       </header>
 
@@ -76,12 +76,12 @@ export function JobCard({
 
 export function ProjectCard({
   projectNumber,
-  jobSequences,
+  jobNumbers,
   status = "on_track",
   onOpen
 }: {
   projectNumber: string;
-  jobSequences: string[];
+  jobNumbers: string[];
   status?: RecordStatus;
   onOpen?: () => void;
 }) {
@@ -120,10 +120,10 @@ export function ProjectCard({
       <div className="card-divider" />
 
       <Text type="text3" color="secondary">
-        {jobSequences.length} job{jobSequences.length === 1 ? "" : "s"} on this project
+        {jobNumbers.length} job{jobNumbers.length === 1 ? "" : "s"} on this project
       </Text>
       <div className="stack-tight">
-        {jobSequences.map(no => (
+        {jobNumbers.map(no => (
           <div key={no}>
             <Text type="text3" weight="medium" element="span">{no}</Text>{" "}
             <Token>addresses.consolidated_address</Token>

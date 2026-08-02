@@ -24,7 +24,7 @@ import type { RecordStatus } from "./types";
 export const PROJECT_SIZES = [3, 2, 2, 3, 1];
 
 export interface ShapeJob {
-  jobSequence: string;
+  jobNumber: string;
   projectNumber: string;
   stage: string;
   team: string;
@@ -65,7 +65,7 @@ export function usePlaceholderShape() {
         // rather than eleven jobs piling into the first two.
         const stage = stageNames[n % stageNames.length];
         jobs.push({
-          jobSequence: `${projectNumber}-${String(i + 1).padStart(2, "0")}`,
+          jobNumber: `${projectNumber}-${String(i + 1).padStart(2, "0")}`,
           projectNumber,
           stage,
           team: teamsByStage[stage]?.[0] ?? "",

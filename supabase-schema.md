@@ -399,7 +399,11 @@ create table jobs (
   -- lock on the parent project row: two concurrent inserts would otherwise read the
   -- same max and collide on the unique index. This is NOT "the job number" — Lofty
   -- means the combined value below by that phrase.
-  job_sequence      text not null,
+  -- Never '00'. The first job on a project is 01 — there is no zeroth job. The check
+  -- is here rather than only in the trigger, because a hand-written insert can supply
+  -- its own sequence and bypass the trigger's allocation.
+  job_sequence      text not null
+                      check (job_sequence ~ '^[0-9]+$' and job_sequence::integer >= 1),
 
   -- The job number, in Lofty's sense: '1001-01'. Generated, so it cannot drift.
   job_number        text unique

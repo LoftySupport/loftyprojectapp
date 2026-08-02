@@ -39,7 +39,7 @@ export function JobDrawer({ job, onClose }: { job: ShapeJob; onClose: () => void
         className="drawer"
         role="dialog"
         aria-modal="true"
-        aria-label={`Job ${job.jobSequence}`}
+        aria-label={`Job ${job.jobNumber}`}
         tabIndex={-1}
         ref={panel}
       >
@@ -48,13 +48,13 @@ export function JobDrawer({ job, onClose }: { job: ShapeJob; onClose: () => void
             <BreadcrumbsBar type="navigation">
               <BreadcrumbItem text="Board" />
               <BreadcrumbItem text={job.stage} />
-              <BreadcrumbItem text={job.jobSequence} isCurrent />
+              <BreadcrumbItem text={job.jobNumber} isCurrent />
             </BreadcrumbsBar>
             <Heading type="h3" weight="medium">
               <Token>addresses.consolidated_address</Token>
             </Heading>
             <Text type="text3" color="secondary">
-              {job.jobSequence} · <Token>project_display.current_address</Token> · {job.projectNumber}
+              {job.jobNumber} · <Token>project_display.current_address</Token> · {job.projectNumber}
             </Text>
           </div>
           <Button kind="tertiary" size="small" onClick={onClose} aria-label="Close">

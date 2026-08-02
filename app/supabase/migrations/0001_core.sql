@@ -307,7 +307,12 @@ create table jobs (
   -- The counter within the project — 01, 02, 03. Assigned by trigger when null, so a
   -- caller inserts a job without working out what it should be. Not what anyone calls
   -- "the job number": that is the combined value below.
-  job_sequence            text not null,
+  --
+  -- Never '00'. The first job on a project is 01 — there is no zeroth job, and the
+  -- check is here rather than only in the trigger because a hand-written insert can
+  -- supply its own sequence and bypass the trigger's allocation entirely.
+  job_sequence            text not null
+                            check (job_sequence ~ '^[0-9]+$' and job_sequence::integer >= 1),
 
   -- The job number, in Lofty's sense of the phrase: '1001-01'. Generated, so it cannot
   -- drift from its parts, and unique because it is the business key everyone types and

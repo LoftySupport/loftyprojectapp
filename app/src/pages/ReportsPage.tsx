@@ -91,8 +91,8 @@ export function ReportsPage() {
                 </thead>
                 <tbody>
                   {attention.map(j => (
-                    <tr key={j.jobSequence}>
-                      <td>{j.jobSequence}</td>
+                    <tr key={j.jobNumber}>
+                      <td>{j.jobNumber}</td>
                       <td><Token>addresses.consolidated_address</Token></td>
                       <td>{j.stage}</td>
                       <td>{j.team}</td>
@@ -142,8 +142,8 @@ export function ReportsPage() {
               </thead>
               <tbody>
                 {jobs.map(j => (
-                  <tr key={j.jobSequence}>
-                    <td>{j.jobSequence}</td>
+                  <tr key={j.jobNumber}>
+                    <td>{j.jobNumber}</td>
                     <td>{j.projectNumber}</td>
                     <td><Token>addresses.consolidated_address</Token></td>
                     <td>{j.stage}</td>
