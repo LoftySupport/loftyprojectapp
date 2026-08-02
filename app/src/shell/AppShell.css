@@ -37,13 +37,17 @@ html, body, #root { height: 100%; }
 /* Dark ink on the light pill — white on white is the obvious failure here. */
 .app-nav-item.is-active { color: #00393f; background: var(--fixed-light-color); }
 
+/* `min-width: 0` because the user token is a long unbreakable string: without it the
+   cluster claims its intrinsic width and pushes the whole page sideways. */
 .app-header-right {
   display: flex;
   align-items: center;
   gap: var(--space-12);
   flex-shrink: 0;
+  flex-wrap: wrap;
+  min-width: 0;
 }
-.app-user { display: flex; align-items: center; gap: var(--space-8); }
+.app-user { display: flex; align-items: center; gap: var(--space-8); min-width: 0; }
 
 /* The binding notice. Fixed dark ink because the band is a fixed light yellow in
    every theme — the theme's own text colour would invert to white on it. */
@@ -118,3 +122,35 @@ html, body, #root { height: 100%; }
 
 /* Wide enough for an address fragment, and it gives up width before the nav does. */
 .app-search { min-width: 200px; max-width: 320px; flex: 1 1 200px; }
+
+/* ---- narrow screens ------------------------------------------------------
+   A phone, and the tablet widths on the way there. Nothing is hidden — the nav
+   wraps rather than collapsing into a menu, because nine destinations behind a
+   hamburger is worse than three rows of readable pills, and this is a tool
+   people live in rather than a site they visit.
+
+   The cut is 720px: below it the header cluster no longer fits beside the nav on
+   one line at any sensible type size. */
+@media (max-width: 720px) {
+  .app-header { padding: var(--space-12) var(--space-16); }
+  .app-main { padding: var(--space-16); }
+  .app-banner { padding: var(--space-8) var(--space-16); }
+  .app-foot { padding: var(--space-16); }
+  .app-logo { height: 20px; }
+
+  /* Reordered: identity and search share the first line with the logo, and the nav
+     drops to a full-width block underneath. Left alone, the logo sits in a column
+     beside three wrapped rows of nav and eats 120px of every one of them. */
+  .app-header-right { order: 1; flex: 1 1 auto; justify-content: flex-end; }
+  .app-nav { order: 2; flex-basis: 100%; gap: 2px; }
+  /* Smaller pills, because nine of them wrap and each row is header the board does
+     not get. Still 34px of target — comfortably above the 24px minimum. */
+  .app-nav-item { height: 34px; padding: 0 var(--space-8); font: var(--font-text3-medium); }
+
+  /* Full width and first: on a phone this is the control you reach for, and sharing
+     a line with the permission switcher left it too narrow to hold an address. */
+  .app-search { order: -1; flex: 1 1 100%; max-width: none; }
+  /* The avatar carries the identity here. The name is an unbound token 200px wide,
+     which is a whole line of a small screen to say what the circle already says. */
+  .app-user .sb-token { display: none; }
+}

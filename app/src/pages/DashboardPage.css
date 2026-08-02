@@ -14,9 +14,12 @@
   border-bottom: 1px solid var(--layout-border-color);
   margin-bottom: var(--space-20);
 }
-.pd-greeting { display: flex; align-items: center; gap: var(--space-12); }
+/* `min-width: 0` on both, or the unbound name token holds the row at its full
+   intrinsic width and the page scrolls sideways on a phone. */
+.pd-greeting { display: flex; align-items: center; gap: var(--space-12); min-width: 0; }
 .pd-greeting-title {
   margin: 0;
+  min-width: 0;
   font: var(--font-h1-bold);
   letter-spacing: var(--letter-spacing-h1);
   color: var(--primary-text-color);

@@ -94,7 +94,11 @@ function Section({
     <div className="panel" style={{ marginBottom: "var(--space-16)" }}>
       <Text type="text2" weight="bold">{title}</Text>
       <Text type="text3" color="secondary">{note}</Text>
-      <table className="wiring-table" style={{ marginTop: "var(--space-12)" }}>
+      {/* The wrapper is what scrolls on a narrow screen — three columns of method
+          names do not fit on a phone, and a table that widens the page is worse
+          than one you swipe. */}
+      <div className="data-table-wrap" style={{ marginTop: "var(--space-12)" }}>
+      <table className="wiring-table">
         <thead>
           <tr>
             <th scope="col">Repository method</th>
@@ -120,6 +124,7 @@ function Section({
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

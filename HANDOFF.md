@@ -238,6 +238,29 @@ Projects and Reports.
   its own the day `addresses` binds.
 - **The toolbar filter chips are still inert.** `Showing N of M` counts the search only.
 
+### Narrow screens
+
+It works on a phone, and that is checked rather than assumed: every page, at 320 / 390 /
+430 / 768 / 1024, under an empty query, a matching one and a non-matching one, must show
+**zero horizontal overflow** with the footer at the bottom.
+
+- **The nav wraps, it does not collapse.** Nine destinations behind a hamburger is worse
+  than two rows of readable pills, and this is a tool people live in. Below 720px the
+  identity cluster and search share the first line with the logo and the nav takes a
+  full-width block underneath — otherwise the logo sits in a column beside three wrapped
+  rows and eats 120px of every one of them.
+- **Almost every overflow was a missing `min-width: 0`.** A flex or grid child sizes to
+  its content's minimum unless told otherwise, and the minimum here is an unbreakable
+  `{{profiles.last_name}}`. Vibe's `Text` makes it worse: it clips to one line, and a
+  clipping child only shrinks when its parent is allowed to. If a new panel scrolls the
+  page sideways, that is the first thing to check.
+- **A track floor wider than its container is still honoured.** `minmax(320px, 1fr)` in a
+  288px column overflows. `minmax(min(320px, 100%), 1fr)`.
+- **The drawer close button was pushed outside the panel** by an unshrinkable title
+  block. On a phone the drawer covers the full width, so there was no overlay to tap and
+  no Escape key either — the panel could not be closed at all. Worth remembering as the
+  shape of the bug, not just the instance: a layout fault can become a trap.
+
 ### Vibe defaults that fail accessibility
 
 Two, both fixed, both worth knowing because they will recur:
@@ -292,5 +315,6 @@ cd app && npm run dictionary # regenerate; commit the result
 ```
 
 Then, in a browser against `dist/`: every page renders, the footer sits at the bottom, no
-horizontal overflow, no console errors, and **zero AA contrast failures across light, dark
-and black**. Every commit in the history states what was verified — keep that up.
+horizontal overflow **at 320, 390, 430, 768 and 1024**, no console errors, and **zero AA
+contrast failures across light, dark and black**. Every commit in the history states what
+was verified — keep that up.
