@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Avatar, BreadcrumbsBar, BreadcrumbItem, Button, Heading, Text } from "@vibe/core";
-import { PHASE_CHECKPOINTS, PHASE_EXPECTED_DAYS } from "../data/lookups";
+import { useCheckpoints, useTemplatePhases } from "../data/useLookups";
 import type { ShapeJob } from "../data/placeholderShape";
 import { StatusPill } from "./RecordCards";
 import { PropertySlots } from "./PropertySlots";
@@ -26,8 +26,11 @@ export function JobDrawer({ job, onClose }: { job: ShapeJob; onClose: () => void
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const expected = PHASE_EXPECTED_DAYS[job.stage] ?? 14;
-  const checkpoints = PHASE_CHECKPOINTS[job.stage] ?? [];
+  const { expectedDaysByStage } = useTemplatePhases();
+  const { byStage: checkpointsByStage } = useCheckpoints();
+
+  const expected = expectedDaysByStage[job.stage] ?? 14;
+  const checkpoints = checkpointsByStage[job.stage] ?? [];
 
   return (
     <>
@@ -99,9 +102,9 @@ export function JobDrawer({ job, onClose }: { job: ShapeJob; onClose: () => void
               <Text type="text3" color="secondary">from the template for this phase</Text>
             </div>
             {checkpoints.map(c => (
-              <div className="checkpoint" key={c}>
-                <input type="checkbox" disabled aria-label={c} />
-                <Text type="text2">{c}</Text>
+              <div className="checkpoint" key={c.label}>
+                <input type="checkbox" disabled aria-label={c.label} />
+                <Text type="text2">{c.label}</Text>
               </div>
             ))}
           </section>

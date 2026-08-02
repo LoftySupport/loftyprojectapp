@@ -1,5 +1,6 @@
 import { Text } from "@vibe/core";
-import { byStage, slotsFor, type PropertyScope } from "../data/lookups";
+import { groupByStage, usePropertyDefs, useStages } from "../data/useLookups";
+import type { PropertyScope } from "../data/types";
 import { Token } from "./Token";
 import "./ui.css";
 
@@ -19,7 +20,10 @@ import "./ui.css";
  * stops showing its token the moment its row comes back.
  */
 export function PropertySlots({ scope }: { scope: PropertyScope }) {
-  const groups = byStage(slotsFor(scope));
+  const { slotsFor } = usePropertyDefs();
+  const { stageNames } = useStages();
+
+  const groups = groupByStage(slotsFor(scope), stageNames);
   if (groups.length === 0) return null;
 
   const total = groups.reduce((n, g) => n + g.defs.length, 0);
@@ -46,7 +50,7 @@ export function PropertySlots({ scope }: { scope: PropertyScope }) {
                   </span>
                 )}
                 <div className="slot-sub">
-                  {d.team} · {d.format}
+                  {d.teamName} · {d.format}
                 </div>
               </div>
               <div className="slot-value">

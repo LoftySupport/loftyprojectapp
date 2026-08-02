@@ -1,14 +1,7 @@
 import { useState } from "react";
 import { Chips, Counter, Heading, Text } from "@vibe/core";
-import {
-  PROJECT_TYPES,
-  PHASE_CHECKPOINTS,
-  PHASE_EXPECTED_DAYS,
-  PHASE_TEAMS,
-  STAGE_NAMES,
-  slotsFor,
-  type ProjectType
-} from "../data/lookups";
+import { PROJECT_TYPES, PROJECT_TYPE_LABELS, type ProjectType } from "../data/types";
+import { useCheckpoints, usePropertyDefs, useStages, useTemplatePhases } from "../data/useLookups";
 import "../components/ui.css";
 
 /**
@@ -20,10 +13,12 @@ import "../components/ui.css";
  */
 export function TemplatesPage() {
   const [type, setType] = useState<ProjectType>(PROJECT_TYPES[0]);
-  const checkpointCount = STAGE_NAMES.reduce(
-    (n, s) => n + (PHASE_CHECKPOINTS[s]?.length ?? 0),
-    0
-  );
+  const { stageNames } = useStages();
+  const { teamsByStage, expectedDaysByStage } = useTemplatePhases();
+  const { byStage: checkpointsByStage, checkpoints } = useCheckpoints();
+  const { slotsFor } = usePropertyDefs();
+
+  const checkpointCount = checkpoints.length;
   const jobFields = slotsFor("job");
 
   return (
@@ -37,7 +32,7 @@ export function TemplatesPage() {
           </Text>
         </div>
         <Text type="text3" color="secondary">
-          {STAGE_NAMES.length} phases · {checkpointCount} checkpoints
+          {stageNames.length} phases · {checkpointCount} checkpoints
         </Text>
       </div>
 
@@ -46,7 +41,7 @@ export function TemplatesPage() {
         {PROJECT_TYPES.map(t => (
           <Chips
             key={t}
-            label={t}
+            label={PROJECT_TYPE_LABELS[t]}
             readOnly={false}
             onClick={() => setType(t)}
             color={t === type ? "primary" : undefined}
@@ -55,8 +50,8 @@ export function TemplatesPage() {
       </div>
 
       <div className="phase-grid">
-        {STAGE_NAMES.map((stage, i) => {
-          const fields = jobFields.filter(f => f.stage === stage);
+        {stageNames.map((stage, i) => {
+          const fields = jobFields.filter(f => f.stageName === stage);
           return (
             <section className="phase-card" key={stage}>
               <Text type="text3" color="secondary">Phase {i + 1}</Text>
@@ -64,10 +59,10 @@ export function TemplatesPage() {
 
               <div className="stack-tight" style={{ marginTop: "var(--space-8)" }}>
                 <Text type="text3" color="secondary">
-                  {PHASE_TEAMS[stage].join(" or ")}
+                  {(teamsByStage[stage] ?? []).join(" or ")}
                 </Text>
                 <Text type="text3" color="secondary">
-                  Expected {PHASE_EXPECTED_DAYS[stage]} days
+                  Expected {expectedDaysByStage[stage]} days
                 </Text>
               </div>
 
@@ -75,12 +70,12 @@ export function TemplatesPage() {
 
               <div className="panel-head">
                 <Text type="text3" weight="bold">Checkpoints</Text>
-                <Counter count={PHASE_CHECKPOINTS[stage]?.length ?? 0} kind="line" />
+                <Counter count={checkpointsByStage[stage]?.length ?? 0} kind="line" />
               </div>
-              {(PHASE_CHECKPOINTS[stage] ?? []).map(c => (
-                <div className="checkpoint" key={c}>
-                  <input type="checkbox" disabled aria-label={c} />
-                  <Text type="text3">{c}</Text>
+              {(checkpointsByStage[stage] ?? []).map(c => (
+                <div className="checkpoint" key={c.label}>
+                  <input type="checkbox" disabled aria-label={c.label} />
+                  <Text type="text3">{c.label}</Text>
                 </div>
               ))}
 

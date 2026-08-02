@@ -1,15 +1,9 @@
 import { useMemo, useState } from "react";
 import { Button, Counter, Heading, Text } from "@vibe/core";
 import { useQuery } from "../data/DataProvider";
-import {
-  RECORD_STATUS_LABELS,
-  RECORD_STATUSES,
-  PROJECT_TYPES,
-  PHASE_EXPECTED_DAYS,
-  STAGE_NAMES,
-  TEAMS
-} from "../data/lookups";
-import { SHAPE_JOBS, type ShapeJob } from "../data/placeholderShape";
+import { RECORD_STATUS_LABELS, RECORD_STATUSES, PROJECT_TYPES } from "../data/types";
+import { useStages, useTeams, useTemplatePhases } from "../data/useLookups";
+import { usePlaceholderShape, type ShapeJob } from "../data/placeholderShape";
 import { JobCard, StatusPill } from "../components/RecordCards";
 import { JobDrawer } from "../components/JobDrawer";
 import { Token } from "../components/Token";
@@ -25,7 +19,10 @@ import "../components/ui.css";
  * stages lookup, which is the business process rather than something a user created.
  */
 export function JobsPage() {
-  const { data: stages } = useQuery(r => r.listStages(), []);
+  const { stages, stageNames } = useStages();
+  const { teamNames } = useTeams();
+  const { expectedDaysByStage } = useTemplatePhases();
+  const shape = usePlaceholderShape();
   const { data: jobs, loading } = useQuery(r => r.listJobs(), []);
 
   const [view, setView] = useState<View>("Board");
@@ -34,12 +31,12 @@ export function JobsPage() {
   const [openJob, setOpenJob] = useState<ShapeJob | null>(null);
 
   const unbound = !loading && jobs.length === 0;
-  const rows = useMemo(() => (unbound ? SHAPE_JOBS : []), [unbound]);
+  const rows = useMemo(() => (unbound ? shape.jobs : []), [unbound, shape]);
 
   const optionsFor = (field: string) => {
     switch (field) {
-      case "Stage": return toOptions(STAGE_NAMES);
-      case "Team": return toOptions(TEAMS);
+      case "Stage": return toOptions(stageNames);
+      case "Team": return toOptions(teamNames);
       case "Status": return RECORD_STATUSES.map(s => ({ value: s, label: RECORD_STATUS_LABELS[s] }));
       case "Type": return toOptions(PROJECT_TYPES);
       default: return [];
@@ -56,13 +53,13 @@ export function JobsPage() {
       : "{{profiles.full_name}}";
 
     const order: string[] =
-      grouping === "Stage" ? STAGE_NAMES
-      : grouping === "Team" ? TEAMS
+      grouping === "Stage" ? stageNames
+      : grouping === "Team" ? teamNames
       : grouping === "Status" ? RECORD_STATUSES.map(s => RECORD_STATUS_LABELS[s])
       : [...new Set(rows.map(keyOf))];
 
     return order.map(key => ({ key, jobs: rows.filter(j => keyOf(j) === key) }));
-  }, [grouping, rows]);
+  }, [grouping, rows, stageNames, teamNames]);
 
   return (
     <>
@@ -163,7 +160,7 @@ export function JobsPage() {
             <Text type="text3" color="secondary">Expected days come from template_phases</Text>
           </div>
           {rows.map(j => {
-            const expected = PHASE_EXPECTED_DAYS[j.stage] ?? 14;
+            const expected = expectedDaysByStage[j.stage] ?? 14;
             const pct = Math.min(100, Math.round((j.daysInStage / expected) * 100));
             return (
               <div className="bar-row" key={j.jobNumber}>

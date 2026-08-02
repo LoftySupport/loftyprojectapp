@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Heading, Tab, TabList, Text } from "@vibe/core";
-import { RECORD_STATUS_LABELS, STAGE_NAMES, TEAMS } from "../data/lookups";
-import { SHAPE_JOBS } from "../data/placeholderShape";
+import { RECORD_STATUS_LABELS } from "../data/types";
+import { useStages, useTeams } from "../data/useLookups";
+import { usePlaceholderShape } from "../data/placeholderShape";
 import { StatusPill } from "../components/RecordCards";
 import { Token } from "../components/Token";
 import { Toolbar, type ToolbarFilter } from "../components/Toolbar";
@@ -19,14 +20,16 @@ export function ReportsPage() {
   const [tab, setTab] = useState(0);
   const [filters, setFilters] = useState<ToolbarFilter[]>([]);
 
-  const jobs = SHAPE_JOBS;
+  const { stageNames } = useStages();
+  const { teamNames } = useTeams();
+  const jobs = usePlaceholderShape().jobs;
   const onTrack = jobs.filter(j => j.status === "on_track").length;
   const atRisk = jobs.filter(j => j.status === "at_risk").length;
   const stalled = jobs.filter(j => j.status === "behind_schedule").length;
   const avgDays = Math.round(jobs.reduce((n, j) => n + j.daysInStage, 0) / (jobs.length || 1));
 
-  const byStage = STAGE_NAMES.map(s => ({ key: s, n: jobs.filter(j => j.stage === s).length }));
-  const byTeam = TEAMS.map(t => ({ key: t, n: jobs.filter(j => j.team === t).length }))
+  const byStage = stageNames.map(s => ({ key: s, n: jobs.filter(j => j.stage === s).length }));
+  const byTeam = teamNames.map(t => ({ key: t, n: jobs.filter(j => j.team === t).length }))
     .filter(r => r.n > 0)
     .sort((a, b) => b.n - a.n);
 
@@ -35,7 +38,7 @@ export function ReportsPage() {
     .sort((a, b) => b.daysInStage - a.daysInStage);
 
   const optionsFor = (field: string) =>
-    field === "Stage" ? toOptions(STAGE_NAMES) : field === "Team" ? toOptions(TEAMS) : [];
+    field === "Stage" ? toOptions(stageNames) : field === "Team" ? toOptions(teamNames) : [];
 
   return (
     <>
