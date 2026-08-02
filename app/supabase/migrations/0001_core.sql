@@ -11,12 +11,38 @@
 
 create extension if not exists "pgcrypto";
 
+-- =============================================================================
+-- The audit quartet
+-- =============================================================================
+-- Every table carries created_at / created_by / updated_at / updated_by. No
+-- exceptions: the one table without them is the one someone asks about when a value
+-- turns out to be wrong.
+--
+-- `created_by` and `updated_by` are nullable, because a row can legitimately have no
+-- author — a seeded lookup, an import, the very first profile. Nullable and honest
+-- beats not-null and filled with a placeholder nobody can trace.
+--
+-- `updated_at` is maintained by this trigger rather than by the application. A default
+-- of now() only fires on insert; without the trigger the column reads "created_at" for
+-- the rest of the row's life and quietly lies. Attached to every table below.
+create or replace function touch_updated_at() returns trigger
+language plpgsql as $$
+begin
+  new.updated_at := now();
+  return new;
+end $$;
+
 -- ----------------------------------------------------------------- stages
 -- A seeded lookup, ordered. This order is the board's column order.
 create table stages (
-  id        smallint primary key,
-  name      text not null unique,
-  position  smallint not null unique
+  id         smallint primary key,
+  name       text not null unique,
+  position   smallint not null unique,
+
+  created_at timestamptz not null default now(),
+  created_by uuid,                                 -- fk added with profiles
+  updated_at timestamptz not null default now(),
+  updated_by uuid
 );
 
 insert into stages (id, name, position) values
@@ -59,8 +85,11 @@ create table profiles (
   permission     permission_level not null default 'viewer',
   -- + fields (job_title, phone, source, …)
   active         boolean not null default true,
+
   created_at     timestamptz not null default now(),
-  updated_at     timestamptz not null default now()
+  created_by     uuid references profiles(id),   -- null for the first profile
+  updated_at     timestamptz not null default now(),
+  updated_by     uuid references profiles(id)
 );
 
 -- People sit in more than one team, so membership is its own table, not a column.
@@ -71,7 +100,12 @@ create table profile_teams (
   profile_id uuid references profiles(id) on delete cascade,
   team_id    uuid not null,                 -- fk added with the teams table
   is_primary boolean not null default false,
-  joined_at  timestamptz not null default now(),
+
+  created_at timestamptz not null default now(),   -- when they joined the team
+  created_by uuid references profiles(id),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id),
+
   primary key (profile_id, team_id)
 );
 create unique index profile_one_primary_team
@@ -124,10 +158,16 @@ $$;
 -- without rebuilding the type. A table also carries the state, so a picker can filter
 -- to the state already chosen on the address.
 create table council_regions (
-  id      uuid primary key default gen_random_uuid(),
-  name    text not null,
-  state   au_state not null,
-  active  boolean not null default true,
+  id         uuid primary key default gen_random_uuid(),
+  name       text not null,
+  state      au_state not null,
+  active     boolean not null default true,
+
+  created_at timestamptz not null default now(),
+  created_by uuid references profiles(id),        -- null when seeded
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id),
+
   unique (name, state)
 );
 create index on council_regions (state);
@@ -250,19 +290,27 @@ create view project_display as
     left join addresses orig on orig.id = p.original_address_id;
 
 -- ------------------------------------------------------------------- jobs
+-- Deliberately basic. Identity, the link to its project, the numbering, and the audit
+-- quartet. Stage, team, assignee, status and the commercial fields come later.
 create table jobs (
   id                    uuid primary key default gen_random_uuid(),
+
+  -- The real relationship. Renumbering a project must never orphan its jobs, which is
+  -- why this is the uuid and not the friendly number.
   project_id            uuid not null references projects(id) on delete cascade,
 
-  -- Denormalised from the parent so the combined number can be generated. A
-  -- generated column cannot reach across tables, so this is kept in sync by the
-  -- trigger below rather than written by the app.
+  -- The friendly project number, denormalised from the parent so job_name can be a
+  -- generated column — a generated column cannot reach another table. Kept true by the
+  -- triggers below, never written by the app.
   project_no            integer not null,
 
-  job_number            text not null,            -- '01', within the project
+  -- Sequential within the project, zero-padded. Assigned by trigger when null, so a
+  -- caller inserts a job without having to work out what number it should be.
+  job_number            text not null,
 
-  -- The number people actually quote. Generated, so it can never drift from its parts.
-  combined_job_number   text
+  -- What people actually quote: '1001-01'. Generated, so it cannot drift from its
+  -- parts, and unique because it is the business key everyone types and says out loud.
+  job_name              text
     generated always as (project_no::text || '-' || job_number) stored,
 
   -- Same address pair as projects, for the same reason: a job's address is corrected
@@ -276,11 +324,14 @@ create table jobs (
 
   -- No type column: a job's type is its project's type, read through job_display.
   -- + fields (stage_id, owning_team_id, assignee_id, contract/deposit/drawings, …)
+
   created_at            timestamptz not null default now(),
+  created_by            uuid references profiles(id),
   updated_at            timestamptz not null default now(),
+  updated_by            uuid references profiles(id),
 
   unique (project_id, job_number),
-  unique (combined_job_number)
+  unique (job_name)
 );
 
 create index jobs_project_id_idx on jobs (project_id);
@@ -291,8 +342,38 @@ create trigger jobs_default_current_address
   before insert or update on jobs
   for each row execute function default_current_address();
 
+-- Allocate the next job number within the project.
+--
+-- The lock matters. Two jobs inserted on the same project at the same moment would
+-- both read the same max and both compute the same next number; the unique index
+-- would catch it, but as a failed insert rather than a correct one. Locking the parent
+-- project row serialises allocation per project without blocking any other project.
+create or replace function assign_job_number() returns trigger
+language plpgsql as $$
+declare
+  next_no integer;
+begin
+  if new.job_number is null then
+    perform 1 from projects where id = new.project_id for update;
+
+    select coalesce(max(job_number::integer), 0) + 1
+      into next_no
+      from jobs
+     where project_id = new.project_id;
+
+    -- Zero-padded to two digits, and wider than two once a project passes 99 rather
+    -- than silently truncating.
+    new.job_number := lpad(next_no::text, 2, '0');
+  end if;
+  return new;
+end $$;
+
+create trigger jobs_assign_number
+  before insert on jobs
+  for each row execute function assign_job_number();
+
 -- Keep the denormalised project number true, on insert and if a project is ever
--- renumbered. Without this the combined number silently goes stale.
+-- renumbered. Without this the job name silently goes stale.
 create or replace function sync_job_project_number() returns trigger
 language plpgsql as $$
 begin
@@ -323,7 +404,7 @@ create trigger projects_cascade_renumber
 -- inherited, not copied — so there is nowhere for the two to disagree.
 create view job_display as
   select j.id,
-         j.combined_job_number,
+         j.job_name,
          j.project_id,
          p.project_no,
          p.project_type,                     -- inherited from the project
@@ -356,6 +437,11 @@ create table job_stages (
   -- The open stage row is simply the one with exited_at null.
   -- + fields (owning_team_id, assignee_id, sla_days, notes, …)
 
+  created_at  timestamptz not null default now(),
+  created_by  uuid references profiles(id),
+  updated_at  timestamptz not null default now(),
+  updated_by  uuid references profiles(id),
+
   unique (job_id, stage_id),
   foreign key (job_id, project_id) references jobs (id, project_id) on delete cascade,
   check (exited_at is null or entered_at is not null),
@@ -364,6 +450,25 @@ create table job_stages (
 
 -- the composite FK above needs this on the parent
 alter table jobs add constraint jobs_id_project_id_key unique (id, project_id);
+
+-- stages is declared before profiles, so its author columns get their foreign keys here.
+alter table stages add constraint stages_created_by_fkey foreign key (created_by) references profiles(id);
+alter table stages add constraint stages_updated_by_fkey foreign key (updated_by) references profiles(id);
+
+-- =============================================================================
+-- updated_at, on every table
+-- =============================================================================
+-- A default of now() only fires on insert. Without these the column reads
+-- "created_at" for the rest of the row's life and quietly lies — which is worse than
+-- not having it, because people trust it.
+create trigger stages_touch          before update on stages          for each row execute function touch_updated_at();
+create trigger profiles_touch        before update on profiles        for each row execute function touch_updated_at();
+create trigger profile_teams_touch   before update on profile_teams   for each row execute function touch_updated_at();
+create trigger council_regions_touch before update on council_regions for each row execute function touch_updated_at();
+create trigger addresses_touch       before update on addresses       for each row execute function touch_updated_at();
+create trigger projects_touch        before update on projects        for each row execute function touch_updated_at();
+create trigger jobs_touch            before update on jobs            for each row execute function touch_updated_at();
+create trigger job_stages_touch      before update on job_stages      for each row execute function touch_updated_at();
 
 create index job_stages_job_idx     on job_stages (job_id);
 create index job_stages_project_idx on job_stages (project_id);

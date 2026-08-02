@@ -27,15 +27,29 @@ import type {
  * changes and nothing else does.
  */
 
+/**
+ * The audit quartet on seeded rows.
+ *
+ * `createdBy` and `updatedBy` are null, which is the honest answer: nobody created a
+ * seed. That is exactly why the columns are nullable rather than not-null with a
+ * placeholder — a placeholder author is a lie that survives into production.
+ */
+const SEEDED = {
+  createdAt: "2026-08-01T00:00:00Z",
+  createdBy: null,
+  updatedAt: "2026-08-01T00:00:00Z",
+  updatedBy: null
+};
+
 export const SEED_STAGES: Stage[] = [
-  { id: 1, name: "Sales & acquisition", position: 1 },
-  { id: 2, name: "Planning & Engineering", position: 2 },
-  { id: 3, name: "Working Drawings & Contracts", position: 3 },
-  { id: 4, name: "Preconstruction", position: 4 },
-  { id: 5, name: "Scheduling & Estimating", position: 5 },
-  { id: 6, name: "Construction & execution", position: 6 },
-  { id: 7, name: "Post-construction & closeout", position: 7 },
-  { id: 8, name: "Handover & maintenance", position: 8 }
+  { id: 1, name: "Sales & acquisition", position: 1, ...SEEDED },
+  { id: 2, name: "Planning & Engineering", position: 2, ...SEEDED },
+  { id: 3, name: "Working Drawings & Contracts", position: 3, ...SEEDED },
+  { id: 4, name: "Preconstruction", position: 4, ...SEEDED },
+  { id: 5, name: "Scheduling & Estimating", position: 5, ...SEEDED },
+  { id: 6, name: "Construction & execution", position: 6, ...SEEDED },
+  { id: 7, name: "Post-construction & closeout", position: 7, ...SEEDED },
+  { id: 8, name: "Handover & maintenance", position: 8, ...SEEDED }
 ];
 
 /**
@@ -66,7 +80,7 @@ export const SEED_TEMPLATE_PHASES: TemplatePhase[] = PHASES.map(([name, teams, d
 /** Every team, whether or not it currently holds a job. */
 export const SEED_TEAMS: Team[] = [...new Set(PHASES.flatMap(([, teams]) => teams))]
   .sort()
-  .map(name => ({ id: `team-${name.toLowerCase().replace(/[^a-z]+/g, "-")}`, name, parentTeamId: null }));
+  .map(name => ({ id: `team-${name.toLowerCase().replace(/[^a-z]+/g, "-")}`, name, parentTeamId: null, ...SEEDED }));
 
 const CHECKPOINTS: Record<string, string[]> = {
   "Sales & acquisition": ["Enquiry logged", "Site inspection booked", "Contract issued", "Deposit received"],
