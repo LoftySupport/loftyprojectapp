@@ -3,7 +3,7 @@
 Everything a new session needs to pick this up. Read this first, then
 `data-dictionary.md`.
 
-Last updated: 2026-08-01.
+Last updated: 2026-08-02.
 
 ---
 
@@ -213,6 +213,31 @@ user creates, and without them there is no board to look at. Records still resol
 The Wiring page shows the two separately for that reason: a lookup serving from the seed
 is real progress, a record returning empty is not.
 
+### The header search
+
+One `TextField` in the header, one query in `app/src/data/SearchProvider.tsx`, and every
+list screen reads it. Same behaviour as the prototype: **it filters the view you are on
+rather than opening a results page**, so typing on the board narrows the board, and the
+query survives switching Board → Table → Gantt → Calendar and moving between Jobs,
+Projects and Reports.
+
+- **Every term must match.** `"prj-002 on track"` is an AND, not an OR — an OR would widen
+  the result the moment someone typed a second word, which is the opposite of what they
+  were doing.
+- **`jobMatchesQuery` and `projectMatchesQuery` are shared**, not written per page. If
+  Jobs searched the team and Reports did not, the same query would return different sets
+  on two screens showing the same records, which reads as a bug even though both "work".
+- **A project matches on its own values or on any job it holds.** Searching a job number
+  and being told the project does not exist would be nonsense when the job is on it.
+- **Both addresses are searched**, current and original — that is why the schema keeps the
+  pair. When a match comes off an *original* address only, the screen says so once above
+  the results: whoever searched is working from an old email or a contract, and the
+  address they have is not where the job is now. `ShapeJob` and `ShapeProject` carry the
+  two address fields unset today, because addresses are still tokenised and inventing text
+  for them would put something on the board that looks like data. The hint lights up on
+  its own the day `addresses` binds.
+- **The toolbar filter chips are still inert.** `Showing N of M` counts the search only.
+
 ### Vibe defaults that fail accessibility
 
 Two, both fixed, both worth knowing because they will recur:
@@ -234,6 +259,13 @@ The contrast audit composites alpha against the painted backdrop before measurin
   hold nothing are `clearable` — a filter, not a view.
 - **Vibe's `title` prop renders a visible label.** In a table that is noise on every row;
   use `aria-label`.
+- **`TextField` ignores `aria-label` and writes its own from the placeholder.** The prop
+  is `inputAriaLabel`. A field with no placeholder and a plain `aria-label` ends up with
+  no accessible name at all. Pass `id` too — the default is literally `id="input"` on
+  every instance, so two on a page collide.
+- **`Text` clips to a single line by default.** Any sentence longer than its container
+  becomes `"Every word has to appear somew…"`, and in a full-width band it forces a
+  horizontal scrollbar instead. `ellipsis={false}` wherever the words matter.
 - **`TextArea` hands back the event; `TextField` hands back the value.**
 - **The layout is a flex column from `html` down**, and it has to pass through
   ThemeProvider's own wrapper (`#root, #root > *`) or the footer floats mid-page.

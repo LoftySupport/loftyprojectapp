@@ -4,6 +4,8 @@ import { useQuery } from "../data/DataProvider";
 import { RECORD_STATUS_LABELS, RECORD_STATUSES, PROJECT_TYPES } from "../data/types";
 import { useStages, useTeams } from "../data/useLookups";
 import { usePlaceholderShape, type ShapeProject } from "../data/placeholderShape";
+import { matchedOnPreviousAddress, projectMatchesQuery, useSearch } from "../data/SearchProvider";
+import { NoResults, PreviousAddressNote } from "../components/SearchNotices";
 import { ProjectCard, StatusPill } from "../components/RecordCards";
 import { PropertySlots } from "../components/PropertySlots";
 import { Token } from "../components/Token";
@@ -28,8 +30,17 @@ export function ProjectsPage() {
   const [open, setOpen] = useState<ShapeProject | null>(null);
 
   const unbound = !loading && projects.length === 0;
-  const rows = useMemo(() => (unbound ? shape.projects : []), [unbound, shape]);
-  const jobCount = rows.reduce((n, p) => n + p.jobs.length, 0);
+  const all = useMemo(() => (unbound ? shape.projects : []), [unbound, shape]);
+
+  /**
+   * A project stays in the list when one of its *jobs* matches — searching a job number
+   * and being told the project does not exist would be nonsense when the job is on it.
+   */
+  const { terms } = useSearch();
+  const rows = useMemo(() => all.filter(p => projectMatchesQuery(p, terms)), [all, terms]);
+  const noMatches = terms.length > 0 && rows.length === 0;
+  const stale = matchedOnPreviousAddress(rows.flatMap(p => [p, ...p.jobs]), terms);
+  const jobCount = all.reduce((n, p) => n + p.jobs.length, 0);
 
   const optionsFor = (field: string) => {
     switch (field) {
@@ -48,7 +59,7 @@ export function ProjectsPage() {
       <div className="page-head">
         <Heading type="h2" weight="bold">Projects</Heading>
         <Text type="text2" color="secondary">
-          {loading ? "Loading…" : `${rows.length} projects · ${jobCount} jobs`}
+          {loading ? "Loading…" : `${all.length} projects · ${jobCount} jobs`}
         </Text>
       </div>
 
@@ -59,11 +70,15 @@ export function ProjectsPage() {
         filters={filters}
         onFiltersChange={setFilters}
         optionsFor={optionsFor}
-        count={`Showing ${rows.length} of ${rows.length} projects`}
+        count={`Showing ${rows.length} of ${all.length} projects`}
         actions={<Button size="small">+ New project</Button>}
       />
 
-      {view === "Board" ? (
+      {stale && <PreviousAddressNote />}
+
+      {noMatches ? (
+        <NoResults noun="projects" />
+      ) : view === "Board" ? (
         <div className="card-grid">
           {rows.map(p => (
             <ProjectCard

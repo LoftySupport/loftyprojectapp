@@ -4,6 +4,8 @@ import { useQuery } from "../data/DataProvider";
 import { RECORD_STATUS_LABELS, RECORD_STATUSES, PROJECT_TYPES } from "../data/types";
 import { useStages, useTeams, useTemplatePhases } from "../data/useLookups";
 import { usePlaceholderShape, type ShapeJob } from "../data/placeholderShape";
+import { jobMatchesQuery, matchedOnPreviousAddress, useSearch } from "../data/SearchProvider";
+import { NoResults, PreviousAddressNote } from "../components/SearchNotices";
 import { JobCard, StatusPill } from "../components/RecordCards";
 import { JobDrawer } from "../components/JobDrawer";
 import { Token } from "../components/Token";
@@ -31,7 +33,19 @@ export function JobsPage() {
   const [openJob, setOpenJob] = useState<ShapeJob | null>(null);
 
   const unbound = !loading && jobs.length === 0;
-  const rows = useMemo(() => (unbound ? shape.jobs : []), [unbound, shape]);
+  const all = useMemo(() => (unbound ? shape.jobs : []), [unbound, shape]);
+
+  /**
+   * The header search narrows the view you are on — it is not a separate results page.
+   * Board, Table, Gantt and Calendar all read `rows`, so the query survives switching
+   * between them, which is the whole point of putting it in the header.
+   */
+  const { terms } = useSearch();
+  const rows = useMemo(() => all.filter(j => jobMatchesQuery(j, terms)), [all, terms]);
+  /** Only a *search* that found nothing gets the empty state — an unbound board with no
+   *  placeholder rows is a different situation and already reads correctly. */
+  const noMatches = terms.length > 0 && rows.length === 0;
+  const stale = matchedOnPreviousAddress(rows, terms);
 
   const optionsFor = (field: string) => {
     switch (field) {
@@ -68,7 +82,7 @@ export function JobsPage() {
         <Text type="text2" color="secondary">
           {loading
             ? "Loading…"
-            : `${rows.length} job${rows.length === 1 ? "" : "s"} across ${stages.length} stages`}
+            : `${all.length} job${all.length === 1 ? "" : "s"} across ${stages.length} stages`}
         </Text>
       </div>
 
@@ -81,11 +95,15 @@ export function JobsPage() {
         filters={filters}
         onFiltersChange={setFilters}
         optionsFor={optionsFor}
-        count={`Showing ${rows.length} of ${rows.length} jobs`}
+        count={`Showing ${rows.length} of ${all.length} jobs`}
         actions={<Button size="small">+ New job</Button>}
       />
 
-      {view === "Board" && (
+      {stale && <PreviousAddressNote />}
+
+      {noMatches && <NoResults noun="jobs" />}
+
+      {view === "Board" && !noMatches && (
         <div className="board">
           {groups.map(g => (
             <section className="board-column" key={g.key}>
@@ -118,7 +136,7 @@ export function JobsPage() {
         </div>
       )}
 
-      {view === "Table" && (
+      {view === "Table" && !noMatches && (
         <div className="panel data-table-wrap">
           <table className="data-table">
             <thead>
@@ -153,7 +171,7 @@ export function JobsPage() {
         </div>
       )}
 
-      {view === "Gantt" && (
+      {view === "Gantt" && !noMatches && (
         <div className="panel">
           <div className="panel-head">
             <Text type="text2" weight="bold">Time in stage against the template</Text>
@@ -175,7 +193,7 @@ export function JobsPage() {
         </div>
       )}
 
-      {view === "Calendar" && (
+      {view === "Calendar" && !noMatches && (
         <div className="panel">
           <div className="panel-head">
             <Text type="text2" weight="bold">Scheduled dates</Text>

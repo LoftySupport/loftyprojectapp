@@ -115,3 +115,6 @@ html, body, #root { height: 100%; }
 /* The demo permission switcher. Narrow, because it is scaffolding — it goes when
    Supabase Auth lands and the level comes from profiles.permission. */
 .app-permission { min-width: 130px; }
+
+/* Wide enough for an address fragment, and it gives up width before the nav does. */
+.app-search { min-width: 200px; max-width: 320px; flex: 1 1 200px; }

@@ -4,6 +4,7 @@ import { ThemeProvider } from "@vibe/core";
 import { loftyTheme, type SystemTheme } from "./theme/loftyTheme";
 import { DataProvider } from "./data/DataProvider";
 import { PermissionProvider } from "./data/PermissionProvider";
+import { SearchProvider } from "./data/SearchProvider";
 import { AppShell } from "./shell/AppShell";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
@@ -36,6 +37,7 @@ export default function App() {
     <ThemeProvider themeConfig={loftyTheme} systemTheme={theme}>
       <PermissionProvider>
       <DataProvider>
+      <SearchProvider>
         {/* Served from /app/, so the router has to know that is the root. */}
         <BrowserRouter basename={import.meta.env.BASE_URL}>
           <Routes>
@@ -55,6 +57,7 @@ export default function App() {
             </Route>
           </Routes>
         </BrowserRouter>
+      </SearchProvider>
       </DataProvider>
       </PermissionProvider>
     </ThemeProvider>

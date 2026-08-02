@@ -336,6 +336,28 @@
 .field-hint { font: var(--font-text3-normal); color: var(--secondary-text-color); margin-top: 2px; }
 .field-control { min-width: 220px; }
 
+/* ---- search notices ------------------------------------------------------ */
+.no-results {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-8);
+  text-align: center;
+  padding: var(--space-32) var(--space-24);
+}
+/* Sits between the toolbar and the results, so it is read before them rather than
+   found after scrolling past the thing it explains. */
+.search-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin-bottom: var(--space-12);
+  padding: var(--space-8) var(--space-12);
+  border-left: 3px solid var(--primary-color);
+  background: var(--primary-selected-color);
+  border-radius: var(--border-radius-small);
+}
+
 /* ---- accessibility corrections on Vibe defaults --------------------------
    Vibe's text avatar paints white on #66ccff — 1.8:1, well under AA, and it is
    the initials that carry the meaning. Repaint it in the brand pair, which is
