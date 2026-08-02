@@ -1,5 +1,5 @@
 import { Avatar, Text } from "@vibe/core";
-import { RECORD_STATUS_LABELS, type RecordStatus } from "../data/lookups";
+import { RECORD_STATUS_LABELS, type RecordStatus } from "../data/types";
 import { Token } from "./Token";
 import "./ui.css";
 

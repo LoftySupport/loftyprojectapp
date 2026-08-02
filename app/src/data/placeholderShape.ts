@@ -1,4 +1,6 @@
-import { PHASE_TEAMS, STAGE_NAMES, type RecordStatus } from "./lookups";
+import { useMemo } from "react";
+import { useTemplatePhases, useStages } from "./useLookups";
+import type { RecordStatus } from "./types";
 
 /**
  * Layout scaffolding for the unbound state — **not data**.
@@ -13,8 +15,10 @@ import { PHASE_TEAMS, STAGE_NAMES, type RecordStatus } from "./lookups";
  * project, PRJ-001-02 for its second job — so the relationship reads off the number
  * while nothing looks like a Lofty number.
  *
- * Every screen that uses this checks its repository call first and only falls back to
- * these when the result is empty. The moment a table is wired, they are gone.
+ * It is built from the stage and phase lookups rather than hard-coding them, which is
+ * why it is a hook: those come through the repository now. Every screen using it checks
+ * its repository call first and only falls back to these when the result is empty. The
+ * moment a table is wired, they are gone.
  */
 
 export const PROJECT_SIZES = [3, 2, 2, 3, 1];
@@ -34,50 +38,55 @@ export interface ShapeProject {
   status: RecordStatus;
 }
 
-/** Spread across the enum so the board shows what each status looks like, not just
- *  the happy one. Completed and cancelled are in there deliberately — they are what
+/** Spread across the enum so the board shows what each status looks like, not just the
+ *  happy one. Completed and cancelled are in there deliberately — they are what
  *  is_current() filters out. */
 const STATUS_CYCLE: RecordStatus[] = [
   "on_track", "on_track", "at_risk", "on_track", "behind_schedule",
   "on_track", "on_hold", "completed", "at_risk", "cancelled", "on_track"
 ];
 
-export const SHAPE_PROJECTS: ShapeProject[] = (() => {
-  const projects: ShapeProject[] = [];
-  let n = 0;
+export function usePlaceholderShape() {
+  const { stageNames } = useStages();
+  const { teamsByStage } = useTemplatePhases();
 
-  PROJECT_SIZES.forEach((size, p) => {
-    const projectNumber = `PRJ-${String(p + 1).padStart(3, "0")}`;
-    const jobs: ShapeJob[] = [];
+  return useMemo(() => {
+    if (stageNames.length === 0) return { projects: [], jobs: [] as ShapeJob[] };
 
-    for (let i = 0; i < size; i++) {
-      // One job per stage before wrapping, so all eight columns are represented
-      // rather than eleven jobs piling into the first two.
-      const stage = STAGE_NAMES[n % STAGE_NAMES.length];
-      jobs.push({
-        jobNumber: `${projectNumber}-${String(i + 1).padStart(2, "0")}`,
+    const projects: ShapeProject[] = [];
+    let n = 0;
+
+    PROJECT_SIZES.forEach((size, p) => {
+      const projectNumber = `PRJ-${String(p + 1).padStart(3, "0")}`;
+      const jobs: ShapeJob[] = [];
+
+      for (let i = 0; i < size; i++) {
+        // One job per stage before wrapping, so all eight columns are represented
+        // rather than eleven jobs piling into the first two.
+        const stage = stageNames[n % stageNames.length];
+        jobs.push({
+          jobNumber: `${projectNumber}-${String(i + 1).padStart(2, "0")}`,
+          projectNumber,
+          stage,
+          team: teamsByStage[stage]?.[0] ?? "",
+          status: STATUS_CYCLE[n % STATUS_CYCLE.length],
+          daysInStage: 3 + ((n * 5) % 18)
+        });
+        n++;
+      }
+
+      projects.push({
         projectNumber,
-        stage,
-        team: PHASE_TEAMS[stage][0],
-        status: STATUS_CYCLE[n % STATUS_CYCLE.length],
-        daysInStage: 3 + ((n * 5) % 18)
+        jobs,
+        // A project is only as healthy as its worst job — derived, never stored.
+        status: jobs.some(j => j.status === "behind_schedule")
+          ? "behind_schedule"
+          : jobs.some(j => j.status === "at_risk")
+            ? "at_risk"
+            : "on_track"
       });
-      n++;
-    }
-
-    projects.push({
-      projectNumber,
-      jobs,
-      // A project is only as healthy as its worst job — derived, never stored.
-      status: jobs.some(j => j.status === "behind_schedule")
-        ? "behind_schedule"
-        : jobs.some(j => j.status === "at_risk")
-          ? "at_risk"
-          : "on_track"
     });
-  });
 
-  return projects;
-})();
-
-export const SHAPE_JOBS: ShapeJob[] = SHAPE_PROJECTS.flatMap(p => p.jobs);
+    return { projects, jobs: projects.flatMap(p => p.jobs) };
+  }, [stageNames, teamsByStage]);
+}

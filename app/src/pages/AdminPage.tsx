@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Counter, Heading, Tab, TabList, Text } from "@vibe/core";
-import { PHASE_TEAMS, PROPERTY_DEFS, STAGE_NAMES, TEAMS, byStage } from "../data/lookups";
-import { SHAPE_JOBS } from "../data/placeholderShape";
+import { groupByStage, usePropertyDefs, useStages, useTeams, useTemplatePhases } from "../data/useLookups";
+import { usePlaceholderShape } from "../data/placeholderShape";
 import { Token } from "../components/Token";
 import "../components/ui.css";
 
@@ -76,10 +76,15 @@ function Users() {
 }
 
 function Teams() {
+  const { teamNames } = useTeams();
+  const { stageNames } = useStages();
+  const { teamsByStage } = useTemplatePhases();
+  const { jobs } = usePlaceholderShape();
+
   return (
     <section className="panel">
       <div className="panel-head">
-        <Text type="text2" weight="bold">Teams ({TEAMS.length})</Text>
+        <Text type="text2" weight="bold">Teams ({teamNames.length})</Text>
         <Text type="text3" color="secondary">
           Each team owns one or more phases. That mapping drives “one job, one team at a
           time” and the handover between phases.
@@ -91,9 +96,9 @@ function Teams() {
             <tr><th>Team</th><th>Phases owned</th><th className="num">Jobs held</th><th>Members</th></tr>
           </thead>
           <tbody>
-            {TEAMS.map(t => {
-              const owned = STAGE_NAMES.filter(s => PHASE_TEAMS[s].includes(t));
-              const held = SHAPE_JOBS.filter(j => j.team === t).length;
+            {teamNames.map(t => {
+              const owned = stageNames.filter(s => (teamsByStage[s] ?? []).includes(t));
+              const held = jobs.filter(j => j.team === t).length;
               return (
                 <tr key={t}>
                   <td><strong>{t}</strong></td>
@@ -111,12 +116,14 @@ function Teams() {
 }
 
 function Properties() {
-  const groups = byStage(PROPERTY_DEFS);
+  const { propertyDefs } = usePropertyDefs();
+  const { stageNames } = useStages();
+  const groups = groupByStage(propertyDefs, stageNames);
 
   return (
     <section className="panel">
       <div className="panel-head">
-        <Text type="text2" weight="bold">Property definitions ({PROPERTY_DEFS.length})</Text>
+        <Text type="text2" weight="bold">Property definitions ({propertyDefs.length})</Text>
         <Counter count={groups.length} kind="line" aria-label="stages capturing properties" />
       </div>
       <Text type="text2" color="secondary">
@@ -143,7 +150,7 @@ function Properties() {
                     <td><strong>{d.label}</strong></td>
                     <td className="muted"><code>{d.key}</code></td>
                     <td>{d.scope}</td>
-                    <td>{d.team}</td>
+                    <td>{d.teamName}</td>
                     <td>{d.format}</td>
                     <td>{d.required ? "Yes" : "—"}</td>
                     <td className="muted">{d.automation ?? "—"}</td>

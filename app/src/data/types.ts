@@ -259,10 +259,75 @@ export interface ProfileTeam {
 export const greetingName = (p: Profile): string => p.preferredName ?? p.firstName;
 
 // ------------------------------------------------------------------ lookup
+//
+// These are reference tables in Supabase, not constants. They are the business
+// process — which is exactly why they must come through the repository, not be
+// imported from a module: the day they are seeded, every screen already reads them
+// from the right place.
 
 /** Stages are a seeded lookup, ordered — this order is the board's column order. */
 export interface Stage {
   id: number;
   name: string;
   position: number;
+}
+
+/** `teams`. Each owns one or more pipeline phases. */
+export interface Team {
+  id: Uuid;
+  name: string;
+  /** The hierarchy the `team_hierarchy` permission scope walks. */
+  parentTeamId: Uuid | null;
+}
+
+/**
+ * `template_phases` — which team owns a stage, and how long it should take.
+ *
+ * Stated, not derived from whatever jobs happen to be loaded: a team that owns a phase
+ * owns it on a quiet day too.
+ */
+export interface TemplatePhase {
+  stageId: number;
+  stageName: string;
+  owningTeamNames: string[];
+  expectedDays: number;
+}
+
+/** `template_checkpoints` — what a phase expects done before it hands over. */
+export interface TemplateCheckpoint {
+  stageId: number;
+  stageName: string;
+  label: string;
+  position: number;
+}
+
+// -------------------------------------------------------------- properties
+
+export type PropertyScope = "project" | "job";
+
+export type PropertyFormat =
+  | "text" | "number" | "currency" | "date" | "checkbox"
+  | "file" | "single select" | "multi select" | "person" | "link";
+
+/**
+ * `property_defs`. A property IS a field — the two words mean the same thing.
+ *
+ * Every one lives at project or job level and carries two pieces of context: which
+ * stage captures it, and which team captures it. Stage is deliberately not a third
+ * level — a pour date is a property of a *job* that happens to be filled in at
+ * Scheduling & Estimating.
+ *
+ * These are rows, not columns, which is why nothing in this app has `field_1`. The
+ * count is data.
+ */
+export interface PropertyDef {
+  key: string;
+  label: string;
+  scope: PropertyScope;
+  stageName: string;
+  teamName: string;
+  format: PropertyFormat;
+  /** Required to *leave* its stage, not required to create the record. */
+  required: boolean;
+  automation?: string;
 }

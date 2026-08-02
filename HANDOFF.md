@@ -190,19 +190,28 @@ permissions.
 
 ## The app: things worth knowing before changing it
 
-### The repository seam, and where it is currently broken
+### The repository seam
 
 `app/src/data/repository.ts` is the interface every screen reads through, so tables can be
-wired one at a time. Its stated rule: **no component may import the Supabase client; if a
-screen needs data that is not here, add a method.**
+wired one at a time. Its rule, in two halves: **no component may import the Supabase
+client, and no component may import seed data directly.** If a screen needs something that
+is not on the interface, add a method.
 
-**Nine files currently break it.** `PROPERTY_DEFS`, `TEAMS`, `PHASE_TEAMS` and
-`PHASE_CHECKPOINTS` are module constants in `app/src/data/lookups.ts`, imported directly
-by nine files. They are real Supabase tables. When they come online, all nine change —
-the exact rewrite the seam exists to prevent.
+The second half was learned the hard way and is worth not re-learning. The lookups —
+teams, template phases, checkpoints, property definitions — spent a while as module
+constants in a `lookups.ts`, imported straight into nine files. They read like
+configuration, but every one is a real Supabase table, and the day they were seeded all
+nine files would have had to change. That is now fixed: they come through
+`listTeams()`, `listTemplatePhases()`, `listTemplateCheckpoints()` and
+`listPropertyDefs()`, and `app/src/data/useLookups.ts` holds the hooks that read them.
 
-**This is the highest-value cleanup outstanding.** It is mechanical now and painful later.
-Widening `Repository` at the same time also makes the Wiring page an honest checklist.
+**If it will live in Postgres, it belongs on the interface, however static it looks
+today.**
+
+The stub answers the lookups honestly — they are the business process, not something a
+user creates, and without them there is no board to look at. Records still resolve empty.
+The Wiring page shows the two separately for that reason: a lookup serving from the seed
+is real progress, a record returning empty is not.
 
 ### Vibe defaults that fail accessibility
 

@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { Button, Heading, Text } from "@vibe/core";
 import { useQuery } from "../data/DataProvider";
-import { RECORD_STATUS_LABELS, RECORD_STATUSES, PROJECT_TYPES, STAGE_NAMES, TEAMS } from "../data/lookups";
-import { SHAPE_PROJECTS, type ShapeProject } from "../data/placeholderShape";
+import { RECORD_STATUS_LABELS, RECORD_STATUSES, PROJECT_TYPES } from "../data/types";
+import { useStages, useTeams } from "../data/useLookups";
+import { usePlaceholderShape, type ShapeProject } from "../data/placeholderShape";
 import { ProjectCard, StatusPill } from "../components/RecordCards";
 import { PropertySlots } from "../components/PropertySlots";
 import { Token } from "../components/Token";
@@ -18,19 +19,22 @@ import "../components/ui.css";
  * Everything else in the toolbar reads the same as it does on Jobs.
  */
 export function ProjectsPage() {
+  const { stageNames } = useStages();
+  const { teamNames } = useTeams();
+  const shape = usePlaceholderShape();
   const { data: projects, loading } = useQuery(r => r.listProjects(), []);
   const [view, setView] = useState<View>("Board");
   const [filters, setFilters] = useState<ToolbarFilter[]>([]);
   const [open, setOpen] = useState<ShapeProject | null>(null);
 
   const unbound = !loading && projects.length === 0;
-  const rows = useMemo(() => (unbound ? SHAPE_PROJECTS : []), [unbound]);
+  const rows = useMemo(() => (unbound ? shape.projects : []), [unbound, shape]);
   const jobCount = rows.reduce((n, p) => n + p.jobs.length, 0);
 
   const optionsFor = (field: string) => {
     switch (field) {
-      case "Stage": return toOptions(STAGE_NAMES);
-      case "Team": return toOptions(TEAMS);
+      case "Stage": return toOptions(stageNames);
+      case "Team": return toOptions(teamNames);
       case "Status": return RECORD_STATUSES.map(s => ({ value: s, label: RECORD_STATUS_LABELS[s] }));
       case "Type": return toOptions(PROJECT_TYPES);
       default: return [];

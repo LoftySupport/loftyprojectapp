@@ -15,19 +15,31 @@ export function WiringPage() {
   const repo = useRepository();
   const configured = isSupabaseConfigured();
 
+  // Lookups and records are different kinds of "not wired". A lookup answered from
+  // the seed is genuinely serving the business process; a record returning empty is
+  // simply not there yet. Showing both as one "Stub" badge reads as less progress
+  // than there is.
+  const LOOKUPS: RepositoryMethod[] = [
+    "listStages", "listTeams", "listTemplatePhases",
+    "listTemplateCheckpoints", "listPropertyDefs"
+  ];
+
   const rows = ALL_METHODS.map(method => ({
     method,
     table: METHOD_TABLES[method],
+    isLookup: LOOKUPS.includes(method),
     wired: repo.wired.has(method as keyof typeof repo)
   }));
 
-  const live = rows.filter(r => r.wired).length;
+  const fromSupabase = rows.filter(r => r.wired && configured).length;
   const byTable = [...new Set(rows.map(r => r.table))];
+  const records = rows.filter(r => !r.isLookup);
+  const lookups = rows.filter(r => r.isLookup);
 
   return (
     <PageShell
       title="Wiring"
-      subtitle={`${live} of ${rows.length} repository methods backed by real data · ${byTable.length} tables in the seam`}
+      subtitle={`${rows.length} methods across ${byTable.length} tables · ${fromSupabase} reading from Supabase`}
     >
       <div className="panel" style={{ marginBottom: "var(--space-16)" }}>
         <Text type="text2">
@@ -37,32 +49,19 @@ export function WiringPage() {
         </Text>
       </div>
 
-      <div className="panel">
-        <table className="wiring-table">
-          <thead>
-            <tr>
-              <th scope="col">Repository method</th>
-              <th scope="col">Table</th>
-              <th scope="col">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(row => (
-              <tr key={row.method}>
-                <td><code>{row.method as RepositoryMethod}()</code></td>
-                <td><Text type="text2" color="secondary">{row.table}</Text></td>
-                <td>
-                  {row.wired ? (
-                    <Label kind="fill" color="positive" text="Wired" />
-                  ) : (
-                    <Label kind="fill" color="dark" text="Stub" />
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Section
+        title="Records"
+        note="What users create. Empty until the table exists and the method is a query."
+        rows={records}
+        configured={configured}
+      />
+
+      <Section
+        title="Lookups"
+        note="The business process — stages, teams, template phases, checkpoints, property definitions. Seeded rather than user-created, so the stub answers them honestly: the board has its columns and the drawer its field slots before any table exists. They still come through the seam, so seeding them in Supabase changes one method and no screens."
+        rows={lookups}
+        configured={configured}
+      />
 
       <div className="panel" style={{ marginTop: "var(--space-16)" }}>
         <Text type="text2" weight="medium">To bring a table online</Text>
@@ -77,5 +76,50 @@ export function WiringPage() {
         </Text>
       </div>
     </PageShell>
+  );
+}
+
+function Section({
+  title,
+  note,
+  rows,
+  configured
+}: {
+  title: string;
+  note: string;
+  rows: { method: RepositoryMethod; table: string; isLookup: boolean; wired: boolean }[];
+  configured: boolean;
+}) {
+  return (
+    <div className="panel" style={{ marginBottom: "var(--space-16)" }}>
+      <Text type="text2" weight="bold">{title}</Text>
+      <Text type="text3" color="secondary">{note}</Text>
+      <table className="wiring-table" style={{ marginTop: "var(--space-12)" }}>
+        <thead>
+          <tr>
+            <th scope="col">Repository method</th>
+            <th scope="col">Table</th>
+            <th scope="col">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(row => (
+            <tr key={row.method}>
+              <td><code>{row.method}()</code></td>
+              <td><Text type="text2" color="secondary">{row.table}</Text></td>
+              <td>
+                {row.wired && configured ? (
+                  <Label kind="fill" color="positive" text="Supabase" />
+                ) : row.wired ? (
+                  <Label kind="fill" color="primary" text="Seeded" />
+                ) : (
+                  <Label kind="fill" color="dark" text="Empty" />
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
