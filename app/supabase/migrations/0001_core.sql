@@ -420,6 +420,60 @@ create view job_display as
     join addresses cur        on cur.id  = j.current_address_id
     left join addresses orig  on orig.id = j.original_address_id;
 
+-- =============================================================================
+-- Searching by address
+-- =============================================================================
+-- The rule: **the current address is what shows, both addresses are what match.**
+--
+-- A job renumbered by council is still the job someone has in an email from last year,
+-- and searching that old address has to find it. So the display side reads
+-- `current_address` from job_display / project_display and nothing else, while search
+-- looks at both.
+--
+-- These views give one row per (record, address role), so a match on either finds the
+-- record and says which address it matched — worth showing, because a hit on an
+-- original address is a hint that the person searching has stale information.
+create view job_address_search as
+  select j.id                  as job_id,
+         j.project_id,
+         j.job_number,
+         a.id                  as address_id,
+         a.consolidated_address,
+         a.suburb,
+         a.council_id,
+         case when a.id = j.current_address_id then 'current' else 'original' end as role
+  from jobs j
+    join addresses a
+      on a.id = j.current_address_id
+      or a.id = j.original_address_id;
+
+create view project_address_search as
+  select p.id                  as project_id,
+         p.project_no,
+         a.id                  as address_id,
+         a.consolidated_address,
+         a.suburb,
+         a.council_id,
+         case when a.id = p.current_address_id then 'current' else 'original' end as role
+  from projects p
+    join addresses a
+      on a.id = p.current_address_id
+      or a.id = p.original_address_id;
+
+-- People search "Ironbark" or "22 Ironbark", not the whole string, so this needs
+-- trigram matching rather than a b-tree — a plain index does nothing for a leading
+-- wildcard. pg_trgm also survives typos, which a full-text index does not.
+create extension if not exists pg_trgm;
+create index addresses_consolidated_trgm
+  on addresses using gin (consolidated_address gin_trgm_ops);
+create index addresses_suburb_trgm
+  on addresses using gin (suburb gin_trgm_ops);
+
+-- The original address needs its own index or half the search is a sequential scan.
+-- Easy to miss, because the current one gets added while writing the display path.
+create index on projects (original_address_id);
+create index on jobs (original_address_id);
+
 -- ------------------------------------------------- job_stages (composite)
 -- One row per job per stage. A single stage_id on the job would only say where
 -- something is now — not when it got there, how long it sat, or what it skipped.
