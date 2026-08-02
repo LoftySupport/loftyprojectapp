@@ -5914,8 +5914,8 @@ function fakeUuid(seed) {
 // numbering has, so the relationship still reads off the number, but no one can
 // mistake one of these for a job that exists.
 //   projects.lofty_project_number       PRJ-001
-//   jobs.job_number                     02
-//   jobs.combined_lofty_job_number      PRJ-001-02   (generated, UNIQUE)
+//   jobs.job_sequence                     02
+//   jobs.combined_lofty_job_sequence      PRJ-001-02   (generated, UNIQUE)
 function placeholderProjectNo(idx) { return "PRJ-" + String(idx + 1).padStart(3, "0"); }
 
 // Project-level properties are a deliberately different set from job-level ones. A few overlap

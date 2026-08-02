@@ -104,8 +104,8 @@ export function JobsPage() {
               ) : (
                 g.jobs.map(j => (
                   <JobCard
-                    key={j.jobNumber}
-                    jobNumber={j.jobNumber}
+                    key={j.jobSequence}
+                    jobSequence={j.jobSequence}
                     stageName={j.stage}
                     team={j.team}
                     status={j.status}
@@ -136,8 +136,8 @@ export function JobsPage() {
             </thead>
             <tbody>
               {rows.map(j => (
-                <tr key={j.jobNumber} onClick={() => setOpenJob(j)}>
-                  <td>{j.jobNumber}</td>
+                <tr key={j.jobSequence} onClick={() => setOpenJob(j)}>
+                  <td>{j.jobSequence}</td>
                   <td>{j.projectNumber}</td>
                   <td><Token>addresses.consolidated_address</Token></td>
                   <td><Token>job_display.project_type</Token></td>
@@ -163,8 +163,8 @@ export function JobsPage() {
             const expected = expectedDaysByStage[j.stage] ?? 14;
             const pct = Math.min(100, Math.round((j.daysInStage / expected) * 100));
             return (
-              <div className="bar-row" key={j.jobNumber}>
-                <Text type="text3">{j.jobNumber} · {j.stage}</Text>
+              <div className="bar-row" key={j.jobSequence}>
+                <Text type="text3">{j.jobSequence} · {j.stage}</Text>
                 <div className="bar-track">
                   <div className="bar-fill" style={{ width: `${pct}%` }} />
                 </div>
@@ -190,8 +190,8 @@ export function JobsPage() {
               </thead>
               <tbody>
                 {rows.map(j => (
-                  <tr key={j.jobNumber}>
-                    <td>{j.jobNumber}</td>
+                  <tr key={j.jobSequence}>
+                    <td>{j.jobSequence}</td>
                     <td>{j.stage}</td>
                     <td><Token>property_defs.label</Token></td>
                     <td><Token>property_values.value</Token></td>

@@ -299,19 +299,21 @@ create table jobs (
   -- why this is the uuid and not the friendly number.
   project_id            uuid not null references projects(id) on delete cascade,
 
-  -- The friendly project number, denormalised from the parent so job_name can be a
+  -- The friendly project number, denormalised from the parent so job_number can be a
   -- generated column — a generated column cannot reach another table. Kept true by the
   -- triggers below, never written by the app.
   project_no            integer not null,
 
-  -- Sequential within the project, zero-padded. Assigned by trigger when null, so a
-  -- caller inserts a job without having to work out what number it should be.
-  job_number            text not null,
+  -- The counter within the project — 01, 02, 03. Assigned by trigger when null, so a
+  -- caller inserts a job without working out what it should be. Not what anyone calls
+  -- "the job number": that is the combined value below.
+  job_sequence            text not null,
 
-  -- What people actually quote: '1001-01'. Generated, so it cannot drift from its
-  -- parts, and unique because it is the business key everyone types and says out loud.
-  job_name              text
-    generated always as (project_no::text || '-' || job_number) stored,
+  -- The job number, in Lofty's sense of the phrase: '1001-01'. Generated, so it cannot
+  -- drift from its parts, and unique because it is the business key everyone types and
+  -- says out loud.
+  job_number              text
+    generated always as (project_no::text || '-' || job_sequence) stored,
 
   -- Same address pair as projects, for the same reason: a job's address is corrected
   -- and renumbered more often than a project's, and it is what people search on.
@@ -330,8 +332,8 @@ create table jobs (
   updated_at            timestamptz not null default now(),
   updated_by            uuid references profiles(id),
 
-  unique (project_id, job_number),
-  unique (job_name)
+  unique (project_id, job_sequence),
+  unique (job_number)
 );
 
 create index jobs_project_id_idx on jobs (project_id);
@@ -342,38 +344,38 @@ create trigger jobs_default_current_address
   before insert or update on jobs
   for each row execute function default_current_address();
 
--- Allocate the next job number within the project.
+-- Allocate the next sequence number within the project.
 --
 -- The lock matters. Two jobs inserted on the same project at the same moment would
--- both read the same max and both compute the same next number; the unique index
+-- both read the same max and both compute the same next sequence; the unique index
 -- would catch it, but as a failed insert rather than a correct one. Locking the parent
 -- project row serialises allocation per project without blocking any other project.
-create or replace function assign_job_number() returns trigger
+create or replace function assign_job_sequence() returns trigger
 language plpgsql as $$
 declare
   next_no integer;
 begin
-  if new.job_number is null then
+  if new.job_sequence is null then
     perform 1 from projects where id = new.project_id for update;
 
-    select coalesce(max(job_number::integer), 0) + 1
+    select coalesce(max(job_sequence::integer), 0) + 1
       into next_no
       from jobs
      where project_id = new.project_id;
 
     -- Zero-padded to two digits, and wider than two once a project passes 99 rather
     -- than silently truncating.
-    new.job_number := lpad(next_no::text, 2, '0');
+    new.job_sequence := lpad(next_no::text, 2, '0');
   end if;
   return new;
 end $$;
 
-create trigger jobs_assign_number
+create trigger jobs_assign_sequence
   before insert on jobs
-  for each row execute function assign_job_number();
+  for each row execute function assign_job_sequence();
 
 -- Keep the denormalised project number true, on insert and if a project is ever
--- renumbered. Without this the job name silently goes stale.
+-- renumbered. Without this the job number silently goes stale.
 create or replace function sync_job_project_number() returns trigger
 language plpgsql as $$
 begin
@@ -404,7 +406,7 @@ create trigger projects_cascade_renumber
 -- inherited, not copied — so there is nowhere for the two to disagree.
 create view job_display as
   select j.id,
-         j.job_name,
+         j.job_number,
          j.project_id,
          p.project_no,
          p.project_type,                     -- inherited from the project

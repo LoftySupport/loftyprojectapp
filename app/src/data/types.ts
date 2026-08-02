@@ -156,17 +156,20 @@ export interface Job {
   /** FK to projects.id — the real relationship. Renumbering must not orphan jobs. */
   projectId: Uuid;
   /**
-   * The friendly project number, denormalised from the parent so `jobName` can be a
+   * The friendly project number, denormalised from the parent so `jobNumber` can be a
    * generated column. Kept in sync by a trigger; never written by the app.
    */
   projectNo: number;
   /**
-   * Sequential within the project, zero-padded — "01", "02". Assigned by a trigger
-   * when omitted, under a lock on the parent project row.
+   * The counter within the project — "01", "02". Assigned by a trigger when omitted,
+   * under a lock on the parent project row.
+   *
+   * Not what Lofty calls "the job number" — that is `jobNumber` below, the combined
+   * value. Keeping the two words apart here is the whole reason this one is renamed.
    */
+  jobSequence: string;
+  /** Generated: projectNo || '-' || jobSequence. Unique. e.g. "1001-01" */
   jobNumber: string;
-  /** Generated: projectNo || '-' || jobNumber. Unique. e.g. "1001-01" */
-  jobName: string;
   /** Same pair as projects, for the same reason. */
   originalAddressId: Uuid | null;
   currentAddressId: Uuid;
@@ -187,7 +190,7 @@ export interface Job {
 /** The joined shape the board reads — `job_display`. Carries the inherited type. */
 export interface JobDisplay {
   id: Uuid;
-  jobName: string;
+  jobNumber: string;
   projectId: Uuid;
   projectNo: number;
   /** Inherited from the project, never stored on the job. */

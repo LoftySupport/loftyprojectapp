@@ -391,18 +391,19 @@ create view project_display as
 
 create table jobs (
   id                uuid primary key default gen_random_uuid(),
-  -- The friendly project number, denormalised from the parent so job_name can be a
+  -- The friendly project number, denormalised from the parent so job_number can be a
   -- generated column. Kept true by a trigger, never written by the app.
   project_no        integer not null,
 
-  -- Sequential within the project, zero-padded. Assigned by trigger when null, under a
-  -- lock on the parent project row — two concurrent inserts would otherwise read the
-  -- same max and collide on the unique index.
-  job_number        text not null,                  -- '01', within the project
+  -- The counter within the project — 01, 02, 03. Assigned by trigger when null, under a
+  -- lock on the parent project row: two concurrent inserts would otherwise read the
+  -- same max and collide on the unique index. This is NOT "the job number" — Lofty
+  -- means the combined value below by that phrase.
+  job_sequence      text not null,
 
-  -- What people quote and say out loud: '1001-01'. Generated, so it cannot drift.
-  job_name          text unique
-    generated always as (project_no::text || '-' || job_number) stored,
+  -- The job number, in Lofty's sense: '1001-01'. Generated, so it cannot drift.
+  job_number        text unique
+    generated always as (project_no::text || '-' || job_sequence) stored,
   project_id        uuid references projects(id) on delete cascade not null,
 
   -- Same pair as projects, for the same reason: a job's address is corrected and
@@ -449,7 +450,7 @@ create table job_dependencies (
 -- inherited, not copied — so there is nowhere for the two to disagree.
 create view job_display as
   select j.id,
-         j.job_name,
+         j.job_number,
          j.project_id,
          p.project_no,
          p.project_type,                     -- inherited from the project

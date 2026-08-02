@@ -69,7 +69,7 @@ export function ProjectsPage() {
             <ProjectCard
               key={p.projectNumber}
               projectNumber={p.projectNumber}
-              jobNumbers={p.jobs.map(j => j.jobNumber)}
+              jobSequences={p.jobs.map(j => j.jobSequence)}
               status={p.status}
               onOpen={() => setOpen(p)}
             />
@@ -164,8 +164,8 @@ function ProjectDetail({ project, onBack }: { project: ShapeProject; onBack: () 
               </thead>
               <tbody>
                 {project.jobs.map(j => (
-                  <tr key={j.jobNumber}>
-                    <td>{j.jobNumber}</td>
+                  <tr key={j.jobSequence}>
+                    <td>{j.jobSequence}</td>
                     <td><Token>addresses.consolidated_address</Token></td>
                     <td>{j.stage}</td>
                     <td>{j.team}</td>
