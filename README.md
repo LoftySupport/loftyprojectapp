@@ -1,44 +1,108 @@
-# Lofty Job Oversight Board — Prototype
+# Lofty Job Oversight Board
 
-A dummy-data, stakeholder-facing prototype of a proposed "Job Oversight Board" (Kanban-style) for Lofty's job pipeline. Built to demonstrate a data visibility/oversight concept before any real platform decision is made.
+The V0 build of Lofty's job pipeline board: React, Vibe and Supabase.
 
-**This is not connected to live data.** All jobs, names, dates, and activity shown are placeholder content for demonstration purposes only.
+**Not connected to live data yet.** Every value that will come from Supabase renders as a
+`{{table.column}}` token, so an unbound field is visible rather than silently blank. The
+tokens disappear on their own as tables come online.
 
-## What's here
+The stakeholder prototype this grew out of lives in a separate repo,
+[`loftyprojectboard`](https://github.com/amberbeaumont/loftyprojectboard), and is
+deliberately frozen.
 
-- `index.html` — the interactive prototype. Open directly in a browser, or enable GitHub Pages on this repo to serve it at a public URL.
-- `concept-spec.md` — the underlying data architecture / concept write-up this prototype is based on.
+---
+
+## Where things are
+
+| URL | What |
+| --- | --- |
+| [`loftyprojectapp.netlify.app`](https://loftyprojectapp.netlify.app) | Redirects to `/app/` |
+| `…/app/` | **The build.** Every screen, on Vibe |
+| `…/app/dictionary` | The data dictionary |
+| `…/binding-template` | The tokenised prototype — **layout** reference only |
+| `…/prototype.html` | The original, with its dummy data |
+
+`binding-template` is kept for layout, not for fields: its field set predates the schema
+decisions and it still shows the old project shape and the old six roles. The React app is
+the accurate one.
+
+## Read these first
+
+| File | What it is |
+| --- | --- |
+| **`HANDOFF.md`** | **Start here.** State of play, decisions made and why, what is next |
+| `data-dictionary.md` | Every property: Lofty name, definition, type, rules, relationships, status. Generated — see below |
+| `supabase-schema.md` | The tables, the RLS scope model, and the open questions |
+| `app/supabase/migrations/0001_core.sql` | The migration, as far as it goes |
+| `concept-spec.md` | The original data-architecture write-up |
+
+Design-system records, still accurate:
+
+- `design-system-evaluation.md` — the evaluation against Vibe and what changed
+- `vibe-catalog-status.md` — component-by-component status against the Vibe catalog
+- `react-migration.md` — the original migration plan *(historical: written before the
+  schema decisions, so its table shapes are out of date)*
+
+## The data dictionary is generated
+
+`app/src/data/dictionary.ts` is the only place properties are written down.
+`data-dictionary.md` is generated from it and the Dictionary page renders the same array,
+so the file, the page and the code cannot disagree.
+
+```bash
+cd app && npm run dictionary
+```
+
+Edit the array, regenerate, commit both. Never edit `data-dictionary.md` by hand.
+
+## Working on it
+
+```bash
+cd app
+npm install
+npm run dev          # http://localhost:5173/app/
+npm run build        # tsc -b && vite build
+npm run dictionary   # regenerate data-dictionary.md
+```
+
+`./build.sh` from the repo root assembles the whole deploy — the app, the binding
+template and the prototype — into `dist/`. That is what Netlify runs.
+
+### One branch and PR per table
+
+Each schema decision touches the migration, the types, the app and the dictionary
+together, so it is reviewed as a unit rather than landing on `main` already done.
+
+```bash
+git checkout -b claude/<table>-schema
+# … change all four …
+cd app && npm run dictionary && npx tsc -b
+git commit && git push -u origin claude/<table>-schema
+```
+
+Netlify builds a deploy preview per PR. Merge when the preview looks right.
 
 ## Design system
 
-The interface is built on [Vibe](https://vibe.monday.com), monday.com's design system —
-its type ramp, 4px spacing scale, radii, motion curves, elevation, neutrals and semantic
-colours, plus its accessibility contract. Lofty's logo and its two hero colours (the logo
-orange `#f47e63` and the deep green `#005058`) sit in Vibe's primary slots in place of
-Vibe's blue.
+Built on [Vibe](https://vibe.monday.com), monday.com's design system — its type ramp, 4px
+spacing scale, radii, motion curves, elevation, neutrals and semantic colours, plus its
+accessibility contract. Lofty's logo orange `#f47e63` and deep green `#005058` sit in
+Vibe's primary slots in place of Vibe's blue.
 
-`.mcp.json` wires the [Vibe MCP server](https://vibe.monday.com/?path=/docs/mcp--docs) into
-this repo, so any MCP-capable editor can query component APIs, tokens and accessibility
-requirements directly while working on the UI.
+Light, dark and black themes, switchable in Settings. **Zero AA contrast failures across
+all three**, checked with a composited-alpha audit rather than by eye — including two
+places where Vibe's own defaults fail (see `HANDOFF.md`).
 
-These documents cover it:
-
-- `design-system-evaluation.md` — the evaluation of the previous UI against Vibe, and a
-  record of what changed.
-- `vibe-catalog-status.md` — component-by-component status against the Vibe catalog.
-- `supabase-template.html` + `supabase-schema.md` — **the binding template.** The prototype
-  with every data value replaced by a `{{table.column}}` token, and the schema those tokens
-  point at. Build the schema, bind the tokens.
-- `react-migration.md` — **the plan for the real build: React, Vibe and Supabase.** Step
-  one is standing up React with Supabase connected, before any UI is ported. Covers the
-  schema, the Row Level Security mapping for the permission model, the component mapping,
-  the `ThemeProvider` config for Lofty's brand colours, what ports as-is versus what has
-  to be rebuilt, and the build order.
+`.mcp.json` wires the [Vibe MCP server](https://vibe.monday.com/?path=/docs/mcp--docs)
+into the repo, so an MCP-capable editor can query component APIs, tokens and
+accessibility requirements while working on the UI.
 
 ## Views
 
-Board, Table, Gantt and Calendar — the same four names on both Jobs and Projects, switchable from the toolbar. The board groups by Stage, Project, Team, Team member or Status. The toolbar also carries a date-range picker and add/remove filters, which follow the page you are on.
+Board, Table, Gantt and Calendar — the same four names on Jobs, Board and Table on
+Projects. Grouping by Stage, Project, Team, Team member or Status. One date control
+holding the whole range, and filters you add and remove, each arriving unset.
 
-Free-text search across every view; drag-and-drop between phases; and a job detail panel with breadcrumbs, its own job search, a full-screen mode, one activity feed, comments with @mentions, and editable team, phase, build stage, type and health status fields.
-
-Light, dark and black themes, switchable in Settings.
+A job drawer with breadcrumbs, checkpoints, the definition-driven field slots and the
+activity feed. Cards are keyboard-operable; the drawer takes focus on open and closes on
+Escape.
