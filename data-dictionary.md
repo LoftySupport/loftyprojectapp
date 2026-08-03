@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-111 properties across 22 tables.
+118 properties across 24 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 42 | Specified here, not yet in the migration |
-| Created | 66 | In the migration and the types |
+| Created | 73 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 3 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -75,12 +75,19 @@
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `health_statuses.id` | Health status | PARKED — deliberately not built yet. Health is calculated, not set: is it on schedule, is it over budget, has an issue been raised. The inputs are still to be decided, and inventing a column before they are known would bake in the wrong answer. Distinct from status, which is what a person sets. | `text` | Not in the schema. Awaiting the list of inputs it is calculated from. | Will be derived, not stored — no column until the calculation is settled. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 
+## `job_address_search`
+
+| Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `job_address_search.role` | Matched address | Whether a search hit the job's current or original address. Worth showing: a hit on an original address is a hint that whoever searched is working from stale information. | `view` | Read-only. 'current' \| 'original'. | One row per (job, address role), so a match on either address finds the job. Backed by a trigram index on addresses.consolidated_address. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
 ## `job_display`
 
 | Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `job_display.project_type` | Job type (inherited) | The job's type, which is its project's type. Inherited through the view rather than copied onto the job, so there is nowhere for the two to disagree. | `view` | Read-only. | jobs ⋈ projects on project_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `job_display.is_current` | Is current | Whether the job is still live — not completed, cancelled or archived. Derived from status every time it is read, never stored. | `view` | Read-only. is_current(jobs.status). | Mirrors the isCurrent() helper in the app. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `job_display.job_number` | Job number | The job number, joined for the board and for search. | `view` | Read-only. | jobs.job_number. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `job_display.current_address` | Job address (current) | The consolidated current address, joined for the board and for search. | `view` | Read-only. | jobs ⋈ addresses on current_address_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `job_stages`
@@ -106,12 +113,12 @@
 | Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `jobs.id` | Job ID | The job's machine key. | `uuid` | Primary key. | Referenced by job_stages.job_id, job_tags, job_dependencies, activity. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `jobs.project_id` | Parent project | The project this job belongs to. One project, many jobs. | `uuid` | Not null. Indexed. | FK → projects(id) ON DELETE CASCADE. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `jobs.project_no` | Project number (denormalised) | A copy of the parent's number, held here only so the combined job number can be a generated column — a generated column cannot reach another table. Never written by the app. | `integer` | Not null. | Maintained by the jobs_sync_project_number and projects_cascade_renumber triggers. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `jobs.job_number` | Job number | The sequence within the project — '01', '02'. | `text` | Not null. Unique with project_id. | Feeds combined_job_number. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `jobs.combined_job_number` | Job number (full) | What people actually quote — '1000-01'. The parent reads straight off the child. | `generated text` | GENERATED ALWAYS AS (project_no::text \|\| '-' \|\| job_number) STORED. Unique. | Derived from jobs.project_no + jobs.job_number. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `jobs.original_address_id` | Original address | The job's address as first recorded. | `uuid` | Nullable. | FK → addresses(id). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `jobs.current_address_id` | Current address | What the board shows and what people search on. | `uuid` | Not null. Falls back to the original in a trigger. Indexed. | FK → addresses(id). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `jobs.project_id` | Parent project | The project this job belongs to. One project, many jobs. The uuid rather than the friendly number, so renumbering a project never orphans its jobs. | `uuid` | Not null. Indexed. | FK → projects(id) ON DELETE CASCADE. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `jobs.project_no` | Project number | The friendly project number, user-facing. Held on the job only so job_number can be a generated column — a generated column cannot reach another table. Never written by the app. | `integer` | Not null. | Maintained by the jobs_sync_project_number and projects_cascade_renumber triggers. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `jobs.job_sequence` | Job sequence | The counter within the project — 01, 02, 03. Allocated automatically: insert a job without one and a trigger assigns the next. NOT what Lofty calls the job number — that is jobs.job_number, the combined value. | `text` | Not null. Unique with project_id. Zero-padded to two digits, and wider than two past 99 rather than truncating. CHECK (>= 1) — there is no zeroth job, and the check is on the column rather than only in the trigger because a hand-written insert can supply its own sequence. | Assigned by the jobs_assign_sequence trigger, which locks the parent project row first — two concurrent inserts would otherwise read the same max and collide on the unique index. Feeds job_number. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `jobs.job_number` | Job number | The job number as Lofty uses the phrase — '1001-01'. The project number and the sequence joined, so the parent reads straight off the child. This is what people type, quote and say out loud. | `generated text` | GENERATED ALWAYS AS (project_no::text \|\| '-' \|\| job_sequence) STORED. Unique. | Derived from jobs.project_no + jobs.job_sequence. Exposed by job_display.job_number. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `jobs.original_address_id` | Original address | The job's address as first recorded — what the contract says and what an email from last year refers to. Never moves. Not displayed, but always searchable. | `uuid` | Nullable. Falls back from current in a trigger. Indexed, because half of address search hits this column. | FK → addresses(id). Exposed by job_display.original_address and job_address_search. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `jobs.current_address_id` | Current address | What every card, board and search result shows. Identical to the original until something changes — a lot renumbered by council, a street renamed, a typo found at handover. | `uuid` | Not null. Falls back to the original in a trigger. Indexed. | FK → addresses(id). Exposed by job_display.current_address and job_address_search. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `jobs.stage_id` | Stage | Which of the eight pipeline phases the job is in now. The single answer to that question — job_stages carries the history, not the current position. | `integer` | Not null. | FK → stages(id). job_stages.is_current was removed in favour of this. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `jobs.owning_team_id` | Owning team | The one team holding the job right now. "One job, one team at a time" is the whole model. | `uuid` | Not null. | FK → teams(id). | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `jobs.assignee_id` | Assigned to | The person responsible inside the owning team. | `uuid` | Nullable. | FK → profiles(id). | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
@@ -123,6 +130,10 @@
 | `jobs.requested_note` | Waiting on | What the job is blocked on. Non-null is what makes a card show the amber waiting flag. | `text` | Nullable. | Drives the card's warning state. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `jobs.notes` | Notes | Free text on the job. | `text` | Nullable. | — | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `jobs.stage_entered_at` | Entered stage on | When the job arrived in its current stage. "Days in stage" is computed from this, never stored. | `timestamptz` | Not null, default now(). | Superseded by job_stages.entered_at if the composite table becomes authoritative. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
+| `jobs.created_at` | Created on | When the job record was created. | `timestamptz` | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `jobs.created_by` | Created by | Who created it. | `uuid` | Nullable. | FK → profiles(id). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `jobs.updated_at` | Updated on | When it last changed. Maintained by the touch_updated_at trigger, not by the app. | `timestamptz` | Not null, default now(). | Set by the jobs_touch trigger on every update. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `jobs.updated_by` | Updated by | Who last changed it. | `uuid` | Nullable. | FK → profiles(id). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `permission_grants`
 
@@ -157,6 +168,12 @@
 | `profiles.source` | Source | Where the account came from — 'Entra ID' once SCIM is live, otherwise a manually created account. | `text` | Nullable. | — | To do | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `profiles.created_at` | Created on | When the profile row was created. | `timestamptz` | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `profiles.updated_at` | Updated on | When the profile row last changed. Worth having when a permission or team change is disputed. | `timestamptz` | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `project_address_search`
+
+| Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `project_address_search.role` | Matched address | The same, for projects. | `view` | Read-only. 'current' \| 'original'. | One row per (project, address role). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `project_display`
 

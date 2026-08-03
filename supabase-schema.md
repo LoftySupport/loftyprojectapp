@@ -180,6 +180,30 @@ create index on council_regions (state);
   My read: **(2)**, because Selections and Estimating will want it next, and (1) then
   becomes a column per team.
 
+### The audit quartet — on every table
+
+`created_at` · `created_by` · `updated_at` · `updated_by`. No exceptions: the one table
+without them is the one someone asks about when a value turns out to be wrong.
+
+The `_by` columns are **nullable**, because a row can legitimately have no author — a
+seeded lookup, an import, the very first profile. Nullable and honest beats not-null
+filled with a placeholder nobody can trace.
+
+`updated_at` is maintained by a `touch_updated_at()` trigger on every table, not by the
+application. A default of `now()` only fires on insert; without the trigger the column
+reads the same as `created_at` for the rest of the row's life and quietly lies — which
+is worse than not having it, because people trust it.
+
+```sql
+create or replace function touch_updated_at() returns trigger
+language plpgsql as $$
+begin
+  new.updated_at := now();
+  return new;
+end $$;
+-- … then one `before update` trigger per table.
+```
+
 ### Core records
 
 ```sql
@@ -367,12 +391,23 @@ create view project_display as
 
 create table jobs (
   id                uuid primary key default gen_random_uuid(),
-  -- Denormalised from the parent so the combined number can be generated — a generated
-  -- column cannot reach another table. Kept true by a trigger, never written by the app.
+  -- The friendly project number, denormalised from the parent so job_number can be a
+  -- generated column. Kept true by a trigger, never written by the app.
   project_no        integer not null,
-  job_number        text not null,                  -- '01', within the project
-  combined_job_number text unique
-    generated always as (project_no::text || '-' || job_number) stored,   -- '1000-01'
+
+  -- The counter within the project — 01, 02, 03. Assigned by trigger when null, under a
+  -- lock on the parent project row: two concurrent inserts would otherwise read the
+  -- same max and collide on the unique index. This is NOT "the job number" — Lofty
+  -- means the combined value below by that phrase.
+  -- Never '00'. The first job on a project is 01 — there is no zeroth job. The check
+  -- is here rather than only in the trigger, because a hand-written insert can supply
+  -- its own sequence and bypass the trigger's allocation.
+  job_sequence      text not null
+                      check (job_sequence ~ '^[0-9]+$' and job_sequence::integer >= 1),
+
+  -- The job number, in Lofty's sense: '1001-01'. Generated, so it cannot drift.
+  job_number        text unique
+    generated always as (project_no::text || '-' || job_sequence) stored,
   project_id        uuid references projects(id) on delete cascade not null,
 
   -- Same pair as projects, for the same reason: a job's address is corrected and
@@ -419,7 +454,7 @@ create table job_dependencies (
 -- inherited, not copied — so there is nowhere for the two to disagree.
 create view job_display as
   select j.id,
-         j.combined_job_number,
+         j.job_number,
          j.project_id,
          p.project_no,
          p.project_type,                     -- inherited from the project
@@ -432,6 +467,60 @@ create view job_display as
     join projects p           on p.id    = j.project_id
     join addresses cur        on cur.id  = j.current_address_id
     left join addresses orig  on orig.id = j.original_address_id;
+
+-- =============================================================================
+-- Searching by address
+-- =============================================================================
+-- The rule: **the current address is what shows, both addresses are what match.**
+--
+-- A job renumbered by council is still the job someone has in an email from last year,
+-- and searching that old address has to find it. So the display side reads
+-- `current_address` from job_display / project_display and nothing else, while search
+-- looks at both.
+--
+-- These views give one row per (record, address role), so a match on either finds the
+-- record and says which address it matched — worth showing, because a hit on an
+-- original address is a hint that the person searching has stale information.
+create view job_address_search as
+  select j.id                  as job_id,
+         j.project_id,
+         j.job_number,
+         a.id                  as address_id,
+         a.consolidated_address,
+         a.suburb,
+         a.council_id,
+         case when a.id = j.current_address_id then 'current' else 'original' end as role
+  from jobs j
+    join addresses a
+      on a.id = j.current_address_id
+      or a.id = j.original_address_id;
+
+create view project_address_search as
+  select p.id                  as project_id,
+         p.project_no,
+         a.id                  as address_id,
+         a.consolidated_address,
+         a.suburb,
+         a.council_id,
+         case when a.id = p.current_address_id then 'current' else 'original' end as role
+  from projects p
+    join addresses a
+      on a.id = p.current_address_id
+      or a.id = p.original_address_id;
+
+-- People search "Ironbark" or "22 Ironbark", not the whole string, so this needs
+-- trigram matching rather than a b-tree — a plain index does nothing for a leading
+-- wildcard. pg_trgm also survives typos, which a full-text index does not.
+create extension if not exists pg_trgm;
+create index addresses_consolidated_trgm
+  on addresses using gin (consolidated_address gin_trgm_ops);
+create index addresses_suburb_trgm
+  on addresses using gin (suburb gin_trgm_ops);
+
+-- The original address needs its own index or half the search is a sequential scan.
+-- Easy to miss, because the current one gets added while writing the display path.
+create index on projects (original_address_id);
+create index on jobs (original_address_id);
 
 ### One activity feed
 

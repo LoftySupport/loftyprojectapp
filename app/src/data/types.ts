@@ -14,6 +14,25 @@ export type Uuid = string;
 export type IsoDate = string;      // 'YYYY-MM-DD'
 export type IsoDateTime = string;  // timestamptz
 
+/**
+ * The audit quartet — on every table, no exceptions.
+ *
+ * The one table without it is the one someone asks about when a value turns out to be
+ * wrong. `createdBy` and `updatedBy` are nullable because a row can legitimately have
+ * no author: a seeded lookup, an import, the very first profile. Nullable and honest
+ * beats not-null filled with a placeholder nobody can trace.
+ *
+ * `updatedAt` is maintained by a Postgres trigger, not by the app — a default only
+ * fires on insert, and a column that silently equals `createdAt` forever is worse than
+ * no column, because people trust it.
+ */
+export interface Audited {
+  createdAt: IsoDateTime;
+  createdBy: Uuid | null;
+  updatedAt: IsoDateTime;
+  updatedBy: Uuid | null;
+}
+
 // ---------------------------------------------------------------- projects
 
 export const AU_STATES = ["SA", "NSW", "VIC", "QLD", "WA", "NT", "TAS", "ACT"] as const;
@@ -46,7 +65,7 @@ export interface Address {
   updatedBy: Uuid | null;
 }
 
-export interface CouncilRegion {
+export interface CouncilRegion extends Audited {
   id: Uuid;
   name: string;
   state: AuState;
@@ -134,17 +153,23 @@ export interface ProjectDisplay {
 
 export interface Job {
   id: Uuid;
-  /** FK to projects.id — the real relationship */
+  /** FK to projects.id — the real relationship. Renumbering must not orphan jobs. */
   projectId: Uuid;
   /**
-   * The project's number, denormalised from the parent so the combined number can be
-   * a generated column. Kept in sync by a trigger; never edited directly.
+   * The friendly project number, denormalised from the parent so `jobNumber` can be a
+   * generated column. Kept in sync by a trigger; never written by the app.
    */
   projectNo: number;
-  /** Job number within the project, e.g. "01" */
+  /**
+   * The counter within the project — "01", "02". Assigned by a trigger when omitted,
+   * under a lock on the parent project row.
+   *
+   * Not what Lofty calls "the job number" — that is `jobNumber` below, the combined
+   * value. Keeping the two words apart here is the whole reason this one is renamed.
+   */
+  jobSequence: string;
+  /** Generated: projectNo || '-' || jobSequence. Unique. e.g. "1001-01" */
   jobNumber: string;
-  /** Generated: projectNo || '-' || jobNumber. Unique. e.g. "1000-01" */
-  combinedJobNumber: string;
   /** Same pair as projects, for the same reason. */
   originalAddressId: Uuid | null;
   currentAddressId: Uuid;
@@ -157,13 +182,15 @@ export interface Job {
    */
   // + fields
   createdAt: IsoDateTime;
+  createdBy: Uuid | null;
   updatedAt: IsoDateTime;
+  updatedBy: Uuid | null;
 }
 
 /** The joined shape the board reads — `job_display`. Carries the inherited type. */
 export interface JobDisplay {
   id: Uuid;
-  combinedJobNumber: string;
+  jobNumber: string;
   projectId: Uuid;
   projectNo: number;
   /** Inherited from the project, never stored on the job. */
@@ -201,6 +228,10 @@ export interface JobStage {
    * thing to keep true.
    */
   // + fields
+  createdAt: IsoDateTime;
+  createdBy: Uuid | null;
+  updatedAt: IsoDateTime;
+  updatedBy: Uuid | null;
 }
 
 // ------------------------------------------------------------ user profile
@@ -230,7 +261,9 @@ export interface Profile {
   // + fields
   active: boolean;
   createdAt: IsoDateTime;
+  createdBy: Uuid | null;
   updatedAt: IsoDateTime;
+  updatedBy: Uuid | null;
 }
 
 /** Declaration order is the ladder; Postgres compares enum values by it. */
@@ -248,11 +281,10 @@ export const atLeast = (have: PermissionLevel, need: PermissionLevel): boolean =
  * dashboard watches, what the board filters to by default. At most one per person,
  * and a new joiner legitimately has none.
  */
-export interface ProfileTeam {
+export interface ProfileTeam extends Audited {
   profileId: Uuid;
   teamId: Uuid;
   isPrimary: boolean;
-  joinedAt: IsoDateTime;
 }
 
 /** What goes after "Hi, ". One place, so the decision is never re-made ad hoc. */
@@ -266,14 +298,14 @@ export const greetingName = (p: Profile): string => p.preferredName ?? p.firstNa
 // from the right place.
 
 /** Stages are a seeded lookup, ordered — this order is the board's column order. */
-export interface Stage {
+export interface Stage extends Audited {
   id: number;
   name: string;
   position: number;
 }
 
 /** `teams`. Each owns one or more pipeline phases. */
-export interface Team {
+export interface Team extends Audited {
   id: Uuid;
   name: string;
   /** The hierarchy the `team_hierarchy` permission scope walks. */
