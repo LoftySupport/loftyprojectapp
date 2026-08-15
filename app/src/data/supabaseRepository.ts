@@ -3,6 +3,8 @@ import type { Repository, RepositoryMethod } from "./repository";
 import { createStubRepository, SEED_STAGES } from "./stubRepository";
 import type {
   Job,
+  NewJob,
+  NewProject,
   Profile,
   Project,
   PropertyDef,
@@ -34,7 +36,7 @@ import type {
 // listStages came off this list in 0004. Stages are a `stage` enum now, not a table,
 // so there is nothing to query — the values are known at compile time and the seed is
 // the source. An enum cannot be wired; it can only be regenerated.
-const WIRED: RepositoryMethod[] = [];
+const WIRED: RepositoryMethod[] = ["createProject", "createJob"];
 
 // The publishable key (`sb_publishable_…`), not the legacy JWT anon key. Both work, and
 // both are safe in a client bundle — this key is public by design and RLS is what
@@ -96,6 +98,97 @@ export function createSupabaseRepository(): Repository {
       return stub.currentProfile();
     },
 
+    // ---- creating -------------------------------------------------------
+    // The first two methods that actually write. Both are two inserts, and both are
+    // deliberately *not* wrapped in a transaction, because PostgREST has no way to
+    // offer one — each request is its own transaction. If the second insert fails the
+    // first has already committed, so the address is left behind.
+    //
+    // That is an orphan row, not corruption: an address referenced by nothing, which
+    // costs a row and breaks nothing. The alternative is a Postgres function doing both
+    // inserts atomically, which is the right answer once creating a project means more
+    // than two tables. Worth doing then, not worth the indirection now.
+    async createProject(input: NewProject): Promise<Project> {
+      const { data: address, error: addressError } = await client
+        .from("addresses")
+        .insert({
+          lot_number: input.address.lotNumber ?? null,
+          street_number: input.address.streetNumber ?? null,
+          street_1: input.address.street1,
+          street_2: input.address.street2 ?? null,
+          suburb: input.address.suburb,
+          state: input.address.state ?? "SA",
+          council: input.address.council ?? null
+        })
+        .select("id")
+        .single();
+      if (addressError) throw addressError;
+
+      // original_address_id is left unset: the database's default_current_address
+      // trigger points it at the same row, which is what "it has not moved yet" means.
+      const { data, error } = await client
+        .from("projects")
+        .insert({
+          current_address_id: address.id,
+          project_type: input.projectType,
+          status: input.status ?? "on_track",
+          start_date: input.startDate ?? null,
+          target_completion: input.targetCompletion ?? null
+        })
+        .select("*")
+        .single();
+      if (error) throw error;
+      return toProject(data);
+    },
+
+    async createJob(input: NewJob): Promise<Job> {
+      let addressId: string | undefined;
+
+      // No address given is the common case — the job sits at the project's address,
+      // and default_current_address fills it in. Only insert one if it differs.
+      if (input.address) {
+        const { data: address, error: addressError } = await client
+          .from("addresses")
+          .insert({
+            lot_number: input.address.lotNumber ?? null,
+            street_number: input.address.streetNumber ?? null,
+            street_1: input.address.street1,
+            street_2: input.address.street2 ?? null,
+            suburb: input.address.suburb,
+            state: input.address.state ?? "SA",
+            council: input.address.council ?? null
+          })
+          .select("id")
+          .single();
+        if (addressError) throw addressError;
+        addressId = address.id;
+      } else {
+        const { data: project, error: projectError } = await client
+          .from("projects")
+          .select("current_address_id")
+          .eq("id", input.projectId)
+          .single();
+        if (projectError) throw projectError;
+        addressId = project.current_address_id;
+      }
+
+      // job_sequence is omitted on purpose — assign_job_sequence() sets it under a lock
+      // on the parent project, which is the only thing that stops two people creating
+      // jobs at the same moment from both claiming "-03".
+      const { data, error } = await client
+        .from("jobs")
+        .insert({
+          project_id: input.projectId,
+          current_address_id: addressId,
+          stage: input.stage ?? "Sales & acquisition",
+          status: input.status ?? "on_track"
+        })
+        .select("*")
+        .single();
+      if (error) throw error;
+      return toJob(data);
+    },
+
     // ---- lookups --------------------------------------------------------
     // Stages and teams are enums as of 0004 (`stage`, `team`), not tables. There is no
     // query to make: PostgREST cannot select from a type, and the values are fixed at
@@ -130,5 +223,63 @@ export function createSupabaseRepository(): Repository {
       // if (error || !data?.length) return stub.listPropertyDefs();
       // return (data ?? []).map(toPropertyDef);
     }
+  };
+}
+
+// ---------------------------------------------------------------- row mappers
+// Postgres is snake_case and the app is camelCase; these are the one place that is
+// true. Written by hand rather than generated so the shape mismatch shows up here as a
+// type error rather than at runtime as an undefined.
+
+type ProjectRow = {
+  id: string; project_no: number;
+  original_address_id: string | null; current_address_id: string;
+  project_type: Project["projectType"]; status: Project["status"];
+  start_date: string | null; target_completion: string | null; end_date: string | null;
+  created_at: string; created_by: string | null;
+  updated_at: string; updated_by: string | null;
+};
+
+function toProject(r: ProjectRow): Project {
+  return {
+    id: r.id,
+    projectNo: r.project_no,
+    originalAddressId: r.original_address_id,
+    currentAddressId: r.current_address_id,
+    projectType: r.project_type,
+    status: r.status,
+    startDate: r.start_date,
+    targetCompletion: r.target_completion,
+    endDate: r.end_date,
+    createdAt: r.created_at,
+    createdBy: r.created_by,
+    updatedAt: r.updated_at,
+    updatedBy: r.updated_by
+  };
+}
+
+type JobRow = {
+  id: string; project_id: string; project_no: number;
+  job_sequence: string; job_number: string;
+  original_address_id: string | null; current_address_id: string;
+  status: Job["status"];
+  created_at: string; created_by: string | null;
+  updated_at: string; updated_by: string | null;
+};
+
+function toJob(r: JobRow): Job {
+  return {
+    id: r.id,
+    projectId: r.project_id,
+    projectNo: r.project_no,
+    jobSequence: r.job_sequence,
+    jobNumber: r.job_number,
+    originalAddressId: r.original_address_id,
+    currentAddressId: r.current_address_id,
+    status: r.status,
+    createdAt: r.created_at,
+    createdBy: r.created_by,
+    updatedAt: r.updated_at,
+    updatedBy: r.updated_by
   };
 }

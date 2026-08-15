@@ -63,7 +63,7 @@ function Users() {
               <td><Token>profiles.last_name</Token></td>
               <td><Token>profiles.email</Token></td>
               {/* Many-to-many now — one person, one row per team they sit in. */}
-              <td><Token>profile_teams[].teams.name</Token></td>
+              <td><Token>profile_teams[].team</Token></td>
               <td><Token>profiles.permission</Token></td>
               <td><Token>profiles.source</Token></td>
               <td><Token>profiles.active</Token></td>

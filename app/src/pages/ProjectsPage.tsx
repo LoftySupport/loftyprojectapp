@@ -11,6 +11,7 @@ import { PropertySlots } from "../components/PropertySlots";
 import { Token } from "../components/Token";
 import { Toolbar, type ToolbarFilter, type View } from "../components/Toolbar";
 import { toOptions } from "../components/Select";
+import { NewProjectDialog } from "../components/CreateDialogs";
 import "../components/ui.css";
 
 /**
@@ -28,6 +29,7 @@ export function ProjectsPage() {
   const [view, setView] = useState<View>("Board");
   const [filters, setFilters] = useState<ToolbarFilter[]>([]);
   const [open, setOpen] = useState<ShapeProject | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const unbound = !loading && projects.length === 0;
   const all = useMemo(() => (unbound ? shape.projects : []), [unbound, shape]);
@@ -71,8 +73,10 @@ export function ProjectsPage() {
         onFiltersChange={setFilters}
         optionsFor={optionsFor}
         count={`Showing ${rows.length} of ${all.length} projects`}
-        actions={<Button size="small">+ New project</Button>}
+        actions={<Button size="small" onClick={() => setCreating(true)}>+ New project</Button>}
       />
+
+      <NewProjectDialog show={creating} onClose={() => setCreating(false)} />
 
       {stale && <PreviousAddressNote />}
 
@@ -152,7 +156,7 @@ function ProjectDetail({ project, onBack }: { project: ShapeProject; onBack: () 
             ["Current address", "project_display.current_address"],
             ["Original address", "project_display.original_address"],
             ["Suburb", "addresses.suburb"],
-            ["Council region", "council_regions.name"],
+            ["Council region", "addresses.council"],
             ["Type", "projects.project_type"],
             ["Start date", "projects.start_date"],
             ["Target completion", "projects.target_completion"],
