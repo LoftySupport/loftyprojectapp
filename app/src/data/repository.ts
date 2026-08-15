@@ -1,6 +1,5 @@
 import type {
   Job,
-  JobStage,
   Profile,
   Project,
   PropertyDef,
@@ -41,8 +40,6 @@ export interface Repository {
   listJobs(opts?: { projectId?: string }): Promise<Job[]>;
   getJob(id: string): Promise<Job | null>;
 
-  listJobStages(opts?: { jobId?: string; projectId?: string }): Promise<JobStage[]>;
-
   listProfiles(): Promise<Profile[]>;
   currentProfile(): Promise<Profile | null>;
 
@@ -63,7 +60,6 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "getProject",
   "listJobs",
   "getJob",
-  "listJobStages",
   "listProfiles",
   "currentProfile",
   "listStages",
@@ -79,7 +75,6 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   getProject: "projects",
   listJobs: "jobs",
   getJob: "jobs",
-  listJobStages: "job_stages",
   listProfiles: "profiles",
   currentProfile: "profiles",
   listStages: "stage (enum)",

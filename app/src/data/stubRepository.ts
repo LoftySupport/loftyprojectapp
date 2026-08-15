@@ -1,7 +1,6 @@
 import type { Repository, RepositoryMethod } from "./repository";
 import type {
   Job,
-  JobStage,
   Profile,
   Project,
   PropertyDef,
@@ -136,7 +135,6 @@ export function createStubRepository(): Repository {
     async listJobs(): Promise<Job[]> { return []; },
     async getJob(): Promise<Job | null> { return null; },
 
-    async listJobStages(): Promise<JobStage[]> { return []; },
 
     async listProfiles(): Promise<Profile[]> { return []; },
     async currentProfile(): Promise<Profile | null> { return null; },

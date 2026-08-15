@@ -206,33 +206,18 @@ export interface JobDisplay {
 // ------------------------------------------------------- project/job/stage
 
 /**
- * The composite table: one row per job per stage. This is what makes stage history
- * possible — a single `stage_id` on the job would only ever tell you where it is now,
- * not when it got there, how long it sat, or what it skipped.
+ * `JobStage` was here — the composite table, one row per job per stage, carrying
+ * entered_at and exited_at so stage history was answerable.
  *
- * `projectId` is carried alongside `jobId` so project-level rollups don't need the
- * extra join. It is enforced against the job's project by a foreign key.
+ * Dropped in 0006. The current position moved onto the job itself in 0004 as
+ * `jobs.stage` and `jobs.stage_entered_at`, which is what the board filters on and
+ * what "days in stage" derives from. That left the table holding only the durations of
+ * stages a job had already left, nothing wrote to it, and no screen read it.
+ *
+ * The cost is per-stage duration history, and it is not recoverable by re-adding the
+ * table: bringing the bottleneck ranking back needs this table plus a trigger on
+ * `jobs.stage`, collecting from that day forward.
  */
-export interface JobStage {
-  id: Uuid;
-  projectId: Uuid;
-  jobId: Uuid;
-  stageId: number;
-  /** Null until the job reaches this stage */
-  enteredAt: IsoDateTime | null;
-  /** Null while the job is still in this stage — which is what makes it the open one. */
-  exitedAt: IsoDateTime | null;
-  /**
-   * No `isCurrent` flag. Which stage a job is in now is `jobs.stageId`; whether the job
-   * itself is current is `isCurrent(job.status)`. A third copy of that fact is a third
-   * thing to keep true.
-   */
-  // + fields
-  createdAt: IsoDateTime;
-  createdBy: Uuid | null;
-  updatedAt: IsoDateTime;
-  updatedBy: Uuid | null;
-}
 
 // ------------------------------------------------------------ user profile
 

@@ -3,7 +3,6 @@ import type { Repository, RepositoryMethod } from "./repository";
 import { createStubRepository, SEED_STAGES } from "./stubRepository";
 import type {
   Job,
-  JobStage,
   Profile,
   Project,
   PropertyDef,
@@ -86,10 +85,6 @@ export function createSupabaseRepository(): Repository {
 
     async getJob(id: string): Promise<Job | null> {
       return stub.getJob(id);
-    },
-
-    async listJobStages(opts?: { jobId?: string; projectId?: string }): Promise<JobStage[]> {
-      return stub.listJobStages(opts);
     },
 
     // ---- profiles -------------------------------------------------------
