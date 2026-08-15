@@ -33,11 +33,19 @@ import type {
 // Add a method name here as you implement it. The Wiring page reads this.
 const WIRED: RepositoryMethod[] = ["listStages"];
 
+// The publishable key (`sb_publishable_…`), not the legacy JWT anon key. Both work, and
+// both are safe in a client bundle — this key is public by design and RLS is what
+// actually protects the data. The publishable one rotates independently of the JWT
+// secret, which the legacy anon key does not, so a compromise there does not force a
+// re-issue of every token.
+//
+// Never the service role key. It bypasses RLS entirely, and anything named VITE_* is
+// inlined into the JavaScript that ships to the browser.
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
 
 export const supabase: SupabaseClient | null =
-  url && anonKey ? createClient(url, anonKey) : null;
+  url && publishableKey ? createClient(url, publishableKey) : null;
 
 export function isSupabaseConfigured(): boolean {
   return Boolean(supabase);

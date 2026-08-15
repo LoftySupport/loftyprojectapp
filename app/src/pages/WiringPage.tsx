@@ -45,7 +45,7 @@ export function WiringPage() {
         <Text type="text2">
           {configured
             ? "Supabase is configured. Methods still marked stub fall through to empty results."
-            : "Supabase is not configured — set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local. Until then every method returns empty and the app renders its structure only."}
+            : "Supabase is not configured — set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in .env.local. Until then every method returns empty and the app renders its structure only."}
         </Text>
       </div>
 

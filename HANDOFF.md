@@ -17,11 +17,19 @@ a `{{table.column}}` token, so an unbound field is visible rather than silently 
 The schema is being designed one table at a time, and the app is built ahead of it.
 
 The migrations **are** applied now, to the `loftyprojectapp` project
-(`gmekuqdjemrfuurxhuib`, ap-southeast-2) — the eight tables exist and are empty. What is
-still missing is the wiring: `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are unset,
-so `supabaseRepository.ts` returns a null client and the app runs on mock data. Until
-those are set, a schema change means re-running the migration against that project;
-`supabase migration list` is the check for whether the two have drifted.
+(`gmekuqdjemrfuurxhuib`, ap-southeast-2) — the eight tables exist and are empty. A schema
+change means re-running the migration against that project; `supabase migration list` is
+the check for whether the two have drifted.
+
+The client is wired too: `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` are set
+on the Netlify project for every deploy context, so `supabaseRepository.ts` builds a real
+client instead of returning null. Locally they come from `app/.env.local`.
+
+**That does not mean data appears yet.** Every RLS policy grants to `authenticated`, and
+there is no auth — so an unauthenticated visitor reads zero rows from every table, and
+the repository's deliberate fall back to seed data on an empty result means the board
+still renders its structure from `SEED_STAGES`. Real rows need Supabase Auth, which is
+still to land. The connection being live is what changed; the data path opens with auth.
 
 **The prototype it grew from is a different repo** — `amberbeaumont/loftyprojectboard`,
 frozen, still deployed at `loftyprojectboard.netlify.app` for showing people. Nothing in
