@@ -82,8 +82,8 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   listJobStages: "job_stages",
   listProfiles: "profiles",
   currentProfile: "profiles",
-  listStages: "stages",
-  listTeams: "teams",
+  listStages: "stage (enum)",
+  listTeams: "team (enum)",
   listTemplatePhases: "template_phases",
   listTemplateCheckpoints: "template_checkpoints",
   listPropertyDefs: "property_defs"
