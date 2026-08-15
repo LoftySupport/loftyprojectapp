@@ -57,7 +57,7 @@ export function SettingsPage({
           <Locked label="Last name" token="profiles.last_name" />
           <Locked label="Goes by" hint="only if different from your first name" token="profiles.preferred_name" />
           <Locked label="Permission" hint="set by an admin, not by you" token="profiles.permission" />
-          <Locked label="Teams" hint="you can sit in more than one" token="profile_teams[].teams.name" />
+          <Locked label="Teams" hint="you can sit in more than one" token="profile_teams[].team" />
           <Locked label="Email" token="profiles.email" />
           <Locked label="Job title" token="profiles.job_title" />
         </section>

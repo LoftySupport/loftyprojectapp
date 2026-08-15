@@ -152,7 +152,7 @@ function ProjectDetail({ project, onBack }: { project: ShapeProject; onBack: () 
             ["Current address", "project_display.current_address"],
             ["Original address", "project_display.original_address"],
             ["Suburb", "addresses.suburb"],
-            ["Council region", "council_regions.name"],
+            ["Council region", "addresses.council"],
             ["Type", "projects.project_type"],
             ["Start date", "projects.start_date"],
             ["Target completion", "projects.target_completion"],
