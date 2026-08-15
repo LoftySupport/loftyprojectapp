@@ -3,7 +3,11 @@
 Everything a new session needs to pick this up. Read this first, then
 `data-dictionary.md`.
 
-Last updated: 2026-08-02.
+**Next job: [Microsoft Entra sign-in](#first-job-microsoft-entra-sign-in).** The schema is
+applied and the client is wired, so authentication is the one thing standing between the
+app and real data on screen.
+
+Last updated: 2026-08-15.
 
 ---
 
@@ -12,9 +16,9 @@ Last updated: 2026-08-02.
 `amberbeaumont/loftyprojectapp` — the V0 build of Lofty's job pipeline board. React,
 Vibe (monday.com's design system) and Supabase.
 
-Nothing is connected to Supabase yet. Every value that will come from a table renders as
-a `{{table.column}}` token, so an unbound field is visible rather than silently blank.
-The schema is being designed one table at a time, and the app is built ahead of it.
+The schema is being designed one table at a time and the app is built ahead of it, so
+every value that will come from a table renders as a `{{table.column}}` token — an
+unbound field is visible rather than silently blank.
 
 The migrations **are** applied now, to the `loftyprojectapp` project
 (`gmekuqdjemrfuurxhuib`, ap-southeast-2) — the eight tables exist and are empty. A schema
@@ -31,9 +35,154 @@ the repository's deliberate fall back to seed data on an empty result means the 
 still renders its structure from `SEED_STAGES`. Real rows need Supabase Auth, which is
 still to land. The connection being live is what changed; the data path opens with auth.
 
+### The Netlify environment, and what is deliberately not in it
+
+The Supabase Netlify extension provisions four variables of its own —
+`SUPABASE_DATABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_JWT_SECRET` and
+`SUPABASE_SERVICE_ROLE_KEY`. None of them reach the browser, because **Vite only exposes
+variables prefixed `VITE_`**. That is the whole reason the app sat on mock data with a
+fully populated environment: it was a prefix mismatch, not a missing value.
+
+**`SUPABASE_JWT_SECRET` and `SUPABASE_SERVICE_ROLE_KEY` have been deleted from Netlify.
+Do not put them back.** This is a static Vite build — no Netlify Functions, no edge
+functions, nothing in this repo reads either one. The service role key bypasses RLS
+entirely and the JWT secret mints tokens for any user, so an unused copy sitting in a
+build environment is pure risk: the only thing separating it from the public bundle was
+the convention that nobody types `VITE_` in front of it. If a Netlify Function ever
+genuinely needs one, add it back scoped to functions only — never to builds.
+
+Two gotchas worth knowing before touching that screen:
+
+- **Set env vars with all scopes.** Writing one scoped to `builds` alone through the
+  Netlify API reports success and then does not persist. Always read the variable back
+  after writing it; the success message is not proof.
+- **Never mark a `VITE_` variable as secret.** Netlify fails any build whose output
+  contains a secret value, and Vite inlines these into the bundle by design — so the flag
+  turns every build red. They are public keys, and that is correct: RLS is the boundary,
+  not the key.
+
+**That does not mean data appears yet.** Every RLS policy grants to `authenticated`, and
+there is no auth — so an unauthenticated visitor reads zero rows from every table, and
+the repository's deliberate fall back to seed data on an empty result means the board
+still renders its structure from `SEED_STAGES`. Real rows need Supabase Auth, which is
+still to land. The connection being live is what changed; the data path opens with auth.
+
 **The prototype it grew from is a different repo** — `amberbeaumont/loftyprojectboard`,
 frozen, still deployed at `loftyprojectboard.netlify.app` for showing people. Nothing in
 this work touches it. Its PR #11 was closed unmerged as superseded.
+
+## First job: Microsoft Entra sign-in
+
+**Do this before wiring another table.** Every RLS policy grants to `authenticated` and
+nobody is authenticated, so every query returns zero rows and the seam falls back to
+seeds. Until this lands you can write queries but you cannot see one work — and the
+moment it does land, the already-wired `listStages` starts returning the eight real rows
+with no further code. That is the cheapest possible proof the whole path is sound.
+
+This is **Azure OAuth (social login)**, not Supabase's enterprise SAML SSO. Same Entra
+directory, but OAuth is on every plan; SAML needs Pro and is aimed at multi-org
+federation Lofty does not need. Do not follow the `platform/sso/azure` docs — those are
+for signing in to the Supabase *dashboard*, a different thing entirely.
+
+### 1. Register the application in Entra
+
+At [portal.azure.com](https://portal.azure.com) → **Microsoft Entra ID** → **App
+registrations** → **New registration**:
+
+| Field | Value |
+| --- | --- |
+| Name | `Lofty Project App` |
+| Supported account types | **Accounts in this organizational directory only** |
+| Redirect URI | **Web** → `https://gmekuqdjemrfuurxhuib.supabase.co/auth/v1/callback` |
+
+Single-tenant is the point: it is what stops any Microsoft account on earth signing in.
+The redirect URI is Supabase's callback, not the app's — a common early mistake is
+putting the Netlify URL here. It goes in the allow list at step 4 instead.
+
+### 2. Client ID and secret
+
+- **Client ID** — on the app's Overview screen, *Application (client) ID*.
+- **Secret** — *Certificates & secrets* → *Client secrets* → *New client secret*. Copy
+  the **Value** column, not *Secret ID*. It is shown once and never again.
+- **Put the expiry in a calendar now.** Sign-in breaks organisation-wide the day it
+  lapses, and the symptom looks nothing like an expired secret.
+- **Tenant ID** — Overview screen, *Directory (tenant) ID*.
+
+In the Supabase dashboard → **Authentication** → **Sign In / Providers** → **Azure**:
+enable it, paste the client ID and secret, and set **Azure Tenant URL** to
+`https://login.microsoftonline.com/<tenant-id>`. Without the tenant URL Supabase uses the
+`common` endpoint and the single-tenant restriction is enforced only by Entra, not here.
+
+### 3. Add the `xms_edov` claim — not optional for us
+
+Entra can emit **unverified** email domains, which lets someone impersonate an existing
+account. Microsoft's own guidance is that this applies to single-tenant apps — which is
+exactly what step 1 registered. Do not skip it.
+
+App registration → **Manifest** → back up the JSON → set `optionalClaims`:
+
+```json
+"optionalClaims": {
+  "idToken": [
+    { "name": "xms_edov", "source": null, "essential": false, "additionalProperties": [] },
+    { "name": "email",    "source": null, "essential": false, "additionalProperties": [] }
+  ],
+  "accessToken": [
+    { "name": "xms_edov", "source": null, "essential": false, "additionalProperties": [] }
+  ],
+  "saml2Token": []
+}
+```
+
+### 4. Redirect allow list
+
+Supabase → **Authentication** → **URL Configuration**. Site URL
+`https://loftyprojectapp.netlify.app/app/`, and under *Redirect URLs* add the deploy
+previews too or every PR preview fails to complete sign-in:
+
+```
+https://loftyprojectapp.netlify.app/app/**
+https://deploy-preview-*--loftyprojectapp.netlify.app/app/**
+http://localhost:5173/app/**
+```
+
+### 5. The client call
+
+`email` scope is required — Supabase Auth rejects the sign-in without an email address.
+
+```ts
+await supabase.auth.signInWithOAuth({
+  provider: "azure",
+  options: { scopes: "email", redirectTo: `${window.location.origin}/app/` }
+});
+```
+
+### 6. The gap this exposes: no `profiles` row
+
+Signing in creates a row in `auth.users`. **It does not create one in `profiles`** — and
+nothing in `0001_core.sql` does either. A signed-in user with no profile has no
+`permission` and no team, so team-scoped policies match nothing and the app has a user it
+knows nothing about.
+
+Closing it is a trigger on `auth.users` that inserts the profile from the Entra claims
+(`first_name`, `last_name`, `email`), defaulting `permission` to `viewer` exactly as the
+column already does. Write it as `0003_handle_new_user.sql`.
+
+Keep `permission` in `profiles` and read it from there. It must never move into JWT
+`user_metadata`: that field is user-editable, so an authorization check against it can be
+edited by the person it is meant to restrict. `app_metadata` is the safe half if a claim
+is ever genuinely needed.
+
+### What "working" looks like
+
+Sign in with a Lofty account, land back on `/app/`, and the Wiring page flips
+`listStages` from **Seeded** to **Supabase**. That is the first real row on screen.
+
+Then replace the placeholder policies. Right now they are `using (true)` for
+`authenticated` — **any signed-in person reads every project, job and address.** Fine
+against an empty database, wrong the day real data lands. `profile_teams` and
+`permission_level` exist to drive the real scope model; the shape is in
+`supabase-schema.md`.
 
 ## The working rule: one branch and PR per table
 
