@@ -63,13 +63,21 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_<...>
 ```
 
 On Netlify these are project environment variables rather than a file, set on the
-`loftyprojectapp` project for all deploy contexts and scoped to builds — Vite reads them
-at build time and inlines them, so nothing needs them at runtime.
+`loftyprojectapp` project for all deploy contexts and all scopes. Vite reads them at
+build time and inlines them, so nothing needs them at runtime — but set them with all
+scopes anyway: writing one scoped to `builds` alone through the Netlify API reports
+success and silently fails to persist, which is a build that quietly produces an
+unconfigured bundle. Read the variable back after writing it.
 
 The `VITE_` prefix is what makes them visible to client code, and it is also what makes
 them **public**: Vite writes the value straight into the JavaScript the browser
 downloads. Only ever the publishable key here. The service role key bypasses RLS
-entirely and must never be given a `VITE_` name.
+entirely and must never be given a `VITE_` name — it is not in the Netlify environment at
+all, deliberately; see HANDOFF.md.
+
+For the same reason, never mark these two as secret in Netlify. It fails any build whose
+output contains a secret value, and inlining them into the bundle is exactly what they
+are for.
 
 The migrations are already applied to the project (`gmekuqdjemrfuurxhuib`). Regenerate
 types when the schema changes:
