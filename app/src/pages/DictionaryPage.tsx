@@ -134,12 +134,17 @@ export function DictionaryPage() {
               />
             </div>
             <div className="toolbar-field dict-search">
+              {/* `inputAriaLabel`, not `aria-label`: Vibe overwrites aria-label with the
+                  placeholder and ignores the prop. Ids are explicit because the default
+                  is literally id="input" on every instance. */}
               <TextField
+                id="dict-search"
+                type="search"
                 placeholder="Search name, id or definition…"
                 value={query}
                 onChange={setQuery}
                 size="small"
-                aria-label="Search the dictionary"
+                inputAriaLabel="Search the dictionary"
               />
             </div>
             <div className="toolbar-spacer" />
@@ -171,10 +176,11 @@ export function DictionaryPage() {
                       <td>
                         {canEditWording ? (
                           <TextField
+                            id={`name-${d.id}`}
                             value={d.friendlyName}
                             onChange={v => edit(d.id, { friendlyName: v })}
                             size="small"
-                            aria-label={`Lofty name for ${d.id}`}
+                            inputAriaLabel={`Lofty name for ${d.id}`}
                           />
                         ) : (
                           <strong>{d.friendlyName}</strong>

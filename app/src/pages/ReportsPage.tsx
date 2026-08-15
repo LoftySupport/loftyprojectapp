@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Heading, Tab, TabList, Text } from "@vibe/core";
 import { RECORD_STATUS_LABELS } from "../data/types";
 import { useStages, useTeams } from "../data/useLookups";
 import { usePlaceholderShape } from "../data/placeholderShape";
+import { jobMatchesQuery, matchedOnPreviousAddress, useSearch } from "../data/SearchProvider";
+import { NoResults, PreviousAddressNote } from "../components/SearchNotices";
 import { StatusPill } from "../components/RecordCards";
 import { Token } from "../components/Token";
 import { Toolbar, type ToolbarFilter } from "../components/Toolbar";
@@ -22,11 +24,22 @@ export function ReportsPage() {
 
   const { stageNames } = useStages();
   const { teamNames } = useTeams();
-  const jobs = usePlaceholderShape().jobs;
+  /**
+   * Reports read the same filtered set as the board — a report of "the jobs in view"
+   * that quietly ignored the search would contradict the screen you came from.
+   */
+  const { terms } = useSearch();
+  const all = usePlaceholderShape().jobs;
+  const jobs = useMemo(() => all.filter(j => jobMatchesQuery(j, terms)), [all, terms]);
+  const noMatches = terms.length > 0 && jobs.length === 0;
+  const stale = matchedOnPreviousAddress(jobs, terms);
+
   const onTrack = jobs.filter(j => j.status === "on_track").length;
   const atRisk = jobs.filter(j => j.status === "at_risk").length;
   const stalled = jobs.filter(j => j.status === "behind_schedule").length;
   const avgDays = Math.round(jobs.reduce((n, j) => n + j.daysInStage, 0) / (jobs.length || 1));
+  // Guarded: a search that matches nothing would otherwise print "NaN% on track".
+  const pctOnTrack = jobs.length ? Math.round((onTrack / jobs.length) * 100) : 0;
 
   const byStage = stageNames.map(s => ({ key: s, n: jobs.filter(j => j.stage === s).length }));
   const byTeam = teamNames.map(t => ({ key: t, n: jobs.filter(j => j.team === t).length }))
@@ -51,8 +64,12 @@ export function ReportsPage() {
         filters={filters}
         onFiltersChange={setFilters}
         optionsFor={optionsFor}
-        count={`Showing ${jobs.length} of ${jobs.length} jobs`}
+        count={`Showing ${jobs.length} of ${all.length} jobs`}
       />
+
+      {stale && <PreviousAddressNote />}
+
+      {noMatches && <NoResults noun="jobs" />}
 
       <TabList activeTabId={tab} onTabChange={setTab}>
         <Tab>Portfolio overview</Tab>
@@ -60,11 +77,11 @@ export function ReportsPage() {
         <Tab>Job report</Tab>
       </TabList>
 
-      {tab === 0 && (
+      {tab === 0 && !noMatches && (
         <div className="stack" style={{ marginTop: "var(--space-16)" }}>
           <div className="stat-row">
             <Tile n={jobs.length} label="Jobs in view" />
-            <Tile n={onTrack} label={`On track (${Math.round((onTrack / jobs.length) * 100)}%)`} />
+            <Tile n={onTrack} label={`On track (${pctOnTrack}%)`} />
             <Tile n={atRisk} label="At risk" />
             <Tile n={stalled} label="Stalled" />
             <Tile n={avgDays} label="Avg days in stage" />
@@ -108,7 +125,7 @@ export function ReportsPage() {
         </div>
       )}
 
-      {tab === 1 && (
+      {tab === 1 && !noMatches && (
         <div className="stack" style={{ marginTop: "var(--space-16)" }}>
           <div className="stat-row">
             <Tile n={jobs.length} label="Jobs in flight" />
@@ -127,7 +144,7 @@ export function ReportsPage() {
         </div>
       )}
 
-      {tab === 2 && (
+      {tab === 2 && !noMatches && (
         <section className="panel" style={{ marginTop: "var(--space-16)" }}>
           <div className="panel-head">
             <Text type="text2" weight="bold">Every job, every status</Text>

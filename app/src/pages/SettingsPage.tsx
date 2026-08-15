@@ -46,7 +46,9 @@ export function SettingsPage({
         </Text>
       </div>
 
-      <div className="card-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}>
+      {/* `min(320px, 100%)`, not a bare 320px: a track floor wider than the container
+          is a floor the grid honours, and the page scrolls sideways on a 320px phone. */}
+      <div className="card-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))" }}>
         <section className="panel">
           <div className="panel-head">
             <Text type="text2" weight="bold">Your details</Text>

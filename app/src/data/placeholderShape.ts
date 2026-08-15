@@ -23,6 +23,14 @@ import type { RecordStatus } from "./types";
 
 export const PROJECT_SIZES = [3, 2, 2, 3, 1];
 
+/**
+ * The two address fields are optional and left unset here on purpose.
+ *
+ * Addresses are still tokenised on every screen, so inventing text for them would put
+ * something on the board that looks like data. They exist on the shape because search
+ * reads them — the moment `addresses` is wired and these carry values, searching by a
+ * previous address starts working without a change to any page.
+ */
 export interface ShapeJob {
   jobNumber: string;
   projectNumber: string;
@@ -30,12 +38,16 @@ export interface ShapeJob {
   team: string;
   status: RecordStatus;
   daysInStage: number;
+  currentAddress?: string | null;
+  originalAddress?: string | null;
 }
 
 export interface ShapeProject {
   projectNumber: string;
   jobs: ShapeJob[];
   status: RecordStatus;
+  currentAddress?: string | null;
+  originalAddress?: string | null;
 }
 
 /** Spread across the enum so the board shows what each status looks like, not just the

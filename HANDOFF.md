@@ -3,7 +3,7 @@
 Everything a new session needs to pick this up. Read this first, then
 `data-dictionary.md`.
 
-Last updated: 2026-08-01.
+Last updated: 2026-08-02.
 
 ---
 
@@ -213,6 +213,54 @@ user creates, and without them there is no board to look at. Records still resol
 The Wiring page shows the two separately for that reason: a lookup serving from the seed
 is real progress, a record returning empty is not.
 
+### The header search
+
+One `TextField` in the header, one query in `app/src/data/SearchProvider.tsx`, and every
+list screen reads it. Same behaviour as the prototype: **it filters the view you are on
+rather than opening a results page**, so typing on the board narrows the board, and the
+query survives switching Board → Table → Gantt → Calendar and moving between Jobs,
+Projects and Reports.
+
+- **Every term must match.** `"prj-002 on track"` is an AND, not an OR — an OR would widen
+  the result the moment someone typed a second word, which is the opposite of what they
+  were doing.
+- **`jobMatchesQuery` and `projectMatchesQuery` are shared**, not written per page. If
+  Jobs searched the team and Reports did not, the same query would return different sets
+  on two screens showing the same records, which reads as a bug even though both "work".
+- **A project matches on its own values or on any job it holds.** Searching a job number
+  and being told the project does not exist would be nonsense when the job is on it.
+- **Both addresses are searched**, current and original — that is why the schema keeps the
+  pair. When a match comes off an *original* address only, the screen says so once above
+  the results: whoever searched is working from an old email or a contract, and the
+  address they have is not where the job is now. `ShapeJob` and `ShapeProject` carry the
+  two address fields unset today, because addresses are still tokenised and inventing text
+  for them would put something on the board that looks like data. The hint lights up on
+  its own the day `addresses` binds.
+- **The toolbar filter chips are still inert.** `Showing N of M` counts the search only.
+
+### Narrow screens
+
+It works on a phone, and that is checked rather than assumed: every page, at 320 / 390 /
+430 / 768 / 1024, under an empty query, a matching one and a non-matching one, must show
+**zero horizontal overflow** with the footer at the bottom.
+
+- **The nav wraps, it does not collapse.** Nine destinations behind a hamburger is worse
+  than two rows of readable pills, and this is a tool people live in. Below 720px the
+  identity cluster and search share the first line with the logo and the nav takes a
+  full-width block underneath — otherwise the logo sits in a column beside three wrapped
+  rows and eats 120px of every one of them.
+- **Almost every overflow was a missing `min-width: 0`.** A flex or grid child sizes to
+  its content's minimum unless told otherwise, and the minimum here is an unbreakable
+  `{{profiles.last_name}}`. Vibe's `Text` makes it worse: it clips to one line, and a
+  clipping child only shrinks when its parent is allowed to. If a new panel scrolls the
+  page sideways, that is the first thing to check.
+- **A track floor wider than its container is still honoured.** `minmax(320px, 1fr)` in a
+  288px column overflows. `minmax(min(320px, 100%), 1fr)`.
+- **The drawer close button was pushed outside the panel** by an unshrinkable title
+  block. On a phone the drawer covers the full width, so there was no overlay to tap and
+  no Escape key either — the panel could not be closed at all. Worth remembering as the
+  shape of the bug, not just the instance: a layout fault can become a trap.
+
 ### Vibe defaults that fail accessibility
 
 Two, both fixed, both worth knowing because they will recur:
@@ -234,6 +282,13 @@ The contrast audit composites alpha against the painted backdrop before measurin
   hold nothing are `clearable` — a filter, not a view.
 - **Vibe's `title` prop renders a visible label.** In a table that is noise on every row;
   use `aria-label`.
+- **`TextField` ignores `aria-label` and writes its own from the placeholder.** The prop
+  is `inputAriaLabel`. A field with no placeholder and a plain `aria-label` ends up with
+  no accessible name at all. Pass `id` too — the default is literally `id="input"` on
+  every instance, so two on a page collide.
+- **`Text` clips to a single line by default.** Any sentence longer than its container
+  becomes `"Every word has to appear somew…"`, and in a full-width band it forces a
+  horizontal scrollbar instead. `ellipsis={false}` wherever the words matter.
 - **`TextArea` hands back the event; `TextField` hands back the value.**
 - **The layout is a flex column from `html` down**, and it has to pass through
   ThemeProvider's own wrapper (`#root, #root > *`) or the footer floats mid-page.
@@ -260,5 +315,6 @@ cd app && npm run dictionary # regenerate; commit the result
 ```
 
 Then, in a browser against `dist/`: every page renders, the footer sits at the bottom, no
-horizontal overflow, no console errors, and **zero AA contrast failures across light, dark
-and black**. Every commit in the history states what was verified — keep that up.
+horizontal overflow **at 320, 390, 430, 768 and 1024**, no console errors, and **zero AA
+contrast failures across light, dark and black**. Every commit in the history states what
+was verified — keep that up.
