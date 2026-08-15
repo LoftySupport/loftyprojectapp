@@ -5,14 +5,14 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-118 properties across 24 tables.
+120 properties across 26 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
-| To do | 42 | Specified here, not yet in the migration |
+| To do | 37 | Specified here, not yet in the migration |
 | Created | 73 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
-| Merged | 3 | Folded into another property |
+| Merged | 10 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
 
 ---
@@ -21,13 +21,25 @@
 
 | Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `activity.id` | Activity ID | One feed for both events and comments — the UI interleaves them, so the schema should not keep them apart. | `uuid` | Primary key. | — | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
+| `activity.id` | Activity ID | One feed for both events and comments — the UI interleaves them, so the schema should not keep them apart. Distinct from activity_audit: this is what people read, that is what the database records. | `uuid` | Primary key. | — | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `activity.subject_type` | Subject type | Whether the entry is against a job or a project. | `text` | Not null. CHECK in ('job','project'). | Paired with subject_id. Indexed with it. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `activity.subject_id` | Subject | Which job or project. | `uuid` | Not null. | Polymorphic — no FK, enforced by the app. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `activity.kind` | Kind | An event the system recorded, or a comment a person wrote. | `text` | Not null. CHECK in ('event','comment'). | — | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `activity.description` | Description | The text of the event or comment. | `text` | Not null. | — | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `activity.author_id` | Author | Who wrote it. Null for system events. | `uuid` | Nullable. | FK → profiles(id). | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `activity.mentions` | Mentions | Who was @mentioned, for the notification fan-out. | `jsonb` | uuid[], default '{}'. | Each entry references profiles(id). | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
+
+## `activity_audit`
+
+| Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `activity_audit.id` | Audit entry | One row per change to a tracked table. The trg_activity_audit_row trigger fires after every insert, update and delete on profiles, profile_teams, addresses, projects and jobs. | `integer` | Primary key, bigint identity. The only index on the table. | Written by log_activity_audit(). Not written by the app. | Created | 2026-08-01 · Amber Beaumont — outside the migrations | 2026-08-01 · Amber Beaumont — outside the migrations |
+| `activity_audit.table_name` | Table | Which table changed, alongside schema_name. | `text` | Not null. | Filtering by this is a sequential scan today — worth an index on (table_name, changed_at) if audit queries become routine. | Created | 2026-08-01 · Amber Beaumont — outside the migrations | 2026-08-01 · Amber Beaumont — outside the migrations |
+| `activity_audit.operation` | Operation | INSERT, UPDATE or DELETE. | `text` | Not null. | — | Created | 2026-08-01 · Amber Beaumont — outside the migrations | 2026-08-01 · Amber Beaumont — outside the migrations |
+| `activity_audit.old_row` | Before | The whole row as it was, as jsonb. Null on insert. | `jsonb` | Nullable. | to_jsonb(old). Because it captures every column, old_row->>'stage' is where a job's previous stage is recorded. | Created | 2026-08-01 · Amber Beaumont — outside the migrations | 2026-08-01 · Amber Beaumont — outside the migrations |
+| `activity_audit.new_row` | After | The whole row as it became, as jsonb. Null on delete. | `jsonb` | Nullable. | to_jsonb(new). new_row->>'stage' paired with changed_at is what replaces job_stages.entered_at. | Created | 2026-08-01 · Amber Beaumont — outside the migrations | 2026-08-01 · Amber Beaumont — outside the migrations |
+| `activity_audit.changed_at` | Changed on | When the change happened. | `timestamptz` | Not null. | The timestamp any reconstruction of time-in-stage measures between. | Created | 2026-08-01 · Amber Beaumont — outside the migrations | 2026-08-01 · Amber Beaumont — outside the migrations |
+| `activity_audit.changed_by` | Changed by | The database role that made the change; jwt_sub carries the authenticated user. | `text` | Nullable. | Paired with jwt_sub. | Created | 2026-08-01 · Amber Beaumont — outside the migrations | 2026-08-01 · Amber Beaumont — outside the migrations |
 
 ## `addresses`
 
@@ -41,7 +53,7 @@
 | `addresses.suburb` | Suburb | Suburb or locality. | `text` | Not null. Indexed. | Feeds consolidated_address; exposed by project_display.suburb. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `addresses.state` | State | Australian state or territory. | `enum` | au_state. Not null, default 'SA'. Values: SA NSW VIC QLD WA NT TAS ACT. | Feeds consolidated_address. Filters the council picker. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `addresses.country` | Country | Country. One value today; an enum so a second is ALTER TYPE, not a data-cleaning exercise. | `enum` | country_code. Not null, default 'AU'. | Feeds consolidated_address. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `addresses.council_id` | Council region | The local government area the address sits in. | `uuid` | Nullable. Indexed. | FK → council_regions(id). Exposed by project_display.council_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `addresses.council` | Council region | The local government area the address sits in. The council's name is the value itself — 'City of Burnside', not an id pointing at it — so reading it needs no join. | `enum` | sa_council. Nullable. Indexed. 68 values from the LGA listing, declared in that listing's order, so `order by council` is picker order. CHECK addresses_council_is_sa: only an SA address may carry one, because the enum is SA-only. | Exposed by project_display.council, project_address_search.council and job_address_search.council. Replaced addresses.council_id in 0003. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `addresses.consolidated_address` | Full address | The whole address as one string, assembled in the database so every card, export and search reads exactly the same text. | `text` | Not null. Maintained by the addresses_build_consolidated trigger, never written by the app — not a generated column, because a generation expression must be IMMUTABLE and the enum-to-text casts are not (enum_out is STABLE). Built with \|\| and coalesce rather than concat_ws, so a null part drops its separator. | Derived from street_2, street_number, street_1, suburb, state, country. Read by project_display.current_address / original_address. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `addresses.created_at` | Created on | When the address was first recorded. | `timestamptz` | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `addresses.created_by` | Created by | Who recorded it. | `uuid` | Nullable. | FK → profiles(id). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
@@ -58,10 +70,7 @@
 
 | Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `council_regions.id` | Council ID | A local government area. | `uuid` | Primary key. | Referenced by addresses.council_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `council_regions.name` | Council name | The council's name as published by the LGA. | `text` | Not null. Unique with state. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `council_regions.state` | State | Which state the council is in, so the picker can filter to the state already chosen on the address. | `enum` | au_state. Not null. Indexed. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `council_regions.active` | Active | Councils amalgamate and split. Retiring one keeps the addresses that reference it intact. | `boolean` | Not null, default true. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `council_regions.id` | Council (merged) | Merged into the sa_council enum on addresses. The table held 68 rows nobody maintained, plus the audit quartet and a touch trigger to look after them. A council is now a value on the address, not a row it points at. | `uuid` | Table dropped in 0003. | Superseded by addresses.council. The state filter it used to provide is the addresses_council_is_sa CHECK; the active flag has no equivalent, because Postgres cannot drop an enum value. | Merged | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `divisions`
 
@@ -94,13 +103,8 @@
 
 | Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `job_stages.id` | Job stage ID | One row per job per stage. This is what makes stage history possible — a single stage_id on the job says where something is now, not when it got there or how long it sat. | `uuid` | Primary key. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `job_stages.project_id` | Project | Carried alongside job_id so project rollups do not need the extra join. | `uuid` | Not null. | Composite FK with job_id, so it cannot disagree with the job's own project. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `job_stages.job_id` | Job | The job this stage row belongs to. | `uuid` | Not null. | FK → jobs(id) ON DELETE CASCADE. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `job_stages.stage_id` | Stage | Which phase. | `integer` | Not null. | FK → stages(id). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `job_stages.entered_at` | Entered on | When the job reached this stage. Null until it does. | `timestamptz` | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `job_stages.exited_at` | Exited on | When it left. Null while it is still here. | `timestamptz` | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `job_stages.is_current` | Is current (removed) | Removed. Which stage a job is in now is jobs.stage_id; whether the job itself is current is is_current(status) — anything not completed, cancelled or archived. The open stage row is simply the one with exited_at null, guaranteed by a partial unique index. A third copy of that fact was a third thing to keep true. | `boolean` | Dropped from the schema. | Superseded by jobs.stage_id and the is_current(record_status) function. | Merged | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `job_stages.id` | Job stage (removed) | Removed. It was one row per job per stage with entered_at and exited_at, and answering "what stage is this job in" meant finding the row with a null exited_at — the wrong shape for a query the board makes on every load. 0004 moved the current position onto the job as stage and stage_entered_at, which left this table holding only the durations of stages a job had already left. Nothing wrote to it and no screen read it, so 0006 dropped it. | `uuid` | Table dropped in 0006. | Current position is jobs.stage + jobs.stage_entered_at. Past transitions are in activity_audit, whose trigger captures whole rows — an update changing jobs.stage leaves old_row->>'stage', new_row->>'stage' and changed_at. | Merged | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `job_stages.is_current` | Is current (removed) | Removed before the table itself was. Which stage a job is in now is jobs.stage; whether the job itself is current is is_current(status) — anything not completed, cancelled or archived. A third copy of that fact was a third thing to keep true. | `boolean` | Dropped from the schema. | Superseded by jobs.stage and the is_current(record_status) function. | Merged | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `job_types`
 
@@ -112,15 +116,15 @@
 
 | Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `jobs.id` | Job ID | The job's machine key. | `uuid` | Primary key. | Referenced by job_stages.job_id, job_tags, job_dependencies, activity. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `jobs.id` | Job ID | The job's machine key. | `uuid` | Primary key. | Referenced by job_tags, job_dependencies, activity. job_stages was dropped in 0006. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `jobs.project_id` | Parent project | The project this job belongs to. One project, many jobs. The uuid rather than the friendly number, so renumbering a project never orphans its jobs. | `uuid` | Not null. Indexed. | FK → projects(id) ON DELETE CASCADE. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `jobs.project_no` | Project number | The friendly project number, user-facing. Held on the job only so job_number can be a generated column — a generated column cannot reach another table. Never written by the app. | `integer` | Not null. | Maintained by the jobs_sync_project_number and projects_cascade_renumber triggers. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `jobs.job_sequence` | Job sequence | The counter within the project — 01, 02, 03. Allocated automatically: insert a job without one and a trigger assigns the next. NOT what Lofty calls the job number — that is jobs.job_number, the combined value. | `text` | Not null. Unique with project_id. Zero-padded to two digits, and wider than two past 99 rather than truncating. CHECK (>= 1) — there is no zeroth job, and the check is on the column rather than only in the trigger because a hand-written insert can supply its own sequence. | Assigned by the jobs_assign_sequence trigger, which locks the parent project row first — two concurrent inserts would otherwise read the same max and collide on the unique index. Feeds job_number. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `jobs.job_number` | Job number | The job number as Lofty uses the phrase — '1001-01'. The project number and the sequence joined, so the parent reads straight off the child. This is what people type, quote and say out loud. | `generated text` | GENERATED ALWAYS AS (project_no::text \|\| '-' \|\| job_sequence) STORED. Unique. | Derived from jobs.project_no + jobs.job_sequence. Exposed by job_display.job_number. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `jobs.original_address_id` | Original address | The job's address as first recorded — what the contract says and what an email from last year refers to. Never moves. Not displayed, but always searchable. | `uuid` | Nullable. Falls back from current in a trigger. Indexed, because half of address search hits this column. | FK → addresses(id). Exposed by job_display.original_address and job_address_search. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `jobs.current_address_id` | Current address | What every card, board and search result shows. Identical to the original until something changes — a lot renumbered by council, a street renamed, a typo found at handover. | `uuid` | Not null. Falls back to the original in a trigger. Indexed. | FK → addresses(id). Exposed by job_display.current_address and job_address_search. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `jobs.stage_id` | Stage | Which of the eight pipeline phases the job is in now. The single answer to that question — job_stages carries the history, not the current position. | `integer` | Not null. | FK → stages(id). job_stages.is_current was removed in favour of this. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
-| `jobs.owning_team_id` | Owning team | The one team holding the job right now. "One job, one team at a time" is the whole model. | `uuid` | Not null. | FK → teams(id). | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
+| `jobs.stage` | Stage | Which of the eight pipeline phases the job is in now, and the single answer to that question. The board filters on this column every load. | `enum` | stage. Not null, default 'Sales & acquisition'. Indexed. | Replaced the proposed jobs.stage_id in 0004. Paired with stage_entered_at, which a trigger moves whenever this changes. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `jobs.owning_team` | Owning team | The one team holding the job right now. "One job, one team at a time" is the whole model. | `enum` | team. Not null. | An enum value since 0004, not an FK — there is no teams table to point at. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `jobs.assignee_id` | Assigned to | The person responsible inside the owning team. | `uuid` | Nullable. | FK → profiles(id). | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `jobs.status` | Status | Where the job stands — the same seven values as a project, from the same enum. What someone sets, not what the system works out. | `enum` | record_status. Not null, default 'on_track'. | Feeds is_current(status). Exposed by job_display.status and job_display.is_current. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `jobs.source_system` | Source system | Where the record originated — HubSpot, SharePoint, SiteBook, Trello. | `text` | Nullable. | — | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
@@ -129,11 +133,20 @@
 | `jobs.drawings_status` | Drawings status | Where the working drawings are up to. | `text` | Nullable. | — | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `jobs.requested_note` | Waiting on | What the job is blocked on. Non-null is what makes a card show the amber waiting flag. | `text` | Nullable. | Drives the card's warning state. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `jobs.notes` | Notes | Free text on the job. | `text` | Nullable. | — | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
-| `jobs.stage_entered_at` | Entered stage on | When the job arrived in its current stage. "Days in stage" is computed from this, never stored. | `timestamptz` | Not null, default now(). | Superseded by job_stages.entered_at if the composite table becomes authoritative. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
+| `jobs.stage_entered_at` | Entered stage on | When the job arrived in its current stage. "Days in stage" is now() minus this, computed and never stored. | `timestamptz` | Not null, default now(). Maintained by the jobs_touch_stage_entered_at trigger, so it cannot drift off stage when someone updates one without the other. | Paired with jobs.stage. Was the alternative to job_stages.entered_at; job_stages was dropped in 0006, so this is the only record of when the current stage began. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `jobs.created_at` | Created on | When the job record was created. | `timestamptz` | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `jobs.created_by` | Created by | Who created it. | `uuid` | Nullable. | FK → profiles(id). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `jobs.updated_at` | Updated on | When it last changed. Maintained by the touch_updated_at trigger, not by the app. | `timestamptz` | Not null, default now(). | Set by the jobs_touch trigger on every update. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `jobs.updated_by` | Updated by | Who last changed it. | `uuid` | Nullable. | FK → profiles(id). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `login_activity`
+
+| Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `login_activity.id` | Login entry | One row per authentication event. | `integer` | Primary key, bigint identity. | Written from auth.users by log_login_activity_from_auth_users(). | Created | 2026-08-01 · Amber Beaumont — outside the migrations | 2026-08-01 · Amber Beaumont — outside the migrations |
+| `login_activity.user_id` | User | Who signed in. | `uuid` | Nullable. Indexed. | References auth.users(id). Email is denormalised alongside it so the row survives account deletion. | Created | 2026-08-01 · Amber Beaumont — outside the migrations | 2026-08-01 · Amber Beaumont — outside the migrations |
+| `login_activity.event_type` | Event | What kind of authentication event it was. | `text` | Nullable. | Details in metadata. | Created | 2026-08-01 · Amber Beaumont — outside the migrations | 2026-08-01 · Amber Beaumont — outside the migrations |
+| `login_activity.occurred_at` | Occurred on | When it happened. | `timestamptz` | Not null. Indexed descending. | Indexed for "most recent first", which is how it is read. | Created | 2026-08-01 · Amber Beaumont — outside the migrations | 2026-08-01 · Amber Beaumont — outside the migrations |
 
 ## `permission_grants`
 
@@ -147,9 +160,9 @@
 | Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `profile_teams.profile_id` | Person | Half of the membership pair. People sit in more than one team, so membership is a table rather than a column on profiles. | `uuid` | Part of the composite primary key. | FK → profiles(id) ON DELETE CASCADE. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `profile_teams.team_id` | Team | The other half of the pair. | `uuid` | Part of the composite primary key. | FK → teams(id) ON DELETE CASCADE. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `profile_teams.team` | Team | The other half of the pair. An enum value, not a row — the list of teams is the `team` type, while this table holds who is in them. | `enum` | team. Part of the composite primary key. Indexed. | Replaced profile_teams.team_id in 0004, which was a uuid pointing at a teams table that was never built. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `profile_teams.is_primary` | Primary team | Which team answers the questions that need one answer: what the dashboard's "Heading to your team" panel watches, and what the board filters to by default. | `boolean` | Not null, default false. Partial unique index on (profile_id) WHERE is_primary — at most one per person, and none is legitimate for a new joiner. | Read by the dashboard and the default board filter. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `profile_teams.joined_at` | Joined on | When the person was added to this team. | `timestamptz` | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `profile_teams.joined_at` | Joined on (merged) | Merged into created_at. This was recorded as built and never was — 0001 gave profile_teams the standard audit quartet and no joined_at, and a membership row is created when the person joins, so created_at already answers it. Caught by cross-checking the dictionary against information_schema. | `timestamptz` | Never created. | Superseded by profile_teams.created_at. | Merged | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `profiles`
 
@@ -181,6 +194,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `project_display.current_address` | Project address (current) | The consolidated current address, joined for the cards. A view because a generated column cannot reach another table. | `view` | Read-only. | projects ⋈ addresses on current_address_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `project_display.original_address` | Project address (original) | The consolidated original address, for paperwork and search. | `view` | Read-only. | projects ⋈ addresses on original_address_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `project_display.council` | Council region | The council of the project's current address, carried through so a card can show it without joining addresses itself. The council's name, not an id — it has been an enum value since 0003. | `view` | Read-only. sa_council. | Reads addresses.council via current_address_id. Replaced project_display.council_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `projects`
 
@@ -208,10 +222,10 @@
 | `property_defs.key` | Key | Stable machine name, referenced by automations. Renaming the label never breaks them. | `text` | Unique. Not null. | — | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `property_defs.label` | Field name | What people see. Renameable at any time. | `text` | Not null. | — | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `property_defs.scope` | Level | Whether the field hangs off a project or a job. Two levels only — stage is context, not a level. | `text` | Not null. CHECK (scope in ('project','job')). | — | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
-| `property_defs.stage_id` | Captured at | Which stage of the pipeline this field gets filled in. | `integer` | Not null. | FK → stages(id). Groups the field slots on the job drawer and project detail. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
-| `property_defs.owning_team_id` | Captured by | Which team fills it in. Constrained to teams that own the stage. | `uuid` | Not null. | FK → teams(id). | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
+| `property_defs.stage` | Captured at | Which stage of the pipeline this field gets filled in. | `enum` | stage. Not null. | An enum column since 0004, not an FK. Groups the field slots on the job drawer and project detail. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
+| `property_defs.owning_team` | Captured by | Which team fills it in. Constrained to teams that own the stage. | `enum` | team. Not null. | An enum column since 0004, not an FK. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `property_defs.format` | Format | The shape of the value — text, number, currency, date, checkbox, file, single/multi select, person, link. | `text` | Not null, CHECK against the format list. | Determines how property_values.value is validated and rendered. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
-| `property_defs.required` | Required to exit stage | Whether the job can leave stage_id without this filled in. Not the same as required to create the record. | `boolean` | Not null, default false. | OPEN QUESTION: some fields will mean 'required to create'. Those are different columns. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
+| `property_defs.required` | Required to exit stage | Whether the job can leave the stage without this filled in. Not the same as required to create the record. | `boolean` | Not null, default false. | OPEN QUESTION: some fields will mean 'required to create'. Those are different columns. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `property_defs.automation` | Automation | What setting this field triggers — notify, block stage exit, start an SLA clock, recalculate dates. | `text` | Nullable. | — | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `property_defs.archived_at` | Archived on | Retires a field without losing the history of what was captured in it. | `timestamptz` | Nullable. | — | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 
@@ -225,9 +239,8 @@
 
 | Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `stages.id` | Stage ID | One of the eight pipeline phases. Seeded, not user-created — this is the business process. | `integer` | Primary key. | Referenced by jobs.stage_id, job_stages.stage_id, property_defs.stage_id, template_phases.stage_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `stages.name` | Stage name | The phase name, as it appears as a board column heading. | `text` | Unique. Not null. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `stages.position` | Order | Board column order. The whole reason stages are ordered rather than a set. | `integer` | Unique. Not null. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `stages.id` | Stage (merged) | Merged into the `stage` enum. Eight seeded values that are the business process rather than data anyone maintains. As a table it cost a touch trigger, an RLS policy, the audit quartet and a position column to hold an order that enums give by declaration. | `integer` | Table dropped in 0004. | Superseded by jobs.stage. Also the type for property_defs.stage_id and template_phases.stage_id when those are built — as enum columns, not FKs. | Merged | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `stages.position` | Order (merged) | Merged. Enum values sort by declaration order, so the type itself is the board's column order and a separate column would be a second copy of it. The cost is that reordering the pipeline is no longer an UPDATE — it needs a new type and a rewrite of jobs.stage. | `integer` | Column dropped with the table in 0004. | Superseded by the declaration order of the stage enum. | Merged | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `tags`
 
@@ -239,9 +252,8 @@
 
 | Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `teams.id` | Team ID | A team. Each owns one or more pipeline phases, which drives the handover between them. | `uuid` | Primary key. | Referenced by profile_teams.team_id, jobs.owning_team_id, property_defs.owning_team_id, template_phases.owning_team_id. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
-| `teams.name` | Team name | What the team is called. | `text` | Unique. Not null. | — | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
-| `teams.parent_team_id` | Parent team | The hierarchy the team_hierarchy permission scope walks. | `uuid` | Nullable. | Self-FK → teams(id). Walked recursively by visible_team_ids(). | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
+| `teams.id` | Team (merged) | Merged into the `team` enum. The table was specified but never built — profile_teams.team_id pointed at nothing from 0001 until 0004, and the app queried a table that did not exist. The eleven values came from PHASES in stubRepository.ts, the only place they had been written down. | `uuid` | Never created. Superseded by the team enum in 0004. | Referenced now as an enum value by profile_teams.team, and by jobs.owning_team_id, property_defs.owning_team_id and template_phases.owning_team_id when those are built. | Merged | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `teams.parent_team_id` | Parent team (merged) | Merged with the table. It existed for the team_hierarchy permission scope to walk, but every seeded team had a null parent, so the hierarchy was never real. An enum cannot hold a parent pointer; if a hierarchy is genuinely wanted it comes back as a table keyed by the enum, not as this column. | `uuid` | Never created. | The team_hierarchy scope needs rethinking against a flat team enum, or a new table to walk. | Merged | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `template_checkpoints`
 
@@ -253,4 +265,4 @@
 
 | Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `template_phases.expected_days` | Expected days | How long a phase should take. What the Gantt measures actual time in stage against. | `integer` | Nullable. | FK context: template_phases → templates, stages, teams. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
+| `template_phases.expected_days` | Expected days | How long a phase should take. What the Gantt measures actual time in stage against. | `integer` | Nullable. | Keyed by template plus the stage enum; the owning team is a team enum value. Neither is an FK. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
