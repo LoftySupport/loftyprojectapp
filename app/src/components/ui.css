@@ -425,3 +425,55 @@ code { overflow-wrap: anywhere; }
    hashes its class names, but keeps the readable prefix. */
 [class*="circleText"] { background: var(--primary-color) !important; }
 [class*="circleText"] [class*="contentText"] { color: var(--text-color-on-primary) !important; }
+
+/* ---- create dialogs -------------------------------------------------------
+   The forms behind "+ New project" and "+ New job".
+
+   Settings lays a field out in two columns, label beside control, because it
+   has the full page width. A modal does not, and reusing that shape here put
+   the label and the control on top of each other. Inside a dialog they stack. */
+.create-form { display: flex; flex-direction: column; }
+
+/* The council picker alone makes this form taller than a short viewport, so the
+   fields scroll inside the dialog rather than pushing its footer off screen —
+   a Create button you have to scroll the page to reach is a Create button
+   people miss. */
+.create-form {
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.create-form .field-row { display: block; padding: 8px 0; }
+.create-form .field-label { margin-bottom: 4px; }
+.create-form .field-control,
+.create-form .field-control > * { width: 100%; }
+
+.field-required { color: var(--negative-color); }
+
+/* Postgres messages are shown verbatim — an RLS refusal and a missing field
+   need to look different, and both are worth reading — so this has to hold a
+   long, unbroken string without pushing the dialog sideways. */
+.create-problem {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--negative-color-selected);
+  border: 1px solid var(--negative-color);
+  overflow-wrap: anywhere;
+}
+
+/* Vibe's Text clamps to one line with an ellipsis. On an error that is exactly
+   backwards: the half that gets cut is the half naming the constraint or policy
+   that refused. Unclamp it and let the box grow. */
+.create-problem > * {
+  display: block;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  -webkit-line-clamp: none;
+}
+
+.create-result {
+  padding: 16px 4px;
+}

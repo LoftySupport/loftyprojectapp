@@ -139,6 +139,23 @@ export function createStubRepository(): Repository {
     async listProfiles(): Promise<Profile[]> { return []; },
     async currentProfile(): Promise<Profile | null> { return null; },
 
+    // ---- creating: refuse rather than pretend ---------------------------
+    // The other stubs answer with empty arrays, which is honest — there are no records
+    // yet. A create cannot be stubbed the same way: returning a fabricated Project
+    // would put a row on screen that does not exist anywhere, with a projectNo the
+    // database never issued, and the person who typed it would have no way to tell.
+    // Failing loudly is the only answer that stays true.
+    async createProject(): Promise<Project> {
+      throw new Error(
+        "Creating a project needs Supabase — set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY."
+      );
+    },
+    async createJob(): Promise<Job> {
+      throw new Error(
+        "Creating a job needs Supabase — set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY."
+      );
+    },
+
     // ---- lookups: the business process ----------------------------------
     async listStages(): Promise<Stage[]> { return SEED_STAGES; },
     async listTeams(): Promise<Team[]> { return SEED_TEAMS; },
