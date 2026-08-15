@@ -16,6 +16,13 @@ Nothing is connected to Supabase yet. Every value that will come from a table re
 a `{{table.column}}` token, so an unbound field is visible rather than silently blank.
 The schema is being designed one table at a time, and the app is built ahead of it.
 
+The migrations **are** applied now, to the `loftyprojectapp` project
+(`gmekuqdjemrfuurxhuib`, ap-southeast-2) — the eight tables exist and are empty. What is
+still missing is the wiring: `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are unset,
+so `supabaseRepository.ts` returns a null client and the app runs on mock data. Until
+those are set, a schema change means re-running the migration against that project;
+`supabase migration list` is the check for whether the two have drifted.
+
 **The prototype it grew from is a different repo** — `amberbeaumont/loftyprojectboard`,
 frozen, still deployed at `loftyprojectboard.netlify.app` for showing people. Nothing in
 this work touches it. Its PR #11 was closed unmerged as superseded.
@@ -89,10 +96,14 @@ Addresses get corrected and changed: a lot renumbered by council, a street renam
 typo found at handover. Everything pointing at one should follow without being edited
 individually, so projects and jobs hold an id.
 
-- **`consolidated_address` is a generated column**, so every card, export and search
-  reads the same string. Built with `||` and `coalesce`, **not `concat_ws`** —
-  `concat_ws` is only `STABLE` and a generated column requires `IMMUTABLE`. It fails at
-  `create table` otherwise.
+- **`consolidated_address` is maintained by trigger**, so every card, export and search
+  reads the same string. It is deliberately *not* a generated column: a generation
+  expression must be `IMMUTABLE`, and casting an enum to text is not — `enum_out` is
+  `STABLE`, because `alter type … rename value` can change a label under a stored value.
+  `create table` fails with "generation expression is not immutable". The trigger
+  overwrites the column on every insert and update, so it still cannot be written by
+  hand or drift from its parts. Built with `||` and `coalesce`, **not `concat_ws`**, so
+  a null part drops its separator with it.
 - **Lot and street numbers are `text`.** "12A", "5-7" and "Lot 3" are as common as 12.
 - **Councils are a table, not an enum** — the one place the spec was not followed
   literally. SA has 68 and Australia about 537; they amalgamate, split and get renamed,

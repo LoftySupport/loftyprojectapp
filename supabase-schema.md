@@ -29,7 +29,7 @@ so you can still check the formatting you're preserving.
 
 | Token | Column | Type | Notes |
 | --- | --- | --- | --- |
-| `{{addresses.consolidated_address}}` | `addresses.consolidated_address` | generated `text` | Site address. Assembled in the database, so every card, export and search reads the same string |
+| `{{addresses.consolidated_address}}` | `addresses.consolidated_address` | trigger-maintained `text` | Site address. Assembled in the database, so every card, export and search reads the same string |
 | `{{addresses.suburb}}` | `addresses.suburb` | `text not null` | |
 | `{{council_regions.name}}` | join from `addresses.council_id` | — | |
 | `{{project_display.current_address}}` | view over `projects` + `addresses` | — | What project cards show. A generated column cannot reach another table, so it is a view |
@@ -282,18 +282,20 @@ create table addresses (
   council_id     uuid references council_regions(id),
 
   -- Assembled once, in the database, so every card, export and search hit reads the
-  -- same string. Generated rather than a view because it is on the row itself and
-  -- nothing outside this row is needed to build it.
+  -- same string. On the row rather than in a view because nothing outside this row is
+  -- needed to build it.
   --
-  -- Built with `||` and `coalesce`, not `concat_ws`: concat_ws is only STABLE, and a
-  -- generated column requires an IMMUTABLE expression. The enum-to-text casts are
-  -- immutable, so those are fine.
-  consolidated_address text generated always as (
-    coalesce(street_2 || ', ', '') ||
-    coalesce(street_number || ' ', '') ||
-    street_1 || ', ' ||
-    suburb || ' ' || state::text || ', ' || country::text
-  ) stored,
+  -- Maintained by trigger, not `generated always as`. A generation expression must be
+  -- IMMUTABLE, and `state::text` / `country::text` are not: enum output goes through
+  -- `enum_out`, which is declared STABLE because `alter type … rename value` can change
+  -- a label under an already-stored value. Postgres rejects the table outright with
+  -- "generation expression is not immutable". The trigger overwrites the column on
+  -- every insert and update, so it still cannot be written by hand or drift from its
+  -- parts — the same guarantee, in legal SQL.
+  --
+  -- Built with `||` and `coalesce` rather than `concat_ws`, so a null part drops its
+  -- separator with it.
+  consolidated_address text not null default '',
 
   created_at     timestamptz not null default now(),
   created_by     uuid references profiles(id),
@@ -302,6 +304,21 @@ create table addresses (
 );
 create index on addresses (suburb);
 create index on addresses (council_id);
+
+create or replace function build_consolidated_address() returns trigger
+language plpgsql set search_path = public, pg_temp as $$
+begin
+  new.consolidated_address :=
+    coalesce(new.street_2 || ', ', '') ||
+    coalesce(new.street_number || ' ', '') ||
+    new.street_1 || ', ' ||
+    new.suburb || ' ' || new.state::text || ', ' || new.country::text;
+  return new;
+end $$;
+
+create trigger addresses_build_consolidated
+  before insert or update on addresses
+  for each row execute function build_consolidated_address();
 
 create table projects (
   id                 uuid primary key default gen_random_uuid(),
