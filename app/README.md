@@ -51,16 +51,28 @@ data appearing rather than as a refactor.
 
 ## Connecting Supabase
 
+Locally:
+
 ```bash
 cp .env.example .env.local     # then fill in
 ```
 
 ```
 VITE_SUPABASE_URL=https://<project>.supabase.co
-VITE_SUPABASE_ANON_KEY=<anon key>
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_<...>
 ```
 
-Then apply `supabase/migrations/0001_core.sql`. Regenerate types when the schema changes:
+On Netlify these are project environment variables rather than a file, set on the
+`loftyprojectapp` project for all deploy contexts and scoped to builds — Vite reads them
+at build time and inlines them, so nothing needs them at runtime.
+
+The `VITE_` prefix is what makes them visible to client code, and it is also what makes
+them **public**: Vite writes the value straight into the JavaScript the browser
+downloads. Only ever the publishable key here. The service role key bypasses RLS
+entirely and must never be given a `VITE_` name.
+
+The migrations are already applied to the project (`gmekuqdjemrfuurxhuib`). Regenerate
+types when the schema changes:
 
 ```bash
 supabase gen types typescript --project-id <id> > src/data/database.types.ts

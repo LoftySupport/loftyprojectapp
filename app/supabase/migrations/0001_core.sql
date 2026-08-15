@@ -191,14 +191,15 @@ create table addresses (
   council_id     uuid references council_regions(id),
 
   -- Assembled once, in the database, so every card, export and search reads the same
-  -- string. `||` with coalesce rather than concat_ws: concat_ws is only STABLE and a
-  -- generated column needs IMMUTABLE. The enum-to-text casts are immutable.
-  consolidated_address text generated always as (
-    coalesce(street_2 || ', ', '') ||
-    coalesce(street_number || ' ', '') ||
-    street_1 || ', ' ||
-    suburb || ' ' || state::text || ', ' || country::text
-  ) stored,
+  -- string.
+  --
+  -- Maintained by trigger, not `generated always as`. A generation expression must be
+  -- IMMUTABLE, and casting an enum to text is not: `enum_out` is declared STABLE,
+  -- because `alter type … rename value` can change a label under a stored value.
+  -- Postgres rejects the column outright — "generation expression is not immutable".
+  -- The trigger below overwrites this on every insert and update, so it cannot be
+  -- written to by hand and cannot drift from its parts. Same guarantee, legal SQL.
+  consolidated_address text not null default '',
 
   created_at     timestamptz not null default now(),
   created_by     uuid references profiles(id),
@@ -207,6 +208,22 @@ create table addresses (
 );
 create index on addresses (suburb);
 create index on addresses (council_id);
+
+-- `||` with coalesce rather than concat_ws, so a null part drops its separator too.
+create or replace function build_consolidated_address() returns trigger
+language plpgsql set search_path = public, pg_temp as $$
+begin
+  new.consolidated_address :=
+    coalesce(new.street_2 || ', ', '') ||
+    coalesce(new.street_number || ' ', '') ||
+    new.street_1 || ', ' ||
+    new.suburb || ' ' || new.state::text || ', ' || new.country::text;
+  return new;
+end $$;
+
+create trigger addresses_build_consolidated
+  before insert or update on addresses
+  for each row execute function build_consolidated_address();
 
 -- --------------------------------------------------------------- projects
 -- Sequential from 1000, four digits minimum, overridable by hand.
@@ -504,13 +521,17 @@ create table job_stages (
   updated_by  uuid references profiles(id),
 
   unique (job_id, stage_id),
-  foreign key (job_id, project_id) references jobs (id, project_id) on delete cascade,
   check (exited_at is null or entered_at is not null),
   check (exited_at is null or exited_at >= entered_at)
 );
 
--- the composite FK above needs this on the parent
+-- The composite FK needs a matching unique constraint on the parent, and it has to
+-- exist before the FK is declared — so the constraint goes on first and the FK is
+-- added after, rather than being declared inline above.
 alter table jobs add constraint jobs_id_project_id_key unique (id, project_id);
+
+alter table job_stages add constraint job_stages_job_id_project_id_fkey
+  foreign key (job_id, project_id) references jobs (id, project_id) on delete cascade;
 
 -- stages is declared before profiles, so its author columns get their foreign keys here.
 alter table stages add constraint stages_created_by_fkey foreign key (created_by) references profiles(id);
@@ -543,15 +564,56 @@ create unique index job_stages_one_open
 -- On from the start, so nothing is ever built against an open table. These are
 -- permissive placeholders for signed-in users; replace them with the scope model
 -- in supabase-schema.md as roles and teams land.
-alter table projects      enable row level security;
-alter table jobs          enable row level security;
-alter table job_stages    enable row level security;
-alter table profiles enable row level security;
-alter table stages        enable row level security;
+--
+-- Every table, with no exceptions. A table left out of this list is not "not yet
+-- secured" — PostgREST exposes it on the public API the moment it exists, so an
+-- omission is an open table, readable and writable by anyone holding the anon key.
+-- addresses is the one that matters most: it is the customer data.
+alter table stages          enable row level security;
+alter table profiles        enable row level security;
+alter table profile_teams   enable row level security;
+alter table council_regions enable row level security;
+alter table addresses       enable row level security;
+alter table projects        enable row level security;
+alter table jobs            enable row level security;
+alter table job_stages      enable row level security;
 
-create policy "read stages"        on stages        for select to authenticated using (true);
-create policy "read projects"      on projects      for select to authenticated using (true);
-create policy "read jobs"          on jobs          for select to authenticated using (true);
-create policy "read job_stages"    on job_stages    for select to authenticated using (true);
-create policy "read own profile"   on profiles for select to authenticated using (id = auth.uid());
-create policy "update own profile" on profiles for update to authenticated using (id = auth.uid());
+create policy "read stages"          on stages          for select to authenticated using (true);
+create policy "read council_regions" on council_regions for select to authenticated using (true);
+create policy "read addresses"       on addresses       for select to authenticated using (true);
+create policy "read projects"        on projects        for select to authenticated using (true);
+create policy "read jobs"            on jobs            for select to authenticated using (true);
+create policy "read job_stages"      on job_stages      for select to authenticated using (true);
+create policy "read own profile"     on profiles        for select to authenticated using (id = auth.uid());
+create policy "update own profile"   on profiles        for update to authenticated using (id = auth.uid());
+-- Own membership only, matching the stance on profiles. The board will need to read
+-- other people's teams; widen this deliberately when the scope model lands, rather
+-- than starting open and hoping someone remembers to close it.
+create policy "read own teams"       on profile_teams   for select to authenticated using (profile_id = auth.uid());
+
+-- No insert/update/delete policies anywhere but "update own profile". With RLS on and
+-- no policy for a command, that command is denied — so writes are closed until the
+-- scope model says who may write what. Seeding goes through the service role, which
+-- bypasses RLS by design.
+
+-- ----------------------------------------------------------- views and RLS
+-- A view runs as its owner, not its caller, so by default these would read straight
+-- past every policy above — profile_display would hand out everyone's name despite
+-- "read own profile", and the search views would expose every address. security_invoker
+-- makes each view execute as the querying user, so the policies apply through it.
+alter view profile_display        set (security_invoker = on);
+alter view project_display        set (security_invoker = on);
+alter view job_display            set (security_invoker = on);
+alter view job_address_search     set (security_invoker = on);
+alter view project_address_search set (security_invoker = on);
+
+-- ------------------------------------------------------------- search_path
+-- Pinned rather than left to the caller's search_path: a mutable one lets a caller
+-- shadow an unqualified name inside these bodies with an object of their own.
+alter function touch_updated_at()        set search_path = public, pg_temp;
+alter function is_current(record_status) set search_path = public, pg_temp;
+alter function default_current_address() set search_path = public, pg_temp;
+alter function bump_project_no_seq()     set search_path = public, pg_temp;
+alter function assign_job_sequence()     set search_path = public, pg_temp;
+alter function sync_job_project_number() set search_path = public, pg_temp;
+alter function cascade_project_renumber() set search_path = public, pg_temp;
