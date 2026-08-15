@@ -1,0 +1,32 @@
+-- =============================================================================
+-- 0006 — job_stages goes
+-- =============================================================================
+-- 0001 built it as the stage history: one row per job per stage, entered_at and
+-- exited_at, with a partial unique index guaranteeing exactly one open row. Which
+-- stage a job was in meant finding that open row.
+--
+-- 0004 moved the current position onto the job itself — `jobs.stage` and
+-- `jobs.stage_entered_at` — because the board filters on stage every load and walking
+-- a history table to draw eight columns was the wrong shape. That left job_stages
+-- holding one thing and one thing only: how long a job spent in stages it has already
+-- left.
+--
+-- Nothing was written to it, and nothing read it. The repository method returned an
+-- empty array and no screen consumed the result. Removed rather than kept empty: a
+-- table nothing writes to reads as a feature that exists, and the next person to open
+-- the schema would have to work out that it does not.
+--
+-- What this costs, stated plainly, because it is not recoverable by re-adding the
+-- table: per-stage duration history, and with it the leadership dashboard's
+-- bottleneck ranking (prototype-handover.md) — "which stage do jobs pile up in".
+-- Bringing that back means this table again *plus* a trigger on jobs.stage to record
+-- transitions, and it would start collecting from that day. Jobs that moved before it
+-- would have no history to show.
+--
+-- What survives: "days in stage" for the stage a job is in now, which is
+-- `now() - jobs.stage_entered_at` and never needed this table.
+--
+-- The `stage` enum stays — jobs.stage is typed on it.
+-- =============================================================================
+
+drop table if exists job_stages;
