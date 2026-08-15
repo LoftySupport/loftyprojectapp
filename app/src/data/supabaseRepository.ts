@@ -31,7 +31,11 @@ import type {
  */
 
 // Add a method name here as you implement it. The Wiring page reads this.
-const WIRED: RepositoryMethod[] = ["listStages"];
+//
+// listStages came off this list in 0004. Stages are a `stage` enum now, not a table,
+// so there is nothing to query — the values are known at compile time and the seed is
+// the source. An enum cannot be wired; it can only be regenerated.
+const WIRED: RepositoryMethod[] = [];
 
 // The publishable key (`sb_publishable_…`), not the legacy JWT anon key. Both work, and
 // both are safe in a client bundle — this key is public by design and RLS is what
@@ -98,23 +102,17 @@ export function createSupabaseRepository(): Repository {
     },
 
     // ---- lookups --------------------------------------------------------
+    // Stages and teams are enums as of 0004 (`stage`, `team`), not tables. There is no
+    // query to make: PostgREST cannot select from a type, and the values are fixed at
+    // migration time rather than maintained as rows. These stay on the seed until the
+    // generated Database["public"]["Enums"] types replace it, which is a type change
+    // rather than a wiring one.
     async listStages(): Promise<Stage[]> {
-      const { data, error } = await client
-        .from("stages")
-        .select("id, name, position")
-        .order("position");
-      if (error || !data?.length) return SEED_STAGES;
-      return data as Stage[];
+      return SEED_STAGES;
     },
 
     async listTeams(): Promise<Team[]> {
       return stub.listTeams();
-      // const { data, error } = await client
-      //   .from("teams")
-      //   .select("id, name, parent_team_id")
-      //   .order("name");
-      // if (error || !data?.length) return stub.listTeams();
-      // return (data ?? []).map(toTeam);
     },
 
     async listTemplatePhases(): Promise<TemplatePhase[]> {
