@@ -54,3 +54,49 @@ export function Select({
 
 export const toOptions = (values: readonly string[]): SelectOption[] =>
   values.map(v => ({ value: v, label: v }));
+
+/**
+ * The same Dropdown in multi mode, for the fields that hold a set rather than a value.
+ *
+ * Separate from `Select` rather than a flag on it because the two have genuinely
+ * different signatures — `value` is an array, `onChange` hands back an array — and
+ * threading both through one component means every caller carries a union it does not
+ * use. The cast stays here for the same reason it does above: once, not at each site.
+ */
+export function MultiSelect({
+  options,
+  value,
+  onChange,
+  placeholder,
+  "aria-label": ariaLabel,
+  size = "small",
+  className
+}: {
+  options: SelectOption[];
+  value: string[];
+  onChange: (value: string[]) => void;
+  placeholder?: string;
+  "aria-label": string;
+  size?: "small" | "medium" | "large";
+  className?: string;
+}) {
+  const items = options.map(o => ({ value: o.value, label: o.label }));
+  const selected = value
+    .map(v => items.find(o => o.value === v))
+    .filter((o): o is SelectOption => Boolean(o));
+
+  return (
+    <Dropdown
+      multi
+      multiline
+      className={className}
+      size={size}
+      placeholder={placeholder}
+      aria-label={ariaLabel}
+      options={items as never}
+      value={selected as never}
+      onChange={((opts: SelectOption[] | null) =>
+        onChange((opts ?? []).map(o => o.value))) as never}
+    />
+  );
+}
