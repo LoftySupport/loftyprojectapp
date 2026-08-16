@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { Button, Counter, Heading, Text } from "@vibe/core";
 import { useQuery } from "../data/DataProvider";
 import { RECORD_STATUS_LABELS, RECORD_STATUSES, PROJECT_TYPES } from "../data/types";
@@ -20,6 +21,10 @@ import "../components/ui.css";
  * Grouping is a property of the view, not of the data, so switching from Board to Table
  * keeps whatever you grouped by. Columns exist before any job does: they come from the
  * stages lookup, which is the business process rather than something a user created.
+ *
+ * Which job is open is the URL — /jobs/PRJ-001-02 — rather than component state. The view
+ * and the grouping are not, deliberately: they are how *you* are looking at the board, and
+ * putting them in the path would make every shared link impose the sender's layout.
  */
 export function JobsPage() {
   const { stages, stageNames } = useStages();
@@ -34,11 +39,23 @@ export function JobsPage() {
   const [view, setView] = useState<View>("Board");
   const [grouping, setGrouping] = useState<Grouping>("Stage");
   const [filters, setFilters] = useState<ToolbarFilter[]>([]);
-  const [openJob, setOpenJob] = useState<ShapeJob | null>(null);
   const [creating, setCreating] = useState(false);
+
+  const { jobNumber } = useParams();
+  const navigate = useNavigate();
+  const openOne = (j: ShapeJob) => navigate(`/jobs/${encodeURIComponent(j.jobNumber)}`);
 
   const unbound = !loading && jobs.length === 0;
   const all = useMemo(() => (unbound ? shape.jobs : []), [unbound, shape]);
+
+  /**
+   * Resolved against `all` rather than `rows`: a job you opened should not vanish because
+   * the header search stopped matching it while the drawer was up.
+   */
+  const openJob = useMemo(
+    () => (jobNumber ? all.find(j => j.jobNumber === jobNumber) ?? null : null),
+    [all, jobNumber]
+  );
 
   /**
    * The header search narrows the view you are on — it is not a separate results page.
@@ -79,6 +96,14 @@ export function JobsPage() {
 
     return order.map(key => ({ key, jobs: rows.filter(j => keyOf(j) === key) }));
   }, [grouping, rows, stageNames, teamNames]);
+
+  /**
+   * A number nobody recognises goes back to the board, so a stale link is a board rather
+   * than a dead end. Guarded on `all.length` on purpose: the list is empty both while the
+   * lookups load and when the app is bound to real data with no placeholder shape, and
+   * redirecting then would throw away a perfectly good link before it could resolve.
+   */
+  if (jobNumber && !openJob && all.length > 0) return <Navigate to="/jobs" replace />;
 
   return (
     <>
@@ -138,7 +163,7 @@ export function JobsPage() {
                     stageName={j.stage}
                     team={j.team}
                     status={j.status}
-                    onOpen={() => setOpenJob(j)}
+                    onOpen={() => openOne(j)}
                   />
                 ))
               )}
@@ -165,7 +190,7 @@ export function JobsPage() {
             </thead>
             <tbody>
               {rows.map(j => (
-                <tr key={j.jobNumber} onClick={() => setOpenJob(j)}>
+                <tr key={j.jobNumber} onClick={() => openOne(j)}>
                   <td>{j.jobNumber}</td>
                   <td>{j.projectNumber}</td>
                   <td><Token>addresses.consolidated_address</Token></td>
@@ -232,7 +257,7 @@ export function JobsPage() {
         </div>
       )}
 
-      {openJob && <JobDrawer job={openJob} onClose={() => setOpenJob(null)} />}
+      {openJob && <JobDrawer job={openJob} onClose={() => navigate("/jobs")} />}
     </>
   );
 }

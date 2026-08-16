@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { Button, Heading, Text } from "@vibe/core";
 import { useQuery } from "../data/DataProvider";
 import { RECORD_STATUS_LABELS, RECORD_STATUSES, PROJECT_TYPES } from "../data/types";
@@ -20,6 +21,9 @@ import "../components/ui.css";
  * "Group by Project" is deliberately absent from this screen's toolbar — a project
  * cannot be grouped by itself, and offering it would be a control that does nothing.
  * Everything else in the toolbar reads the same as it does on Jobs.
+ *
+ * Which project is open is the URL — /projects/PRJ-001 — so the detail view is a page
+ * somebody can link to, and Back returns to the list instead of leaving the app.
  */
 export function ProjectsPage() {
   const { stageNames } = useStages();
@@ -28,11 +32,19 @@ export function ProjectsPage() {
   const { data: projects, loading } = useQuery(r => r.listProjects(), []);
   const [view, setView] = useState<View>("Board");
   const [filters, setFilters] = useState<ToolbarFilter[]>([]);
-  const [open, setOpen] = useState<ShapeProject | null>(null);
   const [creating, setCreating] = useState(false);
+
+  const { projectNumber } = useParams();
+  const navigate = useNavigate();
+  const openOne = (p: ShapeProject) => navigate(`/projects/${encodeURIComponent(p.projectNumber)}`);
 
   const unbound = !loading && projects.length === 0;
   const all = useMemo(() => (unbound ? shape.projects : []), [unbound, shape]);
+
+  const open = useMemo(
+    () => (projectNumber ? all.find(p => p.projectNumber === projectNumber) ?? null : null),
+    [all, projectNumber]
+  );
 
   /**
    * A project stays in the list when one of its *jobs* matches — searching a job number
@@ -54,7 +66,9 @@ export function ProjectsPage() {
     }
   };
 
-  if (open) return <ProjectDetail project={open} onBack={() => setOpen(null)} />;
+  if (open) return <ProjectDetail project={open} onBack={() => navigate("/projects")} />;
+  /** Same guard as Jobs: only redirect once there is a list to have missed it in. */
+  if (projectNumber && all.length > 0) return <Navigate to="/projects" replace />;
 
   return (
     <>
@@ -90,7 +104,7 @@ export function ProjectsPage() {
               projectNumber={p.projectNumber}
               jobNumbers={p.jobs.map(j => j.jobNumber)}
               status={p.status}
-              onOpen={() => setOpen(p)}
+              onOpen={() => openOne(p)}
             />
           ))}
         </div>
@@ -105,7 +119,7 @@ export function ProjectsPage() {
             </thead>
             <tbody>
               {rows.map(p => (
-                <tr key={p.projectNumber} onClick={() => setOpen(p)}>
+                <tr key={p.projectNumber} onClick={() => openOne(p)}>
                   <td>{p.projectNumber}</td>
                   <td><Token>project_display.current_address</Token></td>
                   <td><Token>addresses.suburb</Token></td>
@@ -124,6 +138,8 @@ export function ProjectsPage() {
 }
 
 function ProjectDetail({ project, onBack }: { project: ShapeProject; onBack: () => void }) {
+  const navigate = useNavigate();
+
   return (
     <>
       <div className="page-head page-head-row">
@@ -183,7 +199,12 @@ function ProjectDetail({ project, onBack }: { project: ShapeProject; onBack: () 
               </thead>
               <tbody>
                 {project.jobs.map(j => (
-                  <tr key={j.jobNumber}>
+                  // Now that a job has an address of its own, this list is a set of links
+                  // rather than a printout — same click as a row on the Jobs table.
+                  <tr
+                    key={j.jobNumber}
+                    onClick={() => navigate(`/jobs/${encodeURIComponent(j.jobNumber)}`)}
+                  >
                     <td>{j.jobNumber}</td>
                     <td><Token>addresses.consolidated_address</Token></td>
                     <td>{j.stage}</td>
