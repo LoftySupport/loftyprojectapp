@@ -3,13 +3,109 @@
 Everything a new session needs to pick this up. Read this first, then
 `data-dictionary.md`.
 
-**Next job: [turn off the email provider](#the-open-door-beside-the-front-one) and fix the
-redirect allow list, then `property_defs`.** Entra sign-in is built, the app is gated
-behind it, and the forty-five staff are seeded. Nobody has signed in yet, and until the
-redirect URLs are corrected nobody can — which means every signed-in surface is still
-unexercised.
+**Next job: [turn off the email provider](#the-open-door-beside-the-front-one), then
+`property_defs`.** The redirect allow list is fixed and people can sign in — that half of
+the old "next job" is done, and the signed-in surfaces have now been walked through with a
+real session rather than reasoned about.
 
 Last updated: 2026-08-16.
+
+---
+
+## Session of 2026-08-16 — what changed, and what is still open
+
+### Applied to the live database
+
+`0020`–`0023` are **applied** to `gmekuqdjemrfuurxhuib`, not just written. `supabase
+migration list` is the check if that ever looks doubtful.
+
+| | |
+| --- | --- |
+| `0020` | Backfills `auth_user_id` for anyone whose auth user predates their profile. A no-op now; kept for the case below. |
+| `0021` | Drops `profiles.preferred_name`. `profile_display.greeting_name` is `first_name`. |
+| `0022` | Folds `profile_teams` into `profiles.teams team[]`, normalised on write, GIN indexed. |
+| `0023` | Requires `original_address_id`, `created_by` and `job_number`; adds `jobs.old_job_number`; fixes project numbering. |
+
+### Six faults found, all fixed — the shapes are worth knowing
+
+1. **`create or replace view` does not preserve `reloptions`.** Rewriting `profile_display`
+   silently dropped the `security_invoker = on` from `0001`, which would have left the view
+   executing as its owner and returning every name in the company past the policies on
+   `profiles`. Exactly what `0001`'s own comment warns about. **Any migration touching a
+   view must re-apply `security_invoker` and assert on `pg_class.reloptions` afterwards.**
+2. **`created_by` was never populated.** Not by the app, not by a trigger — every row ever
+   written left it null. `stamp_created_by()` fills it now, falling back to a system
+   account when there is no JWT.
+3. **Project numbers were not sequential** — 1000, 1002, 1004. `bump_project_no_seq` asked
+   its question with `nextval`, which consumes rather than reads. It uses
+   `pg_sequence_last_value` now.
+4. **The toolbar filters filtered nothing.** The chips rendered and were never applied to
+   any row; only the header search narrowed results. `FILTERABLE` is now only the fields
+   the data actually carries — "Team member", "Type" and "Tag" came off it and go back when
+   their columns exist.
+5. **A backfill that claimed to be re-runnable was not.** Caught by running it twice against
+   fixtures, not by reading it.
+6. **The team picker labelled the first chip "(primary)"** after `0022` had made
+   `profiles.teams` a sorted set. The database reorders on write, so that label had stopped
+   being able to be true.
+
+### App changes
+
+Records have URLs (`/jobs/:jobNumber`, `/projects/:projectNumber`, flat — a job number
+already carries its project). Board state — view, grouping, filters, saved view — is in the
+query string, defaults omitted, writes replacing rather than pushing. Saved views are the
+phases of the build. Nav moved to a collapsible left rail that becomes a drawer below
+900px. Dashboard, User settings and the Admin picker read the profile instead of showing
+tokens.
+
+**The binding template's rule got sharper and is worth keeping:** a `{{table.column}}` token
+means *the app cannot answer yet*. An empty value from a wired column is a different answer
+and gets a message — "No team assigned — ask an administrator to add you to one" — because
+only one of those two is the reader's to act on.
+
+### Open, in rough priority order
+
+1. **The preconstruction pipeline.** Lofty tracks stage 4 through ~10 positions plus three
+   terminal states (`Initial Documents` … `Build Commences [Closed Won]`, `Not Proceeding
+   [Closed Lost]`, `In Doubt / On Hold`), and jobs should land there by default. Three
+   things block building it, and guessing any of them is how the phase split got done twice:
+   whether those values are a roll-up of the 57 steps in `preconstruction-process.md` or a
+   separate list; whether "stage 4" means the app's stage 4 alone or 4 and 5 together, since
+   Lofty's own numbering merges them; and where the three terminal states live, given
+   `record_status` already has `on_hold` and `cancelled` and two places recording the same
+   fact will drift.
+2. **The 57 preconstruction steps have no home.** `template_checkpoints` is the nearest
+   structure and its seeded rows are **four invented placeholders per stage** — not Lofty's.
+   Mapping the steps onto stages, deciding which are skippable, and deciding whether their
+   SLA days should drive the board's "days in stage" are all business decisions.
+3. **`0007` fails on a fresh database.** It comments on `activity_audit`, which `0008`
+   creates. One `comment on` statement, so the cost is a missing comment — but a clean
+   rebuild does not apply without reordering.
+4. **"Not set up yet" misreports a dead session.** When the session's auth user has been
+   deleted, `getUser()` fails, the catch treats it as "no profile", and the page says the
+   account is not on the Lofty team list. It is neither true nor actionable, and it cost an
+   hour of debugging. It should detect an invalid session and clear it.
+5. **Linking is not self-healing.** `0015`'s trigger is `after insert on auth.users`, so it
+   fires once per person. Anyone added to `profiles` *after* they have signed in never
+   links, and `0020` has to be re-run. Fixing it properly means a trigger on `auth.users`,
+   which per `0015` can be created and never dropped — so it is a decision, not a chore.
+6. **"Post-construction" is an inferred name.** The business named preconstruction and
+   construction. What stages 7–8 are called, and whether they are one phase or two, has not
+   been said. `app/src/data/savedViews.ts` says so at the point of definition.
+7. **A naming collision.** The *phase* Preconstruction contains a *stage* also called
+   Preconstruction, so a saved-view tab and one of its five columns share a name. Lofty's
+   own vocabulary, left alone.
+8. **Two profiles have no team**, so they exercise the empty state rather than the value.
+   The dashboard's three teammate avatars are still hardcoded — deriving them needs a query
+   and a decision about what "your team" means when somebody is in several.
+
+### What is actually wired
+
+`profiles` (47 rows) is the only business table with data. `addresses`, `projects` and
+`jobs` exist and are empty. `property_defs`, `property_values`, `comments`, `activity`,
+`permission_grants`, `template_phases` and `template_checkpoints` **do not exist yet** — the
+lookups fall back to the seed in `stubRepository.ts`, which is why boards render columns
+with nothing in them. Every remaining token on screen is one of those two cases.
 
 ---
 
@@ -22,15 +118,18 @@ The schema is being designed one table at a time and the app is built ahead of i
 every value that will come from a table renders as a `{{table.column}}` token — an
 unbound field is visible rather than silently blank.
 
-The migrations **are** applied, through `0016`, to the `loftyprojectapp` project
+The migrations **are** applied, through `0023`, to the `loftyprojectapp` project
 (`gmekuqdjemrfuurxhuib`, ap-southeast-2). A schema change means re-running the migration
 against that project; `supabase migration list` is the check for whether the two have
 drifted.
 
-**`profiles` is no longer empty: the forty-five staff are seeded and none is linked yet.**
-`auth.users` is empty — two accidental email-provider accounts created during setup
-(`support@` and a mistyped `anber@`) were deleted. Their two `login_activity` rows are
-left as audit history, pointing at ids that no longer exist.
+**`profiles` is no longer empty: the forty-five seeded staff are there, people have signed
+in, and linking works.**
+`auth.users` is no longer empty. Several rows there have been created and deleted during
+setup, so `login_activity` holds entries pointing at ids that no longer exist — that is
+audit history and is meant to stay. Note the consequence, because it bit once: deleting an
+auth user sets its profile's `auth_user_id` back to null via `on delete set null`, and the
+browser holding a token for the deleted user keeps presenting it until somebody signs out.
 
 The link was proved against the live database rather than reasoned about: inserting an
 `auth.users` row for `amber@loftybg.onmicrosoft.com` linked it to Amber Beaumont as
