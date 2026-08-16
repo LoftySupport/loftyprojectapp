@@ -115,8 +115,18 @@ export default function App() {
             <Route element={<RequireAuth />}>
             <Route element={<AppShell />}>
               <Route index element={<DashboardPage />} />
+              {/* A record is a URL. The drawer and the detail view used to be component
+                  state, which made an open job unlinkable, unbookmarkable, and lost on
+                  refresh — and put Back on the browser's "leave the page" behaviour
+                  rather than "close what I opened".
+
+                  Flat, not nested under the project: a job number already carries its
+                  project (PRJ-001-02), so /projects/PRJ-001/PRJ-001-02 would repeat it
+                  for a longer URL and a second way to say the same thing. */}
               <Route path="projects" element={<ProjectsPage />} />
+              <Route path="projects/:projectNumber" element={<ProjectsPage />} />
               <Route path="jobs" element={<JobsPage />} />
+              <Route path="jobs/:jobNumber" element={<JobsPage />} />
               <Route path="reports" element={<ReportsPage />} />
               <Route path="templates" element={<TemplatesPage />} />
               <Route path="admin" element={<AdminPage />} />

@@ -26,6 +26,54 @@
 /* ---- toolbar -------------------------------------------------------------
    Wraps rather than scrolls. A scrolling toolbar creates a clipping context,
    which cuts the top off every popover the controls open. */
+/* ---- saved views ---------------------------------------------------------
+   Which slice of the pipeline you are looking at. Above the toolbar and styled as
+   tabs, because it chooses the scope rather than narrowing inside one — flattened
+   into the toolbar it read as a seventh equal dropdown with no starting point.
+
+   Anchors rather than buttons: every view already has a URL, so this gets
+   middle-click and copy-link-address for free. Scrolls sideways on a phone instead
+   of wrapping, so the toolbar underneath stays where the eye left it. */
+.saved-views {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-4);
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-bottom: 1px solid var(--layout-border-color);
+  scrollbar-width: thin;
+}
+.saved-view {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12);
+  white-space: nowrap;
+  text-decoration: none;
+  color: var(--secondary-text-color);
+  /* Transparent rather than absent, so the row does not shift by 2px when the active
+     view changes — the classic underline-tab jump. */
+  border-bottom: 2px solid transparent;
+  border-radius: var(--border-radius-small) var(--border-radius-small) 0 0;
+}
+.saved-view:hover { background: var(--primary-background-hover-color); color: var(--primary-text-color); }
+.saved-view.is-active {
+  color: var(--primary-text-color);
+  border-bottom-color: var(--lofty-orange);
+}
+.saved-view.is-active * { color: var(--primary-text-color); }
+/* The count is a fact about the view, not a badge demanding attention — hence the
+   quiet chip rather than a coloured counter. */
+.saved-view-count {
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+  background: var(--allgrey-background-color);
+  border-radius: 10px;
+  padding: 0 var(--space-8);
+  min-width: 20px;
+  text-align: center;
+}
+
 .toolbar {
   display: flex;
   align-items: center;
@@ -36,6 +84,9 @@
   border-bottom: 1px solid var(--layout-border-color);
   margin-bottom: var(--space-16);
 }
+/* Following the saved-view tabs, which already draw a rule — two 1px lines a row
+   apart read as a mistake rather than as structure. */
+.saved-views + .toolbar { border-top: 0; }
 .toolbar-field { display: flex; align-items: center; gap: var(--space-8); }
 .toolbar-label {
   font: var(--font-text2-normal);

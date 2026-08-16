@@ -12,30 +12,163 @@ html, body, #root { height: 100%; }
   min-width: 0;
 }
 
-.app-header {
+/* ---- the frame ------------------------------------------------------------
+   A row: rail on the left, everything else in a column beside it. The column keeps
+   the flex-column behaviour the footer depends on. */
+.app-shell {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  flex: 1 0 auto;
+  min-height: 100%;
+  min-width: 0;
+}
+.app-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  /* Without this the board's horizontal scroll pushes the whole frame sideways and the
+     rail slides off screen with it — a flex item's default min-width is its content. */
+  min-width: 0;
+}
+
+/* ---- the rail -------------------------------------------------------------
+   Nav lives here rather than across the top: seven destinations wrapped to two and
+   three rows on anything narrower than a laptop, and every row was height the board
+   did not get. Sticky rather than fixed, so it scrolls with a long page but stays put
+   while you read one. */
+.app-side {
+  --rail-width: 232px;
+  --rail-width-collapsed: 68px;
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  height: 100vh;
+  height: 100dvh;
+  width: var(--rail-width);
+  flex: 0 0 var(--rail-width);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-12) var(--space-8);
   background: var(--lofty-header-bg);
   color: var(--fixed-light-color);
-  padding: var(--space-12) var(--space-24);
-  border-bottom: 4px solid var(--lofty-orange);
-  flex-shrink: 0;
+  border-right: 4px solid var(--lofty-orange);
+  overflow-y: auto;
+  overflow-x: hidden;
+  transition: width var(--motion-productive-medium) var(--motion-timing-transition),
+              flex-basis var(--motion-productive-medium) var(--motion-timing-transition);
 }
-.app-logo { height: 24px; width: auto; display: block; }
+.app-side.is-collapsed {
+  width: var(--rail-width-collapsed);
+  flex-basis: var(--rail-width-collapsed);
+}
 
-.app-nav { display: flex; gap: var(--space-4); flex: 1; flex-wrap: wrap; }
-.app-nav-item {
+.app-side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: var(--space-4) var(--space-8) var(--space-12);
+  min-width: 0;
+}
+.app-side.is-collapsed .app-side-head {
+  flex-direction: column;
+  padding-inline: 0;
+}
+.app-logo { height: 24px; width: auto; display: block; min-width: 0; }
+.app-logo-mark { height: 28px; }
+
+.app-side-toggle {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  background: none;
+  border: 0;
+  border-radius: var(--border-radius-small);
+  color: var(--lofty-header-text-muted);
+  cursor: pointer;
+}
+.app-side-toggle:hover { color: var(--fixed-light-color); background: rgba(255, 255, 255, 0.12); }
+
+.app-nav { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.app-nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
   height: 40px;
-  padding: 0 var(--space-16);
+  padding: 0 var(--space-12);
   font: var(--font-text2-medium);
   color: var(--lofty-header-text-muted);
   text-decoration: none;
   border-radius: var(--border-radius-small);
+  white-space: nowrap;
+  min-width: 0;
   transition: background-color var(--motion-productive-medium) var(--motion-timing-transition);
 }
 .app-nav-item:hover { color: var(--fixed-light-color); background: rgba(255, 255, 255, 0.12); }
 /* Dark ink on the light pill — white on white is the obvious failure here. */
 .app-nav-item.is-active { color: #00393f; background: var(--fixed-light-color); }
+.app-nav-icon { display: inline-flex; flex-shrink: 0; }
+.app-nav-label { overflow: hidden; text-overflow: ellipsis; }
+
+/* Collapsed: the label leaves the screen but stays in the accessibility tree, so the
+   link keeps its name for a screen reader. `display: none` would take the name with
+   it and leave seven identically-unnamed icons. */
+.app-side.is-collapsed .app-nav-item { justify-content: center; padding-inline: 0; }
+.app-side.is-collapsed .app-nav-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---- the top bar ----------------------------------------------------------
+   What is left once nav moves out: find something, and who you are. */
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  background: var(--lofty-header-bg);
+  color: var(--fixed-light-color);
+  padding: var(--space-12) var(--space-24);
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.app-menu-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  background: none;
+  border: 0;
+  border-radius: var(--border-radius-small);
+  color: inherit;
+  cursor: pointer;
+}
+.app-menu-button:hover { background: rgba(255, 255, 255, 0.12); }
+
+/* Sits over the page while the drawer is open. A real button, so Escape is not the
+   only way out and the label says what tapping it does. */
+.app-side-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  border: 0;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+}
 
 /* `min-width: 0` because the user token is a long unbreakable string: without it the
    cluster claims its intrinsic width and pushes the whole page sideways. */
@@ -46,18 +179,17 @@ html, body, #root { height: 100%; }
   flex-shrink: 0;
   flex-wrap: wrap;
   min-width: 0;
+  margin-inline-start: auto;
 }
 .app-user { display: flex; align-items: center; gap: var(--space-8); min-width: 0; }
+/* Vibe's Text picks its colour from the theme, which is dark ink in light mode — on a
+   bar that is dark teal in every theme. Pin the ink to the bar, as the yellow banner
+   below already does for the same reason. */
+.app-header .user-menu-trigger, .app-header .user-menu-trigger * { color: var(--fixed-light-color); }
 /* min-width: 0 or the name sizes to its own unbreakable minimum and pushes the header
    sideways — the same fault as every other overflow in this app. */
 .app-user-name { min-width: 0; }
 
-/* Sign-in failures and the missing-profile notice.
-   Painted on the page background rather than in a coloured band: the binding band gets
-   away with fixed dark ink because the band itself is a fixed yellow in every theme,
-   and that trick does not transfer to a strip that has to sit on three different
-   backgrounds. --negative-ink is defined per theme, so this stays AA in light, dark and
-   black. */
 .app-alert {
   padding: var(--space-8) var(--space-24);
   border-bottom: 2px solid var(--negative-ink);
@@ -178,32 +310,47 @@ html, body, #root { height: 100%; }
 .app-search { min-width: 200px; max-width: 320px; flex: 1 1 200px; }
 
 /* ---- narrow screens ------------------------------------------------------
-   A phone, and the tablet widths on the way there. Nothing is hidden — the nav
-   wraps rather than collapsing into a menu, because nine destinations behind a
-   hamburger is worse than three rows of readable pills, and this is a tool
-   people live in rather than a site they visit.
+   Below 900px the rail cannot share a line with the page and still leave the board
+   usable, so it becomes a drawer over the top instead of a column beside. The
+   hamburger only exists at these widths — on a desktop the rail is always there and a
+   button to summon it would be a control for a problem nobody has.
 
-   The cut is 720px: below it the header cluster no longer fits beside the nav on
-   one line at any sensible type size. */
+   900px, not 720px: the cut is now "does a 232px rail plus a readable board fit",
+   which bites earlier than the old "does the header cluster fit beside the nav". */
+@media (max-width: 900px) {
+  .app-side {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 50;
+    height: 100dvh;
+    /* Always the full width when it slides in. The icons-only preference is a desktop
+       affordance for reclaiming a column; on a phone the drawer covers the page anyway,
+       so shrinking it to icons costs the labels and saves nothing. */
+    width: var(--rail-width);
+    flex-basis: var(--rail-width);
+    transform: translateX(-100%);
+    transition: transform var(--motion-productive-medium) var(--motion-timing-transition);
+  }
+  .app-side.is-open { transform: translateX(0); }
+  /* The drawer is full width whatever the stored preference says, so the collapse
+     control here would be a button that visibly does nothing. */
+  .app-side-toggle { display: none; }
+  /* The rail is out of the flow here, so the body takes the whole width rather than
+     leaving a 232px gap where the drawer will be. */
+  .app-shell { display: block; }
+  .app-body { min-height: 100dvh; }
+}
+
 @media (max-width: 720px) {
   .app-header { padding: var(--space-12) var(--space-16); }
   .app-main { padding: var(--space-16); }
   .app-banner { padding: var(--space-8) var(--space-16); }
   .app-foot { padding: var(--space-16); }
-  .app-logo { height: 20px; }
 
-  /* Reordered: identity and search share the first line with the logo, and the nav
-     drops to a full-width block underneath. Left alone, the logo sits in a column
-     beside three wrapped rows of nav and eats 120px of every one of them. */
-  .app-header-right { order: 1; flex: 1 1 auto; justify-content: flex-end; }
-  .app-nav { order: 2; flex-basis: 100%; gap: 2px; }
-  /* Smaller pills, because nine of them wrap and each row is header the board does
-     not get. Still 34px of target — comfortably above the 24px minimum. */
-  .app-nav-item { height: 34px; padding: 0 var(--space-8); font: var(--font-text3-medium); }
-
-  /* Full width and first: on a phone this is the control you reach for, and sharing
-     a line with the permission switcher left it too narrow to hold an address. */
-  .app-search { order: -1; flex: 1 1 100%; max-width: none; }
+  /* On a phone this is the control you reach for, so it gets the room. */
+  .app-search { flex: 1 1 auto; max-width: none; }
   /* The avatar carries the identity here. The name is an unbound token 200px wide,
      which is a whole line of a small screen to say what the circle already says. */
   .app-user .sb-token, .app-user-name { display: none; }
