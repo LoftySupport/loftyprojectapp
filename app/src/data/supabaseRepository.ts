@@ -50,7 +50,7 @@ const WIRED: RepositoryMethod[] = [
  * level to shape the result, and `"a" + "b"` widens to `string`, which it cannot read.
  */
 const PROFILE_COLUMNS =
-  "id, auth_user_id, first_name, last_name, full_name, preferred_name, email, login_email, job_title, last_login_at, permission, active, created_at, created_by, updated_at, updated_by, profile_teams(team, is_primary)";
+  "id, auth_user_id, first_name, last_name, full_name, email, login_email, job_title, last_login_at, permission, active, teams, created_at, created_by, updated_at, updated_by";
 
 interface ProfileRow {
   id: string;
@@ -58,19 +58,18 @@ interface ProfileRow {
   first_name: string;
   last_name: string;
   full_name: string;
-  preferred_name: string | null;
   email: string;
   login_email: string | null;
   job_title: string | null;
   last_login_at: string | null;
   permission: Profile["permission"];
   active: boolean;
+  /** A `team[]` column since 0022, not an embed — so it is always present. */
+  teams: string[] | null;
   created_at: string;
   created_by: string | null;
   updated_at: string;
   updated_by: string | null;
-  /** Embedded from profile_teams. Absent rather than empty if the join is not selected. */
-  profile_teams?: { team: string; is_primary: boolean }[] | null;
 }
 
 /** Past tense, because the audit log is a record of what happened. */
@@ -80,11 +79,6 @@ const OPERATION_WORDS: Record<string, string> = {
   DELETE: "Deleted"
 };
 
-/**
- * Team membership is a set, and the UI edits it as one — so replace rather than diff.
- * Delete-then-insert is safe here because `profile_teams` carries no data of its own
- * beyond `is_primary`, which is derived from position in the list.
- */
 /** Re-read after a write, so the caller gets generated columns and teams, not its input. */
 async function readProfile(client: SupabaseClient, id: string): Promise<Profile | null> {
   const { data, error } = await client
@@ -93,24 +87,12 @@ async function readProfile(client: SupabaseClient, id: string): Promise<Profile 
   return toProfile(data as unknown as ProfileRow);
 }
 
-async function replaceTeams(client: SupabaseClient, profileId: string, teams: string[]) {
-  const { error: delError } = await client
-    .from("profile_teams").delete().eq("profile_id", profileId);
-  if (delError) throw delError;
-  if (!teams.length) return;
-  const { error } = await client.from("profile_teams").insert(
-    teams.map((team, i) => ({ profile_id: profileId, team, is_primary: i === 0 }))
-  );
-  if (error) throw error;
-}
-
 const toProfile = (r: ProfileRow): Profile => ({
   id: r.id,
   authUserId: r.auth_user_id,
   firstName: r.first_name,
   lastName: r.last_name,
   fullName: r.full_name,
-  preferredName: r.preferred_name,
   email: r.email,
   loginEmail: r.login_email,
   jobTitle: r.job_title,
@@ -121,12 +103,9 @@ const toProfile = (r: ProfileRow): Profile => ({
   createdBy: r.created_by,
   updatedAt: r.updated_at,
   updatedBy: r.updated_by,
-  // Primary first, then alphabetical — the primary is the answer to "which team is
-  // this person's", and the rest are context.
-  teams: (r.profile_teams ?? [])
-    .slice()
-    .sort((a, b) => Number(b.is_primary) - Number(a.is_primary) || a.team.localeCompare(b.team))
-    .map(t => t.team)
+  // Sorted and deduplicated by the database on write, so it arrives in order and this
+  // does not re-sort it. `?? []` covers a select that did not ask for the column.
+  teams: r.teams ?? []
 });
 
 // The publishable key (`sb_publishable_…`), not the legacy JWT anon key. Both work, and
@@ -255,15 +234,14 @@ export function createSupabaseRepository(): Repository {
           email: input.email,
           login_email: input.loginEmail,
           job_title: input.jobTitle,
-          permission: input.permission
+          permission: input.permission,
+          teams: input.teams
         })
         .select(PROFILE_COLUMNS)
         .single();
       if (error) throw error;
 
-      const created = toProfile(data as unknown as ProfileRow);
-      await replaceTeams(client, created.id, input.teams);
-      return (await readProfile(client, created.id)) ?? created;
+      return toProfile(data as unknown as ProfileRow);
     },
 
     async updateProfile(id: string, patch: Partial<NewProfile>): Promise<Profile> {
@@ -274,12 +252,14 @@ export function createSupabaseRepository(): Repository {
       if (patch.loginEmail !== undefined) row.login_email = patch.loginEmail;
       if (patch.jobTitle !== undefined) row.job_title = patch.jobTitle;
       if (patch.permission !== undefined) row.permission = patch.permission;
+      // A column now, so it rides the same update as everything else — no second write
+      // to keep in step, and no window where the name changed and the teams did not.
+      if (patch.teams !== undefined) row.teams = patch.teams;
 
       if (Object.keys(row).length) {
         const { error } = await client.from("profiles").update(row).eq("id", id);
         if (error) throw error;
       }
-      if (patch.teams !== undefined) await replaceTeams(client, id, patch.teams);
 
       const after = await readProfile(client, id);
       if (!after) throw new Error("Profile disappeared while being updated");
@@ -315,15 +295,13 @@ export function createSupabaseRepository(): Repository {
     async listActivity(opts: { profileId?: string; team?: string; limit?: number }): Promise<ActivityEntry[]> {
       const limit = opts.limit ?? 100;
 
+      // One query rather than the two the join needed: `contains` is `teams @> {Design}`,
+      // which the GIN index in 0022 serves, and it no longer has to switch shape between
+      // "filtered by team" and "not".
       let q = client.from("profiles").select("id, auth_user_id, full_name");
       if (opts.profileId) q = q.eq("id", opts.profileId);
-      if (opts.team) q = q.eq("profile_teams.team", opts.team);
-      const { data: people, error: peopleError } = opts.team
-        ? await client
-            .from("profiles")
-            .select("id, auth_user_id, full_name, profile_teams!inner(team)")
-            .eq("profile_teams.team", opts.team)
-        : await q;
+      if (opts.team) q = q.contains("teams", [opts.team]);
+      const { data: people, error: peopleError } = await q;
       if (peopleError) throw peopleError;
 
       const rows = (people ?? []) as unknown as { id: string; auth_user_id: string | null; full_name: string }[];

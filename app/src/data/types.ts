@@ -283,8 +283,6 @@ export interface Profile {
   lastName: string;
   /** Generated in Postgres from the two above. Read-only: never write to it. */
   fullName: string;
-  /** Only when someone goes by something else. Null means "use firstName". */
-  preferredName: string | null;
   email: string;
   /**
    * The address they sign in with, when it differs from `email`.
@@ -298,9 +296,9 @@ export interface Profile {
   /** Most recent sign-in. Null means never. */
   lastLoginAt: IsoDateTime | null;
   /**
-   * The teams this person sits in, by name. Read from `profile_teams`, which is
-   * many-to-many — somebody can be in several, and the admin table has to show all of
-   * them rather than picking one.
+   * The teams this person sits in, by name. A `team[]` column on profiles since 0022,
+   * which folded in the profile_teams join table — somebody can still be in several, and
+   * the admin table has to show all of them rather than picking one.
    */
   teams: string[];
   /**
@@ -390,8 +388,14 @@ export interface ActivityEntry {
   summary: string;
 }
 
-/** What goes after "Hi, ". One place, so the decision is never re-made ad hoc. */
-export const greetingName = (p: Profile): string => p.preferredName ?? p.firstName;
+/**
+ * What goes after "Hi, ". One place, so the decision is never re-made ad hoc.
+ *
+ * It was `preferredName ?? firstName` until 0021 dropped that column. Kept as a function
+ * rather than inlined at the two call sites: the greeting is a decision, and if Lofty
+ * ever wants one again this is where it goes back.
+ */
+export const greetingName = (p: Profile): string => p.firstName;
 
 // ------------------------------------------------------------------ lookup
 //
