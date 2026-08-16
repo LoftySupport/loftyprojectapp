@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from "rea
 import { Loader, ThemeProvider } from "@vibe/core";
 import { loftyTheme, type SystemTheme } from "./theme/loftyTheme";
 import { AuthProvider, useAuth } from "./data/AuthProvider";
+import { LegalPage } from "./pages/LegalPage";
 import { NotSetUpPage } from "./pages/NotSetUpPage";
 import { SignInPage } from "./pages/SignInPage";
 import { DataProvider } from "./data/DataProvider";
@@ -108,6 +109,10 @@ export default function App() {
         <BrowserRouter basename={import.meta.env.BASE_URL}>
           <Routes>
             <Route path="signin" element={<RedirectIfSignedIn />} />
+            {/* Public, and outside RequireAuth on purpose: a policy that cannot be read
+                without an account has not been published. */}
+            <Route path="privacy" element={<LegalPage kind="privacy" />} />
+            <Route path="terms" element={<LegalPage kind="terms" />} />
             <Route element={<RequireAuth />}>
             <Route element={<AppShell />}>
               <Route index element={<DashboardPage />} />

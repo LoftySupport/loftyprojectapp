@@ -90,6 +90,44 @@ html, body, #root { height: 100%; }
   padding: var(--space-24);
   text-align: center;
 }
+/* Two groups that sit on one line when there is room and stack when there is not.
+   The separators are drawn in CSS rather than typed as "|" characters, so a screen
+   reader is not read a pipe between every link. */
+.app-foot > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4) var(--space-12);
+  min-width: 0;
+}
+.app-foot-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4) var(--space-12);
+  min-width: 0;
+}
+.app-foot-links > * + *::before {
+  content: "|";
+  margin-inline-end: var(--space-12);
+  opacity: 0.5;
+}
+.app-foot a {
+  color: inherit;
+  text-decoration: underline;
+}
+.app-foot a:hover { text-decoration: none; }
+/* Visible focus, because these are the only links in the footer and the theme's own
+   outline does not always survive `color: inherit`. */
+.app-foot a:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+/* Monospace so a commit ref reads as one, and tabular so it does not jiggle. */
+.app-foot-version { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 
 .skip-link {
   position: absolute;

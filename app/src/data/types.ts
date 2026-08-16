@@ -296,6 +296,12 @@ export interface Profile {
   loginEmail: string | null;
   jobTitle: string | null;
   /**
+   * The teams this person sits in, by name. Read from `profile_teams`, which is
+   * many-to-many — somebody can be in several, and the admin table has to show all of
+   * them rather than picking one.
+   */
+  teams: string[];
+  /**
    * The permission ladder, in order — a comparison, not a set. `viewer` reads,
    * `user` works their own jobs, `manager` reads across teams, `admin` edits
    * definitions, `superadmin` manages teams and can delete. Maps onto Microsoft

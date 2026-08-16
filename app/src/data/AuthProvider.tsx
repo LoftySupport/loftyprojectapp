@@ -143,7 +143,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     setError(null);
-    await supabase?.auth.signOut();
+    const client = supabase;
+
+    // Sign-out must not depend on the network agreeing.
+    //
+    // The default scope is "global", which POSTs to /auth/v1/logout to revoke refresh
+    // tokens everywhere. That is the better sign-out — and it is a request that can
+    // fail, most often with a 401 when the token the app is holding has already been
+    // rejected. supabase-js surfaces that as an error and leaves the stored session in
+    // place, which is the worst possible outcome: somebody sitting inside the app,
+    // unable to get out, with a session the server will not honour anyway.
+    //
+    // So: try the thorough one, fall back to local, and if both fail clear the stored
+    // session by hand. Being signed out is a client-side fact; the server revoking
+    // tokens is a nicety on top of it.
+    try {
+      const { error: err } = (await client?.auth.signOut()) ?? { error: null };
+      if (err) throw err;
+    } catch {
+      try {
+        await client?.auth.signOut({ scope: "local" });
+      } catch {
+        for (const key of Object.keys(localStorage)) {
+          if (key.startsWith("sb-") && key.endsWith("-auth-token")) localStorage.removeItem(key);
+        }
+      }
+    }
+
+    // onAuthStateChange normally carries this, but it does not fire when the session was
+    // cleared by hand above. A full navigation guarantees the app comes back up with no
+    // session rather than trusting React state to have caught every path.
+    window.location.assign(`${import.meta.env.BASE_URL}signin`);
   }, []);
 
   const value = useMemo<AuthContextValue>(

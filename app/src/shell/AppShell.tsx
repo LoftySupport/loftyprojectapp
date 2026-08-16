@@ -129,8 +129,26 @@ export function AppShell() {
       </main>
 
       <footer className="app-foot" role="contentinfo">
-        <Text type="text3" color="secondary">
-          Lofty Job Oversight Board — React, Vibe and Supabase
+        <Text type="text3" color="secondary" element="div" ellipsis={false}>
+          {/* The year is computed, not written down — a hardcoded one is wrong every
+              January and nobody notices until a client does. */}
+          <span className="app-foot-name">
+            Lofty © {new Date().getFullYear()} Project Management App
+            {" "}
+            <span className="app-foot-version" title={`Netlify context: ${__BUILD_CONTEXT__}`}>
+              v{__BUILD_REF__}
+            </span>
+          </span>
+          <span className="app-foot-links">
+            {/* Privacy and Terms sit OUTSIDE the auth gate deliberately: a policy nobody
+                can read without signing in is not published. Support is Lofty's own
+                portal, hence a full URL and rel="noreferrer". */}
+            <NavLink to="/privacy">Privacy Policy</NavLink>
+            <NavLink to="/terms">Terms</NavLink>
+            <a href="https://app.lofty.com.au" target="_blank" rel="noreferrer noopener">
+              Support
+            </a>
+          </span>
         </Text>
       </footer>
     </>

@@ -36,7 +36,7 @@ import type {
 // listStages came off this list in 0004. Stages are a `stage` enum now, not a table,
 // so there is nothing to query — the values are known at compile time and the seed is
 // the source. An enum cannot be wired; it can only be regenerated.
-const WIRED: RepositoryMethod[] = ["createProject", "createJob", "currentProfile"];
+const WIRED: RepositoryMethod[] = ["createProject", "createJob", "currentProfile", "listProfiles"];
 
 /**
  * The `profiles` columns this app reads. `full_name` is generated; never written.
@@ -45,7 +45,7 @@ const WIRED: RepositoryMethod[] = ["createProject", "createJob", "currentProfile
  * level to shape the result, and `"a" + "b"` widens to `string`, which it cannot read.
  */
 const PROFILE_COLUMNS =
-  "id, auth_user_id, first_name, last_name, full_name, preferred_name, email, login_email, job_title, permission, active, created_at, created_by, updated_at, updated_by";
+  "id, auth_user_id, first_name, last_name, full_name, preferred_name, email, login_email, job_title, permission, active, created_at, created_by, updated_at, updated_by, profile_teams(team, is_primary)";
 
 interface ProfileRow {
   id: string;
@@ -63,6 +63,8 @@ interface ProfileRow {
   created_by: string | null;
   updated_at: string;
   updated_by: string | null;
+  /** Embedded from profile_teams. Absent rather than empty if the join is not selected. */
+  profile_teams?: { team: string; is_primary: boolean }[] | null;
 }
 
 const toProfile = (r: ProfileRow): Profile => ({
@@ -80,7 +82,13 @@ const toProfile = (r: ProfileRow): Profile => ({
   createdAt: r.created_at,
   createdBy: r.created_by,
   updatedAt: r.updated_at,
-  updatedBy: r.updated_by
+  updatedBy: r.updated_by,
+  // Primary first, then alphabetical — the primary is the answer to "which team is
+  // this person's", and the rest are context.
+  teams: (r.profile_teams ?? [])
+    .slice()
+    .sort((a, b) => Number(b.is_primary) - Number(a.is_primary) || a.team.localeCompare(b.team))
+    .map(t => t.team)
 });
 
 // The publishable key (`sb_publishable_…`), not the legacy JWT anon key. Both work, and
@@ -135,8 +143,23 @@ export function createSupabaseRepository(): Repository {
     },
 
     // ---- profiles -------------------------------------------------------
+    /**
+     * Everyone on the staff list, for the Admin table.
+     *
+     * No fallback to the stub on an empty result, unlike the lookups. An empty list here
+     * is a real answer — it means the reader cannot see any profiles, which after 0015
+     * means they are not linked — and seeding it with invented people would hide exactly
+     * that. The read policy is `is_active_user()`, so this returns everyone to anyone
+     * with an active linked profile, and nothing to anybody else.
+     */
     async listProfiles(): Promise<Profile[]> {
-      return stub.listProfiles();
+      const { data, error } = await client
+        .from("profiles")
+        .select(PROFILE_COLUMNS)
+        .order("last_name")
+        .order("first_name");
+      if (error) throw error;
+      return (data ?? []).map(r => toProfile(r as unknown as ProfileRow));
     },
 
     /**

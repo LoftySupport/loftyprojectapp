@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Counter, Heading, Tab, TabList, Text } from "@vibe/core";
+import { useQuery } from "../data/DataProvider";
 import { groupByStage, usePropertyDefs, useStages, useTeams, useTemplatePhases } from "../data/useLookups";
 import { usePlaceholderShape } from "../data/placeholderShape";
 import { Token } from "../components/Token";
@@ -43,31 +44,64 @@ export function AdminPage() {
 }
 
 function Users() {
+  const { data: profiles, loading, error } = useQuery(repo => repo.listProfiles(), []);
+
   return (
     <section className="panel">
       <div className="panel-head">
-        <Text type="text2" weight="bold">Users</Text>
-        <Text type="text3" color="secondary">
-          Identity and sign-in come from Microsoft Entra via <code>auth.users</code>.
-          Permission and team membership are owned here, in <code>profiles</code>.
+        <Text type="text2" weight="bold">
+          Users{!loading && !error ? ` (${profiles.length})` : ""}
+        </Text>
+        <Text type="text3" color="secondary" ellipsis={false}>
+          The staff list, and the thing that decides who may use the app at all. Signing
+          in with Microsoft links an account to a row here — it never creates one, so a
+          directory account with no row gets a session that reads nothing.
         </Text>
       </div>
+
+      {error && (
+        <Text type="text2" color="secondary" ellipsis={false}>
+          Could not read <code>profiles</code>: {error.message}
+        </Text>
+      )}
+
+      {!error && !loading && profiles.length === 0 && (
+        /* Not "no users" — 45 are seeded. An empty read means the RLS policy denied it,
+           which after 0015 means the reader has no linked profile of their own. Saying
+           "none" here would blame the data for a permissions answer. */
+        <Text type="text2" color="secondary" ellipsis={false}>
+          No profiles are readable with your current session. Every read is gated on
+          having an active linked profile — if you are signed in and seeing this, your
+          Microsoft account has not been linked to a row yet.
+        </Text>
+      )}
+
       <div className="data-table-wrap">
         <table className="data-table">
           <thead>
-            <tr><th>First name</th><th>Last name</th><th>Email</th><th>Teams</th><th>Permission</th><th>Source</th><th>Active</th></tr>
+            <tr>
+              <th>Name</th><th>Job title</th><th>Email</th><th>Teams</th>
+              <th>Permission</th><th>Signed in</th><th>Active</th>
+            </tr>
           </thead>
           <tbody>
-            <tr>
-              <td><Token>profiles.first_name</Token></td>
-              <td><Token>profiles.last_name</Token></td>
-              <td><Token>profiles.email</Token></td>
-              {/* Many-to-many now — one person, one row per team they sit in. */}
-              <td><Token>profile_teams[].team</Token></td>
-              <td><Token>profiles.permission</Token></td>
-              <td><Token>profiles.source</Token></td>
-              <td><Token>profiles.active</Token></td>
-            </tr>
+            {loading && (
+              <tr><td colSpan={7}><Text type="text3" color="secondary">Loading…</Text></td></tr>
+            )}
+            {!loading && profiles.map(p => (
+              <tr key={p.id}>
+                <td>{p.fullName}</td>
+                <td>{p.jobTitle ?? <Token>profiles.job_title</Token>}</td>
+                <td>{p.email}</td>
+                {/* Many-to-many — one person, one row per team, primary first. */}
+                <td>{p.teams.length ? p.teams.join(", ") : "—"}</td>
+                <td>{p.permission}</td>
+                {/* Whether they have ever signed in, which is what auth_user_id means.
+                    Useful precisely because the staff list is created ahead of arrival. */}
+                <td>{p.authUserId ? "Yes" : "Not yet"}</td>
+                <td>{p.active ? "Yes" : "No"}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
