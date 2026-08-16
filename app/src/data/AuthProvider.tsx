@@ -192,6 +192,5 @@ export function useAuth(): AuthContextValue {
 
 /** Initials for the header avatar. Two letters, or one when there is no surname. */
 export function initialsOf(profile: Profile): string {
-  const first = profile.preferredName?.trim() || profile.firstName;
-  return ((first[0] ?? "") + (profile.lastName[0] ?? "")).toUpperCase();
+  return ((profile.firstName[0] ?? "") + (profile.lastName[0] ?? "")).toUpperCase();
 }
