@@ -1,9 +1,15 @@
 /**
- * Saved views — "All jobs", "Pre-construction", "Construction".
+ * Saved views — the phases of the build, as slices of the eight stages.
  *
- * A saved view is a *named set of stages*, nothing more. It answers "which slice of the
- * pipeline am I looking at", which is a different question from the toolbar's filters
- * ("narrow what is in front of me") and from the header search ("find this one thing").
+ * The eight stages are the *whole* process, start to finish. A phase is a run of
+ * consecutive stages within it, and Preconstruction and Construction are two of them:
+ * everything up to "Released to Construction" is preconstruction, and the build itself
+ * is construction. That is Lofty's own vocabulary, taken from the preconstruction
+ * process map rather than guessed.
+ *
+ * A saved view is a *named set of stages*, nothing more. It answers "which phase am I
+ * looking at", which is a different question from the toolbar's filters ("narrow what is
+ * in front of me") and from the header search ("find this one thing").
  *
  * Defined in code for now rather than in the database. Each one resolves to a URL —
  * /jobs?saved=construction — so a view is already something you can send to somebody,
@@ -11,12 +17,16 @@
  * round: when saved views become user-created, the table stores a query string per row
  * and everything below keeps working unchanged. Nothing here has to be unpicked.
  *
- * ────────────────────────────────────────────────────────────────────────────────
- * AMBER: the groupings below are a PLACEHOLDER — my guess at how Lofty splits the
- * eight stages, not something the business told me. Correct `stages` on each entry and
- * the rest of the app follows; nothing else reads the split. Names must match the
- * `stage` enum exactly (see SEED_STAGES in stubRepository.ts).
- * ────────────────────────────────────────────────────────────────────────────────
+ * Two things to know before editing:
+ *
+ *   Names must match the `stage` enum exactly — see SEED_STAGES in stubRepository.ts.
+ *   `stagesInView` intersects against the live list, so a typo shows up as a phase that
+ *   matches nothing rather than as an error.
+ *
+ *   The phase called Preconstruction contains a *stage* also called Preconstruction.
+ *   That collision is Lofty's, not this file's, and it is left alone deliberately —
+ *   inventing a different word for one of them would put a name in the app that nobody
+ *   at Lofty uses. Worth revisiting if it reads badly on the board.
  */
 
 export interface SavedView {
@@ -33,23 +43,33 @@ export const SAVED_VIEWS: SavedView[] = [
     stages: []
   },
   {
-    slug: "pre-construction",
-    label: "Pre-construction",
+    // Everything from the PWA being issued through to "Released to Construction" — the
+    // 57 steps of the preconstruction process map. Selections and Estimating are both
+    // inside it, which is why Scheduling & Estimating belongs here and not with the
+    // build: the production estimate, the finance approval and the construction release
+    // all happen before a slab is poured.
+    slug: "preconstruction",
+    label: "Preconstruction",
     stages: [
       "Sales & acquisition",
       "Planning & Engineering",
       "Working Drawings & Contracts",
-      "Preconstruction"
+      "Preconstruction",
+      "Scheduling & Estimating"
     ]
   },
   {
     slug: "construction",
     label: "Construction",
-    stages: ["Scheduling & Estimating", "Construction & execution"]
+    stages: ["Construction & execution"]
   },
   {
-    slug: "closeout",
-    label: "Closeout",
+    // INFERRED, unlike the two above. Lofty named preconstruction and construction; what
+    // to call the two stages after handover, and whether they are one phase or two, has
+    // not been said. Grouped and named here so the last two stages are reachable rather
+    // than orphaned — rename or split it when the business says.
+    slug: "post-construction",
+    label: "Post-construction",
     stages: ["Post-construction & closeout", "Handover & maintenance"]
   }
 ];
