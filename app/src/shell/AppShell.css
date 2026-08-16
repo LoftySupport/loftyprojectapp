@@ -208,3 +208,41 @@ html, body, #root { height: 100%; }
      which is a whole line of a small screen to say what the circle already says. */
   .app-user .sb-token, .app-user-name { display: none; }
 }
+
+/* ---- the user menu -------------------------------------------------------
+   Your name in the header, and the two things that belong to you behind it. */
+
+.user-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  background: none;
+  border: 0;
+  padding: var(--space-4);
+  border-radius: var(--border-radius-small);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  min-width: 0;
+}
+.user-menu-trigger:hover { background: rgba(255, 255, 255, 0.12); }
+
+.user-menu { display: flex; flex-direction: column; min-width: 200px; }
+.user-menu-head {
+  padding: var(--space-8) var(--space-12);
+  border-bottom: 1px solid var(--layout-border-color);
+  margin-bottom: var(--space-4);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.user-menu button {
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: var(--space-8) var(--space-12);
+  border-radius: var(--border-radius-small);
+  font: var(--font-text2-normal);
+  color: var(--primary-text-color);
+  cursor: pointer;
+}
+.user-menu button:hover { background: var(--primary-background-hover-color); }

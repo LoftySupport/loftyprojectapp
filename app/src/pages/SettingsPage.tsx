@@ -40,7 +40,7 @@ export function SettingsPage({
   return (
     <>
       <div className="page-head">
-        <Heading type="h2" weight="bold">Settings</Heading>
+        <Heading type="h2" weight="bold">User settings</Heading>
         <Text type="text2" color="secondary">
           Your details and preferences. Admin is about other people; this page is about you.
         </Text>

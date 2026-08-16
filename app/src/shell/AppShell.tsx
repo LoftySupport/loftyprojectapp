@@ -1,5 +1,8 @@
-import { NavLink, Outlet } from "react-router-dom";
-import { Avatar, Button, Flex, Label, Text, TextField } from "@vibe/core";
+import { useState } from "react";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import {
+  Avatar, Dialog, DialogContentContainer, Flex, Label, Text, TextField
+} from "@vibe/core";
 import { initialsOf, useAuth } from "../data/AuthProvider";
 import { useRepository } from "../data/DataProvider";
 import { useSearch } from "../data/SearchProvider";
@@ -15,9 +18,83 @@ const PAGES = [
   { to: "/admin", label: "Admin" },
   // Setup replaced Dictionary and Wiring as separate destinations: configuration was
   // sitting at the same rank as the work, and nine items wrapped to two rows on a phone.
-  { to: "/setup", label: "Setup" },
-  { to: "/settings", label: "Settings" }
+  { to: "/setup", label: "Setup" }
+  // Settings is deliberately absent — it is personal, not a destination, so it lives in
+  // the menu under your own name where "User settings" says whose settings they are.
 ];
+
+/**
+ * Your name, and the two things that are yours: your settings, and leaving.
+ *
+ * Settings came out of the main nav to get here. It is not a destination alongside
+ * Projects and Jobs — it is personal, and putting it under your own name is what makes
+ * "whose settings?" answerable without opening it. The label says "User settings" for
+ * the same reason: the app has a Setup screen now, and "Settings" beside it was two
+ * words for two unrelated things.
+ */
+function UserMenu() {
+  const { profile, signOut } = useAuth();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
+
+  const content = (
+    <DialogContentContainer>
+      <div className="user-menu">
+        {profile && (
+          <div className="user-menu-head">
+            <Text type="text2" weight="bold" ellipsis={false}>{profile.fullName}</Text>
+            <Text type="text3" color="secondary" ellipsis={false}>{profile.email}</Text>
+          </div>
+        )}
+        <button type="button" onClick={() => { close(); navigate("/settings"); }}>
+          User settings
+        </button>
+        <button type="button" onClick={() => { close(); void signOut(); }}>
+          Sign out
+        </button>
+      </div>
+    </DialogContentContainer>
+  );
+
+  return (
+    <span className="app-user">
+      <Dialog
+        open={open}
+        onClickOutside={close}
+        content={content}
+        position="bottom-end"
+        showTrigger={[]}
+        hideTrigger={[]}
+      >
+        <button
+          type="button"
+          className="user-menu-trigger"
+          aria-haspopup="menu"
+          aria-expanded={open}
+          onClick={() => setOpen(o => !o)}
+          onKeyDown={e => { if (e.key === "Escape") close(); }}
+        >
+          {profile && (
+            <Avatar
+              size="small"
+              type="text"
+              text={initialsOf(profile)}
+              aria-hidden
+            />
+          )}
+          {/* Hidden below 720px in CSS — the avatar carries identity there and the name
+              costs a line of header. The accessible name stays on the button either way. */}
+          <span className="app-user-name">
+            <Text type="text2" element="span">
+              {profile ? greetingName(profile) : "Account"}
+            </Text>
+          </span>
+        </button>
+      </Dialog>
+    </span>
+  );
+}
 
 /**
  * The frame every page sits in.
@@ -31,9 +108,8 @@ const PAGES = [
  */
 export function AppShell() {
   const repo = useRepository();
-
   const { query, setQuery } = useSearch();
-  const { profile, signOut, error: authError } = useAuth();
+  const { error: authError } = useAuth();
 
   return (
     <>
@@ -80,28 +156,7 @@ export function AppShell() {
               text="Unbound"
               aria-label={`Reading through the ${repo.name} repository`}
             />
-            <span className="app-user">
-              {profile && (
-                <>
-                  <Avatar
-                    size="small"
-                    type="text"
-                    text={initialsOf(profile)}
-                    aria-label={`Signed in as ${profile.fullName}`}
-                  />
-                  {/* Hidden below 720px in CSS, like the token it replaced — the avatar
-                      carries identity there and the name costs a line of header. */}
-                  <span className="app-user-name">
-                    <Text type="text2" element="span">{greetingName(profile)}</Text>
-                  </span>
-                </>
-              )}
-              {/* Always "Sign out": RequireAuth means the shell only ever renders for a
-                  signed-in person, so there is no signed-out state to handle here. */}
-              <Button size="small" kind="tertiary" onClick={() => void signOut()}>
-                Sign out
-              </Button>
-            </span>
+            <UserMenu />
           </div>
         </Flex>
       </header>
