@@ -24,13 +24,21 @@
 -- `created_by` has to point at a profile, and the row it defaults to has to exist before
 -- anything can default to it.
 --
--- `active = false`, deliberately. This is an attribution, not a person: the FK does not
--- care about `active`, but `is_active_user()` does, so a row that can be named as the
--- author of a record cannot also be used to get into the app. The mailbox is real and can
--- complete a Microsoft sign-in — there is a signup for it in login_activity already — and
--- without this it would link to this profile and inherit whatever permission it carries.
--- An admin can flip `active` if support ever needs real access; until then the safe state
--- is the one where signing in as it gets you nothing.
+-- `on conflict do nothing`, and it matters which way that cuts. On a database where the
+-- row is absent this creates it as a locked-down attribution: `viewer` and `active =
+-- false`, so a row that can be named as the author of a record cannot also be used to get
+-- into the app. The FK does not care about `active`; `is_active_user()` does.
+--
+-- Where the row already exists, this migration leaves it exactly as it is — permission,
+-- active flag and all. That is deliberate: whoever created it may have meant it to be a
+-- real account, and a migration that quietly demotes an existing superadmin is a migration
+-- that breaks access at a moment nobody is expecting it to.
+--
+-- The consequence is worth stating rather than burying, because it is the difference
+-- between the two cases: if this row exists and is `active`, the support mailbox is a way
+-- into the app carrying whatever permission the row holds. It is a real mailbox — there is
+-- a signup for it in login_activity already — so that is not hypothetical. Locking it down
+-- is an admin decision, made against the row, not something this migration should take.
 insert into profiles (first_name, last_name, email, login_email, job_title, permission, active)
 values ('Lofty', 'Support', 'support@lofty.com.au', null,
         'System account', 'viewer'::permission_level, false)
