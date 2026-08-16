@@ -1,5 +1,6 @@
 import type { Repository, RepositoryMethod } from "./repository";
 import type {
+  ActivityEntry,
   Job,
   Profile,
   Project,
@@ -138,6 +139,22 @@ export function createStubRepository(): Repository {
 
     async listProfiles(): Promise<Profile[]> { return []; },
     async currentProfile(): Promise<Profile | null> { return null; },
+    async getProfile(): Promise<Profile | null> { return null; },
+
+    // Same stance as createProject below: refuse rather than pretend. A fabricated
+    // profile would be a person who does not exist, holding a permission level.
+    async createProfile(): Promise<Profile> {
+      throw new Error(
+        "Adding a user needs Supabase — set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY."
+      );
+    },
+    async updateProfile(): Promise<Profile> {
+      throw new Error("Editing a user needs Supabase.");
+    },
+    async setProfileActive(): Promise<Profile> {
+      throw new Error("Changing a user's status needs Supabase.");
+    },
+    async listActivity(): Promise<ActivityEntry[]> { return []; },
 
     // ---- creating: refuse rather than pretend ---------------------------
     // The other stubs answer with empty arrays, which is honest — there are no records

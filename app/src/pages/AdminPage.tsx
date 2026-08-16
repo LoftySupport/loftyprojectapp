@@ -1,6 +1,11 @@
 import { useState } from "react";
-import { Counter, Heading, Tab, TabList, Text } from "@vibe/core";
+import { Button, Counter, Heading, Tab, TabList, Text } from "@vibe/core";
 import { useQuery } from "../data/DataProvider";
+import { ActivityDialog, DeactivateDialog, UserDialog } from "../components/UserDialogs";
+import { Select, toOptions } from "../components/Select";
+import {
+  PERMISSION_LEVELS, PROFILE_STATUSES, TEAMS, profileStatus, type Profile
+} from "../data/types";
 import { groupByStage, usePropertyDefs, useStages, useTeams, useTemplatePhases } from "../data/useLookups";
 import { usePlaceholderShape } from "../data/placeholderShape";
 import { Token } from "../components/Token";
@@ -44,19 +49,51 @@ export function AdminPage() {
 }
 
 function Users() {
-  const { data: profiles, loading, error } = useQuery(repo => repo.listProfiles(), []);
+  // Bumped after every write so the table re-reads. useQuery takes a dependency list,
+  // so a counter is the whole mechanism — no cache to invalidate because there is none.
+  const [reload, setReload] = useState(0);
+  const refresh = () => setReload(n => n + 1);
+  const { data: profiles, loading, error } = useQuery<Profile[]>(repo => repo.listProfiles(), [], [reload]);
+  const [team, setTeam] = useState<string | null>(null);
+  const [permission, setPermission] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
+
+  const [editing, setEditing] = useState<Profile | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [deactivating, setDeactivating] = useState<Profile | null>(null);
+  const [activityFor, setActivityFor] = useState<Profile | null>(null);
+
+  const shown = profiles.filter(p =>
+    (!team || p.teams.includes(team)) &&
+    (!permission || p.permission === permission) &&
+    (!status || profileStatus(p) === status)
+  );
+  const filtered = Boolean(team || permission || status);
 
   return (
     <section className="panel">
       <div className="panel-head">
         <Text type="text2" weight="bold">
-          Users{!loading && !error ? ` (${profiles.length})` : ""}
+          Users{!loading && !error ? ` (${filtered ? `${shown.length} of ${profiles.length}` : profiles.length})` : ""}
         </Text>
-        <Text type="text3" color="secondary" ellipsis={false}>
-          The staff list, and the thing that decides who may use the app at all. Signing
-          in with Microsoft links an account to a row here — it never creates one, so a
-          directory account with no row gets a session that reads nothing.
-        </Text>
+        <Button size="small" onClick={() => setAdding(true)}>Add user</Button>
+      </div>
+
+      <Text type="text3" color="secondary" ellipsis={false}>
+        The staff list, and what decides who may use the app at all. Signing in with
+        Microsoft links an account to a row here — it never creates one, so a directory
+        account with no row gets a session that reads nothing.
+      </Text>
+
+      <div className="filter-row">
+        <Select aria-label="Filter by team" placeholder="All teams" clearable
+          options={toOptions([...TEAMS])} value={team} onChange={setTeam} />
+        <Select aria-label="Filter by permission" placeholder="All permissions" clearable
+          options={toOptions([...PERMISSION_LEVELS])} value={permission} onChange={setPermission} />
+        {/* active / pending / inactive — pending is "created, has not signed in", which
+            only exists because the staff list is made ahead of people arriving. */}
+        <Select aria-label="Filter by status" placeholder="All statuses" clearable
+          options={toOptions([...PROFILE_STATUSES])} value={status} onChange={setStatus} />
       </div>
 
       {error && (
@@ -66,9 +103,9 @@ function Users() {
       )}
 
       {!error && !loading && profiles.length === 0 && (
-        /* Not "no users" — 45 are seeded. An empty read means the RLS policy denied it,
+        /* Not "no users" — forty-five are seeded. An empty read means RLS denied it,
            which after 0015 means the reader has no linked profile of their own. Saying
-           "none" here would blame the data for a permissions answer. */
+           "none" would blame the data for a permissions answer. */
         <Text type="text2" color="secondary" ellipsis={false}>
           No profiles are readable with your current session. Every read is gated on
           having an active linked profile — if you are signed in and seeing this, your
@@ -81,30 +118,60 @@ function Users() {
           <thead>
             <tr>
               <th>Name</th><th>Job title</th><th>Email</th><th>Teams</th>
-              <th>Permission</th><th>Signed in</th><th>Active</th>
+              <th>Permission</th><th>Status</th><th>Last login</th><th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={7}><Text type="text3" color="secondary">Loading…</Text></td></tr>
+              <tr><td colSpan={8}><Text type="text3" color="secondary">Loading…</Text></td></tr>
             )}
-            {!loading && profiles.map(p => (
-              <tr key={p.id}>
-                <td>{p.fullName}</td>
-                <td>{p.jobTitle ?? <Token>profiles.job_title</Token>}</td>
-                <td>{p.email}</td>
-                {/* Many-to-many — one person, one row per team, primary first. */}
-                <td>{p.teams.length ? p.teams.join(", ") : "—"}</td>
-                <td>{p.permission}</td>
-                {/* Whether they have ever signed in, which is what auth_user_id means.
-                    Useful precisely because the staff list is created ahead of arrival. */}
-                <td>{p.authUserId ? "Yes" : "Not yet"}</td>
-                <td>{p.active ? "Yes" : "No"}</td>
-              </tr>
-            ))}
+            {!loading && filtered && shown.length === 0 && profiles.length > 0 && (
+              <tr><td colSpan={8}><Text type="text3" color="secondary">No users match these filters.</Text></td></tr>
+            )}
+            {!loading && shown.map(p => {
+              const st = profileStatus(p);
+              return (
+                <tr key={p.id}>
+                  <td>
+                    {/* The name is the way in to their history, which is the thing
+                        somebody is usually after when they look a person up. */}
+                    <button type="button" className="link-button" onClick={() => setActivityFor(p)}>
+                      {p.fullName}
+                    </button>
+                  </td>
+                  <td className="muted">{p.jobTitle ?? "—"}</td>
+                  <td className="muted">{p.email}</td>
+                  <td>{p.teams.length ? p.teams.join(", ") : "—"}</td>
+                  <td>{p.permission}</td>
+                  <td><span className={`status-pill is-${st}`}>{st}</span></td>
+                  {/* "Never" and "not yet" are different facts: never signed in versus
+                      signed in before this column existed. Only the first can happen now. */}
+                  <td className="muted">
+                    {p.lastLoginAt ? new Date(p.lastLoginAt).toLocaleDateString() : "Never"}
+                  </td>
+                  <td>
+                    <span className="row-actions">
+                      <Button size="xs" kind="tertiary" onClick={() => setEditing(p)}>Edit</Button>
+                      <Button size="xs" kind="tertiary" onClick={() => setDeactivating(p)}>
+                        {p.active ? "Deactivate" : "Restore"}
+                      </Button>
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
+
+      <UserDialog show={adding} profile={null}
+        onClose={() => setAdding(false)} onSaved={refresh} />
+      <UserDialog show={editing !== null} profile={editing}
+        onClose={() => setEditing(null)} onSaved={refresh} />
+      <DeactivateDialog show={deactivating !== null} profile={deactivating}
+        onClose={() => setDeactivating(null)} onSaved={refresh} />
+      <ActivityDialog show={activityFor !== null} title={activityFor?.fullName ?? ""}
+        profileId={activityFor?.id} onClose={() => setActivityFor(null)} />
     </section>
   );
 }
