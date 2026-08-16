@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Button, Text } from "@vibe/core";
 import { Select, toOptions, type SelectOption } from "./Select";
 import "./ui.css";
@@ -20,10 +19,19 @@ export type View = (typeof VIEWS)[number];
 export const GROUPINGS = ["Stage", "Project", "Team", "Team member", "Status"] as const;
 export type Grouping = (typeof GROUPINGS)[number];
 
-export const FILTERABLE = ["Stage", "Team", "Team member", "Status", "Type", "Tag"] as const;
+/**
+ * Only fields the data actually carries.
+ *
+ * "Team member", "Type" and "Tag" were on this list and are not any more. Nothing on a
+ * job holds them yet, so choosing one narrowed nothing and the board sat there looking
+ * broken — a control that lies about what it does is worse than one that is missing.
+ * Put each back the moment its column exists.
+ */
+export const FILTERABLE = ["Stage", "Team", "Status"] as const;
 
+/** `field` is the identity — a field appears at most once, so a separate id is a second
+ *  way to say the same thing, and the query string keys off the field anyway. */
 export interface ToolbarFilter {
-  id: number;
   field: string;
   value: string | null;
 }
@@ -53,16 +61,13 @@ export function Toolbar({
   count?: string;
   actions?: React.ReactNode;
 }) {
-  const [nextId, setNextId] = useState(1);
-
   const addFilter = () => {
     const used = filters.map(f => f.field);
     const field = FILTERABLE.find(f => !used.includes(f));
     if (!field) return;
     // Arrives unset. A filter that defaults to its first option looks like it did
     // nothing while quietly hiding most of the board.
-    onFiltersChange([...filters, { id: nextId, field, value: null }]);
-    setNextId(nextId + 1);
+    onFiltersChange([...filters, { field, value: null }]);
   };
 
   return (
@@ -109,7 +114,7 @@ export function Toolbar({
       <div className="toolbar-field filter-chips">
         <span className="toolbar-label">Filter by</span>
         {filters.map(f => (
-          <span className="toolbar-field" key={f.id}>
+          <span className="toolbar-field" key={f.field}>
             <Select
               className="toolbar-control"
               clearable
@@ -118,14 +123,14 @@ export function Toolbar({
               options={optionsFor(f.field)}
               value={f.value}
               onChange={v =>
-                onFiltersChange(filters.map(x => (x.id === f.id ? { ...x, value: v } : x)))
+                onFiltersChange(filters.map(x => (x.field === f.field ? { ...x, value: v } : x)))
               }
             />
             <Button
               kind="tertiary"
               size="small"
               aria-label={`Remove the ${f.field} filter`}
-              onClick={() => onFiltersChange(filters.filter(x => x.id !== f.id))}
+              onClick={() => onFiltersChange(filters.filter(x => x.field !== f.field))}
             >
               ×
             </Button>

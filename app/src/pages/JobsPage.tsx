@@ -2,15 +2,19 @@ import { useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { Button, Counter, Heading, Text } from "@vibe/core";
 import { useQuery } from "../data/DataProvider";
-import { RECORD_STATUS_LABELS, RECORD_STATUSES, PROJECT_TYPES } from "../data/types";
+import { RECORD_STATUS_LABELS, RECORD_STATUSES } from "../data/types";
 import { useStages, useTeams, useTemplatePhases } from "../data/useLookups";
 import { usePlaceholderShape, type ShapeJob } from "../data/placeholderShape";
 import { jobMatchesQuery, matchedOnPreviousAddress, useSearch } from "../data/SearchProvider";
+import { useBoardParams } from "../data/useBoardParams";
+import { savedViewBySlug, stagesInView } from "../data/savedViews";
+import { activeFilterCount, jobMatchesFilters, statusOptions } from "../data/filtering";
 import { NoResults, PreviousAddressNote } from "../components/SearchNotices";
+import { SavedViewTabs } from "../components/SavedViewTabs";
 import { JobCard, StatusPill } from "../components/RecordCards";
 import { JobDrawer } from "../components/JobDrawer";
 import { Token } from "../components/Token";
-import { Toolbar, type Grouping, type ToolbarFilter, type View } from "../components/Toolbar";
+import { Toolbar } from "../components/Toolbar";
 import { toOptions } from "../components/Select";
 import { NewJobDialog } from "../components/CreateDialogs";
 import "../components/ui.css";
@@ -22,9 +26,9 @@ import "../components/ui.css";
  * keeps whatever you grouped by. Columns exist before any job does: they come from the
  * stages lookup, which is the business process rather than something a user created.
  *
- * Which job is open is the URL — /jobs/PRJ-001-02 — rather than component state. The view
- * and the grouping are not, deliberately: they are how *you* are looking at the board, and
- * putting them in the path would make every shared link impose the sender's layout.
+ * Everything you can see is in the URL. The open job is the path — /jobs/PRJ-001-02 — and
+ * the view, grouping, filters and saved view are the query string, so the answer to "show
+ * me what you are looking at" is a link rather than a list of instructions.
  */
 export function JobsPage() {
   const { stages, stageNames } = useStages();
@@ -36,17 +40,28 @@ export function JobsPage() {
   // project, so the picker reads the real list rather than the placeholder shape.
   const { data: realProjects } = useQuery(r => r.listProjects(), []);
 
-  const [view, setView] = useState<View>("Board");
-  const [grouping, setGrouping] = useState<Grouping>("Stage");
-  const [filters, setFilters] = useState<ToolbarFilter[]>([]);
   const [creating, setCreating] = useState(false);
+
+  const {
+    view, setView, grouping, setGrouping, filters, setFilters, saved, setSaved, search
+  } = useBoardParams({ view: "Board", grouping: "Stage" });
 
   const { jobNumber } = useParams();
   const navigate = useNavigate();
-  const openOne = (j: ShapeJob) => navigate(`/jobs/${encodeURIComponent(j.jobNumber)}`);
+  // `search` rides along, so closing the drawer puts you back on the board you left
+  // rather than on a reset one.
+  const openOne = (j: ShapeJob) =>
+    navigate(`/jobs/${encodeURIComponent(j.jobNumber)}${search}`);
 
   const unbound = !loading && jobs.length === 0;
   const all = useMemo(() => (unbound ? shape.jobs : []), [unbound, shape]);
+
+  /** The stages this saved view admits — the board's columns, and its scope. */
+  const viewStages = useMemo(() => stagesInView(saved, stageNames), [saved, stageNames]);
+  const inView = useMemo(
+    () => all.filter(j => viewStages.includes(j.stage)),
+    [all, viewStages]
+  );
 
   /**
    * Resolved against `all` rather than `rows`: a job you opened should not vanish because
@@ -63,18 +78,24 @@ export function JobsPage() {
    * between them, which is the whole point of putting it in the header.
    */
   const { terms } = useSearch();
-  const rows = useMemo(() => all.filter(j => jobMatchesQuery(j, terms)), [all, terms]);
-  /** Only a *search* that found nothing gets the empty state — an unbound board with no
-   *  placeholder rows is a different situation and already reads correctly. */
-  const noMatches = terms.length > 0 && rows.length === 0;
+  const rows = useMemo(
+    () => inView.filter(j => jobMatchesFilters(j, filters) && jobMatchesQuery(j, terms)),
+    [inView, filters, terms]
+  );
+  /** Only a *narrowing* that found nothing gets the empty state — an unbound board with
+   *  no placeholder rows is a different situation and already reads correctly. Filters
+   *  count alongside the search now that they do something. */
+  const narrowed = terms.length > 0 || activeFilterCount(filters) > 0;
+  const noMatches = narrowed && rows.length === 0;
   const stale = matchedOnPreviousAddress(rows, terms);
 
   const optionsFor = (field: string) => {
     switch (field) {
-      case "Stage": return toOptions(stageNames);
+      // The stages this saved view admits, not all eight: offering "Construction" inside
+      // the Pre-construction view is offering a choice that returns nothing.
+      case "Stage": return toOptions(viewStages);
       case "Team": return toOptions(teamNames);
-      case "Status": return RECORD_STATUSES.map(s => ({ value: s, label: RECORD_STATUS_LABELS[s] }));
-      case "Type": return toOptions(PROJECT_TYPES);
+      case "Status": return statusOptions();
       default: return [];
     }
   };
@@ -89,13 +110,13 @@ export function JobsPage() {
       : "{{profiles.full_name}}";
 
     const order: string[] =
-      grouping === "Stage" ? stageNames
+      grouping === "Stage" ? viewStages
       : grouping === "Team" ? teamNames
       : grouping === "Status" ? RECORD_STATUSES.map(s => RECORD_STATUS_LABELS[s])
       : [...new Set(rows.map(keyOf))];
 
     return order.map(key => ({ key, jobs: rows.filter(j => keyOf(j) === key) }));
-  }, [grouping, rows, stageNames, teamNames]);
+  }, [grouping, rows, viewStages, teamNames]);
 
   /**
    * A number nobody recognises goes back to the board, so a stale link is a board rather
@@ -103,7 +124,7 @@ export function JobsPage() {
    * lookups load and when the app is bound to real data with no placeholder shape, and
    * redirecting then would throw away a perfectly good link before it could resolve.
    */
-  if (jobNumber && !openJob && all.length > 0) return <Navigate to="/jobs" replace />;
+  if (jobNumber && !openJob && all.length > 0) return <Navigate to={`/jobs${search}`} replace />;
 
   return (
     <>
@@ -112,9 +133,20 @@ export function JobsPage() {
         <Text type="text2" color="secondary">
           {loading
             ? "Loading…"
-            : `${all.length} job${all.length === 1 ? "" : "s"} across ${stages.length} stages`}
+            : saved.stages.length === 0
+              ? `${all.length} job${all.length === 1 ? "" : "s"} across ${stages.length} stages`
+              : `${inView.length} of ${all.length} jobs · ${saved.label}, ${viewStages.length} of ${stages.length} stages`}
         </Text>
       </div>
+
+      <SavedViewTabs
+        activeSlug={saved.slug}
+        onSelect={setSaved}
+        hrefFor={slug => (slug === "all" ? "/jobs" : `/jobs?saved=${slug}`)}
+        countFor={slug =>
+          all.filter(j => stagesInView(savedViewBySlug(slug), stageNames).includes(j.stage)).length
+        }
+      />
 
       <Toolbar
         view={view}
@@ -125,7 +157,7 @@ export function JobsPage() {
         filters={filters}
         onFiltersChange={setFilters}
         optionsFor={optionsFor}
-        count={`Showing ${rows.length} of ${all.length} jobs`}
+        count={`Showing ${rows.length} of ${inView.length} jobs`}
         actions={<Button size="small" onClick={() => setCreating(true)}>+ New job</Button>}
       />
 
@@ -257,7 +289,7 @@ export function JobsPage() {
         </div>
       )}
 
-      {openJob && <JobDrawer job={openJob} onClose={() => navigate("/jobs")} />}
+      {openJob && <JobDrawer job={openJob} onClose={() => navigate(`/jobs${search}`)} />}
     </>
   );
 }

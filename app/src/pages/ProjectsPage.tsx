@@ -2,15 +2,18 @@ import { useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { Button, Heading, Text } from "@vibe/core";
 import { useQuery } from "../data/DataProvider";
-import { RECORD_STATUS_LABELS, RECORD_STATUSES, PROJECT_TYPES } from "../data/types";
 import { useStages, useTeams } from "../data/useLookups";
 import { usePlaceholderShape, type ShapeProject } from "../data/placeholderShape";
 import { matchedOnPreviousAddress, projectMatchesQuery, useSearch } from "../data/SearchProvider";
+import { useBoardParams } from "../data/useBoardParams";
+import { savedViewBySlug, stagesInView } from "../data/savedViews";
+import { activeFilterCount, projectMatchesFilters, statusOptions } from "../data/filtering";
 import { NoResults, PreviousAddressNote } from "../components/SearchNotices";
+import { SavedViewTabs } from "../components/SavedViewTabs";
 import { ProjectCard, StatusPill } from "../components/RecordCards";
 import { PropertySlots } from "../components/PropertySlots";
 import { Token } from "../components/Token";
-import { Toolbar, type ToolbarFilter, type View } from "../components/Toolbar";
+import { Toolbar } from "../components/Toolbar";
 import { toOptions } from "../components/Select";
 import { NewProjectDialog } from "../components/CreateDialogs";
 import "../components/ui.css";
@@ -23,23 +26,38 @@ import "../components/ui.css";
  * Everything else in the toolbar reads the same as it does on Jobs.
  *
  * Which project is open is the URL — /projects/PRJ-001 — so the detail view is a page
- * somebody can link to, and Back returns to the list instead of leaving the app.
+ * somebody can link to, and Back returns to the list instead of leaving the app. The
+ * toolbar's own state rides in the query string for the same reason.
+ *
+ * A saved view names a set of *job* stages, so here it keeps the projects that have at
+ * least one job in that slice — "Construction" on this screen means the projects with
+ * something on site, which is the question somebody filtering to it is asking.
  */
 export function ProjectsPage() {
   const { stageNames } = useStages();
   const { teamNames } = useTeams();
   const shape = usePlaceholderShape();
   const { data: projects, loading } = useQuery(r => r.listProjects(), []);
-  const [view, setView] = useState<View>("Board");
-  const [filters, setFilters] = useState<ToolbarFilter[]>([]);
   const [creating, setCreating] = useState(false);
+
+  // No grouping control on this screen, so the value is inert — it still has to be given,
+  // and "Stage" is the one the toolbar would show if the control were ever turned on.
+  const { view, setView, filters, setFilters, saved, setSaved, search } =
+    useBoardParams({ view: "Board", grouping: "Stage" });
 
   const { projectNumber } = useParams();
   const navigate = useNavigate();
-  const openOne = (p: ShapeProject) => navigate(`/projects/${encodeURIComponent(p.projectNumber)}`);
+  const openOne = (p: ShapeProject) =>
+    navigate(`/projects/${encodeURIComponent(p.projectNumber)}${search}`);
 
   const unbound = !loading && projects.length === 0;
   const all = useMemo(() => (unbound ? shape.projects : []), [unbound, shape]);
+
+  const viewStages = useMemo(() => stagesInView(saved, stageNames), [saved, stageNames]);
+  const inView = useMemo(
+    () => all.filter(p => p.jobs.some(j => viewStages.includes(j.stage))),
+    [all, viewStages]
+  );
 
   const open = useMemo(
     () => (projectNumber ? all.find(p => p.projectNumber === projectNumber) ?? null : null),
@@ -51,33 +69,50 @@ export function ProjectsPage() {
    * and being told the project does not exist would be nonsense when the job is on it.
    */
   const { terms } = useSearch();
-  const rows = useMemo(() => all.filter(p => projectMatchesQuery(p, terms)), [all, terms]);
-  const noMatches = terms.length > 0 && rows.length === 0;
+  const rows = useMemo(
+    () => inView.filter(p => projectMatchesFilters(p, filters) && projectMatchesQuery(p, terms)),
+    [inView, filters, terms]
+  );
+  const narrowed = terms.length > 0 || activeFilterCount(filters) > 0;
+  const noMatches = narrowed && rows.length === 0;
   const stale = matchedOnPreviousAddress(rows.flatMap(p => [p, ...p.jobs]), terms);
   const jobCount = all.reduce((n, p) => n + p.jobs.length, 0);
 
   const optionsFor = (field: string) => {
     switch (field) {
-      case "Stage": return toOptions(stageNames);
+      case "Stage": return toOptions(viewStages);
       case "Team": return toOptions(teamNames);
-      case "Status": return RECORD_STATUSES.map(s => ({ value: s, label: RECORD_STATUS_LABELS[s] }));
-      case "Type": return toOptions(PROJECT_TYPES);
+      case "Status": return statusOptions();
       default: return [];
     }
   };
 
-  if (open) return <ProjectDetail project={open} onBack={() => navigate("/projects")} />;
+  if (open) return <ProjectDetail project={open} onBack={() => navigate(`/projects${search}`)} />;
   /** Same guard as Jobs: only redirect once there is a list to have missed it in. */
-  if (projectNumber && all.length > 0) return <Navigate to="/projects" replace />;
+  if (projectNumber && all.length > 0) return <Navigate to={`/projects${search}`} replace />;
 
   return (
     <>
       <div className="page-head">
         <Heading type="h2" weight="bold">Projects</Heading>
         <Text type="text2" color="secondary">
-          {loading ? "Loading…" : `${all.length} projects · ${jobCount} jobs`}
+          {loading
+            ? "Loading…"
+            : saved.stages.length === 0
+              ? `${all.length} projects · ${jobCount} jobs`
+              : `${inView.length} of ${all.length} projects with work in ${saved.label}`}
         </Text>
       </div>
+
+      <SavedViewTabs
+        activeSlug={saved.slug}
+        onSelect={setSaved}
+        hrefFor={slug => (slug === "all" ? "/projects" : `/projects?saved=${slug}`)}
+        countFor={slug => {
+          const s = stagesInView(savedViewBySlug(slug), stageNames);
+          return all.filter(p => p.jobs.some(j => s.includes(j.stage))).length;
+        }}
+      />
 
       <Toolbar
         views={["Board", "Table"]}
@@ -86,7 +121,7 @@ export function ProjectsPage() {
         filters={filters}
         onFiltersChange={setFilters}
         optionsFor={optionsFor}
-        count={`Showing ${rows.length} of ${all.length} projects`}
+        count={`Showing ${rows.length} of ${inView.length} projects`}
         actions={<Button size="small" onClick={() => setCreating(true)}>+ New project</Button>}
       />
 
