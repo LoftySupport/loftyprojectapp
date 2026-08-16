@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Modal, ModalContent, ModalFooter, ModalHeader, Text, TextField } from "@vibe/core";
-import { Select, toOptions } from "./Select";
+import { MultiSelect, Select, toOptions } from "./Select";
 import { useRepository } from "../data/DataProvider";
 import {
   PERMISSION_LEVELS, TEAMS,
@@ -153,32 +153,29 @@ export function UserDialog({
   );
 }
 
-/** Membership is a set. Add builds it, each chip removes itself. */
+/**
+ * Membership is a set, and now the control says so: one multi-select over the `team`
+ * enum, rather than a single-select that appended to a list of chips beside it.
+ *
+ * The options are TEAMS, which is the enum transcribed — all fifteen values, including
+ * the four 0014 added. The old control could reach them too; what it could not do was
+ * show you what you had and what you could add in the same place.
+ *
+ * The "(primary)" label on the first chip is gone, and its removal is the point rather
+ * than tidying. 0022 dropped `is_primary` and made `profiles.teams` a normalised set —
+ * the database sorts it into enum order on every write. So the first team you picked
+ * was not the first one stored, and a label claiming otherwise was telling you something
+ * the schema had stopped being able to honour.
+ */
 function TeamPicker({ value, onChange }: { value: string[]; onChange: (t: string[]) => void }) {
-  const available = TEAMS.filter(t => !value.includes(t));
   return (
-    <div className="team-picker">
-      {value.length > 0 && (
-        <ul className="team-chips">
-          {value.map((t, i) => (
-            <li key={t} className={i === 0 ? "is-primary" : undefined}>
-              <span>{t}{i === 0 && value.length > 1 ? " (primary)" : ""}</span>
-              <button type="button" onClick={() => onChange(value.filter(x => x !== t))}
-                aria-label={`Remove ${t}`}>×</button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {available.length > 0 && (
-        <Select
-          aria-label="Add a team"
-          options={toOptions([...available])}
-          value={null}
-          onChange={v => v && onChange([...value, v])}
-          placeholder={value.length ? "Add another team" : "Select a team"}
-        />
-      )}
-    </div>
+    <MultiSelect
+      aria-label="Teams"
+      options={toOptions([...TEAMS])}
+      value={value}
+      onChange={onChange}
+      placeholder="Select teams"
+    />
   );
 }
 
