@@ -1,4 +1,5 @@
 import { ButtonGroup, Heading, Text, Toggle } from "@vibe/core";
+import { useAuth } from "../data/AuthProvider";
 import { SYSTEM_THEMES, type SystemTheme } from "../theme/loftyTheme";
 import { Select, toOptions } from "../components/Select";
 import { Token } from "../components/Token";
@@ -37,6 +38,8 @@ export function SettingsPage({
   theme: SystemTheme;
   onThemeChange: (t: SystemTheme) => void;
 }) {
+  const { profile } = useAuth();
+
   return (
     <>
       <div className="page-head">
@@ -53,12 +56,17 @@ export function SettingsPage({
           <div className="panel-head">
             <Text type="text2" weight="bold">Your details</Text>
           </div>
-          <Locked label="First name" hint="from Entra ID in the real build" token="profiles.first_name" />
-          <Locked label="Last name" token="profiles.last_name" />
-          <Locked label="Permission" hint="set by an admin, not by you" token="profiles.permission" />
-          <Locked label="Teams" hint="you can sit in more than one" token="profiles.teams" />
-          <Locked label="Email" token="profiles.email" />
-          <Locked label="Job title" token="profiles.job_title" />
+          <Locked label="First name" hint="from Entra ID in the real build"
+            token="profiles.first_name" value={profile?.firstName} />
+          <Locked label="Last name" token="profiles.last_name" value={profile?.lastName} />
+          <Locked label="Permission" hint="set by an admin, not by you"
+            token="profiles.permission" value={profile?.permission} />
+          {/* Joined, not reduced to one — somebody can sit in several, which is what the
+              hint beside this field has been promising all along. */}
+          <Locked label="Teams" hint="you can sit in more than one"
+            token="profiles.teams" value={profile?.teams.join(", ") || null} />
+          <Locked label="Email" token="profiles.email" value={profile?.email} />
+          <Locked label="Job title" token="profiles.job_title" value={profile?.jobTitle} />
         </section>
 
         <section className="panel">
@@ -143,10 +151,30 @@ function Row({
   );
 }
 
-function Locked({ label, hint, token }: { label: string; hint?: string; token: string }) {
+/**
+ * A field you can read and cannot change here.
+ *
+ * `value` is what it says when the app knows the answer, and the token is what it says
+ * when it does not. Both, rather than one or the other: every field on this page comes
+ * from `profiles`, which is wired — so showing {{profiles.email}} to somebody looking at
+ * their own settings was the template reporting a gap that had closed. The token stays
+ * for the case it was built for, which here means a profile that has not loaded, or a
+ * column genuinely empty like a job title nobody has filled in.
+ */
+function Locked({
+  label,
+  hint,
+  token,
+  value
+}: {
+  label: string;
+  hint?: string;
+  token: string;
+  value?: string | null;
+}) {
   return (
     <Row label={label} hint={hint}>
-      <Token>{token}</Token>
+      {value ? <Text type="text2">{value}</Text> : <Token>{token}</Token>}
     </Row>
   );
 }
