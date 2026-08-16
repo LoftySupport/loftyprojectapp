@@ -20,10 +20,20 @@ The schema is being designed one table at a time and the app is built ahead of i
 every value that will come from a table renders as a `{{table.column}}` token — an
 unbound field is visible rather than silently blank.
 
-The migrations **are** applied now, to the `loftyprojectapp` project
-(`gmekuqdjemrfuurxhuib`, ap-southeast-2) — the tables exist and are empty. A schema
-change means re-running the migration against that project; `supabase migration list` is
-the check for whether the two have drifted.
+The migrations **are** applied, through `0016`, to the `loftyprojectapp` project
+(`gmekuqdjemrfuurxhuib`, ap-southeast-2). A schema change means re-running the migration
+against that project; `supabase migration list` is the check for whether the two have
+drifted.
+
+**`profiles` is no longer empty: the forty-five staff are seeded and none is linked yet.**
+`auth.users` is empty — two accidental email-provider accounts created during setup
+(`support@` and a mistyped `anber@`) were deleted. Their two `login_activity` rows are
+left as audit history, pointing at ids that no longer exist.
+
+The link was proved against the live database rather than reasoned about: inserting an
+`auth.users` row for `amber@loftybg.onmicrosoft.com` linked it to Amber Beaumont as
+`superadmin`, an insert for `nobody@example.com` created nothing, and the profile count
+stayed at 45. Run inside a transaction and rolled back.
 
 The client is wired too: `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` are set
 on the Netlify project for every deploy context, so `supabaseRepository.ts` builds a real
