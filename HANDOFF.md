@@ -3,11 +3,11 @@
 Everything a new session needs to pick this up. Read this first, then
 `data-dictionary.md`.
 
-**Next job: [Microsoft Entra sign-in](#first-job-microsoft-entra-sign-in).** The schema is
-applied and the client is wired, so authentication is the one thing standing between the
-app and real data on screen.
+**Next job: [turn off the email provider](#the-open-door-beside-the-front-one), then
+`jobs`.** Entra sign-in is built and the app is gated behind it. The one thing left on
+auth is a door standing open beside it.
 
-Last updated: 2026-08-15.
+Last updated: 2026-08-16.
 
 ---
 
@@ -71,18 +71,77 @@ still to land. The connection being live is what changed; the data path opens wi
 frozen, still deployed at `loftyprojectboard.netlify.app` for showing people. Nothing in
 this work touches it. Its PR #11 was closed unmerged as superseded.
 
-## First job: Microsoft Entra sign-in
+## Sign-in: what was built, and the one thing still open
 
-**Do this before wiring another table.** Every RLS policy grants to `authenticated` and
-nobody is authenticated, so every query returns zero rows and the seam falls back to
-seeds. Until this lands you can write queries but you cannot see one work — and the
-moment it does land, the already-wired `listStages` starts returning the eight real rows
-with no further code. That is the cheapest possible proof the whole path is sound.
+Entra sign-in is **done and in the app**. This section is now the record of how it is
+put together and what it cost, not a to-do list. The registration, the claims, the
+provider config and the client code are all in place; the app is gated behind them.
+
+### The open door beside the front one
+
+**Supabase has the `email` provider enabled with open signup, and it must be turned
+off.** Check it, do not assume:
+
+```bash
+curl -s "https://gmekuqdjemrfuurxhuib.supabase.co/auth/v1/settings" \
+  -H "apikey: <publishable key>" | python3 -m json.tool
+```
+
+`"external": {"azure": true, "email": true}` is the problem. Every RLS policy grants to
+`authenticated`, and four of them — `addresses`, `projects`, `jobs`, `job_stages` — are
+`using (true)`. So `authenticated` is not "a Lofty person", it is **anyone holding any
+session**, and the email provider hands one to any address on earth that can receive a
+confirmation link. Single-tenant Entra, `xms_edov`, the tenant URL — all of it is the
+lock on the front door, and this is the window next to it.
+
+Fix: **Authentication → Sign In / Providers → Email → off.** Lofty has no
+email-and-password users and never will; the directory is the source of truth. Then
+re-run the curl above and confirm `email` is gone — the same read-it-back rule as the
+Netlify variables.
+
+Nothing is exposed today because the tables are empty. It stops being harmless the day
+the first real project lands, which is why it is the next job and not a later one.
+
+### Why OAuth, not SAML
 
 This is **Azure OAuth (social login)**, not Supabase's enterprise SAML SSO. Same Entra
 directory, but OAuth is on every plan; SAML needs Pro and is aimed at multi-org
 federation Lofty does not need. Do not follow the `platform/sso/azure` docs — those are
 for signing in to the Supabase *dashboard*, a different thing entirely.
+
+### The registration, as it stands
+
+| | |
+| --- | --- |
+| Display name | `Project Management App for Lofty` |
+| Application (client) ID | `f3eea05d-7f16-4a82-807d-96ae468a32b3` |
+| Directory (tenant) ID | `4fa1ee97-94cb-4be5-8130-8c11845ec54e` |
+| `signInAudience` | `AzureADMyOrg` — single tenant |
+| Redirect URI | `https://gmekuqdjemrfuurxhuib.supabase.co/auth/v1/callback` |
+| Client secret | `Supabase Auth`, **expires 15 August 2028** |
+
+Neither ID is secret — they identify the app, they do not authenticate it. The secret
+does, and it lives only in the Supabase dashboard.
+
+**The secret expiry is a diary entry, not a note here.** Sign-in breaks
+organisation-wide the day it lapses and the symptom looks nothing like an expired
+credential. `"secretText": null` in the manifest means the value cannot be read back out
+of Entra: if it is ever lost, the only route is a new secret.
+
+Three checks that need no dashboard access, worth re-running if sign-in ever misbehaves:
+
+```bash
+# 1. the tenant resolves
+curl -s "https://login.microsoftonline.com/<tenant-id>/v2.0/.well-known/openid-configuration"
+
+# 2. the app + redirect URI are accepted — a sign-in page means yes, AADSTS50011
+#    means the redirect URI is wrong, AADSTS700016 means the client ID is
+curl -sL "https://login.microsoftonline.com/<tenant-id>/oauth2/v2.0/authorize?client_id=<client-id>&response_type=code&redirect_uri=https%3A%2F%2Fgmekuqdjemrfuurxhuib.supabase.co%2Fauth%2Fv1%2Fcallback&scope=openid+email+profile"
+
+# 3. single-tenant is actually enforced — this must be REJECTED
+curl -sL "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?client_id=<client-id>&…"
+#    → "unauthorized_client: The client does not exist or is not enabled for consumers"
+```
 
 ### 1. Register the application in Entra
 
@@ -134,55 +193,86 @@ App registration → **Manifest** → back up the JSON → set `optionalClaims`:
 }
 ```
 
-### 4. Redirect allow list
+### The redirect allow list — now at the root
 
-Supabase → **Authentication** → **URL Configuration**. Site URL
-`https://loftyprojectapp.netlify.app/app/`, and under *Redirect URLs* add the deploy
-previews too or every PR preview fails to complete sign-in:
+Supabase → **Authentication** → **URL Configuration**. **The app moved out of `/app/`,
+so these changed.** Site URL `https://loftyprojectapp.netlify.app/`, and under *Redirect
+URLs* the deploy previews too or every PR preview fails to complete sign-in:
 
 ```
-https://loftyprojectapp.netlify.app/app/**
-https://deploy-preview-*--loftyprojectapp.netlify.app/app/**
-http://localhost:5173/app/**
+https://loftyprojectapp.netlify.app/**
+https://deploy-preview-*--loftyprojectapp.netlify.app/**
+http://localhost:5173/**
 ```
 
-### 5. The client call
+A stale `/app/**` entry here is harmless but no longer matched; the old paths 301 to the
+root at the CDN, and Supabase compares against the URL the browser was sent to.
 
-`email` scope is required — Supabase Auth rejects the sign-in without an email address.
+### The client call
 
-```ts
-await supabase.auth.signInWithOAuth({
-  provider: "azure",
-  options: { scopes: "email", redirectTo: `${window.location.origin}/app/` }
-});
-```
+`email` is required — Supabase Auth rejects a sign-in with no email address. `openid
+profile` come with it so the token carries `given_name` and `family_name`: without them
+the 0003 trigger has only a display name to split, and splitting is a guess.
 
-### 6. The gap this exposes: no `profiles` row
+`redirectTo` reads `import.meta.env.BASE_URL` rather than hard-coding a path, so the base
+in `vite.config.ts` is the single place the app's location is decided.
 
-Signing in creates a row in `auth.users`. **It does not create one in `profiles`** — and
-nothing in `0001_core.sql` does either. A signed-in user with no profile has no
-`permission` and no team, so team-scoped policies match nothing and the app has a user it
-knows nothing about.
+### The gap it exposed: no `profiles` row — closed by `0003`
 
-Closing it is a trigger on `auth.users` that inserts the profile from the Entra claims
-(`first_name`, `last_name`, `email`), defaulting `permission` to `viewer` exactly as the
-column already does. Write it as `0003_handle_new_user.sql`.
+Signing in creates a row in `auth.users`. **It does not create one in `profiles`**, and
+nothing in `0001_core.sql` does either. `0003_handle_new_user.sql` closes it: a
+`security definer` trigger on `auth.users` that inserts from the Entra claims.
+
+Three decisions inside it worth not re-making:
+
+- **It never fails a sign-in over a name.** `first_name`/`last_name` are `not null`, and
+  a not-null violation in a trigger on `auth.users` aborts the insert — which is a person
+  locked out of the app entirely. So it reads `given_name`/`family_name`, falls back to
+  splitting the display name on the last space, and falls back again to the email's local
+  part.
+- **`permission` is not in the insert.** The column defaults to `viewer`; naming it in
+  the trigger would be a second place for least-privilege to be decided.
+- **It does not link by email.** `on conflict (id) do nothing` deliberately does not
+  catch a conflict on `email` — matching a new auth user to an existing profile by
+  address is exactly the impersonation path `xms_edov` was added to close.
+
+Insert only: a later sign-in with a changed surname does not overwrite the row, because
+`profiles` is the copy Lofty owns and an overwrite would silently undo an edit.
 
 Keep `permission` in `profiles` and read it from there. It must never move into JWT
 `user_metadata`: that field is user-editable, so an authorization check against it can be
 edited by the person it is meant to restrict. `app_metadata` is the safe half if a claim
 is ever genuinely needed.
 
+### The app is gated
+
+`RequireAuth` in `App.tsx` — nothing renders without a session, not even an empty page
+with the nav on it. `/signin` is the only route an unauthenticated visitor reaches.
+
+**The cost, stated plainly: a deploy preview now needs a Lofty account to review.** A PR
+can no longer be eyeballed by anyone outside the directory. That was a deliberate
+choice; if it starts to hurt, the gate is one component.
+
+Two states it handles that are easy to get wrong:
+
+- **`loading` renders a wait, not the sign-in page.** A session restored from local
+  storage arrives a beat after first paint — redirecting on it flashes the sign-in screen
+  at every signed-in person on every reload.
+- **A build with no Supabase client goes to `/signin` too**, where it says it is not
+  configured. A gated app that quietly ungates itself when its configuration is missing
+  is worse than one that stops.
+
 ### What "working" looks like
 
-Sign in with a Lofty account, land back on `/app/`, and the Wiring page flips
-`listStages` from **Seeded** to **Supabase**. That is the first real row on screen.
+Sign in with a Lofty account, land back on `/`, and the Wiring page flips `listStages`
+from **Seeded** to **Supabase**. `currentProfile` is wired alongside it, so the header
+shows a real name and the permission level comes from `profiles.permission`.
 
 Then replace the placeholder policies. Right now they are `using (true)` for
 `authenticated` — **any signed-in person reads every project, job and address.** Fine
-against an empty database, wrong the day real data lands. `profile_teams` and
-`permission_level` exist to drive the real scope model; the shape is in
-`supabase-schema.md`.
+against an empty database, wrong the day real data lands, and the reason the email
+provider above matters. `profile_teams` and `permission_level` exist to drive the real
+scope model; the shape is in `supabase-schema.md`.
 
 ## The working rule: one branch and PR per table
 
@@ -208,11 +298,22 @@ git commit && git push -u origin claude/<table>-schema
 
 | URL | What |
 | --- | --- |
-| `loftyprojectapp.netlify.app` | 302 → `/app/` |
-| `…/app/` | The build |
-| `…/app/dictionary` | The data dictionary, permission-gated |
+| `loftyprojectapp.netlify.app` | The build — **the app is the site now**, not a subfolder |
+| `…/dictionary` | The data dictionary, permission-gated |
+| `…/signin` | The only route reachable without a session |
 | `…/binding-template` | The tokenised prototype — **layout** reference only |
 | `…/prototype.html` | The original, dummy data |
+| `…/app/*` | 301 → the same path at the root, for old bookmarks |
+
+The app moved out of `/app/`. Three things had to agree for that, and they still do:
+`base` in `vite.config.ts`, the catch-all in `netlify.toml`, and where `build.sh` copies
+the build. The router basename and the OAuth `redirectTo` both read
+`import.meta.env.BASE_URL`, so they follow `base` on their own — that is the one value
+to change if it ever moves again.
+
+The catch-all is deliberately **not** `force`d. Without `force`, Netlify serves a real
+file when one exists, which is what stops `/assets/*`, `/prototype.html` and the images
+from being swallowed by the SPA fallback.
 
 `binding-template` still shows the pre-simplification project (name, division, client,
 manager) and the old six roles. **It is deliberately not swept forward** — keeping the
@@ -463,12 +564,15 @@ The contrast audit composites alpha against the painted backdrop before measurin
 - **`placeholderShape.ts` is layout scaffolding, not data** — five projects, one to three
   jobs each, shown only while the repository returns empty. It disappears on its own.
 
-### The demo permission switcher
+### The demo permission switcher — nearly gone
 
-`app/src/data/PermissionProvider.tsx` plus a `<Select>` in the header. With no auth there
-is no honest way to know a level, and defaulting to `superadmin` would quietly hide every
-gate — which is the thing that needs reviewing. It goes when Supabase Auth lands and the
-level comes from `profiles.permission`; nothing consuming `can()` changes.
+`app/src/data/PermissionProvider.tsx` reads `profiles.permission` for the signed-in
+person, and the header `<Select>` only renders when there is no profile row to read.
+
+That last state is not dead code: a session with no profile means the `0003` trigger did
+not fire, and the app says so in a banner rather than inventing a level. Falling back to
+the switcher there is deliberate — a guessed `viewer` would hide the fault, and the
+fault is the thing worth seeing. Nothing consuming `can()` changed.
 
 ---
 

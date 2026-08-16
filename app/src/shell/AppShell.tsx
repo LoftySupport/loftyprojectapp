@@ -1,9 +1,10 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { Avatar, Flex, Label, Text, TextField } from "@vibe/core";
+import { Avatar, Button, Flex, Label, Text, TextField } from "@vibe/core";
+import { initialsOf, useAuth } from "../data/AuthProvider";
 import { useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { useSearch } from "../data/SearchProvider";
-import { PERMISSION_LEVELS, type PermissionLevel } from "../data/types";
+import { PERMISSION_LEVELS, greetingName, type PermissionLevel } from "../data/types";
 import { Select } from "../components/Select";
 import { Token } from "../components/Token";
 import "./AppShell.css";
@@ -32,8 +33,9 @@ const PAGES = [
  */
 export function AppShell() {
   const repo = useRepository();
-  const { permission, setPermission } = usePermission();
+  const { permission, setPermission, isDemo } = usePermission();
   const { query, setQuery } = useSearch();
+  const { status, profile, signOut, error: authError } = useAuth();
 
   return (
     <>
@@ -80,25 +82,74 @@ export function AppShell() {
               text="Unbound"
               aria-label={`Reading through the ${repo.name} repository`}
             />
-            {/* With no auth there is no honest way to know a permission level, and
-                defaulting to superadmin would quietly hide every gate in the app —
-                which is the thing that needs reviewing. Switchable, and visible.
-                It disappears when Supabase Auth lands. */}
-            <span className="app-permission">
-              <Select
-                aria-label="Signed in as (demo)"
-                options={PERMISSION_LEVELS.map(p => ({ value: p, label: p }))}
-                value={permission}
-                onChange={v => setPermission(v as PermissionLevel)}
-              />
-            </span>
+            {/* Only while nobody is signed in. With a real session the level comes from
+                profiles.permission and a switcher beside it would be a second, editable
+                answer to the one question every gate in the app asks. */}
+            {isDemo && (
+              <span className="app-permission">
+                <Select
+                  aria-label="Signed in as (demo)"
+                  options={PERMISSION_LEVELS.map(p => ({ value: p, label: p }))}
+                  value={permission}
+                  onChange={v => setPermission(v as PermissionLevel)}
+                />
+              </span>
+            )}
             <span className="app-user">
-              <Avatar size="small" type="text" text="SB" aria-label="Signed in" />
-              <Token>profiles.full_name</Token>
+              {profile ? (
+                <>
+                  <Avatar
+                    size="small"
+                    type="text"
+                    text={initialsOf(profile)}
+                    aria-label={`Signed in as ${profile.fullName}`}
+                  />
+                  {/* Hidden below 720px in CSS, like the token it replaced — the avatar
+                      carries identity there and the name costs a line of header. */}
+                  <span className="app-user-name">
+                    <Text type="text2" element="span">{greetingName(profile)}</Text>
+                  </span>
+                </>
+              ) : (
+                /* Signed in, but the profiles row has not arrived — either still loading
+                   or the 0003 trigger did not fire. The token is the honest placeholder
+                   for a value that should be bound and is not. */
+                <>
+                  <Avatar size="small" type="text" text="?" aria-label="Profile not loaded" />
+                  <Token>profiles.full_name</Token>
+                </>
+              )}
+              {/* Always "Sign out": RequireAuth means the shell only ever renders for a
+                  signed-in person, so there is no signed-out state to handle here. */}
+              <Button size="small" kind="tertiary" onClick={() => void signOut()}>
+                Sign out
+              </Button>
             </span>
           </div>
         </Flex>
       </header>
+
+      {authError && (
+        <div className="app-alert" role="alert">
+          <Text type="text2" element="span" ellipsis={false}>
+            <strong>Sign-in failed.</strong> {authError}
+          </Text>
+        </div>
+      )}
+
+      {/* A session with no profiles row means the 0003 trigger did not fire for this
+          user. Everything gated still works off the demo level, so the fault would
+          otherwise be invisible — and an invisible missing profile is the exact gap
+          that migration exists to close. */}
+      {status === "signed-in" && !profile && (
+        <div className="app-alert" role="alert">
+          <Text type="text2" element="span" ellipsis={false}>
+            <strong>Signed in, but no profile row.</strong> The{" "}
+            <code className="sb-token">handle_new_user</code> trigger has not created one,
+            so permissions fall back to the demo level.
+          </Text>
+        </div>
+      )}
 
       <div className="app-banner" role="status">
         {/* `ellipsis={false}` or Vibe holds this on one line and pushes the page into a

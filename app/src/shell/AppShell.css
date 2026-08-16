@@ -48,6 +48,22 @@ html, body, #root { height: 100%; }
   min-width: 0;
 }
 .app-user { display: flex; align-items: center; gap: var(--space-8); min-width: 0; }
+/* min-width: 0 or the name sizes to its own unbreakable minimum and pushes the header
+   sideways — the same fault as every other overflow in this app. */
+.app-user-name { min-width: 0; }
+
+/* Sign-in failures and the missing-profile notice.
+   Painted on the page background rather than in a coloured band: the binding band gets
+   away with fixed dark ink because the band itself is a fixed yellow in every theme,
+   and that trick does not transfer to a strip that has to sit on three different
+   backgrounds. --negative-ink is defined per theme, so this stays AA in light, dark and
+   black. */
+.app-alert {
+  padding: var(--space-8) var(--space-24);
+  border-bottom: 2px solid var(--negative-ink);
+  flex-shrink: 0;
+}
+.app-alert, .app-alert * { color: var(--negative-ink); }
 
 /* The binding notice. Fixed dark ink because the band is a fixed light yellow in
    every theme — the theme's own text colour would invert to white on it. */
@@ -152,5 +168,5 @@ html, body, #root { height: 100%; }
   .app-search { order: -1; flex: 1 1 100%; max-width: none; }
   /* The avatar carries the identity here. The name is an unbound token 200px wide,
      which is a whole line of a small screen to say what the circle already says. */
-  .app-user .sb-token { display: none; }
+  .app-user .sb-token, .app-user-name { display: none; }
 }

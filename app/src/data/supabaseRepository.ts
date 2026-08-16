@@ -31,7 +31,46 @@ import type {
  */
 
 // Add a method name here as you implement it. The Wiring page reads this.
-const WIRED: RepositoryMethod[] = ["listStages"];
+const WIRED: RepositoryMethod[] = ["listStages", "currentProfile"];
+
+/**
+ * The `profiles` columns this app reads. `full_name` is generated; never written.
+ *
+ * One string literal rather than a concatenation: postgrest-js parses this at the type
+ * level to shape the result, and `"a" + "b"` widens to `string`, which it cannot read.
+ */
+const PROFILE_COLUMNS =
+  "id, first_name, last_name, full_name, preferred_name, email, permission, active, created_at, created_by, updated_at, updated_by";
+
+interface ProfileRow {
+  id: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  preferred_name: string | null;
+  email: string;
+  permission: Profile["permission"];
+  active: boolean;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+const toProfile = (r: ProfileRow): Profile => ({
+  id: r.id,
+  firstName: r.first_name,
+  lastName: r.last_name,
+  fullName: r.full_name,
+  preferredName: r.preferred_name,
+  email: r.email,
+  permission: r.permission,
+  active: r.active,
+  createdAt: r.created_at,
+  createdBy: r.created_by,
+  updatedAt: r.updated_at,
+  updatedBy: r.updated_by
+});
 
 // The publishable key (`sb_publishable_…`), not the legacy JWT anon key. Both work, and
 // both are safe in a client bundle — this key is public by design and RLS is what
@@ -93,8 +132,34 @@ export function createSupabaseRepository(): Repository {
       return stub.listProfiles();
     },
 
+    /**
+     * The signed-in person's own row, or null when nobody is signed in.
+     *
+     * No fallback to the stub. Every other method here degrades to seed data so a
+     * half-built database still shows its structure, but identity is the one thing that
+     * must never be invented: a made-up profile would come with a made-up `permission`,
+     * and every gate in the app reads that. Null is the honest answer, and the header
+     * shows it as signed out.
+     *
+     * `maybeSingle()` rather than `single()` — no row is a real state, not an error. It
+     * means the 0003 trigger did not fire for this user, which the caller surfaces
+     * instead of crashing on.
+     */
     async currentProfile(): Promise<Profile | null> {
-      return stub.currentProfile();
+      const { data: auth } = await client.auth.getUser();
+      if (!auth.user) return null;
+
+      const { data, error } = await client
+        .from("profiles")
+        .select(PROFILE_COLUMNS)
+        // Redundant against the "read own profile" policy, which already restricts this
+        // to `id = auth.uid()`. Stated anyway: a query that only works because of a
+        // policy breaks silently and confusingly the day the policy is widened.
+        .eq("id", auth.user.id)
+        .maybeSingle();
+
+      if (error || !data) return null;
+      return toProfile(data as ProfileRow);
     },
 
     // ---- lookups --------------------------------------------------------

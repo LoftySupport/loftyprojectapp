@@ -1,7 +1,6 @@
 # What gets deployed:
 #
-#   /                     redirects to /app/ — the app is the build now
-#   /app/                 the React build, reading through the data seam
+#   /                     the React build, reading through the data seam
 #   /binding-template     the prototype with every data property tokenised.
 #                         Kept as the LAYOUT reference; its fields predate the
 #                         schema decisions, so it is not the field reference.
@@ -16,15 +15,6 @@
 [build.environment]
   NODE_VERSION = "22"
 
-# The root is the app. Landing on the tokenised prototype made it look like the
-# work had stopped — it still shows the pre-simplification project and the old
-# six roles, because it is being kept for layout, not for fields.
-[[redirects]]
-  from = "/"
-  to = "/app/"
-  status = 302
-  force = true
-
 # The binding template keeps a URL of its own, so the layout reference is still
 # reachable without being what anyone lands on.
 [[redirects]]
@@ -32,11 +22,22 @@
   to = "/binding-template.html"
   status = 200
 
-# The React app does client-side routing under /app/, so its paths have to reach
-# its own index.html.
+# The app used to live under /app/. Anything still pointing there — a bookmark, a
+# Teams message, an old deploy-preview link — lands on the same page at the root
+# rather than a 404. Must come before the catch-all below: Netlify takes the first
+# rule that matches.
 [[redirects]]
   from = "/app/*"
-  to = "/app/index.html"
+  to = "/:splat"
+  status = 301
+
+# Client-side routing: every path that is not a real file reaches index.html so the
+# router can read it. No `force`, deliberately — without it Netlify serves an actual
+# file when one exists, which is what keeps /assets/*, /prototype.html and the images
+# from being swallowed by this rule.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
   status = 200
 
 # Not for the public while it is V0. These do not replace auth — Supabase Auth
