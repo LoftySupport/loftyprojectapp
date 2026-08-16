@@ -1,0 +1,41 @@
+-- =============================================================================
+-- 0012 — give the policy helpers back to authenticated
+-- =============================================================================
+-- 0011 revoked EXECUTE from PUBLIC and broke every read and write in the app. The
+-- error is unambiguous once you can see it:
+--
+--   insert into addresses  ->  permission denied for function current_permission
+--   select from projects   ->  permission denied for function is_active_user
+--
+-- So a policy expression *is* evaluated with the caller's function privileges. A
+-- SECURITY DEFINER helper called from a policy still has to be executable by the role
+-- the policy applies to; running as the owner changes what the function can see
+-- inside, not who is allowed to invoke it.
+--
+-- Worth writing down because the opposite is easy to assume, and the failure only
+-- shows up under a real signed-in role — as `postgres` everything keeps working, and
+-- the app looks fine right up until a user touches it.
+--
+-- The end state, which is the most closed one that actually functions:
+--
+--   anon           no EXECUTE on anything. Every policy is `to authenticated`, so
+--                  anon never needs to call these. Clears the four
+--                  anon_security_definer_function_executable warnings, which are the
+--                  ones that matter — those are the unauthenticated endpoints.
+--   authenticated  EXECUTE on the two policy helpers only.
+--   both trigger   no grant. A trigger's EXECUTE is checked when the trigger is
+--   functions      created, not each time it fires, so the audit keeps working with
+--                  nobody holding EXECUTE. Verified, not assumed.
+--   redact_audit   no grant. It is only ever called from inside log_activity_audit,
+--                  which is SECURITY DEFINER and therefore already running as the
+--                  owner by the time it gets there.
+--
+-- This leaves the four authenticated_security_definer_function_executable warnings
+-- standing, and they are accepted rather than unnoticed. Both helpers report facts
+-- about the caller and nobody else: current_permission() returns your own rung,
+-- is_active_user() whether your own account is active. Calling either through
+-- /rest/v1/rpc tells you something you already know about yourself.
+-- =============================================================================
+
+grant execute on function current_permission() to authenticated;
+grant execute on function is_active_user()     to authenticated;

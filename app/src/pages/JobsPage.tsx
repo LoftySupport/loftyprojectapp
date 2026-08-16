@@ -11,6 +11,7 @@ import { JobDrawer } from "../components/JobDrawer";
 import { Token } from "../components/Token";
 import { Toolbar, type Grouping, type ToolbarFilter, type View } from "../components/Toolbar";
 import { toOptions } from "../components/Select";
+import { NewJobDialog } from "../components/CreateDialogs";
 import "../components/ui.css";
 
 /**
@@ -26,11 +27,15 @@ export function JobsPage() {
   const { expectedDaysByStage } = useTemplatePhases();
   const shape = usePlaceholderShape();
   const { data: jobs, loading } = useQuery(r => r.listJobs(), []);
+  // The job dialog needs somewhere to put the job — a job cannot exist without a
+  // project, so the picker reads the real list rather than the placeholder shape.
+  const { data: realProjects } = useQuery(r => r.listProjects(), []);
 
   const [view, setView] = useState<View>("Board");
   const [grouping, setGrouping] = useState<Grouping>("Stage");
   const [filters, setFilters] = useState<ToolbarFilter[]>([]);
   const [openJob, setOpenJob] = useState<ShapeJob | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const unbound = !loading && jobs.length === 0;
   const all = useMemo(() => (unbound ? shape.jobs : []), [unbound, shape]);
@@ -96,7 +101,13 @@ export function JobsPage() {
         onFiltersChange={setFilters}
         optionsFor={optionsFor}
         count={`Showing ${rows.length} of ${all.length} jobs`}
-        actions={<Button size="small">+ New job</Button>}
+        actions={<Button size="small" onClick={() => setCreating(true)}>+ New job</Button>}
+      />
+
+      <NewJobDialog
+        show={creating}
+        onClose={() => setCreating(false)}
+        projects={realProjects.map(p => ({ id: p.id, label: String(p.projectNo) }))}
       />
 
       {stale && <PreviousAddressNote />}

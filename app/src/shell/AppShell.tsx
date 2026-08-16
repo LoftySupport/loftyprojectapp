@@ -112,7 +112,7 @@ export function AppShell() {
                 </>
               ) : (
                 /* Signed in, but the profiles row has not arrived — either still loading
-                   or the 0003 trigger did not fire. The token is the honest placeholder
+                   or the 0014 trigger did not fire. The token is the honest placeholder
                    for a value that should be bound and is not. */
                 <>
                   <Avatar size="small" type="text" text="?" aria-label="Profile not loaded" />
@@ -137,7 +137,7 @@ export function AppShell() {
         </div>
       )}
 
-      {/* A session with no profiles row means the 0003 trigger did not fire for this
+      {/* A session with no profiles row means the 0014 trigger did not fire for this
           user. Everything gated still works off the demo level, so the fault would
           otherwise be invisible — and an invisible missing profile is the exact gap
           that migration exists to close. */}

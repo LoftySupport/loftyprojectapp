@@ -11,21 +11,21 @@ import type { Profile } from "./types";
  * directory is single-tenant, so only a Lofty account reaches the consent screen at all;
  * everything past that point is Supabase's session and this app's `profiles` row.
  *
- * Two things this provider deliberately does not do:
+ * The gate itself lives in `RequireAuth` in App.tsx, not here — this provider only
+ * reports what is true. It deliberately **does not read `permission` from the JWT**: the
+ * level comes from the `profiles` row through the repository. Entra's token carries
+ * `user_metadata`, which is user-editable, so an authorization check against it can be
+ * edited by the person it is meant to restrict.
  *
- * - **It does not gate the app.** Signed out, every screen still renders from seed and
- *   placeholder data, which is what makes deploy previews and the dictionary readable
- *   without an account. RLS is what protects the data, not the absence of a route.
- * - **It does not read `permission` from the JWT.** The level comes from the `profiles`
- *   row through the repository. Entra's token carries `user_metadata`, which is
- *   user-editable — an authorization check against it can be edited by the person it is
- *   meant to restrict.
+ * None of this is the security boundary. RLS is: every read policy is gated on
+ * `is_active_user()`, which needs an active `profiles` row, which only the 0014 trigger
+ * creates and only for an Entra sign-in. The gate is a UX decision on top of that.
  */
 
 export type AuthStatus =
   /** Still asking Supabase whether a session is in local storage. */
   | "loading"
-  /** No session. The app runs on seeds and the demo permission switcher. */
+  /** No session. RequireAuth sends every route to /signin. */
   | "signed-out"
   /** Session established. `profile` follows a moment later. */
   | "signed-in"
@@ -37,7 +37,7 @@ interface AuthContextValue {
   session: Session | null;
   /**
    * The `profiles` row for the signed-in user. Null while it is still loading, and null
-   * if the row is genuinely absent — which means the 0003 trigger did not fire, and is
+   * if the row is genuinely absent — which means the 0014 trigger did not fire, and is
    * worth surfacing rather than papering over.
    */
   profile: Profile | null;
@@ -108,12 +108,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       options: {
         // `email` is required — Supabase Auth rejects a sign-in with no email address,
         // and `profiles.email` is not null. `openid profile` come with it so the token
-        // carries `given_name` and `family_name`: without them the 0003 trigger has only
+        // carries `given_name` and `family_name`: without them the 0014 trigger has only
         // a display name to split, and splitting is a guess.
         scopes: "openid profile email",
-        // BASE_URL, not a bare origin — the app is served from /app/, and landing on /
-        // after a successful sign-in is a 404 with a valid session behind it, which
-        // reads like auth failing when it did not.
+        // BASE_URL rather than a literal path, so `base` in vite.config.ts stays the
+        // single place the app's location is decided. Landing on a path the app does
+        // not serve is a 404 with a valid session behind it, which reads like auth
+        // failing when it did not.
         redirectTo: `${window.location.origin}${import.meta.env.BASE_URL}`
       }
     });

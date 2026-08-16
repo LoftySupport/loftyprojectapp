@@ -56,7 +56,11 @@ export interface Address {
   suburb: string;
   state: AuState;
   country: "AU";
-  councilId: Uuid | null;
+  /**
+   * An enum value since 0003, not an id — "City of Burnside" reads straight off the
+   * row. Only an SA address may carry one; the database enforces that with a CHECK.
+   */
+  council: SaCouncil | null;
   /** Generated in Postgres. Read-only: never write to it. */
   consolidatedAddress: string;
   createdAt: IsoDateTime;
@@ -65,12 +69,49 @@ export interface Address {
   updatedBy: Uuid | null;
 }
 
-export interface CouncilRegion extends Audited {
-  id: Uuid;
-  name: string;
-  state: AuState;
-  active: boolean;
-}
+/**
+ * The 68 South Australian councils, as the LGA lists them and in that order — so a
+ * picker rendering this array in sequence is already alphabetical the way the LGA reads
+ * it ("District Council of Ceduna" under C, not D).
+ *
+ * This mirrors the `sa_council` Postgres enum from migration 0003 exactly. It replaced
+ * the `council_regions` table, which is why there is no `CouncilRegion` interface any
+ * more: a council is a value on the address now, not a row it points at.
+ *
+ * Source: https://www.lga.sa.gov.au/sa-councils/councils-listing
+ */
+export const SA_COUNCILS = [
+  "City of Adelaide", "Adelaide Hills Council", "Adelaide Plains Council",
+  "Alexandrina Council", "The Barossa Council", "Barunga West Council",
+  "Berri Barmera Council", "City of Burnside", "Campbelltown City Council",
+  "District Council of Ceduna", "City of Charles Sturt",
+  "Clare and Gilbert Valleys Council", "District Council of Cleve",
+  "District Council of Coober Pedy", "Coorong District Council",
+  "Copper Coast Council", "District Council of Elliston",
+  "The Flinders Ranges Council", "District Council of Franklin Harbour",
+  "Town of Gawler", "Regional Council of Goyder", "City of Holdfast Bay",
+  "Kangaroo Island Council", "District Council of Karoonda East Murray",
+  "District Council of Kimba", "Kingston District Council", "Light Regional Council",
+  "Lower Eyre Council", "District Council of Loxton Waikerie", "City of Marion",
+  "Mid Murray Council", "City of Mitcham", "Mount Barker District Council",
+  "City of Mount Gambier", "District Council of Mount Remarkable",
+  "Rural City of Murray Bridge", "Naracoorte Lucindale Council",
+  "Northern Areas Council", "City of Norwood Payneham & St Peters",
+  "City of Onkaparinga", "District Council of Orroroo Carrieton",
+  "District Council of Peterborough", "City of Playford",
+  "City of Port Adelaide Enfield", "Port Augusta City Council",
+  "City of Port Lincoln", "Port Pirie Regional Council", "City of Prospect",
+  "Renmark Paringa Council", "District Council of Robe",
+  "Municipal Council of Roxby Downs", "City of Salisbury",
+  "Southern Limestone Coast Council", "Southern Mallee District Council",
+  "District Council of Streaky Bay", "Tatiara District Council",
+  "City of Tea Tree Gully", "District Council of Tumby Bay", "City of Unley",
+  "City of Victor Harbor", "Wakefield Regional Council", "Town of Walkerville",
+  "Wattle Range Council", "City of West Torrens", "City of Whyalla",
+  "Wudinna District Council", "District Council of Yankalilla",
+  "Yorke Peninsula Council"
+] as const;
+export type SaCouncil = (typeof SA_COUNCILS)[number];
 
 /**
  * Two addresses, not one. `original` is where the project started and never moves —
@@ -206,33 +247,18 @@ export interface JobDisplay {
 // ------------------------------------------------------- project/job/stage
 
 /**
- * The composite table: one row per job per stage. This is what makes stage history
- * possible — a single `stage_id` on the job would only ever tell you where it is now,
- * not when it got there, how long it sat, or what it skipped.
+ * `JobStage` was here — the composite table, one row per job per stage, carrying
+ * entered_at and exited_at so stage history was answerable.
  *
- * `projectId` is carried alongside `jobId` so project-level rollups don't need the
- * extra join. It is enforced against the job's project by a foreign key.
+ * Dropped in 0006. The current position moved onto the job itself in 0004 as
+ * `jobs.stage` and `jobs.stage_entered_at`, which is what the board filters on and
+ * what "days in stage" derives from. That left the table holding only the durations of
+ * stages a job had already left, nothing wrote to it, and no screen read it.
+ *
+ * The cost is per-stage duration history, and it is not recoverable by re-adding the
+ * table: bringing the bottleneck ranking back needs this table plus a trigger on
+ * `jobs.stage`, collecting from that day forward.
  */
-export interface JobStage {
-  id: Uuid;
-  projectId: Uuid;
-  jobId: Uuid;
-  stageId: number;
-  /** Null until the job reaches this stage */
-  enteredAt: IsoDateTime | null;
-  /** Null while the job is still in this stage — which is what makes it the open one. */
-  exitedAt: IsoDateTime | null;
-  /**
-   * No `isCurrent` flag. Which stage a job is in now is `jobs.stageId`; whether the job
-   * itself is current is `isCurrent(job.status)`. A third copy of that fact is a third
-   * thing to keep true.
-   */
-  // + fields
-  createdAt: IsoDateTime;
-  createdBy: Uuid | null;
-  updatedAt: IsoDateTime;
-  updatedBy: Uuid | null;
-}
 
 // ------------------------------------------------------------ user profile
 
@@ -362,4 +388,52 @@ export interface PropertyDef {
   /** Required to *leave* its stage, not required to create the record. */
   required: boolean;
   automation?: string;
+}
+
+// ------------------------------------------------------------------ creating
+
+/**
+ * What a person actually types to create something.
+ *
+ * These are deliberately not `Partial<Project>`. Most of a project is not the caller's
+ * to supply: `projectNo` comes from a sequence, `jobNumber` from a generated column,
+ * `stage` and `stageEnteredAt` from defaults, and the audit quartet from triggers. A
+ * create type that accepted them would invite writing values the database is going to
+ * overwrite — or worse, succeed in overwriting them.
+ *
+ * The address is nested rather than an id because the person creating a project has an
+ * address in their hand, not a row in `addresses`. Making them create the address first
+ * would be the app leaking its own schema into a form.
+ */
+export interface NewAddress {
+  lotNumber?: string | null;
+  streetNumber?: string | null;
+  street1: string;
+  street2?: string | null;
+  suburb: string;
+  state?: AuState;
+  council?: SaCouncil | null;
+}
+
+export interface NewProject {
+  address: NewAddress;
+  projectType: ProjectType | null;
+  status?: RecordStatus;
+  startDate?: IsoDate | null;
+  targetCompletion?: IsoDate | null;
+}
+
+/**
+ * A job belongs to a project and inherits its address unless given its own — which is
+ * the common case, so `address` is optional and the database's default_current_address
+ * trigger fills it in.
+ *
+ * `jobSequence` is absent on purpose: a trigger assigns it under a lock on the parent
+ * project, which is the only way two people creating jobs at once do not collide.
+ */
+export interface NewJob {
+  projectId: Uuid;
+  address?: NewAddress;
+  stage?: Stage["name"];
+  status?: RecordStatus;
 }

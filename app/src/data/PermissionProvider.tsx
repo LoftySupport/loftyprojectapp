@@ -46,7 +46,7 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
 
   const value = useMemo(() => {
     // A session without a profile row falls back to the switcher rather than to a
-    // guessed level: the 0003 trigger not having fired is a fault to see, not one to
+    // guessed level: the 0014 trigger not having fired is a fault to see, not one to
     // paper over with an invented `viewer`.
     const isDemo = profile === null;
     const permission = profile?.permission ?? demoPermission;

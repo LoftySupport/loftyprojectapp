@@ -1,6 +1,7 @@
 import type {
   Job,
-  JobStage,
+  NewJob,
+  NewProject,
   Profile,
   Project,
   PropertyDef,
@@ -41,10 +42,15 @@ export interface Repository {
   listJobs(opts?: { projectId?: string }): Promise<Job[]>;
   getJob(id: string): Promise<Job | null>;
 
-  listJobStages(opts?: { jobId?: string; projectId?: string }): Promise<JobStage[]>;
-
   listProfiles(): Promise<Profile[]>;
   currentProfile(): Promise<Profile | null>;
+
+  // ---- creating ---------------------------------------------------------
+  // Return the created record rather than void: the caller needs the number the
+  // database assigned — projectNo, jobNumber — and a round trip to fetch it would be
+  // a second chance to get it wrong.
+  createProject(input: NewProject): Promise<Project>;
+  createJob(input: NewJob): Promise<Job>;
 
   // ---- lookups ----------------------------------------------------------
   // Reference tables. Seeded rather than user-created, which is why the stub can answer
@@ -63,9 +69,10 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "getProject",
   "listJobs",
   "getJob",
-  "listJobStages",
   "listProfiles",
   "currentProfile",
+  "createProject",
+  "createJob",
   "listStages",
   "listTeams",
   "listTemplatePhases",
@@ -79,11 +86,12 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   getProject: "projects",
   listJobs: "jobs",
   getJob: "jobs",
-  listJobStages: "job_stages",
   listProfiles: "profiles",
   currentProfile: "profiles",
-  listStages: "stages",
-  listTeams: "teams",
+  createProject: "projects + addresses",
+  createJob: "jobs",
+  listStages: "stage (enum)",
+  listTeams: "team (enum)",
   listTemplatePhases: "template_phases",
   listTemplateCheckpoints: "template_checkpoints",
   listPropertyDefs: "property_defs"

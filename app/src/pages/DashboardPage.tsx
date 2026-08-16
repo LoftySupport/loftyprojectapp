@@ -40,7 +40,7 @@ export function DashboardPage() {
         </div>
         <div className="pd-centre-title">Your jobs today</div>
         <div className="pd-team">
-          <span className="pd-team-label"><Token>teams.name</Token></span>
+          <span className="pd-team-label"><Token>profile_teams[].team</Token></span>
           <div className="pd-avatars">
             <Avatar size="small" type="text" text="SB" aria-label="Teammate" />
             <Avatar size="small" type="text" text="SB" aria-label="Teammate" />
@@ -55,7 +55,7 @@ export function DashboardPage() {
           <div className="pd-team-pill">
             <span className="pd-team-mark" aria-hidden="true" />
             <div>
-              <div className="pd-team-name"><Token>teams.name</Token></div>
+              <div className="pd-team-name"><Token>profile_teams[].team</Token></div>
               <div className="pd-team-sub">{jobs.length} jobs assigned to you</div>
             </div>
           </div>
@@ -101,7 +101,7 @@ export function DashboardPage() {
               <h3>Heading to your team</h3>
             </div>
             <Empty>
-              Nothing due to hand over to <Token>teams.name</Token>.
+              Nothing due to hand over to <Token>profile_teams[].team</Token>.
             </Empty>
           </section>
 

@@ -21,7 +21,7 @@ every value that will come from a table renders as a `{{table.column}}` token �
 unbound field is visible rather than silently blank.
 
 The migrations **are** applied now, to the `loftyprojectapp` project
-(`gmekuqdjemrfuurxhuib`, ap-southeast-2) — the eight tables exist and are empty. A schema
+(`gmekuqdjemrfuurxhuib`, ap-southeast-2) — the tables exist and are empty. A schema
 change means re-running the migration against that project; `supabase migration list` is
 the check for whether the two have drifted.
 
@@ -29,11 +29,11 @@ The client is wired too: `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`
 on the Netlify project for every deploy context, so `supabaseRepository.ts` builds a real
 client instead of returning null. Locally they come from `app/.env.local`.
 
-**That does not mean data appears yet.** Every RLS policy grants to `authenticated`, and
-there is no auth — so an unauthenticated visitor reads zero rows from every table, and
-the repository's deliberate fall back to seed data on an empty result means the board
-still renders its structure from `SEED_STAGES`. Real rows need Supabase Auth, which is
-still to land. The connection being live is what changed; the data path opens with auth.
+**Auth has landed, and the data path is open.** Reads are gated on `is_active_user()`,
+so a signed-in person with an active `profiles` row reads real rows and everyone else
+reads none. Where a table is not wired yet the repository still falls back to seed data
+deliberately: a half-built database should degrade to the structure, not to a blank
+screen.
 
 ### The Netlify environment, and what is deliberately not in it
 
@@ -61,11 +61,6 @@ Two gotchas worth knowing before touching that screen:
   turns every build red. They are public keys, and that is correct: RLS is the boundary,
   not the key.
 
-**That does not mean data appears yet.** Every RLS policy grants to `authenticated`, and
-there is no auth — so an unauthenticated visitor reads zero rows from every table, and
-the repository's deliberate fall back to seed data on an empty result means the board
-still renders its structure from `SEED_STAGES`. Real rows need Supabase Auth, which is
-still to land. The connection being live is what changed; the data path opens with auth.
 
 **The prototype it grew from is a different repo** — `amberbeaumont/loftyprojectboard`,
 frozen, still deployed at `loftyprojectboard.netlify.app` for showing people. Nothing in
@@ -87,20 +82,43 @@ curl -s "https://gmekuqdjemrfuurxhuib.supabase.co/auth/v1/settings" \
   -H "apikey: <publishable key>" | python3 -m json.tool
 ```
 
-`"external": {"azure": true, "email": true}` is the problem. Every RLS policy grants to
-`authenticated`, and four of them — `addresses`, `projects`, `jobs`, `job_stages` — are
-`using (true)`. So `authenticated` is not "a Lofty person", it is **anyone holding any
-session**, and the email provider hands one to any address on earth that can receive a
-confirmation link. Single-tenant Entra, `xms_edov`, the tenant URL — all of it is the
-lock on the front door, and this is the window next to it.
+`"external": {"azure": true, "email": true}` is the problem: the email provider hands a
+session to any address on earth that can receive a confirmation link. Single-tenant
+Entra, `xms_edov`, the tenant URL — all of it is the lock on the front door, and this is
+the window next to it.
 
 Fix: **Authentication → Sign In / Providers → Email → off.** Lofty has no
 email-and-password users and never will; the directory is the source of truth. Then
 re-run the curl above and confirm `email` is gone — the same read-it-back rule as the
 Netlify variables.
 
-Nothing is exposed today because the tables are empty. It stops being harmless the day
-the first real project lands, which is why it is the next job and not a later one.
+**What actually stops it today, and why that is not luck.** 0009 moved every read policy
+off `using (true)` and onto `is_active_user()`:
+
+```sql
+select exists (select 1 from profiles p where p.id = auth.uid() and p.active)
+```
+
+So holding a session is not enough — reading needs an **active `profiles` row**. A
+self-service email signup has no profile, so it reads nothing. The profile row *is* the
+grant.
+
+Which is exactly why `0014` has an Entra-only branch at the very top of it:
+
+```sql
+if coalesce(new.raw_app_meta_data ->> 'provider', '') <> 'azure' then
+  return new;
+end if;
+```
+
+Without that, a trigger that greets every new `auth.users` row equally would have
+created an active profile for that email signup and handed it the entire database —
+turning a latent hole into a live one. `raw_app_meta_data`, not `raw_user_meta_data`:
+app_metadata is written by the auth server and cannot be set by the person signing up,
+which is the only reason an authorization check may read it.
+
+That branch is defence in depth, **not a substitute for turning the provider off.** It
+is one `if` standing between an open signup form and every project Lofty has.
 
 ### Why OAuth, not SAML
 
@@ -143,7 +161,13 @@ curl -sL "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?clie
 #    → "unauthorized_client: The client does not exist or is not enabled for consumers"
 ```
 
-### 1. Register the application in Entra
+### How it was set up — the record, for a rebuild
+
+Everything below is **done**. It is kept because a directory can be rebuilt, a secret
+rotated, or the whole registration recreated in a new tenant, and re-deriving these
+choices from scratch is how they come back subtly different.
+
+#### 1. Register the application in Entra
 
 At [portal.azure.com](https://portal.azure.com) → **Microsoft Entra ID** → **App
 registrations** → **New registration**:
@@ -156,9 +180,9 @@ registrations** → **New registration**:
 
 Single-tenant is the point: it is what stops any Microsoft account on earth signing in.
 The redirect URI is Supabase's callback, not the app's — a common early mistake is
-putting the Netlify URL here. It goes in the allow list at step 4 instead.
+putting the Netlify URL here. It goes in the redirect allow list instead.
 
-### 2. Client ID and secret
+#### 2. Client ID and secret
 
 - **Client ID** — on the app's Overview screen, *Application (client) ID*.
 - **Secret** — *Certificates & secrets* → *Client secrets* → *New client secret*. Copy
@@ -172,11 +196,11 @@ enable it, paste the client ID and secret, and set **Azure Tenant URL** to
 `https://login.microsoftonline.com/<tenant-id>`. Without the tenant URL Supabase uses the
 `common` endpoint and the single-tenant restriction is enforced only by Entra, not here.
 
-### 3. Add the `xms_edov` claim — not optional for us
+#### 3. Add the `xms_edov` claim — not optional for us
 
 Entra can emit **unverified** email domains, which lets someone impersonate an existing
 account. Microsoft's own guidance is that this applies to single-tenant apps — which is
-exactly what step 1 registered. Do not skip it.
+exactly what step 1 registered. Do not skip it on a rebuild.
 
 App registration → **Manifest** → back up the JSON → set `optionalClaims`:
 
@@ -212,15 +236,15 @@ root at the CDN, and Supabase compares against the URL the browser was sent to.
 
 `email` is required — Supabase Auth rejects a sign-in with no email address. `openid
 profile` come with it so the token carries `given_name` and `family_name`: without them
-the 0003 trigger has only a display name to split, and splitting is a guess.
+the 0014 trigger has only a display name to split, and splitting is a guess.
 
 `redirectTo` reads `import.meta.env.BASE_URL` rather than hard-coding a path, so the base
 in `vite.config.ts` is the single place the app's location is decided.
 
-### The gap it exposed: no `profiles` row — closed by `0003`
+### The gap it exposed: no `profiles` row — closed by `0014`
 
 Signing in creates a row in `auth.users`. **It does not create one in `profiles`**, and
-nothing in `0001_core.sql` does either. `0003_handle_new_user.sql` closes it: a
+nothing in `0001_core.sql` does either. `0014_handle_new_user.sql` closes it: a
 `security definer` trigger on `auth.users` that inserts from the Entra claims.
 
 Three decisions inside it worth not re-making:
@@ -569,7 +593,7 @@ The contrast audit composites alpha against the painted backdrop before measurin
 `app/src/data/PermissionProvider.tsx` reads `profiles.permission` for the signed-in
 person, and the header `<Select>` only renders when there is no profile row to read.
 
-That last state is not dead code: a session with no profile means the `0003` trigger did
+That last state is not dead code: a session with no profile means the `0014` trigger did
 not fire, and the app says so in a banner rather than inventing a level. Falling back to
 the switcher there is deliberate — a guessed `viewer` would hide the fault, and the
 fault is the thing worth seeing. Nothing consuming `can()` changed.
