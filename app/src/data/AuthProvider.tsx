@@ -18,8 +18,10 @@ import type { Profile } from "./types";
  * edited by the person it is meant to restrict.
  *
  * None of this is the security boundary. RLS is: every read policy is gated on
- * `is_active_user()`, which needs an active `profiles` row, which only the 0014 trigger
- * creates and only for an Entra sign-in. The gate is a UX decision on top of that.
+ * `is_active_user()`, which needs an active `profiles` row whose `auth_user_id` matches
+ * the session. Those rows are created by hand — signing in only links to one. So an
+ * Entra account nobody added to the app authenticates fine and reads nothing, and the
+ * gate below is the polite version of that, not the mechanism.
  */
 
 export type AuthStatus =
@@ -35,12 +37,17 @@ export type AuthStatus =
 interface AuthContextValue {
   status: AuthStatus;
   session: Session | null;
-  /**
-   * The `profiles` row for the signed-in user. Null while it is still loading, and null
-   * if the row is genuinely absent — which means the 0014 trigger did not fire, and is
-   * worth surfacing rather than papering over.
-   */
+  /** The `profiles` row for the signed-in user, once `profileState` is "linked". */
   profile: Profile | null;
+  /**
+   * Whether this Microsoft account is on Lofty's staff list.
+   *
+   * "unlinked" is the load-bearing one: a valid Entra session with no `profiles` row.
+   * Anyone in the directory can authenticate, but only a person somebody created in the
+   * app has a row, and without one every RLS policy denies. Distinguished from "loading"
+   * so the gate can say "not set up" without flashing it at everyone mid-load.
+   */
+  profileState: "loading" | "linked" | "unlinked";
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
   /** Last sign-in failure, for display. Cleared on the next attempt. */
@@ -53,6 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const repo = useRepository();
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [profileState, setProfileState] = useState<"loading" | "linked" | "unlinked">("loading");
   const [status, setStatus] = useState<AuthStatus>(supabase ? "loading" : "unavailable");
   const [error, setError] = useState<string | null>(null);
 
@@ -89,13 +97,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!userId) {
       setProfile(null);
+      setProfileState("loading");
       return;
     }
     let cancelled = false;
+    setProfileState("loading");
     repo
       .currentProfile()
-      .then(p => { if (!cancelled) setProfile(p); })
-      .catch(() => { if (!cancelled) setProfile(null); });
+      .then(p => {
+        if (cancelled) return;
+        setProfile(p);
+        setProfileState(p ? "linked" : "unlinked");
+      })
+      // A failed lookup is treated as unlinked, not as linked-with-no-data. Failing
+      // closed is the only safe direction for the value the gate reads.
+      .catch(() => {
+        if (cancelled) return;
+        setProfile(null);
+        setProfileState("unlinked");
+      });
     return () => { cancelled = true; };
   }, [repo, userId]);
 
@@ -127,8 +147,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, session, profile, signIn, signOut, error }),
-    [status, session, profile, signIn, signOut, error]
+    () => ({ status, session, profile, profileState, signIn, signOut, error }),
+    [status, session, profile, profileState, signIn, signOut, error]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

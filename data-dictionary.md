@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-120 properties across 26 tables.
+122 properties across 26 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
-| To do | 37 | Specified here, not yet in the migration |
-| Created | 73 | In the migration and the types |
+| To do | 36 | Specified here, not yet in the migration |
+| Created | 76 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 10 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -168,14 +168,16 @@
 
 | Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `profiles.id` | Profile ID | The person's identity in the app. Keyed one-to-one to auth.users, which Microsoft Entra populates — this row is the part Lofty owns, not the part the IdP owns. | `uuid` | Primary key. Not null. | FK → auth.users(id) ON DELETE CASCADE. Referenced by projects.manager_id (removed), addresses.created_by/updated_by, profile_teams.profile_id, activity.author_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `profiles.id` | Profile ID | The person's identity in the app, minted when they are added to it. Since 0015 this is Lofty's own key and no longer the auth.users id — a staff record exists before anyone signs in, which is what makes a pre-created team list possible. | `uuid` | Primary key. Not null, default gen_random_uuid(). | Referenced by addresses.created_by/updated_by, profile_teams.profile_id, activity.author_id. No longer FK to auth.users — see profiles.auth_user_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `profiles.auth_user_id` | Microsoft account | The linked Entra login, filled by a trigger the first time the person signs in. Null means created but not yet arrived — a real and expected state. This, not profiles.id, is what every RLS policy compares against auth.uid(). | `uuid` | Unique. Nullable. | FK → auth.users(id) ON DELETE SET NULL — deleting the Microsoft account unlinks the staff record, it does not erase it. Read by is_active_user() and current_permission(). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `profiles.first_name` | First name | Given name. Separate from surname because people change names, and because greetings use the first name on its own — "Hi, Amber". | `text` | Not null. | Feeds full_name (generated) and profile_display.greeting_name. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `profiles.last_name` | Last name | Family name. Separate from first name so a name change is one field, not a string edit that has to be got exactly right. | `text` | Not null. | Feeds full_name (generated). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `profiles.full_name` | Full name | First and last joined, for cards, comment bylines and reports. Never written directly — change the two halves and this follows. | `generated text` | GENERATED ALWAYS AS (first_name \|\| ' ' \|\| last_name) STORED. Read-only. | Derived from profiles.first_name + profiles.last_name. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `profiles.preferred_name` | Goes by | What someone actually wants to be called, when it differs from their first name. Null means use the first name — never store a copy of it here. | `text` | Nullable. | Read by profile_display.greeting_name via COALESCE. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `profiles.email` | Email | Work email. Also the join key if people are ever imported from a spreadsheet. | `text` | Unique. Not null. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `profiles.email` | Email | The address the person actually uses and the one the app shows. At Lofty this is @lofty.com.au, which is usually NOT what they sign in with — see login_email. | `text` | Unique. Not null. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `profiles.login_email` | Microsoft sign-in address | The address on the Microsoft account, when it differs from email — at Lofty typically @loftybg.onmicrosoft.com. A matching key and nothing else: the link trigger looks a person up by this, and no screen displays it. | `text` | Unique on lower(login_email). Nullable. | Matched against auth.users.email by the on_auth_user_created trigger. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `profiles.permission` | Permission level | How far someone reaches: viewer reads, user works their own jobs, manager reads across teams, admin edits definitions, superadmin manages teams and can delete. Intended to sync with Microsoft Teams permission levels. | `enum` | permission_level. Not null, default 'viewer' (least privilege). | Compared by ordinal in RLS policies — permission >= 'manager'. Referenced by permission_grants.permission. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `profiles.job_title` | Job title | Free text, shown on the profile. Not a lookup and not tied to permission. | `text` | Nullable. | — | To do | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `profiles.job_title` | Job title | Free text, shown on the profile. Not a lookup and not tied to permission — a Manager by title may be a user by permission. | `text` | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `profiles.phone` | Phone | Contact number, editable by the person themselves. | `text` | Nullable. | — | To do | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `profiles.active` | Active | Soft delete. A person is never hard-deleted — their name is on years of activity and comments. | `boolean` | Not null, default true. | Filters every user picker. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `profiles.source` | Source | Where the account came from — 'Entra ID' once SCIM is live, otherwise a manually created account. | `text` | Nullable. | — | To do | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |

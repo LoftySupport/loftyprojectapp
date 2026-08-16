@@ -45,15 +45,18 @@ const WIRED: RepositoryMethod[] = ["createProject", "createJob", "currentProfile
  * level to shape the result, and `"a" + "b"` widens to `string`, which it cannot read.
  */
 const PROFILE_COLUMNS =
-  "id, first_name, last_name, full_name, preferred_name, email, permission, active, created_at, created_by, updated_at, updated_by";
+  "id, auth_user_id, first_name, last_name, full_name, preferred_name, email, login_email, job_title, permission, active, created_at, created_by, updated_at, updated_by";
 
 interface ProfileRow {
   id: string;
+  auth_user_id: string | null;
   first_name: string;
   last_name: string;
   full_name: string;
   preferred_name: string | null;
   email: string;
+  login_email: string | null;
+  job_title: string | null;
   permission: Profile["permission"];
   active: boolean;
   created_at: string;
@@ -64,11 +67,14 @@ interface ProfileRow {
 
 const toProfile = (r: ProfileRow): Profile => ({
   id: r.id,
+  authUserId: r.auth_user_id,
   firstName: r.first_name,
   lastName: r.last_name,
   fullName: r.full_name,
   preferredName: r.preferred_name,
   email: r.email,
+  loginEmail: r.login_email,
+  jobTitle: r.job_title,
   permission: r.permission,
   active: r.active,
   createdAt: r.created_at,
@@ -142,9 +148,13 @@ export function createSupabaseRepository(): Repository {
      * and every gate in the app reads that. Null is the honest answer, and the header
      * shows it as signed out.
      *
-     * `maybeSingle()` rather than `single()` — no row is a real state, not an error. It
-     * means the 0014 trigger did not fire for this user, which the caller surfaces
-     * instead of crashing on.
+     * Keyed on `auth_user_id`, not `id`. Since 0015 those are different things: `id` is
+     * Lofty's key on the staff record, `auth.uid()` is Microsoft's on the session, and
+     * the trigger joins them at first sign-in.
+     *
+     * `maybeSingle()` rather than `single()` — no row is a real state, not an error, and
+     * a meaningful one: it means this Microsoft account is not on Lofty's list. The
+     * caller turns that into "not set up" rather than crashing on it.
      */
     async currentProfile(): Promise<Profile | null> {
       const { data: auth } = await client.auth.getUser();
@@ -153,10 +163,9 @@ export function createSupabaseRepository(): Repository {
       const { data, error } = await client
         .from("profiles")
         .select(PROFILE_COLUMNS)
-        // Redundant against the "read own profile" policy, which already restricts this
-        // to `id = auth.uid()`. Stated anyway: a query that only works because of a
-        // policy breaks silently and confusingly the day the policy is widened.
-        .eq("id", auth.user.id)
+        // The read policy is `is_active_user()`, which is broader than "your own row" —
+        // so this filter is doing real work, not restating a policy.
+        .eq("auth_user_id", auth.user.id)
         .maybeSingle();
 
       if (error || !data) return null;

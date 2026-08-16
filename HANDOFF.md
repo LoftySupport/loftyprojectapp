@@ -103,22 +103,14 @@ So holding a session is not enough — reading needs an **active `profiles` row*
 self-service email signup has no profile, so it reads nothing. The profile row *is* the
 grant.
 
-Which is exactly why `0014` has an Entra-only branch at the very top of it:
+Since `0015` the profile row is never created by signing in — it is created by hand and
+only *linked* at sign-in, and the link is matched on `login_email`. So an email signup
+from an unknown address matches nothing, gets no profile, and reads nothing. The staff
+list is what closes this, not a provider check.
 
-```sql
-if coalesce(new.raw_app_meta_data ->> 'provider', '') <> 'azure' then
-  return new;
-end if;
-```
-
-Without that, a trigger that greets every new `auth.users` row equally would have
-created an active profile for that email signup and handed it the entire database —
-turning a latent hole into a live one. `raw_app_meta_data`, not `raw_user_meta_data`:
-app_metadata is written by the auth server and cannot be set by the person signing up,
-which is the only reason an authorization check may read it.
-
-That branch is defence in depth, **not a substitute for turning the provider off.** It
-is one `if` standing between an open signup form and every project Lofty has.
+That is defence in depth, **not a substitute for turning the provider off.** Leaving an
+open signup form pointed at the same database is a standing invitation to find the next
+gap in that reasoning.
 
 ### Why OAuth, not SAML
 
@@ -241,32 +233,66 @@ the 0014 trigger has only a display name to split, and splitting is a guess.
 `redirectTo` reads `import.meta.env.BASE_URL` rather than hard-coding a path, so the base
 in `vite.config.ts` is the single place the app's location is decided.
 
-### The gap it exposed: no `profiles` row — closed by `0014`
+### Who may sign in: the staff list, not the directory
 
-Signing in creates a row in `auth.users`. **It does not create one in `profiles`**, and
-nothing in `0001_core.sql` does either. `0014_handle_new_user.sql` closes it: a
-`security definer` trigger on `auth.users` that inserts from the Entra claims.
+**Authenticating and being allowed in are different things.** Anyone in the Lofty Entra
+directory can complete a Microsoft sign-in — that is what a directory is for — and a
+session on its own now grants nothing at all.
 
-Three decisions inside it worth not re-making:
+Access comes from a row in `profiles` that somebody created first. Signing in only
+**links** to one.
 
-- **It never fails a sign-in over a name.** `first_name`/`last_name` are `not null`, and
-  a not-null violation in a trigger on `auth.users` aborts the insert — which is a person
-  locked out of the app entirely. So it reads `given_name`/`family_name`, falls back to
-  splitting the display name on the last space, and falls back again to the email's local
-  part.
-- **`permission` is not in the insert.** The column defaults to `viewer`; naming it in
-  the trigger would be a second place for least-privilege to be decided.
-- **It does not link by email.** `on conflict (id) do nothing` deliberately does not
-  catch a conflict on `email` — matching a new auth user to an existing profile by
-  address is exactly the impersonation path `xms_edov` was added to close.
+That forced a schema change, because `profiles.id` used to *be* the FK to
+`auth.users(id)`: a profile could not exist before the login did, which is backwards for
+a staff list that exists first and has people arrive against it. So, in `0015`:
 
-Insert only: a later sign-in with a changed surname does not overwrite the row, because
-`profiles` is the copy Lofty owns and an overwrite would silently undo an edit.
+| | |
+| --- | --- |
+| `profiles.id` | Lofty's own key, `default gen_random_uuid()`. No longer FK to auth.users |
+| `profiles.auth_user_id` | nullable FK → `auth.users(id)` **on delete set null**. Null = created, not yet arrived |
+| `profiles.login_email` | the `@loftybg.onmicrosoft.com` address — the matching key |
+| `profiles.email` | unchanged in meaning: their real `@lofty.com.au` address, which is what the app shows |
+| `is_active_user()`, `current_permission()` | re-pointed from `p.id = auth.uid()` to `p.auth_user_id = auth.uid()` |
+
+`on delete set null` and not cascade, deliberately: deleting somebody's Microsoft account
+must unlink the staff record, never erase it. Cascade there would mean an IT offboarding
+step silently destroyed their team, title and permission.
+
+**The two emails are two columns because at Lofty they are two addresses.** The login is
+`@loftybg.onmicrosoft.com`; the address everyone actually uses is `@lofty.com.au`. The
+trigger matches `login_email` first and falls back to `email`, which covers the one
+person whose Microsoft account simply is their everyday address.
+
+**No match means nothing happens.** No row is created and nothing is raised — the person
+holds a valid session that reads nothing, which is exactly the requirement. Raising would
+abort the insert into `auth.users` and turn "not invited" into a broken sign-in.
+
+`0016` seeds the forty-five people from the August 2026 staff list. One correction was
+applied and is called out in the file: `amber@lofty.com.auy` had a trailing `y`.
 
 Keep `permission` in `profiles` and read it from there. It must never move into JWT
 `user_metadata`: that field is user-editable, so an authorization check against it can be
-edited by the person it is meant to restrict. `app_metadata` is the safe half if a claim
-is ever genuinely needed.
+edited by the person it is meant to restrict.
+
+### Teams, and why four enum values were added
+
+`team` was built from the pipeline — the teams that hand work to each other through the
+stages. The staff list is departments, a different taxonomy, and ten of forty-five people
+had nowhere to sit. `0014` adds `Commercial`, `Executive`, `Lofty General` and `Admin`.
+
+`Admin` reads close to the `admin` value of `permission_level` and is unrelated: one is
+which team someone is in, the other is what they may do. Different types on different
+columns, so nothing is ambiguous to Postgres — worth knowing before writing a sentence
+containing both.
+
+Enum values can be added and **never removed** without rebuilding the type, so the four
+pipeline teams nobody is currently in — `Sales Admin`, `Scheduling`, `Pre-Construction
+Admin`, `Construction Admin` — stay. Two of them did turn out to have members once job
+titles were read rather than the department column.
+
+**Multi-team already worked and needed no change:** `profile_teams` is
+`primary key (profile_id, team)` with a partial unique index allowing only one
+`is_primary` per person. A second team is another row.
 
 ### The app is gated
 

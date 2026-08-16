@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from "rea
 import { Loader, ThemeProvider } from "@vibe/core";
 import { loftyTheme, type SystemTheme } from "./theme/loftyTheme";
 import { AuthProvider, useAuth } from "./data/AuthProvider";
+import { NotSetUpPage } from "./pages/NotSetUpPage";
 import { SignInPage } from "./pages/SignInPage";
 import { DataProvider } from "./data/DataProvider";
 import { PermissionProvider } from "./data/PermissionProvider";
@@ -23,6 +24,10 @@ const THEME_KEY = "lofty-theme";
 /**
  * The gate.
  *
+ * Two conditions, not one: a Microsoft session **and** a Lofty staff record. Anyone in
+ * the Entra directory can pass the first; only someone created in the app passes the
+ * second.
+ *
  * Nothing renders without a session — not the board, not the dictionary, not an empty
  * page with the nav on it. The cost of that is real and worth stating: a deploy preview
  * now needs a Lofty account to review, so a PR cannot be eyeballed by anyone outside the
@@ -37,7 +42,7 @@ const THEME_KEY = "lofty-theme";
  * is worse than one that stops.
  */
 function RequireAuth() {
-  const { status } = useAuth();
+  const { status, profileState } = useAuth();
   const location = useLocation();
 
   if (status === "loading") {
@@ -52,6 +57,19 @@ function RequireAuth() {
     // through Microsoft instead of dumping everyone on the dashboard.
     return <Navigate to="/signin" replace state={{ from: location.pathname }} />;
   }
+
+  // A session is not admission. Only people created in the app have a profiles row, and
+  // without one every RLS policy denies — so rendering the board would show an empty
+  // shell that looks broken rather than closed.
+  if (profileState === "loading") {
+    return (
+      <div className="app-wait" role="status" aria-live="polite">
+        <Loader size="medium" />
+      </div>
+    );
+  }
+  if (profileState === "unlinked") return <NotSetUpPage />;
+
   return <Outlet />;
 }
 

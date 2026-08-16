@@ -269,6 +269,15 @@ export interface JobDisplay {
  */
 export interface Profile {
   id: Uuid;
+  /**
+   * The linked Microsoft account, or null for someone created but not yet arrived.
+   *
+   * This is not `id`. `id` is Lofty's key, minted when the person is added to the app;
+   * this is Entra's, and it appears the first time they sign in. Keeping them separate
+   * is what lets the staff list exist before anyone has logged in — and null here is
+   * precisely "has no access yet".
+   */
+  authUserId: Uuid | null;
   /** Two fields, not one — people change names, and greetings use the first. */
   firstName: string;
   lastName: string;
@@ -277,6 +286,15 @@ export interface Profile {
   /** Only when someone goes by something else. Null means "use firstName". */
   preferredName: string | null;
   email: string;
+  /**
+   * The address they sign in with, when it differs from `email`.
+   *
+   * At Lofty it usually does: the Microsoft account is `@loftybg.onmicrosoft.com` while
+   * the address people actually use is `@lofty.com.au`. `email` stays the real one —
+   * this is a matching key and nothing else, and no screen should display it.
+   */
+  loginEmail: string | null;
+  jobTitle: string | null;
   /**
    * The permission ladder, in order — a comparison, not a set. `viewer` reads,
    * `user` works their own jobs, `manager` reads across teams, `admin` edits

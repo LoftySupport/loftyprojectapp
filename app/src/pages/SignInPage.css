@@ -56,3 +56,15 @@
 /* --negative-ink is redefined per theme, so this stays AA in light, dark and black.
    Vibe's Text sets its own colour from the theme, hence the descendant selector. */
 .signin-error, .signin-error * { color: var(--negative-ink); }
+
+/* The address someone signed in with, on the not-set-up screen. Neutral rather than
+   negative: nothing has gone wrong, they are simply not on the list yet. */
+.signin-note {
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-8) var(--space-12);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-small);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
