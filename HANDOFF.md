@@ -3,9 +3,11 @@
 Everything a new session needs to pick this up. Read this first, then
 `data-dictionary.md`.
 
-**Next job: [turn off the email provider](#the-open-door-beside-the-front-one), then
-`jobs`.** Entra sign-in is built and the app is gated behind it. The one thing left on
-auth is a door standing open beside it.
+**Next job: [turn off the email provider](#the-open-door-beside-the-front-one) and fix the
+redirect allow list, then `property_defs`.** Entra sign-in is built, the app is gated
+behind it, and the forty-five staff are seeded. Nobody has signed in yet, and until the
+redirect URLs are corrected nobody can — which means every signed-in surface is still
+unexercised.
 
 Last updated: 2026-08-16.
 
@@ -284,6 +286,43 @@ Keep `permission` in `profiles` and read it from there. It must never move into 
 `user_metadata`: that field is user-editable, so an authorization check against it can be
 edited by the person it is meant to restrict.
 
+### The escalation that was live for about an hour
+
+Worth reading even though it is fixed, because the shape of it will recur.
+
+`0009` gave people an "update own profile" policy. **An RLS policy decides which *rows*
+may be written, never which *columns*** — and `authenticated` held `UPDATE` on every
+column of `profiles`. So this was permitted, and it satisfied the policy:
+
+```sql
+update profiles set permission = 'superadmin' where auth_user_id = auth.uid();
+```
+
+Every gate in the app reads `profiles.permission`, and `current_permission()` reads it
+for every policy in the schema. The check meant to stop them was the one they had just
+rewritten. `active` was the same fault in reverse: a deactivated person could switch
+themselves back on.
+
+The handoff already contained the reasoning — *"that field is user-editable, so an
+authorization check against it can be edited by the person it is meant to restrict"* —
+written about JWT `user_metadata`. It applied to a column the whole time, and nobody
+noticed because the sentence had "JWT" in it.
+
+**`0018` fixes it with a trigger, not column grants.** Grants are per *role*, and admins
+are `authenticated` too, so revoking `UPDATE(permission)` from the role takes it from the
+people who are supposed to have it. The distinction being drawn is between two users of
+the *same* role — which a trigger can see and a grant cannot. `auth.uid() is null` passes
+through so migrations, seeds and the service role still work.
+
+**`0019`** then protects `preferred_name` as well, per Lofty: an admin sets that too. That
+leaves nothing on `profiles` a non-admin may write, so "update own profile" is **dropped**
+rather than left in place. A policy granting a right nothing can exercise reads as
+evidence that self-service exists, and the next person adding a column would assume it is
+self-editable because the policy says "own profile".
+
+The general lesson: **when a policy lets someone write their own row, ask which columns
+that row contains.** RLS will not ask for you.
+
 ### Teams, and why four enum values were added
 
 `team` was built from the pipeline — the teams that hand work to each other through the
@@ -333,6 +372,29 @@ Then replace the placeholder policies. Right now they are `using (true)` for
 against an empty database, wrong the day real data lands, and the reason the email
 provider above matters. `profile_teams` and `permission_level` exist to drive the real
 scope model; the shape is in `supabase-schema.md`.
+
+## Admin and Setup are different screens
+
+Admin was Users, Teams, Properties, Permissions — two jobs on one screen. It is now:
+
+| **Admin** — people | **Setup** — configuration |
+| --- | --- |
+| Users, Teams, Permissions | Properties, Dictionary, Wiring, Automations |
+
+"Who works here and what may they do" and "how is this app configured" are asked by
+different people at different times. Dictionary and Wiring were top-level nav items
+sitting beside Projects and Jobs, which put configuration at the same rank as the work;
+folding them in took the nav from nine destinations to eight, and moving Settings into a
+menu under the user's own name took it to seven. Both old routes still resolve — they
+were in the nav for weeks and are in bookmarks.
+
+The Setup section is in the path (`/setup/dictionary`), not in component state, so a link
+to a tab is a link somebody can send.
+
+**Properties is deliberately read-only.** There is no create form: definitions are
+superadmin's and arrive by migration, which is what Lofty asked for at this stage. Note
+that **`property_defs` does not exist in the database yet** — that tab is still rendering
+seed definitions, and the migration to create and populate it is the next schema job.
 
 ## The working rule: one branch and PR per table
 
