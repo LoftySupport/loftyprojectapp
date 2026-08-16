@@ -1,5 +1,7 @@
 import { Avatar, Text } from "@vibe/core";
 import { useQuery } from "../data/DataProvider";
+import { initialsOf, useAuth } from "../data/AuthProvider";
+import { greetingName } from "../data/types";
 import { Token } from "../components/Token";
 import { PageShell } from "./Placeholder";
 import "./DashboardPage.css";
@@ -12,6 +14,14 @@ import "./DashboardPage.css";
  * With nothing wired this is the prototype's own empty state, which is also what
  * a real user sees on a quiet day — so it is worth getting right rather than
  * papering over. Values that will come from a table show it.
+ *
+ * "Show it" means a token only while the value is genuinely unavailable. Your own
+ * name, initials and teams are not: `currentProfile` is wired, AuthProvider already
+ * holds the row, and the header has been greeting you by name from it all along.
+ * Rendering {{profiles.first_name}} next to that was the template being honest about
+ * a gap that had closed. The token stays as the fallback for the case it was built
+ * for — no profile, or no teams on it — rather than being deleted, because the rest
+ * of this page is still waiting on tables that do not have rows yet.
  */
 
 function Empty({ children }: { children: React.ReactNode }) {
@@ -20,6 +30,13 @@ function Empty({ children }: { children: React.ReactNode }) {
 
 export function DashboardPage() {
   const { data: jobs, loading } = useQuery(r => r.listJobs(), []);
+  const { profile } = useAuth();
+
+  // Joined rather than reduced to one: somebody can sit in several teams, and picking
+  // the first would quietly answer a question this page is not asking.
+  const teams = profile?.teams.length
+    ? profile.teams.join(", ")
+    : null;
 
   if (loading) {
     return (
@@ -33,14 +50,20 @@ export function DashboardPage() {
     <div className="pd-shell">
       <div className="pd-greeting-row">
         <div className="pd-greeting">
-          <Avatar size="large" type="text" text="SB" aria-label="You" className="pd-avatar" />
+          <Avatar
+            size="large"
+            type="text"
+            text={profile ? initialsOf(profile) : "…"}
+            aria-label="You"
+            className="pd-avatar"
+          />
           <h2 className="pd-greeting-title">
-            Hi, <Token>profiles.first_name</Token>!
+            Hi, {profile ? greetingName(profile) : <Token>profiles.first_name</Token>}!
           </h2>
         </div>
         <div className="pd-centre-title">Your jobs today</div>
         <div className="pd-team">
-          <span className="pd-team-label"><Token>profiles.teams</Token></span>
+          <span className="pd-team-label">{teams ?? <Token>profiles.teams</Token>}</span>
           <div className="pd-avatars">
             <Avatar size="small" type="text" text="SB" aria-label="Teammate" />
             <Avatar size="small" type="text" text="SB" aria-label="Teammate" />
@@ -55,7 +78,7 @@ export function DashboardPage() {
           <div className="pd-team-pill">
             <span className="pd-team-mark" aria-hidden="true" />
             <div>
-              <div className="pd-team-name"><Token>profiles.teams</Token></div>
+              <div className="pd-team-name">{teams ?? <Token>profiles.teams</Token>}</div>
               <div className="pd-team-sub">{jobs.length} jobs assigned to you</div>
             </div>
           </div>
