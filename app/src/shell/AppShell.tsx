@@ -13,9 +13,10 @@ const PAGES = [
   { to: "/reports", label: "Reports" },
   { to: "/templates", label: "Templates" },
   { to: "/admin", label: "Admin" },
-  { to: "/settings", label: "Settings" },
-  { to: "/dictionary", label: "Dictionary" },
-  { to: "/wiring", label: "Wiring" }
+  // Setup replaced Dictionary and Wiring as separate destinations: configuration was
+  // sitting at the same rank as the work, and nine items wrapped to two rows on a phone.
+  { to: "/setup", label: "Setup" },
+  { to: "/settings", label: "Settings" }
 ];
 
 /**

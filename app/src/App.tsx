@@ -17,8 +17,7 @@ import { ReportsPage } from "./pages/ReportsPage";
 import { TemplatesPage } from "./pages/TemplatesPage";
 import { AdminPage } from "./pages/AdminPage";
 import { SettingsPage } from "./pages/SettingsPage";
-import { DictionaryPage } from "./pages/DictionaryPage";
-import { WiringPage } from "./pages/WiringPage";
+import { SetupPage } from "./pages/SetupPage";
 
 const THEME_KEY = "lofty-theme";
 
@@ -125,8 +124,14 @@ export default function App() {
                 path="settings"
                 element={<SettingsPage theme={theme} onThemeChange={setTheme} />}
               />
-              <Route path="dictionary" element={<DictionaryPage />} />
-              <Route path="wiring" element={<WiringPage />} />
+              {/* Setup owns Properties, Dictionary, Wiring and Automations. The
+                  section is in the path so a tab can be linked to. */}
+              <Route path="setup" element={<SetupPage />} />
+              <Route path="setup/:section" element={<SetupPage />} />
+              {/* The old top-level routes still resolve — they were in the nav for
+                  weeks and will be in somebody's bookmarks and Teams messages. */}
+              <Route path="dictionary" element={<Navigate to="/setup/dictionary" replace />} />
+              <Route path="wiring" element={<Navigate to="/setup/wiring" replace />} />
             </Route>
             </Route>
           </Routes>

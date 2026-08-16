@@ -1,23 +1,23 @@
 import { useState } from "react";
-import { Button, Counter, Heading, Tab, TabList, Text } from "@vibe/core";
+import { Button, Heading, Tab, TabList, Text } from "@vibe/core";
 import { useQuery } from "../data/DataProvider";
 import { ActivityDialog, DeactivateDialog, UserDialog } from "../components/UserDialogs";
 import { Select, toOptions } from "../components/Select";
 import {
   PERMISSION_LEVELS, PROFILE_STATUSES, TEAMS, profileStatus, type Profile
 } from "../data/types";
-import { groupByStage, usePropertyDefs, useStages, useTeams, useTemplatePhases } from "../data/useLookups";
+import { useStages, useTeams, useTemplatePhases } from "../data/useLookups";
 import { usePlaceholderShape } from "../data/placeholderShape";
 import { Token } from "../components/Token";
 import "../components/ui.css";
 
 /**
- * Users, teams, properties and permissions.
+ * People: who works here, which team they are in, and what they may do.
  *
- * The Properties tab is the one that matters for the build: it is where a field is
- * defined, and every slot everywhere else in the app comes from a row here. Properties
- * are rows, not columns — which is what lets a team add what it captures without a
- * schema migration, and why nothing in this app has a fixed number of field slots.
+ * Properties moved to Setup. The two were one screen and are two jobs — this one is
+ * about a person's access, that one is about how the app is configured, and they are
+ * used by different people at different times. Dictionary and Wiring went with it, which
+ * also took the nav from nine destinations to eight.
  */
 export function AdminPage() {
   const [tab, setTab] = useState(0);
@@ -27,22 +27,20 @@ export function AdminPage() {
       <div className="page-head">
         <Heading type="h2" weight="bold">Admin</Heading>
         <Text type="text2" color="secondary">
-          Users, teams, properties and permissions.
+          Who works here, which team they are in, and what they may do.
         </Text>
       </div>
 
       <TabList activeTabId={tab} onTabChange={setTab}>
         <Tab>Users</Tab>
         <Tab>Teams</Tab>
-        <Tab>Properties</Tab>
         <Tab>Permissions</Tab>
       </TabList>
 
       <div style={{ marginTop: "var(--space-16)" }}>
         {tab === 0 && <Users />}
         {tab === 1 && <Teams />}
-        {tab === 2 && <Properties />}
-        {tab === 3 && <Permissions />}
+        {tab === 2 && <Permissions />}
       </div>
     </>
   );
@@ -212,56 +210,6 @@ function Teams() {
           </tbody>
         </table>
       </div>
-    </section>
-  );
-}
-
-function Properties() {
-  const { propertyDefs } = usePropertyDefs();
-  const { stageNames } = useStages();
-  const groups = groupByStage(propertyDefs, stageNames);
-
-  return (
-    <section className="panel">
-      <div className="panel-head">
-        <Text type="text2" weight="bold">Property definitions ({propertyDefs.length})</Text>
-        <Counter count={groups.length} kind="line" aria-label="stages capturing properties" />
-      </div>
-      <Text type="text2" color="secondary">
-        Properties are <strong>rows, not columns</strong> — which is what lets a team add what
-        it captures without a schema migration. Each definition says what level the property
-        lives at (<strong>project or job</strong>), then which stage captures it and which team
-        captures it, what shape the value takes, and whether it is required to leave that
-        stage. Property and field mean the same thing here.
-      </Text>
-
-      {groups.map(g => (
-        <div className="slot-stage" key={g.stage}>
-          <div className="slot-stage-head">
-            {g.stage} · {g.defs.length} propert{g.defs.length === 1 ? "y" : "ies"} captured here
-          </div>
-          <div className="data-table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr><th>Label</th><th>Key</th><th>Level</th><th>Team</th><th>Format</th><th>Required</th><th>Automation</th></tr>
-              </thead>
-              <tbody>
-                {g.defs.map(d => (
-                  <tr key={d.key}>
-                    <td><strong>{d.label}</strong></td>
-                    <td className="muted"><code>{d.key}</code></td>
-                    <td>{d.scope}</td>
-                    <td>{d.teamName}</td>
-                    <td>{d.format}</td>
-                    <td>{d.required ? "Yes" : "—"}</td>
-                    <td className="muted">{d.automation ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ))}
     </section>
   );
 }
