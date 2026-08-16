@@ -34,9 +34,15 @@ export function DashboardPage() {
 
   // Joined rather than reduced to one: somebody can sit in several teams, and picking
   // the first would quietly answer a question this page is not asking.
-  const teams = profile?.teams.length
-    ? profile.teams.join(", ")
-    : null;
+  //
+  // Three outcomes, not two. No profile yet is the token's case. A profile with no teams
+  // is not — that is a real answer, and showing {{profiles.teams}} for it reads as a
+  // broken screen rather than as "nobody has put you in a team".
+  const teamLabel: React.ReactNode = !profile
+    ? <Token>profiles.teams</Token>
+    : profile.teams.length
+      ? profile.teams.join(", ")
+      : <span className="pd-unassigned">No team assigned</span>;
 
   if (loading) {
     return (
@@ -63,7 +69,7 @@ export function DashboardPage() {
         </div>
         <div className="pd-centre-title">Your jobs today</div>
         <div className="pd-team">
-          <span className="pd-team-label">{teams ?? <Token>profiles.teams</Token>}</span>
+          <span className="pd-team-label">{teamLabel}</span>
           <div className="pd-avatars">
             <Avatar size="small" type="text" text="SB" aria-label="Teammate" />
             <Avatar size="small" type="text" text="SB" aria-label="Teammate" />
@@ -78,7 +84,7 @@ export function DashboardPage() {
           <div className="pd-team-pill">
             <span className="pd-team-mark" aria-hidden="true" />
             <div>
-              <div className="pd-team-name">{teams ?? <Token>profiles.teams</Token>}</div>
+              <div className="pd-team-name">{teamLabel}</div>
               <div className="pd-team-sub">{jobs.length} jobs assigned to you</div>
             </div>
           </div>

@@ -202,3 +202,7 @@
    pair as every other avatar (ui.css) — one treatment reads as a system, and the
    orange needed a hand-placed ink override to clear AA that the shared rule then
    fought with. The logo still carries the orange, which is where it belongs. */
+
+/* Same idea as .field-empty on the settings page: a real answer of "none", not a
+   placeholder. Muted rather than tokenised so it does not read as unbound. */
+.pd-unassigned { color: var(--secondary-text-color); font-style: normal; }

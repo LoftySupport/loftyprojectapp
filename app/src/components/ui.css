@@ -627,3 +627,8 @@ code { overflow-wrap: anywhere; }
 }
 .activity-kind.is-login { color: var(--positive-ink); }
 .activity-kind.is-audit { color: var(--secondary-text-color); }
+
+/* "There is nothing here yet", as opposed to "this is not wired". A token says the app
+   cannot answer; this says it can, and the answer is none — so it is muted body text
+   rather than the token's orange, which would read as another unbound field. */
+.field-empty { font: var(--font-text2-normal); color: var(--secondary-text-color); }

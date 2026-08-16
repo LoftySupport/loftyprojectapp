@@ -63,8 +63,18 @@ export function SettingsPage({
             token="profiles.permission" value={profile?.permission} />
           {/* Joined, not reduced to one — somebody can sit in several, which is what the
               hint beside this field has been promising all along. */}
-          <Locked label="Teams" hint="you can sit in more than one"
-            token="profiles.teams" value={profile?.teams.join(", ") || null} />
+          <Locked
+            label="Teams"
+            hint="you can sit in more than one"
+            token="profiles.teams"
+            value={profile?.teams.join(", ") || null}
+            known={Boolean(profile)}
+            empty={
+              <span className="field-empty">
+                No team assigned — ask an administrator to add you to one.
+              </span>
+            }
+          />
           <Locked label="Email" token="profiles.email" value={profile?.email} />
           <Locked label="Job title" token="profiles.job_title" value={profile?.jobTitle} />
         </section>
@@ -165,16 +175,26 @@ function Locked({
   label,
   hint,
   token,
-  value
+  value,
+  known,
+  empty
 }: {
   label: string;
   hint?: string;
   token: string;
   value?: string | null;
+  /** Whether the row this reads from has loaded. Without it an empty value during the
+   *  first paint would flash "nothing assigned" at somebody who has plenty. */
+  known?: boolean;
+  empty?: React.ReactNode;
 }) {
   return (
     <Row label={label} hint={hint}>
-      {value ? <Text type="text2">{value}</Text> : <Token>{token}</Token>}
+      {value
+        ? <Text type="text2">{value}</Text>
+        : known && empty
+          ? empty
+          : <Token>{token}</Token>}
     </Row>
   );
 }
