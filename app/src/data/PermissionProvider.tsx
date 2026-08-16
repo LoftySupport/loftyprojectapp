@@ -1,39 +1,40 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { PERMISSION_LEVELS, atLeast, type PermissionLevel } from "./types";
+import { createContext, useContext, useMemo } from "react";
+import { useAuth } from "./AuthProvider";
+import { atLeast, type PermissionLevel } from "./types";
 
 /**
- * Who you are signed in as, until Supabase Auth is wired.
+ * What the signed-in person is allowed to do.
  *
- * With no auth there is no honest way to know a permission level, and defaulting to
- * "superadmin" would quietly hide every gate in the app — which is exactly the thing
- * that needs reviewing. So it is switchable, and the switch is visible in the header.
+ * `profiles.permission`, read from the row through the repository — never from the JWT.
+ * `user_metadata` on a Supabase token is editable by the user it describes, so an
+ * authorization check against it can be edited by the person it is meant to restrict.
  *
- * When auth lands this provider reads `profiles.permission` for the signed-in user and
- * the switcher disappears. Everything that consumes `useCan()` stays as it is.
+ * The demo switcher that used to live here is gone. It existed because there was no auth
+ * and therefore no honest way to know a level; there is now. Its last hiding place was
+ * "signed in but no profile row", and the gate closes that too — without a profile
+ * nobody reaches the app at all, so there is no longer a state this could be asked
+ * about where the answer is unknown.
+ *
+ * `viewer` when there is no profile: least privilege, and unreachable inside the app
+ * anyway. It is here so the value is defined on `/signin`, not as a fallback anything
+ * should rely on.
  */
 
 interface PermissionContextValue {
   permission: PermissionLevel;
-  setPermission: (p: PermissionLevel) => void;
   /** `can("manager")` — true at that rung or above. */
   can: (need: PermissionLevel) => boolean;
 }
 
 const PermissionContext = createContext<PermissionContextValue | null>(null);
-const KEY = "lofty-permission";
 
 export function PermissionProvider({ children }: { children: React.ReactNode }) {
-  const [permission, setPermission] = useState<PermissionLevel>(() => {
-    const saved = localStorage.getItem(KEY) as PermissionLevel | null;
-    return saved && PERMISSION_LEVELS.includes(saved) ? saved : "manager";
-  });
+  const { profile } = useAuth();
 
-  useEffect(() => { localStorage.setItem(KEY, permission); }, [permission]);
-
-  const value = useMemo(
-    () => ({ permission, setPermission, can: (need: PermissionLevel) => atLeast(permission, need) }),
-    [permission]
-  );
+  const value = useMemo(() => {
+    const permission = profile?.permission ?? "viewer";
+    return { permission, can: (need: PermissionLevel) => atLeast(permission, need) };
+  }, [profile]);
 
   return <PermissionContext.Provider value={value}>{children}</PermissionContext.Provider>;
 }

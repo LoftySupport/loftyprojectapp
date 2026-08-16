@@ -477,3 +477,102 @@ code { overflow-wrap: anywhere; }
 .create-result {
   padding: 16px 4px;
 }
+
+/* ---- admin: users --------------------------------------------------------
+   Filters, status pills, row actions and the team picker. */
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  margin: var(--space-12) 0;
+  min-width: 0;
+}
+/* A floor, not a fixed width — min() so a 320px viewport is never overflowed by a
+   control that insists on being wider than the screen. */
+.filter-row > * { flex: 1 1 min(200px, 100%); min-width: 0; }
+
+/* A name that opens history. Styled as a link because that is what it behaves like;
+   a <button> because it opens a dialog rather than navigating. */
+.link-button {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--link-color, var(--primary-color));
+  text-decoration: underline;
+  cursor: pointer;
+  text-align: left;
+}
+.link-button:hover { text-decoration: none; }
+
+.row-actions { display: inline-flex; gap: var(--space-4); flex-wrap: wrap; }
+
+/* The inks are the semantic ones from tokens.css, each redefined per theme, so these
+   hold AA in light, dark and black rather than only in the one they were picked in. */
+.status-pill {
+  display: inline-block;
+  padding: 2px var(--space-8);
+  border-radius: 999px;
+  font: var(--font-text3-medium);
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+.status-pill.is-active   { color: var(--positive-ink); }
+.status-pill.is-pending  { color: var(--warning-ink); }
+.status-pill.is-inactive { color: var(--secondary-text-color); }
+
+.team-picker { display: flex; flex-direction: column; gap: var(--space-8); min-width: 0; }
+.team-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.team-chips li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 2px var(--space-8);
+  border: 1px solid var(--layout-border-color);
+  border-radius: 999px;
+  font: var(--font-text3-normal);
+  max-width: 100%;
+  min-width: 0;
+}
+.team-chips li.is-primary { border-color: var(--primary-color); }
+.team-chips li span { min-width: 0; overflow-wrap: anywhere; }
+.team-chips button {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  color: inherit;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.activity-list { list-style: none; margin: 0; padding: 0; min-width: 0; }
+.activity-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-8);
+  padding: var(--space-8) 0;
+  border-bottom: 1px solid var(--layout-border-color);
+  min-width: 0;
+}
+.activity-list time { margin-left: auto; color: var(--secondary-text-color); font: var(--font-text3-normal); white-space: nowrap; }
+.activity-summary { min-width: 0; overflow-wrap: anywhere; }
+.activity-kind {
+  flex-shrink: 0;
+  padding: 1px var(--space-8);
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  font: var(--font-text3-medium);
+}
+.activity-kind.is-login { color: var(--positive-ink); }
+.activity-kind.is-audit { color: var(--secondary-text-color); }

@@ -1,5 +1,7 @@
 import type {
+  ActivityEntry,
   Job,
+  NewProfile,
   NewJob,
   NewProject,
   Profile,
@@ -44,6 +46,20 @@ export interface Repository {
 
   listProfiles(): Promise<Profile[]>;
   currentProfile(): Promise<Profile | null>;
+  getProfile(id: string): Promise<Profile | null>;
+
+  /** Admin-only in practice — RLS decides that, not the caller. */
+  createProfile(input: NewProfile): Promise<Profile>;
+  updateProfile(id: string, patch: Partial<NewProfile>): Promise<Profile>;
+  /**
+   * Deactivate or restore. There is no delete: `profiles` has no DELETE policy and the
+   * schema says so deliberately — a person's name is on years of activity and comments,
+   * so removing the row would orphan all of it. "Delete" in the UI means this.
+   */
+  setProfileActive(id: string, active: boolean): Promise<Profile>;
+
+  /** One person's history, or a whole team's. Newest first. */
+  listActivity(opts: { profileId?: string; team?: string; limit?: number }): Promise<ActivityEntry[]>;
 
   // ---- creating ---------------------------------------------------------
   // Return the created record rather than void: the caller needs the number the
@@ -71,6 +87,11 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "getJob",
   "listProfiles",
   "currentProfile",
+  "getProfile",
+  "createProfile",
+  "updateProfile",
+  "setProfileActive",
+  "listActivity",
   "createProject",
   "createJob",
   "listStages",
@@ -88,6 +109,11 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   getJob: "jobs",
   listProfiles: "profiles",
   currentProfile: "profiles",
+  getProfile: "profiles",
+  createProfile: "profiles",
+  updateProfile: "profiles",
+  setProfileActive: "profiles",
+  listActivity: "activity_audit",
   createProject: "projects + addresses",
   createJob: "jobs",
   listStages: "stage (enum)",

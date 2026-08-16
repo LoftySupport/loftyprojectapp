@@ -1,0 +1,70 @@
+/* The sign-in screen.
+   Its own layout rather than the app shell's: there is no nav, no search and no
+   identity to show, so the header would be an empty frame around one button. */
+
+/* The beat between first paint and knowing whether a session was restored. Centred and
+   empty on purpose — anything with words in it would be read, and then replaced a
+   few hundred milliseconds later. */
+.app-wait {
+  flex: 1 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-32);
+}
+
+.signin {
+  flex: 1 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Breathing room on a phone, where the card is nearly full width. */
+  padding: var(--space-24) var(--space-16);
+  min-width: 0;
+}
+
+.signin-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-16);
+  text-align: center;
+  /* min() and not a bare 400px: a fixed floor wider than a 320px viewport overflows
+     the page sideways, which is the same fault as every other overflow here. */
+  width: min(400px, 100%);
+  min-width: 0;
+  padding: var(--space-32) var(--space-24);
+  background: var(--primary-background-color);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-big);
+}
+
+.signin-logo {
+  height: 40px;
+  width: auto;
+  max-width: 100%;
+}
+
+.signin-error {
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-8) var(--space-12);
+  border: 1px solid var(--negative-ink);
+  border-radius: var(--border-radius-small);
+  text-align: left;
+}
+/* --negative-ink is redefined per theme, so this stays AA in light, dark and black.
+   Vibe's Text sets its own colour from the theme, hence the descendant selector. */
+.signin-error, .signin-error * { color: var(--negative-ink); }
+
+/* The address someone signed in with, on the not-set-up screen. Neutral rather than
+   negative: nothing has gone wrong, they are simply not on the list yet. */
+.signin-note {
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-8) var(--space-12);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-small);
+  text-align: left;
+  overflow-wrap: anywhere;
+}

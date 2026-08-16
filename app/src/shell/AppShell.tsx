@@ -1,11 +1,12 @@
-import { NavLink, Outlet } from "react-router-dom";
-import { Avatar, Flex, Label, Text, TextField } from "@vibe/core";
+import { useState } from "react";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import {
+  Avatar, Dialog, DialogContentContainer, Flex, Label, Text, TextField
+} from "@vibe/core";
+import { initialsOf, useAuth } from "../data/AuthProvider";
 import { useRepository } from "../data/DataProvider";
-import { usePermission } from "../data/PermissionProvider";
 import { useSearch } from "../data/SearchProvider";
-import { PERMISSION_LEVELS, type PermissionLevel } from "../data/types";
-import { Select } from "../components/Select";
-import { Token } from "../components/Token";
+import { greetingName } from "../data/types";
 import "./AppShell.css";
 
 const PAGES = [
@@ -15,10 +16,85 @@ const PAGES = [
   { to: "/reports", label: "Reports" },
   { to: "/templates", label: "Templates" },
   { to: "/admin", label: "Admin" },
-  { to: "/settings", label: "Settings" },
-  { to: "/dictionary", label: "Dictionary" },
-  { to: "/wiring", label: "Wiring" }
+  // Setup replaced Dictionary and Wiring as separate destinations: configuration was
+  // sitting at the same rank as the work, and nine items wrapped to two rows on a phone.
+  { to: "/setup", label: "Setup" }
+  // Settings is deliberately absent — it is personal, not a destination, so it lives in
+  // the menu under your own name where "User settings" says whose settings they are.
 ];
+
+/**
+ * Your name, and the two things that are yours: your settings, and leaving.
+ *
+ * Settings came out of the main nav to get here. It is not a destination alongside
+ * Projects and Jobs — it is personal, and putting it under your own name is what makes
+ * "whose settings?" answerable without opening it. The label says "User settings" for
+ * the same reason: the app has a Setup screen now, and "Settings" beside it was two
+ * words for two unrelated things.
+ */
+function UserMenu() {
+  const { profile, signOut } = useAuth();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
+
+  const content = (
+    <DialogContentContainer>
+      <div className="user-menu">
+        {profile && (
+          <div className="user-menu-head">
+            <Text type="text2" weight="bold" ellipsis={false}>{profile.fullName}</Text>
+            <Text type="text3" color="secondary" ellipsis={false}>{profile.email}</Text>
+          </div>
+        )}
+        <button type="button" onClick={() => { close(); navigate("/settings"); }}>
+          User settings
+        </button>
+        <button type="button" onClick={() => { close(); void signOut(); }}>
+          Sign out
+        </button>
+      </div>
+    </DialogContentContainer>
+  );
+
+  return (
+    <span className="app-user">
+      <Dialog
+        open={open}
+        onClickOutside={close}
+        content={content}
+        position="bottom-end"
+        showTrigger={[]}
+        hideTrigger={[]}
+      >
+        <button
+          type="button"
+          className="user-menu-trigger"
+          aria-haspopup="menu"
+          aria-expanded={open}
+          onClick={() => setOpen(o => !o)}
+          onKeyDown={e => { if (e.key === "Escape") close(); }}
+        >
+          {profile && (
+            <Avatar
+              size="small"
+              type="text"
+              text={initialsOf(profile)}
+              aria-hidden
+            />
+          )}
+          {/* Hidden below 720px in CSS — the avatar carries identity there and the name
+              costs a line of header. The accessible name stays on the button either way. */}
+          <span className="app-user-name">
+            <Text type="text2" element="span">
+              {profile ? greetingName(profile) : "Account"}
+            </Text>
+          </span>
+        </button>
+      </Dialog>
+    </span>
+  );
+}
 
 /**
  * The frame every page sits in.
@@ -32,8 +108,8 @@ const PAGES = [
  */
 export function AppShell() {
   const repo = useRepository();
-  const { permission, setPermission } = usePermission();
   const { query, setQuery } = useSearch();
+  const { error: authError } = useAuth();
 
   return (
     <>
@@ -80,25 +156,19 @@ export function AppShell() {
               text="Unbound"
               aria-label={`Reading through the ${repo.name} repository`}
             />
-            {/* With no auth there is no honest way to know a permission level, and
-                defaulting to superadmin would quietly hide every gate in the app —
-                which is the thing that needs reviewing. Switchable, and visible.
-                It disappears when Supabase Auth lands. */}
-            <span className="app-permission">
-              <Select
-                aria-label="Signed in as (demo)"
-                options={PERMISSION_LEVELS.map(p => ({ value: p, label: p }))}
-                value={permission}
-                onChange={v => setPermission(v as PermissionLevel)}
-              />
-            </span>
-            <span className="app-user">
-              <Avatar size="small" type="text" text="SB" aria-label="Signed in" />
-              <Token>profiles.full_name</Token>
-            </span>
+            <UserMenu />
           </div>
         </Flex>
       </header>
+
+      {authError && (
+        <div className="app-alert" role="alert">
+          <Text type="text2" element="span" ellipsis={false}>
+            <strong>Sign-in failed.</strong> {authError}
+          </Text>
+        </div>
+      )}
+
 
       <div className="app-banner" role="status">
         {/* `ellipsis={false}` or Vibe holds this on one line and pushes the page into a
@@ -115,8 +185,26 @@ export function AppShell() {
       </main>
 
       <footer className="app-foot" role="contentinfo">
-        <Text type="text3" color="secondary">
-          Lofty Job Oversight Board — React, Vibe and Supabase
+        <Text type="text3" color="secondary" element="div" ellipsis={false}>
+          {/* The year is computed, not written down — a hardcoded one is wrong every
+              January and nobody notices until a client does. */}
+          <span className="app-foot-name">
+            Lofty © {new Date().getFullYear()} Project Management App
+            {" "}
+            <span className="app-foot-version" title={`Netlify context: ${__BUILD_CONTEXT__}`}>
+              v{__BUILD_REF__}
+            </span>
+          </span>
+          <span className="app-foot-links">
+            {/* Privacy and Terms sit OUTSIDE the auth gate deliberately: a policy nobody
+                can read without signing in is not published. Support is Lofty's own
+                portal, hence a full URL and rel="noreferrer". */}
+            <NavLink to="/privacy">Privacy Policy</NavLink>
+            <NavLink to="/terms">Terms</NavLink>
+            <a href="https://app.lofty.com.au" target="_blank" rel="noreferrer noopener">
+              Support
+            </a>
+          </span>
         </Text>
       </footer>
     </>

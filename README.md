@@ -16,9 +16,9 @@ deliberately frozen.
 
 | URL | What |
 | --- | --- |
-| [`loftyprojectapp.netlify.app`](https://loftyprojectapp.netlify.app) | Redirects to `/app/` |
-| `…/app/` | **The build.** Every screen, on Vibe |
-| `…/app/dictionary` | The data dictionary |
+| [`loftyprojectapp.netlify.app`](https://loftyprojectapp.netlify.app) | **The build.** Every screen, on Vibe |
+| `…/signin` | Microsoft Entra sign-in — the only route open without a session |
+| `…/dictionary` | The data dictionary |
 | `…/binding-template` | The tokenised prototype — **layout** reference only |
 | `…/prototype.html` | The original, with its dummy data |
 
@@ -60,7 +60,7 @@ Edit the array, regenerate, commit both. Never edit `data-dictionary.md` by hand
 ```bash
 cd app
 npm install
-npm run dev          # http://localhost:5173/app/
+npm run dev          # http://localhost:5173/
 npm run build        # tsc -b && vite build
 npm run dictionary   # regenerate data-dictionary.md
 ```

@@ -269,6 +269,15 @@ export interface JobDisplay {
  */
 export interface Profile {
   id: Uuid;
+  /**
+   * The linked Microsoft account, or null for someone created but not yet arrived.
+   *
+   * This is not `id`. `id` is Lofty's key, minted when the person is added to the app;
+   * this is Entra's, and it appears the first time they sign in. Keeping them separate
+   * is what lets the staff list exist before anyone has logged in — and null here is
+   * precisely "has no access yet".
+   */
+  authUserId: Uuid | null;
   /** Two fields, not one — people change names, and greetings use the first. */
   firstName: string;
   lastName: string;
@@ -277,6 +286,23 @@ export interface Profile {
   /** Only when someone goes by something else. Null means "use firstName". */
   preferredName: string | null;
   email: string;
+  /**
+   * The address they sign in with, when it differs from `email`.
+   *
+   * At Lofty it usually does: the Microsoft account is `@loftybg.onmicrosoft.com` while
+   * the address people actually use is `@lofty.com.au`. `email` stays the real one —
+   * this is a matching key and nothing else, and no screen should display it.
+   */
+  loginEmail: string | null;
+  jobTitle: string | null;
+  /** Most recent sign-in. Null means never. */
+  lastLoginAt: IsoDateTime | null;
+  /**
+   * The teams this person sits in, by name. Read from `profile_teams`, which is
+   * many-to-many — somebody can be in several, and the admin table has to show all of
+   * them rather than picking one.
+   */
+  teams: string[];
   /**
    * The permission ladder, in order — a comparison, not a set. `viewer` reads,
    * `user` works their own jobs, `manager` reads across teams, `admin` edits
@@ -311,6 +337,57 @@ export interface ProfileTeam extends Audited {
   profileId: Uuid;
   teamId: Uuid;
   isPrimary: boolean;
+}
+
+/**
+ * Where somebody is in the arrival process — derived, never stored.
+ *
+ * "pending" is the state the staff list makes possible: created in the app, has not
+ * signed in with Microsoft yet. It is not a third value of `active`; conflating them
+ * would lose the difference between "has not arrived" and "no longer here", which are
+ * opposite ends of someone's time at Lofty.
+ */
+/**
+ * The `team` Postgres enum, in declaration order.
+ *
+ * Mirrors the database exactly — the four at the end were added in 0014 when the staff
+ * list turned out to be departments rather than the pipeline the enum was built from.
+ * `SEED_TEAMS` is NOT this list: it is derived from the template phases and so only ever
+ * contains the teams that own a stage, which is right for the board and wrong for a
+ * person picker.
+ */
+export const TEAMS = [
+  "Acquisition & Development", "Sales Admin", "Design", "Pre-Construction Admin",
+  "Scheduling", "Selections", "Estimating", "Construction", "Construction Admin",
+  "Finance", "Maintenance", "Commercial", "Executive", "Lofty General", "Admin"
+] as const;
+export type TeamName = (typeof TEAMS)[number];
+
+export const PROFILE_STATUSES = ["active", "pending", "inactive"] as const;
+export type ProfileStatus = (typeof PROFILE_STATUSES)[number];
+
+export const profileStatus = (p: Profile): ProfileStatus =>
+  !p.active ? "inactive" : p.authUserId ? "active" : "pending";
+
+/** What a person is allowed to be created or edited as. `id` is the database's. */
+export interface NewProfile {
+  firstName: string;
+  lastName: string;
+  email: string;
+  loginEmail: string | null;
+  jobTitle: string | null;
+  permission: PermissionLevel;
+  teams: string[];
+}
+
+/** One line of history. Two sources, one shape, because a reader wants one list. */
+export interface ActivityEntry {
+  id: string;
+  kind: "audit" | "login";
+  at: IsoDateTime;
+  /** The auth user who did it, as recorded. Null for rows written before auth. */
+  actorAuthId: string | null;
+  summary: string;
 }
 
 /** What goes after "Hi, ". One place, so the decision is never re-made ad hoc. */

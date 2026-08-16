@@ -1,0 +1,43 @@
+/* Privacy and Terms. Public pages, so they carry their own frame rather than the app
+   shell's — there is no nav, no search and no identity to show on them. */
+
+.legal {
+  flex: 1 0 auto;
+  display: flex;
+  justify-content: center;
+  padding: var(--space-32) var(--space-16);
+  min-width: 0;
+}
+
+.legal-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  /* min() not a bare width: a fixed floor wider than a 320px viewport scrolls the page
+     sideways, which is the same fault as every other overflow here. */
+  width: min(720px, 100%);
+  min-width: 0;
+}
+
+.legal-logo { height: 32px; width: auto; max-width: 100%; display: block; }
+.legal-home { display: inline-block; width: fit-content; }
+
+.legal-pending {
+  padding: var(--space-12);
+  border: 1px solid var(--warning-ink);
+  border-radius: var(--border-radius-small);
+}
+/* --warning-ink is redefined per theme, so this holds AA in light, dark and black. */
+.legal-pending, .legal-pending * { color: var(--warning-ink); }
+
+.legal-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-top: var(--space-8);
+  border-top: 1px solid var(--layout-border-color);
+  min-width: 0;
+}
+
+.legal a { color: inherit; }
+.legal-back { margin-top: var(--space-16); }

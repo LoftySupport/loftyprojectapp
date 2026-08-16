@@ -2,7 +2,9 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Repository, RepositoryMethod } from "./repository";
 import { createStubRepository, SEED_STAGES } from "./stubRepository";
 import type {
+  ActivityEntry,
   Job,
+  NewProfile,
   NewJob,
   NewProject,
   Profile,
@@ -36,7 +38,96 @@ import type {
 // listStages came off this list in 0004. Stages are a `stage` enum now, not a table,
 // so there is nothing to query — the values are known at compile time and the seed is
 // the source. An enum cannot be wired; it can only be regenerated.
-const WIRED: RepositoryMethod[] = ["createProject", "createJob"];
+const WIRED: RepositoryMethod[] = [
+  "createProject", "createJob", "currentProfile", "listProfiles",
+  "createProfile", "updateProfile", "setProfileActive", "listActivity"
+];
+
+/**
+ * The `profiles` columns this app reads. `full_name` is generated; never written.
+ *
+ * One string literal rather than a concatenation: postgrest-js parses this at the type
+ * level to shape the result, and `"a" + "b"` widens to `string`, which it cannot read.
+ */
+const PROFILE_COLUMNS =
+  "id, auth_user_id, first_name, last_name, full_name, preferred_name, email, login_email, job_title, last_login_at, permission, active, created_at, created_by, updated_at, updated_by, profile_teams(team, is_primary)";
+
+interface ProfileRow {
+  id: string;
+  auth_user_id: string | null;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  preferred_name: string | null;
+  email: string;
+  login_email: string | null;
+  job_title: string | null;
+  last_login_at: string | null;
+  permission: Profile["permission"];
+  active: boolean;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+  /** Embedded from profile_teams. Absent rather than empty if the join is not selected. */
+  profile_teams?: { team: string; is_primary: boolean }[] | null;
+}
+
+/** Past tense, because the audit log is a record of what happened. */
+const OPERATION_WORDS: Record<string, string> = {
+  INSERT: "Created",
+  UPDATE: "Updated",
+  DELETE: "Deleted"
+};
+
+/**
+ * Team membership is a set, and the UI edits it as one — so replace rather than diff.
+ * Delete-then-insert is safe here because `profile_teams` carries no data of its own
+ * beyond `is_primary`, which is derived from position in the list.
+ */
+/** Re-read after a write, so the caller gets generated columns and teams, not its input. */
+async function readProfile(client: SupabaseClient, id: string): Promise<Profile | null> {
+  const { data, error } = await client
+    .from("profiles").select(PROFILE_COLUMNS).eq("id", id).maybeSingle();
+  if (error || !data) return null;
+  return toProfile(data as unknown as ProfileRow);
+}
+
+async function replaceTeams(client: SupabaseClient, profileId: string, teams: string[]) {
+  const { error: delError } = await client
+    .from("profile_teams").delete().eq("profile_id", profileId);
+  if (delError) throw delError;
+  if (!teams.length) return;
+  const { error } = await client.from("profile_teams").insert(
+    teams.map((team, i) => ({ profile_id: profileId, team, is_primary: i === 0 }))
+  );
+  if (error) throw error;
+}
+
+const toProfile = (r: ProfileRow): Profile => ({
+  id: r.id,
+  authUserId: r.auth_user_id,
+  firstName: r.first_name,
+  lastName: r.last_name,
+  fullName: r.full_name,
+  preferredName: r.preferred_name,
+  email: r.email,
+  loginEmail: r.login_email,
+  jobTitle: r.job_title,
+  lastLoginAt: r.last_login_at,
+  permission: r.permission,
+  active: r.active,
+  createdAt: r.created_at,
+  createdBy: r.created_by,
+  updatedAt: r.updated_at,
+  updatedBy: r.updated_by,
+  // Primary first, then alphabetical — the primary is the answer to "which team is
+  // this person's", and the rest are context.
+  teams: (r.profile_teams ?? [])
+    .slice()
+    .sort((a, b) => Number(b.is_primary) - Number(a.is_primary) || a.team.localeCompare(b.team))
+    .map(t => t.team)
+});
 
 // The publishable key (`sb_publishable_…`), not the legacy JWT anon key. Both work, and
 // both are safe in a client bundle — this key is public by design and RLS is what
@@ -90,12 +181,189 @@ export function createSupabaseRepository(): Repository {
     },
 
     // ---- profiles -------------------------------------------------------
+    /**
+     * Everyone on the staff list, for the Admin table.
+     *
+     * No fallback to the stub on an empty result, unlike the lookups. An empty list here
+     * is a real answer — it means the reader cannot see any profiles, which after 0015
+     * means they are not linked — and seeding it with invented people would hide exactly
+     * that. The read policy is `is_active_user()`, so this returns everyone to anyone
+     * with an active linked profile, and nothing to anybody else.
+     */
     async listProfiles(): Promise<Profile[]> {
-      return stub.listProfiles();
+      const { data, error } = await client
+        .from("profiles")
+        .select(PROFILE_COLUMNS)
+        .order("last_name")
+        .order("first_name");
+      if (error) throw error;
+      return (data ?? []).map(r => toProfile(r as unknown as ProfileRow));
     },
 
+    /**
+     * The signed-in person's own row, or null when nobody is signed in.
+     *
+     * No fallback to the stub. Every other method here degrades to seed data so a
+     * half-built database still shows its structure, but identity is the one thing that
+     * must never be invented: a made-up profile would come with a made-up `permission`,
+     * and every gate in the app reads that. Null is the honest answer, and the header
+     * shows it as signed out.
+     *
+     * Keyed on `auth_user_id`, not `id`. Since 0015 those are different things: `id` is
+     * Lofty's key on the staff record, `auth.uid()` is Microsoft's on the session, and
+     * the trigger joins them at first sign-in.
+     *
+     * `maybeSingle()` rather than `single()` — no row is a real state, not an error, and
+     * a meaningful one: it means this Microsoft account is not on Lofty's list. The
+     * caller turns that into "not set up" rather than crashing on it.
+     */
     async currentProfile(): Promise<Profile | null> {
-      return stub.currentProfile();
+      const { data: auth } = await client.auth.getUser();
+      if (!auth.user) return null;
+
+      const { data, error } = await client
+        .from("profiles")
+        .select(PROFILE_COLUMNS)
+        // The read policy is `is_active_user()`, which is broader than "your own row" —
+        // so this filter is doing real work, not restating a policy.
+        .eq("auth_user_id", auth.user.id)
+        .maybeSingle();
+
+      if (error || !data) return null;
+      return toProfile(data as ProfileRow);
+    },
+
+
+    /**
+     * Add somebody to the staff list.
+     *
+     * Two statements, not one, and deliberately not in a transaction — PostgREST gives
+     * each request its own, so there is no way to ask for one. If the team insert fails
+     * the profile is already committed: a person with no team, which the Admin table
+     * shows as "—" and an admin can fix. The alternative failure — a team row pointing
+     * at nothing — cannot happen, because the profile is written first.
+     *
+     * No auth_user_id: that is the whole point. The row exists before the person has
+     * signed in, and the 0015 trigger fills it when they do.
+     */
+    async createProfile(input: NewProfile): Promise<Profile> {
+      const { data, error } = await client
+        .from("profiles")
+        .insert({
+          first_name: input.firstName,
+          last_name: input.lastName,
+          email: input.email,
+          login_email: input.loginEmail,
+          job_title: input.jobTitle,
+          permission: input.permission
+        })
+        .select(PROFILE_COLUMNS)
+        .single();
+      if (error) throw error;
+
+      const created = toProfile(data as unknown as ProfileRow);
+      await replaceTeams(client, created.id, input.teams);
+      return (await readProfile(client, created.id)) ?? created;
+    },
+
+    async updateProfile(id: string, patch: Partial<NewProfile>): Promise<Profile> {
+      const row: Record<string, unknown> = {};
+      if (patch.firstName !== undefined) row.first_name = patch.firstName;
+      if (patch.lastName !== undefined) row.last_name = patch.lastName;
+      if (patch.email !== undefined) row.email = patch.email;
+      if (patch.loginEmail !== undefined) row.login_email = patch.loginEmail;
+      if (patch.jobTitle !== undefined) row.job_title = patch.jobTitle;
+      if (patch.permission !== undefined) row.permission = patch.permission;
+
+      if (Object.keys(row).length) {
+        const { error } = await client.from("profiles").update(row).eq("id", id);
+        if (error) throw error;
+      }
+      if (patch.teams !== undefined) await replaceTeams(client, id, patch.teams);
+
+      const after = await readProfile(client, id);
+      if (!after) throw new Error("Profile disappeared while being updated");
+      return after;
+    },
+
+    /**
+     * The "delete" button. `profiles` has no DELETE policy, by design: a name sits on
+     * years of activity and comments, and removing the row orphans all of it. Setting
+     * `active` false is what removes their access — `is_active_user()` requires it —
+     * while leaving the history readable.
+     */
+    async setProfileActive(id: string, active: boolean): Promise<Profile> {
+      const { error } = await client.from("profiles").update({ active }).eq("id", id);
+      if (error) throw error;
+      const after = await readProfile(client, id);
+      if (!after) throw new Error("Profile disappeared while being deactivated");
+      return after;
+    },
+
+    async getProfile(id: string): Promise<Profile | null> {
+      return readProfile(client, id);
+    },
+
+    /**
+     * One list from two tables, because a reader wants one story.
+     *
+     * `activity_audit` records the actor as `jwt_sub` — auth.uid() as text — so this
+     * matches on auth_user_id, not on the profile id. Somebody who has never signed in
+     * has no auth_user_id and therefore no activity, which is correct rather than empty
+     * by accident.
+     */
+    async listActivity(opts: { profileId?: string; team?: string; limit?: number }): Promise<ActivityEntry[]> {
+      const limit = opts.limit ?? 100;
+
+      let q = client.from("profiles").select("id, auth_user_id, full_name");
+      if (opts.profileId) q = q.eq("id", opts.profileId);
+      if (opts.team) q = q.eq("profile_teams.team", opts.team);
+      const { data: people, error: peopleError } = opts.team
+        ? await client
+            .from("profiles")
+            .select("id, auth_user_id, full_name, profile_teams!inner(team)")
+            .eq("profile_teams.team", opts.team)
+        : await q;
+      if (peopleError) throw peopleError;
+
+      const rows = (people ?? []) as unknown as { id: string; auth_user_id: string | null; full_name: string }[];
+      const byAuthId = new Map(rows.filter(r => r.auth_user_id).map(r => [r.auth_user_id!, r.full_name]));
+      const authIds = [...byAuthId.keys()];
+      if (!authIds.length) return [];
+
+      const [audit, logins] = await Promise.all([
+        client.from("activity_audit")
+          .select("id, table_name, operation, changed_at, jwt_sub")
+          .in("jwt_sub", authIds).order("changed_at", { ascending: false }).limit(limit),
+        client.from("login_activity")
+          .select("id, user_id, event_type, occurred_at")
+          .in("user_id", authIds).order("occurred_at", { ascending: false }).limit(limit)
+      ]);
+      if (audit.error) throw audit.error;
+      if (logins.error) throw logins.error;
+
+      const entries: ActivityEntry[] = [
+        ...((audit.data ?? []) as unknown as { id: number; table_name: string; operation: string; changed_at: string; jwt_sub: string }[])
+          .map(a => ({
+            id: `audit-${a.id}`,
+            kind: "audit" as const,
+            at: a.changed_at,
+            actorAuthId: a.jwt_sub,
+            summary: `${OPERATION_WORDS[a.operation] ?? a.operation} ${a.table_name}`
+              + (byAuthId.size > 1 ? ` — ${byAuthId.get(a.jwt_sub) ?? "unknown"}` : "")
+          })),
+        ...((logins.data ?? []) as unknown as { id: number; user_id: string; event_type: string; occurred_at: string }[])
+          .map(l => ({
+            id: `login-${l.id}`,
+            kind: "login" as const,
+            at: l.occurred_at,
+            actorAuthId: l.user_id,
+            summary: (l.event_type === "SIGNUP" ? "First signed in" : "Signed in")
+              + (byAuthId.size > 1 ? ` — ${byAuthId.get(l.user_id) ?? "unknown"}` : "")
+          }))
+      ];
+
+      return entries.sort((a, b) => b.at.localeCompare(a.at)).slice(0, limit);
     },
 
     // ---- creating -------------------------------------------------------
