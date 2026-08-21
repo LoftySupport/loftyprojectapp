@@ -23,13 +23,19 @@ at first, what needs a decision.
 
 ## Where the current work lives
 
-The schema plan is at `/root/.claude/plans/i-need-to-sort-gentle-shannon.md` (Claude Code's
-own plans folder — the filename is auto-generated and means nothing). It should move into
-this repo as `schema-plan.md` when it settles.
+**`schema-plan.md` is the current design and the record of how it was decided.** Phase A
+(structure) is fully specified; Phase C waits on business decisions listed at its end. It is
+a decision log rather than a specification — reversed decisions are kept on purpose, because
+a schema choice without its reasoning gets "simplified" back into a bug by the next person.
 
-`supabase-schema.md` is a **target document written before the migrations and never swept
-forward**. It describes ~20 tables; six exist. Trust the migrations and the live database
-over it.
+A readable version with diagrams is published at
+https://claude.ai/code/artifact/188ca532-0cb0-4cf9-a6fb-d10db5bc7d0c — show that one to
+people; edit `schema-plan.md`.
+
+`supabase-schema.md` is **superseded** and carries a banner saying so. It was written before
+the migrations and never swept forward, and it now contradicts the plan on keys, naming,
+stages, teams, permissions and parties. Kept for its reasoning, not for its schema. Trust
+the migrations and the live database over it.
 
 ## Conventions that already bind
 
