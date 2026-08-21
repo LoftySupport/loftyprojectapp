@@ -101,8 +101,15 @@ begin
   end;
 
   begin
+    -- Named explicitly, NOT `order by address_id desc limit 1`. address_id is a random
+    -- uuid, so that ordering picked the address the project already had about half the
+    -- time — the guard then correctly returned early, no exception was raised, and the
+    -- probe reported a failure. A test whose subject depends on uuid sort order is a
+    -- test that reports a different answer on Tuesdays.
     update projects set project_original_address_id =
-      (select address_id from addresses order by address_id desc limit 1);
+      (select address_id from addresses where address_street_1 = 'Somewhere Else Road')
+     where project_original_address_id is distinct from
+      (select address_id from addresses where address_street_1 = 'Somewhere Else Road');
     raise warning 'FAIL: a user below admin moved the original address';
   exception
     when insufficient_privilege then raise notice 'ok  the original address does not move below admin';
