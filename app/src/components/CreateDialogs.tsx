@@ -5,8 +5,8 @@ import {
 import { Select, toOptions } from "./Select";
 import { useRepository } from "../data/DataProvider";
 import {
-  AU_STATES, PROJECT_TYPE_LABELS, PROJECT_TYPES, SA_COUNCILS,
-  type NewAddress, type ProjectType, type SaCouncil
+  AU_STATES, PROJECT_TYPE_LABELS, PROJECT_TYPES, SA_COUNCILS, TEAM_SEED,
+  type NewAddress, type ProjectType, type SaCouncil, type TeamId
 } from "../data/types";
 import "./ui.css";
 
@@ -166,7 +166,9 @@ export function NewProjectDialog({
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<string | null>(null);
 
-  const valid = addressIsValid(address);
+  // projectType is required by the database now, so the button waits for it rather than
+  // letting the insert come back with a not-null violation.
+  const valid = addressIsValid(address) && projectType !== null;
 
   const reset = () => {
     setAddress(EMPTY_ADDRESS);
@@ -180,7 +182,7 @@ export function NewProjectDialog({
     setSaving(true);
     setError(null);
     try {
-      const project = await repo.createProject({ address, projectType });
+      const project = await repo.createProject({ address, projectType: projectType! });
       // The project number is the thing the person came for — it is what they will
       // quote on the phone — and it does not exist until the sequence issues it.
       setCreated(String(project.id));
@@ -242,16 +244,21 @@ export function NewJobDialog({
 }) {
   const repo = useRepository();
   const [projectId, setProjectId] = useState<string | null>(null);
+  // No default. The database has none either, deliberately: this decides whose work the
+  // job is, and a default would mean nobody ever chose.
+  const [owningTeam, setOwningTeam] = useState<TeamId | null>(null);
   const [ownAddress, setOwnAddress] = useState(false);
   const [address, setAddress] = useState<NewAddress>(EMPTY_ADDRESS);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<string | null>(null);
 
-  const valid = projectId !== null && (!ownAddress || addressIsValid(address));
+  const valid = projectId !== null && owningTeam !== null
+    && (!ownAddress || addressIsValid(address));
 
   const reset = () => {
     setProjectId(null);
+    setOwningTeam(null);
     setOwnAddress(false);
     setAddress(EMPTY_ADDRESS);
     setError(null);
@@ -260,12 +267,13 @@ export function NewJobDialog({
   };
 
   async function save() {
-    if (!projectId) return;
+    if (!projectId || !owningTeam) return;
     setSaving(true);
     setError(null);
     try {
       const job = await repo.createJob({
-        projectId,
+        projectId: Number(projectId),
+        owningTeam,
         address: ownAddress ? address : undefined
       });
       setCreated(job.id);
@@ -294,6 +302,16 @@ export function NewJobDialog({
                 value={projectId}
                 onChange={setProjectId}
                 placeholder={projects.length ? "Select a project" : "No projects yet"}
+              />
+            </Field>
+
+            <Field label="Owning team" required hint="who is accountable for this job">
+              <Select
+                aria-label="Owning team"
+                options={TEAM_SEED.filter(t => t.isActive).map(t => ({ value: t.id, label: t.name }))}
+                value={owningTeam}
+                onChange={v => setOwningTeam(v as TeamId)}
+                placeholder="Select a team"
               />
             </Field>
 

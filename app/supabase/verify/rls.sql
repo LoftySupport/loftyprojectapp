@@ -1,0 +1,125 @@
+-- Prove the security boundary AS `authenticated`, not as the table owner.
+--
+-- Everything in behaviour.sql and constraints.sql runs as postgres, which BYPASSES row
+-- level security — a policy could be missing entirely and neither file would notice.
+-- This one sets the role and the auth claim the way PostgREST does and asks what a real
+-- signed-in person can actually see and do.
+--
+-- The app's can() checks hide controls; they are not security. Every one needs a
+-- matching policy or it is decoration. This is where that gets tested.
+\set ON_ERROR_STOP on
+\set QUIET on
+\pset tuples_only on
+\pset format unaligned
+
+-- A real auth identity for the test person. The shim's auth.uid() reads a GUC instead of
+-- a JWT, so this is the whole of "signing in".
+insert into auth.users (id, email) values (gen_random_uuid(), 'behaviour-test@lofty.com.au')
+on conflict do nothing;
+
+update profiles p set profile_auth_user_id = u.id
+from auth.users u
+where u.email = 'behaviour-test@lofty.com.au'
+  and p.profile_email = 'behaviour-test@lofty.com.au';
+
+select profile_auth_user_id::text as uid from profiles
+ where profile_email = 'behaviour-test@lofty.com.au' \gset
+
+-- A SECOND address, so "move the original address" is a real move. With only one
+-- address in the database the probe set the column to the value it already had, the
+-- guard correctly returned early, and the absence of an exception read as the guard
+-- having failed. A test that cannot distinguish "refused" from "nothing to do" proves
+-- nothing.
+insert into addresses (address_lot_number, address_street_1, address_suburb,
+                       address_postcode, address_council, address_created_by)
+select '99', 'Somewhere Else Road', 'Modbury', '5092', 'City of Tea Tree Gully',
+       (select profile_id from profiles where profile_email='behaviour-test@lofty.com.au');
+
+-- What Supabase grants the API roles. Without these, everything below fails on table
+-- privileges rather than on policy, and would pass for the wrong reason.
+grant usage on schema public to authenticated, anon;
+grant select, insert, update, delete on all tables in schema public to authenticated;
+grant select on all tables in schema public to anon;
+
+\echo '=== an ANONYMOUS visitor sees nothing ==='
+set role anon;
+select 'jobs: '     || count(*) from jobs;
+select 'projects: ' || count(*) from projects;
+select 'profiles: ' || count(*) from profiles;
+select 'teams: '    || count(*) from teams;
+reset role;
+
+-- Deliberately at `user`, not admin: these probes are about what an ORDINARY signed-in
+-- person can do, and the test profile is seeded as an admin, which would pass several of
+-- them for the wrong reason.
+update profiles set profile_permission = 'user'
+ where profile_email = 'behaviour-test@lofty.com.au';
+
+\echo '=== a signed-in ACTIVE person, at permission level `user` ==='
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+select 'is_active_user: ' || is_active_user()::text;
+select 'permission: '     || current_permission()::text;
+select 'jobs visible: '   || count(*) from jobs;
+select 'teams visible: '  || count(*) from teams;
+
+\echo '--- probes (each must print ok) ---'
+do $$
+begin
+  begin
+    insert into job_stage_events (job_id, pipeline_id, job_stage_event_to_stage_id)
+    values ((select job_id from jobs limit 1),
+            (select pipeline_id from pipelines limit 1),
+            (select pipeline_stage_id from pipeline_stages limit 1));
+    raise warning 'FAIL: a real user wrote to the append-only stage log';
+  exception
+    when insufficient_privilege then raise notice 'ok  job_stage_events has no INSERT policy — the trigger writes it, nobody else';
+    when others then raise warning 'FAIL: unexpected on stage log (%)', sqlerrm;
+  end;
+
+  begin
+    insert into pipelines (pipeline_key, pipeline_name, pipeline_scope)
+    values ('sneaky', 'Sneaky', 'job');
+    raise warning 'FAIL: a non-superadmin created a pipeline';
+  exception
+    when insufficient_privilege then raise notice 'ok  pipelines refused a write below superadmin';
+    when others then raise warning 'FAIL: unexpected on pipelines (%)', sqlerrm;
+  end;
+
+  -- RLS on DELETE and UPDATE FILTERS ROWS; it does not raise. A policy that denies
+  -- everything makes the statement affect zero rows and succeed quietly, so these two
+  -- have to count rows rather than catch an exception. Testing them the other way
+  -- reports a pass whether the policy exists or not.
+  begin
+    delete from teams where team_id = 'lofty_general';
+    if found then
+      raise warning 'FAIL: a team was deleted — retirement is meant to be the only path';
+    else
+      raise notice 'ok  teams has no DELETE policy — team_is_active is the only way to retire one';
+    end if;
+  exception when others then raise warning 'FAIL: unexpected on team delete (%)', sqlerrm;
+  end;
+
+  begin
+    update projects set project_original_address_id =
+      (select address_id from addresses order by address_id desc limit 1);
+    raise warning 'FAIL: a user below admin moved the original address';
+  exception
+    when insufficient_privilege then raise notice 'ok  the original address does not move below admin';
+    when others then raise warning 'FAIL: unexpected on original address (%)', sqlerrm;
+  end;
+
+  -- And the positive case, so this file proves the policies let the right things through
+  -- as well as keeping the wrong things out. A read-only test suite that only ever
+  -- asserts refusal passes just as happily against a database nobody can use.
+  begin
+    update jobs set job_status = 'at_risk';
+    if found then
+      raise notice 'ok  an ordinary user can still do ordinary work';
+    else
+      raise warning 'FAIL: a user could not update a job at all — the policies are too tight';
+    end if;
+  exception when others then raise warning 'FAIL: unexpected on ordinary update (%)', sqlerrm;
+  end;
+end $$;
+reset role;

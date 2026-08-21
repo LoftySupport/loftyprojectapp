@@ -26,7 +26,35 @@ $PSQL -f "$HERE/behaviour.sql"   || { echo "BEHAVIOUR CHECKS FAILED"; exit 1; }
 echo
 $PSQL -f "$HERE/constraints.sql" 2>&1 | grep -E "NOTICE|WARNING|^---" | sed 's/^psql.*NOTICE:  //; s/^psql.*WARNING:  //'
 
-if $PSQL -f "$HERE/constraints.sql" 2>&1 | grep -q "FAIL:"; then
+OUT=$($PSQL -f "$HERE/constraints.sql" 2>&1)
+if grep -q "FAIL:" <<<"$OUT"; then
   echo; echo "A CONSTRAINT DID NOT BITE — see the FAIL line above."; exit 1
 fi
-echo; echo "SCHEMA APPLIES AND BEHAVES"
+
+# Count them. An unhandled exception inside the DO block aborts every remaining probe,
+# and the output simply stops — which read as success until it was noticed that three of
+# seventeen checks had run. A harness that can quietly test less than it claims is worse
+# than no harness, because it is trusted.
+# Count PROBES, not messages: a probe reports either "ok" or "note", and two of them
+# carry both strings (one per branch), so counting messages in the source double-counts.
+EXPECTED=$(grep -c "^  BEGIN$" "$HERE/constraints.sql")
+# $OUT still carries psql's "psql:file:line: NOTICE:  " prefix; strip it the same way
+# the display line above does before counting.
+ACTUAL=$(sed 's/^psql.*NOTICE:  //; s/^psql.*WARNING:  //' <<<"$OUT" | grep -cE "^(ok |note:)")
+if [ "$ACTUAL" -lt "$EXPECTED" ]; then
+  echo; echo "ONLY $ACTUAL OF $EXPECTED CONSTRAINT CHECKS RAN — the block aborted early."
+  echo "$OUT" | tail -5
+  exit 1
+fi
+# The security boundary, as a real signed-in user rather than as the owner.
+echo
+RLS=$($PSQL -f "$HERE/rls.sql" 2>&1 | sed 's/^psql.*NOTICE:  //; s/^psql.*WARNING:  //')
+echo "$RLS" | grep -vE "^(SET|RESET|UPDATE|GRANT|INSERT)"
+# ERROR as well as FAIL: rls.sql runs with ON_ERROR_STOP, so a broken probe aborts the
+# file rather than reporting — and an abort carries no "FAIL:" line, which read as a pass
+# until it was noticed the output had simply stopped early.
+if grep -qE "FAIL:|ERROR:" <<<"$RLS"; then
+  echo; echo "AN RLS PROBE FAILED OR ABORTED — see the FAIL/ERROR line above."; exit 1
+fi
+
+echo; echo "SCHEMA APPLIES AND BEHAVES ($ACTUAL constraint checks, all biting; RLS holds)"

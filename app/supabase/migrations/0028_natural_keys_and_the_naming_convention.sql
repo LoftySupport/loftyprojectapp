@@ -63,10 +63,9 @@
 --     that could not wait.
 -- =============================================================================
 
--- moddatetime is a contrib module, already installed on the live project. It replaces
+-- moddatetime is established in 0026, which needs it for the teams tables. It replaces
 -- touch_updated_at(): it takes the column name as a trigger argument, which the prefix
--- convention now requires, since `updated_at` has a different name on every table.
-create extension if not exists moddatetime with schema extensions;
+-- convention requires, since `updated_at` has a different name on every table.
 
 -- ============================================================================
 -- 1. Out of the way first: views reference old column names
@@ -159,7 +158,10 @@ create table projects (
   -- Optional. Most projects are known by their address, not by a name.
   project_name text,
 
-  project_type text
+  -- Not null: a project without a type cannot be reported on, grouped or filtered, and
+  -- "we'll set it later" is how a column ends up half-filled and useless. Free to
+  -- require now, while the table is empty.
+  project_type text not null
     check (project_type in ('residential', 'commercial', 'development')),
 
   -- What someone sets. Not health — health is what the system works out, and nobody has
@@ -183,6 +185,11 @@ create table projects (
   -- be worse than leaving it unset.
   project_owning_team text references teams(team_id) on update cascade,
   project_assignee_id uuid references profiles(profile_id),
+
+  -- The highest job sequence ever ISSUED on this project, which is not the same as the
+  -- highest currently in use. Only ever goes up, so a deleted job's number is never
+  -- handed out a second time. See assign_job_sequence().
+  project_job_seq_high_water smallint not null default 0,
 
   project_start_date        date,
   project_target_completion date,
@@ -235,12 +242,12 @@ create table jobs (
 
   -- Who is primarily accountable. Drives board grouping and reporting.
   --
-  -- The default is derived from the stage default, not invented: a new job starts at
-  -- Sales & Acquisition, so Acquisition & Development owns it. AMBER — worth confirming;
-  -- it is a one-line change and it is the only business rule in this migration that was
-  -- not stated anywhere.
-  job_owning_team text not null default 'acquisition_development'
-    references teams(team_id) on update cascade,
+  -- NOT NULL and NO DEFAULT, deliberately. A default here looked harmless and is not:
+  -- this column is what the permission ladder reads to decide whose work a job is, so a
+  -- default silently files every job created without a team under one team, and nobody
+  -- ever sees the error that would have made them choose. Not-null-with-no-default makes
+  -- the caller decide; not-null-with-a-default guarantees they never do.
+  job_owning_team text not null references teams(team_id) on update cascade,
 
   -- Every team currently holding the job. "One team at a time" is an aspiration rather
   -- than a fact — a variation in construction can have Selections, Estimating and
@@ -258,7 +265,18 @@ create table jobs (
   job_updated_at timestamptz not null default now(),
   job_updated_by uuid references profiles(profile_id),
 
-  unique (project_id, job_sequence)
+  unique (project_id, job_sequence),
+
+  -- The key must always equal its parts.
+  --
+  -- job_number used to be a GENERATED column, which made this physically impossible to
+  -- violate. Making it an ordinary stamped column bought the property that matters — a
+  -- number on a contract is never silently rewritten — but gave away the one that came
+  -- for free, so any user with UPDATE could set job_id to '9999-99' and leave the key
+  -- disagreeing with project_id and job_sequence. This restores it as an invariant
+  -- rather than as a side effect of how the column is computed.
+  constraint jobs_id_matches_its_parts
+    check (job_id = project_id::text || '-' || job_sequence)
 );
 
 comment on table jobs is
@@ -386,6 +404,14 @@ language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   target_column text := tg_argv[0];
 begin
+  -- jsonb_populate_record silently ignores a key that matches no column, so a typo in
+  -- the trigger argument would leave the column unset with no error anywhere. Assert the
+  -- name resolves rather than finding out at 3am that created_by has been null for a
+  -- month.
+  if not (to_jsonb(new) ? target_column) then
+    raise exception 'stamp_created_by: % is not a column of %', target_column, tg_table_name;
+  end if;
+
   if (to_jsonb(new) ->> target_column) is null then
     new := jsonb_populate_record(new, jsonb_build_object(
       target_column, coalesce(current_profile_id(), support_profile_id())
@@ -403,6 +429,13 @@ declare
   original_value  text  := row_json ->> original_column;
   current_value   text  := row_json ->> current_column;
 begin
+  -- Same reason as stamp_created_by: a wrong name here is silent, and on a nullable
+  -- column it would stay silent forever.
+  if not (row_json ? original_column and row_json ? current_column) then
+    raise exception 'default_current_address: % / % are not both columns of %',
+      original_column, current_column, tg_table_name;
+  end if;
+
   -- Either one fills in for the other, so "it has not moved yet" needs no second entry.
   if current_value is null and original_value is not null then
     new := jsonb_populate_record(new, jsonb_build_object(current_column, original_value));
@@ -444,6 +477,19 @@ $$;
 create or replace function guard_profile_privileges() returns trigger
 language plpgsql set search_path = public, pg_temp as $$
 begin
+  -- No JWT means this is not a person: a migration, a seed, a server-side script. Its
+  -- sibling guard_privileged_profile_columns() has always had this escape hatch and this
+  -- one never did, which made a permission level the one thing no migration could set —
+  -- it failed even as superuser, because current_permission() reads a profile by
+  -- auth.uid() and falls back to 'viewer' when there is none.
+  --
+  -- This is not a hole. Reaching the database without a JWT already means holding the
+  -- service key or a database login, which is strictly more access than any permission
+  -- level grants.
+  if auth.uid() is null then
+    return new;
+  end if;
+
   if current_permission() >= 'admin' then
     return new;
   end if;
@@ -514,8 +560,12 @@ end $$;
 -- 1106 explicitly and the next generated number is still 1107. Reads the sequence
 -- through pg_get_serial_sequence rather than by name — identity owns its own sequence,
 -- and hardcoding the name is how it breaks next time.
+-- SECURITY DEFINER because setval() needs UPDATE on the sequence, not merely USAGE.
+-- Supabase's default privileges do grant it to `authenticated` (checked on live), but
+-- relying on a platform default for something a trigger cannot do without is how this
+-- breaks quietly the first time those defaults change.
 create or replace function bump_project_no_seq() returns trigger
-language plpgsql set search_path = public, pg_temp as $$
+language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   seq text := pg_get_serial_sequence('projects', 'project_id');
 begin
@@ -535,13 +585,24 @@ declare
   next_no integer;
 begin
   if new.job_sequence is null then
-    -- The lock is what stops two people creating jobs on the same project at once from
-    -- both reading the same max().
-    perform 1 from projects where project_id = new.project_id for update;
-    select coalesce(max(job_sequence::integer), 0) + 1
-      into next_no
-      from jobs
-     where project_id = new.project_id;
+    -- Allocated from a high-water mark on the parent, not from max() over the live jobs.
+    --
+    -- max()+1 looks equivalent and is not: delete the HIGHEST job and the next insert
+    -- reissues its number. A gap is fine and expected — the design says gaps are
+    -- permanent — but reissuing a retired number is strictly worse, because two
+    -- different builds then share '1042-03' across contracts, folders and invoices.
+    --
+    -- The UPDATE takes a row lock on the parent, which is also what stops two people
+    -- creating jobs on the same project at once from both claiming the same number.
+    update projects
+       set project_job_seq_high_water = project_job_seq_high_water + 1
+     where project_id = new.project_id
+    returning project_job_seq_high_water into next_no;
+
+    if next_no is null then
+      raise exception 'project % does not exist', new.project_id using errcode = '23503';
+    end if;
+
     new.job_sequence := lpad(next_no::text, 2, '0');
   end if;
 
@@ -579,17 +640,74 @@ language plpgsql set search_path = public, pg_temp as $$
 declare
   unknown_team text;
 begin
+  -- Normalise first — sort, deduplicate, strip nulls — which is what
+  -- normalise_profile_teams() did for the array it replaced. An array will happily store
+  -- {design, design}, and a nested null, neither of which a join table's primary key
+  -- could ever have contained.
+  new.job_engaged_teams := coalesce(
+    (select array_agg(distinct t order by t)
+       from unnest(new.job_engaged_teams) as t where t is not null),
+    '{}');
+
+  -- EXISTS over the whole array, not `select ... limit 1` into a variable. The variable
+  -- form has a hole a null falls straight through: `team_id = null` is null, so a null
+  -- element satisfies NOT EXISTS and gets selected, and then `unknown_team is not null`
+  -- is false and nothing raises. Worse, with no ORDER BY the null can be picked INSTEAD
+  -- of a genuinely bad value, so {design, null, not_a_team} passed clean.
   select t into unknown_team
   from unnest(new.job_engaged_teams) as t
   where not exists (select 1 from teams where team_id = t)
+  order by t
   limit 1;
 
-  if unknown_team is not null then
+  if found and unknown_team is not null then
     raise exception 'job_engaged_teams contains %, which is not a team', unknown_team
       using errcode = '23503';
   end if;
   return new;
 end $$;
+
+-- ------------------------------------------- the original address does not move
+-- The design says original is set at creation and immutable thereafter; a comment two
+-- hundred lines above asserts it, and until now nothing enforced it.
+--
+-- A trigger rather than a policy, which is the 0018 lesson: RLS filters rows and never
+-- columns, so "everyone may edit a job except this one field" cannot be a policy. Only
+-- a trigger can see which column changed.
+create or replace function guard_original_address() returns trigger
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  original_column text := tg_argv[0];
+begin
+  if (to_jsonb(old) ->> original_column) is not distinct from (to_jsonb(new) ->> original_column) then
+    return new;
+  end if;
+  if auth.uid() is null or current_permission() >= 'admin' then
+    return new;
+  end if;
+  raise exception
+    'The original address is what the record was first called and does not move. Only an admin may correct it.'
+    using errcode = '42501';
+end $$;
+
+-- --------------------------------------------- a team slug rename reaches the array
+-- job_owning_team and profile_teams.team_id follow a rename through ON UPDATE CASCADE.
+-- An array cannot carry a foreign key, so it cannot follow — and a dangling value there
+-- is not cosmetic: validate_engaged_teams then rejects every subsequent write to the
+-- job, including ones that never touch the array. The job becomes un-editable.
+create or replace function cascade_team_rename() returns trigger
+language plpgsql set search_path = public, pg_temp as $$
+begin
+  if new.team_id is distinct from old.team_id then
+    update jobs
+       set job_engaged_teams = array_replace(job_engaged_teams, old.team_id, new.team_id)
+     where job_engaged_teams && array[old.team_id];
+  end if;
+  return new;
+end $$;
+
+create trigger teams_cascade_rename after update on teams
+  for each row execute function cascade_team_rename();
 
 -- --------------------------------------------------- functions that are now gone
 drop function if exists sync_job_project_number();
@@ -626,8 +744,17 @@ create trigger jobs_resync_job_id before update on jobs
   for each row execute function resync_job_id();
 create trigger jobs_touch_stage_entered_at before update on jobs
   for each row execute function touch_stage_entered_at();
-create trigger jobs_validate_engaged_teams before insert or update on jobs
+-- `update OF job_engaged_teams`, not plain `update`. Unscoped, changing a job's status
+-- would re-validate the whole array — so one bad value anywhere in it would block every
+-- future write to that job, including writes that never go near it.
+create trigger jobs_validate_engaged_teams
+  before insert or update of job_engaged_teams on jobs
   for each row execute function validate_engaged_teams();
+
+create trigger projects_guard_original_address before update on projects
+  for each row execute function guard_original_address('project_original_address_id');
+create trigger jobs_guard_original_address before update on jobs
+  for each row execute function guard_original_address('job_original_address_id');
 create trigger jobs_touch before update on jobs
   for each row execute function extensions.moddatetime(job_updated_at);
 
@@ -640,6 +767,56 @@ create trigger trg_activity_audit_row after insert or update or delete on projec
   for each row execute function log_activity_audit();
 create trigger trg_activity_audit_row after insert or update or delete on jobs
   for each row execute function log_activity_audit();
+
+-- ------------------------------------------------ what the audit log actually covers
+-- 0013's allowlist names four tables. profile_teams was removed from it by 0022 when the
+-- table was folded into an array, and `teams` was never in it — so as things stand, the
+-- two tables that decide who can see whose work would change without any record of who
+-- did it. Restored, with the table names it now needs.
+create or replace function log_activity_audit() returns trigger
+language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if tg_table_schema <> 'public'
+     or tg_table_name not in ('profiles', 'addresses', 'projects', 'jobs',
+                              'teams', 'profile_teams') then
+    return null;
+  end if;
+
+  if tg_op = 'INSERT' then
+    insert into public.activity_audit (schema_name, table_name, operation, old_row, new_row)
+    values (tg_table_schema, tg_table_name, tg_op, null, redact_audit_row(to_jsonb(new)));
+    return new;
+  elsif tg_op = 'UPDATE' then
+    insert into public.activity_audit (schema_name, table_name, operation, old_row, new_row)
+    values (tg_table_schema, tg_table_name, tg_op,
+            redact_audit_row(to_jsonb(old)), redact_audit_row(to_jsonb(new)));
+    return new;
+  else
+    insert into public.activity_audit (schema_name, table_name, operation, old_row, new_row)
+    values (tg_table_schema, tg_table_name, tg_op, redact_audit_row(to_jsonb(old)), null);
+    return old;
+  end if;
+end;
+$$;
+
+create trigger trg_activity_audit_row after insert or update or delete on teams
+  for each row execute function log_activity_audit();
+create trigger trg_activity_audit_row after insert or update or delete on profile_teams
+  for each row execute function log_activity_audit();
+
+-- ------------------------------------------------- keep the new functions off the API
+-- 0024 closed this hole for every function that existed then. `create or replace`
+-- preserved those revocations, but a NEW function gets Postgres's default grant of
+-- EXECUTE to PUBLIC, and anon inherits from PUBLIC — so each of these would be published
+-- at /rest/v1/rpc/<name>. None is SECURITY DEFINER except where noted and all error
+-- outside a trigger, but "it errors out" is a property of today's bodies, not a promise.
+--
+-- is_current(text) is deliberately NOT revoked: the security_invoker display views call
+-- it, so it must stay executable by the caller. Same reasoning as 0024.
+revoke execute on function resync_job_id()           from public, anon, authenticated;
+revoke execute on function validate_engaged_teams()  from public, anon, authenticated;
+revoke execute on function guard_original_address()  from public, anon, authenticated;
+revoke execute on function cascade_team_rename()     from public, anon, authenticated;
 
 -- ============================================================================
 -- 8. RLS

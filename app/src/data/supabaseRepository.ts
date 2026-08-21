@@ -95,14 +95,34 @@ const OPERATION_WORDS: Record<string, string> = {
  * this does not have. Recorded here because it will matter when managers are editable.
  */
 async function writeTeams(client: SupabaseClient, profileId: string, teams: TeamId[]) {
-  const { error: clearError } = await client
-    .from("profile_teams").delete().eq("profile_id", profileId);
-  if (clearError) throw clearError;
-  if (!teams.length) return;
+  // Remove only what was actually removed, and add only what is new.
+  //
+  // Delete-all-then-reinsert is the obvious version and it is wrong: profile_team_role
+  // has a default of 'member', so re-inserting a row a manager already had silently
+  // demotes them. Every edit to somebody's team list would quietly strip the one
+  // attribute this table exists to carry — and nothing would report it, because the
+  // write succeeds.
+  const { data: existing, error: readError } = await client
+    .from("profile_teams").select("team_id").eq("profile_id", profileId);
+  if (readError) throw readError;
 
-  const { error } = await client.from("profile_teams")
-    .insert(teams.map(team_id => ({ profile_id: profileId, team_id })));
-  if (error) throw error;
+  const had = new Set((existing ?? []).map(r => r.team_id as TeamId));
+  const wanted = new Set(teams);
+
+  const removed = [...had].filter(t => !wanted.has(t));
+  const added = [...wanted].filter(t => !had.has(t));
+
+  if (removed.length) {
+    const { error } = await client.from("profile_teams")
+      .delete().eq("profile_id", profileId).in("team_id", removed);
+    if (error) throw error;
+  }
+  if (added.length) {
+    const { error } = await client.from("profile_teams")
+      .insert(added.map(team_id => ({ profile_id: profileId, team_id })));
+    if (error) throw error;
+  }
+  // Teams in both sets are left completely alone, which is what preserves the role.
 }
 
 /** Re-read after a write, so the caller gets generated columns and teams, not its input. */
@@ -465,6 +485,7 @@ export function createSupabaseRepository(): Repository {
         .from("jobs")
         .insert({
           project_id: input.projectId,
+          job_owning_team: input.owningTeam,
           job_current_address_id: addressId,
           // Not "Sales & acquisition". The live enum has been title-cased since somebody
           // edited the type by hand; the migration files only caught up in 0027, and

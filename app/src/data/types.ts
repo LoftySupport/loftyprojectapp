@@ -647,7 +647,8 @@ export interface NewAddress {
 
 export interface NewProject {
   address: NewAddress;
-  projectType: ProjectType | null;
+  /** Required. A project without a type cannot be reported on, grouped or filtered. */
+  projectType: ProjectType;
   status?: RecordStatus;
   startDate?: IsoDate | null;
   targetCompletion?: IsoDate | null;
@@ -662,8 +663,16 @@ export interface NewProject {
  * project, which is the only way two people creating jobs at once do not collide.
  */
 export interface NewJob {
-  projectId: Uuid;
+  projectId: number;
+  /**
+   * Required, and deliberately not defaulted anywhere.
+   *
+   * This is what the permission ladder reads to decide whose work a job is. A default
+   * would file every job created without a team under one team, and nobody would ever
+   * see the prompt that would have made them choose.
+   */
+  owningTeam: TeamId;
   address?: NewAddress;
-  stage?: Stage["name"];
+  stage?: StageName;
   status?: RecordStatus;
 }

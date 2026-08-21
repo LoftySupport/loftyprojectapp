@@ -58,6 +58,16 @@
 -- policies built on them. The table can exist without them; they cannot exist without it.
 -- =============================================================================
 
+-- moddatetime is a contrib module, already installed on the live project in the
+-- `extensions` schema (checked before writing this). It takes the column name as a
+-- trigger argument, which the prefix convention needs: `updated_at` has a different
+-- name on every table, so one shared plpgsql function cannot maintain it.
+--
+-- CREATE EXTENSION ... WITH SCHEMA does NOT relocate an already-installed extension —
+-- the clause is ignored when it exists — so this establishes it on a fresh database and
+-- is inert on live, where it is already where it needs to be.
+create extension if not exists moddatetime with schema extensions;
+
 -- ---------------------------------------------------------------------- teams
 create table if not exists teams (
   -- A slug, not an integer and not the display name. The name is renameable — "Pre-
@@ -239,8 +249,15 @@ create policy "read teams" on teams
   for select to authenticated
   using ((select is_active_user()));
 
-create policy "admins write teams" on teams
-  for all to authenticated
+-- INSERT and UPDATE, deliberately NOT DELETE. This table's whole argument is
+-- "retirement, not deletion": a deleted team dangles in every job_engaged_teams array
+-- that named it, and because that array is validated on every write, the job then
+-- becomes permanently un-editable. team_is_active is the supported way to retire one.
+create policy "admins add teams" on teams
+  for insert to authenticated
+  with check ((select current_permission()) >= 'admin');
+create policy "admins edit teams" on teams
+  for update to authenticated
   using ((select current_permission()) >= 'admin')
   with check ((select current_permission()) >= 'admin');
 
@@ -257,6 +274,14 @@ create policy "admins write profile teams" on profile_teams
   for all to authenticated
   using ((select current_permission()) >= 'admin')
   with check ((select current_permission()) >= 'admin');
+
+-- --------------------------------------------------------- keeping updated_at honest
+-- Both tables declare an updated_at, and a column that is always equal to created_at is
+-- worse than no column at all: it will be read as fact. moddatetime maintains them.
+create trigger teams_touch before update on teams
+  for each row execute function extensions.moddatetime(team_updated_at);
+create trigger profile_teams_touch before update on profile_teams
+  for each row execute function extensions.moddatetime(profile_team_updated_at);
 
 -- ---------------------------------------------------- retire the array and its trigger
 drop trigger if exists profiles_normalise_teams on profiles;
