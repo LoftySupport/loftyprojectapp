@@ -364,6 +364,7 @@ export function createSupabaseRepository(): Repository {
           street_2: input.address.street2 ?? null,
           suburb: input.address.suburb,
           state: input.address.state ?? "SA",
+          postcode: input.address.postcode,
           council: input.address.council ?? null
         })
         .select("id")
@@ -402,6 +403,7 @@ export function createSupabaseRepository(): Repository {
             street_2: input.address.street2 ?? null,
             suburb: input.address.suburb,
             state: input.address.state ?? "SA",
+            postcode: input.address.postcode,
             council: input.address.council ?? null
           })
           .select("id")

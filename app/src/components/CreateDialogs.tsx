@@ -99,6 +99,16 @@ function AddressFields({
           }}
         />
       </Field>
+      <Field label="Postcode" required>
+        <TextField
+          value={value.postcode}
+          onChange={v => set("postcode", v)}
+          placeholder="5125"
+          id="addr-postcode"
+          inputAriaLabel="Postcode"
+          required
+        />
+      </Field>
       {councilAvailable && (
         <Field label="Council region" hint="in the LGA's own order">
           <Select
@@ -116,9 +126,29 @@ function AddressFields({
 }
 
 const EMPTY_ADDRESS: NewAddress = {
-  street1: "", suburb: "", state: "SA", council: null,
+  street1: "", suburb: "", state: "SA", postcode: "", council: null,
   lotNumber: null, streetNumber: null, street2: null
 };
+
+/**
+ * The same four rules the `addresses` table enforces, checked here so the Create button
+ * greys out instead of the insert coming back with a constraint name.
+ *
+ * Kept beside the fields rather than inside the repository because it is a statement
+ * about this form: what the person still has to fill in. The database remains the one
+ * that decides — this only saves them a round trip.
+ */
+const addressIsValid = (a: NewAddress): boolean =>
+  a.street1.trim() !== "" &&
+  a.suburb.trim() !== "" &&
+  // addresses_postcode_shape: four digits, and text, because 0800 is Darwin.
+  /^[0-9]{4}$/.test(a.postcode.trim()) &&
+  // addresses_has_a_number: a subdivided site is "Lot 3" long before it is "28", so
+  // either one will do — but not neither.
+  (!!a.lotNumber?.trim() || !!a.streetNumber?.trim()) &&
+  // addresses_council_required_in_sa: an SA address must name its council. Interstate
+  // addresses cannot carry one at all, which is why this is conditional.
+  ((a.state ?? "SA") !== "SA" || a.council !== null);
 
 export function NewProjectDialog({
   show,
@@ -136,7 +166,7 @@ export function NewProjectDialog({
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<string | null>(null);
 
-  const valid = address.street1.trim() !== "" && address.suburb.trim() !== "";
+  const valid = addressIsValid(address);
 
   const reset = () => {
     setAddress(EMPTY_ADDRESS);
@@ -218,9 +248,7 @@ export function NewJobDialog({
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<string | null>(null);
 
-  const valid =
-    projectId !== null &&
-    (!ownAddress || (address.street1.trim() !== "" && address.suburb.trim() !== ""));
+  const valid = projectId !== null && (!ownAddress || addressIsValid(address));
 
   const reset = () => {
     setProjectId(null);
