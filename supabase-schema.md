@@ -12,6 +12,7 @@
 > | `permission_grants` keyed on the permission ladder | Keyed on permission sets, because Finance is not a rung |
 > | Companies, contacts and parties | Out of scope — this is project and process management, not a CRM |
 > | One `activity` table merging comments and system events | Split, because one is user-authored and mutable and the other must be append-only |
+> | `addresses` with a `council_id` FK, no postcode, everything nullable | Council is an enum value on the row; postcode is required; a lot or street number is required; and `address_history` keeps every name a site has had |
 >
 > **See `schema-plan.md` for the current design.** This file is kept, not deleted: its
 > reasoning on addresses as records, status versus health, and what was removed and why is
@@ -282,6 +283,25 @@ create view profile_display as
   select id, coalesce(preferred_name, first_name) as greeting_name, full_name
   from profiles;
 
+-- SUPERSEDED BY 0003 AND 0025. The premise below — an address is a record, not a string
+-- on another record — held, and it is why everything points at an id. Four things in the
+-- DDL did not:
+--
+--   * `council_id uuid references council_regions(id)` became a `sa_council` enum value on
+--     the row in 0003, so reading a council needs no join and `council_regions` is gone.
+--   * `postcode` was simply missing. 0025 added it, not null, four digits, as text —
+--     0800 is Darwin and an integer makes it 800.
+--   * every column here is nullable that should not be. 0025 added the rules as they
+--     actually are: at least one of lot number or street number (a subdivided site has
+--     "Lot 3" long before it has "28"), and an SA address must name its council —
+--     conditional rather than a flat NOT NULL, so an interstate address stays enterable.
+--   * `consolidated_address` did not include the lot number or the postcode. It does now,
+--     which is what lets "Lot 3 Corner Street" and "5000" both find the job.
+--
+-- And the columns on projects and jobs are only two points on a timeline: `address_history`
+-- (0025) holds the superseded assignments between them, so a site renamed twice is still
+-- findable under the name it had in the middle. See `schema-plan.md`.
+--
 -- An address is a record, not a string on another record. Addresses get corrected and
 -- they get changed — a lot renumbered by council, a street renamed, a typo found at
 -- handover — and every project and job pointing at it should follow without anyone

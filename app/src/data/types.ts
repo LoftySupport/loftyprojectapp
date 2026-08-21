@@ -55,10 +55,20 @@ export interface Address {
   street2: string | null;
   suburb: string;
   state: AuState;
+  /**
+   * Four digits, as a string. Australian postcodes are not numbers — 0800 is Darwin,
+   * and an integer would silently make it 800. The database checks the shape.
+   */
+  postcode: string;
   country: "AU";
   /**
    * An enum value since 0003, not an id — "City of Burnside" reads straight off the
    * row. Only an SA address may carry one; the database enforces that with a CHECK.
+   *
+   * Required in practice: a South Australian address must name its council, and every
+   * address is South Australian today. Expressed as a conditional CHECK rather than a
+   * flat NOT NULL so an interstate address stays enterable — the enum is SA-only, so
+   * there would be no valid value to give it.
    */
   council: SaCouncil | null;
   /** Generated in Postgres. Read-only: never write to it. */
@@ -112,6 +122,37 @@ export const SA_COUNCILS = [
   "Yorke Peninsula Council"
 ] as const;
 export type SaCouncil = (typeof SA_COUNCILS)[number];
+
+/**
+ * An address a project or job used to have, and the period it applied for.
+ *
+ * Superseded assignments only — the current and original addresses live in columns on
+ * the record itself, so no fact is stored twice. And it holds the *link*, never a copy
+ * of the address text: that lives once, in `addresses`.
+ *
+ * Why the two columns are not enough on their own: when a project's current address
+ * repoints from "20 Corner Street" to "20A Corner Street", the 20 Corner Street row is
+ * orphaned. It still exists and search still finds the text, but nothing can say whose
+ * it was. This is what makes "12 Test Street" still find project 1042 years after it
+ * became "20 Corner Street".
+ *
+ * Exactly one of `projectId` / `jobId` is set — two real foreign keys rather than a
+ * subject-type discriminator, so the reference is enforced and the delete cascades.
+ */
+export interface AddressHistory {
+  /** bigint identity. Nothing references this table, so a sequential key is enough. */
+  id: number;
+  /** Still uuids: projects and jobs move to natural keys in a later batch. */
+  projectId: Uuid | null;
+  jobId: Uuid | null;
+  addressId: Uuid;
+  role: "original" | "current";
+  validFrom: IsoDateTime;
+  /** A row only exists once superseded, so this is never null. */
+  validTo: IsoDateTime;
+  changedBy: Uuid | null;
+  createdAt: IsoDateTime;
+}
 
 /**
  * Two addresses, not one. `original` is where the project started and never moves —
@@ -493,6 +534,8 @@ export interface NewAddress {
   street2?: string | null;
   suburb: string;
   state?: AuState;
+  /** Required. There is no sensible default for a postcode. */
+  postcode: string;
   council?: SaCouncil | null;
 }
 
