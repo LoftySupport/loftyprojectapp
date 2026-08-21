@@ -1,3 +1,22 @@
+> ## Superseded
+>
+> This document was written **before** the migrations and never swept forward. It describes
+> roughly twenty tables where six exist, and it is now contradicted on several decisions
+> that were made later:
+>
+> | This document says | The decision now |
+> |---|---|
+> | uuid primary keys with business numbers alongside | Natural keys — `project_id` is the 4-digit number, `job_id` is `1042-01` |
+> | `subject_type` + `subject_id` on `property_values` | Two real foreign keys with a "exactly one" check, so deletes cascade |
+> | Stages and teams as Postgres enums | Both are lookup tables — the lists have each changed more than once |
+> | `permission_grants` keyed on the permission ladder | Keyed on permission sets, because Finance is not a rung |
+> | Companies, contacts and parties | Out of scope — this is project and process management, not a CRM |
+> | One `activity` table merging comments and system events | Split, because one is user-authored and mutable and the other must be append-only |
+>
+> **See `schema-plan.md` for the current design.** This file is kept, not deleted: its
+> reasoning on addresses as records, status versus health, and what was removed and why is
+> still the record of how those questions were settled.
+
 # Supabase schema — derived from the binding template
 
 `supabase-template.html` is the prototype with every data value replaced by a
