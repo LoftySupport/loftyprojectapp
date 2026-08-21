@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-162 properties across 29 tables.
+183 properties across 31 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 36 | Specified here, not yet in the migration |
-| Created | 110 | In the migration and the types |
+| Created | 131 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -323,3 +323,34 @@
 | Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `template_phases.expected_days` | Expected days | How long a phase should take. What the Gantt measures actual time in stage against. | `integer` | Nullable. | Keyed by template plus the stage enum; the owning team is a team enum value. Neither is an FK. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
+
+## `variation_reopened_tasks`
+
+| Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `variation_reopened_tasks.variation_id` | Variation | The change that sent work back. | `uuid` | Part of the primary key. | FK → variations(variation_id) ON DELETE CASCADE. A trigger refuses a task on a different job. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `variation_reopened_tasks.task_id` | Task | The task that had to be done again. | `uuid` | Part of the primary key. Indexed on its own. | FK → tasks(task_id) ON DELETE CASCADE. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `variation_reopened_tasks.variation_reopened_task_was_complete` | Was already finished | Whether the task was already done when the variation reopened it. THIS is the number that makes a process argument settleable — work that was finished, and then had to be finished again. | `boolean` | Not null. SNAPSHOTTED by the trigger at the moment the row is written, not derived. Derived would be wrong twice over: the task is about to be reopened, so its live state no longer describes what the change interrupted, and a second variation reopening the same task would overwrite the first one's record. | Counted by variation_rework.tasks_that_were_finished. Cannot be backfilled — a reopened-and-refinished task just looks slow. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `variation_reopened_tasks.variation_reopened_task_completed_at` | Had been finished on | When the task had been completed, before the variation reopened it. Snapshotted with the flag above. | `timestamptz` | Nullable — null when the task was not finished. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `variations`
+
+| Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `variations.variation_id` | Variation | One change to a job. A record rather than a state on the job, because three teams raising conflicting changes at once is the problem this exists for, and a flag cannot represent three of anything. | `uuid` | Primary key. | Referenced by variation_reopened_tasks. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `variations.job_id` | Job | The job being changed. Always a job, never a project: a project-level change is an ordinary edit, and project properties are read through by their jobs rather than copied. | `text` | Not null. | FK → jobs(job_id) ON UPDATE CASCADE ON DELETE CASCADE. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `variations.variation_sequence` | Variation number within the job | 1, 2, 3 — per job, so V3 on 1042-01 is unrelated to V3 on 1042-02. | `integer` | smallint. Not null, >= 1, unique with job_id. Allocated from jobs.job_variation_seq_high_water under a row lock — a high-water mark rather than max()+1, because a deleted V3 must never be reissued when that number has been in an email to a client. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `variations.variation_number` | Variation reference | '1042-01-V3'. What appears in client correspondence. | `text` | Not null. Unique. Stamped at insert, and CHECK variations_number_matches_its_parts keeps it equal to job_id \|\| '-V' \|\| sequence, so it can never drift from them. | Recomputed by variations_resync_number only when the parent job is renumbered. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `variations.variation_title` | Title | What the change is. | `text` | Not null, not blank. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `variations.variation_reason` | Reason | Why it was raised, captured at the point of raising. Lofty asked for this specifically: a variation without its reason is an argument nobody can settle six months later. | `text` | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `variations.variation_origin` | Raised by whom | client · lofty · consultant · authority · supplier. A client-requested change and a Lofty-caused rework are the same shape and completely different facts, and the difference decides who pays. | `text` | Not null, default 'client'. CHECK on the five values. | Grouped by in variation_rework. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `variations.variation_status` | Status | new → with_us → waiting_on_external → waiting_on_client → on_hold → completed \| cancelled. Lofty's own words. | `text` | Not null, default 'new'. Text with a check rather than an enum, because this is a process and processes change. CHECK variations_completed_is_approved ties completed to an approval date. | Drives the partial indexes and the job badge. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `variations.variation_current_team` | With whom | Which team is holding it right now — the board reads "With us — Estimating". Not the job's owning team: the point of a variation is that it moves between teams while the job stays where it is. | `text` | Nullable. | FK → teams(team_id) ON UPDATE CASCADE. Partially indexed on the open statuses. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `variations.variation_assignee_id` | Assignee | The person handling it. | `uuid` | Nullable. | FK → profiles(profile_id). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `variations.variation_cost` | Cost | What the change is worth. Nullable, because a variation is raised long before it is priced. | `numeric` | numeric(12,2), never a float — money that does not add up exactly is money somebody argues about. | Summed by job_variation_summary for APPROVED variations only: a proposed change is not money spent. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `variations.variation_days_impact` | Days impact | How much time the change adds. | `integer` | smallint. Nullable. | Summed for approved variations in job_variation_summary. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `variations.variation_raised_at` | Raised on | When it was requested. | `timestamptz` | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `variations.variation_raised_by` | Raised by | Who logged it. | `uuid` | Nullable. | FK → profiles(profile_id). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `variations.variation_approved_at` | Approved on | When it was approved. Stamped by the database when the status becomes completed, never sent by the client — this one has a dollar value attached. | `timestamptz` | Nullable. Required once the status is completed. | Paired with the approver by CHECK variations_approved_by_needs_a_time. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `variations.variation_approved_by` | Approved by | Who approved it. MAY be null while the date is set — "approved on this date, by somebody we no longer know" is a real state for history imported from the old system. The reverse is forbidden: an approver with no approval date is meaningless. | `uuid` | Nullable. CHECK variations_approved_by_needs_a_time. | FK → profiles(profile_id). Falls through to the support profile when an automation approves, the way created_by does. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `variations.variation_cancelled_reason` | Cancelled because | Why it was dropped. CHECK-enforced rather than left to convention: the reason is the only thing that makes a cancelled variation worth keeping instead of deleting. | `text` | Nullable, but not null and not blank once the status is cancelled. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |

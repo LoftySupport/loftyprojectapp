@@ -590,6 +590,77 @@ export interface TaskDependency {
 }
 
 /**
+ * A change to a job — a record, not a state.
+ *
+ * Three teams raising conflicting changes to one job is the problem this exists for, and
+ * a flag cannot represent three of anything. Each change is its own row with its own
+ * owner, cost, approval and team, so Selections, Estimating and Design can all be
+ * holding the same job without anything having to lie about it.
+ *
+ * Always against a job, never a project. A project-level change is an ordinary edit, and
+ * project properties are read through by their jobs rather than copied — so "push it to
+ * all the jobs" needs no push.
+ */
+export interface Variation {
+  id: Uuid;
+  jobId: string;
+  /** Per-job. The third variation on 1042-01 is V3 whatever is happening elsewhere. */
+  sequence: number;
+  /** '1042-01-V3'. What goes in an email to a client, so it never silently changes. */
+  number: string;
+  title: string;
+  /** Why. Captured when the request is raised, not reconstructed six months later. */
+  reason: string | null;
+  /** Who asked. A client request and a Lofty-caused rework decide who pays. */
+  origin: VariationOrigin;
+  status: VariationStatus;
+  /** The board reads "With us — Estimating". Not the job's team; the variation's. */
+  currentTeam: TeamId | null;
+  assigneeId: Uuid | null;
+  /** A decimal string, not a number — money that does not add up exactly is argued about. */
+  cost: string | null;
+  daysImpact: number | null;
+  raisedAt: IsoDateTime;
+  raisedBy: Uuid | null;
+  approvedAt: IsoDateTime | null;
+  /** May be null with a date set: imported history knows when, not always by whom. */
+  approvedBy: Uuid | null;
+  cancelledReason: string | null;
+  createdAt: IsoDateTime;
+  createdBy: Uuid | null;
+  updatedAt: IsoDateTime;
+  updatedBy: Uuid | null;
+}
+
+export const VARIATION_STATUSES = [
+  "new", "with_us", "waiting_on_external", "waiting_on_client",
+  "on_hold", "completed", "cancelled"
+] as const;
+export type VariationStatus = (typeof VARIATION_STATUSES)[number];
+
+export const VARIATION_ORIGINS = [
+  "client", "lofty", "consultant", "authority", "supplier"
+] as const;
+export type VariationOrigin = (typeof VARIATION_ORIGINS)[number];
+
+/**
+ * A task a variation sent back, and whether it was already finished when it did.
+ *
+ * The number that makes a process argument settleable — "this change cost us eleven
+ * completed tasks". It cannot be reconstructed later: a reopened-and-refinished task
+ * just looks slow. The snapshot is taken by the database at the moment it is recorded,
+ * so it stays true even after the task is finished again.
+ */
+export interface VariationReopenedTask {
+  variationId: Uuid;
+  taskId: Uuid;
+  wasComplete: boolean;
+  completedAt: IsoDateTime | null;
+  reopenedAt: IsoDateTime;
+  reopenedBy: Uuid | null;
+}
+
+/**
  * The nine values of the `stage` Postgres enum, in order.
  *
  * This list was wrong in every part of the app until the migration that reconciled it:

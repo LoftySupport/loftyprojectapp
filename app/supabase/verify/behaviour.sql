@@ -207,3 +207,55 @@ update tasks set task_status='cancelled' where job_id='1106-02' and task_name='O
 update tasks set task_status='done' where job_id='1106-02'
   and task_name in ('Order Soil Test','Working Drawings');
 select task_name as ready_now from tasks_ready where job_id='1106-02' order by task_name;
+
+\echo '--- 24. THREE variations on one job at once, each with its own team'
+insert into variations (job_id, variation_title, variation_reason, variation_origin,
+                        variation_status, variation_current_team)
+values ('1106-02','Tiles unavailable','Supplier discontinued the range','supplier',
+        'with_us','selections'),
+       ('1106-02','Client wants a wider driveway','Requested at the site walk','client',
+        'waiting_on_client','estimating'),
+       ('1106-02','Beam size correction','Engineer revised the span','consultant',
+        'with_us','design');
+select variation_number, variation_current_team, variation_status, variation_origin
+from variations where job_id='1106-02' order by variation_sequence;
+
+\echo '--- 25. the job badge is derived, so it cannot go stale'
+select variations_open, variations_with_client, variations_completed
+from job_variation_summary where job_id='1106-02';
+
+\echo '--- 26. a deleted variation number is never reissued'
+delete from variations where variation_number='1106-02-V3';
+insert into variations (job_id, variation_title) values ('1106-02','Raised after the delete');
+select variation_number as next_issued from variations
+where job_id='1106-02' order by variation_sequence desc limit 1;
+
+\echo '--- 27. REWORK: the variation reopens finished work, and it is counted'
+-- Contract Deposit Paid and Working Drawings are done from step 23.
+insert into variation_reopened_tasks (variation_id, task_id)
+select v.variation_id, t.task_id
+from variations v, tasks t
+where v.variation_number='1106-02-V1' and t.job_id='1106-02'
+  and t.task_name in ('Contract Deposit Paid','Working Drawings','Order Soil Test');
+
+select variation_number, tasks_reopened, tasks_that_were_finished
+from variation_rework where variation_number='1106-02-V1';
+
+\echo '--- 28. the snapshot survives the task being reopened afterwards'
+update tasks set task_status='open'
+ where job_id='1106-02' and task_name in ('Contract Deposit Paid','Working Drawings');
+select 'task completed_at now cleared: ' ||
+       (select count(*) from tasks where job_id='1106-02'
+         and task_name='Working Drawings' and task_completed_at is null)::text;
+select variation_number, tasks_that_were_finished as still_counted_as_rework
+from variation_rework where variation_number='1106-02-V1';
+
+\echo '--- 29. approving a variation stamps it and it lands in the cost'
+update variations set variation_status='completed', variation_cost=4250.00,
+       variation_days_impact=7
+ where variation_number='1106-02-V1';
+select variation_approved_at is not null as stamped,
+       variation_cost, variation_days_impact
+from variations where variation_number='1106-02-V1';
+select variations_open, variations_approved_cost, variations_approved_days
+from job_variation_summary where job_id='1106-02';

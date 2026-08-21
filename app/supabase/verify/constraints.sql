@@ -181,4 +181,37 @@ DO $$ BEGIN
     RAISE WARNING 'FAIL: a dependency crossed two different jobs';
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a task cannot depend on another record''s task';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on cross-record dependency (%)', SQLERRM; END;
+
+  BEGIN
+    UPDATE variations SET variation_status='cancelled', variation_cancelled_reason=NULL
+     WHERE job_id='1106-02' AND variation_sequence=2;
+    RAISE WARNING 'FAIL: a variation was cancelled with no reason';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a cancelled variation must say why';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on cancel reason (%)', SQLERRM; END;
+
+  BEGIN
+    UPDATE variations SET variation_number='9999-99-V9'
+     WHERE job_id='1106-02' AND variation_sequence=2;
+    RAISE WARNING 'FAIL: a variation number was rewritten away from its parts';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a variation number cannot be rewritten';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on variation number (%)', SQLERRM; END;
+
+  BEGIN
+    -- An approver with no approval date. The reverse — a date with no name — is allowed
+    -- on purpose, for history imported from a system that did not record who.
+    UPDATE variations SET variation_approved_by = (SELECT profile_id FROM profiles LIMIT 1),
+           variation_approved_at = NULL
+     WHERE job_id='1106-02' AND variation_sequence=2;
+    RAISE WARNING 'FAIL: an approver with no approval date was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  an approver must carry an approval date';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on approval (%)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO variation_reopened_tasks (variation_id, task_id)
+    SELECT v.variation_id, t.task_id FROM variations v, tasks t
+     WHERE v.job_id='1106-02' AND v.variation_sequence=2
+       AND t.task_name='A task on another job' LIMIT 1;
+    RAISE WARNING 'FAIL: a variation reopened a task on a different job';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a variation cannot reopen another job''s task';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on cross-job rework (%)', SQLERRM; END;
 END $$;
