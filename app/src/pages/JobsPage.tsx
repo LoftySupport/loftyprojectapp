@@ -257,21 +257,36 @@ export function JobsPage() {
         <div className="panel">
           <div className="panel-head">
             <Text type="text2" weight="bold">Time in stage against the template</Text>
-            <Text type="text3" color="secondary">Expected days come from template_phases</Text>
+            <Text type="text3" color="secondary">
+              Expected days come from pipeline_stages
+            </Text>
           </div>
+          {/* A bar needs something to be a proportion OF. `?? 14` used to supply that,
+              which drew every job against an SLA nobody set — and 14 is not a neutral
+              default, it is a claim. With no expectation the honest bar is no bar. */}
           {rows.map(j => {
-            const expected = expectedDaysByStage[j.stage] ?? 14;
-            const pct = Math.min(100, Math.round((j.daysInStage / expected) * 100));
+            const expected = expectedDaysByStage[j.stage];
+            const pct = expected ? Math.min(100, Math.round((j.daysInStage / expected) * 100)) : 0;
             return (
               <div className="bar-row" key={j.jobNumber}>
                 <Text type="text3">{j.jobNumber} · {j.stage}</Text>
                 <div className="bar-track">
-                  <div className="bar-fill" style={{ width: `${pct}%` }} />
+                  {expected != null && (
+                    <div className="bar-fill" style={{ width: `${pct}%` }} />
+                  )}
                 </div>
-                <span className="bar-num">{j.daysInStage}/{expected}d</span>
+                <span className="bar-num">
+                  {expected != null ? `${j.daysInStage}/${expected}d` : `${j.daysInStage}d`}
+                </span>
               </div>
             );
           })}
+          {Object.keys(expectedDaysByStage).length === 0 && (
+            <Text type="text3" color="secondary" ellipsis={false}>
+              No stage has an expected duration set, so there is nothing to measure these
+              against — only the days each job has been where it is.
+            </Text>
+          )}
         </div>
       )}
 

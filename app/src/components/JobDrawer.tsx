@@ -29,7 +29,9 @@ export function JobDrawer({ job, onClose }: { job: BoardJob; onClose: () => void
   const { expectedDaysByStage } = useTemplatePhases();
   const { byStage: checkpointsByStage } = useCheckpoints();
 
-  const expected = expectedDaysByStage[job.stage] ?? 14;
+  // Undefined, not 14: no stage has an expected duration set, and inventing one here
+  // put a number under "Days in stage" that read as a target somebody had agreed.
+  const expected = expectedDaysByStage[job.stage];
   const checkpoints = checkpointsByStage[job.stage] ?? [];
 
   return (
@@ -90,7 +92,7 @@ export function JobDrawer({ job, onClose }: { job: BoardJob; onClose: () => void
             <div className="field-row">
               <div className="field-label">
                 <Text type="text2">Days in stage</Text>
-                <div className="field-hint">expected {expected}</div>
+                {expected != null && <div className="field-hint">expected {expected}</div>}
               </div>
               <Text type="text2" weight="medium">{job.daysInStage}</Text>
             </div>

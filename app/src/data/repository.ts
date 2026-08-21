@@ -121,7 +121,7 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   // job is to say what is backed by what.
   listStages: "pipeline_stages",
   listTeams: "teams",
-  listTemplatePhases: "template_phases",
-  listTemplateCheckpoints: "template_checkpoints",
-  listPropertyDefs: "property_defs"
+  listTemplatePhases: "pipeline_stages",
+  listTemplateCheckpoints: "pipeline_stage_tasks (not built)",
+  listPropertyDefs: "property_defs (not built)"
 };

@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Repository, RepositoryMethod } from "./repository";
-import { createStubRepository, SEED_STAGES } from "./stubRepository";
+import { createStubRepository } from "./stubRepository";
 import type {
   ActivityEntry,
   Job,
@@ -29,22 +29,24 @@ import type {
  * Nothing else changes. The screens are already reading through the seam, so a table
  * going live shows up as data appearing, not as a refactor.
  *
- * The lookups fall back to the seed on error or an empty result, deliberately: a missing
- * table on a fresh project should not leave the board with no columns, the templates
- * page with no phases, or the drawer with no field slots. A half-built database should
- * degrade to the structure, not to a blank screen.
+ * Nothing here falls back to the seed any more. That fallback was written for a database
+ * with no tables in it, and it long outlived the condition: it meant an empty table and a
+ * missing table gave the same answer, so a screen could show eleven invented field
+ * definitions and look exactly like a screen showing eleven real ones. Empty is now empty,
+ * and the screens have states that say which.
  */
 
 // Add a method name here as you implement it. The Wiring page reads this.
 //
-// The lookups are still answered from the seed. Both are now real tables — `teams` since
-// 0026 and `pipeline_stages` since 0029 — and both seeds match production row for row, so
-// nothing on screen is wrong. What is missing is that nothing would tell us if they ever
-// stopped matching. Wiring them is a separate change with a check of its own.
+// listTemplateCheckpoints and listPropertyDefs are the only two left, and neither is
+// waiting on wiring: `pipeline_stage_tasks` and `property_defs` do not exist. They return
+// empty rather than a seed, so the Wiring page shows them as the two things genuinely not
+// built rather than as two more methods somebody forgot.
 const WIRED: RepositoryMethod[] = [
   "listProjects", "getProject", "listJobs", "getJob",
   "createProject", "createJob", "currentProfile", "listProfiles",
-  "createProfile", "updateProfile", "setProfileActive", "listActivity"
+  "createProfile", "updateProfile", "setProfileActive", "listActivity",
+  "listStages", "listTeams", "listTemplatePhases"
 ];
 
 /**
@@ -81,6 +83,54 @@ const PROJECT_COLUMNS =
 
 const JOB_COLUMNS =
   "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_created_at, job_created_by, job_updated_at, job_updated_by";
+
+const TEAM_COLUMNS = "team_id, team_name, team_position, team_is_active";
+
+const STAGE_COLUMNS =
+  "pipeline_stage_id, pipeline_stage_name, pipeline_stage_position, pipeline_stage_owning_team, pipeline_stage_expected_days, pipeline_stage_created_at, pipeline_stage_created_by, pipeline_stage_updated_at, pipeline_stage_updated_by";
+
+interface StageRow {
+  pipeline_stage_id: string;
+  pipeline_stage_name: string;
+  pipeline_stage_position: number;
+  pipeline_stage_owning_team: TeamId | null;
+  pipeline_stage_expected_days: number | null;
+  pipeline_stage_created_at: string;
+  pipeline_stage_created_by: string | null;
+  pipeline_stage_updated_at: string;
+  pipeline_stage_updated_by: string | null;
+}
+
+/**
+ * The stages of the build lifecycle, in order.
+ *
+ * Two round trips rather than one embed, deliberately. `pipelines` and `pipeline_stages`
+ * reference each other in both directions — `pipeline_stages.pipeline_id` down, and
+ * `pipelines.pipeline_parent_stage_id` back up for the nesting — and an embed across a
+ * pair like that is exactly the shape that produced PGRST201 on sign-in. Two plain
+ * queries cannot be ambiguous, and this runs once per page load.
+ *
+ * Filtered to `build_lifecycle` because a job sits in several pipelines at once: the
+ * lifecycle, then a nested one per phase. Without the filter this would return every
+ * stage of every pipeline as though they were one list.
+ */
+async function loadLifecycleStages(client: SupabaseClient): Promise<StageRow[]> {
+  const { data: pipeline, error: pipelineError } = await client
+    .from("pipelines")
+    .select("pipeline_id")
+    .eq("pipeline_key", "build_lifecycle")
+    .maybeSingle();
+  if (pipelineError) throw pipelineError;
+  if (!pipeline) return [];
+
+  const { data, error } = await client
+    .from("pipeline_stages")
+    .select(STAGE_COLUMNS)
+    .eq("pipeline_id", pipeline.pipeline_id)
+    .order("pipeline_stage_position");
+  if (error) throw error;
+  return (data ?? []) as unknown as StageRow[];
+}
 
 interface ProfileRow {
   profile_id: string;
@@ -206,7 +256,12 @@ export function createSupabaseRepository(): Repository {
   const client = supabase;
   if (!client) return stub;
 
-  return {
+  const lifecycleStages = () => loadLifecycleStages(client);
+
+  // Bound rather than returned inline: listTemplatePhases reads the same team list
+  // listTeams returns, and calling it through the object keeps one definition of what a
+  // team looks like instead of two queries that could drift apart.
+  const repo: Repository = {
     name: "supabase",
     wired: new Set<RepositoryMethod>(WIRED) as ReadonlySet<keyof Repository>,
 
@@ -578,40 +633,115 @@ export function createSupabaseRepository(): Repository {
     },
 
     // ---- lookups --------------------------------------------------------
-    // Stages and teams are enums as of 0004 (`stage`, `team`), not tables. There is no
-    // query to make: PostgREST cannot select from a type, and the values are fixed at
-    // migration time rather than maintained as rows. These stay on the seed until the
-    // generated Database["public"]["Enums"] types replace it, which is a type change
-    // rather than a wiring one.
+    /**
+     * Three of these are real tables now and two are not, and the honest answers differ.
+     *
+     * `pipeline_stages` (0029) and `teams` (0026) hold rows, so they are queried. They
+     * were answered from a TypeScript seed long after that stopped being necessary, and
+     * the seed was right — which is the problem: nothing would have said so if it drifted,
+     * and the app and the database disagreed about who owns Working Drawings for weeks
+     * without either being wrong enough to notice.
+     *
+     * `template_checkpoints` and `property_defs` do not exist. They are Phase C. The seed
+     * answered them with a plausible invention — 36 checkpoints and 11 field definitions
+     * that nobody at Lofty wrote — and a plausible invention is the worst of the three
+     * options, because it is the one that gets treated as the process and quoted back at
+     * people. Empty is the true answer, and the screens say so.
+     */
     async listStages(): Promise<Stage[]> {
-      return SEED_STAGES;
+      const rows = await lifecycleStages();
+      return rows.map(r => ({
+        // The position, not the uuid. `Stage.id` is a number the app uses only to key a
+        // list, and position is the stable small integer the seed already used.
+        id: r.pipeline_stage_position,
+        name: r.pipeline_stage_name,
+        position: r.pipeline_stage_position,
+        createdAt: r.pipeline_stage_created_at,
+        createdBy: r.pipeline_stage_created_by,
+        updatedAt: r.pipeline_stage_updated_at,
+        updatedBy: r.pipeline_stage_updated_by
+      }));
     },
 
+    /**
+     * Every team, retired ones included.
+     *
+     * Retired teams have to come back: `team_is_active` is false for Commercial,
+     * Executive and Admin, and a record still owned by one of them would otherwise render
+     * its slug. Pickers filter on `isActive` — that is what the column is for — and the
+     * filtering belongs at the point of display rather than here, where it would silently
+     * remove rows the caller may need.
+     */
     async listTeams(): Promise<Team[]> {
-      return stub.listTeams();
+      const { data, error } = await client
+        .from("teams")
+        .select(TEAM_COLUMNS)
+        .order("team_position");
+      if (error) throw error;
+      return (data ?? []).map(r => ({
+        id: r.team_id as TeamId,
+        name: r.team_name,
+        position: r.team_position,
+        isActive: r.team_is_active
+      }));
     },
 
+    /**
+     * Who picks a job up at each phase, and how long it should take.
+     *
+     * Both come off `pipeline_stages` rather than a seed, which settles a disagreement:
+     * the app said Pre-Construction Admin owned Working Drawings & Contracts and the
+     * database said Design. Neither was authoritative, and two sources that disagree are
+     * worse than one that is provisional.
+     *
+     * `expectedDays` is null for all nine, because nobody has set one. It used to render
+     * as 10, 14, 12, 90 — numbers written to fill the field, which the Gantt then drew
+     * bars against. A blank reads as "not configured"; an invented 14 reads as an SLA.
+     */
     async listTemplatePhases(): Promise<TemplatePhase[]> {
-      return stub.listTemplatePhases();
-      // Joins template_phases -> stages -> teams; a phase can be owned by more than
-      // one team, so this groups rather than mapping one-to-one.
+      const [stages, teams] = await Promise.all([lifecycleStages(), repo.listTeams()]);
+      const nameOf = new Map(teams.map(t => [t.id, t.name]));
+
+      return stages.map(r => ({
+        stageId: r.pipeline_stage_position,
+        stageName: r.pipeline_stage_name,
+        // One owning team per stage in the schema. An array because a phase genuinely can
+        // be shared, and widening this later should not be a type change on every caller.
+        owningTeamNames: r.pipeline_stage_owning_team
+          ? [nameOf.get(r.pipeline_stage_owning_team) ?? r.pipeline_stage_owning_team]
+          : [],
+        expectedDays: r.pipeline_stage_expected_days
+      }));
     },
 
+    /**
+     * Empty until the process exists.
+     *
+     * `pipeline_stage_tasks` is specified and not built, and the 36 checkpoints this used
+     * to return — "Slab poured", "Defect walkthrough" — were invented to give the template
+     * card something to show. The real ones are the 57-step preconstruction schedule and
+     * the process map, both still being revised by Lofty, and both needing a person to map
+     * each step to a team before they can be loaded.
+     */
     async listTemplateCheckpoints(): Promise<TemplateCheckpoint[]> {
-      return stub.listTemplateCheckpoints();
+      return [];
     },
 
+    /**
+     * Empty until `property_defs` exists.
+     *
+     * Same reasoning as the checkpoints. The eleven this used to return were plausible —
+     * site address, pour date, contract value — which is exactly what made them dangerous:
+     * five of them named a stage that does not exist and simply did not render, and nobody
+     * could tell the difference between a field that was missing and a field that was
+     * never defined.
+     */
     async listPropertyDefs(): Promise<PropertyDef[]> {
-      return stub.listPropertyDefs();
-      // const { data, error } = await client
-      //   .from("property_defs")
-      //   .select("key, label, scope, format, required, automation, stages(name), teams(name)")
-      //   .is("archived_at", null)
-      //   .order("position");
-      // if (error || !data?.length) return stub.listPropertyDefs();
-      // return (data ?? []).map(toPropertyDef);
+      return [];
     }
   };
+
+  return repo;
 }
 
 // ---------------------------------------------------------------- row mappers

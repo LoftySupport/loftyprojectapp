@@ -20,12 +20,17 @@ import type {
  * have on a fresh tenant anyway. Building against this first means the empty states are
  * designed rather than discovered later.
  *
- * The **lookups** are the exception, and they answer honestly: stages, teams, template
- * phases, checkpoints and property definitions are the business process, not something a
- * user creates. Without them there is no board to look at and no field to bind. They are
- * seeded here so the stub can serve them, and they are served *through the repository*
- * rather than exported as constants — the day they exist in Supabase, `listTeams()`
- * changes and nothing else does.
+ * **Stages and teams** are the exception, and they are seeded here because without them
+ * there is no board to look at. Both are real tables now, and the Supabase repository
+ * queries them; these copies exist only for a run with no backend, and `verify/seeds.sh`
+ * fails if they stop matching what the migrations create.
+ *
+ * The other three lookups used to be seeded too, and should not have been. Template
+ * phases carried an invented owning team and an invented expected duration; checkpoints
+ * and property definitions were 36 and 11 rows of plausible fiction. None of them existed
+ * anywhere in the database, so seeding them meant this stub and production disagreed about
+ * what the app contains — and the more convincing answer was the wrong one. They now say
+ * what the database says, which is nothing.
  */
 
 /**
@@ -55,99 +60,24 @@ export const SEED_STAGES: Stage[] = [
 ];
 
 /**
- * Which teams own which phase, and how long each should take.
+ * Every team, retired ones included.
  *
- * Stated, not derived from whatever jobs happen to be loaded — deriving it means a team
- * holding nothing right now vanishes from the model, which is wrong: a team that owns a
- * phase owns it on a quiet day too. That bug was real, and this is the fix.
+ * Not filtered to active, matching what `listTeams()` returns from Postgres. A record
+ * still owned by Commercial or Executive has to resolve to a name rather than to its slug,
+ * and the filtering belongs where the pickers are — `useTeams().teamNames` — rather than
+ * here, where it would silently remove rows a caller may need.
+ *
+ * Read straight from TEAM_SEED rather than derived from anything: a list derived from
+ * which teams own a phase leaves out Finance and Lofty General, who own none and still
+ * have people in them.
  */
-const PHASES: [string, string[], number][] = [
-  ["Sales & Acquisition", ["Acquisition & Development", "Sales Admin"], 10],
-  ["Planning & Engineering", ["Design"], 14],
-  ["Working Drawings & Contracts", ["Pre-Construction Admin"], 12],
-  ["Pre-construction", ["Scheduling", "Selections"], 10],
-  ["Scheduling & Estimating", ["Estimating"], 12],
-  ["Construction", ["Construction"], 90],
-  ["Post-construction & Closeout", ["Construction Admin", "Finance"], 14],
-  ["Handover", ["Construction Admin"], 7],
-  ["Maintenance", ["Maintenance"], 21]
-];
-
-export const SEED_TEMPLATE_PHASES: TemplatePhase[] = PHASES.map(([name, teams, days]) => ({
-  stageId: SEED_STAGES.find(s => s.name === name)!.id,
-  stageName: name,
-  owningTeamNames: teams,
-  expectedDays: days
-}));
-
-/**
- * Every team, whether or not it currently holds a job.
- *
- * Read straight from TEAM_SEED rather than derived from the phase labels above. Deriving
- * it was always wrong in the same way the comment on TEAM_SEED describes: PHASES only
- * names the teams that own a stage, so Finance and Lofty General never appeared in a
- * person picker. It also minted ids of its own ("team-design"), which now have to be the
- * real slugs, because they are foreign keys.
- */
-export const SEED_TEAMS: Team[] = TEAM_SEED.filter(t => t.isActive).map(t => ({ ...t }));
-
-const CHECKPOINTS: Record<string, string[]> = {
-  "Sales & Acquisition": ["Enquiry logged", "Site inspection booked", "Contract issued", "Deposit received"],
-  "Planning & Engineering": ["Design brief finalised", "Preliminary floor plan", "Engineering assessment", "Client sign-off"],
-  "Working Drawings & Contracts": ["Working drawings started", "Drawings sent to client", "Contract prepared", "Contract signed"],
-  "Pre-construction": ["Selections booked", "Selections finalised", "Site survey", "Baseline schedule drafted"],
-  "Scheduling & Estimating": ["Quotes requested", "Purchase orders issued", "Site prep checklist started", "Trades confirmed"],
-  "Construction": ["Site established", "Slab poured", "Frame complete", "Lock-up reached"],
-  "Post-construction & Closeout": ["Defect walkthrough", "Defect list issued", "Final invoice", "Compliance pack lodged"],
-  "Handover": ["Keys handed over", "Handover pack issued", "Final inspection", "Warranty pack issued"],
-  "Maintenance": ["Maintenance period opened", "90-day review booked", "Defects rectified", "Maintenance period closed"]
-};
-
-export const SEED_CHECKPOINTS: TemplateCheckpoint[] = SEED_STAGES.flatMap(stage =>
-  (CHECKPOINTS[stage.name] ?? []).map((label, i) => ({
-    stageId: stage.id,
-    stageName: stage.name,
-    label,
-    position: i + 1
-  }))
-);
-
-/**
- * Every `stageName` here must match a name in SEED_STAGES exactly.
- *
- * Five of these did not, and the failure was silent rather than loud: `groupByStage`
- * intersects definitions against the live stage list, so "Sales & acquisition" with a
- * lowercase a, "Preconstruction" without the hyphen and "Construction & execution"
- * matched nothing and rendered nowhere. Setup → Properties counted eleven in its heading
- * and listed six beneath it, and site address, project type and deposit status — three of
- * the most ordinary fields in the business — were among the ones that vanished.
- *
- * The intersect is right and should stay: a definition pointing at a stage that does not
- * exist should not render under a stage that does. What was missing is anything that
- * fails when the two disagree, so `check.sh` now asserts every key here resolves.
- */
-export const SEED_PROPERTY_DEFS: PropertyDef[] = [
-  { key: "address", label: "Site address", scope: "job", stageName: "Sales & Acquisition", teamName: "Sales Admin", format: "text", required: true },
-  { key: "type", label: "Project type", scope: "project", stageName: "Sales & Acquisition", teamName: "Acquisition & Development", format: "single select", required: true, automation: "Recalculate dependent dates" },
-  { key: "deposit", label: "Deposit status", scope: "job", stageName: "Sales & Acquisition", teamName: "Sales Admin", format: "single select", required: true, automation: "Notify owning team on change" },
-  { key: "drawings", label: "Drawings status", scope: "job", stageName: "Planning & Engineering", teamName: "Design", format: "single select", required: true, automation: "Block stage exit until set" },
-  { key: "final_eer", label: "Final EER", scope: "job", stageName: "Planning & Engineering", teamName: "Design", format: "file", required: true, automation: "Block stage exit until set" },
-  { key: "contract", label: "Contract status", scope: "job", stageName: "Working Drawings & Contracts", teamName: "Pre-Construction Admin", format: "single select", required: true, automation: "Block stage exit until set" },
-  { key: "contract_val", label: "Contract value", scope: "project", stageName: "Working Drawings & Contracts", teamName: "Pre-Construction Admin", format: "currency", required: false },
-  { key: "council_hold", label: "Council hold", scope: "job", stageName: "Pre-construction", teamName: "Scheduling", format: "checkbox", required: false, automation: "Notify owning team on change" },
-  { key: "temp_fence", label: "Temp fence supplier", scope: "job", stageName: "Scheduling & Estimating", teamName: "Estimating", format: "text", required: false, automation: "Start SLA clock when set" },
-  { key: "pour_date", label: "Pour date", scope: "job", stageName: "Scheduling & Estimating", teamName: "Estimating", format: "date", required: true, automation: "Recalculate dependent dates" },
-  { key: "pc_date", label: "Practical completion", scope: "job", stageName: "Construction", teamName: "Construction", format: "date", required: true, automation: "Notify assignee when set" }
-];
+export const SEED_TEAMS: Team[] = TEAM_SEED.map(t => ({ ...t }));
 
 export function createStubRepository(): Repository {
-  const wired = new Set<RepositoryMethod>([
-    "listStages",
-    "listTeams",
-    "listTemplatePhases",
-    "listTemplateCheckpoints",
-    "listPropertyDefs"
-  ]);
+  // Stages and teams only. The other three answer honestly rather than fully — phases
+  // without their owning team, checkpoints and properties not at all — and calling that
+  // "wired" on the Wiring page would overstate what a backendless run can tell you.
+  const wired = new Set<RepositoryMethod>(["listStages", "listTeams"]);
 
   return {
     name: "stub",
@@ -200,8 +130,34 @@ export function createStubRepository(): Repository {
     // ---- lookups: the business process ----------------------------------
     async listStages(): Promise<Stage[]> { return SEED_STAGES; },
     async listTeams(): Promise<Team[]> { return SEED_TEAMS; },
-    async listTemplatePhases(): Promise<TemplatePhase[]> { return SEED_TEMPLATE_PHASES; },
-    async listTemplateCheckpoints(): Promise<TemplateCheckpoint[]> { return SEED_CHECKPOINTS; },
-    async listPropertyDefs(): Promise<PropertyDef[]> { return SEED_PROPERTY_DEFS; }
+    /**
+     * The stages, with nothing attached to them.
+     *
+     * This used to return a team per phase and an expected duration — invented, both of
+     * them, and the durations were then drawn as Gantt bars. The database has an owning
+     * team on `pipeline_stages` and the Supabase repository reads it; the stub cannot
+     * know it, and guessing is what produced two sources that disagreed about who owns
+     * Working Drawings.
+     */
+    async listTemplatePhases(): Promise<TemplatePhase[]> {
+      return SEED_STAGES.map(s => ({
+        stageId: s.id,
+        stageName: s.name,
+        owningTeamNames: [],
+        expectedDays: null
+      }));
+    },
+
+    /**
+     * Empty, matching what the database says.
+     *
+     * `pipeline_stage_tasks` and `property_defs` are not built, so the Supabase repository
+     * answers both with []. The stub used to answer with 36 checkpoints and 11 field
+     * definitions, which meant a developer running without a backend saw a different — and
+     * more convincing — app than anybody with one, and the empty states this app now needs
+     * were never once rendered while they were being written.
+     */
+    async listTemplateCheckpoints(): Promise<TemplateCheckpoint[]> { return []; },
+    async listPropertyDefs(): Promise<PropertyDef[]> { return []; }
   };
 }

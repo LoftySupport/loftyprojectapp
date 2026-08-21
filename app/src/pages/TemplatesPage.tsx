@@ -1,18 +1,27 @@
-import { useState } from "react";
 import { Chips, Counter, Heading, Text } from "@vibe/core";
-import { PROJECT_TYPES, PROJECT_TYPE_LABELS, type ProjectType } from "../data/types";
+import { PROJECT_TYPES, PROJECT_TYPE_LABELS } from "../data/types";
 import { useCheckpoints, usePropertyDefs, useStages, useTemplatePhases } from "../data/useLookups";
 import "../components/ui.css";
 
 /**
  * The job template — the set-up a new job inherits.
  *
- * This is configuration, not records, so nothing here is tokenised: the phases, the
- * teams that own them and the checkpoints they expect are the process itself. Creating
- * a job from a template is what keeps every job's data consistent enough to report on.
+ * Half of this page is now real and half of it is missing, and the difference matters
+ * more than either half. The phases and the team that picks each one up come from
+ * `pipeline_stages`. The checkpoints and the fields do not exist: `pipeline_stage_tasks`
+ * and `property_defs` are specified and not built.
+ *
+ * What this page used to show instead was 36 checkpoints and 11 field definitions that
+ * were invented — "Slab poured", "Defect walkthrough", plausible enough that the page's
+ * own comment described them as "the process itself". They were not. The real process is
+ * the 57-step preconstruction schedule and the process map, both still being revised, and
+ * both needing a person to map each step to a team.
+ *
+ * So the sections stay, with nothing in them and a line saying why. A section that is
+ * visibly unconfigured invites somebody to configure it; a section full of a convincing
+ * guess gets quoted back at people as though Lofty had agreed it.
  */
 export function TemplatesPage() {
-  const [type, setType] = useState<ProjectType>(PROJECT_TYPES[0]);
   const { stageNames } = useStages();
   const { teamsByStage, expectedDaysByStage } = useTemplatePhases();
   const { byStage: checkpointsByStage, checkpoints } = useCheckpoints();
@@ -36,16 +45,27 @@ export function TemplatesPage() {
         </Text>
       </div>
 
+      {(checkpointCount === 0 || jobFields.length === 0) && (
+        <div className="search-note">
+          <Text type="text3" ellipsis={false}>
+            The <strong>phases</strong> and the team that owns each one are read from the
+            database. The <strong>checkpoints</strong> and <strong>fields</strong> are not
+            configured yet — those tables are not built, and the lists that used to appear
+            here were written to fill the space rather than taken from Lofty's process.
+          </Text>
+        </div>
+      )}
+
+      {/* One template, applying to every project type.
+          There was a chip per type here. They highlighted on click and nothing below read
+          the selection, so switching from Residential to Commercial showed the identical
+          page — a filter that looked broken rather than a feature that did not exist yet.
+          Read-only chips instead: they still say who the template covers, and they no
+          longer promise to narrow it. */}
       <div className="toolbar">
-        <span className="toolbar-label">Template</span>
+        <span className="toolbar-label">Applies to</span>
         {PROJECT_TYPES.map(t => (
-          <Chips
-            key={t}
-            label={PROJECT_TYPE_LABELS[t]}
-            readOnly={false}
-            onClick={() => setType(t)}
-            color={t === type ? "primary" : undefined}
-          />
+          <Chips key={t} label={PROJECT_TYPE_LABELS[t]} readOnly />
         ))}
       </div>
 
@@ -59,10 +79,12 @@ export function TemplatesPage() {
 
               <div className="stack-tight" style={{ marginTop: "var(--space-8)" }}>
                 <Text type="text3" color="secondary">
-                  {(teamsByStage[stage] ?? []).join(" or ")}
+                  {(teamsByStage[stage] ?? []).join(" or ") || "No owning team set"}
                 </Text>
                 <Text type="text3" color="secondary">
-                  Expected {expectedDaysByStage[stage]} days
+                  {expectedDaysByStage[stage] != null
+                    ? `Expected ${expectedDaysByStage[stage]} days`
+                    : "No expected duration set"}
                 </Text>
               </div>
 
@@ -72,12 +94,18 @@ export function TemplatesPage() {
                 <Text type="text3" weight="bold">Checkpoints</Text>
                 <Counter count={checkpointsByStage[stage]?.length ?? 0} kind="line" />
               </div>
-              {(checkpointsByStage[stage] ?? []).map(c => (
-                <div className="checkpoint" key={c.label}>
-                  <input type="checkbox" disabled aria-label={c.label} />
-                  <Text type="text3">{c.label}</Text>
-                </div>
-              ))}
+              {(checkpointsByStage[stage] ?? []).length === 0 ? (
+                <Text type="text3" color="secondary" ellipsis={false}>
+                  None defined yet.
+                </Text>
+              ) : (
+                (checkpointsByStage[stage] ?? []).map(c => (
+                  <div className="checkpoint" key={c.label}>
+                    <input type="checkbox" disabled aria-label={c.label} />
+                    <Text type="text3">{c.label}</Text>
+                  </div>
+                ))
+              )}
 
               {fields.length > 0 && (
                 <>

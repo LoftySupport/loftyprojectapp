@@ -4,22 +4,23 @@
 #
 # WHY THIS EXISTS
 # ---------------
-# Five of the eleven seeded property definitions named a stage that does not exist —
-# "Sales & acquisition" with a lowercase a, "Preconstruction" without the hyphen,
-# "Construction & execution". `groupByStage` intersects definitions against the live stage
-# list, so those five matched nothing and rendered nowhere. Setup → Properties counted
-# eleven in its heading and listed six beneath it. Nothing failed; the fields just were
-# not there, and site address was one of them.
+# Two lists that must agree, written in two places, with nothing that notices when they
+# stop agreeing. Three of those got past review in a week:
 #
-# That is the shape of the whole class: two lists that must agree, written in two files,
-# with nothing that notices when they stop agreeing. The intersect is correct and should
-# stay — a definition pointing at a stage that does not exist must not render under one
-# that does — so the check has to live outside it.
+#   Five of eleven seeded property definitions named a stage that does not exist —
+#   "Sales & acquisition" with a lowercase a, "Preconstruction" without the hyphen. They
+#   matched nothing and rendered nowhere, so Setup → Properties counted eleven in its
+#   heading and listed six beneath it. Nothing failed. Site address was one of the five.
 #
-# The same argument applies one level out. `listStages()` and `listTeams()` are still
-# answered from TypeScript constants while `pipeline_stages` and `teams` hold the real
-# rows. Today the two match exactly. Nothing enforces that, so this compares them against
-# the replayed database and fails when they drift.
+#   `listProjects` carried a commented-out query naming five pre-0028 column names. A
+#   select list is a string; nothing type-checks it.
+#
+#   Eight data-dictionary entries marked `created` named view columns renamed by 0028 —
+#   the reference document was wrong about the thing it exists to be right about.
+#
+# `listStages()` and `listTeams()` read the real tables now, but the stub still carries
+# copies for a run with no backend, and those copies have no reason to stay correct except
+# that somebody remembers. Everything below compares one of these pairs.
 #
 # Usage:  ./seeds.sh          (expects replay.sh to have run)
 set -uo pipefail
@@ -44,8 +45,7 @@ fi
 
 DB_COLUMNS=$($PSQL -c "select table_name || '.' || column_name
                        from information_schema.columns
-                       where table_schema = 'public'
-                         and table_name in ('projects', 'jobs', 'profiles');")
+                       where table_schema = 'public';")
 
 DB_STAGES="$DB_STAGES" DB_TEAMS="$DB_TEAMS" DB_COLUMNS="$DB_COLUMNS" python3 - "$SRC" <<'PY'
 import os, re, sys
@@ -70,14 +70,6 @@ seed_stages = re.findall(r'name:\s*"([^"]+)"', block(stub, "export const SEED_ST
 
 # TEAM_SEED — the slug, which is the foreign key.
 seed_teams = re.findall(r'id:\s*"([^"]+)"', block(types, "export const TEAM_SEED"))
-
-# Every stage a property definition claims to be captured at.
-defs = block(stub, "export const SEED_PROPERTY_DEFS")
-prop_pairs = re.findall(r'key:\s*"([^"]+)"[^}]*?stageName:\s*"([^"]+)"', defs)
-
-# Every stage a template phase and a checkpoint claim.
-phase_stages = re.findall(r'\[\s*"([^"]+)",\s*\[', block(stub, "const PHASES"))
-checkpoint_stages = re.findall(r'^\s*"([^"]+)":\s*\[', block(stub, "const CHECKPOINTS"), re.M)
 
 db_stages = [s for s in os.environ["DB_STAGES"].splitlines() if s]
 db_teams = [t for t in os.environ["DB_TEAMS"].splitlines() if t]
@@ -107,22 +99,15 @@ check(
     "seed: " + " | ".join(seed_teams) + "\ndb:   " + " | ".join(db_teams),
 )
 
-# 2 — everything that names a stage names one that exists. This is the one that was
-#     failing silently, and it is checked against the DATABASE's list rather than the
-#     seed's, so it stays honest even if both TypeScript lists drift together.
-known = set(db_stages)
-
-for label, named in (
-    ("property definitions", [(k, s) for k, s in prop_pairs]),
-    ("template phases", [(s, s) for s in phase_stages]),
-    ("checkpoint groups", [(s, s) for s in checkpoint_stages]),
-):
-    bad = [f"{who} → {stage!r}" for who, stage in named if stage not in known]
-    check(
-        f"all {len(named)} {label} name a stage that exists",
-        not bad,
-        "\n".join(bad),
-    )
+# 2 — the seeded lookups no longer name a stage at all.
+#
+#     There were three checks here: every property definition, template phase and
+#     checkpoint group had to name a stage that exists, and the first of them was what
+#     caught five definitions naming `"Sales & acquisition"` with a lowercase a. All three
+#     are gone because their content is: the invented process was removed from the stub,
+#     and the two lookups behind it now answer [] to match the database. Nothing is left to
+#     drift. When `property_defs` becomes a real table the same rule returns as a foreign
+#     key, enforced by Postgres rather than by a script.
 
 # 3 — every column the repository asks PostgREST for is a column that exists.
 #
@@ -150,6 +135,46 @@ for const, table in (("PROJECT_COLUMNS", "projects"),
         not missing,
         "\n".join(f"{table}.{n} does not exist" for n in missing),
     )
+
+# 4 — the data dictionary against the schema it claims to describe.
+#
+#     The dictionary is partly a design document: an entry marked `to_do` describes a
+#     column nobody has built, and that is the point of the status. An entry marked
+#     `created` is an assertion that the column is there right now, and eight of them
+#     were wrong — every one a view column renamed by 0028's prefix convention, so the
+#     dictionary told you to select `job_display.job_number` from a view whose column is
+#     `job_display.job_id`. Nothing failed; the reference was simply wrong, on the page
+#     whose entire job is to be right about this.
+dictionary = open(os.path.join(src, "dictionary.ts")).read()
+dict_body = dictionary[dictionary.index("export const DICTIONARY: DictionaryEntry[] = ["):]
+
+# Digits matter: addresses.address_street_1 and _2 are real columns, and a pattern of
+# [a-z_] alone silently drops them — which reads as "fewer entries" rather than as a bug.
+ID = r'[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*'
+claims = re.findall(r'(?<![A-Za-z_])e\(\s*"(%s)"(.*?)\),\s*(?=\n)' % ID, dict_body, re.S)
+
+created = []
+for eid, rest in claims:
+    quoted = re.findall(r'"((?:[^"\\]|\\.)*)"', rest)
+    if quoted and quoted[-1] == "created":
+        created.append(eid)
+
+absent = [c for c in created if c not in db_columns]
+check(
+    f"all {len(created)} dictionary entries marked 'created' name a column that exists",
+    not absent,
+    "\n".join(f"{c} is documented as created and is not in the schema" for c in absent),
+)
+
+# Coverage is reported, not enforced. Writing a definition for a column is authoring work
+# that needs somebody who knows what the column means, so a bare count failing the build
+# would only ever be silenced. Printed so the number is visible rather than discovered.
+documented = {eid for eid, _ in claims}
+undocumented = sorted(c for c in db_columns if c not in documented)
+print(
+    f"note: {len(documented)} columns documented, {len(undocumented)} in the schema with "
+    f"no entry (mostly tasks, variations, documents and comments, from 0030-0032)"
+)
 
 sys.exit(1 if failed else 0)
 PY

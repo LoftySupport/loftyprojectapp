@@ -147,16 +147,16 @@
 
 | Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `job_address_search.role` | Matched address | Whether a search hit the job's current or original address. Worth showing: a hit on an original address is a hint that whoever searched is working from stale information. | `view` | Read-only. 'current' \| 'original'. | One row per (job, address role), so a match on either address finds the job. Backed by a trigram index on addresses.consolidated_address. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `job_address_search.address_role` | Matched address | Whether a search hit the job's current or original address. Worth showing: a hit on an original address is a hint that whoever searched is working from stale information. | `view` | Read-only. 'current' \| 'original'. | One row per (job, address role), so a match on either address finds the job. Backed by a trigram index on addresses.consolidated_address. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `job_display`
 
 | Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `job_display.project_type` | Job type (inherited) | The job's type, which is its project's type. Inherited through the view rather than copied onto the job, so there is nowhere for the two to disagree. | `view` | Read-only. | jobs ⋈ projects on project_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `job_display.is_current` | Is current | Whether the job is still live — not completed, cancelled or archived. Derived from status every time it is read, never stored. | `view` | Read-only. is_current(jobs.status). | Mirrors the isCurrent() helper in the app. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `job_display.job_number` | Job number | The job number, joined for the board and for search. | `view` | Read-only. | jobs.job_number. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `job_display.current_address` | Job address (current) | The consolidated current address, joined for the board and for search. | `view` | Read-only. | jobs ⋈ addresses on current_address_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `job_display.job_is_current` | Is current | Whether the job is still live — not completed, cancelled or archived. Derived from status every time it is read, never stored. | `view` | Read-only. is_current(jobs.job_status). | Mirrors the isCurrent() helper in the app. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `job_display.job_id` | Job number | The job number, joined for the board and for search. | `view` | Read-only. The job number and the key are the same value. | jobs.job_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `job_display.job_current_address` | Job address (current) | The consolidated current address, joined for the board and for search. | `view` | Read-only. | jobs ⋈ addresses on job_current_address_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `job_stages`
 
@@ -252,15 +252,15 @@
 
 | Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `project_address_search.role` | Matched address | The same, for projects. | `view` | Read-only. 'current' \| 'original'. | One row per (project, address role). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `project_address_search.address_role` | Matched address | The same, for projects. | `view` | Read-only. 'current' \| 'original'. | One row per (project, address role). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `project_display`
 
 | Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `project_display.current_address` | Project address (current) | The consolidated current address, joined for the cards. A view because a generated column cannot reach another table. | `view` | Read-only. | projects ⋈ addresses on current_address_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `project_display.original_address` | Project address (original) | The consolidated original address, for paperwork and search. | `view` | Read-only. | projects ⋈ addresses on original_address_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `project_display.council` | Council region | The council of the project's current address, carried through so a card can show it without joining addresses itself. The council's name, not an id — it has been an enum value since 0003. | `view` | Read-only. sa_council. | Reads addresses.council via current_address_id. Replaced project_display.council_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `project_display.project_current_address` | Project address (current) | The consolidated current address, joined for the cards. A view because a generated column cannot reach another table. | `view` | Read-only. | projects ⋈ addresses on project_current_address_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `project_display.project_original_address` | Project address (original) | The consolidated original address, for paperwork and search. | `view` | Read-only. | projects ⋈ addresses on project_original_address_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `project_display.project_council` | Council region | The council of the project's current address, carried through so a card can show it without joining addresses itself. The council's name, not an id — it has been an enum value since 0003. | `view` | Read-only. sa_council. | Reads addresses.address_council via project_current_address_id. Replaced project_display.council_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `projects`
 
