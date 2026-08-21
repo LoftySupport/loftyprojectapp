@@ -214,4 +214,29 @@ DO $$ BEGIN
     RAISE WARNING 'FAIL: a variation reopened a task on a different job';
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a variation cannot reopen another job''s task';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on cross-job rework (%)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO taggings (tag_id, job_id) VALUES ('urgent','1106-02');
+    RAISE WARNING 'FAIL: the same tag was applied to the same job twice';
+  EXCEPTION WHEN unique_violation THEN RAISE NOTICE 'ok  a tag applies to a record once';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on duplicate tag (%)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO document_links (document_id, project_id, job_id)
+    SELECT document_id, 1106, '1106-02' FROM documents LIMIT 1;
+    RAISE WARNING 'FAIL: a document link with two parents was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a document link has exactly one parent';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on document link parents (%)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO comments (comment_body) VALUES ('Attached to nothing');
+    RAISE WARNING 'FAIL: a comment on no record was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a comment must hang off a record';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on orphan comment (%)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO tags (tag_id, tag_name, tag_colour) VALUES ('bad_colour','Bad colour','red');
+    RAISE WARNING 'FAIL: a non-hex tag colour was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a tag colour must be hex';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on tag colour (%)', SQLERRM; END;
 END $$;

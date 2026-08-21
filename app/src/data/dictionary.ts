@@ -380,6 +380,73 @@ export const DICTIONARY: DictionaryEntry[] = [
     "When the task had been completed, before the variation reopened it. Snapshotted with the flag above.",
     "timestamptz", "Nullable — null when the task was not finished.", "—", "created"),
 
+  // ------------------------------------------------------------------- documents
+  e("documents.document_id", "Document", "A file, held once however many records point at it.",
+    "uuid", "Primary key.", "Referenced by document_links, and by documents.document_supersedes_id.", "created"),
+  e("documents.document_name", "Name", "What the file is called in the app, which need not match the filename.",
+    "text", "Not null, not blank.", "—", "created"),
+  e("documents.document_storage_path", "Storage path", "Where the bytes live in Supabase Storage. Nullable, so a row can exist for a document Lofty expects but has not received — \"the signed contract\" as an outstanding item is a real state.",
+    "text", "Nullable. Unique.", "—", "created"),
+  e("documents.document_category", "Type", "contract · drawing · permit · certificate · photo · invoice · report · correspondence · other. For filtering a drawer that will hold dozens.",
+    "text", "Not null, default 'other'. CHECK on the nine values — text rather than an enum, because this list will grow and every list that has grown so far was an enum first.", "Indexed.", "created"),
+  e("documents.document_supersedes_id", "Replaces",
+    "The document this one supersedes. Versions as a chain rather than a version number: an integer cannot say WHICH document a revision revises when two people upload at once, and \"show me the current drawing and what it replaced\" is the question people actually ask.",
+    "uuid", "Nullable. CHECK documents_not_its_own_predecessor.",
+    "FK → documents(document_id) ON DELETE SET NULL. The documents_current view is everything nothing points at.", "created"),
+  e("documents.document_size_bytes", "Size", "File size.", "integer", "bigint. Nullable. CHECK >= 0.", "—", "created"),
+  e("documents.document_mime_type", "Content type", "What kind of file it is, for choosing a preview.", "text", "Nullable.", "—", "created"),
+
+  // -------------------------------------------------------------- document_links
+  e("document_links.document_link_id", "Attachment",
+    "One place a document is attached. Separate from the document itself because the same soil report belongs to a project AND to every job on it — four parent columns on `documents` would mean four copies of one PDF and four places for its name to drift.",
+    "uuid", "Primary key.", "FK → documents(document_id) ON DELETE CASCADE.", "created"),
+  e("document_links.project_id", "Attached to project", "Set when the parent is a project.",
+    "integer", "Nullable. CHECK document_links_one_parent: exactly one of the four parents.",
+    "FK → projects(project_id). Partially indexed, and partially UNIQUE with document_id so the same file cannot be attached to the same record twice — a full four-column unique would never fire, because a null never equals a null.", "created"),
+
+  // -------------------------------------------------------------------- comments
+  e("comments.comment_id", "Comment", "What somebody wrote on a record.",
+    "uuid", "Primary key.", "Referenced by comment_mentions and by comments.parent_comment_id.", "created"),
+  e("comments.comment_body", "Comment", "The text.", "text", "Not null, not blank.", "Rendered by job_timeline alongside activity events.", "created"),
+  e("comments.parent_comment_id", "In reply to", "Threading. One level deep in practice, unbounded in shape.",
+    "uuid", "Nullable. CHECK comments_not_its_own_parent.", "FK → comments(comment_id) ON DELETE CASCADE.", "created"),
+  e("comments.comment_edited_at", "Edited on",
+    "Set when the BODY changes, not on any update — moving a comment or backfilling a column is not an edit, and a comment falsely marked edited is as misleading as one silently changed. A comment that changed with no sign it changed is how a record of a conversation stops being one.",
+    "timestamptz", "Nullable. Maintained by the comments_touch_edited trigger, which fires `before update OF comment_body`.", "Surfaced as job_timeline.entry_was_edited.", "created"),
+
+  // ------------------------------------------------------------ comment_mentions
+  e("comment_mentions.comment_id", "Comment", "The comment somebody was mentioned in.",
+    "uuid", "Part of the primary key.", "FK → comments(comment_id) ON DELETE CASCADE.", "created"),
+  e("comment_mentions.profile_id", "Mentioned", "Who was @-mentioned. A table rather than parsing the body on read: the body is text people edit, and a mention that disappears when somebody fixes a typo is not a notification.",
+    "uuid", "Part of the primary key.", "FK → profiles(profile_id) ON DELETE CASCADE.", "created"),
+  e("comment_mentions.comment_mention_read_at", "Read on",
+    "When they saw it. Null means unread, which is the whole point of the table — a mention nobody can mark as read is a notification that never stops.",
+    "timestamptz", "Nullable. Partially indexed where null, because that is the only query.",
+    "Only the mentioned person may set it: the RLS policy compares profile_id to current_profile_id() on both USING and WITH CHECK.", "created"),
+
+  // ------------------------------------------------------------- activity_events
+  e("activity_events.activity_event_id", "Activity entry",
+    "One line of the readable feed — \"Deanna moved this to Construction\". Distinct from activity_audit, which is the forensic column-level log: admin-only, whole rows as jsonb, and unreadable in a drawer. Neither can be derived from the other.",
+    "bigint", "Primary key, GENERATED ALWAYS AS IDENTITY.",
+    "Append-only: no INSERT, UPDATE or DELETE policy at all. Triggers write it, and triggers do not need one.", "created"),
+  e("activity_events.activity_event_kind", "What happened",
+    "A key the app renders, not a sentence stored in the database. A stored sentence cannot be reworded, translated or re-rendered when the vocabulary changes — and it will.",
+    "text", "Not null.", "—", "created"),
+  e("activity_events.activity_event_detail", "Detail",
+    "The nouns the sentence needs: which stage, which team, which field. jsonb because the shape differs per kind and the alternative is thirty nullable columns.",
+    "jsonb", "Not null, default '{}'.", "Surfaced by job_timeline.entry_detail.", "created"),
+
+  // ------------------------------------------------------------------------ tags
+  e("tags.tag_id", "Tag", "A free-form label, keyed by slug. The same shape as teams and for the same reason: the list is data, it will change, and a retired tag must stop appearing in pickers without breaking the records carrying it.",
+    "text", "Primary key. CHECK on the slug shape.", "Referenced by taggings ON UPDATE CASCADE.", "created"),
+  e("tags.tag_colour", "Colour", "So a board is scannable.",
+    "text", "Nullable. CHECK: six-digit hex. Checked because \"red\", \"#red\" and \"rgb(255,0,0)\" arriving in one column is how a palette stops being one.", "—", "created"),
+  e("tags.tag_is_active", "Active", "Retiring a tag is a flag, not a delete — deleting one would take every tagging with it.",
+    "boolean", "Not null, default true. There is no DELETE policy on this table.", "—", "created"),
+  e("taggings.tag_id", "Tag", "Which tag is applied.",
+    "text", "Not null.",
+    "FK → tags(tag_id) ON UPDATE CASCADE ON DELETE CASCADE. No primary key across the four parent columns: a null never equals a null, so such a key would let the same tag be applied twice. Four partial unique indexes do the job instead.", "created"),
+
   // ----------------------------------------------------------- council_regions
   e("council_regions.id", "Council (merged)",
     "Merged into the sa_council enum on addresses. The table held 68 rows nobody maintained, plus the audit quartet and a touch trigger to look after them. A council is now a value on the address, not a row it points at.",

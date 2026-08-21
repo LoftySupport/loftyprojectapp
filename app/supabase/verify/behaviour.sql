@@ -259,3 +259,44 @@ select variation_approved_at is not null as stamped,
 from variations where variation_number='1106-02-V1';
 select variations_open, variations_approved_cost, variations_approved_days
 from job_variation_summary where job_id='1106-02';
+
+\echo '--- 30. ONE document, attached to the project AND both its jobs'
+insert into documents (document_name, document_category, document_storage_path)
+values ('Soil report — bore logs','report','projects/1106/soil-report.pdf');
+
+insert into document_links (document_id, project_id)
+select document_id, 1106 from documents where document_name like 'Soil report%';
+insert into document_links (document_id, job_id)
+select d.document_id, j.job_id from documents d, jobs j
+where d.document_name like 'Soil report%' and j.project_id = 1106;
+
+select d.document_name,
+       count(*) filter (where l.project_id is not null) as on_projects,
+       count(*) filter (where l.job_id is not null) as on_jobs,
+       (select count(*) from documents where document_name like 'Soil report%') as stored_copies
+from documents d join document_links l using (document_id)
+where d.document_name like 'Soil report%' group by d.document_name;
+
+\echo '--- 31. superseding a drawing: the chain says which is current'
+insert into documents (document_name, document_category) values ('Working drawing rev A','drawing');
+insert into documents (document_name, document_category, document_supersedes_id)
+select 'Working drawing rev B','drawing', document_id from documents where document_name='Working drawing rev A';
+select document_name from documents_current where document_category='drawing';
+
+\echo '--- 32. a comment records that it was edited, but only when the body changes'
+insert into comments (job_id, comment_body) values ('1106-02','Client asked about the tiles today.');
+select comment_edited_at is null as not_edited_yet from comments where job_id='1106-02';
+update comments set comment_body='Client asked about the tiles this morning.' where job_id='1106-02';
+select comment_edited_at is not null as marked_edited from comments where job_id='1106-02';
+
+\echo '--- 33. tags, and the same tag twice is a double-click not a fact'
+insert into tags (tag_id, tag_name, tag_colour) values ('urgent','Urgent','#d9534f');
+insert into taggings (tag_id, job_id) values ('urgent','1106-02');
+select t.tag_name, count(*) as times_applied from taggings tg join tags t using (tag_id)
+where tg.job_id='1106-02' group by t.tag_name;
+
+\echo '--- 34. the job timeline reads comments and events as one stream'
+insert into activity_events (job_id, activity_event_kind, activity_event_detail)
+values ('1106-02','stage_changed','{"from":"Working Drawings","to":"Development Approval"}');
+select entry_kind, entry_text, entry_was_edited from job_timeline
+where job_id='1106-02' order by entry_at;

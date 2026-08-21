@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-183 properties across 31 tables.
+206 properties across 37 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 36 | Specified here, not yet in the migration |
-| Created | 131 | In the migration and the types |
+| Created | 154 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -40,6 +40,14 @@
 | `activity_audit.new_row` | After | The whole row as it became, as jsonb. Null on delete. | `jsonb` | Nullable. | to_jsonb(new). new_row->>'stage' paired with changed_at is what replaces job_stages.entered_at. | Created | 2026-08-01 · Amber Beaumont — outside the migrations | 2026-08-01 · Amber Beaumont — outside the migrations |
 | `activity_audit.changed_at` | Changed on | When the change happened. | `timestamptz` | Not null. | The timestamp any reconstruction of time-in-stage measures between. | Created | 2026-08-01 · Amber Beaumont — outside the migrations | 2026-08-01 · Amber Beaumont — outside the migrations |
 | `activity_audit.changed_by` | Changed by | The database role that made the change; jwt_sub carries the authenticated user. | `text` | Nullable. | Paired with jwt_sub. | Created | 2026-08-01 · Amber Beaumont — outside the migrations | 2026-08-01 · Amber Beaumont — outside the migrations |
+
+## `activity_events`
+
+| Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `activity_events.activity_event_id` | Activity entry | One line of the readable feed — "Deanna moved this to Construction". Distinct from activity_audit, which is the forensic column-level log: admin-only, whole rows as jsonb, and unreadable in a drawer. Neither can be derived from the other. | `bigint` | Primary key, GENERATED ALWAYS AS IDENTITY. | Append-only: no INSERT, UPDATE or DELETE policy at all. Triggers write it, and triggers do not need one. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `activity_events.activity_event_kind` | What happened | A key the app renders, not a sentence stored in the database. A stored sentence cannot be reworded, translated or re-rendered when the vocabulary changes — and it will. | `text` | Not null. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `activity_events.activity_event_detail` | Detail | The nouns the sentence needs: which stage, which team, which field. jsonb because the shape differs per kind and the alternative is thirty nullable columns. | `jsonb` | Not null, default '{}'. | Surfaced by job_timeline.entry_detail. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `address_history`
 
@@ -81,6 +89,23 @@
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `build_stages.id` | Build stage | The construction sub-stage inside Construction & execution — slab, frame, lock-up and so on. | `integer` | Primary key. | Referenced by jobs.build_stage_id. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 
+## `comment_mentions`
+
+| Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `comment_mentions.comment_id` | Comment | The comment somebody was mentioned in. | `uuid` | Part of the primary key. | FK → comments(comment_id) ON DELETE CASCADE. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `comment_mentions.profile_id` | Mentioned | Who was @-mentioned. A table rather than parsing the body on read: the body is text people edit, and a mention that disappears when somebody fixes a typo is not a notification. | `uuid` | Part of the primary key. | FK → profiles(profile_id) ON DELETE CASCADE. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `comment_mentions.comment_mention_read_at` | Read on | When they saw it. Null means unread, which is the whole point of the table — a mention nobody can mark as read is a notification that never stops. | `timestamptz` | Nullable. Partially indexed where null, because that is the only query. | Only the mentioned person may set it: the RLS policy compares profile_id to current_profile_id() on both USING and WITH CHECK. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `comments`
+
+| Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `comments.comment_id` | Comment | What somebody wrote on a record. | `uuid` | Primary key. | Referenced by comment_mentions and by comments.parent_comment_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `comments.comment_body` | Comment | The text. | `text` | Not null, not blank. | Rendered by job_timeline alongside activity events. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `comments.parent_comment_id` | In reply to | Threading. One level deep in practice, unbounded in shape. | `uuid` | Nullable. CHECK comments_not_its_own_parent. | FK → comments(comment_id) ON DELETE CASCADE. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `comments.comment_edited_at` | Edited on | Set when the BODY changes, not on any update — moving a comment or backfilling a column is not an edit, and a comment falsely marked edited is as misleading as one silently changed. A comment that changed with no sign it changed is how a record of a conversation stops being one. | `timestamptz` | Nullable. Maintained by the comments_touch_edited trigger, which fires `before update OF comment_body`. | Surfaced as job_timeline.entry_was_edited. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
 ## `council_regions`
 
 | Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
@@ -92,6 +117,25 @@
 | Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `divisions.id` | Division (removed) | Removed — it was never a Lofty concept. Division appears nowhere in the concept spec; the prototype invented it, derived it from the project type, and relabelled development work as "Land" — a term that is wrong as well as redundant. The correct word is development, which is what project_type has always used. The table, projects.division_id, teams.division_id and the 'division' permission scope are all gone. | `uuid` | Table dropped. | Superseded by projects.project_type. "Everything of this type" is project_type; "everything in these teams" is the team_hierarchy scope. | Merged | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `document_links`
+
+| Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `document_links.document_link_id` | Attachment | One place a document is attached. Separate from the document itself because the same soil report belongs to a project AND to every job on it — four parent columns on `documents` would mean four copies of one PDF and four places for its name to drift. | `uuid` | Primary key. | FK → documents(document_id) ON DELETE CASCADE. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `document_links.project_id` | Attached to project | Set when the parent is a project. | `integer` | Nullable. CHECK document_links_one_parent: exactly one of the four parents. | FK → projects(project_id). Partially indexed, and partially UNIQUE with document_id so the same file cannot be attached to the same record twice — a full four-column unique would never fire, because a null never equals a null. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `documents`
+
+| Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `documents.document_id` | Document | A file, held once however many records point at it. | `uuid` | Primary key. | Referenced by document_links, and by documents.document_supersedes_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `documents.document_name` | Name | What the file is called in the app, which need not match the filename. | `text` | Not null, not blank. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `documents.document_storage_path` | Storage path | Where the bytes live in Supabase Storage. Nullable, so a row can exist for a document Lofty expects but has not received — "the signed contract" as an outstanding item is a real state. | `text` | Nullable. Unique. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `documents.document_category` | Type | contract · drawing · permit · certificate · photo · invoice · report · correspondence · other. For filtering a drawer that will hold dozens. | `text` | Not null, default 'other'. CHECK on the nine values — text rather than an enum, because this list will grow and every list that has grown so far was an enum first. | Indexed. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `documents.document_supersedes_id` | Replaces | The document this one supersedes. Versions as a chain rather than a version number: an integer cannot say WHICH document a revision revises when two people upload at once, and "show me the current drawing and what it replaced" is the question people actually ask. | `uuid` | Nullable. CHECK documents_not_its_own_predecessor. | FK → documents(document_id) ON DELETE SET NULL. The documents_current view is everything nothing points at. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `documents.document_size_bytes` | Size | File size. | `integer` | bigint. Nullable. CHECK >= 0. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `documents.document_mime_type` | Content type | What kind of file it is, for choosing a preview. | `text` | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `health_statuses`
 
@@ -269,10 +313,19 @@
 | `stages.id` | Stage (merged) | Merged into the `stage` enum. Eight seeded values that are the business process rather than data anyone maintains. As a table it cost a touch trigger, an RLS policy, the audit quartet and a position column to hold an order that enums give by declaration. | `integer` | Table dropped in 0004. | Superseded by jobs.stage. Also the type for property_defs.stage_id and template_phases.stage_id when those are built — as enum columns, not FKs. | Merged | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `stages.position` | Order (merged) | Merged. Enum values sort by declaration order, so the type itself is the board's column order and a separate column would be a second copy of it. The cost is that reordering the pipeline is no longer an UPDATE — it needs a new type and a rewrite of jobs.stage. | `integer` | Column dropped with the table in 0004. | Superseded by the declaration order of the stage enum. | Merged | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
+## `taggings`
+
+| Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `taggings.tag_id` | Tag | Which tag is applied. | `text` | Not null. | FK → tags(tag_id) ON UPDATE CASCADE ON DELETE CASCADE. No primary key across the four parent columns: a null never equals a null, so such a key would let the same tag be applied twice. Four partial unique indexes do the job instead. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
 ## `tags`
 
 | Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `tags.tag_id` | Tag | A free-form label, keyed by slug. The same shape as teams and for the same reason: the list is data, it will change, and a retired tag must stop appearing in pickers without breaking the records carrying it. | `text` | Primary key. CHECK on the slug shape. | Referenced by taggings ON UPDATE CASCADE. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `tags.tag_colour` | Colour | So a board is scannable. | `text` | Nullable. CHECK: six-digit hex. Checked because "red", "#red" and "rgb(255,0,0)" arriving in one column is how a palette stops being one. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `tags.tag_is_active` | Active | Retiring a tag is a flag, not a delete — deleting one would take every tagging with it. | `boolean` | Not null, default true. There is no DELETE policy on this table. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `tags.id` | Tag | A free label on a job — IF, Council hold, Design variation. | `uuid` | Primary key. | Many-to-many with jobs via job_tags. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 
 ## `task_dependencies`

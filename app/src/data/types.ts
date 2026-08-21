@@ -661,6 +661,104 @@ export interface VariationReopenedTask {
 }
 
 /**
+ * Anything that can carry a document, a comment, a tag or an activity entry.
+ *
+ * Exactly one of these is set on each attachment row. Two real foreign-key columns per
+ * parent rather than a type discriminator, so the reference is enforced and the delete
+ * cascades — the same shape tasks and address history use.
+ */
+export interface RecordRef {
+  projectId: number | null;
+  jobId: string | null;
+  taskId: Uuid | null;
+  variationId: Uuid | null;
+}
+
+/**
+ * A file, held once.
+ *
+ * Which records it is attached to lives in `DocumentLink`, not here, because the same
+ * soil report genuinely belongs to a project AND to every job on it. Four parent columns
+ * on the document itself would mean four copies of one PDF and four places for its name
+ * to drift apart.
+ */
+export interface Doc {
+  id: Uuid;
+  name: string;
+  description: string | null;
+  /** Nullable: a row can exist for a document Lofty expects but has not received. */
+  storagePath: string | null;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  category: DocumentCategory;
+  /**
+   * Versions as a chain, not a number. A version integer cannot say WHICH document a
+   * revision revises, and "show me the current drawing and what it replaced" is the
+   * question people actually ask.
+   */
+  supersedesId: Uuid | null;
+  createdAt: IsoDateTime;
+  createdBy: Uuid | null;
+  updatedAt: IsoDateTime;
+  updatedBy: Uuid | null;
+}
+
+export const DOCUMENT_CATEGORIES = [
+  "contract", "drawing", "permit", "certificate",
+  "photo", "invoice", "report", "correspondence", "other"
+] as const;
+export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number];
+
+export interface DocumentLink extends RecordRef {
+  id: Uuid;
+  documentId: Uuid;
+}
+
+/**
+ * What somebody wrote on a record.
+ *
+ * Separate from `ActivityEvent` because a comment is user-authored and mutable while an
+ * event must be append-only, and one table cannot be both without the append-only half
+ * becoming a convention rather than a rule.
+ */
+export interface Comment extends RecordRef {
+  id: Uuid;
+  body: string;
+  parentCommentId: Uuid | null;
+  /** Set when the body changes, so an edit is never silent. */
+  editedAt: IsoDateTime | null;
+  createdAt: IsoDateTime;
+  createdBy: Uuid | null;
+  updatedAt: IsoDateTime;
+  updatedBy: Uuid | null;
+}
+
+/**
+ * One entry in the readable feed — "Deanna moved this to Construction".
+ *
+ * Distinct from `activity_audit`, which is the forensic column-level log: admin-only,
+ * whole rows as jsonb, and unreadable in a drawer. Neither can be derived from the other
+ * and they answer different questions for different people.
+ */
+export interface ActivityEvent extends RecordRef {
+  id: number;
+  /** A key the app renders, not a sentence stored in the database — sentences get reworded. */
+  kind: string;
+  /** The nouns the sentence needs. Shape differs per kind. */
+  detail: Record<string, unknown>;
+  at: IsoDateTime;
+  by: Uuid | null;
+}
+
+export interface Tag {
+  id: string;
+  name: string;
+  /** Hex, checked by the database, so a palette stays one. */
+  colour: string | null;
+  isActive: boolean;
+}
+
+/**
  * The nine values of the `stage` Postgres enum, in order.
  *
  * This list was wrong in every part of the app until the migration that reconciled it:

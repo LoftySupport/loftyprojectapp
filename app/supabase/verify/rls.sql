@@ -116,6 +116,41 @@ begin
     when others then raise warning 'FAIL: unexpected on original address (%)', sqlerrm;
   end;
 
+  -- THE 0011 CHECK. The comments policies call current_profile_id(), which 0024 had
+  -- revoked from `authenticated` on the grounds that no policy referenced it. A policy is
+  -- evaluated with the CALLER's function privileges, so getting this wrong does not
+  -- error — every comment simply becomes invisible to everybody, which is exactly how
+  -- 0011 broke every read and write in the app.
+  begin
+    if (select count(*) from comments) > 0 then
+      raise notice 'ok  comments are visible — current_profile_id() is executable by the caller';
+    else
+      raise warning 'FAIL: no comments visible. current_profile_id() is probably not granted to authenticated — see 0011.';
+    end if;
+  exception when others then raise warning 'FAIL: reading comments raised (%)', sqlerrm;
+  end;
+
+  -- Somebody else's comment is not yours to edit, even at the same permission level.
+  begin
+    update comments set comment_body = 'rewritten by someone else'
+     where comment_created_by is distinct from (select current_profile_id());
+    if found then
+      raise warning 'FAIL: a user edited a comment they did not write';
+    else
+      raise notice 'ok  a comment can only be edited by its author or an admin';
+    end if;
+  exception when others then raise warning 'FAIL: unexpected editing another comment (%)', sqlerrm;
+  end;
+
+  begin
+    insert into activity_events (job_id, activity_event_kind)
+    values ((select job_id from jobs limit 1), 'forged');
+    raise warning 'FAIL: a user wrote to the append-only activity feed';
+  exception
+    when insufficient_privilege then raise notice 'ok  activity_events has no INSERT policy';
+    when others then raise warning 'FAIL: unexpected on activity_events (%)', sqlerrm;
+  end;
+
   -- And the positive case, so this file proves the policies let the right things through
   -- as well as keeping the wrong things out. A read-only test suite that only ever
   -- asserts refusal passes just as happily against a database nobody can use.
