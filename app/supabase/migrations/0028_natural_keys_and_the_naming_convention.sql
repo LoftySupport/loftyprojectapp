@@ -56,8 +56,11 @@
 --   * `permission_level` stays an enum. Every policy compares it with `>=`, and that
 --     ordering is the ladder. Text with a check would silently turn those into
 --     alphabetical comparisons, which is a security bug, not a style change.
---   * `activity_audit` and `login_activity` are renamed in 0028, separately. They have
---     no foreign keys into any of this, so nothing forces them into this migration.
+--   * `activity_audit` and `login_activity` keep their bare column names for now. They
+--     have no foreign key into any of this, so nothing forces them into this migration,
+--     and they are the two tables with rows that are never rewritten. Worth doing, but
+--     as its own migration — see the note on the audit index below, which is the part
+--     that could not wait.
 -- =============================================================================
 
 -- moddatetime is a contrib module, already installed on the live project. It replaces
@@ -322,6 +325,35 @@ create index address_history_job_idx
   where address_history_job_id is not null;
 create index address_history_address_idx
   on address_history (address_history_address_id);
+
+-- ------------------------------------------ the audit index the rename would break
+-- activity_audit stores whole rows as jsonb and indexes the record's key out of them.
+-- That expression was `->> 'id'`, which every one of these tables has just stopped
+-- having: a project row now carries project_id, a job job_id, an address address_id and
+-- a profile profile_id.
+--
+-- Left alone, nothing would error. "Show me the history of this record" would simply
+-- stop using the index and start scanning the table — the worst way for it to fail,
+-- because it gets slower rather than louder. Rebuilt here to coalesce the four keys.
+drop index if exists activity_audit_record_idx;
+create index activity_audit_record_idx on activity_audit (
+  (coalesce(
+     coalesce(new_row, old_row) ->> 'project_id',
+     coalesce(new_row, old_row) ->> 'job_id',
+     coalesce(new_row, old_row) ->> 'address_id',
+     coalesce(new_row, old_row) ->> 'profile_id'
+   )),
+  changed_at desc
+);
+
+-- The 154 rows written before today still carry the OLD keys inside their jsonb, so
+-- they will not be found by the new expression. That discontinuity is unavoidable —
+-- rewriting an append-only forensic log to match a rename would be worse than the gap —
+-- and it is recorded here so the next person does not read it as a bug.
+
+-- While we are here: 0008 created two byte-identical indexes on (jwt_sub, changed_at
+-- desc) under different names. One is dead weight on every audit write.
+drop index if exists activity_audit_jwt_sub_idx;
 
 -- ============================================================================
 -- 6. Functions

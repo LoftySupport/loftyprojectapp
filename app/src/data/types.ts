@@ -201,11 +201,26 @@ export const isCurrent = (s: RecordStatus): boolean =>
   s !== "completed" && s !== "cancelled" && s !== "archived";
 
 export interface Project {
-  id: Uuid;
-  /** Sequential from 1000, four digits minimum, unique. Overridable by hand. */
-  projectNo: number;
+  /**
+   * The 4-digit number itself — 1042 — not a uuid with the number beside it.
+   *
+   * Sequential from 1000, and settable by hand so the import can assign numbers. There
+   * is no separate `projectNo` any more: there was never a reason for a project to have
+   * two identities, and having two meant every child row carried both.
+   */
+  id: number;
+  /** Optional. Most projects are known by their address, not by a name. */
+  name: string | null;
   originalAddressId: Uuid | null;
   currentAddressId: Uuid;
+  /** Who is primarily accountable. A `teams.team_id` slug. */
+  owningTeam: TeamId | null;
+  assigneeId: Uuid | null;
+  /**
+   * What was intended at creation — a different fact from how many jobs exist, which is
+   * counted, never stored. "We planned four lots and got three" needs both.
+   */
+  proposedDwellings: number | null;
   projectType: ProjectType | null;
   status: RecordStatus;
   startDate: IsoDate | null;
@@ -234,29 +249,48 @@ export interface ProjectDisplay {
 // -------------------------------------------------------------------- jobs
 
 export interface Job {
-  id: Uuid;
-  /** FK to projects.id — the real relationship. Renumbering must not orphan jobs. */
-  projectId: Uuid;
   /**
-   * The friendly project number, denormalised from the parent so `jobNumber` can be a
-   * generated column. Kept in sync by a trigger; never written by the app.
+   * The job number itself — '1042-01'. Stamped at insert from the project number and
+   * the sequence, then never regenerated: it goes on contracts.
+   *
+   * `jobNumber` and `projectNo` are both gone. This is the job number, and `projectId`
+   * is the project number.
    */
-  projectNo: number;
+  id: string;
+  /**
+   * The project number, 1042 — which is also the foreign key, because the number IS the
+   * key now. There is no denormalised copy to keep in step any more, and no trigger
+   * keeping one.
+   */
+  projectId: number;
   /**
    * The counter within the project — "01", "02". Assigned by a trigger when omitted,
-   * under a lock on the parent project row.
-   *
-   * Not what Lofty calls "the job number" — that is `jobNumber` below, the combined
-   * value. Keeping the two words apart here is the whole reason this one is renamed.
+   * under a lock on the parent project row, so two people creating jobs at once cannot
+   * collide. Gaps are permanent: deleting 1042-02 does not slide 1042-03 up.
    */
   jobSequence: string;
-  /** Generated: projectNo || '-' || jobSequence. Unique. e.g. "1001-01" */
-  jobNumber: string;
+  /**
+   * The old Lofty number, "12345". SiteBook and Trello use the same one, so one column
+   * covers all three. Nullable and unique compose correctly — nulls do not collide — so
+   * jobs created in the app simply have none.
+   */
+  jobNumberOld: string | null;
   /** Same pair as projects, for the same reason. */
   originalAddressId: Uuid | null;
   currentAddressId: Uuid;
-  /** The same enum as projects. Not health — health is calculated, and not yet built. */
+  /** The same set as projects. Not health — health is calculated, and not yet built. */
   status: RecordStatus;
+  stage: StageName;
+  stageEnteredAt: IsoDateTime;
+  /** Who is primarily accountable. Drives board grouping. */
+  owningTeam: TeamId;
+  /**
+   * Every team currently holding the job. "One team at a time" is an aspiration, not a
+   * fact — a variation in construction can have Selections, Estimating and Scheduling
+   * all on the same job — so permission checks ask "any team engaged", not "the owner".
+   */
+  engagedTeams: TeamId[];
+  assigneeId: Uuid | null;
   /**
    * No `projectType`. A job's type is its project's type, read through `job_display` —
    * a commercial project does not contain residential jobs, so a second field would
@@ -337,11 +371,12 @@ export interface Profile {
   /** Most recent sign-in. Null means never. */
   lastLoginAt: IsoDateTime | null;
   /**
-   * The teams this person sits in, by name. A `team[]` column on profiles since 0022,
-   * which folded in the profile_teams join table — somebody can still be in several, and
+   * The teams this person sits in, by slug. Rows in `profile_teams` again — the array
+   * 0022 introduced went back to being a table when membership had to carry a role. The
+   * repository flattens the join to slugs here; somebody can be in several, and
    * the admin table has to show all of them rather than picking one.
    */
-  teams: string[];
+  teams: TeamId[];
   /**
    * The permission ladder, in order — a comparison, not a set. `viewer` reads,
    * `user` works their own jobs, `manager` reads across teams, `admin` edits
@@ -374,7 +409,14 @@ export const atLeast = (have: PermissionLevel, need: PermissionLevel): boolean =
  */
 export interface ProfileTeam extends Audited {
   profileId: Uuid;
-  teamId: Uuid;
+  teamId: TeamId;
+  /**
+   * The attribute that justifies this being a table rather than an array on the profile.
+   * 0022 folded it into an array precisely because the membership carried nothing of its
+   * own; managing a team is something of its own, and somebody can be a member of four
+   * teams while managing three.
+   */
+  role: "member" | "manager";
   isPrimary: boolean;
 }
 
@@ -387,20 +429,66 @@ export interface ProfileTeam extends Audited {
  * opposite ends of someone's time at Lofty.
  */
 /**
- * The `team` Postgres enum, in declaration order.
+ * A team, as a row.
  *
- * Mirrors the database exactly — the four at the end were added in 0014 when the staff
- * list turned out to be departments rather than the pipeline the enum was built from.
- * `SEED_TEAMS` is NOT this list: it is derived from the template phases and so only ever
- * contains the teams that own a stage, which is right for the board and wrong for a
- * person picker.
+ * It was a Postgres enum until the schema batch that added natural keys. The list has
+ * changed three times — eleven, then fifteen, now twelve — which is the definition of
+ * something that belongs in a row rather than in a type. An enum value can be added but
+ * never removed, so retiring a team was impossible; `isActive` makes it one flag.
  */
-export const TEAMS = [
-  "Acquisition & Development", "Sales Admin", "Design", "Pre-Construction Admin",
-  "Scheduling", "Selections", "Estimating", "Construction", "Construction Admin",
-  "Finance", "Maintenance", "Commercial", "Executive", "Lofty General", "Admin"
+export interface Team {
+  /** The slug, and the real key: 'design', 'sales_admin'. Stable; never changes. */
+  id: TeamId;
+  // No parentTeamId. A team hierarchy was specified and then dropped: the permission
+  // scopes are none / own / team / all, and none of them walks a tree.
+  /** "Design". Renameable freely, because it is only a label. */
+  name: string;
+  /** Display order in pickers and on boards. */
+  position: number;
+  /** Retired teams leave every picker; the history that names them still resolves. */
+  isActive: boolean;
+}
+
+/**
+ * The team slugs, in display order.
+ *
+ * This is a seed and a fallback, not the source — the database is. It exists for the
+ * same reason the other lookup fallbacks do: a query that has not landed yet should
+ * degrade to the structure, not to an empty picker. Read `listTeams()` in preference.
+ *
+ * The last three are seeded inactive. They were added to the enum in 0014 and are not
+ * teams: Commercial, Executive and Admin are how people described themselves, not units
+ * work is assigned to. `admin` also reads close to the `admin` permission level and is
+ * unrelated to it — one is which team you are in, the other is what you may do.
+ */
+export const TEAM_SEED: readonly Team[] = [
+  { id: "acquisition_development", name: "Acquisition & Development", position:  1, isActive: true },
+  { id: "sales_admin",             name: "Sales Admin",               position:  2, isActive: true },
+  { id: "design",                  name: "Design",                    position:  3, isActive: true },
+  { id: "pre_construction_admin",  name: "Pre-Construction Admin",    position:  4, isActive: true },
+  { id: "scheduling",              name: "Scheduling",                position:  5, isActive: true },
+  { id: "selections",              name: "Selections",                position:  6, isActive: true },
+  { id: "estimating",              name: "Estimating",                position:  7, isActive: true },
+  { id: "construction",            name: "Construction",              position:  8, isActive: true },
+  { id: "construction_admin",      name: "Construction Admin",        position:  9, isActive: true },
+  { id: "finance",                 name: "Finance",                   position: 10, isActive: true },
+  { id: "maintenance",             name: "Maintenance",               position: 11, isActive: true },
+  { id: "lofty_general",           name: "Lofty General",             position: 12, isActive: true },
+  { id: "commercial",              name: "Commercial",                position: 90, isActive: false },
+  { id: "executive",               name: "Executive",                 position: 91, isActive: false },
+  { id: "admin",                   name: "Admin",                     position: 92, isActive: false }
 ] as const;
-export type TeamName = (typeof TEAMS)[number];
+
+export const TEAM_IDS = [
+  "acquisition_development", "sales_admin", "design", "pre_construction_admin",
+  "scheduling", "selections", "estimating", "construction", "construction_admin",
+  "finance", "maintenance", "lofty_general", "commercial", "executive", "admin"
+] as const;
+export type TeamId = (typeof TEAM_IDS)[number];
+
+/** The label for a slug, falling back to the slug itself rather than to blank. */
+export const teamName = (id: TeamId | string, from: readonly Team[] = TEAM_SEED): string =>
+  from.find(t => t.id === id)?.name ?? id;
 
 export const PROFILE_STATUSES = ["active", "pending", "inactive"] as const;
 export type ProfileStatus = (typeof PROFILE_STATUSES)[number];
@@ -416,7 +504,7 @@ export interface NewProfile {
   loginEmail: string | null;
   jobTitle: string | null;
   permission: PermissionLevel;
-  teams: string[];
+  teams: TeamId[];
 }
 
 /** One line of history. Two sources, one shape, because a reader wants one list. */
@@ -445,19 +533,37 @@ export const greetingName = (p: Profile): string => p.firstName;
 // imported from a module: the day they are seeded, every screen already reads them
 // from the right place.
 
+/**
+ * The nine values of the `stage` Postgres enum, in order.
+ *
+ * This list was wrong in every part of the app until the migration that reconciled it:
+ * the type in the database had been title-cased and split by hand — Handover and
+ * Maintenance became two stages — and no migration was ever written for it, so the
+ * TypeScript, the seed data and the saved views all still said "Sales & acquisition".
+ * A job created through the UI would have been rejected by the enum.
+ *
+ * Due to be replaced by `pipeline_stages` rows, at which point this constant goes the
+ * same way the team list just did. Until then it mirrors the database exactly, and the
+ * order is board order.
+ */
+export const STAGE_NAMES = [
+  "Sales & Acquisition",
+  "Planning & Engineering",
+  "Working Drawings & Contracts",
+  "Pre-construction",
+  "Scheduling & Estimating",
+  "Construction",
+  "Post-construction & Closeout",
+  "Handover",
+  "Maintenance"
+] as const;
+export type StageName = (typeof STAGE_NAMES)[number];
+
 /** Stages are a seeded lookup, ordered — this order is the board's column order. */
 export interface Stage extends Audited {
   id: number;
   name: string;
   position: number;
-}
-
-/** `teams`. Each owns one or more pipeline phases. */
-export interface Team extends Audited {
-  id: Uuid;
-  name: string;
-  /** The hierarchy the `team_hierarchy` permission scope walks. */
-  parentTeamId: Uuid | null;
 }
 
 /**

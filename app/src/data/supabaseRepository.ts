@@ -11,7 +11,9 @@ import type {
   Project,
   PropertyDef,
   Stage,
+  StageName,
   Team,
+  TeamId,
   TemplateCheckpoint,
   TemplatePhase
 } from "./types";
@@ -50,26 +52,30 @@ const WIRED: RepositoryMethod[] = [
  * level to shape the result, and `"a" + "b"` widens to `string`, which it cannot read.
  */
 const PROFILE_COLUMNS =
-  "id, auth_user_id, first_name, last_name, full_name, email, login_email, job_title, last_login_at, permission, active, teams, created_at, created_by, updated_at, updated_by";
+  "profile_id, profile_auth_user_id, profile_first_name, profile_last_name, profile_full_name, profile_email, profile_login_email, profile_job_title, profile_last_login_at, profile_permission, profile_is_active, profile_created_at, profile_created_by, profile_updated_at, profile_updated_by, profile_teams(team_id, profile_team_role)";
 
 interface ProfileRow {
-  id: string;
-  auth_user_id: string | null;
-  first_name: string;
-  last_name: string;
-  full_name: string;
-  email: string;
-  login_email: string | null;
-  job_title: string | null;
-  last_login_at: string | null;
-  permission: Profile["permission"];
-  active: boolean;
-  /** A `team[]` column since 0022, not an embed — so it is always present. */
-  teams: string[] | null;
-  created_at: string;
-  created_by: string | null;
-  updated_at: string;
-  updated_by: string | null;
+  profile_id: string;
+  profile_auth_user_id: string | null;
+  profile_first_name: string;
+  profile_last_name: string;
+  profile_full_name: string;
+  profile_email: string;
+  profile_login_email: string | null;
+  profile_job_title: string | null;
+  profile_last_login_at: string | null;
+  profile_permission: Profile["permission"];
+  profile_is_active: boolean;
+  /**
+   * An embedded join again, not a column — membership went back to being a table when
+   * it had to carry whether somebody manages the team. PostgREST returns [] rather than
+   * null for an embed with no rows, but `?? []` still covers a select that did not ask.
+   */
+  profile_teams: { team_id: TeamId; profile_team_role: "member" | "manager" }[] | null;
+  profile_created_at: string;
+  profile_created_by: string | null;
+  profile_updated_at: string;
+  profile_updated_by: string | null;
 }
 
 /** Past tense, because the audit log is a record of what happened. */
@@ -79,33 +85,54 @@ const OPERATION_WORDS: Record<string, string> = {
   DELETE: "Deleted"
 };
 
+/**
+ * Replace a person's team memberships.
+ *
+ * Delete-then-insert rather than a diff: the set is three rows at most, PostgREST gives
+ * each request its own transaction so a diff would be no more atomic than this, and the
+ * failure modes are the same. What it must NOT do is touch `profile_team_role` — nothing
+ * in the UI sets it yet, so a diff that preserved it would be pretending to a fidelity
+ * this does not have. Recorded here because it will matter when managers are editable.
+ */
+async function writeTeams(client: SupabaseClient, profileId: string, teams: TeamId[]) {
+  const { error: clearError } = await client
+    .from("profile_teams").delete().eq("profile_id", profileId);
+  if (clearError) throw clearError;
+  if (!teams.length) return;
+
+  const { error } = await client.from("profile_teams")
+    .insert(teams.map(team_id => ({ profile_id: profileId, team_id })));
+  if (error) throw error;
+}
+
 /** Re-read after a write, so the caller gets generated columns and teams, not its input. */
 async function readProfile(client: SupabaseClient, id: string): Promise<Profile | null> {
   const { data, error } = await client
-    .from("profiles").select(PROFILE_COLUMNS).eq("id", id).maybeSingle();
+    .from("profiles").select(PROFILE_COLUMNS).eq("profile_id", id).maybeSingle();
   if (error || !data) return null;
   return toProfile(data as unknown as ProfileRow);
 }
 
 const toProfile = (r: ProfileRow): Profile => ({
-  id: r.id,
-  authUserId: r.auth_user_id,
-  firstName: r.first_name,
-  lastName: r.last_name,
-  fullName: r.full_name,
-  email: r.email,
-  loginEmail: r.login_email,
-  jobTitle: r.job_title,
-  lastLoginAt: r.last_login_at,
-  permission: r.permission,
-  active: r.active,
-  createdAt: r.created_at,
-  createdBy: r.created_by,
-  updatedAt: r.updated_at,
-  updatedBy: r.updated_by,
-  // Sorted and deduplicated by the database on write, so it arrives in order and this
-  // does not re-sort it. `?? []` covers a select that did not ask for the column.
-  teams: r.teams ?? []
+  id: r.profile_id,
+  authUserId: r.profile_auth_user_id,
+  firstName: r.profile_first_name,
+  lastName: r.profile_last_name,
+  fullName: r.profile_full_name,
+  email: r.profile_email,
+  loginEmail: r.profile_login_email,
+  jobTitle: r.profile_job_title,
+  lastLoginAt: r.profile_last_login_at,
+  permission: r.profile_permission,
+  active: r.profile_is_active,
+  createdAt: r.profile_created_at,
+  createdBy: r.profile_created_by,
+  updatedAt: r.profile_updated_at,
+  updatedBy: r.profile_updated_by,
+  // Flattened to slugs: the role rides along in the row but nothing reads it until the
+  // permission model lands, and exposing it now would invite a screen to depend on it
+  // before the policies that make it mean anything exist.
+  teams: (r.profile_teams ?? []).map(t => t.team_id).sort()
 });
 
 // The publishable key (`sb_publishable_…`), not the legacy JWT anon key. Both work, and
@@ -173,8 +200,8 @@ export function createSupabaseRepository(): Repository {
       const { data, error } = await client
         .from("profiles")
         .select(PROFILE_COLUMNS)
-        .order("last_name")
-        .order("first_name");
+        .order("profile_last_name")
+        .order("profile_first_name");
       if (error) throw error;
       return (data ?? []).map(r => toProfile(r as unknown as ProfileRow));
     },
@@ -205,7 +232,7 @@ export function createSupabaseRepository(): Repository {
         .select(PROFILE_COLUMNS)
         // The read policy is `is_active_user()`, which is broader than "your own row" —
         // so this filter is doing real work, not restating a policy.
-        .eq("auth_user_id", auth.user.id)
+        .eq("profile_auth_user_id", auth.user.id)
         .maybeSingle();
 
       if (error || !data) return null;
@@ -229,37 +256,43 @@ export function createSupabaseRepository(): Repository {
       const { data, error } = await client
         .from("profiles")
         .insert({
-          first_name: input.firstName,
-          last_name: input.lastName,
-          email: input.email,
-          login_email: input.loginEmail,
-          job_title: input.jobTitle,
-          permission: input.permission,
-          teams: input.teams
+          profile_first_name: input.firstName,
+          profile_last_name: input.lastName,
+          profile_email: input.email,
+          profile_login_email: input.loginEmail,
+          profile_job_title: input.jobTitle,
+          profile_permission: input.permission
         })
-        .select(PROFILE_COLUMNS)
+        .select("profile_id")
         .single();
       if (error) throw error;
 
-      return toProfile(data as unknown as ProfileRow);
+      await writeTeams(client, (data as { profile_id: string }).profile_id, input.teams);
+
+      const after = await readProfile(client, (data as { profile_id: string }).profile_id);
+      if (!after) throw new Error("Profile disappeared while being created");
+      return after;
     },
 
     async updateProfile(id: string, patch: Partial<NewProfile>): Promise<Profile> {
       const row: Record<string, unknown> = {};
-      if (patch.firstName !== undefined) row.first_name = patch.firstName;
-      if (patch.lastName !== undefined) row.last_name = patch.lastName;
-      if (patch.email !== undefined) row.email = patch.email;
-      if (patch.loginEmail !== undefined) row.login_email = patch.loginEmail;
-      if (patch.jobTitle !== undefined) row.job_title = patch.jobTitle;
-      if (patch.permission !== undefined) row.permission = patch.permission;
-      // A column now, so it rides the same update as everything else — no second write
-      // to keep in step, and no window where the name changed and the teams did not.
-      if (patch.teams !== undefined) row.teams = patch.teams;
+      if (patch.firstName !== undefined) row.profile_first_name = patch.firstName;
+      if (patch.lastName !== undefined) row.profile_last_name = patch.lastName;
+      if (patch.email !== undefined) row.profile_email = patch.email;
+      if (patch.loginEmail !== undefined) row.profile_login_email = patch.loginEmail;
+      if (patch.jobTitle !== undefined) row.profile_job_title = patch.jobTitle;
+      if (patch.permission !== undefined) row.profile_permission = patch.permission;
 
       if (Object.keys(row).length) {
-        const { error } = await client.from("profiles").update(row).eq("id", id);
+        const { error } = await client.from("profiles").update(row).eq("profile_id", id);
         if (error) throw error;
       }
+
+      // A second write again, because membership is a table again. Deliberately after
+      // the profile update rather than before: if this half fails, the name change has
+      // still landed and the teams are visibly unchanged, which an admin can see and
+      // redo. The other order would leave the teams moved under an unchanged name.
+      if (patch.teams !== undefined) await writeTeams(client, id, patch.teams);
 
       const after = await readProfile(client, id);
       if (!after) throw new Error("Profile disappeared while being updated");
@@ -273,7 +306,8 @@ export function createSupabaseRepository(): Repository {
      * while leaving the history readable.
      */
     async setProfileActive(id: string, active: boolean): Promise<Profile> {
-      const { error } = await client.from("profiles").update({ active }).eq("id", id);
+      const { error } = await client.from("profiles")
+        .update({ profile_is_active: active }).eq("profile_id", id);
       if (error) throw error;
       const after = await readProfile(client, id);
       if (!after) throw new Error("Profile disappeared while being deactivated");
@@ -295,12 +329,16 @@ export function createSupabaseRepository(): Repository {
     async listActivity(opts: { profileId?: string; team?: string; limit?: number }): Promise<ActivityEntry[]> {
       const limit = opts.limit ?? 100;
 
-      // One query rather than the two the join needed: `contains` is `teams @> {Design}`,
-      // which the GIN index in 0022 serves, and it no longer has to switch shape between
-      // "filtered by team" and "not".
-      let q = client.from("profiles").select("id, auth_user_id, full_name");
-      if (opts.profileId) q = q.eq("id", opts.profileId);
-      if (opts.team) q = q.contains("teams", [opts.team]);
+      // Back to a join, because membership is a table again. `!inner` is what makes the
+      // embed filter the parent rather than just decorate it — without it, filtering by
+      // team returns every profile with an empty teams array attached.
+      let q = client.from("profiles").select(
+        opts.team
+          ? "profile_id, profile_auth_user_id, profile_full_name, profile_teams!inner(team_id)"
+          : "profile_id, profile_auth_user_id, profile_full_name"
+      );
+      if (opts.profileId) q = q.eq("profile_id", opts.profileId);
+      if (opts.team) q = q.eq("profile_teams.team_id", opts.team);
       const { data: people, error: peopleError } = await q;
       if (peopleError) throw peopleError;
 
@@ -358,16 +396,16 @@ export function createSupabaseRepository(): Repository {
       const { data: address, error: addressError } = await client
         .from("addresses")
         .insert({
-          lot_number: input.address.lotNumber ?? null,
-          street_number: input.address.streetNumber ?? null,
-          street_1: input.address.street1,
-          street_2: input.address.street2 ?? null,
-          suburb: input.address.suburb,
-          state: input.address.state ?? "SA",
-          postcode: input.address.postcode,
-          council: input.address.council ?? null
+          address_lot_number: input.address.lotNumber ?? null,
+          address_street_number: input.address.streetNumber ?? null,
+          address_street_1: input.address.street1,
+          address_street_2: input.address.street2 ?? null,
+          address_suburb: input.address.suburb,
+          address_state: input.address.state ?? "SA",
+          address_postcode: input.address.postcode,
+          address_council: input.address.council ?? null
         })
-        .select("id")
+        .select("address_id")
         .single();
       if (addressError) throw addressError;
 
@@ -376,11 +414,11 @@ export function createSupabaseRepository(): Repository {
       const { data, error } = await client
         .from("projects")
         .insert({
-          current_address_id: address.id,
+          project_current_address_id: address.address_id,
           project_type: input.projectType,
-          status: input.status ?? "on_track",
-          start_date: input.startDate ?? null,
-          target_completion: input.targetCompletion ?? null
+          project_status: input.status ?? "on_track",
+          project_start_date: input.startDate ?? null,
+          project_target_completion: input.targetCompletion ?? null
         })
         .select("*")
         .single();
@@ -397,27 +435,27 @@ export function createSupabaseRepository(): Repository {
         const { data: address, error: addressError } = await client
           .from("addresses")
           .insert({
-            lot_number: input.address.lotNumber ?? null,
-            street_number: input.address.streetNumber ?? null,
-            street_1: input.address.street1,
-            street_2: input.address.street2 ?? null,
-            suburb: input.address.suburb,
-            state: input.address.state ?? "SA",
-            postcode: input.address.postcode,
-            council: input.address.council ?? null
+            address_lot_number: input.address.lotNumber ?? null,
+            address_street_number: input.address.streetNumber ?? null,
+            address_street_1: input.address.street1,
+            address_street_2: input.address.street2 ?? null,
+            address_suburb: input.address.suburb,
+            address_state: input.address.state ?? "SA",
+            address_postcode: input.address.postcode,
+            address_council: input.address.council ?? null
           })
-          .select("id")
+          .select("address_id")
           .single();
         if (addressError) throw addressError;
-        addressId = address.id;
+        addressId = address.address_id;
       } else {
         const { data: project, error: projectError } = await client
           .from("projects")
-          .select("current_address_id")
-          .eq("id", input.projectId)
+          .select("project_current_address_id")
+          .eq("project_id", input.projectId)
           .single();
         if (projectError) throw projectError;
-        addressId = project.current_address_id;
+        addressId = project.project_current_address_id;
       }
 
       // job_sequence is omitted on purpose — assign_job_sequence() sets it under a lock
@@ -427,9 +465,13 @@ export function createSupabaseRepository(): Repository {
         .from("jobs")
         .insert({
           project_id: input.projectId,
-          current_address_id: addressId,
-          stage: input.stage ?? "Sales & acquisition",
-          status: input.status ?? "on_track"
+          job_current_address_id: addressId,
+          // Not "Sales & acquisition". The live enum has been title-cased since somebody
+          // edited the type by hand; the migration files only caught up in 0027, and
+          // this string never did — so every job creation would have been rejected by
+          // the enum. Both now agree.
+          job_stage: input.stage ?? "Sales & Acquisition",
+          job_status: input.status ?? "on_track"
         })
         .select("*")
         .single();
@@ -480,54 +522,69 @@ export function createSupabaseRepository(): Repository {
 // type error rather than at runtime as an undefined.
 
 type ProjectRow = {
-  id: string; project_no: number;
-  original_address_id: string | null; current_address_id: string;
-  project_type: Project["projectType"]; status: Project["status"];
-  start_date: string | null; target_completion: string | null; end_date: string | null;
-  created_at: string; created_by: string | null;
-  updated_at: string; updated_by: string | null;
+  project_id: number; project_name: string | null;
+  project_original_address_id: string | null; project_current_address_id: string;
+  project_type: Project["projectType"]; project_status: Project["status"];
+  project_proposed_dwellings: number | null;
+  project_owning_team: TeamId | null; project_assignee_id: string | null;
+  project_start_date: string | null; project_target_completion: string | null;
+  project_end_date: string | null;
+  project_created_at: string; project_created_by: string | null;
+  project_updated_at: string; project_updated_by: string | null;
 };
 
 function toProject(r: ProjectRow): Project {
   return {
-    id: r.id,
-    projectNo: r.project_no,
-    originalAddressId: r.original_address_id,
-    currentAddressId: r.current_address_id,
+    // The number IS the id. There is no second identity to carry.
+    id: r.project_id,
+    name: r.project_name,
+    originalAddressId: r.project_original_address_id,
+    currentAddressId: r.project_current_address_id,
     projectType: r.project_type,
-    status: r.status,
-    startDate: r.start_date,
-    targetCompletion: r.target_completion,
-    endDate: r.end_date,
-    createdAt: r.created_at,
-    createdBy: r.created_by,
-    updatedAt: r.updated_at,
-    updatedBy: r.updated_by
+    status: r.project_status,
+    proposedDwellings: r.project_proposed_dwellings,
+    owningTeam: r.project_owning_team,
+    assigneeId: r.project_assignee_id,
+    startDate: r.project_start_date,
+    targetCompletion: r.project_target_completion,
+    endDate: r.project_end_date,
+    createdAt: r.project_created_at,
+    createdBy: r.project_created_by,
+    updatedAt: r.project_updated_at,
+    updatedBy: r.project_updated_by
   };
 }
 
 type JobRow = {
-  id: string; project_id: string; project_no: number;
-  job_sequence: string; job_number: string;
-  original_address_id: string | null; current_address_id: string;
-  status: Job["status"];
-  created_at: string; created_by: string | null;
-  updated_at: string; updated_by: string | null;
+  job_id: string; project_id: number;
+  job_sequence: string; job_number_old: string | null;
+  job_original_address_id: string | null; job_current_address_id: string;
+  job_status: Job["status"];
+  job_stage: StageName; job_stage_entered_at: string;
+  job_owning_team: TeamId; job_engaged_teams: TeamId[];
+  job_assignee_id: string | null;
+  job_created_at: string; job_created_by: string | null;
+  job_updated_at: string; job_updated_by: string | null;
 };
 
 function toJob(r: JobRow): Job {
   return {
-    id: r.id,
+    // '1042-01'. The job number and the key are the same thing now.
+    id: r.job_id,
     projectId: r.project_id,
-    projectNo: r.project_no,
     jobSequence: r.job_sequence,
-    jobNumber: r.job_number,
-    originalAddressId: r.original_address_id,
-    currentAddressId: r.current_address_id,
-    status: r.status,
-    createdAt: r.created_at,
-    createdBy: r.created_by,
-    updatedAt: r.updated_at,
-    updatedBy: r.updated_by
+    jobNumberOld: r.job_number_old,
+    originalAddressId: r.job_original_address_id,
+    currentAddressId: r.job_current_address_id,
+    status: r.job_status,
+    stage: r.job_stage,
+    stageEnteredAt: r.job_stage_entered_at,
+    owningTeam: r.job_owning_team,
+    engagedTeams: r.job_engaged_teams ?? [],
+    assigneeId: r.job_assignee_id,
+    createdAt: r.job_created_at,
+    createdBy: r.job_created_by,
+    updatedAt: r.job_updated_at,
+    updatedBy: r.job_updated_by
   };
 }

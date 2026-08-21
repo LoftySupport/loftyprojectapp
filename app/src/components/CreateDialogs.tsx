@@ -183,7 +183,7 @@ export function NewProjectDialog({
       const project = await repo.createProject({ address, projectType });
       // The project number is the thing the person came for — it is what they will
       // quote on the phone — and it does not exist until the sequence issues it.
-      setCreated(String(project.projectNo));
+      setCreated(String(project.id));
       onCreated?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -268,7 +268,7 @@ export function NewJobDialog({
         projectId,
         address: ownAddress ? address : undefined
       });
-      setCreated(job.jobNumber);
+      setCreated(job.id);
       onCreated?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

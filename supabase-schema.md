@@ -6,10 +6,11 @@
 >
 > | This document says | The decision now |
 > |---|---|
-> | uuid primary keys with business numbers alongside | Natural keys — `project_id` is the 4-digit number, `job_id` is `1042-01` |
+> | uuid primary keys with business numbers alongside | Natural keys — `project_id` is the 4-digit number, `job_id` is `1042-01`. **Done in 0028**, which also deleted `jobs.project_no` and the two triggers that existed only to maintain it |
 > | `subject_type` + `subject_id` on `property_values` | Two real foreign keys with a "exactly one" check, so deletes cascade |
-> | Stages and teams as Postgres enums | Both are lookup tables — the lists have each changed more than once |
+> | Stages and teams as Postgres enums | Both are lookup tables — the lists have each changed more than once. **Teams done in 0026**: twelve active rows plus Commercial, Executive and Admin retired. Stages still an enum, reconciled with the live database in 0027 and due to be replaced by `pipeline_stages` |
 > | `permission_grants` keyed on the permission ladder | Keyed on permission sets, because Finance is not a rung |
+> | A `teams` table with `parent_team_id` for a hierarchy to walk | No hierarchy. Every seeded team had a null parent, so it was never real, and the scopes settled as none / own / team / all — none of which walks a tree |
 > | Companies, contacts and parties | Out of scope — this is project and process management, not a CRM |
 > | One `activity` table merging comments and system events | Split, because one is user-authored and mutable and the other must be append-only |
 > | `addresses` with a `council_id` FK, no postcode, everything nullable | Council is an enum value on the row; postcode is required; a lot or street number is required; and `address_history` keeps every name a site has had |

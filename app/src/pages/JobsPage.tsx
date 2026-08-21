@@ -164,7 +164,7 @@ export function JobsPage() {
       <NewJobDialog
         show={creating}
         onClose={() => setCreating(false)}
-        projects={realProjects.map(p => ({ id: p.id, label: String(p.projectNo) }))}
+        projects={realProjects.map(p => ({ id: String(p.id), label: String(p.id) }))}
       />
 
       {stale && <PreviousAddressNote />}
