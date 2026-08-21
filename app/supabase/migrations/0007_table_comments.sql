@@ -27,11 +27,14 @@ comment on table projects is
 comment on table jobs is
   'The unit of work inside a project — one dwelling, one build, the thing that moves across the board. job_number is generated as project_no-job_sequence (1000-01) and is the number that appears in emails and on paperwork. stage is where it is in the eight-phase pipeline now, and stage_entered_at is when it got there; "days in stage" is computed from that pair and is never stored. Both are maintained together by trigger so they cannot drift apart.';
 
-comment on table activity_audit is
-  'Row-level change log. The trg_activity_audit_row trigger fires after every insert, update and delete on profiles, profile_teams, addresses, projects and jobs, and log_activity_audit writes the whole before and after row as jsonb. Because it captures full rows, it is also where stage history lives now that job_stages is gone: an update that changes jobs.stage leaves old_row->>''stage'', new_row->>''stage'' and changed_at. Reconstructing time-in-stage means walking consecutive rows for a job, which is a scan — only id is indexed.';
-
-comment on table login_activity is
-  'Authentication events per user — who signed in, when, and what kind of event it was, with the details in metadata. Separate from activity_audit because it records access rather than data changes, and it is indexed for the questions actually asked of it: by user, and by occurred_at descending.';
+-- activity_audit and login_activity are commented in 0008, not here.
+--
+-- They used to be commented here, and it made this migration unreplayable: both tables
+-- are created by 0008, so a fresh database failed on the first of them with
+-- `relation "activity_audit" does not exist`. It only ever worked because the two
+-- migrations were applied out of file order. A comment belongs with the CREATE it
+-- describes; moving them there is what lets `supabase db reset` rebuild this database
+-- from nothing.
 
 -- -------------------------------------------------------------------- views
 -- All five are security_invoker, so RLS on the underlying tables still applies to
