@@ -534,6 +534,62 @@ export const greetingName = (p: Profile): string => p.firstName;
 // from the right place.
 
 /**
+ * What is being done, as opposed to where the job is.
+ *
+ * One type for both kinds of task — a checklist item instantiated from a process
+ * template and something somebody typed in — because they differ only by where they came
+ * from, and two types would make "what am I working on" a union forever.
+ *
+ * Deliberately independent of the job's pipeline position. Moving a job backwards must
+ * not erase what has already been finished, which is only free because completion lives
+ * here and position lives there.
+ */
+export interface Task {
+  id: Uuid;
+  /** Exactly one of these is set. Most work hangs off a job; some belongs to the site. */
+  jobId: string | null;
+  projectId: number | null;
+  name: string;
+  description: string | null;
+  /** Sub-tasks, for the steps that are really several. */
+  parentTaskId: Uuid | null;
+  position: number;
+  owningTeam: TeamId | null;
+  assigneeId: Uuid | null;
+  status: TaskStatus;
+  dueDate: IsoDate | null;
+  /** The single source of truth for "is it done". There is no boolean beside it. */
+  completedAt: IsoDateTime | null;
+  completedBy: Uuid | null;
+  /**
+   * Council, the EER consultant, SA Water. Kept out of team SLA reporting, because
+   * council's statutory 28 days are not Design running late.
+   */
+  isExternal: boolean;
+  createdAt: IsoDateTime;
+  createdBy: Uuid | null;
+  updatedAt: IsoDateTime;
+  updatedBy: Uuid | null;
+}
+
+export const TASK_STATUSES = ["open", "in_progress", "blocked", "done", "cancelled"] as const;
+export type TaskStatus = (typeof TASK_STATUSES)[number];
+
+/**
+ * What has to happen before what.
+ *
+ * A relationship rather than a column, because 21 of the 57 preconstruction steps have
+ * two or more predecessors and one has five. The lag sits on the edge because Lofty's
+ * process map puts its SLAs on the arrows — "Within 14 Days" labels a transition between
+ * two steps, not either step itself.
+ */
+export interface TaskDependency {
+  taskId: Uuid;
+  dependsOnTaskId: Uuid;
+  lagDays: number;
+}
+
+/**
  * The nine values of the `stage` Postgres enum, in order.
  *
  * This list was wrong in every part of the app until the migration that reconciled it:

@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-145 properties across 27 tables.
+162 properties across 29 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 36 | Specified here, not yet in the migration |
-| Created | 93 | In the migration and the types |
+| Created | 110 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -274,6 +274,33 @@
 | Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `tags.id` | Tag | A free label on a job — IF, Council hold, Design variation. | `uuid` | Primary key. | Many-to-many with jobs via job_tags. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
+
+## `task_dependencies`
+
+| Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `task_dependencies.task_id` | Task | The task that waits. | `uuid` | Part of the primary key. CHECK task_dependencies_not_self. | FK → tasks(task_id) ON DELETE CASCADE. A trigger refuses any edge that would close a cycle, and another refuses an edge between tasks on different records. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `task_dependencies.depends_on_task_id` | Waits for | The task that has to finish first. | `uuid` | Part of the primary key. Indexed on its own for the reverse direction. | FK → tasks(task_id) ON DELETE CASCADE. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `task_dependencies.task_dependency_lag_days` | Lag | How many days after the predecessor finishes this one is due. On the edge rather than on the task because Lofty's process map puts its SLAs on the ARROWS — "Within 14 Days" labels a transition between two steps, not either step itself. | `integer` | smallint. Not null, default 0. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `tasks`
+
+| Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `tasks.task_id` | Task | One thing to be done. The same table holds a checklist item instantiated from a process template and a task somebody typed in — they differ only by where they came from, and two tables would make every "what am I working on" query a union forever. | `uuid` | Primary key. | Referenced by task_dependencies from both sides, and by tasks.parent_task_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `tasks.job_id` | Job | The job this task belongs to, when the parent is a job. | `text` | Nullable. CHECK tasks_one_parent: exactly one of job_id / project_id. | FK → jobs(job_id) ON UPDATE CASCADE ON DELETE CASCADE. Indexed with task_position. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `tasks.project_id` | Project | The project this task belongs to. Some work genuinely belongs to the site rather than to one dwelling — a land division, a shared driveway — and would otherwise be filed under an arbitrary one of its jobs. | `integer` | Nullable. The other arm of tasks_one_parent. | FK → projects(project_id) ON UPDATE CASCADE ON DELETE CASCADE. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `tasks.task_name` | Task | What the task is. | `text` | Not null, and not blank. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `tasks.task_description` | Details | Anything the person doing it needs to know. The process map carries 142 steps with notes; this is where they land, so the context reaches the person doing the step rather than dying in a canvas file. | `text` | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `tasks.parent_task_id` | Parent task | Sub-tasks. The process map has 57 steps and the checklists group them into about 40; rather than resolving that mismatch by hand, a step that is really several becomes a parent with children. | `uuid` | Nullable. CHECK tasks_not_its_own_parent. | FK → tasks(task_id) ON DELETE CASCADE. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `tasks.task_owning_team` | Owning team | The team responsible. Nullable: an unassigned task in a team's queue is a real state. | `text` | Nullable. | FK → teams(team_id) ON UPDATE CASCADE. Partially indexed on the open statuses. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `tasks.task_assignee_id` | Assignee | The person doing it. Nullable for the same reason as the team. | `uuid` | Nullable. | FK → profiles(profile_id). Partially indexed with the due date — this is the "my work" query. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `tasks.task_status` | Status | open · in_progress · blocked · done · cancelled. | `text` | Not null, default 'open'. CHECK on the five values, and CHECK tasks_done_has_a_time ties it to the completion time in both directions. | The open three drive every partial index on this table, because a done task is in nobody's queue and those rows will outnumber the open ones many times over. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `tasks.task_due_date` | Due | When it should be finished. | `date` | Nullable. | Indexed with the open statuses, for the overdue report. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `tasks.task_completed_at` | Completed on | When it was finished, and the single source of truth for whether it was. There is deliberately no boolean beside this: two columns for one fact can disagree, and then one of them is wrong without anything noticing. | `timestamptz` | Nullable. Stamped by the tasks_stamp_completion trigger when the status becomes done, and CLEARED when it stops being done — a completion time on a reopened task is a lie, and it is exactly the lie a variation produces. | Paired with task_status by CHECK tasks_done_has_a_time. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `tasks.task_completed_by` | Completed by | Who finished it. Stamped by the database, never sent by the client — a client that can write this can write somebody else's name into it. | `uuid` | Nullable. | FK → profiles(profile_id). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `tasks.task_is_external` | Waiting on someone outside Lofty | Council, the EER consultant, SA Water. The process map marks these in orange: nothing downstream moves until they are done, and they are not the owning team's fault when they run late. Without the flag, Design looks permanently overdue for council's statutory 28 days. | `boolean` | Not null, default false. | Excluded from team SLA reporting. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `tasks.task_position` | Order | Display order within the record. | `integer` | smallint. Not null, default 0. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `teams`
 

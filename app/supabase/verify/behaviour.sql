@@ -155,3 +155,55 @@ update teams set team_id = 'design' where team_id = 'design_team';
 \echo '--- 19. the array is normalised: duplicates and nulls do not survive'
 update jobs set job_engaged_teams = array['estimating','design','estimating'] where project_id = 1106;
 select distinct job_engaged_teams as sorted_and_deduplicated from jobs where project_id = 1106;
+
+\echo '--- 20. tasks: a fan-out, and what is ready to start'
+insert into tasks (job_id, task_name, task_owning_team, task_position)
+select '1106-02', n, 'design', r::smallint
+from (values ('Contract Deposit Paid',1),('Order Soil Test',2),('Order Prelim FCR',3),
+             ('Working Drawings',4),('Released to Construction',5)) v(n,r);
+
+-- Deposit releases three things at once; the release waits on all three.
+insert into task_dependencies (task_id, depends_on_task_id, task_dependency_lag_days)
+select t.task_id, d.task_id, 14
+from tasks t, tasks d
+where t.job_id='1106-02' and d.job_id='1106-02'
+  and d.task_name='Contract Deposit Paid'
+  and t.task_name in ('Order Soil Test','Order Prelim FCR','Working Drawings');
+
+insert into task_dependencies (task_id, depends_on_task_id)
+select t.task_id, d.task_id
+from tasks t, tasks d
+where t.job_id='1106-02' and d.job_id='1106-02'
+  and t.task_name='Released to Construction'
+  and d.task_name in ('Order Soil Test','Order Prelim FCR','Working Drawings');
+
+select task_name as ready_now from tasks_ready where job_id='1106-02' order by task_name;
+
+-- A task on a DIFFERENT job, so the cross-record dependency probe in constraints.sql has
+-- something real to aim at. Without it that insert matches no rows, does nothing, raises
+-- nothing, and reports the guard as broken.
+insert into tasks (job_id, task_name, task_owning_team)
+select max(job_id), 'A task on another job', 'design' from jobs where project_id=1106
+  and job_id <> '1106-02';
+
+\echo '--- 21. finishing the root releases exactly the three that waited on it'
+update tasks set task_status='done' where job_id='1106-02' and task_name='Contract Deposit Paid';
+select task_name as ready_now from tasks_ready where job_id='1106-02' order by task_name;
+
+\echo '--- 22. completion is stamped by the database, and reopening clears it'
+-- has_person is false here and that is correct: this runs as postgres with no JWT, so
+-- current_profile_id() has nobody to return. The point of the check is has_time, which
+-- the database fills in whether or not it knows who did it.
+select task_name, task_completed_at is not null as has_time,
+       task_completed_by is not null as has_person_no_jwt_so_false
+from tasks where job_id='1106-02' and task_name='Contract Deposit Paid';
+update tasks set task_status='open' where job_id='1106-02' and task_name='Contract Deposit Paid';
+select task_name, task_completed_at is null as time_cleared
+from tasks where job_id='1106-02' and task_name='Contract Deposit Paid';
+
+\echo '--- 23. a cancelled predecessor does not freeze what is behind it'
+update tasks set task_status='done' where job_id='1106-02' and task_name='Contract Deposit Paid';
+update tasks set task_status='cancelled' where job_id='1106-02' and task_name='Order Prelim FCR';
+update tasks set task_status='done' where job_id='1106-02'
+  and task_name in ('Order Soil Test','Working Drawings');
+select task_name as ready_now from tasks_ready where job_id='1106-02' order by task_name;

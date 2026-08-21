@@ -137,4 +137,48 @@ DO $$ BEGIN
     RAISE NOTICE 'note: team deleted as the owner. RLS has no DELETE policy for teams, so admins cannot — checked in rls.sql.';
   EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'ok  team delete refused';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  team delete refused)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO task_dependencies (task_id, depends_on_task_id)
+    SELECT d.task_id, t.task_id FROM tasks t, tasks d
+     WHERE t.job_id='1106-02' AND d.job_id='1106-02'
+       AND t.task_name='Released to Construction' AND d.task_name='Contract Deposit Paid';
+    RAISE WARNING 'FAIL: a dependency cycle was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  guard_task_dependency_cycle rejected a cycle';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on cycle (%)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO tasks (job_id, project_id, task_name)
+    VALUES ('1106-02', 1106, 'Two parents');
+    RAISE WARNING 'FAIL: a task with two parents was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  tasks_one_parent rejected two parents';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on task parents (%)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO tasks (task_name) VALUES ('No parent at all');
+    RAISE WARNING 'FAIL: an orphan task was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  tasks_one_parent rejected an orphan';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on orphan task (%)', SQLERRM; END;
+
+  BEGIN
+    -- Clearing the completion time on a task that is already done.
+    --
+    -- The trigger only fills it when a task BECOMES done, which is right — it must not
+    -- quietly rewrite a completion time that is already recorded. So this is the CHECK's
+    -- job, and being refused is the correct answer rather than being silently repaired:
+    -- "done, and we no longer know when" is not a state worth accepting.
+    UPDATE tasks SET task_completed_at = NULL
+     WHERE job_id='1106-02' AND task_status='done';
+    RAISE WARNING 'FAIL: a done task was left with no completion time';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a done task cannot lose its completion time';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on completion (%)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO task_dependencies (task_id, depends_on_task_id)
+    SELECT a.task_id, b.task_id FROM tasks a, tasks b
+     WHERE a.job_id='1106-02' AND a.task_name='Working Drawings'
+       AND b.task_name='A task on another job' LIMIT 1;
+    RAISE WARNING 'FAIL: a dependency crossed two different jobs';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a task cannot depend on another record''s task';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on cross-record dependency (%)', SQLERRM; END;
 END $$;
