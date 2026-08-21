@@ -22,9 +22,17 @@ export function useStages() {
   return { stages: data, stageNames: names, loading };
 }
 
+/**
+ * `teams` is every team; `teamNames` is only the ones still in use.
+ *
+ * The two are different questions and both get asked. A picker must not offer Commercial,
+ * Executive or Admin — retired by 0026, which is what `team_is_active` is for — but a job
+ * still owned by one of them has to render its name rather than its slug, so the full list
+ * has to come back from the query and be narrowed here.
+ */
 export function useTeams() {
   const { data, loading } = useQuery(r => r.listTeams(), []);
-  const names = useMemo(() => data.map(t => t.name), [data]);
+  const names = useMemo(() => data.filter(t => t.isActive).map(t => t.name), [data]);
   return { teams: data, teamNames: names, loading };
 }
 
@@ -44,9 +52,16 @@ export function useTemplatePhases() {
     return out;
   }, [data]);
 
+  /**
+   * Only the stages that actually have an expectation.
+   *
+   * A stage with no expected days is absent from the map rather than present as 0 —
+   * `expectedDaysByStage[stage]` then reads `undefined`, which a caller has to handle,
+   * where a 0 would quietly render "Expected 0 days" and divide a Gantt bar by nothing.
+   */
   const expectedDaysByStage = useMemo(() => {
     const out: Record<string, number> = {};
-    data.forEach(p => { out[p.stageName] = p.expectedDays; });
+    data.forEach(p => { if (p.expectedDays != null) out[p.stageName] = p.expectedDays; });
     return out;
   }, [data]);
 

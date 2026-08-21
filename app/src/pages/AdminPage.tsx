@@ -7,7 +7,7 @@ import {
   PERMISSION_LEVELS, PROFILE_STATUSES, TEAM_SEED, profileStatus, type Profile, type TeamId
 } from "../data/types";
 import { useStages, useTeams, useTemplatePhases } from "../data/useLookups";
-import { usePlaceholderShape } from "../data/placeholderShape";
+import { useBoardRecords } from "../data/boardModel";
 import { Token } from "../components/Token";
 import "../components/ui.css";
 
@@ -179,7 +179,7 @@ function Teams() {
   const { teamNames } = useTeams();
   const { stageNames } = useStages();
   const { teamsByStage } = useTemplatePhases();
-  const { jobs } = usePlaceholderShape();
+  const { jobs } = useBoardRecords();
 
   return (
     <section className="panel">

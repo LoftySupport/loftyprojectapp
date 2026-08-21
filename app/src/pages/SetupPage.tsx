@@ -95,13 +95,25 @@ function Properties() {
         <Text type="text2" weight="bold">Property definitions ({propertyDefs.length})</Text>
         <Counter count={groups.length} kind="line" aria-label="stages capturing properties" />
       </div>
-      <Text type="text2" color="secondary">
+      <Text type="text2" color="secondary" ellipsis={false}>
         Properties are <strong>rows, not columns</strong> — which is what lets a team add what
         it captures without a schema migration. Each definition says what level the property
         lives at (<strong>project or job</strong>), then which stage captures it and which team
         captures it, what shape the value takes, and whether it is required to leave that
         stage. Property and field mean the same thing here.
       </Text>
+
+      {propertyDefs.length === 0 && (
+        <div className="search-note">
+          <Text type="text3" ellipsis={false}>
+            <strong>Nothing defined yet.</strong> `property_defs` is not built — it is the
+            batch after the import. Eleven definitions used to appear here; they were
+            written to show the shape of the model, not taken from Lofty, and five of them
+            named a stage that does not exist and never rendered at all. The heading counted
+            eleven above a table of six.
+          </Text>
+        </div>
+      )}
 
       {groups.map(g => (
         <div className="slot-stage" key={g.stage}>

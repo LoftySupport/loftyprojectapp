@@ -1,6 +1,6 @@
 import type { ToolbarFilter } from "../components/Toolbar";
 import { RECORD_STATUS_LABELS } from "./types";
-import type { ShapeJob, ShapeProject } from "./placeholderShape";
+import type { BoardJob, BoardProject } from "./boardModel";
 
 /**
  * Applying the toolbar's filters.
@@ -14,7 +14,7 @@ import type { ShapeJob, ShapeProject } from "./placeholderShape";
  * for a filter.
  */
 
-function jobMatchesOne(j: ShapeJob, f: ToolbarFilter): boolean {
+function jobMatchesOne(j: BoardJob, f: ToolbarFilter): boolean {
   if (f.value == null || f.value === "") return true;
   switch (f.field) {
     case "Stage": return j.stage === f.value;
@@ -26,7 +26,7 @@ function jobMatchesOne(j: ShapeJob, f: ToolbarFilter): boolean {
   }
 }
 
-export function jobMatchesFilters(j: ShapeJob, filters: ToolbarFilter[]): boolean {
+export function jobMatchesFilters(j: BoardJob, filters: ToolbarFilter[]): boolean {
   return filters.every(f => jobMatchesOne(j, f));
 }
 
@@ -38,7 +38,7 @@ export function jobMatchesFilters(j: ShapeJob, filters: ToolbarFilter[]): boolea
  * stage to match. Status is the exception: a project has its own, derived from its worst
  * job, so that one is compared directly.
  */
-export function projectMatchesFilters(p: ShapeProject, filters: ToolbarFilter[]): boolean {
+export function projectMatchesFilters(p: BoardProject, filters: ToolbarFilter[]): boolean {
   return filters.every(f => {
     if (f.value == null || f.value === "") return true;
     if (f.field === "Status") return p.status === f.value;

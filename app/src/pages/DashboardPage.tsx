@@ -70,11 +70,11 @@ export function DashboardPage() {
         <div className="pd-centre-title">Your jobs today</div>
         <div className="pd-team">
           <span className="pd-team-label">{teamLabel}</span>
-          <div className="pd-avatars">
-            <Avatar size="small" type="text" text="SB" aria-label="Teammate" />
-            <Avatar size="small" type="text" text="SB" aria-label="Teammate" />
-            <Avatar size="small" type="text" text="SB" aria-label="Teammate" />
-          </div>
+          {/* Three teammates called "SB" used to sit here. They were invented — there is
+              no query behind them — and three fictional colleagues on the page you land on
+              is the most convincing wrong thing in the app. The real version is a read of
+              your team's members, which profile_teams can already answer; until that is
+              built, nothing belongs here. */}
         </div>
       </div>
 
@@ -97,7 +97,8 @@ export function DashboardPage() {
           <div className="pd-activity">
             <div className="pd-activity-head">
               <span>Your workload</span>
-              <span className="pd-activity-tag">Live</span>
+              {/* Was tagged "Live". These three figures are hardcoded zeroes, so the tag
+                  was the one part of the panel making a claim, and the claim was false. */}
             </div>
             <div className="pd-activity-stats">
               <div><div className="pd-stat-num">0</div><div className="pd-stat-lbl">Assigned</div></div>

@@ -801,7 +801,14 @@ export interface TemplatePhase {
   stageId: number;
   stageName: string;
   owningTeamNames: string[];
-  expectedDays: number;
+  /**
+   * Null when nobody has set one, which is currently all nine.
+   *
+   * It was a plain number and the app filled it with 10, 14, 12, 90 — invented, and then
+   * drawn as Gantt bars against an equally invented day count. `pipeline_stage_expected_days`
+   * is nullable for exactly this reason: an unset SLA is a real state, and it is not zero.
+   */
+  expectedDays: number | null;
 }
 
 /** `template_checkpoints` — what a phase expects done before it hands over. */

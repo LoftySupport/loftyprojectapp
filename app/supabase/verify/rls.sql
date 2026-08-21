@@ -62,6 +62,12 @@ select 'is_active_user: ' || is_active_user()::text;
 select 'permission: '     || current_permission()::text;
 select 'jobs visible: '   || count(*) from jobs;
 select 'teams visible: '  || count(*) from teams;
+-- The board's columns. `listStages()` reads these two, so a policy that hid them would
+-- render every board with no columns and every stage filter with no options — an app that
+-- looks broken rather than one that says why. Worth a count precisely because the failure
+-- is silent: an empty list is a legal answer to a SELECT.
+select 'pipelines visible: '       || count(*) from pipelines;
+select 'pipeline stages visible: ' || count(*) from pipeline_stages;
 
 \echo '--- probes (each must print ok) ---'
 do $$

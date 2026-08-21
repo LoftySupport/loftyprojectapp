@@ -1,4 +1,4 @@
-import { Avatar, Text } from "@vibe/core";
+import { Text } from "@vibe/core";
 import { RECORD_STATUS_LABELS, type RecordStatus } from "../data/types";
 import { Token } from "./Token";
 import "./ui.css";
@@ -62,8 +62,10 @@ export function JobCard({
       </dl>
 
       <footer className="card-foot">
+        {/* No avatar until there is somebody to show. It used to render the initials
+            "SB", which is a person who does not work here — and the name beside it was
+            already saying, honestly, that the assignee is unbound. */}
         <div className="card-who">
-          <Avatar size="small" type="text" text="SB" aria-label="Assignee, unbound" />
           <div>
             <Text type="text3" weight="medium">{team}</Text>
             <Text type="text3" color="secondary"><Token>profiles.full_name</Token></Text>

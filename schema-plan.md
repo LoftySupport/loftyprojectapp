@@ -1014,13 +1014,49 @@ checkpoint.** Anything structurally wrong surfaces here, while changing it is st
 |---|---|---|
 | 10 | **Permissions** | Permission sets; `profile_teams` with its role column; the `private` schema and its helpers; entity grants |
 | 11 | **Property types** | The property enums **alone** — never used in the migration that creates them (the `0014` lesson) |
-| 12 | **Properties** | `property_defs` + migrating the 11 seeds out of TypeScript; `property_options`; `property_values` with baseline-only RLS; `property_grants` and the final policies; `property_value_history` |
+| 12 | **Properties** | `property_defs` seeded from the eleven below; `property_options`; `property_values` with baseline-only RLS; `property_grants` and the final policies; `property_value_history` |
 | 13 | **Wiring** | `pipeline_stage_properties`, `pipeline_stage_tasks`, required-to-exit and required-to-create triggers |
 | 14 | **Process import** | Team processes as pipelines; the process map's steps mapped to teams by hand |
 | 15 | **Automations** | `pg_cron` and `pg_net` are already installed |
 
 House rule holds: one branch and PR per table, moving `supabase-schema.md`, the migration,
 `types.ts` and `dictionary.ts` together, then `npm run dictionary`.
+
+### The eleven property definitions, kept here rather than in code
+
+They lived in `stubRepository.ts` and the app served them as though `property_defs`
+existed. That was the fallback this document already warned about at "Loading jobs before
+properties exist" — *"the first imported job will render eleven seed fields that do not
+exist"* — and it went further than a wrong render: five of the eleven named a stage that
+does not exist (`"Sales & acquisition"` with a lowercase a, `"Preconstruction"` without the
+hyphen, `"Construction & execution"`), matched nothing, and never appeared at all. Setup →
+Properties counted eleven above a table of six.
+
+They are **a starting point, not a specification** — written to show the shape of the model,
+not taken from Lofty. Every row below needs confirming with the team that captures it before
+it becomes a `property_defs` insert, and the list is certainly incomplete: eleven fields is
+not what a builder captures on a house.
+
+| Key | Label | Scope | Captured at | By | Format | Required to exit | Automation |
+|---|---|---|---|---|---|---|---|
+| `address` | Site address | job | Sales & Acquisition | Sales Admin | text | yes | — |
+| `type` | Project type | project | Sales & Acquisition | Acquisition & Development | single select | yes | Recalculate dependent dates |
+| `deposit` | Deposit status | job | Sales & Acquisition | Sales Admin | single select | yes | Notify owning team on change |
+| `drawings` | Drawings status | job | Planning & Engineering | Design | single select | yes | Block stage exit until set |
+| `final_eer` | Final EER | job | Planning & Engineering | Design | file | yes | Block stage exit until set |
+| `contract` | Contract status | job | Working Drawings & Contracts | Pre-Construction Admin | single select | yes | Block stage exit until set |
+| `contract_val` | Contract value | project | Working Drawings & Contracts | Pre-Construction Admin | currency | no | — |
+| `council_hold` | Council hold | job | Pre-construction | Scheduling | checkbox | no | Notify owning team on change |
+| `temp_fence` | Temp fence supplier | job | Scheduling & Estimating | Estimating | text | no | Start SLA clock when set |
+| `pour_date` | Pour date | job | Scheduling & Estimating | Estimating | date | yes | Recalculate dependent dates |
+| `pc_date` | Practical completion | job | Construction | Construction | date | yes | Notify assignee when set |
+
+Two of them — `address` and `type` — are **already real columns**, on `addresses` and
+`projects`. They are listed because the app grouped them with the properties, which is worth
+noticing before Phase C creates a second home for a fact that already has one.
+
+The stage each is captured at is a `pipeline_stage_properties` row, not a column on the
+definition — the same property is captured at different stages in different pipelines.
 
 ## Verification
 

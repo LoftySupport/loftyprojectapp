@@ -46,3 +46,40 @@ export function PreviousAddressNote() {
     </div>
   );
 }
+
+/**
+ * No records of this kind exist yet — as opposed to none matching a search.
+ *
+ * The distinction is the whole reason this is separate from NoResults. "No jobs match
+ * 'corner'" and "there are no jobs" are different facts, and a screen that says the
+ * second when it means the first sends somebody looking for a bug. This one carries no
+ * Clear-search button for the same reason: there is nothing to clear.
+ */
+export function NothingYet({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="panel no-results">
+      <Text type="text1" weight="medium" ellipsis={false}>{title}</Text>
+      <Text type="text2" color="secondary" ellipsis={false}>{description}</Text>
+    </div>
+  );
+}
+
+/**
+ * A read that failed, shown rather than swallowed.
+ *
+ * An empty board and a board whose query errored look identical, and the difference
+ * matters: one means "nothing here yet", the other means "you are not seeing what is
+ * here". Postgres and PostgREST messages are worth reading verbatim — a permission
+ * denied from RLS names itself — so the message is not replaced with a friendlier
+ * fiction. This is the same lesson as the sign-in outage, where two catch blocks turned
+ * a database error into "your account is not set up".
+ */
+export function LoadProblem({ error }: { error: Error }) {
+  return (
+    <div className="create-problem" role="alert">
+      <Text type="text2" ellipsis={false}>
+        Could not load these records: {error.message}
+      </Text>
+    </div>
+  );
+}
