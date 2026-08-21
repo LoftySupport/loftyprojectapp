@@ -14,7 +14,7 @@ What made it work, and should be repeated:
 - **Real examples throughout** — project 1042, job `1042-01`, 28 Corner Street, actual
   people and teams. Never placeholders.
 - **Show the same thing from two sides** where a rule is subtle. The job drawer seen by
-  Deanna and by Ryan proved the permission model better than any description of it.
+  Deanna and by Ketan proved the permission model better than any description of it.
 - **End with what needs checking** — the questions where Amber has the answer and Claude
   does not, stated plainly.
 
