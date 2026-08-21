@@ -46,6 +46,12 @@ if [ "$ACTUAL" -lt "$EXPECTED" ]; then
   echo "$OUT" | tail -5
   exit 1
 fi
+# The layer above Postgres. replay.sh, behaviour.sql and rls.sql all talk to the
+# database directly, and the outage on 2026-08-21 lived in PostgREST resolving an
+# embedded select — a correct schema that the API could not query. This is the only check
+# here that looks at that seam.
+"$HERE/embeds.sh" || { echo; echo "EMBEDS WOULD FAIL AT RUNTIME — see above."; exit 1; }
+
 # The security boundary, as a real signed-in user rather than as the owner.
 echo
 RLS=$($PSQL -f "$HERE/rls.sql" 2>&1 | sed 's/^psql.*NOTICE:  //; s/^psql.*WARNING:  //')
@@ -57,4 +63,4 @@ if grep -qE "FAIL:|ERROR:" <<<"$RLS"; then
   echo; echo "AN RLS PROBE FAILED OR ABORTED — see the FAIL/ERROR line above."; exit 1
 fi
 
-echo; echo "SCHEMA APPLIES AND BEHAVES ($ACTUAL constraint checks, all biting; RLS holds)"
+echo; echo "SCHEMA APPLIES AND BEHAVES ($ACTUAL constraint checks, all biting; RLS holds; embeds resolve)"
