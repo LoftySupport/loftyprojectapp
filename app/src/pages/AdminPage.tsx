@@ -4,7 +4,7 @@ import { useQuery } from "../data/DataProvider";
 import { ActivityDialog, DeactivateDialog, UserDialog } from "../components/UserDialogs";
 import { Select, toOptions } from "../components/Select";
 import {
-  PERMISSION_LEVELS, PROFILE_STATUSES, TEAMS, profileStatus, type Profile
+  PERMISSION_LEVELS, PROFILE_STATUSES, TEAM_SEED, profileStatus, type Profile, type TeamId
 } from "../data/types";
 import { useStages, useTeams, useTemplatePhases } from "../data/useLookups";
 import { usePlaceholderShape } from "../data/placeholderShape";
@@ -62,7 +62,7 @@ function Users() {
   const [activityFor, setActivityFor] = useState<Profile | null>(null);
 
   const shown = profiles.filter(p =>
-    (!team || p.teams.includes(team)) &&
+    (!team || p.teams.includes(team as TeamId)) &&
     (!permission || p.permission === permission) &&
     (!status || profileStatus(p) === status)
   );
@@ -85,7 +85,8 @@ function Users() {
 
       <div className="filter-row">
         <Select aria-label="Filter by team" placeholder="All teams" clearable
-          options={toOptions([...TEAMS])} value={team} onChange={setTeam} />
+          options={TEAM_SEED.filter(t => t.isActive).map(t => ({ value: t.id, label: t.name }))}
+          value={team} onChange={setTeam} />
         <Select aria-label="Filter by permission" placeholder="All permissions" clearable
           options={toOptions([...PERMISSION_LEVELS])} value={permission} onChange={setPermission} />
         {/* active / pending / inactive — pending is "created, has not signed in", which

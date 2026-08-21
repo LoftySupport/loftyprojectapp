@@ -1,3 +1,4 @@
+import { TEAM_SEED } from "./types";
 import type { Repository, RepositoryMethod } from "./repository";
 import type {
   ActivityEntry,
@@ -42,14 +43,15 @@ const SEEDED = {
 };
 
 export const SEED_STAGES: Stage[] = [
-  { id: 1, name: "Sales & acquisition", position: 1, ...SEEDED },
+  { id: 1, name: "Sales & Acquisition", position: 1, ...SEEDED },
   { id: 2, name: "Planning & Engineering", position: 2, ...SEEDED },
   { id: 3, name: "Working Drawings & Contracts", position: 3, ...SEEDED },
-  { id: 4, name: "Preconstruction", position: 4, ...SEEDED },
+  { id: 4, name: "Pre-construction", position: 4, ...SEEDED },
   { id: 5, name: "Scheduling & Estimating", position: 5, ...SEEDED },
-  { id: 6, name: "Construction & execution", position: 6, ...SEEDED },
-  { id: 7, name: "Post-construction & closeout", position: 7, ...SEEDED },
-  { id: 8, name: "Handover & maintenance", position: 8, ...SEEDED }
+  { id: 6, name: "Construction", position: 6, ...SEEDED },
+  { id: 7, name: "Post-construction & Closeout", position: 7, ...SEEDED },
+  { id: 8, name: "Handover", position: 8, ...SEEDED },
+  { id: 9, name: "Maintenance", position: 9, ...SEEDED }
 ];
 
 /**
@@ -60,14 +62,15 @@ export const SEED_STAGES: Stage[] = [
  * phase owns it on a quiet day too. That bug was real, and this is the fix.
  */
 const PHASES: [string, string[], number][] = [
-  ["Sales & acquisition", ["Acquisition & Development", "Sales Admin"], 10],
+  ["Sales & Acquisition", ["Acquisition & Development", "Sales Admin"], 10],
   ["Planning & Engineering", ["Design"], 14],
   ["Working Drawings & Contracts", ["Pre-Construction Admin"], 12],
-  ["Preconstruction", ["Scheduling", "Selections"], 10],
+  ["Pre-construction", ["Scheduling", "Selections"], 10],
   ["Scheduling & Estimating", ["Estimating"], 12],
-  ["Construction & execution", ["Construction"], 90],
-  ["Post-construction & closeout", ["Construction Admin", "Finance"], 14],
-  ["Handover & maintenance", ["Maintenance"], 21]
+  ["Construction", ["Construction"], 90],
+  ["Post-construction & Closeout", ["Construction Admin", "Finance"], 14],
+  ["Handover", ["Construction Admin"], 7],
+  ["Maintenance", ["Maintenance"], 21]
 ];
 
 export const SEED_TEMPLATE_PHASES: TemplatePhase[] = PHASES.map(([name, teams, days]) => ({
@@ -77,20 +80,27 @@ export const SEED_TEMPLATE_PHASES: TemplatePhase[] = PHASES.map(([name, teams, d
   expectedDays: days
 }));
 
-/** Every team, whether or not it currently holds a job. */
-export const SEED_TEAMS: Team[] = [...new Set(PHASES.flatMap(([, teams]) => teams))]
-  .sort()
-  .map(name => ({ id: `team-${name.toLowerCase().replace(/[^a-z]+/g, "-")}`, name, parentTeamId: null, ...SEEDED }));
+/**
+ * Every team, whether or not it currently holds a job.
+ *
+ * Read straight from TEAM_SEED rather than derived from the phase labels above. Deriving
+ * it was always wrong in the same way the comment on TEAM_SEED describes: PHASES only
+ * names the teams that own a stage, so Finance and Lofty General never appeared in a
+ * person picker. It also minted ids of its own ("team-design"), which now have to be the
+ * real slugs, because they are foreign keys.
+ */
+export const SEED_TEAMS: Team[] = TEAM_SEED.filter(t => t.isActive).map(t => ({ ...t }));
 
 const CHECKPOINTS: Record<string, string[]> = {
-  "Sales & acquisition": ["Enquiry logged", "Site inspection booked", "Contract issued", "Deposit received"],
+  "Sales & Acquisition": ["Enquiry logged", "Site inspection booked", "Contract issued", "Deposit received"],
   "Planning & Engineering": ["Design brief finalised", "Preliminary floor plan", "Engineering assessment", "Client sign-off"],
   "Working Drawings & Contracts": ["Working drawings started", "Drawings sent to client", "Contract prepared", "Contract signed"],
-  "Preconstruction": ["Selections booked", "Selections finalised", "Site survey", "Baseline schedule drafted"],
+  "Pre-construction": ["Selections booked", "Selections finalised", "Site survey", "Baseline schedule drafted"],
   "Scheduling & Estimating": ["Quotes requested", "Purchase orders issued", "Site prep checklist started", "Trades confirmed"],
-  "Construction & execution": ["Site established", "Slab poured", "Frame complete", "Lock-up reached"],
-  "Post-construction & closeout": ["Defect walkthrough", "Defect list issued", "Final invoice", "Compliance pack lodged"],
-  "Handover & maintenance": ["Keys handed over", "Handover pack issued", "Maintenance period opened", "90-day review booked"]
+  "Construction": ["Site established", "Slab poured", "Frame complete", "Lock-up reached"],
+  "Post-construction & Closeout": ["Defect walkthrough", "Defect list issued", "Final invoice", "Compliance pack lodged"],
+  "Handover": ["Keys handed over", "Handover pack issued", "Final inspection", "Warranty pack issued"],
+  "Maintenance": ["Maintenance period opened", "90-day review booked", "Defects rectified", "Maintenance period closed"]
 };
 
 export const SEED_CHECKPOINTS: TemplateCheckpoint[] = SEED_STAGES.flatMap(stage =>

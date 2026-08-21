@@ -49,19 +49,19 @@ export const SAVED_VIEWS: SavedView[] = [
     // build: the production estimate, the finance approval and the construction release
     // all happen before a slab is poured.
     slug: "preconstruction",
-    label: "Preconstruction",
+    label: "Pre-construction",
     stages: [
-      "Sales & acquisition",
+      "Sales & Acquisition",
       "Planning & Engineering",
       "Working Drawings & Contracts",
-      "Preconstruction",
+      "Pre-construction",
       "Scheduling & Estimating"
     ]
   },
   {
     slug: "construction",
     label: "Construction",
-    stages: ["Construction & execution"]
+    stages: ["Construction"]
   },
   {
     // INFERRED, unlike the two above. Lofty named preconstruction and construction; what
@@ -70,7 +70,10 @@ export const SAVED_VIEWS: SavedView[] = [
     // than orphaned — rename or split it when the business says.
     slug: "post-construction",
     label: "Post-construction",
-    stages: ["Post-construction & closeout", "Handover & maintenance"]
+    // Three, not two: the database split "Handover & maintenance" into Handover and
+    // Maintenance, so leaving Maintenance out here would make the last stage of a job's
+    // life unreachable from any saved view.
+    stages: ["Post-construction & Closeout", "Handover", "Maintenance"]
   }
 ];
 

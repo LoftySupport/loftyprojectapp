@@ -3,8 +3,8 @@ import { Modal, ModalContent, ModalFooter, ModalHeader, Text, TextField } from "
 import { MultiSelect, Select, toOptions } from "./Select";
 import { useRepository } from "../data/DataProvider";
 import {
-  PERMISSION_LEVELS, TEAMS,
-  type ActivityEntry, type NewProfile, type PermissionLevel, type Profile
+  PERMISSION_LEVELS, TEAM_SEED,
+  type ActivityEntry, type NewProfile, type PermissionLevel, type Profile, type TeamId
 } from "../data/types";
 import "./ui.css";
 
@@ -157,7 +157,7 @@ export function UserDialog({
  * Membership is a set, and now the control says so: one multi-select over the `team`
  * enum, rather than a single-select that appended to a list of chips beside it.
  *
- * The options are TEAMS, which is the enum transcribed — all fifteen values, including
+ * The options are TEAM_SEED, which is the enum transcribed — all fifteen values, including
  * the four 0014 added. The old control could reach them too; what it could not do was
  * show you what you had and what you could add in the same place.
  *
@@ -167,13 +167,22 @@ export function UserDialog({
  * was not the first one stored, and a label claiming otherwise was telling you something
  * the schema had stopped being able to honour.
  */
-function TeamPicker({ value, onChange }: { value: string[]; onChange: (t: string[]) => void }) {
+/**
+ * Shows team names, stores team slugs.
+ *
+ * The two were the same string while teams were an enum. They are not any more: the
+ * label is renameable and the slug is a foreign key, which is the whole reason the list
+ * became a table. So the option's value and its label come from different fields, and
+ * retired teams are filtered out — they are still valid for the rows that already
+ * reference them, just not offerable to anyone new.
+ */
+function TeamPicker({ value, onChange }: { value: TeamId[]; onChange: (t: TeamId[]) => void }) {
   return (
     <MultiSelect
       aria-label="Teams"
-      options={toOptions([...TEAMS])}
+      options={TEAM_SEED.filter(t => t.isActive).map(t => ({ value: t.id, label: t.name }))}
       value={value}
-      onChange={onChange}
+      onChange={t => onChange(t as TeamId[])}
       placeholder="Select teams"
     />
   );

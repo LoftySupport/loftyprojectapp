@@ -294,3 +294,12 @@ comment on table login_activity is
 
 comment on column activity_audit.jwt_sub is
   'The authenticated user who caused the change, from auth.uid(). Was current_setting(''request.jwt.claim.sub'') until 0008, a legacy GUC modern PostgREST does not set — so it resolved to null for every API request.';
+
+-- ------------------------------------------------------ what these two tables are for
+-- Moved here from 0007, which commented them before they existed. See the note there.
+
+comment on table activity_audit is
+  'Row-level change log. The trg_activity_audit_row trigger fires after every insert, update and delete on profiles, profile_teams, addresses, projects and jobs, and log_activity_audit writes the whole before and after row as jsonb. Because it captures full rows, it is also where stage history lives now that job_stages is gone: an update that changes jobs.stage leaves old_row->>''stage'', new_row->>''stage'' and changed_at. Reconstructing time-in-stage means walking consecutive rows for a job, which is a scan — only id is indexed.';
+
+comment on table login_activity is
+  'Authentication events per user — who signed in, when, and what kind of event it was, with the details in metadata. Separate from activity_audit because it records access rather than data changes, and it is indexed for the questions actually asked of it: by user, and by occurred_at descending.';
