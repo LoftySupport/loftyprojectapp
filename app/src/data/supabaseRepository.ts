@@ -50,9 +50,18 @@ const WIRED: RepositoryMethod[] = [
  *
  * One string literal rather than a concatenation: postgrest-js parses this at the type
  * level to shape the result, and `"a" + "b"` widens to `string`, which it cannot read.
+ *
+ * The embed names its foreign key — `profile_teams!profile_teams_profile_id_fkey` — and
+ * has to. `profile_teams` has THREE foreign keys to `profiles`: profile_id, and
+ * created_by and updated_by from the audit quartet. PostgREST refuses to guess between
+ * them and returns PGRST201, so the unqualified `profile_teams(...)` embed fails for
+ * every profile read, including the one that decides whether you are signed in.
+ *
+ * Any table with the audit quartet pointing back at `profiles` has this shape, so every
+ * future embed of one needs the same treatment.
  */
 const PROFILE_COLUMNS =
-  "profile_id, profile_auth_user_id, profile_first_name, profile_last_name, profile_full_name, profile_email, profile_login_email, profile_job_title, profile_last_login_at, profile_permission, profile_is_active, profile_created_at, profile_created_by, profile_updated_at, profile_updated_by, profile_teams(team_id, profile_team_role)";
+  "profile_id, profile_auth_user_id, profile_first_name, profile_last_name, profile_full_name, profile_email, profile_login_email, profile_job_title, profile_last_login_at, profile_permission, profile_is_active, profile_created_at, profile_created_by, profile_updated_at, profile_updated_by, profile_teams!profile_teams_profile_id_fkey(team_id, profile_team_role)";
 
 interface ProfileRow {
   profile_id: string;
@@ -255,7 +264,11 @@ export function createSupabaseRepository(): Repository {
         .eq("profile_auth_user_id", auth.user.id)
         .maybeSingle();
 
-      if (error || !data) return null;
+      // An error is NOT "no profile". Collapsing the two is what made a broken query
+      // look like "your account is not set up": currentProfile returned null, the gate
+      // read that as unlinked, and nothing anywhere said the query had failed.
+      if (error) throw error;
+      if (!data) return null;
       return toProfile(data as ProfileRow);
     },
 
@@ -354,7 +367,7 @@ export function createSupabaseRepository(): Repository {
       // team returns every profile with an empty teams array attached.
       let q = client.from("profiles").select(
         opts.team
-          ? "profile_id, profile_auth_user_id, profile_full_name, profile_teams!inner(team_id)"
+          ? "profile_id, profile_auth_user_id, profile_full_name, profile_teams!profile_teams_profile_id_fkey!inner(team_id)"
           : "profile_id, profile_auth_user_id, profile_full_name"
       );
       if (opts.profileId) q = q.eq("profile_id", opts.profileId);
