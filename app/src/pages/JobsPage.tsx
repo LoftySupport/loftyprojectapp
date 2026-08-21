@@ -1,15 +1,14 @@
 import { useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { Button, Counter, Heading, Text } from "@vibe/core";
-import { useQuery } from "../data/DataProvider";
 import { RECORD_STATUS_LABELS, RECORD_STATUSES } from "../data/types";
 import { useStages, useTeams, useTemplatePhases } from "../data/useLookups";
-import { usePlaceholderShape, type ShapeJob } from "../data/placeholderShape";
+import { useBoardRecords, type BoardJob } from "../data/boardModel";
 import { jobMatchesQuery, matchedOnPreviousAddress, useSearch } from "../data/SearchProvider";
 import { useBoardParams } from "../data/useBoardParams";
 import { savedViewBySlug, stagesInView } from "../data/savedViews";
 import { activeFilterCount, jobMatchesFilters, statusOptions } from "../data/filtering";
-import { NoResults, PreviousAddressNote } from "../components/SearchNotices";
+import { LoadProblem, NoResults, NothingYet, PreviousAddressNote } from "../components/SearchNotices";
 import { SavedViewTabs } from "../components/SavedViewTabs";
 import { JobCard, StatusPill } from "../components/RecordCards";
 import { JobDrawer } from "../components/JobDrawer";
@@ -34,13 +33,14 @@ export function JobsPage() {
   const { stages, stageNames } = useStages();
   const { teamNames } = useTeams();
   const { expectedDaysByStage } = useTemplatePhases();
-  const shape = usePlaceholderShape();
-  const { data: jobs, loading } = useQuery(r => r.listJobs(), []);
-  // The job dialog needs somewhere to put the job — a job cannot exist without a
-  // project, so the picker reads the real list rather than the placeholder shape.
-  const { data: realProjects } = useQuery(r => r.listProjects(), []);
-
   const [creating, setCreating] = useState(false);
+  // Bumped after a create so the board re-reads. There is no cache to invalidate.
+  const [reload, setReload] = useState(0);
+  // One read for both: the board's jobs and the projects the New job dialog can put a
+  // job under. A job cannot exist without a project, so the picker has to see the same
+  // list the board does — when it did not, a project created a moment earlier showed up
+  // as "No projects yet".
+  const { jobs: all, projects, loading, error } = useBoardRecords(reload);
 
   const {
     view, setView, grouping, setGrouping, filters, setFilters, saved, setSaved, search
@@ -50,11 +50,8 @@ export function JobsPage() {
   const navigate = useNavigate();
   // `search` rides along, so closing the drawer puts you back on the board you left
   // rather than on a reset one.
-  const openOne = (j: ShapeJob) =>
+  const openOne = (j: BoardJob) =>
     navigate(`/jobs/${encodeURIComponent(j.jobNumber)}${search}`);
-
-  const unbound = !loading && jobs.length === 0;
-  const all = useMemo(() => (unbound ? shape.jobs : []), [unbound, shape]);
 
   /** The stages this saved view admits — the board's columns, and its scope. */
   const viewStages = useMemo(() => stagesInView(saved, stageNames), [saved, stageNames]);
@@ -102,7 +99,7 @@ export function JobsPage() {
 
   /** Group keys in a deterministic order — pipeline order for stages, else as listed. */
   const groups = useMemo(() => {
-    const keyOf = (j: ShapeJob) =>
+    const keyOf = (j: BoardJob) =>
       grouping === "Stage" ? j.stage
       : grouping === "Project" ? j.projectNumber
       : grouping === "Team" ? j.team
@@ -164,14 +161,31 @@ export function JobsPage() {
       <NewJobDialog
         show={creating}
         onClose={() => setCreating(false)}
-        projects={realProjects.map(p => ({ id: String(p.id), label: String(p.id) }))}
+        projects={projects.map(p => ({
+          id: p.projectNumber,
+          label: `${p.projectNumber} · ${p.jobs.length} job${p.jobs.length === 1 ? "" : "s"}`
+        }))}
+        onCreated={() => setReload(n => n + 1)}
       />
 
       {stale && <PreviousAddressNote />}
 
+      {error && <LoadProblem error={error} />}
+
+      {loading && (
+        <div className="panel"><Text type="text2" color="secondary">Loading…</Text></div>
+      )}
+
+      {!loading && all.length === 0 && (
+        <NothingYet
+          title="No jobs yet"
+          description="A job is one dwelling on a project. Create a project first, then add its jobs — one per lot."
+        />
+      )}
+
       {noMatches && <NoResults noun="jobs" />}
 
-      {view === "Board" && !noMatches && (
+      {view === "Board" && !noMatches && !loading && all.length > 0 && (
         <div className="board">
           {groups.map(g => (
             <section className="board-column" key={g.key}>
@@ -204,7 +218,7 @@ export function JobsPage() {
         </div>
       )}
 
-      {view === "Table" && !noMatches && (
+      {view === "Table" && !noMatches && !loading && all.length > 0 && (
         <div className="panel data-table-wrap">
           <table className="data-table">
             <thead>
@@ -239,7 +253,7 @@ export function JobsPage() {
         </div>
       )}
 
-      {view === "Gantt" && !noMatches && (
+      {view === "Gantt" && !noMatches && !loading && all.length > 0 && (
         <div className="panel">
           <div className="panel-head">
             <Text type="text2" weight="bold">Time in stage against the template</Text>
@@ -261,7 +275,7 @@ export function JobsPage() {
         </div>
       )}
 
-      {view === "Calendar" && !noMatches && (
+      {view === "Calendar" && !noMatches && !loading && all.length > 0 && (
         <div className="panel">
           <div className="panel-head">
             <Text type="text2" weight="bold">Scheduled dates</Text>

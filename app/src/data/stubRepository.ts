@@ -112,18 +112,32 @@ export const SEED_CHECKPOINTS: TemplateCheckpoint[] = SEED_STAGES.flatMap(stage 
   }))
 );
 
+/**
+ * Every `stageName` here must match a name in SEED_STAGES exactly.
+ *
+ * Five of these did not, and the failure was silent rather than loud: `groupByStage`
+ * intersects definitions against the live stage list, so "Sales & acquisition" with a
+ * lowercase a, "Preconstruction" without the hyphen and "Construction & execution"
+ * matched nothing and rendered nowhere. Setup → Properties counted eleven in its heading
+ * and listed six beneath it, and site address, project type and deposit status — three of
+ * the most ordinary fields in the business — were among the ones that vanished.
+ *
+ * The intersect is right and should stay: a definition pointing at a stage that does not
+ * exist should not render under a stage that does. What was missing is anything that
+ * fails when the two disagree, so `check.sh` now asserts every key here resolves.
+ */
 export const SEED_PROPERTY_DEFS: PropertyDef[] = [
-  { key: "address", label: "Site address", scope: "job", stageName: "Sales & acquisition", teamName: "Sales Admin", format: "text", required: true },
-  { key: "type", label: "Project type", scope: "project", stageName: "Sales & acquisition", teamName: "Acquisition & Development", format: "single select", required: true, automation: "Recalculate dependent dates" },
-  { key: "deposit", label: "Deposit status", scope: "job", stageName: "Sales & acquisition", teamName: "Sales Admin", format: "single select", required: true, automation: "Notify owning team on change" },
+  { key: "address", label: "Site address", scope: "job", stageName: "Sales & Acquisition", teamName: "Sales Admin", format: "text", required: true },
+  { key: "type", label: "Project type", scope: "project", stageName: "Sales & Acquisition", teamName: "Acquisition & Development", format: "single select", required: true, automation: "Recalculate dependent dates" },
+  { key: "deposit", label: "Deposit status", scope: "job", stageName: "Sales & Acquisition", teamName: "Sales Admin", format: "single select", required: true, automation: "Notify owning team on change" },
   { key: "drawings", label: "Drawings status", scope: "job", stageName: "Planning & Engineering", teamName: "Design", format: "single select", required: true, automation: "Block stage exit until set" },
   { key: "final_eer", label: "Final EER", scope: "job", stageName: "Planning & Engineering", teamName: "Design", format: "file", required: true, automation: "Block stage exit until set" },
   { key: "contract", label: "Contract status", scope: "job", stageName: "Working Drawings & Contracts", teamName: "Pre-Construction Admin", format: "single select", required: true, automation: "Block stage exit until set" },
   { key: "contract_val", label: "Contract value", scope: "project", stageName: "Working Drawings & Contracts", teamName: "Pre-Construction Admin", format: "currency", required: false },
-  { key: "council_hold", label: "Council hold", scope: "job", stageName: "Preconstruction", teamName: "Scheduling", format: "checkbox", required: false, automation: "Notify owning team on change" },
+  { key: "council_hold", label: "Council hold", scope: "job", stageName: "Pre-construction", teamName: "Scheduling", format: "checkbox", required: false, automation: "Notify owning team on change" },
   { key: "temp_fence", label: "Temp fence supplier", scope: "job", stageName: "Scheduling & Estimating", teamName: "Estimating", format: "text", required: false, automation: "Start SLA clock when set" },
   { key: "pour_date", label: "Pour date", scope: "job", stageName: "Scheduling & Estimating", teamName: "Estimating", format: "date", required: true, automation: "Recalculate dependent dates" },
-  { key: "pc_date", label: "Practical completion", scope: "job", stageName: "Construction & execution", teamName: "Construction", format: "date", required: true, automation: "Notify assignee when set" }
+  { key: "pc_date", label: "Practical completion", scope: "job", stageName: "Construction", teamName: "Construction", format: "date", required: true, automation: "Notify assignee when set" }
 ];
 
 export function createStubRepository(): Repository {

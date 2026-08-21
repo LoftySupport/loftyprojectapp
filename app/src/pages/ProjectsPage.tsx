@@ -1,14 +1,13 @@
 import { useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { Button, Heading, Text } from "@vibe/core";
-import { useQuery } from "../data/DataProvider";
 import { useStages, useTeams } from "../data/useLookups";
-import { usePlaceholderShape, type ShapeProject } from "../data/placeholderShape";
+import { useBoardRecords, type BoardProject } from "../data/boardModel";
 import { matchedOnPreviousAddress, projectMatchesQuery, useSearch } from "../data/SearchProvider";
 import { useBoardParams } from "../data/useBoardParams";
 import { savedViewBySlug, stagesInView } from "../data/savedViews";
 import { activeFilterCount, projectMatchesFilters, statusOptions } from "../data/filtering";
-import { NoResults, PreviousAddressNote } from "../components/SearchNotices";
+import { LoadProblem, NoResults, NothingYet, PreviousAddressNote } from "../components/SearchNotices";
 import { SavedViewTabs } from "../components/SavedViewTabs";
 import { ProjectCard, StatusPill } from "../components/RecordCards";
 import { PropertySlots } from "../components/PropertySlots";
@@ -25,7 +24,7 @@ import "../components/ui.css";
  * cannot be grouped by itself, and offering it would be a control that does nothing.
  * Everything else in the toolbar reads the same as it does on Jobs.
  *
- * Which project is open is the URL — /projects/PRJ-001 — so the detail view is a page
+ * Which project is open is the URL — /projects/1042 — so the detail view is a page
  * somebody can link to, and Back returns to the list instead of leaving the app. The
  * toolbar's own state rides in the query string for the same reason.
  *
@@ -36,9 +35,10 @@ import "../components/ui.css";
 export function ProjectsPage() {
   const { stageNames } = useStages();
   const { teamNames } = useTeams();
-  const shape = usePlaceholderShape();
-  const { data: projects, loading } = useQuery(r => r.listProjects(), []);
   const [creating, setCreating] = useState(false);
+  // Bumped after a create so the board re-reads. There is no cache to invalidate.
+  const [reload, setReload] = useState(0);
+  const { projects: all, loading, error } = useBoardRecords(reload);
 
   // No grouping control on this screen, so the value is inert — it still has to be given,
   // and "Stage" is the one the toolbar would show if the control were ever turned on.
@@ -47,16 +47,24 @@ export function ProjectsPage() {
 
   const { projectNumber } = useParams();
   const navigate = useNavigate();
-  const openOne = (p: ShapeProject) =>
+  const openOne = (p: BoardProject) =>
     navigate(`/projects/${encodeURIComponent(p.projectNumber)}${search}`);
 
-  const unbound = !loading && projects.length === 0;
-  const all = useMemo(() => (unbound ? shape.projects : []), [unbound, shape]);
-
   const viewStages = useMemo(() => stagesInView(saved, stageNames), [saved, stageNames]);
+
+  /**
+   * A saved view names a set of *job* stages, so a project is in view when one of its
+   * jobs is. A project with no jobs yet has no position in any pipeline, so it can only
+   * appear in the unfiltered view — but it must appear there, or a project created before
+   * its lots are added is invisible in the app that just created it.
+   */
+  const showingEverything = saved.stages.length === 0;
   const inView = useMemo(
-    () => all.filter(p => p.jobs.some(j => viewStages.includes(j.stage))),
-    [all, viewStages]
+    () =>
+      all.filter(p =>
+        p.jobs.length === 0 ? showingEverything : p.jobs.some(j => viewStages.includes(j.stage))
+      ),
+    [all, viewStages, showingEverything]
   );
 
   const open = useMemo(
@@ -109,8 +117,9 @@ export function ProjectsPage() {
         onSelect={setSaved}
         hrefFor={slug => (slug === "all" ? "/projects" : `/projects?saved=${slug}`)}
         countFor={slug => {
+          if (slug === "all") return all.length;
           const s = stagesInView(savedViewBySlug(slug), stageNames);
-          return all.filter(p => p.jobs.some(j => s.includes(j.stage))).length;
+          return all.filter(p => p.jobs.length > 0 && p.jobs.some(j => s.includes(j.stage))).length;
         }}
       />
 
@@ -125,11 +134,24 @@ export function ProjectsPage() {
         actions={<Button size="small" onClick={() => setCreating(true)}>+ New project</Button>}
       />
 
-      <NewProjectDialog show={creating} onClose={() => setCreating(false)} />
+      <NewProjectDialog
+        show={creating}
+        onClose={() => setCreating(false)}
+        onCreated={() => setReload(n => n + 1)}
+      />
 
       {stale && <PreviousAddressNote />}
 
-      {noMatches ? (
+      {error && <LoadProblem error={error} />}
+
+      {loading ? (
+        <div className="panel"><Text type="text2" color="secondary">Loading…</Text></div>
+      ) : all.length === 0 ? (
+        <NothingYet
+          title="No projects yet"
+          description="A project is the parent folder for the jobs on one site. Create one and its jobs sit beneath it."
+        />
+      ) : noMatches ? (
         <NoResults noun="projects" />
       ) : view === "Board" ? (
         <div className="card-grid">
@@ -172,7 +194,7 @@ export function ProjectsPage() {
   );
 }
 
-function ProjectDetail({ project, onBack }: { project: ShapeProject; onBack: () => void }) {
+function ProjectDetail({ project, onBack }: { project: BoardProject; onBack: () => void }) {
   const navigate = useNavigate();
 
   return (

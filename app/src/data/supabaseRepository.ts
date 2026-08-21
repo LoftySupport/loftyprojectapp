@@ -37,10 +37,12 @@ import type {
 
 // Add a method name here as you implement it. The Wiring page reads this.
 //
-// listStages came off this list in 0004. Stages are a `stage` enum now, not a table,
-// so there is nothing to query — the values are known at compile time and the seed is
-// the source. An enum cannot be wired; it can only be regenerated.
+// The lookups are still answered from the seed. Both are now real tables — `teams` since
+// 0026 and `pipeline_stages` since 0029 — and both seeds match production row for row, so
+// nothing on screen is wrong. What is missing is that nothing would tell us if they ever
+// stopped matching. Wiring them is a separate change with a check of its own.
 const WIRED: RepositoryMethod[] = [
+  "listProjects", "getProject", "listJobs", "getJob",
   "createProject", "createJob", "currentProfile", "listProfiles",
   "createProfile", "updateProfile", "setProfileActive", "listActivity"
 ];
@@ -62,6 +64,23 @@ const WIRED: RepositoryMethod[] = [
  */
 const PROFILE_COLUMNS =
   "profile_id, profile_auth_user_id, profile_first_name, profile_last_name, profile_full_name, profile_email, profile_login_email, profile_job_title, profile_last_login_at, profile_permission, profile_is_active, profile_created_at, profile_created_by, profile_updated_at, profile_updated_by, profile_teams!profile_teams_profile_id_fkey(team_id, profile_team_role)";
+
+/**
+ * Named explicitly rather than `select("*")`, and each one a single string literal.
+ *
+ * postgrest-js reads these at the type level to shape the result, and `"a" + "b"` widens
+ * to `string`, which it cannot read — the same reason PROFILE_COLUMNS is one long line.
+ *
+ * Explicit also means a column added to the table does not silently start arriving in
+ * every response: the row types below say what this app reads, and adding to them is a
+ * deliberate act. Neither list embeds anything, so neither can hit the PGRST201 ambiguity
+ * that PROFILE_COLUMNS has to name its way around.
+ */
+const PROJECT_COLUMNS =
+  "project_id, project_name, project_original_address_id, project_current_address_id, project_type, project_status, project_proposed_dwellings, project_owning_team, project_assignee_id, project_start_date, project_target_completion, project_end_date, project_created_at, project_created_by, project_updated_at, project_updated_by";
+
+const JOB_COLUMNS =
+  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_created_at, job_created_by, job_updated_at, job_updated_by";
 
 interface ProfileRow {
   profile_id: string;
@@ -192,27 +211,72 @@ export function createSupabaseRepository(): Repository {
     wired: new Set<RepositoryMethod>(WIRED) as ReadonlySet<keyof Repository>,
 
     // ---- projects -------------------------------------------------------
+    /**
+     * Every project the reader may see. RLS decides which; this asks for all of them.
+     *
+     * No fallback to the stub on an empty result. That fallback is right for the lookups —
+     * an empty `teams` table means "not seeded yet", not "there are no teams" — and wrong
+     * here, because zero projects is a true and ordinary answer. It was also actively
+     * harmful: `createProject` has written to Supabase for a while, so a project created
+     * in the app was inserted, given its number, and then not shown, because this method
+     * was still answering from a stub that returns nothing. The record existed and the
+     * app that made it could not see it.
+     */
     async listProjects(): Promise<Project[]> {
-      return stub.listProjects();
-      // const { data, error } = await client
-      //   .from("projects")
-      //   .select("id, project_no, current_address_id, project_type, status, created_at")
-      //   .order("project_no");
-      // if (error) throw error;
-      // return (data ?? []).map(toProject);
+      const { data, error } = await client
+        .from("projects")
+        .select(PROJECT_COLUMNS)
+        .order("project_id");
+      if (error) throw error;
+      return (data ?? []).map(r => toProject(r as unknown as ProjectRow));
     },
 
+    /**
+     * `id` arrives as text because it came out of a URL. `project_id` is an integer, and
+     * PostgREST will not coerce a non-numeric string for us — it returns a 22P02 that
+     * reads like a server fault rather than a bad link. So a URL that is not a number is
+     * "no such project", which is what it means.
+     */
     async getProject(id: string): Promise<Project | null> {
-      return stub.getProject(id);
+      const projectId = Number(id);
+      if (!Number.isInteger(projectId)) return null;
+
+      const { data, error } = await client
+        .from("projects")
+        .select(PROJECT_COLUMNS)
+        .eq("project_id", projectId)
+        .maybeSingle();
+      if (error) throw error;
+      return data ? toProject(data as unknown as ProjectRow) : null;
     },
 
     // ---- jobs -----------------------------------------------------------
     async listJobs(opts?: { projectId?: string }): Promise<Job[]> {
-      return stub.listJobs(opts);
+      let query = client.from("jobs").select(JOB_COLUMNS);
+
+      if (opts?.projectId != null) {
+        const projectId = Number(opts.projectId);
+        // A filter that cannot be honoured must not silently widen to "every job".
+        if (!Number.isInteger(projectId)) return [];
+        query = query.eq("project_id", projectId);
+      }
+
+      // By project, then by sequence — so 1042-02 sorts after 1042-01 and before 1042-10,
+      // which ordering by job_id as text would not do.
+      const { data, error } = await query.order("project_id").order("job_sequence");
+      if (error) throw error;
+      return (data ?? []).map(r => toJob(r as unknown as JobRow));
     },
 
+    /** `maybeSingle`, not `single`: a job that is not there is null, not an error. */
     async getJob(id: string): Promise<Job | null> {
-      return stub.getJob(id);
+      const { data, error } = await client
+        .from("jobs")
+        .select(JOB_COLUMNS)
+        .eq("job_id", id)
+        .maybeSingle();
+      if (error) throw error;
+      return data ? toJob(data as unknown as JobRow) : null;
     },
 
     // ---- profiles -------------------------------------------------------

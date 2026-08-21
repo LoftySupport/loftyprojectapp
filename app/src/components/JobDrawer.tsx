@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
-import { Avatar, BreadcrumbsBar, BreadcrumbItem, Button, Heading, Text } from "@vibe/core";
+import { BreadcrumbsBar, BreadcrumbItem, Button, Heading, Text } from "@vibe/core";
 import { useCheckpoints, useTemplatePhases } from "../data/useLookups";
-import type { ShapeJob } from "../data/placeholderShape";
+import type { BoardJob } from "../data/boardModel";
 import { StatusPill } from "./RecordCards";
 import { PropertySlots } from "./PropertySlots";
 import { Token } from "./Token";
@@ -14,7 +14,7 @@ import "./ui.css";
  * Escape closes it and focus moves into the panel on open, because a drawer you can
  * only leave with the mouse is a trap for anyone driving from the keyboard.
  */
-export function JobDrawer({ job, onClose }: { job: ShapeJob; onClose: () => void }) {
+export function JobDrawer({ job, onClose }: { job: BoardJob; onClose: () => void }) {
   const panel = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -68,8 +68,8 @@ export function JobDrawer({ job, onClose }: { job: ShapeJob; onClose: () => void
               <Text type="text2" weight="bold">Who it’s with</Text>
               <StatusPill status={job.status} />
             </div>
+            {/* Same as the card: no invented initials while the assignee is unbound. */}
             <div className="card-who">
-              <Avatar size="small" type="text" text="SB" aria-label="Assignee, unbound" />
               <div>
                 <Text type="text3" weight="medium">{job.team}</Text>
                 <Text type="text3" color="secondary"><Token>profiles.full_name</Token></Text>

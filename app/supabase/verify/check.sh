@@ -52,6 +52,14 @@ fi
 # here that looks at that seam.
 "$HERE/embeds.sh" || { echo; echo "EMBEDS WOULD FAIL AT RUNTIME — see above."; exit 1; }
 
+# The layer above that again: lists the app holds in TypeScript that must agree with lists
+# the database holds in rows. Five property definitions named a stage that does not exist
+# and simply did not render — no error, no empty state, a heading that counted eleven above
+# a table of six. Nothing here talks to Postgres about DDL; it compares two sets of strings
+# that have no reason to stay equal except that somebody remembered.
+echo
+"$HERE/seeds.sh" || { echo; echo "A SEEDED LOOKUP DISAGREES WITH THE DATABASE — see above."; exit 1; }
+
 # The security boundary, as a real signed-in user rather than as the owner.
 echo
 RLS=$($PSQL -f "$HERE/rls.sql" 2>&1 | sed 's/^psql.*NOTICE:  //; s/^psql.*WARNING:  //')
@@ -63,4 +71,4 @@ if grep -qE "FAIL:|ERROR:" <<<"$RLS"; then
   echo; echo "AN RLS PROBE FAILED OR ABORTED — see the FAIL/ERROR line above."; exit 1
 fi
 
-echo; echo "SCHEMA APPLIES AND BEHAVES ($ACTUAL constraint checks, all biting; RLS holds; embeds resolve)"
+echo; echo "SCHEMA APPLIES AND BEHAVES ($ACTUAL constraint checks, all biting; RLS holds; embeds resolve; seeds agree)"

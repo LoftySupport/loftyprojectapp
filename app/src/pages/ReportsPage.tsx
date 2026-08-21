@@ -2,13 +2,14 @@ import { useMemo, useState } from "react";
 import { Heading, Tab, TabList, Text } from "@vibe/core";
 import { RECORD_STATUS_LABELS } from "../data/types";
 import { useStages, useTeams } from "../data/useLookups";
-import { usePlaceholderShape } from "../data/placeholderShape";
+import { useBoardRecords } from "../data/boardModel";
 import { jobMatchesQuery, matchedOnPreviousAddress, useSearch } from "../data/SearchProvider";
-import { NoResults, PreviousAddressNote } from "../components/SearchNotices";
+import { LoadProblem, NoResults, NothingYet, PreviousAddressNote } from "../components/SearchNotices";
 import { StatusPill } from "../components/RecordCards";
 import { Token } from "../components/Token";
 import { Toolbar, type ToolbarFilter } from "../components/Toolbar";
 import { toOptions } from "../components/Select";
+import { jobMatchesFilters } from "../data/filtering";
 import "../components/ui.css";
 
 /**
@@ -29,8 +30,17 @@ export function ReportsPage() {
    * that quietly ignored the search would contradict the screen you came from.
    */
   const { terms } = useSearch();
-  const all = usePlaceholderShape().jobs;
-  const jobs = useMemo(() => all.filter(j => jobMatchesQuery(j, terms)), [all, terms]);
+  const { jobs: all, loading, error } = useBoardRecords();
+  /**
+   * Both the toolbar's filters and the header search, which is what the count line above
+   * has been claiming all along. The filters were rendered, took a value, and were never
+   * read — "Showing 11 of 11" whatever you chose. Same bug the boards had before
+   * `filtering.ts` existed; Reports was simply missed when it was fixed there.
+   */
+  const jobs = useMemo(
+    () => all.filter(j => jobMatchesFilters(j, filters) && jobMatchesQuery(j, terms)),
+    [all, filters, terms]
+  );
   const noMatches = terms.length > 0 && jobs.length === 0;
   const stale = matchedOnPreviousAddress(jobs, terms);
 
@@ -69,7 +79,7 @@ export function ReportsPage() {
 
       {stale && <PreviousAddressNote />}
 
-      {noMatches && <NoResults noun="jobs" />}
+      {error && <LoadProblem error={error} />}
 
       <TabList activeTabId={tab} onTabChange={setTab}>
         <Tab>Portfolio overview</Tab>
@@ -77,7 +87,24 @@ export function ReportsPage() {
         <Tab>Job report</Tab>
       </TabList>
 
-      {tab === 0 && !noMatches && (
+      {loading && (
+        <div className="panel" style={{ marginTop: "var(--space-16)" }}>
+          <Text type="text2" color="secondary">Loading…</Text>
+        </div>
+      )}
+
+      {!loading && all.length === 0 && (
+        <div style={{ marginTop: "var(--space-16)" }}>
+          <NothingYet
+            title="Nothing to report on yet"
+            description="These figures count the jobs in view. Import or create some and every tab fills in."
+          />
+        </div>
+      )}
+
+      {noMatches && <NoResults noun="jobs" />}
+
+      {tab === 0 && !noMatches && !loading && all.length > 0 && (
         <div className="stack" style={{ marginTop: "var(--space-16)" }}>
           <div className="stat-row">
             <Tile n={jobs.length} label="Jobs in view" />
@@ -125,7 +152,7 @@ export function ReportsPage() {
         </div>
       )}
 
-      {tab === 1 && !noMatches && (
+      {tab === 1 && !noMatches && !loading && all.length > 0 && (
         <div className="stack" style={{ marginTop: "var(--space-16)" }}>
           <div className="stat-row">
             <Tile n={jobs.length} label="Jobs in flight" />
@@ -144,7 +171,7 @@ export function ReportsPage() {
         </div>
       )}
 
-      {tab === 2 && !noMatches && (
+      {tab === 2 && !noMatches && !loading && all.length > 0 && (
         <section className="panel" style={{ marginTop: "var(--space-16)" }}>
           <div className="panel-head">
             <Text type="text2" weight="bold">Every job, every status</Text>

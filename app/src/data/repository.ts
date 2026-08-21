@@ -116,8 +116,11 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   listActivity: "activity_audit",
   createProject: "projects + addresses",
   createJob: "jobs",
-  listStages: "stage (enum)",
-  listTeams: "team (enum)",
+  // Both became tables — `teams` in 0026, `pipeline_stages` in 0029. The labels
+  // said "enum" long after that stopped being true, on the one screen whose entire
+  // job is to say what is backed by what.
+  listStages: "pipeline_stages",
+  listTeams: "teams",
   listTemplatePhases: "template_phases",
   listTemplateCheckpoints: "template_checkpoints",
   listPropertyDefs: "property_defs"
