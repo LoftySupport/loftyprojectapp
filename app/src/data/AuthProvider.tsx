@@ -69,6 +69,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!client) return;
     let cancelled = false;
 
+    // Entra redirects failures back HERE, in the URL, not through signInWithOAuth — that
+    // call only reports whether the redirect could be started. So a failure on Supabase's
+    // side (a database trigger raising during the auth write, say) came back as
+    // `#error=server_error&error_description=...`, supabase-js consumed the fragment,
+    // no session appeared, and the screen simply returned to "Sign in" with nothing said.
+    //
+    // That is exactly how an hour-long sign-in outage looked from the UI: a flash and
+    // then nothing. Read it and keep it.
+    const fromUrl = (raw: string) => new URLSearchParams(raw.replace(/^[#?]/, ""));
+    const params = [fromUrl(window.location.hash), fromUrl(window.location.search)];
+    for (const p of params) {
+      const description = p.get("error_description") ?? p.get("error");
+      if (description) {
+        setError(decodeURIComponent(description.replace(/\+/g, " ")));
+        break;
+      }
+    }
+
     // getSession() reads what is already in local storage; onAuthStateChange covers the
     // redirect back from Entra, a sign-out in another tab, and the periodic token
     // refresh. Both are needed — the first alone misses the redirect that just happened,
@@ -110,11 +128,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setProfileState(p ? "linked" : "unlinked");
       })
       // A failed lookup is treated as unlinked, not as linked-with-no-data. Failing
-      // closed is the only safe direction for the value the gate reads.
-      .catch(() => {
+      // closed is the only safe direction for the value the gate reads — but it is NOT a
+      // reason to say nothing. Treating a broken query as "you are not set up" is what
+      // made a PGRST201 look like an account problem for an hour.
+      .catch((e: unknown) => {
         if (cancelled) return;
         setProfile(null);
         setProfileState("unlinked");
+        setError(e instanceof Error ? e.message : String(e));
       });
     return () => { cancelled = true; };
   }, [repo, userId]);
