@@ -32,4 +32,22 @@ for f in $(ls *.sql | sort); do
     exit 1
   fi
 done
+# ---------------------------------------------- what production has and the repo cannot
+# `trg_login_activity_auth_users` lives on auth.users, which belongs to
+# supabase_auth_admin — 0008 explains why no migration here can create it, and says
+# outright that on a rebuild from empty it will not exist.
+#
+# That gap is exactly where sign-in broke after the 0028 rename: the trigger fires on
+# every sign-in, its function still named two pre-rename columns, and nothing in this
+# harness ran it. Every table-level check passed while nobody could get a session.
+#
+# So the shim creates it here, after the migrations have defined the function. Locally we
+# are superuser and may; the point is that this throwaway database should differ from
+# production as little as possible, and least of all in the auth path.
+$PSQL -d lofty_verify -c "
+  drop trigger if exists trg_login_activity_auth_users on auth.users;
+  create trigger trg_login_activity_auth_users
+    after insert or update on auth.users
+    for each row execute function log_login_activity_from_auth_users();" >/dev/null 2>&1
+
 echo "ALL MIGRATIONS APPLIED CLEANLY"

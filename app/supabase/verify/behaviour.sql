@@ -300,3 +300,36 @@ insert into activity_events (job_id, activity_event_kind, activity_event_detail)
 values ('1106-02','stage_changed','{"from":"Working Drawings","to":"Development Approval"}');
 select entry_kind, entry_text, entry_was_edited from job_timeline
 where job_id='1106-02' order by entry_at;
+
+\echo '--- 35. SIGNING IN: both auth.users triggers, end to end'
+-- This is the check that was missing. Sign-in was broken for an hour after the rename
+-- because log_login_activity_from_auth_users() still wrote `profiles.last_login_at` and
+-- matched on `auth_user_id`. It is a trigger on auth.users, so nothing in this harness
+-- touched it — every table-level check passed while nobody could get a session.
+--
+-- Simulated rather than reasoned about: create the auth user, then move last_sign_in_at
+-- the way Supabase Auth does, and assert what the two triggers are supposed to have done.
+insert into profiles (profile_first_name, profile_last_name, profile_email, profile_permission)
+values ('Signin','Test','signin-test@lofty.com.au','user')
+on conflict (profile_email) do nothing;
+
+-- SIGNUP: on_auth_user_created fires link_profile_to_auth_user + the SIGNUP log row.
+insert into auth.users (email, raw_app_meta_data)
+values ('signin-test@lofty.com.au', '{"provider":"azure"}');
+
+select 'profile linked to auth: ' ||
+       (select (profile_auth_user_id is not null)::text
+          from profiles where profile_email='signin-test@lofty.com.au');
+
+-- SIGNING IN: this is the exact write that was failing.
+update auth.users set last_sign_in_at = now()
+ where email = 'signin-test@lofty.com.au';
+
+select 'last_login_at recorded on the profile: ' ||
+       (select (profile_last_login_at is not null)::text
+          from profiles where profile_email='signin-test@lofty.com.au');
+
+select event_type, (occurred_at is not null) as has_time
+from login_activity
+where email = 'signin-test@lofty.com.au'
+order by event_type;
