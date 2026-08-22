@@ -1,8 +1,23 @@
 # Schema plan
 
-**Status:** Phase A (structure) is fully specified and ready to build. Phase C (properties,
-permissions, process import) waits on decisions Lofty has not made yet — they are listed
-under *Risks* and in the open questions at the end.
+**Status:** Phase A (structure) is **built and applied** — migrations `0024`–`0033`, live
+on `gmekuqdjemrfuurxhuib` since 21 August 2026: 24 tables all with RLS, 70 policies, 10
+`security_invoker` views, zero advisor errors. The app reads it: 15 of 18 repository
+methods query Supabase.
+
+**Phase B (the import) has not run** — 0 projects and 0 jobs. That is the next thing, and
+`HANDOFF.md` carries the running order, including which kinds of change are cheaper before
+it than after. Phase C (properties, permissions, process import) still waits on decisions
+Lofty has not made — listed under *Risks* here and in `HANDOFF.md`.
+
+**What changed against this plan while building it**, each with its reasoning in the
+migration header: teams became a lookup table before the rest rather than in Phase C, since
+`profiles.teams` was being replaced anyway and every team-naming column could then be
+created with its foreign key from the start; the stage enum needed reconciling (`0027`)
+because the repo files produced eight values where the live database had nine, five spelled
+differently; `job_owning_team` has no default, reversing a decision made here, because a
+default means nobody ever chooses; and `companies` / `contacts` / `record_parties` were not
+built, as decided below.
 
 **Readable version:** https://claude.ai/code/artifact/188ca532-0cb0-4cf9-a6fb-d10db5bc7d0c
 — the same design with diagrams and screen mockups. This file is the source of record;
