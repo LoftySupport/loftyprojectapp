@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import {
   Button, Modal, ModalContent, ModalFooter, ModalHeader, Text, TextField
 } from "@vibe/core";
+import { CreatePanel } from "./CreatePanel";
 import { Select, toOptions } from "./Select";
 import { useRepository } from "../data/DataProvider";
 import { useTeams } from "../data/useLookups";
@@ -282,10 +283,37 @@ export function NewProjectDialog({
     }
   }
 
+  const close = () => { reset(); onClose(); };
+
+  // The footer's two buttons, built once. They are the same pair whether the panel is a
+  // panel or expanded, and building them inline in JSX twice is how the two drift.
+  const primary = created
+    ? dwellingCount
+      ? { text: `Create ${dwellingCount} job${dwellingCount === 1 ? "" : "s"}`,
+          onClick: () => { const id = created; reset(); onClose(); onSplit?.(id, dwellingCount); },
+          disabled: false }
+      : { text: "Done", onClick: close, disabled: false }
+    : { text: saving ? "Creating…" : "Create project", onClick: save, disabled: !valid || saving };
+
+  const secondary = created
+    ? dwellingCount ? { text: "Not now", onClick: close } : null
+    : { text: "Cancel", onClick: close };
+
   return (
-    <Modal show={show} onClose={() => { reset(); onClose(); }} id="new-project">
-      <ModalHeader title="New project" />
-      <ModalContent>
+    <CreatePanel
+      open={show}
+      title="New project"
+      onClose={close}
+      footer={
+        <>
+          {secondary && (
+            <Button kind="tertiary" onClick={secondary.onClick}>{secondary.text}</Button>
+          )}
+          <Button onClick={primary.onClick} disabled={primary.disabled}>{primary.text}</Button>
+        </>
+      }
+    >
+      <>
         {created ? (
           <Result>
             Project <strong>{created}</strong> created.
@@ -335,28 +363,8 @@ export function NewProjectDialog({
           </div>
         )}
         {error && <Problem>{error}</Problem>}
-      </ModalContent>
-      {/* The split is offered here rather than only on the project, because "make the
-          project, then make its four lots" is one action in somebody's head and the
-          moment they have just typed the dwelling count is the moment they mean it. */}
-      <ModalFooter
-        primaryButton={
-          created
-            ? dwellingCount
-              ? {
-                  text: `Create ${dwellingCount} job${dwellingCount === 1 ? "" : "s"}`,
-                  onClick: () => { const id = created; reset(); onClose(); onSplit?.(id, dwellingCount); }
-                }
-              : { text: "Done", onClick: () => { reset(); onClose(); } }
-            : { text: saving ? "Creating…" : "Create project", onClick: save, disabled: !valid || saving }
-        }
-        secondaryButton={
-          created
-            ? dwellingCount ? { text: "Not now", onClick: () => { reset(); onClose(); } } : undefined
-            : { text: "Cancel", onClick: () => { reset(); onClose(); } }
-        }
-      />
-    </Modal>
+      </>
+    </CreatePanel>
   );
 }
 
