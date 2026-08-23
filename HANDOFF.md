@@ -176,6 +176,19 @@ means *the app cannot answer yet*. An empty value from a wired column is a diffe
 and gets a message — "No team assigned — ask an administrator to add you to one" — because
 only one of those two is the reader's to act on.
 
+**The yellow banner that explained that rule is gone**, at Lofty's request, 23 August — and
+the "Unbound" chip in the header went with it. They were one thing: the chip was the badge
+and the band was its caption, so keeping the badge without the caption would have left an
+unexplained word in the header. The chip had also stopped being true — its text was the
+hardcoded string `"Unbound"`, not `repo.name`, so it read the same on a build with eighteen
+methods reading live Supabase as on one reading nothing.
+
+The rule itself stands and the tokens still render. What no longer exists is a line on
+screen explaining them, which is fine while the audience is Lofty rather than the public,
+and worth remembering if that changes. **Setup → Wiring is where the honest answer lives**
+now: it counts the methods actually reading from Supabase, per table, and it is generated
+rather than typed.
+
 ### Open, in rough priority order
 
 1. **The preconstruction pipeline.** Lofty tracks stage 4 through ~10 positions plus three

@@ -197,20 +197,6 @@ html, body, #root { height: 100%; }
 }
 .app-alert, .app-alert * { color: var(--negative-ink); }
 
-/* The binding notice. Fixed dark ink because the band is a fixed light yellow in
-   every theme — the theme's own text colour would invert to white on it. */
-.app-banner {
-  background: #ffcb00;
-  color: var(--fixed-dark-color);
-  padding: var(--space-8) var(--space-24);
-  flex-shrink: 0;
-}
-/* The Text component sets its own colour from the theme, which inverts to white
-   in dark and black — on a band that stays yellow in every theme. Pin the ink to
-   the band, not to the theme. */
-.app-banner, .app-banner * { color: var(--fixed-dark-color); }
-.app-banner .sb-token { background: rgba(0, 0, 0, 0.08); }
-
 .app-main {
   flex: 1 0 auto;
   padding: var(--space-24);
@@ -353,7 +339,6 @@ html, body, #root { height: 100%; }
 @media (max-width: 720px) {
   .app-header { padding: var(--space-12) var(--space-16); }
   .app-main { padding: var(--space-16); }
-  .app-banner { padding: var(--space-8) var(--space-16); }
   .app-foot { padding: var(--space-16); }
 
   /* On a phone this is the control you reach for, so it gets the room.
@@ -373,27 +358,15 @@ html, body, #root { height: 100%; }
   /* And the cluster it sits beside has to be allowed to give too, or the search alone
      absorbs every pixel the header is short of.
 
-     `nowrap` with it: the cluster wraps by default, so at 320px the chip went onto its
-     own line above the avatar, doubling the header's height and pushing the avatar out
-     of the bar. Wrapping is the right behaviour on a desktop where there is a third
-     thing to wrap; here there are two and they belong on one line. */
+     `nowrap` with it: the cluster wraps by default, and while it still held the
+     "Unbound" chip that put the chip on its own line above the avatar at 320px, doubling
+     the header's height and pushing the avatar out of the bar. The chip has gone with the
+     binding banner, so there is one child left and nothing to wrap — kept because the
+     next thing added here would reintroduce the fault silently. */
   .app-header-right { flex-shrink: 1; min-width: 0; flex-wrap: nowrap; }
   /* The avatar carries the identity here. The name is an unbound token 200px wide,
      which is a whole line of a small screen to say what the circle already says. */
   .app-user .sb-token, .app-user-name { display: none; }
-}
-
-/* Below this the header has three things and room for two. The "Unbound" chip is the
-   one to drop: the yellow banner immediately underneath says the same thing in a
-   sentence and is never hidden, so nothing is lost — unlike the search, which is the
-   control people came for, and the avatar, which is the only way to reach sign-out. */
-@media (max-width: 480px) {
-  /* By position, not by class. Vibe's Label renders a bare <span> with no class of its
-     own here, so the obvious `[class*="label"]` selector matched nothing and this rule
-     silently did nothing at all — found by measuring the chip's width at 320px and
-     seeing it still there. The `:not` keeps the avatar safe if the chip is ever removed
-     and the user menu becomes the first child. */
-  .app-header-right > :first-child:not(.app-user) { display: none; }
 }
 
 /* ---- the user menu -------------------------------------------------------
