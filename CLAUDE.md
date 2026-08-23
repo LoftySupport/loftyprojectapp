@@ -23,9 +23,13 @@ at first, what needs a decision.
 
 ## Where the current work lives
 
+**`HANDOFF.md` is where to start** — state of play, what is next, and which kinds of change
+are cheaper before the import than after.
+
 **`schema-plan.md` is the current design and the record of how it was decided.** Phase A
-(structure) is fully specified; Phase C waits on business decisions listed at its end. It is
-a decision log rather than a specification — reversed decisions are kept on purpose, because
+(structure) is **built and applied**; Phase B (the import) has not run, so there are no
+projects or jobs yet; Phase C waits on business decisions listed at its end. It is a
+decision log rather than a specification — reversed decisions are kept on purpose, because
 a schema choice without its reasoning gets "simplified" back into a bug by the next person.
 
 A readable version with diagrams is published at
@@ -48,3 +52,12 @@ the migrations and the live database over it.
   method — do not reach around it.
 - **RLS is the security boundary.** The app's `can()` checks hide controls; they are not
   security. Every one needs a matching policy or it is decoration.
+- **Never fill a gap with a plausible value.** An invented default is worse than a blank,
+  because a blank invites configuring and a guess gets quoted back as though it were agreed.
+  Sign-in was down for an hour behind an error two `catch` blocks turned into "your account
+  is not set up"; Reports showed "45% on track" computed from a fixed array; the job
+  template showed 36 checkpoints nobody at Lofty wrote. Empty, or a token that names its
+  column — never a stand-in.
+- **A check nobody has watched fail is not evidence.** Every assertion in
+  `app/supabase/verify/` was proved by breaking the thing it guards and seeing it report.
+  `./check.sh` runs the lot: constraints bite, RLS holds, embeds resolve, seeds agree.

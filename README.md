@@ -2,9 +2,15 @@
 
 The V0 build of Lofty's job pipeline board: React, Vibe and Supabase.
 
-**Not connected to live data yet.** Every value that will come from Supabase renders as a
-`{{table.column}}` token, so an unbound field is visible rather than silently blank. The
-tokens disappear on their own as tables come online.
+**Connected, and mostly empty.** 15 of the 18 repository methods read Supabase — projects,
+jobs, profiles, teams and the pipeline stages are live queries. There are **no projects and
+no jobs yet**; the import is Phase B, so those boards show a designed empty state rather
+than data.
+
+Values whose table is not built yet still render as a `{{table.column}}` token, so an
+unbound field is visible rather than silently blank. Two things are genuinely not built —
+`property_defs` and `pipeline_stage_tasks` — and the screens that would show them say so
+instead of showing a plausible guess.
 
 The stakeholder prototype this grew out of lives in a separate repo,
 [`loftyprojectboard`](https://github.com/amberbeaumont/loftyprojectboard), and is
@@ -30,10 +36,12 @@ the accurate one.
 
 | File | What it is |
 | --- | --- |
-| **`HANDOFF.md`** | **Start here.** State of play, decisions made and why, what is next |
+| **`HANDOFF.md`** | **Start here.** State of play, what is next, and when to change what |
+| **`schema-plan.md`** | The current design and the record of how it was decided. Phase A is built; Phase C waits on the business decisions at its end |
 | `data-dictionary.md` | Every property: Lofty name, definition, type, rules, relationships, status. Generated — see below |
-| `supabase-schema.md` | The tables, the RLS scope model, and the open questions |
-| `app/supabase/migrations/0001_core.sql` | The migration, as far as it goes |
+| `app/supabase/migrations/` | 33 files, `0001`–`0033`. The database is the authority; these rebuild it |
+| `app/supabase/verify/check.sh` | Replays every migration into a throwaway database and proves the schema *behaves* — constraints bite, RLS holds, embeds resolve, seeds agree |
+| `supabase-schema.md` | **Superseded** — carries a banner saying so. Kept for its reasoning, not its schema |
 | `concept-spec.md` | The original data-architecture write-up |
 
 Design-system records, still accurate:

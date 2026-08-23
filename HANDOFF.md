@@ -1,18 +1,123 @@
 # Handoff
 
-Everything a new session needs to pick this up. Read this first, then
-`data-dictionary.md`.
+Everything a new session needs to pick this up. Read this first, then `schema-plan.md`.
 
-**Next job: [turn off the email provider](#the-open-door-beside-the-front-one), then
-`property_defs`.** The redirect allow list is fixed and people can sign in — that half of
-the old "next job" is done, and the signed-in surfaces have now been walked through with a
-real session rather than reasoned about.
+**Phase A is done and applied. Next job: [Phase B, the import](#next-phase-b-the-import)** —
+and before it, the spine review described there, because that is the only category of
+change that gets expensive once 200 jobs are in.
 
-Last updated: 2026-08-16.
+Last updated: 2026-08-21.
+
+---
+
+## Session of 2026-08-21 — Phase A built, applied and proved
+
+### Where it actually stands
+
+Verified against `gmekuqdjemrfuurxhuib` on 21 August, not remembered:
+
+| | |
+| --- | --- |
+| Tables | **24**, every one with RLS enabled |
+| Policies | **70**, none missing a `WITH CHECK` on an UPDATE |
+| Views | **10**, every one `security_invoker` |
+| Security advisors | **0 errors** (72 warnings, all understood — 68 are pg_graphql discoverability, 3 are the `SECURITY DEFINER` helpers the policies need, 1 is leaked-password protection, irrelevant behind Entra) |
+| Migrations | **35 applied**, 33 files |
+| People | 47 profiles, 45 team memberships, 15 teams, 9 lifecycle stages |
+| Records | **0 projects, 0 jobs** — Phase B has not run |
+| Repository methods reading Supabase | **15 of 18** |
+
+**The two migrations with no file are both accounted for**, which is worth recording
+because "the repo cannot rebuild production" was a live worry:
+
+- `0014_revoke_recreated_audit_function` — its content was folded into the repo's
+  `0013`, which carries both revokes. Checked rather than assumed: replaying the repo
+  files alone produces `log_activity_audit` with no EXECUTE for `anon`, `authenticated`
+  or `PUBLIC`, which is what production has.
+- `move_profiles_backup_out_of_the_api` — moved an ad-hoc backup table out of `public`.
+  A rebuild from empty never creates that table, so there is nothing for a file to do.
+
+### What was built
+
+Migrations `0024`–`0033`. Teams became a lookup table; the stage enum was reconciled to
+the nine live values; `projects` and `jobs` moved to natural keys under the
+prefix-everything naming convention; then pipelines and position, tasks and dependencies,
+variations, and documents/comments/tags.
+
+The four axes are separate tables, deliberately, and merging any pair destroys something
+that cannot be recovered afterwards — see `schema-plan.md`.
+
+### The sign-in outage, and what it taught
+
+Sign-in broke twice on the same day and both causes are worth carrying forward.
+
+1. **PGRST201.** `profile_teams` has three foreign keys to `profiles` — `profile_id`
+   plus `created_by`/`updated_by` from the audit quartet — so an unqualified
+   `profile_teams(...)` embed is ambiguous and PostgREST refuses it. The query deciding
+   whether you are signed in went through that embed. **Every table with the audit
+   quartet has this shape**, so every future embed of one must name its constraint.
+2. **A trigger on `auth.users`.** `log_login_activity_from_auth_users()` still wrote
+   `profiles.last_login_at` and matched `auth_user_id`, both renamed in `0028`. It fires
+   on every sign-in, so the trigger raised, the update rolled back, and there was no
+   session at all.
+
+The lesson from the second is in `0033`'s header: *"which functions reference this table"
+is a question to ask the database, not one to answer from a function's name.* The rewrite
+list for `0028` was built by reading names out of `pg_proc`; this one reads like a logging
+helper and the write to `profiles` is four lines into the body.
+
+Neither could have been caught by the harness as it stood — `0008` explains that no
+migration here can create a trigger on `auth.users`, so the throwaway database differed
+from production in exactly the place that broke. `replay.sh` now creates it afterwards,
+where it is superuser and may, and `behaviour.sql` simulates a full sign-in.
+
+Both outages presented as *"your account is not set up"* because two `catch` blocks
+swallowed the error. `AuthProvider` now fails closed **and** reports.
+
+### The placeholder sweep
+
+Every page and form was audited against the live database. Four different things were
+occupying the screen while their table was unavailable, and they all looked identical:
+
+| | |
+| --- | --- |
+| `{{table.column}}` tokens | Working as designed — they announce themselves |
+| Invented records | 5 projects and 11 jobs generated at render time. `PRJ-001-02` read as a decision the app had made, and every figure on Reports was arithmetic over a fixed array — "45% on track" counted positions in an 11-item status cycle |
+| Correct but not live | Stages and teams, right but read from a TypeScript seed while real tables held the rows |
+| Invented process | 36 checkpoints, 11 property definitions and a team-per-phase mapping that **disagreed with the database** — none of it from Lofty |
+
+All four are resolved: the boards read real records, the lookups query, and the two that
+have no table (`pipeline_stage_tasks`, `property_defs`) return empty with the screens
+saying so. The eleven property definitions are preserved in `schema-plan.md` as the
+Phase C starting point rather than deleted.
+
+Two defects fixed along the way, both live at the time:
+
+- **Creating a project lost it.** `createProject` wrote to Supabase; `listProjects` still
+  answered from a stub that returns `[]`. The row was inserted, the number was issued,
+  and neither the board nor the New job picker could see it.
+- **Five property definitions never rendered.** They named a stage that does not exist
+  (`"Sales & acquisition"` with a lowercase a), so Setup → Properties counted eleven in
+  its heading above a table of six.
+
+### `verify/seeds.sh` — the class of bug behind most of the above
+
+Two lists that must agree, written in two places, with nothing noticing when they stop.
+Three got past review in a week: the property definitions above, a commented-out query in
+`listProjects` naming five pre-`0028` columns, and eight data-dictionary entries marked
+`created` for view columns renamed by `0028`.
+
+`seeds.sh` asserts all of it — seeded stages and teams against their tables, every column
+in each `*_COLUMNS` select list, and every `created` dictionary entry. **Each assertion
+was watched failing before being trusted.** It also reports, without failing, that 188
+real columns have no dictionary entry: everything from `0030`–`0032`.
 
 ---
 
 ## Session of 2026-08-16 — what changed, and what is still open
+
+> **Superseded in places.** Kept for its reasoning. Anything it calls "next" was
+> done in the 21 August session above, and the schema it describes predates `0024`–`0033`.
 
 ### Applied to the live database
 
@@ -545,6 +650,11 @@ layout reference. The React app is the field reference.
 
 ## Schema: what is decided
 
+> **Written before `0024`–`0033`.** The reasoning holds; several of the shapes do not —
+> keys, naming, stages, teams and parties all changed. `schema-plan.md` and the migrations
+> are the current record. Kept because a schema decision without its reasoning gets
+> "simplified" back into a bug by the next person.
+
 Three tables are designed and in the migration. Full detail in `data-dictionary.md`;
 this is the reasoning, which is the part that does not survive in a column list.
 
@@ -645,36 +755,155 @@ re-asked in six months:
 
 ## What needs a decision (not mine to make)
 
-1. **The `permission_grants` matrix.** I rewrote it against the five rungs, but it is my
-   reading of the definitions, not a decision. Two genuine judgement calls: should a
-   `viewer` see their own team's tree or the whole portfolio, and should a `manager` be
-   able to move a job between stages? In `supabase-schema.md`.
-2. **Health status inputs.** When known, it gets built as a calculation.
-3. **Property questions**, in `supabase-schema.md` under Properties: related properties
-   (a field whose value is another record — some stop being properties and become their
-   own tables); select options (an options table, or point at an existing lookup);
-   whether `required` means "cannot leave this stage" or "cannot create the record";
-   and whether any field needs history.
-4. **Finance is not a rung.** A ladder says *how much* you can do; Finance says *what you
-   own* — commercial fields — at an ordinary level everywhere else. Recommendation is
-   property-level grants (`property_grants(property_def_id, permission, can_edit)`),
-   since properties are already rows and Selections and Estimating will want the same.
+> **Moved.** This list is now [Still needs a decision](#still-needs-a-decision-loftys-not-mine)
+> below, updated: health status and phase ownership have become the two that block real
+> screens, and the property questions are unchanged.
 
 ---
 
-## Next: `jobs`
+## Next: Phase B, the import
 
-The table is sketched in `supabase-schema.md` and its columns are in the dictionary as
-**To do**. What is already settled: `project_no` denormalised with a sync trigger,
-`combined_job_number` generated, the two address ids, `status` from `record_status`, and
-no type column (inherited via `job_display`).
+Phase A is structure. Phase B is the first real data, and it is also the **checkpoint** —
+anything structurally wrong surfaces here, while changing it is still cheap.
 
-What is not: `stage_id` vs `job_stages` authority, `owning_team_id`, `assignee_id`, the
-contract/deposit/drawings fields (free text today, a lookup if the states settle), tags,
-and dependencies.
+### What the import actually is
 
-After that: `teams`, `property_defs` / `property_values`, `activity`, templates,
-permissions.
+Roughly **200 live jobs** out of the old system, plus closed and cancelled ones on a
+best-effort basis. The renumbering is not the hard part; two other things are.
+
+1. **The old system has no project key.** Its job numbers are a flat five-digit sequence
+   with nothing linking the jobs on one site — they are not even contiguous. Projects have
+   to be **reconstructed from the address, by hand, with a person checking each grouping**.
+   Getting it wrong is not cosmetic: project properties read through to every job, so a job
+   filed under the wrong project silently inherits the wrong council, the wrong developer
+   and the wrong site facts.
+2. **Job sequence must follow lot order, not old-number order.** In Lofty's own example the
+   old numbers are scrambled relative to the lots, so sorting by old number produces
+   "1106-03 = Lot 4". Lot-versus-sequence confusion is forever.
+
+Closed and cancelled jobs whose grouping is not confidently known each become a
+**single-job project**. That asserts nothing nobody verified, and project numbers are cheap
+integers.
+
+`job_number_old` is a nullable unique alternate key, searchable for the life of the system —
+old paperwork, SharePoint folders and invoices will carry it for years.
+
+### The order of work
+
+| | |
+| --- | --- |
+| 1 | **The spine review below** — before anything is loaded |
+| 2 | Spreadsheet of the ~200 live jobs, grouped into projects and sequenced by lot, checked by a person |
+| 3 | Load into `import_staging_jobs` verbatim, then create the spine from it |
+| 4 | Walk the hard scenarios end to end: the corner-block rename, a project split into four lots, a variation raised in construction, a job held by three teams at once |
+
+**Do the import before go-live.** The natural-key decision is safe *because* numbers are
+assigned once and never reassigned. A number correction after Lofty is working in the app
+means live job numbers moving under people, which is a different and much worse problem.
+If the schedule slips past go-live, revisit that decision rather than the schedule.
+
+---
+
+## When to change the UI: before the import, or after?
+
+Asked directly, and worth recording because the answer is not "one or the other". Three
+categories, and **only one is time-critical**.
+
+### 1. The spine — do it now, before Phase B
+
+What a project *is*, what a job *is*, the number format, what a project groups, what lives
+on `addresses`. These are real columns on tables the import writes into, and the groupings
+are checked by hand.
+
+Changing them afterwards means a data migration over 200 rows whose relationships a person
+verified — and `job_id` goes on contracts, so it cannot quietly move.
+
+**This is the only category that gets meaningfully more expensive after the import**, and
+it is a small one. A focused half-day is enough: create a project, add its jobs, rename an
+address, open the job drawer, and write down anything that makes you say *"that is not how
+we work"*.
+
+### 2. Anything that becomes a property — any time
+
+*"I want to track X on a job"* is usually **not a schema change at all**. Properties are
+rows in `property_values`, which is the entire reason that design was chosen over adding
+columns. Adding one is an insert, before or after the import, before or after go-live.
+
+New tables are the same: nothing exists to backfill, so a table added later costs no more
+than one added now.
+
+The expensive operation is **changing or removing a column that already holds data** —
+not adding.
+
+### 3. Presentation — after Phase B, and better for the wait
+
+Layout, which columns show, how the board groups, wording, colours. Cheap to change
+forever, so there is no deadline — and **designing them now means designing blind.** Every
+board currently has zero rows on it. Whether grouping by team works, whether the card
+carries the right four facts, whether the table needs to scroll, whether 200 jobs need
+virtualising: none of those questions can be answered against an empty screen, and all of
+them answer themselves the day real jobs land.
+
+### So, concretely
+
+```
+spine review  →  import  →  UI and features  →  go-live
+   (now)          (B)          (after B)
+```
+
+The one thing to watch: if a feature idea turns out to need a new column on `projects` or
+`jobs` rather than a property, it belongs in step 1 with the spine, not in step 3. The test
+is *"does this change what a job is, or just what we know about one?"*
+
+---
+
+## Still needs a decision (Lofty's, not mine)
+
+Carried forward and still open. The first two block real screens.
+
+1. **What makes a job "at risk"?** *Status* is what a person sets; *health* is what the
+   system works out — from what? Past the phase's expected days, a required field still
+   empty, a blocked dependency, some combination? Reports can no longer show a fabricated
+   percentage, but it has nothing to compute a real one from either. Kanban-by-health is
+   specified and unbuildable until this is answered.
+2. **Who owns each phase, and how long should it take?** `pipeline_stages` now carries an
+   owning team and the app reads it — but **those values were seeded by me, not by Lofty**,
+   and they need confirming. `pipeline_stage_expected_days` is null for all nine; there is
+   no SLA anywhere until somebody sets one.
+   Three vocabularies disagree here, and one of them mixes teams with job titles: the
+   preconstruction schedule names *Sales Administration*, *Contracts Administrator*,
+   *Preconstruction Manager*, *Production Estimator* and *Accounts*.
+3. **The real checkpoints and the real field list.** The 57-step preconstruction schedule
+   and the ~1,200-step process map are the source, both still being revised, and both
+   needing each step mapped to a team by hand. **Do not seed from the current map** — its
+   named people are known to be stale.
+4. **The `permission_grants` matrix.** Two genuine judgement calls: should a `viewer` see
+   their own team's tree or the whole portfolio, and should a `manager` move a job between
+   stages?
+5. **Property questions** — related properties, select options, whether `required` means
+   "cannot leave this stage" or "cannot create the record", and whether any field needs
+   history.
+6. **Finance is not a rung.** A ladder says *how much* you can do; Finance says *what you
+   own*. Recommendation stands: property-level grants, since properties are already rows
+   and Selections and Estimating will want the same.
+
+---
+
+## Phase C, after the import
+
+| | |
+| --- | --- |
+| Permissions | Permission sets, the `private` schema and its helpers, entity grants |
+| Property types | The property enums **alone** — never used in the migration that creates them (the `0014` lesson) |
+| Properties | `property_defs` seeded from the eleven in `schema-plan.md`; `property_options`; `property_values`; `property_grants`; `property_value_history` |
+| Wiring | `pipeline_stage_properties`, `pipeline_stage_tasks`, required-to-exit and required-to-create triggers |
+| Process import | Team processes as pipelines; the map's steps mapped to teams by hand |
+| Automations | `pg_cron` 1.6.4 and `pg_net` 0.20.4 are already installed |
+
+One thing to carry into Phase C: **two of the eleven property definitions are already real
+columns** — site address on `addresses`, project type on `projects`. They were grouped with
+the properties by the app, which is worth noticing before Phase C gives a fact a second
+home.
 
 ---
 
