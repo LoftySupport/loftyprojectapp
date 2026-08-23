@@ -126,6 +126,20 @@ export function createStubRepository(): Repository {
         "Creating a job needs Supabase — set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY."
       );
     },
+    async createJobsFromSplit(): Promise<Job[]> {
+      throw new Error(
+        "Splitting a project into jobs needs Supabase — set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY."
+      );
+    },
+
+    // Refuse rather than resolve. A delete that quietly succeeds against nothing is the
+    // worst of the three answers: the row is still there and the screen says it went.
+    async deleteJob(): Promise<void> {
+      throw new Error("Removing a job needs Supabase.");
+    },
+    async deleteProject(): Promise<void> {
+      throw new Error("Removing a project needs Supabase.");
+    },
 
     // ---- lookups: the business process ----------------------------------
     async listStages(): Promise<Stage[]> { return SEED_STAGES; },

@@ -881,9 +881,66 @@ export interface NewProject {
   address: NewAddress;
   /** Required. A project without a type cannot be reported on, grouped or filtered. */
   projectType: ProjectType;
+  /**
+   * How many dwellings are intended, captured at creation.
+   *
+   * Deliberately not the same fact as how many jobs exist, which is counted and never
+   * stored — "we planned four lots and got three" needs both numbers. It is also what
+   * the Create jobs action offers as its default count, which is the only reason the
+   * form asks for it at creation rather than later.
+   */
+  proposedDwellings?: number | null;
   status?: RecordStatus;
   startDate?: IsoDate | null;
   targetCompletion?: IsoDate | null;
+}
+
+/**
+ * Splitting a project into its lots, in one go.
+ *
+ * The alternative is the New job dialog n times, which is how it works today and is
+ * wrong in a way that matters beyond tedium: each of those jobs points at the *project's*
+ * address row, so none of them carries its own lot number, and "Lot 3, Corner Street"
+ * has nowhere to live.
+ *
+ * A split gives every job an address of its own — a copy of the project's current
+ * address taken at that moment, with the lot number set. That copy is what makes the
+ * original address meaningful: a later change to the project's address does not rewrite
+ * what the jobs were originally called.
+ */
+/**
+ * The most jobs one split will create.
+ *
+ * Not a database limit — a typo guard. Lofty's biggest sites are tens of dwellings, so a
+ * mistyped "400" is a mistake every time, and 400 rows of junk on a real project is
+ * tedious to undo one Remove button at a time.
+ *
+ * Here rather than in the repository so the form and the write share one number without
+ * a component importing the module that holds the Supabase client.
+ */
+export const MAX_SPLIT = 60;
+
+export interface JobSplit {
+  projectId: number;
+  /** How many jobs to create. */
+  count: number;
+  /**
+   * Required, and not defaulted — the same reason `NewJob.owningTeam` is not. One team
+   * for the batch: at a split every lot is with whoever is starting the site, and they
+   * diverge later.
+   */
+  owningTeam: TeamId;
+  /**
+   * The lot number the first job carries; the rest count up from it. Defaults to 1.
+   *
+   * Settable because a second split on the same project is adding lots 5 and 6, not
+   * repeating 1 and 2 — the job sequence continues from its high-water mark, and the lot
+   * numbering has to be able to as well.
+   */
+  startLot?: number;
+  /** Stage and status for every job in the batch. Both default as a single job does. */
+  stage?: StageName;
+  status?: RecordStatus;
 }
 
 /**

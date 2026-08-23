@@ -602,3 +602,16 @@ code { overflow-wrap: anywhere; }
    cannot answer; this says it can, and the answer is none — so it is muted body text
    rather than the token's orange, which would read as another unbound field. */
 .field-empty { font: var(--font-text2-normal); color: var(--secondary-text-color); }
+
+/* The split dialog's "this is what you will get" line. Quiet, because it is a
+   restatement of the fields above rather than a warning about them. */
+.create-preview {
+  grid-column: 1 / -1;
+  padding: 10px 12px;
+  border-left: 2px solid var(--primary-color, #0073ea);
+  background: var(--primary-background-hover-color, rgba(0, 115, 234, 0.06));
+  border-radius: 0 4px 4px 0;
+}
+
+/* Right-hand side of a panel head: a count and an action, on one line. */
+.panel-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }

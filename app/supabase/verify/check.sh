@@ -22,7 +22,14 @@ HOST="${LOFTY_PG_HOST:-/var/tmp}"
 
 PSQL="psql -h $HOST -p $PORT -U postgres -d lofty_verify -q"
 echo
-$PSQL -f "$HERE/behaviour.sql"   || { echo "BEHAVIOUR CHECKS FAILED"; exit 1; }
+# Captured, printed, then GREPPED. It used to be `$PSQL -f ... || exit`, which catches a
+# psql error and nothing else — so a probe that printed "FAIL: ..." and exited cleanly was
+# reported as a pass. Found by adding a check that failed and watching check.sh say green.
+BEHAVIOUR=$($PSQL -f "$HERE/behaviour.sql" 2>&1) || { echo "$BEHAVIOUR"; echo "BEHAVIOUR CHECKS FAILED"; exit 1; }
+echo "$BEHAVIOUR"
+if grep -qE "FAIL:|ERROR:" <<<"$BEHAVIOUR"; then
+  echo; echo "A BEHAVIOUR CHECK FAILED — see the FAIL/ERROR line above."; exit 1
+fi
 echo
 $PSQL -f "$HERE/constraints.sql" 2>&1 | grep -E "NOTICE|WARNING|^---" | sed 's/^psql.*NOTICE:  //; s/^psql.*WARNING:  //'
 
