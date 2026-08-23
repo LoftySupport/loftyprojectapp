@@ -649,6 +649,43 @@ The catch-all is deliberately **not** `force`d. Without `force`, Netlify serves 
 file when one exists, which is what stops `/assets/*`, `/prototype.html` and the images
 from being swallowed by the SPA fallback.
 
+`app/netlify.toml` is **gone**. Netlify reads the `netlify.toml` at the site's base
+directory and nothing else, and this site's base is the repo root — so that file had been
+dead since the app stopped publishing from `app/`. Everything in it (the SPA catch-all,
+the noindex and frame headers, `NODE_VERSION`) is in the root file already. It was kept
+around as a second source of truth for a setting only one file decides, which is the
+shape of a config that eventually contradicts the live one.
+
+### The environment variables, and where the security actually comes from
+
+Verified against the live site, 23 August:
+
+| key | set | read by |
+| --- | --- | --- |
+| `VITE_SUPABASE_URL` | ✅ | the app |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | ✅ `sb_publishable_…` | the app |
+| `SUPABASE_ANON_KEY` | ✅ | **nothing** — added by the Supabase Netlify extension |
+| `SUPABASE_DATABASE_URL` | ✅ | **nothing** — same |
+
+**There is no `service_role` key on the site**, which is the check that actually matters.
+
+Keeping these in Netlify rather than in the repo is right and worth doing — a key in git
+is a key in every clone, every fork and every screen share forever. But it is worth being
+exact about what it does *not* do: **a `VITE_`-prefixed variable is inlined into the
+JavaScript bundle at build time and shipped to every browser.** Built with a probe value,
+the string appears verbatim in `dist/assets/*.js`. Anyone who opens the site can read the
+publishable key out of it.
+
+That is fine, and by design — the publishable key is meant to be public. **RLS is what
+protects the data**, which is why `rls.sql` exists and why every `can()` in the app needs
+a matching policy. The one thing that would be catastrophic is a `service_role` key behind
+a `VITE_` prefix, because that key bypasses RLS entirely and would be published the same
+way. Never add one.
+
+Both `VITE_` variables are scoped to context `all`, so **deploy previews point at
+production Supabase**. Fine while there are no jobs; scope them per context at Phase B,
+when a preview branch can write to real records.
+
 `binding-template` still shows the pre-simplification project (name, division, client,
 manager) and the old six roles. **It is deliberately not swept forward** — keeping the
 same decisions in two codebases is the drift this whole setup exists to avoid. It is the
@@ -877,10 +914,17 @@ Carried forward and still open. The first two block real screens.
 2. ~~**Who owns each phase?**~~ **Answered, 23 August: nobody does.** Several teams work
    inside one phase. `0035` nulled the owning team on every lifecycle stage and the column
    now means what it says on a *nested* pipeline, where a team does own its own columns.
-   Still open: **how long should a phase take?** `pipeline_stage_expected_days` is null on
-   all five, so there is no SLA anywhere until somebody sets one — and it may be that a
-   duration belongs on a nested pipeline's stages rather than on a lifecycle phase, which
-   is a question worth asking before filling any of them in.
+   ~~Still open: how long should a phase take?~~ **Answered, 23 August: there is no set
+   limit — it has to be editable.** Which is what the schema already says, and that is
+   worth stating explicitly so nobody "finishes" it later by inventing five numbers:
+   `pipeline_stage_expected_days` is **nullable with no default**, so null means *no
+   agreed duration* rather than *nobody has filled it in yet*, and `> 0` is the only
+   constraint on it. It is null on all five lifecycle phases and should stay that way
+   until someone at Lofty sets one deliberately.
+
+   What is *not* built is a screen to edit it. RLS says superadmin — proved in `rls.sql`,
+   which watches a manager be refused — so the control belongs in Setup → Process
+   alongside the stage editor, and neither exists yet.
 3. **The real checkpoints and the real field list.** Lofty, 23 August: *"the process map
    will always be an evolving process"*, and the certain property list is not ready to be
    split into job-level and project-level yet. So this is not a question waiting on one
@@ -893,8 +937,27 @@ Carried forward and still open. The first two block real screens.
    took. Ten stages of a nested pipeline is enough to prove the whole mechanism at a scale
    where being wrong is cheap.
 4. **The `permission_grants` matrix.** ~~Should a `viewer` see their own team's tree or the
-   whole portfolio~~ — **parked, 23 August: viewers are not in use yet.** Still open:
-   should a `manager` move a job between stages?
+   whole portfolio~~ — **parked, 23 August: viewers are not in use yet.** ~~Should a
+   `manager` move a job between stages?~~ — **answered, 23 August: yes, between stages and
+   lifecycle stages both.**
+
+   The policies already permitted it: `permission_level` is an ordered enum and every write
+   policy on `jobs` and `job_pipeline_positions` compares `>= 'user'`, which a manager
+   clears. So nothing changed in the schema — but nothing in the harness ran at `manager`
+   either, which made "a manager can move a job" a fact about how an enum sorts rather than
+   an observed one. `rls.sql` now proves all four halves of the answer, each watched failing
+   first:
+
+   | | |
+   | --- | --- |
+   | the lifecycle — a column on `jobs` | a manager moves it |
+   | a team's process — a row in `job_pipeline_positions` | a manager moves it |
+   | what the stages *are* | superadmin only |
+   | how long a phase should take | superadmin only |
+
+   The last two are the line that answer does not cross, and they are the reason the first
+   two mean anything: moving a job between stages and renaming the lifecycle for the whole
+   company are different acts.
 5. **Property questions** — related properties, select options, and whether any field
    needs history. ~~Whether `required` means "cannot leave this stage" or "cannot create
    the record"~~ is **answered, 23 August: both, per property.** Which confirms the two

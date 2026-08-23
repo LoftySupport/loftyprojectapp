@@ -171,3 +171,107 @@ begin
   end;
 end $$;
 reset role;
+
+-- ---------------------------------------------------------------------------
+-- A MANAGER MOVES JOBS. Lofty's answer, 23 August: "a manager can move jobs between
+-- stages and lifecycle stages."
+--
+-- The policies already permit it — `permission_level` is an ordered enum and every write
+-- policy on `jobs` and `job_pipeline_positions` compares `>= 'user'`, which a manager
+-- clears. Probed anyway, and this is the reason: nothing in the harness ran at `manager`
+-- at all, so "a manager can move a job" was a fact about how the enum sorts rather than
+-- an observed one. The next person to tighten a policy to `= 'user'`, or to reorder the
+-- enum, would break Lofty's stated rule and no check would say so.
+--
+-- Both halves are probed because they are two different mechanisms wearing one sentence:
+-- the lifecycle is a column on `jobs`, a team's own process is a row in
+-- `job_pipeline_positions`, and a policy change could easily reach one and not the other.
+-- The claim has to go first. `reset role` puts the session back to postgres but leaves
+-- request.jwt.claim.sub set, so guard_privileged_profile_columns() still saw the test
+-- user — at `user` level — and refused with "Only an admin may change a profile". The
+-- guard was right; the probe was asking as somebody it had just demoted.
+reset request.jwt.claim.sub;
+update profiles set profile_permission = 'manager'
+ where profile_email = 'behaviour-test@lofty.com.au';
+
+\echo '=== a MANAGER ==='
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+select 'permission: ' || current_permission()::text;
+
+\echo '--- probes (each must print ok) ---'
+do $$
+declare
+  moved integer;
+begin
+  -- 1. The lifecycle. A column on `jobs`, so RLS filters rows rather than raising —
+  --    ROW_COUNT, not the absence of an exception. Three probes in 0035 reported a pass
+  --    because a statement that touches nothing succeeds.
+  begin
+    update jobs set job_stage = 'Construction' where job_stage is distinct from 'Construction';
+    get diagnostics moved = row_count;
+    if moved > 0 then
+      raise notice 'ok  a manager moved % job(s) to another lifecycle phase', moved;
+    else
+      raise warning 'FAIL: a manager could not move a job between lifecycle phases';
+    end if;
+  exception when others then raise warning 'FAIL: unexpected moving a lifecycle phase (%)', sqlerrm;
+  end;
+
+  -- 2. A team's own process. A row in job_pipeline_positions, moved to a different stage
+  --    of the SAME pipeline — the composite foreign key refuses a stage from another one,
+  --    so a careless probe here fails for that reason and reads as a permission problem.
+  begin
+    update job_pipeline_positions jpp
+       set pipeline_stage_id = (
+             select ps.pipeline_stage_id from pipeline_stages ps
+             where ps.pipeline_id = jpp.pipeline_id
+               and ps.pipeline_stage_id is distinct from jpp.pipeline_stage_id
+             order by ps.pipeline_stage_position limit 1);
+    get diagnostics moved = row_count;
+    if moved > 0 then
+      raise notice 'ok  a manager moved % job(s) to another stage of their pipeline', moved;
+    else
+      raise warning 'FAIL: a manager could not move a job between pipeline stages';
+    end if;
+  exception when others then raise warning 'FAIL: unexpected moving a pipeline stage (%)', sqlerrm;
+  end;
+
+  -- 3. And the line that answer does NOT cross. Moving a job between stages and changing
+  --    what the stages ARE are different acts; the second is superadmin's. Without this
+  --    the two probes above would still pass if somebody opened `pipeline_stages` to
+  --    everybody, which is the change that would quietly let a manager rename the
+  --    lifecycle for the whole company.
+  begin
+    insert into pipeline_stages (pipeline_id, pipeline_stage_name, pipeline_stage_position)
+    values ((select pipeline_id from pipelines where pipeline_key = 'build_lifecycle'), 'Invented', 99);
+    raise warning 'FAIL: a manager added a stage to the lifecycle';
+  exception
+    when insufficient_privilege then raise notice 'ok  a manager moves jobs between stages but cannot change what the stages are';
+    when others then raise warning 'FAIL: unexpected adding a stage (%)', sqlerrm;
+  end;
+
+  -- 4. How long a phase should take. Lofty's answer, same day: "there is no set limit for
+  --    how long a phase should take — this needs to be an editable property." Nullable
+  --    with no default is the "no set limit" half, and constraints.sql holds the check
+  --    that a nonsense one is refused. This is the other half: that it can be edited at
+  --    all, and by whom. Superadmin, because it is a property of the process rather than
+  --    of a job — the same line as 3.
+  begin
+    update pipeline_stages set pipeline_stage_expected_days = 30;
+    if found then
+      raise warning 'FAIL: a manager set how long a phase should take — that is the process, not a job';
+    else
+      raise notice 'ok  expected days is editable, but not below superadmin';
+    end if;
+  exception
+    when insufficient_privilege then raise notice 'ok  expected days is editable, but not below superadmin';
+    when others then raise warning 'FAIL: unexpected setting expected days (%)', sqlerrm;
+  end;
+end $$;
+reset role;
+
+-- Left as it was found, so the file can be read twice and mean the same thing.
+reset request.jwt.claim.sub;
+update profiles set profile_permission = 'user'
+ where profile_email = 'behaviour-test@lofty.com.au';
