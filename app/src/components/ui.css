@@ -458,6 +458,82 @@ code { overflow-wrap: anywhere; }
   /* A 24px × is the WCAG minimum and no more than that. On a touch screen it is the
      control everyone reaches for first, so give it a finger. */
   .drawer-head > :last-child { min-width: 40px; min-height: 40px; }
+
+  /* Vibe's Modal is a fixed 540px at every viewport — no max-width, no media query of
+     its own. Measured on a 390px phone it sat at left -69px, right 471px: 69px off one
+     edge and 70px off the other, so "New project" lost the left of every label and the
+     right of its own Create button. The form behind the app's primary create action was
+     unreachable on a phone, which is the worst of the faults found here.
+
+     Both hooks together on purpose. `role="dialog"` is the semantic one and survives a
+     Vibe upgrade; the hashed-prefix class keeps this off the popovers, which are dialogs
+     too and are sized by their trigger rather than by the viewport. */
+  [role="dialog"][class*="modal_"] {
+    max-width: calc(100vw - 2 * var(--space-16));
+  }
+}
+
+/* The cap on the form, and the reason the footer under it stays on screen.
+
+   `dvh` not `vh`: a phone's viewport height changes as the URL bar slides away, and `vh`
+   is measured against the tallest it ever gets — so the box is taller than the screen at
+   the moment someone is actually typing in it.
+
+   The cap alone is not enough, and a percentage of the viewport can never be. Vibe's modal
+   is `max-height: 80%` with `overflow: hidden`, and the form plus the dialog's own header
+   and footer add up to more than that on any phone held sideways — so the footer is drawn
+   past the bottom of a box that hides what it cannot fit. Measured on the three commonest
+   landscape sizes, before this rule:
+
+       844x390   modal ends 351, Create ends 363   clipped
+       740x360   modal ends 324, Create ends 342   clipped
+       667x375   modal ends 338, Create ends 353   clipped
+
+   Cancel and Create, both cut off, on the app's primary create form. Raising the cap made
+   it worse rather than better, which is the tell that a viewport percentage is the wrong
+   instrument: the form's share has to be what is left after the chrome, not a fraction of
+   the whole.
+
+   So the arithmetic is handed to flexbox instead. The dialog is already a flex column;
+   the wrapper Vibe puts between it and our form is `display: block` with the default
+   `min-height: auto`, which is what refuses to shrink. Give that wrapper `min-height: 0`
+   and the form room to shrink inside it, and the footer cannot be pushed out however
+   short the screen is — the cap below is then only an upper bound for tall ones. */
+[role="dialog"][class*="modal_"] > :has(> .create-form) {
+  display: flex;
+  min-height: 0;
+}
+.create-form {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: min(60dvh, 520px);
+}
+
+/* ---- touch ---------------------------------------------------------------
+   Not a width question. An iPad in landscape is 1024px wide and still driven by a
+   finger, and a 360px browser window on a desktop is not — so these key off the
+   pointer rather than the viewport.
+
+   iOS Safari zooms the page whenever a focused input's font-size is under 16px, and
+   it does not zoom back out. Every field in this app is a Vibe `size="small"`, which
+   computes to 14px — measured, not assumed — so tapping the search box threw the whole
+   layout sideways and left it there. Raising the text to 16px is the only fix Safari
+   accepts; `maximum-scale=1` in the viewport tag would also stop it and takes pinch-zoom
+   away from everyone, which is a WCAG 1.4.4 failure.
+
+   `max()` rather than a flat 16px so a future larger default is not shrunk to meet it. */
+@media (pointer: coarse) {
+  /* `input[class]` rather than `input`. Vibe sets the size on its own class, which beats
+     a bare element selector — the first version of this rule was correct CSS that changed
+     nothing, and the field measured 14px with the media query matching. The attribute
+     selector costs one point of specificity and wins without an !important. Both forms
+     listed so an unclassed input is covered too. */
+  input, textarea, select,
+  input[class]:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea[class],
+  select[class] {
+    font-size: max(16px, 1rem);
+  }
 }
 
 /* One card per row on a phone. `minmax(0, 1fr)` rather than the shared auto-fill
@@ -466,6 +542,17 @@ code { overflow-wrap: anywhere; }
    sideways as a result. */
 @media (max-width: 480px) {
   .card-grid, .phase-grid { grid-template-columns: minmax(0, 1fr); }
+
+  /* The board column is 300px, and a 320px phone leaves 288px between the page's
+     margins — so the narrowest phone could never show one whole column, only 288 of
+     300, however far you scrolled. Twelve pixels, and the right-hand edge of every
+     card cut off permanently.
+
+     A cap rather than a stretch: the column keeps its 300px wherever 300px fits, so
+     the board looks the same on every phone that can afford it and only gives way on
+     the ones that cannot. The board still scrolls sideways between columns — that is
+     what a board is — but each one now arrives whole. */
+  .board-column { width: min(300px, calc(100vw - 2 * var(--space-16))); }
 }
 
 /* ---- accessibility corrections on Vibe defaults --------------------------
@@ -490,7 +577,8 @@ code { overflow-wrap: anywhere; }
    a Create button you have to scroll the page to reach is a Create button
    people miss. */
 .create-form {
-  max-height: min(60vh, 520px);
+  /* The cap itself is under "narrow screens" below, in dvh — a phone's viewport height
+     changes as the URL bar moves and `vh` does not notice. */
   overflow-y: auto;
   padding-right: 4px;
 }

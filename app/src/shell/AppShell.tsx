@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
-  Avatar, Dialog, DialogContentContainer, Label, Text, TextField
+  Avatar, Dialog, DialogContentContainer, Text, TextField
 } from "@vibe/core";
 import {
   Board, Chart, Doc, Home, Menu, NavigationChevronLeft, NavigationChevronRight,
   Person, SettingsKnobs, Workspace
 } from "@vibe/icons";
 import { initialsOf, useAuth } from "../data/AuthProvider";
-import { useRepository } from "../data/DataProvider";
 import { useSearch } from "../data/SearchProvider";
 import { greetingName } from "../data/types";
 import "./AppShell.css";
@@ -197,7 +196,6 @@ function Rail({
  * top bar is for search and identity.
  */
 export function AppShell() {
-  const repo = useRepository();
   const { query, setQuery } = useSearch();
   const { error: authError } = useAuth();
   const location = useLocation();
@@ -297,12 +295,6 @@ export function AppShell() {
           </span>
 
           <div className="app-header-right">
-            <Label
-              kind="fill"
-              color="dark"
-              text="Unbound"
-              aria-label={`Reading through the ${repo.name} repository`}
-            />
             <UserMenu />
           </div>
         </header>
@@ -314,16 +306,6 @@ export function AppShell() {
             </Text>
           </div>
         )}
-
-        <div className="app-banner" role="status">
-          {/* `ellipsis={false}` or Vibe holds this on one line and pushes the page into a
-              horizontal scrollbar below about 1000px. */}
-          <Text type="text2" element="span" ellipsis={false}>
-            <strong>Supabase binding template.</strong> Every{" "}
-            <code className="sb-token">{"{{table.column}}"}</code> marks a value that comes from
-            Supabase. Layout, spacing and components are final — only the data is unbound.
-          </Text>
-        </div>
 
         <main id="main" role="main" tabIndex={-1} className="app-main">
           <Outlet />

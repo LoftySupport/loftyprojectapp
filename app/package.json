@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "dictionary": "node scripts/generate-dictionary.mjs"
+    "dictionary": "node scripts/generate-dictionary.mjs",
+    "responsive": "node scripts/responsive.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.111.0",
@@ -24,6 +25,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.4",
     "oxlint": "^1.75.0",
+    "playwright": "^1.57.0",
     "typescript": "~6.0.2",
     "vite": "^8.2.0"
   }
