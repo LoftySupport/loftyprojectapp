@@ -956,17 +956,11 @@ Carried forward and still open. The first two block real screens.
    That is `pipelines.pipeline_parent_stage_id` doing exactly what it was built for, and
    nothing in the schema has to change to carry it — pipelines nest to any depth.
 
-   **This corrects the reading of the preconstruction CSV.** Those `Ordered` / `Received`
-   / `Amendment ordered` / `Amendment received` / `Signed off` cells are not tasks and
-   they are certainly not properties: they are the **stages of the level-3 pipeline**, and
-   a job sits in exactly one of them at a time. Which is the right answer for a document
-   lifecycle — you cannot have both ordered and received — and it is what makes
-   *"how long did Working Drawings take"* a subtraction over `job_stage_events` rather
-   than a pivot over anything.
-
-   The amendment loop is the case the model was built for: moving back from *Received* to
-   *Amendment ordered* moves the position and leaves the history alone. Not snakes and
-   ladders.
+   ~~**This corrects the reading of the preconstruction CSV.** Those `Ordered` /
+   `Received` / `Signed off` cells are the stages of the level-3 pipeline.~~
+   **Superseded the same day — see the entry below. They are dated properties, with a
+   thin position on top.** Left struck through rather than deleted, because the reasoning
+   that produced it is the reasoning somebody will reproduce.
 
    The 37 rows in the CSV are the level-2 list **before** it is refined to 10–15, so
    nothing gets seeded from it yet — several rows are plainly the same stage
@@ -980,6 +974,71 @@ Carried forward and still open. The first two block real screens.
    through Working Drawings, Design want it on a kanban, and they want to know how long it
    took. Ten stages of a nested pipeline is enough to prove the whole mechanism at a scale
    where being wrong is cheap.
+
+   ### The steps are dated properties, and the position sits on top
+
+   **Decided 23 August, reversing the reading above.** Lofty: *"I think they still need to
+   be properties, or if we want to sync them with other systems or pull out 'when did we
+   receive x on job y' will we be able to do it if they are events?"*
+
+   Three reasons, in ascending order of how decisive they are.
+
+   **1. The duration argument was backwards.** Reading a step's date out of a dated
+   property is `signed_off − ordered` — two values, a self-join. Reading it out of an
+   event log means finding the entry into a named stage of a named pipeline, and taking
+   the earliest if there are two. The property is the simpler of the pair, not the more
+   complex one. The earlier note here said the opposite and was wrong.
+
+   **2. Sync.** A property is `(job, named field, typed value)`, which is already the
+   shape of an export column, a webhook field and a Trello custom field. An event log is
+   `(job, from, to, when)` and every consumer would have to reduce it before it means
+   anything — the same logic rewritten in each system, going wrong differently in each.
+   Not hypothetical: the sheet contains a step called *"Log on Sales Estimating Trello"*.
+
+   **3. Nine of the thirty-seven stages are not sequences at all**, which is what settles
+   it. A position is one at a time; these track several independent things at once.
+
+   | Stage | Cells | Independent things |
+   | --- | --- | --- |
+   | Retaining, Fencing & BOB | 10 | retaining · fencing · BOB · registered mail · overdue letter |
+   | Finance | 9 | loan approval · commencement letter · proof of finance · progress claim · settlement |
+   | Working Drawings | 7 | plan check · amends · amended plans · signature |
+   | Selections | 6 | consultant · scheme · gallery appointment · variation · booklet |
+   | SA Water | 6 | docs · cross-check · invoice · meters on site |
+   | Electrical/NBN | 5 | plan · permit · NBN layout to CMAs |
+   | CPC | 5 | sheet · variation · vegetation check |
+   | HOW | 4 | amount · insurance · invoice |
+   | Deposits | 4 | deposits · contract value · Stage 1 |
+
+   Fencing can be at *registered mail collected* while retaining is still unanswered. One
+   position cannot hold that; only independent fields can. Two of those cells end in a
+   question mark and were never steps.
+
+   **What stays a position.** A kanban card sits in exactly one column, and Design wanting
+   to watch a job go through Working Drawings is a request for a column. So both, which is
+   two of the plan's four axes kept apart on purpose:
+
+   | Question | Answered by |
+   | --- | --- |
+   | Where is this job now? | `job_pipeline_positions` |
+   | When did we receive the FCR? | `property_values`, a dated field |
+   | How long did Working Drawings take? | two dated fields, subtracted |
+   | What do we send Trello? | the fields, by name |
+   | Which jobs are waiting on a plan? | the position — a board filter, not an EAV scan |
+
+   And the case that makes the separation worth having: an amendment sends the job
+   backwards, the position moves, and the dates already recorded do not. Nothing is lost
+   and nothing is re-entered.
+
+   **The costs, stated.** About 126 property definitions for preconstruction — defined
+   once against the stage that captures them via `pipeline_stage_properties`, not per job.
+   And the one that does not go away: **the board cannot cheaply filter or sort on a
+   property**, so anything the board filters by stays a real column or a position.
+
+   **Two questions this raises, both open:** should the position move by itself when a
+   date is filled in (tempting, but an amendment would jump it forward again — probably
+   derive as a default and allow an override), and does each step want a date *and a
+   person*? The second is nearly free now and impossible to backfill.
 4. **A project may be known only by its locality — `0037`.** Lofty, 23 August, asked
    whether a project is ever created without an address: *"No — but only the suburb and
    postcode and state will be known for sure. The project name may be something general
