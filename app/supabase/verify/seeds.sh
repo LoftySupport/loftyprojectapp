@@ -18,8 +18,14 @@
 #   Eight data-dictionary entries marked `created` named view columns renamed by 0028 —
 #   the reference document was wrong about the thing it exists to be right about.
 #
+#   The import spreadsheet's stage dropdown still offered the nine phases 0035 replaced
+#   with five, and its example row used one of the seven the database now refuses. A wrong
+#   dropdown is worse than a free-text box, because it reads as the list of permitted
+#   answers.
+#
 # `listStages()` and `listTeams()` read the real tables now, but the stub still carries
-# copies for a run with no backend, and those copies have no reason to stay correct except
+# copies for a run with no backend, and `import/build_template.py` carries its own so the
+# sheet builds without a database. None of those copies has a reason to stay correct except
 # that somebody remembers. Everything below compares one of these pairs.
 #
 # Usage:  ./seeds.sh          (expects replay.sh to have run)
@@ -47,7 +53,28 @@ DB_COLUMNS=$($PSQL -c "select table_name || '.' || column_name
                        from information_schema.columns
                        where table_schema = 'public';")
 
-DB_STAGES="$DB_STAGES" DB_TEAMS="$DB_TEAMS" DB_COLUMNS="$DB_COLUMNS" python3 - "$SRC" <<'PY'
+# The lists the import spreadsheet offers as dropdowns. Same pairs-that-must-agree problem
+# as the stub's, one layer further out: build_template.py holds them as literals so the
+# sheet can be built without a database, and nothing noticed when 0035 cut the lifecycle to
+# five and left nine in the spreadsheet.
+DB_ACTIVE_TEAMS=$($PSQL -c "select team_id || '|' || team_name from teams
+                            where team_is_active order by team_position;")
+DB_STATES=$($PSQL -c "select enumlabel from pg_enum e join pg_type t on t.oid = e.enumtypid
+                      where t.typname = 'au_state' order by e.enumsortorder;")
+DB_COUNCILS=$($PSQL -c "select enumlabel from pg_enum e join pg_type t on t.oid = e.enumtypid
+                        where t.typname = 'sa_council' order by e.enumsortorder;")
+# Anonymous inline checks, so they are found by what they mention rather than by name.
+DB_JOB_STATUS_DEF=$($PSQL -c "select pg_get_constraintdef(oid) from pg_constraint
+                              where conrelid = 'jobs'::regclass and contype = 'c'
+                                and pg_get_constraintdef(oid) like '%job_status%';")
+DB_PROJECT_TYPE_DEF=$($PSQL -c "select pg_get_constraintdef(oid) from pg_constraint
+                                where conrelid = 'projects'::regclass and contype = 'c'
+                                  and pg_get_constraintdef(oid) like '%project_type%';")
+
+DB_STAGES="$DB_STAGES" DB_TEAMS="$DB_TEAMS" DB_COLUMNS="$DB_COLUMNS" \
+DB_ACTIVE_TEAMS="$DB_ACTIVE_TEAMS" DB_STATES="$DB_STATES" DB_COUNCILS="$DB_COUNCILS" \
+DB_JOB_STATUS_DEF="$DB_JOB_STATUS_DEF" DB_PROJECT_TYPE_DEF="$DB_PROJECT_TYPE_DEF" \
+python3 - "$SRC" "$HERE/../import/build_template.py" <<'PY'
 import os, re, sys
 
 src = sys.argv[1]
@@ -175,6 +202,87 @@ print(
     f"note: {len(documented)} columns documented, {len(undocumented)} in the schema with "
     f"no entry (mostly tasks, variations, documents and comments, from 0030-0032)"
 )
+
+
+# 5 — the import spreadsheet's dropdowns against the database.
+#
+#     build_template.py holds its lists as literals so the sheet builds with no database
+#     connection, and its own docstring says "verify/seeds.sh is what catches them
+#     drifting" — which it did not, until this. 0035 cut the lifecycle from nine phases to
+#     five and retyped job_stage to text with a check; the spreadsheet went on offering the
+#     old nine, so seven of its stage values were ones the database would refuse, and the
+#     example row shipped with one of them. A dropdown is worse than a free-text box when
+#     it is wrong: it reads as the list of permitted answers.
+tpl = open(sys.argv[2]).read()
+
+def literals(name):
+    """The quoted strings in a `NAME = [...]` list, in order.
+
+    Brackets are counted rather than matched with a regex: STAGES and TEAMS close with a
+    `]` in column 1 and STATUSES, STATES and PROJECT_TYPES close at the end of their one
+    line, and a pattern anchored to either shape returns None for the other — which this
+    reports as "cannot read the list" rather than as a mismatch, and would be read as a
+    broken check rather than as a broken sheet."""
+    m = re.search(r'^%s = \[' % name, tpl, re.M)
+    if m is None:
+        return None
+    i, depth = m.end() - 1, 0
+    for j in range(i, len(tpl)):
+        if tpl[j] == "[":
+            depth += 1
+        elif tpl[j] == "]":
+            depth -= 1
+            if depth == 0:
+                return re.findall(r'"((?:[^"\\]|\\.)*)"', tpl[i:j])
+    return None
+
+def constraint_values(env):
+    """The quoted literals of an `x in (...)` check, in the order Postgres renders them."""
+    return re.findall(r"'((?:[^']|'')*)'::text", os.environ[env])
+
+# TEAMS is a list of (slug, label) pairs; the pairs flatten in order, so zip them back.
+team_pairs = literals("TEAMS")
+tpl_teams = list(zip(team_pairs[0::2], team_pairs[1::2])) if team_pairs else []
+db_active_teams = [tuple(l.split("|", 1)) for l in os.environ["DB_ACTIVE_TEAMS"].splitlines() if l]
+
+def env_lines(name):
+    return [l for l in os.environ[name].splitlines() if l]
+
+# Councils compare as sets: the enum's order is declaration order and a dropdown's is a
+# presentation choice, so requiring them to agree would fail on a difference that is not
+# a defect. Membership is the thing that decides whether a typed council is accepted.
+tpl_councils = re.search(r'^COUNCILS = """(.*?)"""', tpl, re.S | re.M)
+tpl_councils = tpl_councils.group(1).split("|") if tpl_councils else []
+db_councils = env_lines("DB_COUNCILS")
+
+for label, got, want, ordered in (
+    ("stage",        literals("STAGES"),        env_lines("DB_STAGES"),                    True),
+    ("state",        literals("STATES"),        env_lines("DB_STATES"),                    True),
+    ("job_status",   literals("STATUSES"),      constraint_values("DB_JOB_STATUS_DEF"),    True),
+    ("project_type", literals("PROJECT_TYPES"), constraint_values("DB_PROJECT_TYPE_DEF"),  True),
+    ("owning_team",  tpl_teams,                 db_active_teams,                           True),
+    ("council",      sorted(tpl_councils),      sorted(db_councils),                       False),
+):
+    if got is None:
+        check(f"build_template.py declares a {label} list this can read", False)
+        continue
+    fmt = lambda xs: " | ".join(x if isinstance(x, str) else "=".join(x) for x in xs)
+    # Long lists report the difference, not both sides. The councils are 68 each way, and
+    # a one-council drift printed as two 68-item lines is a diff the reader has to do by
+    # eye — which is how a failure gets skimmed past.
+    if len(got) > 12 or len(want) > 12:
+        # Only the councils take this path, and they are compared as sets — so a
+        # difference here is always a membership difference and never an order one.
+        detail = ("only in the sheet: " + (fmt(sorted(set(got) - set(want))) or "—")
+                  + "\nonly in the database: " + (fmt(sorted(set(want) - set(got))) or "—"))
+    else:
+        detail = "sheet: " + fmt(got) + "\ndb:    " + fmt(want)
+    check(
+        f"the sheet's {len(got)} {label} values match the database"
+        + (", in order" if ordered else " (as a set)"),
+        got == want,
+        detail,
+    )
 
 sys.exit(1 if failed else 0)
 PY

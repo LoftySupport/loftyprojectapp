@@ -30,10 +30,13 @@ TEAMS = [
     ("maintenance", "Maintenance"),
     ("lofty_general", "Lofty General"),
 ]
+# The five lifecycle phases, and only those. This list held the old nine until 0035
+# retyped `jobs.job_stage` to text with a check on the five — so seven of the values
+# this dropdown offered were ones the database would refuse on insert, and the example
+# row below used one of them. Kept honest by verify/seeds.sh, which reads this file.
 STAGES = [
-    "Sales & Acquisition", "Planning & Engineering", "Working Drawings & Contracts",
-    "Pre-construction", "Scheduling & Estimating", "Construction",
-    "Post-construction & Closeout", "Handover", "Maintenance",
+    "Acquisition & Development", "Pre-construction", "Construction",
+    "Handover & Maintenance", "Closed",
 ]
 STATUSES = ["on_track", "at_risk", "behind_schedule", "on_hold", "completed", "cancelled", "archived"]
 PROJECT_TYPES = ["residential", "commercial", "development"]
@@ -98,19 +101,21 @@ wb = Workbook()
 ws = wb.active
 ws.title = "Jobs"
 
-legend = [
-    ("Lofty job import — spine review", 14, True, HEAD),
-    ("One row per JOB. Fill the amber columns; the grey one is a formula, leave it alone.", 10, False, None),
-    ("Row 4 is an example — delete it before sending this back.", 10, False, None),
-]
-for i, (text, size, bold, colour) in enumerate(legend, start=1):
-    c = ws.cell(row=i, column=1, value=text)
-    c.font = Font(name=FONT, size=size, bold=bold, color=colour or INK)
-
 HEADER_ROW = 5
 EXAMPLE_ROW = 6
 FIRST_DATA_ROW = 7
 LAST_ROW = 306          # 300 rows of room; Lofty has ~200 live jobs
+
+legend = [
+    ("Lofty job import — spine review", 14, True, HEAD),
+    ("One row per JOB. Fill the amber columns; the grey one is a formula, leave it alone.", 10, False, None),
+    # Interpolated, not typed. This line said "row 4" while the example sits in row 6
+    # and the How-to sheet said 6 — two instructions disagreeing about which row to delete.
+    (f"Row {EXAMPLE_ROW} is an example — delete it before sending this back.", 10, False, None),
+]
+for i, (text, size, bold, colour) in enumerate(legend, start=1):
+    c = ws.cell(row=i, column=1, value=text)
+    c.font = Font(name=FONT, size=size, bold=bold, color=colour or INK)
 
 for idx, (name, width, kind, help_text) in enumerate(COLUMNS, start=1):
     letter = get_column_letter(idx)
@@ -130,7 +135,7 @@ example = {
     "lot_number": "1", "street_number": "", "street": "Corner Street", "unit_level": "",
     "suburb": "Golden Grove", "state": "SA", "postcode": "5125",
     "council": "City of Tea Tree Gully", "project_type": "residential",
-    "owning_team": "Acquisition & Development", "stage": "Sales & Acquisition",
+    "owning_team": "Acquisition & Development", "stage": "Acquisition & Development",
     "job_status": "on_track", "notes": "example row — delete me",
 }
 
@@ -248,7 +253,7 @@ BLOCKS = [
           "you something is miscoded.\n\n"
           "Every header has a comment with the detail — hover the little red corner."),
     ("h2", "Before you send it back"),
-    ("p", "•  Delete the example row (row 6)\n"
+    ("p", f"•  Delete the example row (row {EXAMPLE_ROW})\n"
           "•  Check jobs_on_site against what you know for a handful of sites\n"
           "•  Every SA address needs a council\n"
           "•  Every row needs a lot_number or a street_number — either will do, not neither\n"

@@ -108,9 +108,17 @@ Three got past review in a week: the property definitions above, a commented-out
 `created` for view columns renamed by `0028`.
 
 `seeds.sh` asserts all of it — seeded stages and teams against their tables, every column
-in each `*_COLUMNS` select list, and every `created` dictionary entry. **Each assertion
-was watched failing before being trusted.** It also reports, without failing, that 188
-real columns have no dictionary entry: everything from `0030`–`0032`.
+in each `*_COLUMNS` select list, every `created` dictionary entry, and the six dropdown
+lists in `import/build_template.py` against the lifecycle's stages, the `au_state` and
+`sa_council` enums, the check constraints on `job_status` and `project_type`, and the
+active teams. **Each assertion was watched failing before being trusted.** It also
+reports, without failing, that 188 real columns have no dictionary entry: everything from
+`0030`–`0032`.
+
+The spreadsheet lists were added after the sheet was found still offering the nine
+lifecycle stages `0035` had replaced with five — seven values the database would refuse on
+insert, in a dropdown, which reads as the list of permitted answers. The script's own
+docstring already said `seeds.sh` was what caught it drifting; it was not, until now.
 
 ---
 

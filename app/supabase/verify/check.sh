@@ -59,11 +59,13 @@ fi
 # here that looks at that seam.
 "$HERE/embeds.sh" || { echo; echo "EMBEDS WOULD FAIL AT RUNTIME — see above."; exit 1; }
 
-# The layer above that again: lists the app holds in TypeScript that must agree with lists
-# the database holds in rows. Five property definitions named a stage that does not exist
-# and simply did not render — no error, no empty state, a heading that counted eleven above
-# a table of six. Nothing here talks to Postgres about DDL; it compares two sets of strings
-# that have no reason to stay equal except that somebody remembered.
+# The layer above that again: lists held outside the database that must agree with lists
+# the database holds in rows — the app's TypeScript seeds, and the import spreadsheet's
+# dropdowns. Five property definitions named a stage that does not exist and simply did not
+# render — no error, no empty state, a heading that counted eleven above a table of six;
+# and the spreadsheet went on offering the nine stages 0035 replaced with five. Nothing here
+# talks to Postgres about DDL; it compares sets of strings that have no reason to stay equal
+# except that somebody remembered.
 echo
 "$HERE/seeds.sh" || { echo; echo "A SEEDED LOOKUP DISAGREES WITH THE DATABASE — see above."; exit 1; }
 
