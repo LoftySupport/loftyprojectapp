@@ -940,7 +940,38 @@ Carried forward and still open. The first two block real screens.
    alongside the stage editor, and neither exists yet.
 3. **The real checkpoints and the real field list.** Lofty, 23 August: *"the process map
    will always be an evolving process"*, and the certain property list is not ready to be
-   split into job-level and project-level yet. So this is not a question waiting on one
+   split into job-level and project-level yet.
+
+   **The shape of the process is now settled, though, and it is three levels deep.**
+   Lofty, same day: *"there are so many columns which is why we need sub processes for
+   each stage… the preconstruction stage maybe has 10–15 main stages and then each sub
+   stage is another mini process."*
+
+   | Level | What it is | How many | Where it lives |
+   | --- | --- | --- | --- |
+   | 1 | The build lifecycle | 5 | `pipelines` where `pipeline_key = 'build_lifecycle'` |
+   | 2 | Pre-construction's main stages | 10–15 | a pipeline with `pipeline_parent_stage_id` → Pre-construction |
+   | 3 | The mini process inside each | ~2–7 | a pipeline per main stage, parented to it |
+
+   That is `pipelines.pipeline_parent_stage_id` doing exactly what it was built for, and
+   nothing in the schema has to change to carry it — pipelines nest to any depth.
+
+   **This corrects the reading of the preconstruction CSV.** Those `Ordered` / `Received`
+   / `Amendment ordered` / `Amendment received` / `Signed off` cells are not tasks and
+   they are certainly not properties: they are the **stages of the level-3 pipeline**, and
+   a job sits in exactly one of them at a time. Which is the right answer for a document
+   lifecycle — you cannot have both ordered and received — and it is what makes
+   *"how long did Working Drawings take"* a subtraction over `job_stage_events` rather
+   than a pivot over anything.
+
+   The amendment loop is the case the model was built for: moving back from *Received* to
+   *Amendment ordered* moves the position and leaves the history alone. Not snakes and
+   ladders.
+
+   The 37 rows in the CSV are the level-2 list **before** it is refined to 10–15, so
+   nothing gets seeded from it yet — several rows are plainly the same stage
+   (three site inspections, three deposits) and a few are cancellation paths rather than
+   stages at all. So this is not a question waiting on one
    answer — it is a moving target, and the design has to survive it moving.
 
    Two consequences worth holding onto. **Nothing gets seeded from the current map**, and
@@ -949,7 +980,33 @@ Carried forward and still open. The first two block real screens.
    through Working Drawings, Design want it on a kanban, and they want to know how long it
    took. Ten stages of a nested pipeline is enough to prove the whole mechanism at a scale
    where being wrong is cheap.
-4. **The `permission_grants` matrix.** ~~Should a `viewer` see their own team's tree or the
+4. **A project may be known only by its locality — `0037`.** Lofty, 23 August, asked
+   whether a project is ever created without an address: *"No — but only the suburb and
+   postcode and state will be known for sure. The project name may be something general
+   like the 'Mt Gambier division'."*
+
+   The schema made that impossible, reproduced against production before anything was
+   changed:
+
+   ```
+   insert into addresses (address_suburb, address_state, address_postcode, address_council)
+   values ('Mount Gambier', 'SA', '5290', 'City of Mount Gambier');
+   ERROR:  null value in column "address_street_1" violates not-null constraint
+   ```
+
+   *"A project must always have an address"* was right; the assumption underneath it was
+   not. **Not every address is a street address** — Lofty buys land before it has a
+   frontage, and a development is named after its locality long before any lot has one.
+
+   The guarantee that was being protected is real but belongs to **jobs**: a job is one
+   dwelling somebody pours a slab for, and "somewhere in Mount Gambier" is not a place you
+   can build. So it moved down to where it is true — `addresses` now accepts a locality,
+   and a trigger on `jobs` refuses one. `address_precision` is generated, not stored, so
+   it can never claim to be a street address while having no street.
+
+   Both halves are probed in `constraints.sql` and both were watched failing.
+
+5. **The `permission_grants` matrix.** ~~Should a `viewer` see their own team's tree or the
    whole portfolio~~ — **parked, 23 August: viewers are not in use yet.** ~~Should a
    `manager` move a job between stages?~~ — **answered, 23 August: yes, between stages and
    lifecycle stages both.**
@@ -971,12 +1028,12 @@ Carried forward and still open. The first two block real screens.
    The last two are the line that answer does not cross, and they are the reason the first
    two mean anything: moving a job between stages and renaming the lifecycle for the whole
    company are different acts.
-5. **Property questions** — related properties, select options, and whether any field
+6. **Property questions** — related properties, select options, and whether any field
    needs history. ~~Whether `required` means "cannot leave this stage" or "cannot create
    the record"~~ is **answered, 23 August: both, per property.** Which confirms the two
    separate booleans already specified — `property_def_required_to_exit` and
    `property_def_required_to_create` — rather than one flag with a mode.
-6. **Finance is not a rung.** A ladder says *how much* you can do; Finance says *what you
+7. **Finance is not a rung.** A ladder says *how much* you can do; Finance says *what you
    own*. Recommendation stands: property-level grants, since properties are already rows
    and Selections and Estimating will want the same.
 

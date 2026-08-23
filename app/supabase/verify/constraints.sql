@@ -275,4 +275,31 @@ BEGIN
     END IF;
   EXCEPTION WHEN OTHERS THEN
     RAISE WARNING 'FAIL: a real lifecycle stage was rejected (%)', SQLERRM; END;
+
+  -- 0037 moved "an address needs a street and a number" off `addresses` and onto jobs,
+  -- because Lofty buys land before it has a frontage and a project may sit at nothing
+  -- more than a suburb. The guarantee is only worth relaxing if the half that still
+  -- matters is enforced somewhere, so this is that half: a job is a dwelling, and
+  -- "somewhere in Mount Gambier" is not a place anybody pours a slab.
+  BEGIN
+    INSERT INTO addresses (address_suburb, address_state, address_postcode, address_council)
+    VALUES ('Mount Gambier', 'SA', '5290', 'City of Mount Gambier');
+    RAISE NOTICE 'ok  a project-shaped address needs no street';
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'FAIL: a locality address was refused (%)', SQLERRM; END;
+
+  BEGIN
+    UPDATE jobs SET job_current_address_id =
+      (SELECT address_id FROM addresses WHERE address_precision = 'locality' LIMIT 1)
+     WHERE job_id = '1106-02';
+    GET DIAGNOSTICS touched = ROW_COUNT;
+    IF touched = 0 THEN
+      RAISE WARNING 'FAIL: the address probe matched no job — the fixture it targets is gone';
+    ELSE
+      RAISE WARNING 'FAIL: a job was moved to a locality address it cannot be built at';
+    END IF;
+  EXCEPTION
+    -- The trigger raises a bare exception, so this catches by class rather than by code.
+    WHEN raise_exception THEN RAISE NOTICE 'ok  a job cannot sit at a locality — it needs a street';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on the job address guard (%)', SQLERRM; END;
 END $$;
