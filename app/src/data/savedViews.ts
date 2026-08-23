@@ -1,32 +1,27 @@
 /**
- * Saved views — the phases of the build, as slices of the eight stages.
+ * Saved views — named slices of the lifecycle.
  *
- * The eight stages are the *whole* process, start to finish. A phase is a run of
- * consecutive stages within it, and Preconstruction and Construction are two of them:
- * everything up to "Released to Construction" is preconstruction, and the build itself
- * is construction. That is Lofty's own vocabulary, taken from the preconstruction
- * process map rather than guessed.
+ * A saved view is a *named set of stages*, nothing more. It answers "which part of the
+ * book am I looking at", which is a different question from the toolbar's filters
+ * ("narrow what is in front of me") and from the header search ("find this one thing").
  *
- * A saved view is a *named set of stages*, nothing more. It answers "which phase am I
- * looking at", which is a different question from the toolbar's filters ("narrow what is
- * in front of me") and from the header search ("find this one thing").
+ * **These were rewritten when the lifecycle went from nine stages to five.** The old
+ * three — Pre-construction, Construction, Post-construction — were slices of a nine-stage
+ * list, and four of those nine turned out to be processes running *inside* a phase rather
+ * than phases: Planning & Engineering, Working Drawings & Contracts, Scheduling &
+ * Estimating and Post-construction & Closeout. Slicing five phases into three named runs
+ * mostly restates the phases, so the useful cut is a different one — live work versus
+ * finished — and a team wanting to see its own process wants a nested pipeline, not a
+ * saved view over this one.
  *
  * Defined in code for now rather than in the database. Each one resolves to a URL —
- * /jobs?saved=construction — so a view is already something you can send to somebody,
- * and the query string is the whole of its state. That is the point of doing it this way
- * round: when saved views become user-created, the table stores a query string per row
- * and everything below keeps working unchanged. Nothing here has to be unpicked.
+ * /jobs?saved=live — so a view is already something you can send to somebody, and the
+ * query string is the whole of its state. When saved views become user-created, the table
+ * stores a query string per row and everything below keeps working unchanged.
  *
- * Two things to know before editing:
- *
- *   Names must match the `stage` enum exactly — see SEED_STAGES in stubRepository.ts.
- *   `stagesInView` intersects against the live list, so a typo shows up as a phase that
- *   matches nothing rather than as an error.
- *
- *   The phase called Preconstruction contains a *stage* also called Preconstruction.
- *   That collision is Lofty's, not this file's, and it is left alone deliberately —
- *   inventing a different word for one of them would put a name in the app that nobody
- *   at Lofty uses. Worth revisiting if it reads badly on the board.
+ * Names must match `pipeline_stages` exactly. `stagesInView` intersects against the live
+ * list, so a typo shows up as a phase that matches nothing rather than as an error —
+ * and `verify/seeds.sh` fails when the two lists disagree.
  */
 
 export interface SavedView {
@@ -43,37 +38,24 @@ export const SAVED_VIEWS: SavedView[] = [
     stages: []
   },
   {
-    // Everything from the PWA being issued through to "Released to Construction" — the
-    // 57 steps of the preconstruction process map. Selections and Estimating are both
-    // inside it, which is why Scheduling & Estimating belongs here and not with the
-    // build: the production estimate, the finance approval and the construction release
-    // all happen before a slab is poured.
-    slug: "preconstruction",
-    label: "Pre-construction",
+    // The cut people actually make. "Show me what is on" is asked far more often than
+    // "show me everything in Construction", which the Stage filter already does.
+    slug: "live",
+    label: "Live",
     stages: [
-      "Sales & Acquisition",
-      "Planning & Engineering",
-      "Working Drawings & Contracts",
+      "Acquisition & Development",
       "Pre-construction",
-      "Scheduling & Estimating"
+      "Construction",
+      "Handover & Maintenance"
     ]
   },
   {
-    slug: "construction",
-    label: "Construction",
-    stages: ["Construction"]
-  },
-  {
-    // INFERRED, unlike the two above. Lofty named preconstruction and construction; what
-    // to call the two stages after handover, and whether they are one phase or two, has
-    // not been said. Grouped and named here so the last two stages are reachable rather
-    // than orphaned — rename or split it when the business says.
-    slug: "post-construction",
-    label: "Post-construction",
-    // Three, not two: the database split "Handover & maintenance" into Handover and
-    // Maintenance, so leaving Maintenance out here would make the last stage of a job's
-    // life unreachable from any saved view.
-    stages: ["Post-construction & Closeout", "Handover", "Maintenance"]
+    // Closed is the one terminal phase. A job that stopped for a bad reason is
+    // *cancelled*, which is a status — so this is not "everything finished with", and
+    // deliberately so: position says where a job got to, status says how it went.
+    slug: "closed",
+    label: "Closed",
+    stages: ["Closed"]
   }
 ];
 

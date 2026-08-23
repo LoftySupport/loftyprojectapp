@@ -1,11 +1,12 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   Button, Modal, ModalContent, ModalFooter, ModalHeader, Text, TextField
 } from "@vibe/core";
 import { Select, toOptions } from "./Select";
 import { useRepository } from "../data/DataProvider";
+import { useTeams } from "../data/useLookups";
 import {
-  AU_STATES, PROJECT_TYPE_LABELS, PROJECT_TYPES, SA_COUNCILS, TEAM_SEED,
+  AU_STATES, MAX_SPLIT, PROJECT_TYPE_LABELS, PROJECT_TYPES, SA_COUNCILS,
   type NewAddress, type ProjectType, type SaCouncil, type TeamId
 } from "../data/types";
 import "./ui.css";
@@ -125,6 +126,39 @@ function AddressFields({
   );
 }
 
+/**
+ * The owning team, from `teams` rather than from TEAM_SEED.
+ *
+ * It read the constant directly, which is the one thing the repository seam exists to
+ * prevent — and it mattered here more than most, because this value is a foreign key.
+ * Retired teams are filtered out: `useTeams().teamNames` is active-only, and a picker
+ * must not offer Commercial or Executive.
+ */
+function OwningTeamField({
+  value,
+  onChange,
+  hint
+}: {
+  value: TeamId | null;
+  onChange: (t: TeamId) => void;
+  hint: string;
+}) {
+  const { teams } = useTeams();
+  const active = teams.filter(t => t.isActive);
+
+  return (
+    <Field label="Owning team" required hint={hint}>
+      <Select
+        aria-label="Owning team"
+        options={active.map(t => ({ value: t.id, label: t.name }))}
+        value={value}
+        onChange={v => onChange(v as TeamId)}
+        placeholder={active.length ? "Select a team" : "Loading teams…"}
+      />
+    </Field>
+  );
+}
+
 const EMPTY_ADDRESS: NewAddress = {
   street1: "", suburb: "", state: "SA", postcode: "", council: null,
   lotNumber: null, streetNumber: null, street2: null
@@ -153,26 +187,40 @@ const addressIsValid = (a: NewAddress): boolean =>
 export function NewProjectDialog({
   show,
   onClose,
-  onCreated
+  onCreated,
+  onSplit
 }: {
   show: boolean;
   onClose: () => void;
   onCreated?: () => void;
+  /** Called with the new project and its dwelling count, to open the split dialog. */
+  onSplit?: (projectId: number, dwellings: number) => void;
 }) {
   const repo = useRepository();
   const [address, setAddress] = useState<NewAddress>(EMPTY_ADDRESS);
   const [projectType, setProjectType] = useState<ProjectType | null>(null);
+  const [dwellings, setDwellings] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [created, setCreated] = useState<string | null>(null);
+  const [created, setCreated] = useState<number | null>(null);
+
+  // Blank is a real answer — "we do not know yet" — and is not the same as zero. Parsed
+  // once here so the button, the insert and the follow-on split all read one value.
+  const dwellingCount =
+    dwellings.trim() === "" ? null
+    : /^[0-9]+$/.test(dwellings.trim()) ? Number(dwellings.trim())
+    : NaN;
+  const dwellingsValid =
+    dwellingCount === null || (Number.isInteger(dwellingCount) && dwellingCount >= 1);
 
   // projectType is required by the database now, so the button waits for it rather than
   // letting the insert come back with a not-null violation.
-  const valid = addressIsValid(address) && projectType !== null;
+  const valid = addressIsValid(address) && projectType !== null && dwellingsValid;
 
   const reset = () => {
     setAddress(EMPTY_ADDRESS);
     setProjectType(null);
+    setDwellings("");
     setError(null);
     setCreated(null);
     setSaving(false);
@@ -182,10 +230,14 @@ export function NewProjectDialog({
     setSaving(true);
     setError(null);
     try {
-      const project = await repo.createProject({ address, projectType: projectType! });
+      const project = await repo.createProject({
+        address,
+        projectType: projectType!,
+        proposedDwellings: dwellingCount
+      });
       // The project number is the thing the person came for — it is what they will
       // quote on the phone — and it does not exist until the sequence issues it.
-      setCreated(String(project.id));
+      setCreated(project.id);
       onCreated?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -201,10 +253,13 @@ export function NewProjectDialog({
         {created ? (
           <Result>
             Project <strong>{created}</strong> created.
+            {dwellingCount
+              ? ` Next: create its ${dwellingCount} job${dwellingCount === 1 ? "" : "s"}.`
+              : " Add its jobs from the project, or one at a time from the Jobs board."}
           </Result>
         ) : (
           <div className="create-form">
-            <Field label="Project type" hint="jobs inherit this — they never set their own">
+            <Field label="Project type" required hint="jobs inherit this — they never set their own">
               <Select
                 aria-label="Project type"
                 options={PROJECT_TYPES.map(t => ({ value: t, label: PROJECT_TYPE_LABELS[t] }))}
@@ -213,18 +268,45 @@ export function NewProjectDialog({
                 placeholder="Select a type"
               />
             </Field>
+            <Field
+              label="Proposed dwellings"
+              hint="how many lots are intended — leave blank if the count is not settled"
+            >
+              <TextField
+                value={dwellings}
+                onChange={setDwellings}
+                placeholder="4"
+                id="project-dwellings"
+                inputAriaLabel="Proposed dwellings"
+                validation={
+                  dwellingsValid ? undefined : { status: "error", text: "A whole number, 1 or more." }
+                }
+              />
+            </Field>
             <AddressFields value={address} onChange={setAddress} />
           </div>
         )}
         {error && <Problem>{error}</Problem>}
       </ModalContent>
+      {/* The split is offered here rather than only on the project, because "make the
+          project, then make its four lots" is one action in somebody's head and the
+          moment they have just typed the dwelling count is the moment they mean it. */}
       <ModalFooter
         primaryButton={
           created
-            ? { text: "Done", onClick: () => { reset(); onClose(); } }
+            ? dwellingCount
+              ? {
+                  text: `Create ${dwellingCount} job${dwellingCount === 1 ? "" : "s"}`,
+                  onClick: () => { const id = created; reset(); onClose(); onSplit?.(id, dwellingCount); }
+                }
+              : { text: "Done", onClick: () => { reset(); onClose(); } }
             : { text: saving ? "Creating…" : "Create project", onClick: save, disabled: !valid || saving }
         }
-        secondaryButton={created ? undefined : { text: "Cancel", onClick: () => { reset(); onClose(); } }}
+        secondaryButton={
+          created
+            ? dwellingCount ? { text: "Not now", onClick: () => { reset(); onClose(); } } : undefined
+            : { text: "Cancel", onClick: () => { reset(); onClose(); } }
+        }
       />
     </Modal>
   );
@@ -305,15 +387,11 @@ export function NewJobDialog({
               />
             </Field>
 
-            <Field label="Owning team" required hint="who is accountable for this job">
-              <Select
-                aria-label="Owning team"
-                options={TEAM_SEED.filter(t => t.isActive).map(t => ({ value: t.id, label: t.name }))}
-                value={owningTeam}
-                onChange={v => setOwningTeam(v as TeamId)}
-                placeholder="Select a team"
-              />
-            </Field>
+            <OwningTeamField
+              value={owningTeam}
+              onChange={setOwningTeam}
+              hint="who is accountable for this job"
+            />
 
             {/* Most jobs sit at the project's address, so that is the default and the
                 fields stay out of the way until someone says otherwise. */}
@@ -383,5 +461,171 @@ function Result({ children }: { children: ReactNode }) {
     <div className="create-result" role="status">
       <Text type="text1">{children}</Text>
     </div>
+  );
+}
+
+/**
+ * Split a project into its lots.
+ *
+ * The one thing worth understanding before changing this: each job gets **its own copy**
+ * of the project's address with a lot number on it, not a pointer at the project's row.
+ * That copy is what the immutable original address is *of* — rename the project to
+ * "20A Corner Street" a month later and Lot 3 still remembers being created as
+ * "Lot 3, Corner Street", which is what somebody searching an old contract will type.
+ *
+ * `startLot` exists because a second split is adding lots 5 and 6, not repeating 1 and 2.
+ * It defaults to one past the highest lot already on the project, which is right almost
+ * always and editable for when it is not.
+ */
+export function SplitProjectDialog({
+  show,
+  onClose,
+  projectId,
+  suggestedCount,
+  nextLot,
+  onCreated
+}: {
+  show: boolean;
+  onClose: () => void;
+  /** Null while no project is chosen — the dialog renders nothing. */
+  projectId: number | null;
+  /** Proposed dwellings, when the project has one. */
+  suggestedCount?: number | null;
+  /** One past the highest lot number already used. */
+  nextLot?: number;
+  onCreated?: () => void;
+}) {
+  const repo = useRepository();
+  const [count, setCount] = useState("");
+  const [startLot, setStartLot] = useState("");
+  const [owningTeam, setOwningTeam] = useState<TeamId | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [created, setCreated] = useState<string[] | null>(null);
+
+  // Defaults arrive as props and the fields start blank, so seed them when the dialog
+  // opens rather than on every render — otherwise typing over the default fights back.
+  useEffect(() => {
+    if (!show) return;
+    setCount(suggestedCount ? String(suggestedCount) : "");
+    setStartLot(String(nextLot ?? 1));
+    setOwningTeam(null);
+    setError(null);
+    setCreated(null);
+    setSaving(false);
+  }, [show, projectId, suggestedCount, nextLot]);
+
+  const whole = (v: string) => /^[0-9]+$/.test(v.trim()) && Number(v.trim()) >= 1;
+  // Same ceiling the repository enforces, imported rather than retyped — two copies
+  // of a limit drift, and the one people meet first should not be the looser one.
+  const countValid = whole(count) && Number(count) <= MAX_SPLIT;
+  const lotValid = whole(startLot);
+  const valid = countValid && lotValid && owningTeam !== null;
+
+  const n = Number(count);
+  const first = Number(startLot);
+
+  async function save() {
+    if (!projectId || !owningTeam) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const jobs = await repo.createJobsFromSplit({
+        projectId,
+        count: n,
+        owningTeam,
+        startLot: first
+      });
+      setCreated(jobs.map(j => j.id));
+      onCreated?.();
+    } catch (e) {
+      // Shown verbatim, and the repository's message says how many were made before it
+      // stopped — which is the difference between "try again" and "you now have three".
+      setError(e instanceof Error ? e.message : String(e));
+      onCreated?.();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (projectId === null) return null;
+
+  return (
+    <Modal show={show} onClose={onClose} id="split-project">
+      <ModalHeader title={`Create jobs on project ${projectId}`} />
+      <ModalContent>
+        {created ? (
+          <Result>
+            Created <strong>{created.length}</strong> job{created.length === 1 ? "" : "s"}:{" "}
+            {created.join(", ")}.
+          </Result>
+        ) : (
+          <div className="create-form">
+            <Field label="How many jobs" required hint="one per dwelling">
+              <TextField
+                value={count}
+                onChange={setCount}
+                placeholder="4"
+                id="split-count"
+                inputAriaLabel="How many jobs"
+                validation={
+                  count === "" || countValid
+                    ? undefined
+                    : { status: "error", text: `A whole number between 1 and ${MAX_SPLIT}.` }
+                }
+              />
+            </Field>
+
+            <Field label="First lot number" hint="the rest count up from here">
+              <TextField
+                value={startLot}
+                onChange={setStartLot}
+                placeholder="1"
+                id="split-start-lot"
+                inputAriaLabel="First lot number"
+                validation={
+                  startLot === "" || lotValid
+                    ? undefined
+                    : { status: "error", text: "A whole number, 1 or more." }
+                }
+              />
+            </Field>
+
+            <OwningTeamField
+              value={owningTeam}
+              onChange={setOwningTeam}
+              hint="the same team for every job in this batch — they diverge later"
+            />
+
+            {countValid && lotValid && (
+              <div className="create-preview">
+                <Text type="text3" color="secondary" ellipsis={false}>
+                  {n === 1
+                    ? `Lot ${first}, at the project's address.`
+                    : `Lots ${first}–${first + n - 1}, each at the project's address with its own lot number. Job numbers are issued by the database, continuing from any that already exist.`}
+                </Text>
+              </div>
+            )}
+          </div>
+        )}
+        {error && <Problem>{error}</Problem>}
+      </ModalContent>
+      <ModalFooter
+        primaryButton={
+          created
+            ? { text: "Done", onClick: onClose }
+            : {
+                text: saving
+                  ? "Creating…"
+                  : countValid
+                    ? `Create ${n} job${n === 1 ? "" : "s"}`
+                    : "Create jobs",
+                onClick: save,
+                disabled: !valid || saving
+              }
+        }
+        secondaryButton={created ? undefined : { text: "Cancel", onClick: onClose }}
+      />
+    </Modal>
   );
 }

@@ -14,7 +14,9 @@ import { PropertySlots } from "../components/PropertySlots";
 import { Token } from "../components/Token";
 import { Toolbar } from "../components/Toolbar";
 import { toOptions } from "../components/Select";
-import { NewProjectDialog } from "../components/CreateDialogs";
+import { NewProjectDialog, SplitProjectDialog } from "../components/CreateDialogs";
+import { usePermission } from "../data/PermissionProvider";
+import { useRepository } from "../data/DataProvider";
 import "../components/ui.css";
 
 /**
@@ -38,7 +40,12 @@ export function ProjectsPage() {
   const [creating, setCreating] = useState(false);
   // Bumped after a create so the board re-reads. There is no cache to invalidate.
   const [reload, setReload] = useState(0);
+  const refresh = () => setReload(n => n + 1);
   const { projects: all, loading, error } = useBoardRecords(reload);
+
+  // Which project the split dialog is for, and what to pre-fill it with. Held here
+  // rather than in ProjectDetail so the New project dialog can hand straight to it.
+  const [splitting, setSplitting] = useState<{ id: number; count: number | null; nextLot: number } | null>(null);
 
   // No grouping control on this screen, so the value is inert — it still has to be given,
   // and "Stage" is the one the toolbar would show if the control were ever turned on.
@@ -95,7 +102,45 @@ export function ProjectsPage() {
     }
   };
 
-  if (open) return <ProjectDetail project={open} onBack={() => navigate(`/projects${search}`)} />;
+  // The split dialog is rendered in both branches. It lives at page level so the New
+  // project dialog can hand straight to it, and the detail view returns early — so
+  // mounting it only in the list branch means the button on a project opens nothing.
+  const splitDialog = (
+    <SplitProjectDialog
+      show={splitting !== null}
+      onClose={() => setSplitting(null)}
+      projectId={splitting?.id ?? null}
+      suggestedCount={splitting?.count}
+      nextLot={splitting?.nextLot}
+      onCreated={refresh}
+    />
+  );
+
+  if (open) {
+    return (
+      <>
+        {splitDialog}
+        <ProjectDetail
+          project={open}
+          onBack={() => navigate(`/projects${search}`)}
+          onChanged={refresh}
+          onSplit={() =>
+            setSplitting({
+              id: open.projectId,
+              // The proposed count, less what is already there — asking for four when
+              // four exist is almost never what somebody means on a second visit.
+              count: open.proposedDwellings != null
+                ? Math.max(1, open.proposedDwellings - open.jobs.length)
+                : null,
+              // Counted from the jobs already on the project rather than read from their
+              // addresses, which are not wired yet. Pre-filled and editable, not stored.
+              nextLot: open.jobs.length + 1
+            })
+          }
+        />
+      </>
+    );
+  }
   /** Same guard as Jobs: only redirect once there is a list to have missed it in. */
   if (projectNumber && all.length > 0) return <Navigate to={`/projects${search}`} replace />;
 
@@ -137,8 +182,11 @@ export function ProjectsPage() {
       <NewProjectDialog
         show={creating}
         onClose={() => setCreating(false)}
-        onCreated={() => setReload(n => n + 1)}
+        onCreated={refresh}
+        onSplit={(id, count) => setSplitting({ id, count, nextLot: 1 })}
       />
+
+      {splitDialog}
 
       {stale && <PreviousAddressNote />}
 
@@ -194,8 +242,35 @@ export function ProjectsPage() {
   );
 }
 
-function ProjectDetail({ project, onBack }: { project: BoardProject; onBack: () => void }) {
+function ProjectDetail({
+  project,
+  onBack,
+  onSplit,
+  onChanged
+}: {
+  project: BoardProject;
+  onBack: () => void;
+  onSplit: () => void;
+  onChanged: () => void;
+}) {
   const navigate = useNavigate();
+  const repo = useRepository();
+  const { can } = usePermission();
+  const [removing, setRemoving] = useState<string | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+
+  async function removeJob(jobNumber: string) {
+    setRemoving(jobNumber);
+    setRemoveError(null);
+    try {
+      await repo.deleteJob(jobNumber);
+      onChanged();
+    } catch (e) {
+      setRemoveError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRemoving(null);
+    }
+  }
 
   return (
     <>
@@ -248,11 +323,40 @@ function ProjectDetail({ project, onBack }: { project: BoardProject; onBack: () 
         <section className="panel">
           <div className="panel-head">
             <Text type="text2" weight="bold">Jobs on this project ({project.jobs.length})</Text>
+            <div className="panel-actions">
+              {project.proposedDwellings != null && (
+                <Text type="text3" color="secondary">
+                  {project.proposedDwellings} proposed
+                  {project.jobs.length !== project.proposedDwellings &&
+                    ` · ${project.jobs.length} created`}
+                </Text>
+              )}
+              <Button size="small" onClick={onSplit}>+ Create jobs</Button>
+            </div>
           </div>
+
+          {removeError && (
+            <div className="create-problem" role="alert">
+              <Text type="text2" ellipsis={false}>{removeError}</Text>
+            </div>
+          )}
+
+          {project.jobs.length === 0 && (
+            <Text type="text3" color="secondary" ellipsis={false}>
+              No jobs yet. <strong>Create jobs</strong> splits this project into one per lot,
+              each with its own lot address.
+            </Text>
+          )}
           <div className="data-table-wrap">
             <table className="data-table">
               <thead>
-                <tr><th>Job</th><th>Address</th><th>Stage</th><th>Team</th><th>Status</th></tr>
+                <tr>
+                  <th>Job</th><th>Address</th><th>Stage</th><th>Team</th><th>Status</th>
+                  {/* `admins delete jobs` is the policy. The column is hidden below that
+                      level so nobody is offered a button the database will refuse — but
+                      the hiding is courtesy, not security: RLS is what actually stops it. */}
+                  {can("admin") && <th aria-label="Remove"></th>}
+                </tr>
               </thead>
               <tbody>
                 {project.jobs.map(j => (
@@ -267,6 +371,18 @@ function ProjectDetail({ project, onBack }: { project: BoardProject; onBack: () 
                     <td>{j.stage}</td>
                     <td>{j.team}</td>
                     <td><StatusPill status={j.status} /></td>
+                    {can("admin") && (
+                      <td onClick={e => e.stopPropagation()}>
+                        <Button
+                          kind="tertiary"
+                          size="small"
+                          disabled={removing === j.jobNumber}
+                          onClick={() => removeJob(j.jobNumber)}
+                        >
+                          {removing === j.jobNumber ? "Removing…" : "Remove"}
+                        </Button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

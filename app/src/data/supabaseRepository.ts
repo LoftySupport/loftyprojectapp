@@ -1,9 +1,11 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Repository, RepositoryMethod } from "./repository";
 import { createStubRepository } from "./stubRepository";
+import { MAX_SPLIT } from "./types";
 import type {
   ActivityEntry,
   Job,
+  JobSplit,
   NewProfile,
   NewJob,
   NewProject,
@@ -44,7 +46,8 @@ import type {
 // built rather than as two more methods somebody forgot.
 const WIRED: RepositoryMethod[] = [
   "listProjects", "getProject", "listJobs", "getJob",
-  "createProject", "createJob", "currentProfile", "listProfiles",
+  "createProject", "createJob", "createJobsFromSplit", "deleteJob", "deleteProject",
+  "currentProfile", "listProfiles",
   "createProfile", "updateProfile", "setProfileActive", "listActivity",
   "listStages", "listTeams", "listTemplatePhases"
 ];
@@ -85,6 +88,9 @@ const JOB_COLUMNS =
   "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_created_at, job_created_by, job_updated_at, job_updated_by";
 
 const TEAM_COLUMNS = "team_id, team_name, team_position, team_is_active";
+
+const ADDRESS_COLUMNS =
+  "address_id, address_lot_number, address_street_number, address_street_1, address_street_2, address_suburb, address_state, address_postcode, address_council";
 
 const STAGE_COLUMNS =
   "pipeline_stage_id, pipeline_stage_name, pipeline_stage_position, pipeline_stage_owning_team, pipeline_stage_expected_days, pipeline_stage_created_at, pipeline_stage_created_by, pipeline_stage_updated_at, pipeline_stage_updated_by";
@@ -568,6 +574,7 @@ export function createSupabaseRepository(): Repository {
         .insert({
           project_current_address_id: address.address_id,
           project_type: input.projectType,
+          project_proposed_dwellings: input.proposedDwellings ?? null,
           project_status: input.status ?? "on_track",
           project_start_date: input.startDate ?? null,
           project_target_completion: input.targetCompletion ?? null
@@ -619,17 +626,145 @@ export function createSupabaseRepository(): Repository {
           project_id: input.projectId,
           job_owning_team: input.owningTeam,
           job_current_address_id: addressId,
-          // Not "Sales & acquisition". The live enum has been title-cased since somebody
-          // edited the type by hand; the migration files only caught up in 0027, and
-          // this string never did — so every job creation would have been rejected by
-          // the enum. Both now agree.
-          job_stage: input.stage ?? "Sales & Acquisition",
+          // The first of the five lifecycle phases. 0035 cut the list from nine after
+          // Lofty confirmed what the lifecycle actually is, and moved the column from an
+          // enum to text with a check — so a wrong value here is a constraint violation
+          // naming itself rather than a type error.
+          job_stage: input.stage ?? "Acquisition & Development",
           job_status: input.status ?? "on_track"
         })
         .select("*")
         .single();
       if (error) throw error;
       return toJob(data);
+    },
+
+    /**
+     * Split a project into its lots.
+     *
+     * Each job gets a **copy** of the project's current address with its lot number set,
+     * not a pointer at the shared row. That is the whole difference between this and
+     * calling createJob n times, and it is what makes "the original address" mean
+     * anything: rename the project to 20A Corner Street later and Lot 3 still remembers
+     * it was created as Lot 3, Corner Street.
+     *
+     * `job_sequence` is left to assign_job_sequence(), which takes a lock on the parent
+     * project row — so the numbers come out contiguous even though the addresses are
+     * inserted first and the jobs one at a time.
+     *
+     * Not a transaction, because PostgREST gives each request its own. A failure part
+     * way through leaves the jobs it already made, which is the right failure for this
+     * shape: they are real jobs on a real project, visible immediately, and removable
+     * one at a time. Rolling them back would be worse — it would also throw away the
+     * numbers, and a number that was issued should not be handed out twice.
+     */
+    async createJobsFromSplit(input: JobSplit): Promise<Job[]> {
+      if (!Number.isInteger(input.count) || input.count < 1) {
+        throw new Error("Number of jobs must be a whole number, 1 or more.");
+      }
+      if (input.count > MAX_SPLIT) {
+        throw new Error(
+          `${input.count} jobs is more than this creates at once (limit ${MAX_SPLIT}). ` +
+          "Split it into two goes, or check the number is right."
+        );
+      }
+
+      const { data: project, error: projectError } = await client
+        .from("projects")
+        .select("project_current_address_id")
+        .eq("project_id", input.projectId)
+        .maybeSingle();
+      if (projectError) throw projectError;
+      if (!project) throw new Error(`Project ${input.projectId} does not exist.`);
+
+      const { data: source, error: sourceError } = await client
+        .from("addresses")
+        .select(ADDRESS_COLUMNS)
+        .eq("address_id", project.project_current_address_id)
+        .maybeSingle();
+      if (sourceError) throw sourceError;
+      if (!source) throw new Error("That project has no address to copy from.");
+
+      const firstLot = input.startLot ?? 1;
+
+      // address_consolidated is left out: build_consolidated_address() composes it, and
+      // a value sent from here would be overwritten anyway — or worse, not be.
+      const rows = Array.from({ length: input.count }, (_, i) => ({
+        address_lot_number: String(firstLot + i),
+        // A lot has a lot number, not a street number — the street number arrives when
+        // the titles do, which is exactly the rename the address history exists for.
+        address_street_number: null,
+        address_street_1: source.address_street_1,
+        address_street_2: source.address_street_2,
+        address_suburb: source.address_suburb,
+        address_state: source.address_state,
+        address_postcode: source.address_postcode,
+        address_council: source.address_council
+      }));
+
+      const { data: addresses, error: addressError } = await client
+        .from("addresses")
+        .insert(rows)
+        .select("address_id, address_lot_number");
+      if (addressError) throw addressError;
+
+      // Insert order is not return order for a bulk insert, so sort by the lot number we
+      // set rather than trusting the array to come back the way it went in.
+      const ordered = (addresses ?? []).slice().sort(
+        (a, b) => Number(a.address_lot_number) - Number(b.address_lot_number)
+      );
+
+      const created: Job[] = [];
+      for (const address of ordered) {
+        const { data, error } = await client
+          .from("jobs")
+          .insert({
+            project_id: input.projectId,
+            job_owning_team: input.owningTeam,
+            job_current_address_id: address.address_id,
+            job_stage: input.stage ?? "Acquisition & Development",
+            job_status: input.status ?? "on_track"
+          })
+          .select("*")
+          .single();
+        if (error) {
+          // Say how far it got. "duplicate key" on job four of six is a different
+          // problem from the same message on job one, and the caller cannot tell
+          // without being told.
+          throw new Error(
+            created.length
+              ? `Created ${created.length} of ${input.count} jobs, then: ${error.message}`
+              : error.message
+          );
+        }
+        created.push(toJob(data));
+      }
+      return created;
+    },
+
+    /**
+     * RLS decides whether this is allowed; the app only hides the button.
+     *
+     * A delete that removes no rows is not an error in Postgres — the policy filters it
+     * out and the statement succeeds having done nothing. So this counts what came back
+     * and says so, or a viewer would click Remove, see no error, and watch the job stay.
+     */
+    async deleteJob(id: string): Promise<void> {
+      const { data, error } = await client
+        .from("jobs").delete().eq("job_id", id).select("job_id");
+      if (error) throw error;
+      if (!data?.length) {
+        throw new Error(`Job ${id} was not removed — it no longer exists, or you do not have permission.`);
+      }
+    },
+
+    async deleteProject(id: number): Promise<void> {
+      const { data, error } = await client
+        .from("projects").delete().eq("project_id", id).select("project_id");
+      if (error) throw error;
+      if (!data?.length) {
+        throw new Error(`Project ${id} was not removed — it no longer exists, or you do not have permission.`);
+      }
     },
 
     // ---- lookups --------------------------------------------------------

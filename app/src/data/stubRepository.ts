@@ -48,15 +48,11 @@ const SEEDED = {
 };
 
 export const SEED_STAGES: Stage[] = [
-  { id: 1, name: "Sales & Acquisition", position: 1, ...SEEDED },
-  { id: 2, name: "Planning & Engineering", position: 2, ...SEEDED },
-  { id: 3, name: "Working Drawings & Contracts", position: 3, ...SEEDED },
-  { id: 4, name: "Pre-construction", position: 4, ...SEEDED },
-  { id: 5, name: "Scheduling & Estimating", position: 5, ...SEEDED },
-  { id: 6, name: "Construction", position: 6, ...SEEDED },
-  { id: 7, name: "Post-construction & Closeout", position: 7, ...SEEDED },
-  { id: 8, name: "Handover", position: 8, ...SEEDED },
-  { id: 9, name: "Maintenance", position: 9, ...SEEDED }
+  { id: 1, name: "Acquisition & Development", position: 1, ...SEEDED },
+  { id: 2, name: "Pre-construction", position: 2, ...SEEDED },
+  { id: 3, name: "Construction", position: 3, ...SEEDED },
+  { id: 4, name: "Handover & Maintenance", position: 4, ...SEEDED },
+  { id: 5, name: "Closed", position: 5, ...SEEDED }
 ];
 
 /**
@@ -125,6 +121,20 @@ export function createStubRepository(): Repository {
       throw new Error(
         "Creating a job needs Supabase — set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY."
       );
+    },
+    async createJobsFromSplit(): Promise<Job[]> {
+      throw new Error(
+        "Splitting a project into jobs needs Supabase — set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY."
+      );
+    },
+
+    // Refuse rather than resolve. A delete that quietly succeeds against nothing is the
+    // worst of the three answers: the row is still there and the screen says it went.
+    async deleteJob(): Promise<void> {
+      throw new Error("Removing a job needs Supabase.");
+    },
+    async deleteProject(): Promise<void> {
+      throw new Error("Removing a project needs Supabase.");
     },
 
     // ---- lookups: the business process ----------------------------------

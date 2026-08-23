@@ -333,3 +333,45 @@ select event_type, (occurred_at is not null) as has_time
 from login_activity
 where email = 'signin-test@lofty.com.au'
 order by event_type;
+
+-- ---------------------------------------------------------------------------
+-- 36. An address says which place it means
+--
+-- `address_consolidated` is what pg_trgm indexes and what every address search reads, so
+-- its format is a search concern rather than a display one. Lot numbers used to be
+-- concatenated bare, which made "Lot 1, Corner Street" render as "1 Corner Street" —
+-- a different house — and a subdivided lot carrying both numbers render as "3 28 Corner
+-- Street". Found by splitting a project into four jobs and reading the result.
+--
+-- 0034 asserts this too, at the moment it changes the function. This asserts it of the
+-- FINAL state, which is the version that survives somebody editing the function again.
+begin;
+insert into addresses (address_lot_number, address_street_number, address_street_2,
+                       address_street_1, address_suburb, address_state,
+                       address_postcode, address_council)
+-- Ironbark Road, not Corner Street: step 1 already put a fixture on Corner Street, and
+-- an assertion that sweeps up rows it did not create tells you about the wrong thing.
+-- "Lot 3" typed with its label is in here on purpose — that is how people enter it, and
+-- prefixing a value that already says Lot produced "Lot Lot 3".
+values ('1',     null, null,     'Ironbark Road', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully'),
+       (null,   '28',  null,     'Ironbark Road', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully'),
+       ('3',    '28',  null,     'Ironbark Road', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully'),
+       ('Lot 4', null, null,     'Ironbark Road', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully'),
+       ('3',    '28',  'Unit 2', 'Ironbark Road', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully');
+
+select case
+  when array_agg(address_consolidated order by address_consolidated) =
+       array[
+         '28 Ironbark Road, Golden Grove SA 5125, AU',
+         'Lot 1, Ironbark Road, Golden Grove SA 5125, AU',
+         'Lot 3, 28 Ironbark Road, Golden Grove SA 5125, AU',
+         'Lot 4, Ironbark Road, Golden Grove SA 5125, AU',
+         'Unit 2, Lot 3, 28 Ironbark Road, Golden Grove SA 5125, AU'
+       ]
+  then 'ok  lot, street, both, unit and a typed "Lot 4" all render distinguishably'
+  else 'FAIL: consolidated address format — ' ||
+       array_to_string(array_agg(address_consolidated order by address_consolidated), ' / ')
+end
+from addresses
+where address_street_1 = 'Ironbark Road';
+rollback;

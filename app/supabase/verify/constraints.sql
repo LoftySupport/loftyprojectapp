@@ -2,7 +2,12 @@
 \pset tuples_only on
 \echo '--- these must ALL be rejected ---'
 \set ON_ERROR_STOP off
-DO $$ BEGIN
+DO $$
+DECLARE
+  -- Row counts, so a probe whose target fixture disappears says so instead of
+  -- reporting that the constraint it guards has stopped biting.
+  touched integer;
+BEGIN
   BEGIN
     INSERT INTO addresses (address_street_1,address_suburb,address_postcode,address_council)
     VALUES ('No Number St','Golden Grove','5125','City of Tea Tree Gully');
@@ -239,4 +244,35 @@ DO $$ BEGIN
     RAISE WARNING 'FAIL: a non-hex tag colour was accepted';
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a tag colour must be hex';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on tag colour (%)', SQLERRM; END;
+
+  -- 0035 cut the lifecycle from nine stages to the five Lofty confirmed, and moved
+  -- job_stage from an enum to text so a vocabulary that changes can lose a value. Text
+  -- only constrains what a check constrains, so this is the probe that makes the column
+  -- mean anything.
+  --
+  -- The row count is checked, not assumed. Written first against '1106-01', which the
+  -- fixtures do not create — the UPDATE matched nothing, raised nothing, and the probe
+  -- reported that the constraint had failed to bite. That is the third zero-row statement
+  -- this harness has mistaken for a result, so this one says so out loud instead.
+  BEGIN
+    UPDATE jobs SET job_stage = 'Working Drawings & Contracts' WHERE job_id = '1106-02';
+    GET DIAGNOSTICS touched = ROW_COUNT;
+    IF touched = 0 THEN
+      RAISE WARNING 'FAIL: the stage probe matched no job — the fixture it targets is gone';
+    ELSE
+      RAISE WARNING 'FAIL: a retired stage name was accepted on a job';
+    END IF;
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  job_stage admits only the five lifecycle phases';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on retired stage name (%)', SQLERRM; END;
+
+  BEGIN
+    UPDATE jobs SET job_stage = 'Handover & Maintenance' WHERE job_id = '1106-02';
+    GET DIAGNOSTICS touched = ROW_COUNT;
+    IF touched = 0 THEN
+      RAISE WARNING 'FAIL: the stage probe matched no job — the fixture it targets is gone';
+    ELSE
+      RAISE NOTICE 'ok  ...and does admit one of them, so the probe above is not a false pass';
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'FAIL: a real lifecycle stage was rejected (%)', SQLERRM; END;
 END $$;

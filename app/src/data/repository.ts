@@ -1,6 +1,7 @@
 import type {
   ActivityEntry,
   Job,
+  JobSplit,
   NewProfile,
   NewJob,
   NewProject,
@@ -68,6 +69,39 @@ export interface Repository {
   createProject(input: NewProject): Promise<Project>;
   createJob(input: NewJob): Promise<Job>;
 
+  /**
+   * Split a project into `count` jobs in one action, each with its own lot address.
+   *
+   * Returns them in lot order. Not a loop over `createJob` on the caller's side: the
+   * addresses are copied from the project once, and doing it here keeps the "a job's
+   * original address is a copy taken at the split" rule in one place rather than in
+   * whichever screen happens to call it.
+   */
+  createJobsFromSplit(input: JobSplit): Promise<Job[]>;
+
+  /**
+   * Remove a job. Its tasks, variations, comments, documents, tags, pipeline positions
+   * and stage events all cascade.
+   *
+   * There is a DELETE for jobs where there is none for profiles, and the difference is
+   * deliberate: the lot count stays fluid until it is confirmed, so a job has to be as
+   * cheap to remove as it is to create. The number does not come back — delete 1042-02
+   * and 1042-03 keeps its own number, because a job number has been on paperwork.
+   *
+   * **The address does not cascade**, and that is not an oversight: `jobs` points at
+   * `addresses`, not the other way round, so the row survives. It should. An address is
+   * a fact about a place rather than about a job, it may be shared with the project, and
+   * it is what search and `address_history` read. The cost is orphan address rows, which
+   * are inert — nothing links them to anything, and nothing reads them.
+   */
+  deleteJob(id: string): Promise<void>;
+
+  /**
+   * Remove a project and every job under it — `jobs.project_id` cascades. Admin-only by
+   * policy, and the same address caveat applies.
+   */
+  deleteProject(id: number): Promise<void>;
+
   // ---- lookups ----------------------------------------------------------
   // Reference tables. Seeded rather than user-created, which is why the stub can answer
   // them honestly — but they are tables, so they come through the seam.
@@ -94,6 +128,9 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "listActivity",
   "createProject",
   "createJob",
+  "createJobsFromSplit",
+  "deleteJob",
+  "deleteProject",
   "listStages",
   "listTeams",
   "listTemplatePhases",
@@ -116,6 +153,9 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   listActivity: "activity_audit",
   createProject: "projects + addresses",
   createJob: "jobs",
+  createJobsFromSplit: "jobs + addresses",
+  deleteJob: "jobs",
+  deleteProject: "projects",
   // Both became tables — `teams` in 0026, `pipeline_stages` in 0029. The labels
   // said "enum" long after that stopped being true, on the one screen whose entire
   // job is to say what is backed by what.

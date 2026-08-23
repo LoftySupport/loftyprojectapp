@@ -53,7 +53,11 @@ export interface BoardJob {
 
 export interface BoardProject {
   projectNumber: string;
+  /** The number itself, for methods that take the key rather than the label. */
+  projectId: number;
   jobs: BoardJob[];
+  /** What was intended at creation. Null when nobody said. */
+  proposedDwellings: number | null;
   /**
    * The project's own status column, not the worst of its jobs.
    *
@@ -122,7 +126,9 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
 
     const boardProjects: BoardProject[] = projects.map(p => ({
       projectNumber: String(p.id),
+      projectId: p.id,
       jobs: byProject.get(String(p.id)) ?? [],
+      proposedDwellings: p.proposedDwellings,
       status: p.status
     }));
 
