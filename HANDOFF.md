@@ -1051,9 +1051,20 @@ Not optional, and all scripted against a real browser rather than assumed:
 cd app && npx tsc -b        # must be clean
 cd .. && ./build.sh          # must be clean
 cd app && npm run dictionary # regenerate; commit the result
+cd app && npm run responsive # every page at five device sizes
 ```
 
 Then, in a browser against `dist/`: every page renders, the footer sits at the bottom, no
-horizontal overflow **at 320, 390, 430, 768 and 1024**, no console errors, and **zero AA
-contrast failures across light, dark and black**. Every commit in the history states what
-was verified — keep that up.
+console errors, and **zero AA contrast failures across light, dark and black**. Every
+commit in the history states what was verified — keep that up.
+
+**"No horizontal overflow at 320, 390, 430, 768 and 1024" used to be on that list and is
+now `npm run responsive`.** It was written down here, it was expected before every PR,
+and it had not been true for some time: every page scrolled sideways by 11px on an iPhone
+and 81px on a 320px phone. The header's search box kept a `min-width: 200px` that its own
+narrow-screen rule forgot to reset, so the bar had an intrinsic minimum of 401px whatever
+the viewport said — and 401 is the number that came back on every route at every phone
+width, which is what made it obvious once anything measured it at all.
+
+Same lesson as `seeds.sh`: an expectation nobody has watched fail is not a check. The
+script and what it deliberately does not assert are documented in `app/scripts/README.md`.
