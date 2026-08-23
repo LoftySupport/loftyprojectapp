@@ -84,8 +84,18 @@ const PROFILE_COLUMNS =
 const PROJECT_COLUMNS =
   "project_id, project_name, project_original_address_id, project_current_address_id, project_type, project_status, project_proposed_dwellings, project_owning_team, project_assignee_id, project_start_date, project_target_completion, project_end_date, project_created_at, project_created_by, project_updated_at, project_updated_by";
 
+// Read from `job_display`, not from `jobs`. The view resolves both of the job's
+// addresses and its project's, which the base table only carries as uuids — so a card
+// could show its number and not the address it is at. 0036 widened the view to carry
+// every column mapped below so it can stand in for the table rather than beside it.
+//
+// Not a PostgREST embed: `jobs` points at `addresses` twice, which is the PGRST201
+// ambiguity that took sign-in down on 21 August, and the disambiguating syntax puts a
+// constraint NAME in this string where a rename would break it at runtime.
+//
+// Writes still go to `jobs` — a view is not the place to insert through.
 const JOB_COLUMNS =
-  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_created_at, job_created_by, job_updated_at, job_updated_by";
+  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_created_at, job_created_by, job_updated_at, job_updated_by, job_current_address, job_original_address, project_current_address";
 
 const TEAM_COLUMNS = "team_id, team_name, team_position, team_is_active";
 
@@ -313,7 +323,7 @@ export function createSupabaseRepository(): Repository {
 
     // ---- jobs -----------------------------------------------------------
     async listJobs(opts?: { projectId?: string }): Promise<Job[]> {
-      let query = client.from("jobs").select(JOB_COLUMNS);
+      let query = client.from("job_display").select(JOB_COLUMNS);
 
       if (opts?.projectId != null) {
         const projectId = Number(opts.projectId);
@@ -332,7 +342,7 @@ export function createSupabaseRepository(): Repository {
     /** `maybeSingle`, not `single`: a job that is not there is null, not an error. */
     async getJob(id: string): Promise<Job | null> {
       const { data, error } = await client
-        .from("jobs")
+        .from("job_display")
         .select(JOB_COLUMNS)
         .eq("job_id", id)
         .maybeSingle();
@@ -928,6 +938,9 @@ type JobRow = {
   job_assignee_id: string | null;
   job_created_at: string; job_created_by: string | null;
   job_updated_at: string; job_updated_by: string | null;
+  // Resolved by the view, not present on the table.
+  job_current_address: string; job_original_address: string | null;
+  project_current_address: string;
 };
 
 function toJob(r: JobRow): Job {
@@ -948,6 +961,9 @@ function toJob(r: JobRow): Job {
     createdAt: r.job_created_at,
     createdBy: r.job_created_by,
     updatedAt: r.job_updated_at,
-    updatedBy: r.job_updated_by
+    updatedBy: r.job_updated_by,
+    currentAddress: r.job_current_address,
+    originalAddress: r.job_original_address,
+    projectCurrentAddress: r.project_current_address
   };
 }

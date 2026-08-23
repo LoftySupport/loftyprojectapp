@@ -300,6 +300,14 @@
   margin-left: var(--space-8);
 }
 .slot-value { text-align: right; min-width: 0; }
+/* The line under a slot panel's heading — why these values are here and where to change
+   them. Sits above the first stage group rather than beside the count, because it is a
+   sentence and the count is a number. */
+.slot-note {
+  margin: 0 0 var(--space-12);
+  padding-bottom: var(--space-8);
+  border-bottom: 1px solid var(--layout-border-color);
+}
 
 /* ---- stat tiles and bars ------------------------------------------------- */
 .stat-row {

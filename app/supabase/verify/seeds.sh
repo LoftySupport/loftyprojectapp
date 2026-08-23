@@ -146,7 +146,12 @@ repo = open(os.path.join(src, "supabaseRepository.ts")).read()
 db_columns = set(c for c in os.environ["DB_COLUMNS"].splitlines() if c)
 
 for const, table in (("PROJECT_COLUMNS", "projects"),
-                     ("JOB_COLUMNS", "jobs"),
+                     # job_display, not jobs: 0036 pointed the job reads at the view so a
+                     # card could show its address, and three of the names in this list
+                     # exist only there. Checked against what the repository actually
+                     # queries — checking it against the table would pass for the wrong
+                     # reason today and fail for the wrong reason tomorrow.
+                     ("JOB_COLUMNS", "job_display"),
                      ("PROFILE_COLUMNS", "profiles")):
     m = re.search(r'const %s =\s*\n\s*"([^"]+)"' % const, repo)
     if not m:

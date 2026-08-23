@@ -208,6 +208,7 @@ export function JobsPage() {
                     jobNumber={j.jobNumber}
                     stageName={j.stage}
                     team={j.team}
+                    address={j.currentAddress}
                     status={j.status}
                     onOpen={() => openOne(j)}
                   />

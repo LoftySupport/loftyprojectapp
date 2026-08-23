@@ -19,12 +19,23 @@ export function JobCard({
   jobNumber,
   stageName,
   team,
+  address,
   status = "on_track",
   onOpen
 }: {
   jobNumber: string;
   stageName: string;
   team: string;
+  /**
+   * The job's own current address, resolved by `job_display`. Lofty, 23 August: a card
+   * shows the job number and the address, because `1001-01` identifies the job only to
+   * somebody who knows the numbering and the address is what everyone says out loud.
+   *
+   * Null while the job has none — which after 0036 means the row is genuinely unreadable
+   * rather than merely unjoined, so the token below is the honest answer and not a
+   * placeholder for work not done.
+   */
+  address?: string | null;
   status?: RecordStatus;
   onOpen?: () => void;
 }) {
@@ -43,14 +54,17 @@ export function JobCard({
       aria-label={`Job ${jobNumber}`}
     >
       <header className="card-top">
-        <Text type="text3" color="secondary">{jobNumber}</Text>
+        {/* The number leads. It is the thing on the contract, and it carries the project
+            in its first half — 1001-01 is job 01 of project 1001. */}
+        <Text type="text2" weight="medium">{jobNumber}</Text>
         <StatusPill status={status} />
       </header>
 
-      <div>
-        <Token>project_display.current_address</Token>
-        <div><Token>addresses.consolidated_address</Token></div>
-      </div>
+      {/* And the address underneath, which is what a person recognises. `ellipsis={false}`
+          so a long one wraps to two lines rather than losing its street. */}
+      <Text type="text3" color="secondary" element="div" ellipsis={false}>
+        {address ?? <Token>job_display.job_current_address</Token>}
+      </Text>
 
       <div className="card-divider" />
 

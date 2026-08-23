@@ -43,12 +43,17 @@ export interface BoardJob {
   /** Derived from stageEnteredAt on every read. Never stored, so it cannot go stale. */
   daysInStage: number;
   /**
-   * Both left unset until `addresses` is wired. They exist because search reads them —
-   * the moment they carry values, searching a previous address starts working with no
-   * change to any page.
+   * Resolved by `job_display` since 0036 — the card shows the job number and the address
+   * together, because neither reads as a place on its own.
+   *
+   * `originalAddress` is null until the job is renamed away from what it was created as,
+   * and search reads all three: somebody typing an old contract's address should find the
+   * job that used to be at it.
    */
   currentAddress?: string | null;
   originalAddress?: string | null;
+  /** The site the job belongs to. Read through from the project, never copied. */
+  projectAddress?: string | null;
 }
 
 export interface BoardProject {
@@ -114,7 +119,10 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
       team: teamName(j.owningTeam, teams),
       teamId: j.owningTeam,
       status: j.status,
-      daysInStage: daysSince(j.stageEnteredAt, now)
+      daysInStage: daysSince(j.stageEnteredAt, now),
+      currentAddress: j.currentAddress,
+      originalAddress: j.originalAddress,
+      projectAddress: j.projectCurrentAddress
     }));
 
     const byProject = new Map<string, BoardJob[]>();

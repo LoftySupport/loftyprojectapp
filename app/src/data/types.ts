@@ -296,6 +296,24 @@ export interface Job {
    * a commercial project does not contain residential jobs, so a second field would
    * only ever be a chance to disagree with the first.
    */
+
+  /**
+   * The addresses as text, resolved by `job_display` rather than by a second request.
+   * A card shows the job number and the address it is at, and neither is useful alone —
+   * `1001-01` identifies the job to somebody who knows the numbering, and the address is
+   * what everyone else says on the phone.
+   *
+   * `currentAddress` is never null: `job_current_address_id` is not null and the view
+   * joins it inner. `originalAddress` is null until the job has been renamed away from
+   * what it was created as.
+   *
+   * `projectCurrentAddress` is the site the job belongs to, read through from the
+   * project rather than copied — a job can show its site but never disagree with it.
+   */
+  currentAddress: string;
+  originalAddress: string | null;
+  projectCurrentAddress: string;
+
   // + fields
   createdAt: IsoDateTime;
   createdBy: Uuid | null;

@@ -19,7 +19,17 @@ import "./ui.css";
  * Binding: join `property_values` on (property_def_id, subject_type, subject_id). A slot
  * stops showing its token the moment its row comes back.
  */
-export function PropertySlots({ scope }: { scope: PropertyScope }) {
+export function PropertySlots({
+  scope,
+  title,
+  note
+}: {
+  scope: PropertyScope;
+  /** Heading for the panel. Defaults to the job wording. */
+  title?: string;
+  /** A line under the heading explaining where these values come from. */
+  note?: string;
+}) {
   const { slotsFor } = usePropertyDefs();
   const { stageNames } = useStages();
 
@@ -27,15 +37,21 @@ export function PropertySlots({ scope }: { scope: PropertyScope }) {
   if (groups.length === 0) return null;
 
   const total = groups.reduce((n, g) => n + g.defs.length, 0);
+  const heading = title ?? "Captured through the pipeline";
 
   return (
-    <section className="panel" aria-label="Fields captured through the pipeline">
+    <section className="panel" aria-label={heading}>
       <div className="panel-head">
-        <Text type="text2" weight="bold">Captured through the pipeline</Text>
+        <Text type="text2" weight="bold">{heading}</Text>
         <Text type="text3" color="secondary">
           {total} field{total === 1 ? "" : "s"} defined in Admin → Properties
         </Text>
       </div>
+      {note && (
+        <Text type="text3" color="secondary" element="p" ellipsis={false} className="slot-note">
+          {note}
+        </Text>
+      )}
 
       {groups.map(g => (
         <div className="slot-stage" key={g.stage}>

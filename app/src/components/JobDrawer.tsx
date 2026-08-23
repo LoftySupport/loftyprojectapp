@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { BreadcrumbsBar, BreadcrumbItem, Button, Heading, Text } from "@vibe/core";
 import { useCheckpoints, useTemplatePhases } from "../data/useLookups";
 import type { BoardJob } from "../data/boardModel";
@@ -16,6 +17,7 @@ import "./ui.css";
  */
 export function JobDrawer({ job, onClose }: { job: BoardJob; onClose: () => void }) {
   const panel = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     panel.current?.focus();
@@ -47,16 +49,39 @@ export function JobDrawer({ job, onClose }: { job: BoardJob; onClose: () => void
       >
         <header className="drawer-head">
           <div>
+            {/* Jobs › project › job, not Board › stage › job.
+                The stage is where the job is *this week*; the project is what it belongs
+                to, and that never changes. Drawing the temporary relationship as the
+                hierarchy and leaving the permanent one out had it backwards — and the
+                database is unambiguous about which is which, since `job_id` is literally
+                `project_id || '-' || job_sequence`.
+
+                `onClick` rather than `link`: Vibe's BreadcrumbItem renders a real anchor
+                for `link`, which in this app is a full page reload of a 1 MB bundle and a
+                fresh auth round trip. The project also appears below as a router Link, so
+                copy-link-address and middle-click are not lost. */}
             <BreadcrumbsBar type="navigation">
-              <BreadcrumbItem text="Board" />
-              <BreadcrumbItem text={job.stage} />
+              <BreadcrumbItem
+                text="Jobs"
+                isClickable
+                onClick={() => { onClose(); navigate("/jobs"); }}
+              />
+              <BreadcrumbItem
+                text={`Project ${job.projectNumber}`}
+                isClickable
+                onClick={() => { onClose(); navigate(`/projects/${job.projectNumber}`); }}
+              />
               <BreadcrumbItem text={job.jobNumber} isCurrent />
             </BreadcrumbsBar>
             <Heading type="h3" weight="medium">
-              <Token>addresses.consolidated_address</Token>
+              {job.currentAddress ?? <Token>job_display.job_current_address</Token>}
             </Heading>
-            <Text type="text3" color="secondary">
-              {job.jobNumber} · <Token>project_display.current_address</Token> · {job.projectNumber}
+            <Text type="text3" color="secondary" element="div" ellipsis={false}>
+              {job.jobNumber} ·{" "}
+              <Link to={`/projects/${job.projectNumber}`} onClick={onClose} className="link-button">
+                Project {job.projectNumber}
+              </Link>
+              {" "}· {job.projectAddress ?? <Token>job_display.project_current_address</Token>}
             </Text>
           </div>
           <Button kind="tertiary" size="small" onClick={onClose} aria-label="Close">
@@ -111,8 +136,20 @@ export function JobDrawer({ job, onClose }: { job: BoardJob; onClose: () => void
             ))}
           </section>
 
-          {/* Every field defined for a job, in the stage that captures it. */}
-          <PropertySlots scope="job" />
+          {/* The site's own facts, above the job's — fencing, pegging, the developer, the
+              council. One answer for the whole project, shown here rather than copied,
+              so twenty jobs on one site cannot quietly disagree about it.
+
+              Read-only on purpose: `property_def_scope` is exclusive, and a project
+              property cannot be overridden per job. Editing one happens on the project. */}
+          <PropertySlots
+            scope="project"
+            title="Project properties"
+            note="True of the whole site, so every job on it shows the same answer. Change them on the project."
+          />
+
+          {/* Then the job's own — twenty jobs, twenty answers. */}
+          <PropertySlots scope="job" title="Job properties" />
 
           <section className="panel">
             <div className="panel-head">
