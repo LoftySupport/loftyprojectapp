@@ -710,6 +710,21 @@ credential sitting somewhere nothing reads — which is precisely why
 `SUPABASE_JWT_SECRET` and `SUPABASE_SERVICE_ROLE_KEY` were deleted from Netlify above.
 It belongs in the **Claude Code remote environment's** variables instead.
 
+Asserted once and then actually checked, because the two environments are easy to
+conflate. Four variables that *are* set on the Netlify project, read from inside a
+session container:
+
+```
+VITE_SUPABASE_URL              (absent)
+VITE_SUPABASE_PUBLISHABLE_KEY  (absent)
+SUPABASE_ANON_KEY              (absent)
+SUPABASE_DATABASE_URL          (absent)
+
+env vars matching /netlify|supabase/i:  0
+```
+
+Not one of them crosses. `env` in a session mentions neither service.
+
 **Why it exists at all.** `.mcp.json` was always correct; what it lacked was a way to
 authenticate without a browser. The hosted server uses OAuth dynamic client registration,
 so an interactive session logs in and a remote one cannot. Supabase documents one
