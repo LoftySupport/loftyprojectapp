@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import {
   Button, Modal, ModalContent, ModalFooter, ModalHeader, Text, TextField
 } from "@vibe/core";
+import { CreatePanel } from "./CreatePanel";
 import { Select, toOptions } from "./Select";
 import { useRepository } from "../data/DataProvider";
 import { useTeams } from "../data/useLookups";
@@ -38,6 +39,10 @@ function AddressFields({
   // picker disappears rather than offering values that would be rejected on save.
   const councilAvailable = (value.state ?? "SA") === "SA";
 
+  // Which of 0037's two address shapes this currently is. Drives the hints, so the form
+  // explains the rule as it is being met rather than only when it is broken.
+  const shape = addressShape(value);
+
   return (
     <>
       <Field label="Lot number" hint="as it appears on the plan of division">
@@ -49,7 +54,10 @@ function AddressFields({
           inputAriaLabel="Lot number"
         />
       </Field>
-      <Field label="Street number">
+      <Field
+        label="Street number"
+        hint={shape === "locality" ? "once there is a street to number" : undefined}
+      >
         <TextField
           value={value.streetNumber ?? ""}
           onChange={v => set("streetNumber", v || null)}
@@ -58,14 +66,23 @@ function AddressFields({
           inputAriaLabel="Street number"
         />
       </Field>
-      <Field label="Street" required>
+      {/* Not required since 0037. Leaving it blank is what makes this a locality, which
+          is the only kind of address Lofty has when the land is bought — so the hint says
+          what blank means rather than treating it as a field somebody forgot. */}
+      <Field
+        label="Street"
+        hint={
+          shape === "locality"
+            ? "leave blank if only the suburb is settled — the project can be created without it"
+            : "with a lot or street number above"
+        }
+      >
         <TextField
-          value={value.street1}
-          onChange={v => set("street1", v)}
+          value={value.street1 ?? ""}
+          onChange={v => set("street1", v || null)}
           placeholder="Ironbark Road"
           id="addr-street-1"
           inputAriaLabel="Street"
-          required
         />
       </Field>
       <Field label="Unit / level" hint="anything above the street line">
@@ -164,25 +181,42 @@ const EMPTY_ADDRESS: NewAddress = {
   lotNumber: null, streetNumber: null, street2: null
 };
 
+const filled = (v: string | null | undefined) => !!v?.trim();
+
 /**
- * The same four rules the `addresses` table enforces, checked here so the Create button
- * greys out instead of the insert coming back with a constraint name.
+ * The rules the `addresses` table enforces, checked here so the Create button greys out
+ * instead of the insert coming back with a constraint name.
  *
- * Kept beside the fields rather than inside the repository because it is a statement
- * about this form: what the person still has to fill in. The database remains the one
- * that decides — this only saves them a round trip.
+ * Kept beside the fields rather than in the repository because it is a statement about
+ * this form: what the person still has to fill in. The database remains the one that
+ * decides — this only saves them a round trip.
+ *
+ * Rewritten for `0037`, which is where the interesting part is. The street used to be
+ * required; it is now the thing that decides which of two shapes this address is.
  */
 const addressIsValid = (a: NewAddress): boolean =>
-  a.street1.trim() !== "" &&
-  a.suburb.trim() !== "" &&
-  // addresses_postcode_shape: four digits, and text, because 0800 is Darwin.
+  // Always: suburb, a four-digit postcode (text, because 0800 is Darwin), and a council
+  // in SA. addresses_council_required_in_sa is conditional because an interstate address
+  // cannot carry one at all.
+  filled(a.suburb) &&
   /^[0-9]{4}$/.test(a.postcode.trim()) &&
-  // addresses_has_a_number: a subdivided site is "Lot 3" long before it is "28", so
-  // either one will do — but not neither.
-  (!!a.lotNumber?.trim() || !!a.streetNumber?.trim()) &&
-  // addresses_council_required_in_sa: an SA address must name its council. Interstate
-  // addresses cannot carry one at all, which is why this is conditional.
-  ((a.state ?? "SA") !== "SA" || a.council !== null);
+  ((a.state ?? "SA") !== "SA" || a.council !== null) &&
+  // And then one of two shapes, which is exactly the pair of constraints 0037 installed:
+  //
+  //   locality — no street, and therefore no numbers either. Enough for a project,
+  //              because Lofty buys land before it has a frontage.
+  //   street   — a street and at least one of lot or street number. A subdivided site is
+  //              "Lot 3" long before it is "28", so either will do, but not neither.
+  //
+  // The halfway states are what the constraints refuse: a number with no street is a
+  // fragment, and a street with no number is somewhere nobody can find.
+  (filled(a.street1)
+    ? filled(a.lotNumber) || filled(a.streetNumber)
+    : !filled(a.lotNumber) && !filled(a.streetNumber));
+
+/** Which of the two shapes the form is currently describing, for the hint under it. */
+const addressShape = (a: NewAddress): "locality" | "street" =>
+  filled(a.street1) ? "street" : "locality";
 
 export function NewProjectDialog({
   show,
@@ -198,6 +232,7 @@ export function NewProjectDialog({
 }) {
   const repo = useRepository();
   const [address, setAddress] = useState<NewAddress>(EMPTY_ADDRESS);
+  const [name, setName] = useState("");
   const [projectType, setProjectType] = useState<ProjectType | null>(null);
   const [dwellings, setDwellings] = useState("");
   const [saving, setSaving] = useState(false);
@@ -219,6 +254,7 @@ export function NewProjectDialog({
 
   const reset = () => {
     setAddress(EMPTY_ADDRESS);
+    setName("");
     setProjectType(null);
     setDwellings("");
     setError(null);
@@ -232,6 +268,7 @@ export function NewProjectDialog({
     try {
       const project = await repo.createProject({
         address,
+        name,
         projectType: projectType!,
         proposedDwellings: dwellingCount
       });
@@ -246,10 +283,37 @@ export function NewProjectDialog({
     }
   }
 
+  const close = () => { reset(); onClose(); };
+
+  // The footer's two buttons, built once. They are the same pair whether the panel is a
+  // panel or expanded, and building them inline in JSX twice is how the two drift.
+  const primary = created
+    ? dwellingCount
+      ? { text: `Create ${dwellingCount} job${dwellingCount === 1 ? "" : "s"}`,
+          onClick: () => { const id = created; reset(); onClose(); onSplit?.(id, dwellingCount); },
+          disabled: false }
+      : { text: "Done", onClick: close, disabled: false }
+    : { text: saving ? "Creating…" : "Create project", onClick: save, disabled: !valid || saving };
+
+  const secondary = created
+    ? dwellingCount ? { text: "Not now", onClick: close } : null
+    : { text: "Cancel", onClick: close };
+
   return (
-    <Modal show={show} onClose={() => { reset(); onClose(); }} id="new-project">
-      <ModalHeader title="New project" />
-      <ModalContent>
+    <CreatePanel
+      open={show}
+      title="New project"
+      onClose={close}
+      footer={
+        <>
+          {secondary && (
+            <Button kind="tertiary" onClick={secondary.onClick}>{secondary.text}</Button>
+          )}
+          <Button onClick={primary.onClick} disabled={primary.disabled}>{primary.text}</Button>
+        </>
+      }
+    >
+      <>
         {created ? (
           <Result>
             Project <strong>{created}</strong> created.
@@ -259,6 +323,18 @@ export function NewProjectDialog({
           </Result>
         ) : (
           <div className="create-form">
+            {/* First, because it is what people will call it. Optional — most projects are
+                known by their address — and the field that matters when the address is a
+                locality, since "Mount Gambier SA 5290" is not what anybody says out loud. */}
+            <Field label="Project name" hint={'optional — e.g. "Mt Gambier division"'}>
+              <TextField
+                value={name}
+                onChange={setName}
+                placeholder="Mt Gambier division"
+                id="project-name"
+                inputAriaLabel="Project name"
+              />
+            </Field>
             <Field label="Project type" required hint="jobs inherit this — they never set their own">
               <Select
                 aria-label="Project type"
@@ -287,28 +363,8 @@ export function NewProjectDialog({
           </div>
         )}
         {error && <Problem>{error}</Problem>}
-      </ModalContent>
-      {/* The split is offered here rather than only on the project, because "make the
-          project, then make its four lots" is one action in somebody's head and the
-          moment they have just typed the dwelling count is the moment they mean it. */}
-      <ModalFooter
-        primaryButton={
-          created
-            ? dwellingCount
-              ? {
-                  text: `Create ${dwellingCount} job${dwellingCount === 1 ? "" : "s"}`,
-                  onClick: () => { const id = created; reset(); onClose(); onSplit?.(id, dwellingCount); }
-                }
-              : { text: "Done", onClick: () => { reset(); onClose(); } }
-            : { text: saving ? "Creating…" : "Create project", onClick: save, disabled: !valid || saving }
-        }
-        secondaryButton={
-          created
-            ? dwellingCount ? { text: "Not now", onClick: () => { reset(); onClose(); } } : undefined
-            : { text: "Cancel", onClick: () => { reset(); onClose(); } }
-        }
-      />
-    </Modal>
+      </>
+    </CreatePanel>
   );
 }
 

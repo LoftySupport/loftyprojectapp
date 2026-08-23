@@ -882,7 +882,19 @@ export interface PropertyDef {
 export interface NewAddress {
   lotNumber?: string | null;
   streetNumber?: string | null;
-  street1: string;
+  /**
+   * Optional since `0037`, and that is the whole point of it.
+   *
+   * Lofty, 23 August: a project is never created without an address, *"but only the
+   * suburb and postcode and state will be known for sure"* — land is bought before it
+   * has a frontage. An address with no street is a **locality**, which is enough for a
+   * project and never enough for a job. `addresses.address_precision` says which one
+   * this is, generated from this field, and a trigger keeps jobs on the street kind.
+   *
+   * Blank and absent mean the same thing here; the repository normalises before insert,
+   * because `""` would be a street named nothing.
+   */
+  street1?: string | null;
   street2?: string | null;
   suburb: string;
   state?: AuState;
@@ -893,6 +905,12 @@ export interface NewAddress {
 
 export interface NewProject {
   address: NewAddress;
+  /**
+   * What people call it — "Mt Gambier division". Optional, because most projects are
+   * known by their address and a name would only repeat it; useful precisely when the
+   * address is a locality and "Mount Gambier SA 5290" is not what anyone says out loud.
+   */
+  name?: string | null;
   /** Required. A project without a type cannot be reported on, grouped or filtered. */
   projectType: ProjectType;
   /**

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Button, Text } from "@vibe/core";
 import { useSearch } from "../data/SearchProvider";
 import "./ui.css";
@@ -55,11 +56,28 @@ export function PreviousAddressNote() {
  * second when it means the first sends somebody looking for a bug. This one carries no
  * Clear-search button for the same reason: there is nothing to clear.
  */
-export function NothingYet({ title, description }: { title: string; description: string }) {
+export function NothingYet({
+  title,
+  description,
+  action
+}: {
+  title: string;
+  description: string;
+  /**
+   * The way out of the empty state.
+   *
+   * Optional, and worth having: this branch runs *instead of* the table, so a create
+   * control that lives in a table row is unreachable at exactly the moment somebody
+   * most needs it — the first time they open the page. The description said "create
+   * one" and offered nothing to click.
+   */
+  action?: ReactNode;
+}) {
   return (
     <div className="panel no-results">
       <Text type="text1" weight="medium" ellipsis={false}>{title}</Text>
       <Text type="text2" color="secondary" ellipsis={false}>{description}</Text>
+      {action}
     </div>
   );
 }

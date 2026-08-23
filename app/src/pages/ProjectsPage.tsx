@@ -15,6 +15,7 @@ import { Token } from "../components/Token";
 import { Toolbar } from "../components/Toolbar";
 import { toOptions } from "../components/Select";
 import { NewProjectDialog, SplitProjectDialog } from "../components/CreateDialogs";
+import { InlineNewProjectRow } from "../components/InlineNewProjectRow";
 import { usePermission } from "../data/PermissionProvider";
 import { useRepository } from "../data/DataProvider";
 import "../components/ui.css";
@@ -37,6 +38,10 @@ import "../components/ui.css";
 export function ProjectsPage() {
   const { stageNames } = useStages();
   const { teamNames } = useTeams();
+  // The inline add row is hidden below `user`, matching the insert policy on `projects`.
+  // A control that offers to do what RLS will refuse is worse than no control — this is
+  // the app's can() hiding it, and the policy is what actually decides.
+  const { can } = usePermission();
   const [creating, setCreating] = useState(false);
   // Bumped after a create so the board re-reads. There is no cache to invalidate.
   const [reload, setReload] = useState(0);
@@ -198,6 +203,14 @@ export function ProjectsPage() {
         <NothingYet
           title="No projects yet"
           description="A project is the parent folder for the jobs on one site. Create one and its jobs sit beneath it."
+          // The empty state runs instead of the table, so the inline add row is
+          // unreachable here — which is the first screen anybody sees. Saying
+          // "create one" and offering nothing to click is the gap this closes.
+          action={
+            can("user")
+              ? <Button size="small" onClick={() => setCreating(true)}>+ New project</Button>
+              : undefined
+          }
         />
       ) : noMatches ? (
         <NoResults noun="projects" />
@@ -234,6 +247,12 @@ export function ProjectsPage() {
                   <td><StatusPill status={p.status} /></td>
                 </tr>
               ))}
+              {/* The other way in, per Lofty: "both. they can add either way." The
+                  toolbar button opens the panel; this is for when you are already
+                  looking at the list and want three more sites in it. */}
+              {can("user") && (
+                <InlineNewProjectRow columns={7} onCreated={refresh} />
+              )}
             </tbody>
           </table>
         </div>

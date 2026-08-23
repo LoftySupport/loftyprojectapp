@@ -97,6 +97,16 @@ const PROJECT_COLUMNS =
 const JOB_COLUMNS =
   "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_created_at, job_created_by, job_updated_at, job_updated_by, job_current_address, job_original_address, project_current_address";
 
+/**
+ * `""` and `"   "` are how a browser reports a field somebody did not fill in, and they
+ * are not the same as a value. Every optional text column goes through this on the way
+ * in, because a blank string satisfies a NOT NULL and defeats every `is null` after it.
+ */
+const emptyToNull = (v: string | null | undefined): string | null => {
+  const t = v?.trim();
+  return t ? t : null;
+};
+
 const TEAM_COLUMNS = "team_id, team_name, team_position, team_is_active";
 
 const ADDRESS_COLUMNS =
@@ -566,8 +576,12 @@ export function createSupabaseRepository(): Repository {
         .insert({
           address_lot_number: input.address.lotNumber ?? null,
           address_street_number: input.address.streetNumber ?? null,
-          address_street_1: input.address.street1,
-          address_street_2: input.address.street2 ?? null,
+          // Blank normalises to null. `0037` made the street optional so a project can
+          // be created at a locality, and `""` would be a street named nothing — which
+          // passes the not-null it replaced and reads as `address_precision = 'street'`,
+          // which would then let a job be attached to a place with no street.
+          address_street_1: emptyToNull(input.address.street1),
+          address_street_2: emptyToNull(input.address.street2),
           address_suburb: input.address.suburb,
           address_state: input.address.state ?? "SA",
           address_postcode: input.address.postcode,
@@ -583,6 +597,7 @@ export function createSupabaseRepository(): Repository {
         .from("projects")
         .insert({
           project_current_address_id: address.address_id,
+          project_name: emptyToNull(input.name),
           project_type: input.projectType,
           project_proposed_dwellings: input.proposedDwellings ?? null,
           project_status: input.status ?? "on_track",

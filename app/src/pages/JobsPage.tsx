@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { Button, Counter, Heading, Text } from "@vibe/core";
 import { RECORD_STATUS_LABELS, RECORD_STATUSES } from "../data/types";
@@ -15,7 +15,6 @@ import { JobDrawer } from "../components/JobDrawer";
 import { Token } from "../components/Token";
 import { Toolbar } from "../components/Toolbar";
 import { toOptions } from "../components/Select";
-import { NewJobDialog } from "../components/CreateDialogs";
 import "../components/ui.css";
 
 /**
@@ -33,14 +32,10 @@ export function JobsPage() {
   const { stages, stageNames } = useStages();
   const { teamNames } = useTeams();
   const { expectedDaysByStage } = useTemplatePhases();
-  const [creating, setCreating] = useState(false);
-  // Bumped after a create so the board re-reads. There is no cache to invalidate.
-  const [reload, setReload] = useState(0);
-  // One read for both: the board's jobs and the projects the New job dialog can put a
-  // job under. A job cannot exist without a project, so the picker has to see the same
-  // list the board does — when it did not, a project created a moment earlier showed up
-  // as "No projects yet".
-  const { jobs: all, projects, loading, error } = useBoardRecords(reload);
+  // No create state and no project list any more: nothing is created from this page, so
+  // there is nothing to re-read after and no picker to feed. Both went with the New job
+  // dialog — see the note above the toolbar.
+  const { jobs: all, loading, error } = useBoardRecords();
 
   const {
     view, setView, grouping, setGrouping, filters, setFilters, saved, setSaved, search
@@ -145,6 +140,14 @@ export function JobsPage() {
         }
       />
 
+      {/* No "+ New job" on this page. Lofty, 23 August: "a new job can only be created
+          from the project screen as they must be linked to a project."
+
+          The dialog this button used to open asked which project to put the job on — a
+          question with no good answer from a board showing every project at once, and one
+          somebody can get wrong. From the project screen the answer is already known, so
+          it cannot be. The button navigates rather than disappearing, because "why can I
+          not add a job here" is the obvious next thought and this answers it. */}
       <Toolbar
         view={view}
         onViewChange={setView}
@@ -155,17 +158,11 @@ export function JobsPage() {
         onFiltersChange={setFilters}
         optionsFor={optionsFor}
         count={`Showing ${rows.length} of ${inView.length} jobs`}
-        actions={<Button size="small" onClick={() => setCreating(true)}>+ New job</Button>}
-      />
-
-      <NewJobDialog
-        show={creating}
-        onClose={() => setCreating(false)}
-        projects={projects.map(p => ({
-          id: p.projectNumber,
-          label: `${p.projectNumber} · ${p.jobs.length} job${p.jobs.length === 1 ? "" : "s"}`
-        }))}
-        onCreated={() => setReload(n => n + 1)}
+        actions={
+          <Button size="small" kind="secondary" onClick={() => navigate("/projects")}>
+            Add a job on its project
+          </Button>
+        }
       />
 
       {stale && <PreviousAddressNote />}
