@@ -699,6 +699,48 @@ Both `VITE_` variables are scoped to context `all`, so **deploy previews point a
 production Supabase**. Fine while there are no jobs; scope them per context at Phase B,
 when a preview branch can write to real records.
 
+### `SUPABASE_ACCESS_TOKEN`, and the environment it has to be in
+
+**Netlify is the wrong place for this one, and the distinction is not obvious.** Every
+other variable on this page is read by a Netlify *build* — the app's two `VITE_` keys, and
+the two the Supabase extension adds. `SUPABASE_ACCESS_TOKEN` is read by the **Supabase MCP
+server**, which runs in the Claude Code session's own container. Netlify's environment
+never reaches that container, so a token stored there authenticates nothing and is only a
+credential sitting somewhere nothing reads — which is precisely why
+`SUPABASE_JWT_SECRET` and `SUPABASE_SERVICE_ROLE_KEY` were deleted from Netlify above.
+It belongs in the **Claude Code remote environment's** variables instead.
+
+**Why it exists at all.** `.mcp.json` was always correct; what it lacked was a way to
+authenticate without a browser. The hosted server uses OAuth dynamic client registration,
+so an interactive session logs in and a remote one cannot. Supabase documents one
+workaround for exactly this case, and it is a header:
+
+```json
+"headers": { "Authorization": "Bearer ${SUPABASE_ACCESS_TOKEN}" }
+```
+
+Claude Code expands `${VAR}` inside `headers`, and an unset variable loads the config with
+a warning rather than failing — so the file is safe to commit before the token exists, and
+safe to keep if it is ever revoked.
+
+**What it can do, stated plainly.** The URL carries no `read_only=true` — that was added
+on 16 August and reverted a minute later, and the revert stands, so the server hands out
+`apply_migration` and unguarded `execute_sql`. That is how `0036` and `0037` reached
+production. Chosen deliberately on 23 August with the trade-off named: a PAT does not
+expire the way an OAuth session does, so this is a standing write credential against the
+live database for as long as the token exists.
+
+Two conditions on that decision, worth revisiting rather than inheriting:
+
+- **Supabase's own documentation says not to do this.** *"Remember to never connect the
+  MCP server to production data. Supabase MCP is only designed for development and
+  testing purposes."* It is tolerable now because `projects` and `jobs` are empty. **At
+  Phase B it stops being tolerable**, because the same token then reaches ~200 real jobs.
+  Add `read_only=true` then, or point the token at a Supabase branch.
+- **Revoking is the whole recovery plan.** There is no scoping below account level, so if
+  the token leaks the only remedy is deleting it at
+  `supabase.com/dashboard/account/tokens`. Name it for its purpose so it can be found.
+
 `binding-template` still shows the pre-simplification project (name, division, client,
 manager) and the old six roles. **It is deliberately not swept forward** — keeping the
 same decisions in two codebases is the drift this whole setup exists to avoid. It is the
