@@ -48,15 +48,11 @@ const SEEDED = {
 };
 
 export const SEED_STAGES: Stage[] = [
-  { id: 1, name: "Sales & Acquisition", position: 1, ...SEEDED },
-  { id: 2, name: "Planning & Engineering", position: 2, ...SEEDED },
-  { id: 3, name: "Working Drawings & Contracts", position: 3, ...SEEDED },
-  { id: 4, name: "Pre-construction", position: 4, ...SEEDED },
-  { id: 5, name: "Scheduling & Estimating", position: 5, ...SEEDED },
-  { id: 6, name: "Construction", position: 6, ...SEEDED },
-  { id: 7, name: "Post-construction & Closeout", position: 7, ...SEEDED },
-  { id: 8, name: "Handover", position: 8, ...SEEDED },
-  { id: 9, name: "Maintenance", position: 9, ...SEEDED }
+  { id: 1, name: "Acquisition & Development", position: 1, ...SEEDED },
+  { id: 2, name: "Pre-construction", position: 2, ...SEEDED },
+  { id: 3, name: "Construction", position: 3, ...SEEDED },
+  { id: 4, name: "Handover & Maintenance", position: 4, ...SEEDED },
+  { id: 5, name: "Closed", position: 5, ...SEEDED }
 ];
 
 /**

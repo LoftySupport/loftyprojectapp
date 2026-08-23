@@ -772,15 +772,11 @@ export interface Tag {
  * order is board order.
  */
 export const STAGE_NAMES = [
-  "Sales & Acquisition",
-  "Planning & Engineering",
-  "Working Drawings & Contracts",
+  "Acquisition & Development",
   "Pre-construction",
-  "Scheduling & Estimating",
   "Construction",
-  "Post-construction & Closeout",
-  "Handover",
-  "Maintenance"
+  "Handover & Maintenance",
+  "Closed"
 ] as const;
 export type StageName = (typeof STAGE_NAMES)[number];
 

@@ -626,11 +626,11 @@ export function createSupabaseRepository(): Repository {
           project_id: input.projectId,
           job_owning_team: input.owningTeam,
           job_current_address_id: addressId,
-          // Not "Sales & acquisition". The live enum has been title-cased since somebody
-          // edited the type by hand; the migration files only caught up in 0027, and
-          // this string never did — so every job creation would have been rejected by
-          // the enum. Both now agree.
-          job_stage: input.stage ?? "Sales & Acquisition",
+          // The first of the five lifecycle phases. 0035 cut the list from nine after
+          // Lofty confirmed what the lifecycle actually is, and moved the column from an
+          // enum to text with a check — so a wrong value here is a constraint violation
+          // naming itself rather than a type error.
+          job_stage: input.stage ?? "Acquisition & Development",
           job_status: input.status ?? "on_track"
         })
         .select("*")
@@ -722,7 +722,7 @@ export function createSupabaseRepository(): Repository {
             project_id: input.projectId,
             job_owning_team: input.owningTeam,
             job_current_address_id: address.address_id,
-            job_stage: input.stage ?? "Sales & Acquisition",
+            job_stage: input.stage ?? "Acquisition & Development",
             job_status: input.status ?? "on_track"
           })
           .select("*")

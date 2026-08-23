@@ -866,23 +866,32 @@ Carried forward and still open. The first two block real screens.
    empty, a blocked dependency, some combination? Reports can no longer show a fabricated
    percentage, but it has nothing to compute a real one from either. Kanban-by-health is
    specified and unbuildable until this is answered.
-2. **Who owns each phase, and how long should it take?** `pipeline_stages` now carries an
-   owning team and the app reads it — but **those values were seeded by me, not by Lofty**,
-   and they need confirming. `pipeline_stage_expected_days` is null for all nine; there is
-   no SLA anywhere until somebody sets one.
-   Three vocabularies disagree here, and one of them mixes teams with job titles: the
-   preconstruction schedule names *Sales Administration*, *Contracts Administrator*,
-   *Preconstruction Manager*, *Production Estimator* and *Accounts*.
-3. **The real checkpoints and the real field list.** The 57-step preconstruction schedule
-   and the ~1,200-step process map are the source, both still being revised, and both
-   needing each step mapped to a team by hand. **Do not seed from the current map** — its
-   named people are known to be stale.
-4. **The `permission_grants` matrix.** Two genuine judgement calls: should a `viewer` see
-   their own team's tree or the whole portfolio, and should a `manager` move a job between
-   stages?
-5. **Property questions** — related properties, select options, whether `required` means
-   "cannot leave this stage" or "cannot create the record", and whether any field needs
-   history.
+2. ~~**Who owns each phase?**~~ **Answered, 23 August: nobody does.** Several teams work
+   inside one phase. `0035` nulled the owning team on every lifecycle stage and the column
+   now means what it says on a *nested* pipeline, where a team does own its own columns.
+   Still open: **how long should a phase take?** `pipeline_stage_expected_days` is null on
+   all five, so there is no SLA anywhere until somebody sets one — and it may be that a
+   duration belongs on a nested pipeline's stages rather than on a lifecycle phase, which
+   is a question worth asking before filling any of them in.
+3. **The real checkpoints and the real field list.** Lofty, 23 August: *"the process map
+   will always be an evolving process"*, and the certain property list is not ready to be
+   split into job-level and project-level yet. So this is not a question waiting on one
+   answer — it is a moving target, and the design has to survive it moving.
+
+   Two consequences worth holding onto. **Nothing gets seeded from the current map**, and
+   the nested pipelines stay empty until a team's process settles. And **the first one to
+   build is Design's**, because it is the one that has been named concretely: a job goes
+   through Working Drawings, Design want it on a kanban, and they want to know how long it
+   took. Ten stages of a nested pipeline is enough to prove the whole mechanism at a scale
+   where being wrong is cheap.
+4. **The `permission_grants` matrix.** ~~Should a `viewer` see their own team's tree or the
+   whole portfolio~~ — **parked, 23 August: viewers are not in use yet.** Still open:
+   should a `manager` move a job between stages?
+5. **Property questions** — related properties, select options, and whether any field
+   needs history. ~~Whether `required` means "cannot leave this stage" or "cannot create
+   the record"~~ is **answered, 23 August: both, per property.** Which confirms the two
+   separate booleans already specified — `property_def_required_to_exit` and
+   `property_def_required_to_create` — rather than one flag with a mode.
 6. **Finance is not a rung.** A ladder says *how much* you can do; Finance says *what you
    own*. Recommendation stands: property-level grants, since properties are already rows
    and Selections and Estimating will want the same.

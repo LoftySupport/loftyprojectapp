@@ -52,12 +52,19 @@ as "not mine to decide":
 
 ### Drift found against the docs (the docs are wrong, the database is right)
 
-- **The pipeline is nine stages, not eight.** Live enum: `Sales & Acquisition`,
-  `Planning & Engineering`, `Working Drawings & Contracts`, `Pre-construction`,
-  `Scheduling & Estimating`, `Construction`, `Post-construction & Closeout`, `Handover`,
-  `Maintenance`. Handover and Maintenance were split; five names changed case or wording.
-  Every stage list in the app (`SEED_STAGES`, `PHASES`, `CHECKPOINTS`, `savedViews.ts`) is
-  stale, and the first job created through the UI would fail on the enum.
+- ~~**The pipeline is nine stages, not eight.**~~ **Superseded by `0035`: it is five.**
+  The nine were the enum's, which came from the prototype, which came from a workshop.
+  Lofty confirmed the lifecycle on 23 August:
+
+      Acquisition & Development > Pre-construction > Construction
+        > Handover & Maintenance > Closed
+
+  Four of the nine — Planning & Engineering, Working Drawings & Contracts, Scheduling &
+  Estimating, Post-construction & Closeout — are **processes that run inside a phase**,
+  not phases, and belong in nested pipelines. Handover and Maintenance are one phase,
+  which answers the question `0029` left in a comment. `jobs.job_stage` also stopped
+  being an enum: a vocabulary that changes has to be able to lose a value, and an enum
+  cannot.
 - **A migration exists in the database with no file in the repo** —
   `0014_revoke_recreated_audit_function`. Migrations after `0013` also lost their numeric
   prefix in the ledger. A fresh `supabase db push` would not reproduce this database.
@@ -484,6 +491,36 @@ the existing `property_def_scope` column and it is exclusive.
 
 Because it is read-through rather than copy, "pushing a project property down to all jobs"
 needs no push at all. It is a join, and it cannot drift.
+
+### The lifecycle is five phases, and nobody owns one
+
+Confirmed by Lofty, 23 August 2026, and applied in `0035`:
+
+| # | Phase | Terminal? |
+|---|---|---|
+| 1 | Acquisition & Development | |
+| 2 | Pre-construction | |
+| 3 | Construction | |
+| 4 | Handover & Maintenance | |
+| 5 | Closed | won |
+
+**No lifecycle phase has an owning team.** Every one of the previous nine carried one; I
+seeded those and nobody confirmed them, and the answer is that they are wrong in principle
+rather than in detail — several teams work inside one phase, which is the same fact that
+makes `job_engaged_teams` an array. `pipeline_stage_owning_team` stays on the column,
+because a *nested* pipeline's stages do have an owner: Design owns every column of its own
+board.
+
+**Cancellation is not a phase.** Closed is the one terminal position; a job that stops for
+a bad reason is `cancelled`, which is a status. Position says where a job got to, status
+says how it went, and collapsing them makes "cancelled during construction"
+unrepresentable.
+
+**Everything else is still moving.** Lofty's words: *"the process map will always be an
+evolving process"*. So the nested pipelines are deliberately not seeded — the mechanism
+exists, the content waits. The first one to build is Design's, because it is the one
+named: a job goes through Working Drawings, Design want to watch it on a kanban and know
+how long it took.
 
 ### Stages are positions in a pipeline
 
