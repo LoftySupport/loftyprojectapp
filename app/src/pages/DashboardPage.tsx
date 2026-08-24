@@ -2,6 +2,7 @@ import { Avatar, Text } from "@vibe/core";
 import { useQuery } from "../data/DataProvider";
 import { initialsOf, useAuth } from "../data/AuthProvider";
 import { greetingName } from "../data/types";
+import { useTeamLabels } from "../data/useLookups";
 import { Token } from "../components/Token";
 import { PageShell } from "./Placeholder";
 import "./DashboardPage.css";
@@ -31,6 +32,7 @@ function Empty({ children }: { children: React.ReactNode }) {
 export function DashboardPage() {
   const { data: jobs, loading } = useQuery(r => r.listJobs(), []);
   const { profile } = useAuth();
+  const { labels } = useTeamLabels();
 
   // Joined rather than reduced to one: somebody can sit in several teams, and picking
   // the first would quietly answer a question this page is not asking.
@@ -38,10 +40,14 @@ export function DashboardPage() {
   // Three outcomes, not two. No profile yet is the token's case. A profile with no teams
   // is not — that is a real answer, and showing {{profiles.teams}} for it reads as a
   // broken screen rather than as "nobody has put you in a team".
+  //
+  // Through `labels`, because `profile.teams` is a list of foreign keys. This greeted
+  // Amber with "lofty_general" — the slug, rendered straight — where the rest of the app
+  // had long since started resolving a job's owning team through the same lookup.
   const teamLabel: React.ReactNode = !profile
     ? <Token>profiles.teams</Token>
     : profile.teams.length
-      ? profile.teams.join(", ")
+      ? labels(profile.teams).join(", ")
       : <span className="pd-unassigned">No team assigned</span>;
 
   if (loading) {

@@ -7,10 +7,12 @@ import {
   STATUS_LABELS,
   STATUS_TONE,
   countByStatus,
+  type AllowedValues,
   type DictionaryEntry,
   type DictionaryStatus
 } from "../data/dictionary";
 import { usePermission } from "../data/PermissionProvider";
+import { useStages, useTeams } from "../data/useLookups";
 import { Select, toOptions } from "../components/Select";
 import "../components/ui.css";
 import "./DictionaryPage.css";
@@ -198,7 +200,10 @@ export function DictionaryPage() {
                           d.definition
                         )}
                       </td>
-                      <td><span className="dict-type">{d.type}</span></td>
+                      <td>
+                        <span className="dict-type">{d.type}</span>
+                        <AllowedValuesCell allowed={d.allowed} />
+                      </td>
                       <td>
                         {canEditStatus ? (
                           <Select
@@ -272,6 +277,66 @@ export function DictionaryPage() {
   );
 }
 
+/**
+ * The permitted values for a constrained column, and — the part that matters — whether
+ * they can be changed from here.
+ *
+ * Amber, on finding `project_type` listed as an enum: *"if it is in an enum type i need
+ * to be able to edit in the app and each type should be a dropdown listing in that column
+ * so i can add or edit it."* The listing half is straightforward and is what this does.
+ * The editing half has a real answer that is not "yes", and the honest thing is to say
+ * which of the two it is per property rather than to offer an editor that would fail:
+ *
+ *   rows in a lookup   — `teams`, and `stages` once the pipeline work lands. Adding one
+ *                        is an ordinary INSERT under RLS. That is genuinely editable, and
+ *                        this points at where.
+ *   an enum or a CHECK — `ALTER TYPE ... ADD VALUE`, or dropping and recreating the
+ *                        constraint. Both are DDL. PostgREST cannot issue DDL and no
+ *                        policy can grant it, so no amount of app code makes this button
+ *                        work: it is a migration, and it lands with the next one.
+ *
+ * A dropdown that silently did nothing would be the worse answer — it is exactly the
+ * "currently data dictionary doesn't do anything" complaint, one layer down.
+ */
+function AllowedValuesCell({ allowed }: { allowed?: AllowedValues }) {
+  const { teams } = useTeams();
+  const { stageNames } = useStages();
+
+  if (!allowed) return null;
+
+  // Read live for the table-backed ones: the whole point of a lookup table is that it
+  // changes, so a list frozen at build time would be wrong the first time it did.
+  const live =
+    allowed.lookup === "teams" ? teams.map(t => t.name)
+    : allowed.lookup === "stages" ? stageNames
+    : null;
+  const values = allowed.values ?? live ?? [];
+
+  const editable = allowed.source === "table";
+  const where =
+    allowed.source === "table" ? <>rows in <code>{allowed.holder}</code></>
+    : allowed.source === "enum" ? <>the <code>{allowed.holder}</code> enum</>
+    : <>the <code>{allowed.holder}</code> constraint</>;
+
+  return (
+    <details className="dict-values">
+      <summary>
+        {values.length ? `${values.length} value${values.length === 1 ? "" : "s"}` : "values"}
+      </summary>
+      <ul className="dict-value-list">
+        {values.length === 0
+          ? <li className="muted">Not readable yet — the lookup has not loaded.</li>
+          : values.map(v => <li key={v}><code>{v}</code></li>)}
+      </ul>
+      <p className="dict-values-note">
+        {editable ? <>Held as {where} — a team can be added and renamed from the app.</>
+                  : <>Held in {where}. Adding or removing one is DDL, which PostgREST cannot
+                     issue and no policy can grant — it takes a migration, not a screen.</>}
+      </p>
+    </details>
+  );
+}
+
 function PermissionNote({
   canEditWording,
   canEditStatus,
@@ -328,7 +393,10 @@ function Tables({ rows }: { rows: DictionaryEntry[] }) {
                     <tr key={d.id}>
                       <td><code className="dict-id">{d.column}</code></td>
                       <td>{d.friendlyName}</td>
-                      <td><span className="dict-type">{d.type}</span></td>
+                      <td>
+                        <span className="dict-type">{d.type}</span>
+                        <AllowedValuesCell allowed={d.allowed} />
+                      </td>
                       <td className="muted dict-rules">{d.rules || "—"}</td>
                       <td className="muted dict-rules">{d.relationships || "—"}</td>
                       <td>

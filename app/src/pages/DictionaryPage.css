@@ -60,3 +60,38 @@
 }
 
 .dict-search { flex: 1; min-width: 240px; }
+
+/* ---- the permitted values --------------------------------------------------
+   Under the type, collapsed. Two hundred and six properties on one page and only
+   fourteen of them have a value set — an always-open list would push the other
+   hundred and ninety-two rows apart to show nothing. */
+.dict-values { margin-top: var(--space-4); }
+.dict-values > summary {
+  cursor: pointer;
+  font: var(--font-text3-normal);
+  color: var(--link-color, var(--primary-color));
+}
+.dict-values > summary::marker { color: var(--secondary-text-color); }
+.dict-value-list {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  max-width: 320px;
+}
+.dict-value-list code {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: var(--border-radius-small);
+  background: var(--allgrey-background-color);
+}
+/* Where the values live, and therefore who can change them. Quiet, but present on
+   every one — it is the difference between "add a team" and "write a migration". */
+.dict-values-note {
+  margin: var(--space-8) 0 0;
+  max-width: 320px;
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+}

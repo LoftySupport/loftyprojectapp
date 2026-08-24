@@ -1,5 +1,6 @@
 import { ButtonGroup, Heading, Text, Toggle } from "@vibe/core";
 import { useAuth } from "../data/AuthProvider";
+import { useTeamLabels } from "../data/useLookups";
 import { SYSTEM_THEMES, type SystemTheme } from "../theme/loftyTheme";
 import { Select, toOptions } from "../components/Select";
 import { Token } from "../components/Token";
@@ -39,6 +40,8 @@ export function SettingsPage({
   onThemeChange: (t: SystemTheme) => void;
 }) {
   const { profile } = useAuth();
+  // Names, not the slugs `profiles.teams` stores — see useTeamLabels.
+  const { labels: teamLabels } = useTeamLabels();
 
   return (
     <>
@@ -67,7 +70,7 @@ export function SettingsPage({
             label="Teams"
             hint="you can sit in more than one"
             token="profiles.teams"
-            value={profile?.teams.join(", ") || null}
+            value={profile?.teams.length ? teamLabels(profile.teams).join(", ") : null}
             known={Boolean(profile)}
             empty={
               <span className="field-empty">

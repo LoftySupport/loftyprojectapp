@@ -6,7 +6,7 @@
  * array; CI would fail the build if the file were stale, once there is CI.
  */
 import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
-import { dirname, resolve, join } from "node:path";
+import { basename, dirname, resolve, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
 import ts from "typescript";
@@ -20,16 +20,55 @@ const srcPath = resolve(here, "..", "src", "data", "dictionary.ts");
 // array is real code with generics and `as const` in it, and a regex gets that wrong
 // in ways that fail loudly today and silently later.
 //
-// `dictionary.ts` imports nothing, by design, so transpiling it alone is enough.
-const { outputText } = ts.transpileModule(readFileSync(srcPath, "utf8"), {
-  compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 }
-});
+// `dictionary.ts` used to import nothing and transpiling it alone was enough. It now
+// imports `./types` for the value lists behind ALLOWED_VALUES, so the relative graph is
+// followed: each module is transpiled into the same temp directory under its own name,
+// and the emitted `from "./types"` resolves there. Both files are plain data with no
+// dependencies of their own, so this bottoms out immediately — it is a two-file walk,
+// not a bundler.
+const dir = mkdtempSync(join(tmpdir(), "dict-"));
+const done = new Set();
 
-const tmp = join(mkdtempSync(join(tmpdir(), "dict-")), "dictionary.mjs");
-writeFileSync(tmp, outputText);
+function emit(tsPath) {
+  if (done.has(tsPath)) return;
+  done.add(tsPath);
+  const source = readFileSync(tsPath, "utf8");
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 }
+  });
+  // Node needs an extension on a relative specifier; TypeScript does not write one.
+  writeFileSync(
+    join(dir, basename(tsPath).replace(/\.ts$/, ".mjs")),
+    outputText.replace(/(from\s+["']\.\.?\/[^"']+)(["'])/g, "$1.mjs$2")
+  );
+  for (const m of source.matchAll(/from\s+["'](\.\.?\/[^"']+)["']/g)) {
+    emit(resolve(dirname(tsPath), m[1] + ".ts"));
+  }
+}
+
+emit(srcPath);
+const tmp = join(dir, "dictionary.mjs");
 const { DICTIONARY, DICTIONARY_TABLES, STATUS_LABELS } = await import(pathToFileURL(tmp).href);
 
 const esc = s => String(s ?? "").replace(/\|/g, "\\|").replace(/\n/g, " ");
+
+/**
+ * The permitted values, as one cell.
+ *
+ * Says where they live as well as what they are, because that is what decides who can
+ * change them: rows in a lookup are an ordinary write, an enum or a check is a migration.
+ * The two table-backed ones have no list here on purpose — they are read live, and a
+ * copy in a generated file would be stale the first time somebody adds a team.
+ */
+const values = d => {
+  const a = d.allowed;
+  if (!a) return "—";
+  const where =
+    a.source === "table" ? `rows in \`${a.holder}\`` :
+    a.source === "enum" ? `enum \`${a.holder}\`` :
+    `CHECK \`${a.holder}\``;
+  return a.values ? `${a.values.map(v => `\`${v}\``).join(" · ")} — ${where}` : `read from ${where}`;
+};
 
 const counts = {};
 DICTIONARY.forEach(d => { counts[d.status] = (counts[d.status] ?? 0) + 1; });
@@ -59,12 +98,12 @@ for (const table of DICTIONARY_TABLES) {
   const cols = DICTIONARY.filter(d => d.table === table);
   lines.push(`## \`${table}\``);
   lines.push("");
-  lines.push("| Supabase ID | Lofty name | Definition | Type | Rules | Relationships | Status | Created | Updated |");
-  lines.push("| --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+  lines.push("| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |");
+  lines.push("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
   for (const d of cols) {
     lines.push(
       `| \`${esc(d.id)}\` | ${esc(d.friendlyName)} | ${esc(d.definition)} | \`${esc(d.type)}\` | ` +
-      `${esc(d.rules)} | ${esc(d.relationships)} | ${esc(STATUS_LABELS[d.status])} | ` +
+      `${esc(values(d))} | ${esc(d.rules)} | ${esc(d.relationships)} | ${esc(STATUS_LABELS[d.status])} | ` +
       `${esc(d.createdAt)} · ${esc(d.createdBy)} | ${esc(d.updatedAt)} · ${esc(d.updatedBy)} |`
     );
   }
