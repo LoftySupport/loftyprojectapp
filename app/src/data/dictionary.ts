@@ -10,7 +10,16 @@
  * When `property_defs` comes online this array becomes a seed for a `data_dictionary`
  * table and the page starts reading through the repository seam instead. The shape here
  * is already the shape of that table, so that swap is a query, not a rewrite.
+ *
+ * It imports one module — `./types`, for the value lists in ALLOWED_VALUES below. That
+ * used to be "imports nothing", and the generator relied on it; `generate-dictionary.mjs`
+ * now follows relative imports instead. The alternative was retyping five enums here, and
+ * a dictionary that can disagree with the constants the app validates against is worse
+ * than no dictionary — it is a wrong dictionary that reads as authoritative.
  */
+import {
+  AU_STATES, PERMISSION_LEVELS, PROJECT_TYPES, RECORD_STATUSES, SA_COUNCILS, STAGE_NAMES
+} from "./types";
 
 export const DICTIONARY_STATUSES = [
   "to_do",
@@ -52,6 +61,38 @@ export type DataType =
   | "generated text"
   | "view";
 
+/**
+ * Where a constrained column's permitted values actually live.
+ *
+ * The distinction is the whole reason this exists, because it decides whether the app
+ * can change them at all:
+ *
+ *   table  — rows in a lookup (`teams`, `stages`). Ordinary INSERTs and UPDATEs under
+ *            RLS. The app can add one, and one screen away it already does.
+ *   enum   — a Postgres `CREATE TYPE ... AS ENUM`. Adding a value is `ALTER TYPE`, which
+ *            is DDL: PostgREST cannot issue it and no policy can grant it. It needs a
+ *            migration.
+ *   check  — a `CHECK (col IN (...))` on the column. Same answer, different statement —
+ *            the constraint has to be dropped and recreated, which is also a migration.
+ *
+ * So the page can say, per property, "this one you can edit here" or "this one is a
+ * migration", instead of offering an editor for something that would fail on save.
+ */
+export type ValueSource = "table" | "enum" | "check";
+
+export interface AllowedValues {
+  source: ValueSource;
+  /** The Postgres object that holds them: a type, a constraint, or a table. */
+  holder: string;
+  /**
+   * The values, when they are fixed at build time. Absent for the two that are rows —
+   * those are read live, because the point of a lookup table is that it changes.
+   */
+  values?: readonly string[];
+  /** Which lookup to read instead, for `source: "table"`. */
+  lookup?: "teams" | "stages";
+}
+
 export interface DictionaryEntry {
   /** `table.column` exactly as it is in Postgres. The primary key of this dictionary. */
   id: string;
@@ -68,6 +109,8 @@ export interface DictionaryEntry {
   rules: string;
   /** Foreign keys, generated-from, triggers, views that read it. */
   relationships: string;
+  /** The permitted values, for a column that has a fixed set of them. */
+  allowed?: AllowedValues;
   status: DictionaryStatus;
   createdAt: string;
   createdBy: string;
@@ -93,8 +136,73 @@ const e = (
   const [table, column] = id.split(".");
   return {
     id, table, column, friendlyName, definition, type, rules, relationships,
-    status, createdAt: D, createdBy: by, updatedAt: D, updatedBy: by
+    status, createdAt: D, createdBy: by, updatedAt: D, updatedBy: by,
+    // Attached by id rather than passed in, so the table below stays a table.
+    allowed: ALLOWED_VALUES[id]
   };
+};
+
+/**
+ * The permitted values, per property, keyed by the same id the entries are.
+ *
+ * Kept as a block rather than as a tenth argument to `e()`, so the table below stays
+ * readable as a table — which is the reason `e()` exists at all.
+ *
+ * These are the lists the app itself validates against, imported rather than retyped: a
+ * dictionary that can disagree with the constants the forms enforce is worse than none,
+ * because it reads as authoritative while being wrong.
+ *
+ * ONLY COLUMNS THAT EXIST
+ *
+ *   Nothing here is recorded for `property_defs` or `permission_grants` — both are still
+ *   `to_do`, and naming a constraint on a table nobody has built would be inventing one.
+ *
+ * WHAT CHECKING THE MIGRATIONS TURNED UP
+ *
+ *   Four of these were recorded as enums and are not:
+ *
+ *     projects.project_type    `0028` dropped the `project_type` type; it is text under
+ *                              a CHECK.
+ *     projects.project_status  same migration, same for `record_status`.
+ *     jobs.job_status          same.
+ *     jobs.job_stage           `0035` dropped the `stage` type — "a vocabulary that
+ *                              changes must be able to lose a value and an enum cannot".
+ *
+ *   That matters beyond pedantry, because enum and CHECK are changed by different
+ *   statements and the page says which. Four still are enums — `permission_level`,
+ *   `au_state`, `country_code`, `sa_council` — and one, the owning team, is a foreign key
+ *   into a real table, which is the only one of the set the app can add to.
+ */
+const ALLOWED_VALUES: Record<string, AllowedValues> = {
+  "profiles.profile_permission": {
+    source: "enum", holder: "permission_level", values: PERMISSION_LEVELS
+  },
+  "addresses.address_state": {
+    source: "enum", holder: "au_state", values: AU_STATES
+  },
+  "addresses.address_country": {
+    source: "enum", holder: "country_code", values: ["AU"]
+  },
+  "addresses.address_council": {
+    source: "enum", holder: "sa_council", values: SA_COUNCILS
+  },
+  // Column-level CHECKs written without a name, so Postgres generates `<table>_<col>_check`.
+  "projects.project_type": {
+    source: "check", holder: "projects_project_type_check", values: PROJECT_TYPES
+  },
+  "projects.project_status": {
+    source: "check", holder: "projects_project_status_check", values: RECORD_STATUSES
+  },
+  "jobs.job_status": {
+    source: "check", holder: "jobs_job_status_check", values: RECORD_STATUSES
+  },
+  // This one 0035 named itself.
+  "jobs.job_stage": {
+    source: "check", holder: "jobs_stage_is_a_lifecycle_stage", values: STAGE_NAMES
+  },
+  // Rows, not a type: `job_owning_team` is `text references teams(team_id)` since 0026.
+  // The values are read live, because the point of a lookup table is that it changes.
+  "jobs.job_owning_team": { source: "table", holder: "teams", lookup: "teams" }
 };
 
 export const DICTIONARY: DictionaryEntry[] = [
@@ -498,11 +606,13 @@ export const DICTIONARY: DictionaryEntry[] = [
     "uuid", "Not null. A blank value falls back to original_address_id in a trigger, so a caller only has to supply one. Indexed.",
     "FK → addresses(id). Exposed by project_display.current_address.", "created"),
   e("projects.project_type", "Project type", "Residential, commercial or development.",
-    "enum", "project_type. Nullable. Values: residential, commercial, development.", "—", "created"),
+    "text",
+    "Nullable. CHECK (project_type in ('residential','commercial','development')). Text with a check since 0028 — the `project_type` enum was dropped there, and this entry said `enum` for four migrations afterwards.",
+    "Inherited by jobs through the job_display view — a job never sets its own.", "created"),
   e("projects.project_status", "Status",
     "Where the project stands. A record is in exactly one of these at a time: on track, at risk, behind schedule, on hold, completed, cancelled or archived. This is what someone sets — it is not health.",
-    "enum",
-    "record_status. Not null, default 'on_track'. The same enum as jobs.status. Labels are snake_case because they are codes, not copy — the app maps them for display, so a rename is not a data migration.",
+    "text",
+    "Not null, default 'on_track'. CHECK on the seven values — the same set as jobs.job_status, which was the `record_status` enum until 0028 dropped it. Labels are snake_case because they are codes, not copy — the app maps them for display, so a rename is not a data migration.",
     "Feeds is_current(status) — anything not completed, cancelled or archived is current. Exposed by project_display.status.",
     "created"),
   e("projects.project_start_date", "Start date", "When work began.", "date", "Nullable.", "—", "created"),
@@ -571,17 +681,21 @@ export const DICTIONARY: DictionaryEntry[] = [
     "FK → addresses(id). Exposed by job_display.current_address and job_address_search.",
     "created"),
   e("jobs.job_stage", "Stage",
-    "Which of the eight pipeline phases the job is in now, and the single answer to that question. The board filters on this column every load.",
-    "enum", "stage. Not null, default 'Sales & acquisition'. Indexed.",
-    "Replaced the proposed jobs.stage_id in 0004. Paired with stage_entered_at, which a trigger moves whenever this changes.",
+    "Which of the five lifecycle phases the job is in now, and the single answer to that question. The board filters on this column every load. What a team does *inside* a phase is a nested pipeline, not a value here.",
+    "text",
+    "Not null, default 'Acquisition & Development'. Indexed. CHECK jobs_stage_is_a_lifecycle_stage on the five names. Text rather than an enum since 0035, in that migration's words: a vocabulary that changes must be able to lose a value, and an enum cannot.",
+    "Replaced the proposed jobs.stage_id in 0004; the `stage` enum it used was dropped in 0035. Paired with job_stage_entered_at, which a trigger moves whenever this changes.",
     "created"),
-  e("jobs.job_owning_team", "Owning team", "The one team holding the job right now. \"One job, one team at a time\" is the whole model.", "enum", "team. Not null.", "An enum value since 0004, not an FK — there is no teams table to point at.", "to_do", PROPOSED),
+  e("jobs.job_owning_team", "Owning team", "The one team holding the job right now. \"One job, one team at a time\" is the whole model.",
+    "text", "Not null. FK → teams(team_id) ON UPDATE CASCADE.",
+    "An FK since 0026, which made teams a table. It was a `team` enum value from 0004 until then — the reason it changed is that a team gets renamed and retired, and neither is something an enum does well.",
+    "created"),
   e("jobs.job_assignee_id", "Assigned to", "The person responsible inside the owning team.", "uuid", "Nullable.", "FK → profiles(id).", "to_do", PROPOSED),
   e("jobs.job_status", "Status",
-    "Where the job stands — the same seven values as a project, from the same enum. What someone sets, not what the system works out.",
-    "enum", "record_status. Not null, default 'on_track'.",
-    "Feeds is_current(status). Exposed by job_display.status and job_display.is_current.",
-    "to_do", PROPOSED),
+    "Where the job stands — the same seven values as a project. What someone sets, not what the system works out.",
+    "text", "Not null, default 'on_track'. CHECK on the seven values; the `record_status` enum they came from was dropped in 0028.",
+    "Feeds is_current(job_status). Exposed by job_display.job_status and job_display.job_is_current.",
+    "created"),
   e("jobs.source_system", "Source system", "Where the record originated — HubSpot, SharePoint, SiteBook, Trello.", "text", "Nullable.", "—", "to_do", PROPOSED),
   e("jobs.contract_status", "Contract status", "Where the contract is up to. Free text today; a lookup once the states settle.", "text", "Nullable.", "—", "to_do", PROPOSED),
   e("jobs.deposit_status", "Deposit status", "Whether the deposit has been received.", "text", "Nullable.", "—", "to_do", PROPOSED),

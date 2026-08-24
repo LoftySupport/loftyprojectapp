@@ -1,6 +1,7 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useQuery } from "./DataProvider";
-import type { PropertyDef, PropertyScope, TemplateCheckpoint } from "./types";
+import { teamName } from "./types";
+import type { PropertyDef, PropertyScope, TeamId, TemplateCheckpoint } from "./types";
 
 /**
  * The lookups, read through the seam.
@@ -108,4 +109,38 @@ export function groupByStage(
   return stageNames
     .map(stage => ({ stage, defs: defs.filter(d => d.stageName === stage) }))
     .filter(g => g.defs.length > 0);
+}
+
+/**
+ * Team ids turned into the names people use.
+ *
+ * `profiles.teams` is a list of slugs — `lofty_general`, `pre_construction_admin` —
+ * because that is what the foreign key holds, and three screens were rendering it
+ * straight: the dashboard greeted you with "lofty_general", Settings showed it under
+ * "Teams", and the Admin table listed it in the Teams column. `boardModel` already
+ * resolves the owning team on a job through `teamName()`; nothing did the same for a
+ * person's memberships.
+ *
+ * Retired teams are included deliberately. A picker must not *offer* Commercial, but a
+ * person still recorded in it has to render as "Commercial" rather than as a slug —
+ * exactly the distinction `useTeams` draws between `teams` and `teamNames`.
+ *
+ * While the lookup is still loading there is nothing to resolve with, and `teamName`
+ * falls back to the id. That is the honest answer for one frame — a placeholder name
+ * would be inventing one — and it settles as soon as the query lands.
+ */
+export function useTeamLabels() {
+  const { teams, loading } = useTeams();
+
+  const label = useCallback((id: TeamId | string) => teamName(id, teams), [teams]);
+
+  /** The joined form the three screens above all want. Empty stays empty. */
+  const labels = useCallback(
+    (ids: readonly (TeamId | string)[]) => ids.map(id => teamName(id, teams)),
+    [teams]
+  );
+
+  // `teams` is passed straight through so a screen that both resolves names and offers
+  // a picker does not have to call two hooks and run the query twice.
+  return { teams, label, labels, loading };
 }

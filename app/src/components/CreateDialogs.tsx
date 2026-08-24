@@ -1,8 +1,7 @@
-import { useEffect, useState, type ReactNode } from "react";
-import {
-  Button, Modal, ModalContent, ModalFooter, ModalHeader, Text, TextField
-} from "@vibe/core";
+import { useEffect, useState } from "react";
+import { Button, Text, TextField } from "@vibe/core";
 import { CreatePanel } from "./CreatePanel";
+import { Field, Problem, Result } from "./Form";
 import { Select, toOptions } from "./Select";
 import { useRepository } from "../data/DataProvider";
 import { useTeams } from "../data/useLookups";
@@ -22,6 +21,17 @@ import "./ui.css";
  * A project needs an address and a type; everything else — the project number from a
  * sequence, both address pointers, the audit quartet — is the database's to set. Asking
  * for a project number here would be offering to fight the sequence.
+ *
+ * ALL THREE ARE PANELS NOW, NOT ONE PANEL AND TWO DIALOGS
+ *
+ *   New project moved to `CreatePanel` and the other two did not, which left the app
+ *   with two different answers to "what does creating something look like". They are
+ *   the same answer now. The reasoning for the panel is in `CreatePanel` and applies
+ *   to all three: the list you are adding to stays visible, and splitting a project
+ *   into six jobs is precisely the case where you want to see the six appear.
+ *
+ *   `Field`, `Problem` and `Result` came out of this file into `Form.tsx`, because a
+ *   second copy of them in `UserDialogs` had drifted onto class names nothing styles.
  */
 
 /** Shared between both dialogs, because a job may sit at its own address. */
@@ -423,10 +433,27 @@ export function NewJobDialog({
     }
   }
 
+  const close = () => { reset(); onClose(); };
+
   return (
-    <Modal show={show} onClose={() => { reset(); onClose(); }} id="new-job">
-      <ModalHeader title="New job" />
-      <ModalContent>
+    <CreatePanel
+      open={show}
+      title="New job"
+      onClose={close}
+      footer={
+        created
+          ? <Button onClick={close}>Done</Button>
+          : (
+            <>
+              <Button kind="tertiary" onClick={close}>Cancel</Button>
+              <Button onClick={save} disabled={!valid || saving}>
+                {saving ? "Creating…" : "Create job"}
+              </Button>
+            </>
+          )
+      }
+    >
+      <>
         {created ? (
           <Result>
             Job <strong>{created}</strong> created.
@@ -465,58 +492,8 @@ export function NewJobDialog({
           </div>
         )}
         {error && <Problem>{error}</Problem>}
-      </ModalContent>
-      <ModalFooter
-        primaryButton={
-          created
-            ? { text: "Done", onClick: () => { reset(); onClose(); } }
-            : { text: saving ? "Creating…" : "Create job", onClick: save, disabled: !valid || saving }
-        }
-        secondaryButton={created ? undefined : { text: "Cancel", onClick: () => { reset(); onClose(); } }}
-      />
-    </Modal>
-  );
-}
-
-// ------------------------------------------------------------------ bits
-
-function Field({
-  label, hint, required, children
-}: {
-  label: string; hint?: string; required?: boolean; children: ReactNode;
-}) {
-  return (
-    <div className="field-row">
-      <div className="field-label">
-        <Text type="text2">
-          {label}{required && <span className="field-required" aria-hidden="true"> *</span>}
-        </Text>
-        {hint && <div className="field-hint">{hint}</div>}
-      </div>
-      <div className="field-control">{children}</div>
-    </div>
-  );
-}
-
-/**
- * The error is shown verbatim rather than replaced with "Something went wrong".
- * Postgres messages here are the ones worth reading — a permission denied from RLS, a
- * check constraint naming itself — and hiding them would mean the person cannot tell a
- * missing field from a missing permission.
- */
-function Problem({ children }: { children: ReactNode }) {
-  return (
-    <div className="create-problem" role="alert">
-      <Text type="text2">{children}</Text>
-    </div>
-  );
-}
-
-function Result({ children }: { children: ReactNode }) {
-  return (
-    <div className="create-result" role="status">
-      <Text type="text1">{children}</Text>
-    </div>
+      </>
+    </CreatePanel>
   );
 }
 
@@ -607,9 +584,28 @@ export function SplitProjectDialog({
   if (projectId === null) return null;
 
   return (
-    <Modal show={show} onClose={onClose} id="split-project">
-      <ModalHeader title={`Create jobs on project ${projectId}`} />
-      <ModalContent>
+    <CreatePanel
+      open={show}
+      title={`Create jobs on project ${projectId}`}
+      onClose={onClose}
+      footer={
+        created
+          ? <Button onClick={onClose}>Done</Button>
+          : (
+            <>
+              <Button kind="tertiary" onClick={onClose}>Cancel</Button>
+              <Button onClick={save} disabled={!valid || saving}>
+                {saving
+                  ? "Creating…"
+                  : countValid
+                    ? `Create ${n} job${n === 1 ? "" : "s"}`
+                    : "Create jobs"}
+              </Button>
+            </>
+          )
+      }
+    >
+      <>
         {created ? (
           <Result>
             Created <strong>{created.length}</strong> job{created.length === 1 ? "" : "s"}:{" "}
@@ -665,23 +661,7 @@ export function SplitProjectDialog({
           </div>
         )}
         {error && <Problem>{error}</Problem>}
-      </ModalContent>
-      <ModalFooter
-        primaryButton={
-          created
-            ? { text: "Done", onClick: onClose }
-            : {
-                text: saving
-                  ? "Creating…"
-                  : countValid
-                    ? `Create ${n} job${n === 1 ? "" : "s"}`
-                    : "Create jobs",
-                onClick: save,
-                disabled: !valid || saving
-              }
-        }
-        secondaryButton={created ? undefined : { text: "Cancel", onClick: onClose }}
-      />
-    </Modal>
+      </>
+    </CreatePanel>
   );
 }

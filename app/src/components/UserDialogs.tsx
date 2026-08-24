@@ -1,9 +1,12 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { Modal, ModalContent, ModalFooter, ModalHeader, Text, TextField } from "@vibe/core";
+import { useEffect, useState } from "react";
+import { Button, Modal, ModalContent, ModalFooter, ModalHeader, Text, TextField } from "@vibe/core";
+import { CreatePanel } from "./CreatePanel";
+import { Field, Problem } from "./Form";
 import { MultiSelect, Select, toOptions } from "./Select";
 import { useRepository } from "../data/DataProvider";
+import { useTeams } from "../data/useLookups";
 import {
-  PERMISSION_LEVELS, TEAM_SEED,
+  PERMISSION_LEVELS,
   type ActivityEntry, type NewProfile, type PermissionLevel, type Profile, type TeamId
 } from "../data/types";
 import "./ui.css";
@@ -16,27 +19,19 @@ import "./ui.css";
  * creates the row they will be *linked to* the first time they authenticate with
  * Microsoft. `login_email` is the field that link is made on, which is why it is asked
  * for here and explained rather than left to look like a duplicate of the email above it.
+ *
+ * WHY THIS FILE CHANGED SHAPE
+ *
+ *   The user form was the one form in the app that had never been swept forward, and it
+ *   showed. It rendered `.create-field / .create-label / .create-hint` — class names
+ *   `ui.css` has no rule for at all — inside a centred `Modal`, so every label sat hard
+ *   against the control above it and the dialog's own title was overlapped by the first
+ *   field. That is the whole explanation for "the edit user one is weird": not a
+ *   subtle spacing bug, three class names nothing styles.
+ *
+ *   It now uses the same two pieces every other form does: `CreatePanel` for the shell
+ *   and `Field` from `Form.tsx` for the rows. There is no second layout left to drift.
  */
-
-function Field({
-  label, hint, required, children
-}: { label: string; hint?: string; required?: boolean; children: ReactNode }) {
-  return (
-    <label className="create-field">
-      <span className="create-label">
-        {label}{required && <span aria-hidden="true"> *</span>}
-        {hint && <span className="create-hint"> — {hint}</span>}
-      </span>
-      {children}
-    </label>
-  );
-}
-
-const Problem = ({ children }: { children: ReactNode }) => (
-  <div className="create-problem" role="alert">
-    <Text type="text2" element="span" ellipsis={false}>{children}</Text>
-  </div>
-);
 
 const EMPTY: NewProfile = {
   firstName: "", lastName: "", email: "",
@@ -92,10 +87,23 @@ export function UserDialog({
     }
   }
 
+  if (!show) return null;
+
   return (
-    <Modal show={show} onClose={onClose} id="user-dialog">
-      <ModalHeader title={profile ? `Edit ${profile.fullName}` : "Add user"} />
-      <ModalContent>
+    <CreatePanel
+      open={show}
+      title={profile ? `Edit ${profile.fullName}` : "Add user"}
+      onClose={onClose}
+      footer={
+        <>
+          <Button kind="tertiary" onClick={onClose}>Cancel</Button>
+          <Button onClick={save} disabled={!valid || saving}>
+            {saving ? "Saving…" : profile ? "Save changes" : "Add user"}
+          </Button>
+        </>
+      }
+    >
+      <>
         <div className="create-form">
           <Field label="First name" required>
             <TextField id="user-first" inputAriaLabel="First name"
@@ -129,67 +137,67 @@ export function UserDialog({
               onChange={v => set("permission", v as PermissionLevel)}
             />
           </Field>
-          <Field label="Teams" hint="the first is their primary — add as many as apply">
+          <Field label="Teams" hint="add as many as apply">
             <TeamPicker value={form.teams} onChange={t => set("teams", t)} />
           </Field>
         </div>
         {error && <Problem>{error}</Problem>}
         {!profile && (
-          <Text type="text3" color="secondary" ellipsis={false}>
-            No password and no invitation: this creates the record their Microsoft account
-            links to the first time they sign in.
-          </Text>
+          <div className="create-preview">
+            <Text type="text3" color="secondary" ellipsis={false}>
+              No password and no invitation: this creates the record their Microsoft account
+              links to the first time they sign in.
+            </Text>
+          </div>
         )}
-      </ModalContent>
-      <ModalFooter
-        primaryButton={{
-          text: saving ? "Saving…" : profile ? "Save changes" : "Add user",
-          onClick: save,
-          disabled: !valid || saving
-        }}
-        secondaryButton={{ text: "Cancel", onClick: onClose }}
-      />
-    </Modal>
+      </>
+    </CreatePanel>
   );
 }
 
 /**
- * Membership is a set, and now the control says so: one multi-select over the `team`
- * enum, rather than a single-select that appended to a list of chips beside it.
- *
- * The options are TEAM_SEED, which is the enum transcribed — all fifteen values, including
- * the four 0014 added. The old control could reach them too; what it could not do was
- * show you what you had and what you could add in the same place.
+ * Membership is a set, and the control says so: one multi-select over the teams lookup,
+ * rather than a single-select that appended to a list of chips beside it.
  *
  * The "(primary)" label on the first chip is gone, and its removal is the point rather
  * than tidying. 0022 dropped `is_primary` and made `profiles.teams` a normalised set —
  * the database sorts it into enum order on every write. So the first team you picked
  * was not the first one stored, and a label claiming otherwise was telling you something
- * the schema had stopped being able to honour.
- */
-/**
- * Shows team names, stores team slugs.
+ * the schema had stopped being able to honour. The hint above says "as many as apply"
+ * and no longer claims the first one means anything.
  *
- * The two were the same string while teams were an enum. They are not any more: the
- * label is renameable and the slug is a foreign key, which is the whole reason the list
- * became a table. So the option's value and its label come from different fields, and
- * retired teams are filtered out — they are still valid for the rows that already
- * reference them, just not offerable to anyone new.
+ * Shows team names, stores team slugs. The two were the same string while teams were an
+ * enum. They are not any more: the label is renameable and the slug is a foreign key,
+ * which is the whole reason the list became a table. So the option's value and its label
+ * come from different fields, and retired teams are filtered out — still valid for the
+ * rows that already reference them, just not offerable to anyone new.
+ *
+ * Read through `useTeams` rather than from `TEAM_SEED`, which is the one thing the
+ * repository seam exists to prevent and matters more here than most, because this value
+ * is a foreign key.
  */
 function TeamPicker({ value, onChange }: { value: TeamId[]; onChange: (t: TeamId[]) => void }) {
+  const { teams } = useTeams();
+  const active = teams.filter(t => t.isActive);
+
   return (
     <MultiSelect
       aria-label="Teams"
-      options={TEAM_SEED.filter(t => t.isActive).map(t => ({ value: t.id, label: t.name }))}
+      options={active.map(t => ({ value: t.id, label: t.name }))}
       value={value}
       onChange={t => onChange(t as TeamId[])}
-      placeholder="Select teams"
+      placeholder={active.length ? "Select teams" : "Loading teams…"}
     />
   );
 }
 
 /**
  * Deactivation, asked for plainly.
+ *
+ * Still a centred `Modal` while the forms moved to panels, and the difference is the
+ * point: a panel leaves the list behind it usable, which is right when you are adding
+ * four people and wrong when you are being asked to confirm one irreversible-looking
+ * thing. A confirmation is supposed to interrupt.
  *
  * The button says "Deactivate" and not "Delete" because that is what happens: `profiles`
  * has no DELETE policy, deliberately, since a name sits on years of activity. The dialog
@@ -250,7 +258,14 @@ export function DeactivateDialog({
   );
 }
 
-/** One person's or one team's history, newest first. */
+/**
+ * One person's or one team's history, newest first.
+ *
+ * A panel rather than a modal, for the reason the create panel is one: this is opened
+ * from a name in a table, and the list you came from stays readable beside it. It is
+ * also the same shape as the job drawer, which is the other "look at this record"
+ * surface in the app.
+ */
 export function ActivityDialog({
   show, title, profileId, team, onClose
 }: {
@@ -275,10 +290,16 @@ export function ActivityDialog({
     return () => { cancelled = true; };
   }, [repo, show, profileId, team]);
 
+  if (!show) return null;
+
   return (
-    <Modal show={show} onClose={onClose} id="activity">
-      <ModalHeader title={`Activity — ${title}`} />
-      <ModalContent>
+    <CreatePanel
+      open={show}
+      title={`Activity — ${title}`}
+      onClose={onClose}
+      footer={<Button kind="tertiary" onClick={onClose}>Close</Button>}
+    >
+      <>
         {error && <Problem>{error}</Problem>}
         {!error && entries === null && <Text type="text2" color="secondary">Loading…</Text>}
         {entries !== null && entries.length === 0 && (
@@ -300,8 +321,7 @@ export function ActivityDialog({
             ))}
           </ul>
         )}
-      </ModalContent>
-      <ModalFooter primaryButton={{ text: "Close", onClick: onClose }} />
-    </Modal>
+      </>
+    </CreatePanel>
   );
 }

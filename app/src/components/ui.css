@@ -791,7 +791,10 @@ code { overflow-wrap: anywhere; }
 }
 .link-button:hover { text-decoration: none; }
 
-.row-actions { display: inline-flex; gap: var(--space-4); flex-wrap: wrap; }
+/* One line, and let the table scroll if that makes it wider — the same call this file
+   already makes for the inline add row. Wrapped, "Edit" and "Deactivate" stack into a
+   two-line cell that drags every row's height with it. */
+.row-actions { display: inline-flex; gap: var(--space-4); flex-wrap: nowrap; white-space: nowrap; }
 
 /* The inks are the semantic ones from tokens.css, each redefined per theme, so these
    hold AA in light, dark and black rather than only in the one they were picked in. */
@@ -849,3 +852,69 @@ code { overflow-wrap: anywhere; }
 
 /* Right-hand side of a panel head: a count and an action, on one line. */
 .panel-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+/* ---- popovers over panels ------------------------------------------------
+   Every dropdown in a create panel was unusable, and this is why.
+
+   Vibe renders a Dropdown's menu through a portal into `<body>`, in a wrapper whose
+   whole ancestor chain computes `z-index: auto`. An auto-stacked positioned element
+   paints in tree order, *before* anything carrying a positive z-index — so the menu
+   was drawn underneath `.create-panel` (41) and `.drawer` (41), at the right
+   coordinates and completely invisible. Measured, not guessed: with "Project type"
+   open, the `[role="option"]` elements sat at x 957–1380 with the panel covering
+   940–1400.
+
+   That is the answer to "I can't add project type". The field was never broken; its
+   list was being painted behind the panel it belongs to. Council, State and Owning
+   team all had it too, and so would every picker in the user form.
+
+   Above Vibe's own Modal (10000) rather than merely above our panels, because a
+   popover has to clear whatever opened it and a modal is the tallest thing here. This
+   is the one rule in the file that reaches into Vibe's markup — the class is its
+   unhashed public one, and there is no prop for this on Dropdown. */
+.monday-style-dialog-content-wrapper { z-index: 10001; }
+
+/* ---- sortable columns ----------------------------------------------------
+   A header that sorts is a button, not a decorated `th`: it is operated by the
+   keyboard, it has a pressed-ish state, and screen readers get the direction from
+   `aria-sort` on the cell rather than from the arrow, which is decorative. */
+.data-table th.is-sortable { padding: 0; }
+.sort-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  height: 40px;
+  padding: 0 var(--space-12);
+  background: none;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.sort-header:hover { background: var(--primary-background-hover-color); }
+.sort-header:focus-visible { outline: 2px solid var(--primary-color); outline-offset: -2px; }
+/* Reserved whether or not this column is the sorted one, so the headings do not shift
+   sideways as the sort moves between them. */
+.sort-arrow { width: 10px; flex-shrink: 0; opacity: 0; }
+.sort-header[aria-pressed="true"] { color: var(--primary-text-color); }
+.sort-header[aria-pressed="true"] .sort-arrow { opacity: 1; }
+.data-table th.num .sort-header { justify-content: flex-end; }
+
+/* ---- editing a row in place ---------------------------------------------
+   The same shape as `.inline-add`: the row keeps its columns and swaps its text for
+   controls, so the thing being edited stays where it was in the list. */
+.data-table tr.is-editing > td {
+  background: var(--primary-selected-color);
+  vertical-align: middle;
+}
+.data-table tr.is-editing > td:first-child { box-shadow: inset 3px 0 0 var(--primary-color); }
+/* Two inputs in the name cell — first and last, which are two columns in `profiles`
+   and have to stay two here or somebody's surname ends up in their given name. */
+.cell-pair { display: flex; gap: var(--space-4); min-width: 220px; }
+.cell-pair > * { flex: 1 1 0; min-width: 0; }
+.cell-edit { min-width: 140px; }
+.cell-edit-wide { min-width: 200px; }
+.row-editing-problem { margin: 0 0 var(--space-8); }

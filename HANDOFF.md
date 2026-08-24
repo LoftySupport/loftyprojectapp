@@ -6,7 +6,59 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 and before it, the spine review described there, because that is the only category of
 change that gets expensive once 200 jobs are in.
 
-Last updated: 2026-08-21.
+Last updated: 2026-08-24.
+
+---
+
+## Session of 2026-08-24 — forms, tables, and one invisible dropdown
+
+### The bug worth carrying forward
+
+**Every dropdown inside the create panel was painted behind it, and looked like a field
+that did not work.** Amber reported it as "I can't add project type to the new project
+form". The field was fine. Vibe renders a Dropdown's menu through a portal into `<body>`
+in a wrapper whose whole ancestor chain computes `z-index: auto`, and an auto-stacked
+positioned element paints *before* anything with a positive z-index — so the menu landed
+under `.create-panel` (41). Measured rather than reasoned about: with the menu open its
+`[role="option"]` elements sat at x 957–1380 while the panel covered 940–1400.
+
+One line in `ui.css` fixes it, above Vibe's own Modal (10000) rather than merely above our
+panels, because a popover has to clear whatever opened it. State, Council and Owning team
+had it too. **Anything new that opens a layer over the page needs to check this**, and the
+check is "open a dropdown inside it", not "read the CSS".
+
+### What else changed
+
+- **The user form was the one form never swept forward.** It rendered
+  `.create-field / .create-label / .create-hint` — three class names `ui.css` has no rule
+  for — inside a centred `Modal`. That is the whole explanation for "the edit user one is
+  weird". `Field`, `Problem` and `Result` now live in `components/Form.tsx` and both files
+  import them; New job and Split project moved onto `CreatePanel` alongside New project.
+  Deactivate stays a modal on purpose — a confirmation is supposed to interrupt.
+- **Sorting** — `components/SortableTable.tsx`, applied to Users and Teams. Blanks sort
+  last in both directions; permission sorts by the ladder, not alphabetically.
+- **Inline editing of a user row**, covering exactly the columns the table shows. Only
+  changed fields are sent. `login_email` stays in the panel — an editor that reached
+  further than the table displays would be invisible until it had changed something.
+- **`profiles.teams` rendered as slugs** on the dashboard greeting, in Settings and in the
+  Admin table. `boardModel` had resolved a job's owning team through `teamName()` for a
+  while; nothing did the same for a person's memberships. `useTeamLabels()` now does.
+- **The dictionary lists a constrained column's values**, and says where they live, which
+  is what decides who can change them: rows in a lookup are an ordinary write, an enum or
+  a CHECK is a migration. Checking the migrations to write that down turned up four
+  entries recording enums Postgres no longer has — `projects.project_type`,
+  `projects.project_status`, `jobs.job_status` (all `0028`) and `jobs.job_stage` (`0035`).
+  Those are corrected.
+
+### Still open
+
+**Amber asked to be able to add and edit enum values from the app.** For `teams` that
+already works — it is a table. For the rest it is DDL (`ALTER TYPE`, or dropping and
+recreating a CHECK), which PostgREST cannot issue and no policy can grant. The page says
+so per property rather than offering a control that would fail on save. Making it true
+would mean either an edge function holding a service-role key that runs vetted DDL, or
+converting the remaining enums to lookup tables the way `teams` and the stage vocabulary
+already went. That is a decision, not an implementation detail.
 
 ---
 
