@@ -207,8 +207,14 @@ begin
   -- 1. The lifecycle. A column on `jobs`, so RLS filters rows rather than raising —
   --    ROW_COUNT, not the absence of an exception. Three probes in 0035 reported a pass
   --    because a statement that touches nothing succeeds.
+  --
+  --    Forwards only: 0039 made the lifecycle linear, and the first version of this
+  --    probe swept every job to Construction — including a fixture already past it,
+  --    which the guard rightly refused. The probe now moves only the jobs that are
+  --    behind, which is the only move a manager is allowed anyway.
   begin
-    update jobs set job_stage = 'Construction' where job_stage is distinct from 'Construction';
+    update jobs set job_stage = 'Construction'
+     where lifecycle_position(job_stage) < lifecycle_position('Construction');
     get diagnostics moved = row_count;
     if moved > 0 then
       raise notice 'ok  a manager moved % job(s) to another lifecycle phase', moved;

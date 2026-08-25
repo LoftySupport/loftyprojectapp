@@ -314,6 +314,12 @@ export interface Job {
   /** This job's own SharePoint subfolder, inside its project's folder. */
   sharepointUrl: string | null;
   /**
+   * The project's folder, resolved by `job_display` rather than copied — the record page
+   * shows both links, and a copy would be a second place for it to be wrong the day a
+   * site is moved. Same rule as `projectCurrentAddress` below.
+   */
+  projectSharepointUrl: string | null;
+  /**
    * The project's type, resolved by `job_display` — never stored on the job.
    *
    * This said "No `projectType`" and meant it about the *column*: a commercial project

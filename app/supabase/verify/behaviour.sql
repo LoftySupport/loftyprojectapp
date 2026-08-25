@@ -375,3 +375,81 @@ end
 from addresses
 where address_street_1 = 'Ironbark Road';
 rollback;
+
+\echo '--- 37. a project follows its slowest job, and only forwards'
+-- 0041. Lofty: "never move backwards ... a project only moves stages when all its jobs
+-- have moved up a lifecycle stage". Those are one rule, not two: the project's stage is
+-- the minimum of its jobs' stages, clamped so it can only increase.
+--
+-- Six steps, because the interesting cases are the ones where nothing should happen.
+-- Read the `moved` column as "did the project change" — three of these must say no.
+begin;
+create temp table t37 (step integer, note text, stage text) on commit drop;
+
+insert into addresses (address_street_number, address_street_1, address_suburb,
+                       address_state, address_postcode, address_council)
+values ('91','Slowest Job Road','Golden Grove','SA','5125','City of Tea Tree Gully');
+
+insert into projects (project_original_address_id, project_type, project_created_by)
+select address_id, 'development', (select profile_id from profiles where profile_email='behaviour-test@lofty.com.au')
+from addresses where address_street_1 = 'Slowest Job Road';
+
+create temp view p37 as
+  select project_id from projects
+  where project_original_address_id = (select address_id from addresses where address_street_1='Slowest Job Road');
+
+-- Two jobs, both at the first phase, same as the project.
+insert into jobs (project_id, job_original_address_id, job_owning_team, job_created_by)
+select (select project_id from p37), address_id, 'design',
+       (select profile_id from profiles where profile_email='behaviour-test@lofty.com.au')
+from addresses where address_street_1 = 'Slowest Job Road';
+insert into jobs (project_id, job_original_address_id, job_owning_team, job_created_by)
+select (select project_id from p37), address_id, 'design',
+       (select profile_id from profiles where profile_email='behaviour-test@lofty.com.au')
+from addresses where address_street_1 = 'Slowest Job Road';
+
+insert into t37 select 1, 'two jobs, both at the first phase', project_stage from projects, p37 where projects.project_id = p37.project_id;
+
+-- ONE job moves up. The other has not, so the project must not either.
+update jobs set job_stage = 'Pre-construction'
+where job_id = (select min(job_id) from jobs where project_id = (select project_id from p37));
+insert into t37 select 2, 'one job of two moved up', project_stage from projects, p37 where projects.project_id = p37.project_id;
+
+-- Now the second one. All its jobs have moved up, so the project moves.
+update jobs set job_stage = 'Pre-construction'
+where project_id = (select project_id from p37) and job_stage = 'Acquisition & Development';
+insert into t37 select 3, 'all jobs moved up', project_stage from projects, p37 where projects.project_id = p37.project_id;
+
+-- A third job is added, at the first phase — an ordinary thing, a project is split more
+-- than once. This is the case 0039 could not decide: the minimum now points backwards.
+insert into jobs (project_id, job_original_address_id, job_owning_team, job_created_by)
+select (select project_id from p37), address_id, 'design',
+       (select profile_id from profiles where profile_email='behaviour-test@lofty.com.au')
+from addresses where address_street_1 = 'Slowest Job Road';
+insert into t37 select 4, 'a new job added behind the project', project_stage from projects, p37 where projects.project_id = p37.project_id;
+
+-- The two older jobs run ahead to Construction. The new one is still at the first phase,
+-- so it is the slowest and the project stays where it is.
+update jobs set job_stage = 'Construction'
+where project_id = (select project_id from p37) and job_stage = 'Pre-construction';
+insert into t37 select 5, 'the others ran ahead, the newest is slowest', project_stage from projects, p37 where projects.project_id = p37.project_id;
+
+-- Delete the slowest. The minimum is now Construction, and the project catches up.
+delete from jobs
+where job_id = (select max(job_id) from jobs where project_id = (select project_id from p37));
+insert into t37 select 6, 'the slowest job deleted', project_stage from projects, p37 where projects.project_id = p37.project_id;
+
+select case
+  when array_agg(stage order by step) = array[
+         'Acquisition & Development',  -- 1  level with its jobs
+         'Acquisition & Development',  -- 2  one job up is not all of them
+         'Pre-construction',           -- 3  all of them, so it moves
+         'Pre-construction',           -- 4  a job behind it cannot drag it back
+         'Pre-construction',           -- 5  still held by the slowest
+         'Construction'                -- 6  slowest gone, catches up to the rest
+       ]
+  then 'ok  project moved only when every job had, and never backwards'
+  else 'FAIL: project stage tracking — ' || array_to_string(array_agg(step || ':' || stage order by step), ' / ')
+end
+from t37;
+rollback;
