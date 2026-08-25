@@ -62,6 +62,27 @@ export function DashboardPage() {
         // silence forever reads as "you are in no team", which is a different fact.
         : <span className="pd-unassigned">{teamsError ? "Team names unavailable" : ""}</span>;
 
+  /**
+   * The same answer as the greeting, phrased for a sentence.
+   *
+   * This read `Nothing due to hand over to {{profiles.teams}}.` — a hardcoded token, on
+   * a page where the greeting three inches away had just resolved the same field. A
+   * token means "the app cannot answer this"; `profiles.teams` is answerable, so it was
+   * reporting a gap that had closed. That is the mistake `Locked` on the Settings page
+   * carries a whole comment about.
+   *
+   * Three sentences rather than one sentence with `teamLabel` dropped into it, because
+   * two of the three states are fragments that do not fit the grammar — "Nothing due to
+   * hand over to No team assigned." "your team" in the last case is not a stand-in for
+   * a name; it is the sentence declining to use one.
+   */
+  const handoverNote: React.ReactNode =
+    teamNames?.length
+      ? <>Nothing due to hand over to {teamNames.join(", ")}.</>
+      : profile && !profile.teams.length
+        ? <>Nothing due to hand over — you are not in a team yet.</>
+        : <>Nothing due to hand over to your team.</>;
+
   if (loading) {
     return (
       <PageShell title="Dashboard" subtitle="What is on your plate today.">
@@ -148,9 +169,7 @@ export function DashboardPage() {
               <span className="pd-panel-mark incoming" aria-hidden="true" />
               <h3>Heading to your team</h3>
             </div>
-            <Empty>
-              Nothing due to hand over to <Token>profiles.teams</Token>.
-            </Empty>
+            <Empty>{handoverNote}</Empty>
           </section>
 
           <section className="pd-panel">

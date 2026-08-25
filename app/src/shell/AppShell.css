@@ -93,6 +93,22 @@ html, body, #root { height: 100%; }
   cursor: pointer;
 }
 .app-side-toggle:hover { color: var(--fixed-light-color); background: rgba(255, 255, 255, 0.12); }
+.app-side-toggle:focus-visible { outline: 2px solid var(--fixed-light-color); outline-offset: 2px; }
+
+/* Collapsed, this is the ONLY way back and it has to look like one.
+   Lofty reported the expand button as missing; it was there — a muted grey chevron on
+   dark navy, 32px, tucked under the logo mark in a 68px rail, which is indistinguishable
+   from a decorative divider until you hover it. Expanded, the button sits beside a full
+   wordmark and a labelled nav, so it can afford to be quiet; collapsed, there is nothing
+   else on that row and no label anywhere to tell you the rail can come back. So it gets
+   a border, a fill and full-strength ink — the difference between a control and a mark. */
+.app-side.is-collapsed .app-side-toggle {
+  color: var(--fixed-light-color);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  margin-top: var(--space-4);
+}
+.app-side.is-collapsed .app-side-toggle:hover { background: rgba(255, 255, 255, 0.22); }
 
 .app-nav { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .app-nav-item {

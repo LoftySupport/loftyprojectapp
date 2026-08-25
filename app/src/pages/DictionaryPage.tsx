@@ -35,6 +35,23 @@ import "./DictionaryPage.css";
  * `data_dictionary` table exists, and pretending otherwise would lose someone's work.
  * That is said on the page rather than left to be discovered.
  */
+/**
+ * The two statuses that describe what a property USED to be.
+ *
+ * `merged` is a property folded into another one; `archived` is one retired outright.
+ * Neither is part of the schema any more, so neither belongs in a list of what the
+ * schema is — sixteen dropped columns sitting among a hundred and ninety live ones is
+ * sixteen chances to read a decision that was reversed as though it still held.
+ *
+ * Hidden, not deleted. The entries carry the reasoning for a reversal, which is the
+ * whole point of keeping them — a schema choice without its reasoning gets "simplified"
+ * back into a bug by the next person. So the status tiles still count them and clicking
+ * one is how you get to them, which is also why this reads the filter rather than being
+ * a toggle of its own: asking for merged properties is already the way to ask.
+ */
+const RETIRED: readonly DictionaryStatus[] = ["merged", "archived"];
+const isRetired = (s: DictionaryStatus) => RETIRED.includes(s);
+
 export function DictionaryPage() {
   const { can } = usePermission();
   const canEditWording = can("manager");
@@ -56,14 +73,22 @@ export function DictionaryPage() {
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return merged.filter(d =>
+      // Merged and archived are out unless you ask for them by name — see RETIRED below.
+      (status ? d.status === status : !isRetired(d.status)) &&
       (!table || d.table === table) &&
-      (!status || d.status === status) &&
       (!q ||
         d.id.toLowerCase().includes(q) ||
         d.friendlyName.toLowerCase().includes(q) ||
         d.definition.toLowerCase().includes(q))
     );
   }, [merged, table, status, query]);
+
+  /** What the "of N" counts against: the live schema, not the history. */
+  const live = useMemo(() => merged.filter(d => !isRetired(d.status)), [merged]);
+  const liveTotal = live.length;
+  const retiredTotal = merged.length - liveTotal;
+  /** Tables that still have at least one column — `divisions` and `job_types` do not. */
+  const liveTables = useMemo(() => [...new Set(live.map(d => d.table))], [live]);
 
   const counts = countByStatus();
 
@@ -83,8 +108,11 @@ export function DictionaryPage() {
             and how far along it is.
           </Text>
         </div>
-        <Text type="text3" color="secondary">
-          {DICTIONARY.length} properties across {DICTIONARY_TABLES.length} tables
+        {/* The live schema, so this agrees with the "of N" beside the filters. Counting
+            all 206 next to a table showing 190 makes the page look broken. */}
+        <Text type="text3" color="secondary" ellipsis={false}>
+          {liveTotal} properties across {liveTables.length} tables
+          {retiredTotal > 0 && ` · ${retiredTotal} merged or archived`}
         </Text>
       </div>
 
@@ -151,11 +179,21 @@ export function DictionaryPage() {
             </div>
             <div className="toolbar-spacer" />
             <Text type="text2" color="secondary">
-              Showing {rows.length} of {DICTIONARY.length}
+              Showing {rows.length} of {status ? DICTIONARY.length : liveTotal}
             </Text>
           </div>
 
           <PermissionNote canEditWording={canEditWording} canEditStatus={canEditStatus} canArchive={canArchive} />
+
+          {/* Said rather than left to be noticed: a count that quietly disagrees with the
+              tiles above it is how somebody concludes the page is broken. */}
+          {!status && retiredTotal > 0 && (
+            <Text type="text3" color="secondary" ellipsis={false}>
+              {retiredTotal} merged or archived propert{retiredTotal === 1 ? "y is" : "ies are"} hidden —
+              they are history rather than schema. Use the <strong>Merged</strong> or{" "}
+              <strong>Archived</strong> tile above to read them.
+            </Text>
+          )}
 
           <div className="panel data-table-wrap">
             <table className="data-table dict-table">
@@ -272,7 +310,9 @@ export function DictionaryPage() {
         </>
       )}
 
-      {tab === 1 && <Tables rows={merged} />}
+      {/* Live columns only, same rule as the Properties tab: this tab is "what each table
+          is", and a dropped column is not part of that. */}
+      {tab === 1 && <Tables rows={live} />}
     </>
   );
 }
@@ -371,7 +411,14 @@ function Tables({ rows }: { rows: DictionaryEntry[] }) {
     <div className="stack" style={{ marginTop: "var(--space-16)" }}>
       {DICTIONARY_TABLES.map(t => {
         const cols = rows.filter(d => d.table === t);
-        const done = cols.filter(d => d.status === "created" || d.status === "merged").length;
+        // Tables whose every column is retired are tables that no longer exist —
+        // `divisions` and `job_types` were both dropped. An empty card for one reads
+        // as a table with no columns, which is a different and untrue thing.
+        if (cols.length === 0) return null;
+        // `merged` used to count as built. It is the opposite: a merged column was
+        // folded into another one and does not exist, so counting it inflated every
+        // table's progress by however many decisions had been reversed on it.
+        const done = cols.filter(d => d.status === "created").length;
         return (
           <section className="panel" key={t}>
             <div className="panel-head">
