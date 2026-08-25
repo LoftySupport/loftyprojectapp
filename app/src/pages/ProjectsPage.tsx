@@ -20,6 +20,9 @@ import { toOptions } from "../components/Select";
 import { NewProjectDialog, SplitProjectDialog } from "../components/CreateDialogs";
 import { InlineNewProjectRow } from "../components/InlineNewProjectRow";
 import { CommentsPanel } from "../components/CommentsPanel";
+import { AddressFields } from "../components/CreateDialogs";
+import { useQuery } from "../data/DataProvider";
+import type { NewAddress } from "../data/types";
 import { usePermission } from "../data/PermissionProvider";
 import { useRepository } from "../data/DataProvider";
 import "../components/ui.css";
@@ -295,6 +298,31 @@ function ProjectDetail({
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [folderUrl, setFolderUrl] = useState(project.sharepointUrl ?? "");
+  // The "Add another address" form. Null while closed; a NewAddress being edited while
+  // open. Saving repoints the current address — the outgoing one lands in the history
+  // below by trigger (0042), which is what keeps an old contract's address findable.
+  const [addingAddress, setAddingAddress] = useState<NewAddress | null>(null);
+  const [savingAddress, setSavingAddress] = useState(false);
+  const { data: pastAddresses } = useQuery(
+    r => r.listAddressHistory({ projectId: project.projectId }),
+    [],
+    [project.projectId, project.currentAddress]
+  );
+
+  async function saveNewAddress() {
+    if (!addingAddress) return;
+    setSavingAddress(true);
+    setSaveError(null);
+    try {
+      await repo.setProjectCurrentAddress(project.projectId, addingAddress);
+      setAddingAddress(null);
+      onChanged();
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSavingAddress(false);
+    }
+  }
 
   /**
    * One field at a time, straight through the seam. The patch carries only the key
@@ -455,6 +483,65 @@ function ProjectDetail({
               )}
             </div>
           </div>
+        </section>
+
+        <section className="panel">
+          <div className="panel-head">
+            <Text type="text2" weight="bold">Addresses</Text>
+            {can("user") && addingAddress === null && (
+              <Button size="small" kind="secondary" onClick={() => setAddingAddress({ suburb: "", postcode: "" })}>
+                + Add another address
+              </Button>
+            )}
+          </div>
+          <Text type="text3" color="secondary" element="p" ellipsis={false}>
+            The original address never changes — it is what the site was bought as, and
+            what old paperwork says. Adding a new address makes it the current one; every
+            previous address stays here and stays searchable.
+          </Text>
+
+          {addingAddress !== null && (
+            <div className="new-address-block">
+              <div className="panel-head">
+                <Text type="text2" weight="bold">New address</Text>
+              </div>
+              <div className="create-form">
+                <AddressFields value={addingAddress} onChange={setAddingAddress} />
+              </div>
+              <div className="field-inline" style={{ marginTop: "var(--space-8)" }}>
+                <Button
+                  size="small"
+                  onClick={saveNewAddress}
+                  disabled={savingAddress || !addingAddress.suburb.trim() || !addingAddress.postcode.trim()}
+                >
+                  {savingAddress ? "Saving…" : "Make this the current address"}
+                </Button>
+                <Button size="small" kind="tertiary" onClick={() => setAddingAddress(null)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {pastAddresses.length > 0 && (
+            <div className="data-table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr><th>Address</th><th>Was</th><th>From</th><th>Until</th></tr>
+                </thead>
+                <tbody>
+                  {pastAddresses.map(h => (
+                    <tr key={h.id}>
+                      <td>{h.address ?? <Token>addresses.consolidated_address</Token>}</td>
+                      <td>{h.role}</td>
+                      <td>{new Date(h.validFrom).toLocaleDateString()}</td>
+                      <td>{new Date(h.validTo).toLocaleDateString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
 
         {/* The newest comment IS the latest update — one mechanism, not a field and a

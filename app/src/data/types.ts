@@ -154,6 +154,15 @@ export interface AddressHistory {
   createdAt: IsoDateTime;
 }
 
+/** A history stint with its address resolved to text — what the record page lists. */
+export interface AddressHistoryEntry {
+  id: number;
+  role: "original" | "current";
+  address: string | null;
+  validFrom: IsoDateTime;
+  validTo: IsoDateTime;
+}
+
 /**
  * Two addresses, not one. `original` is where the project started and never moves —
  * it is what contracts and old paperwork refer to. `current` is what every card, board
@@ -961,6 +970,13 @@ export interface NewAddress {
 
 export interface NewProject {
   address: NewAddress;
+  /**
+   * The "Add another address" block on the create form — for legacy imports, where the
+   * address a project was bought under is already out of date. When present, the FIRST
+   * address becomes the immutable original and THIS one becomes the current address.
+   * Amber: "labelled 'new address' which is the new current address."
+   */
+  newAddress?: NewAddress | null;
   /**
    * What people call it — "Mt Gambier division". Optional, because most projects are
    * known by their address and a name would only repeat it; useful precisely when the

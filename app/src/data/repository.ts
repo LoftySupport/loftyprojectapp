@@ -1,11 +1,13 @@
 import type {
   ActivityEntry,
+  AddressHistoryEntry,
   CommentEntry,
   Job,
   JobSplit,
   NewProfile,
   NewJob,
   NewProject,
+  NewAddress,
   Profile,
   Project,
   ProjectPatch,
@@ -138,6 +140,18 @@ export interface Repository {
   updateProject(id: number, patch: ProjectPatch): Promise<Project>;
 
   /**
+   * Give a project a new current address — the "add another address" on the record
+   * page, for legacy imports and for sites that get renamed. The original never moves
+   * (guard_original_address, admin-only, and even then recorded); the outgoing current
+   * address lands in address_history by trigger, which is what keeps an old contract's
+   * address findable.
+   */
+  setProjectCurrentAddress(id: number, address: NewAddress): Promise<Project>;
+
+  /** Every address a record has had and when it stopped applying. Newest first. */
+  listAddressHistory(ref: { projectId?: number; jobId?: string }): Promise<AddressHistoryEntry[]>;
+
+  /**
    * Remove a project and every job under it — `jobs.project_id` cascades. Admin-only by
    * policy, and the same address caveat applies.
    */
@@ -177,6 +191,8 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "moveJobStage",
   "moveProjectStage",
   "updateProject",
+  "setProjectCurrentAddress",
+  "listAddressHistory",
   "listStages",
   "listTeams",
   "listTemplatePhases",
@@ -207,6 +223,8 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   moveJobStage: "jobs",
   moveProjectStage: "projects",
   updateProject: "projects",
+  setProjectCurrentAddress: "projects + addresses",
+  listAddressHistory: "address_history",
   // Both became tables — `teams` in 0026, `pipeline_stages` in 0029. The labels
   // said "enum" long after that stopped being true, on the one screen whose entire
   // job is to say what is backed by what.

@@ -453,3 +453,64 @@ select case
 end
 from t37;
 rollback;
+
+\echo '--- 38. moving an address writes the history 0025 promised'
+-- 0042. Repointing a current address must record whose the old one was and for what
+-- period — and the periods must tile: each stint starts where the previous ended, the
+-- first at the record's creation.
+begin;
+insert into addresses (address_street_number, address_street_1, address_suburb,
+                       address_state, address_postcode, address_council)
+values ('20',  'History Lane', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully'),
+       ('20A', 'History Lane', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully'),
+       ('20B', 'History Lane', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully');
+
+insert into projects (project_original_address_id, project_type, project_created_by)
+select address_id, 'development', (select profile_id from profiles where profile_email='behaviour-test@lofty.com.au')
+from addresses where address_street_number = '20' and address_street_1 = 'History Lane';
+
+create temp view p38 as
+  select project_id, project_created_at from projects
+  where project_original_address_id =
+    (select address_id from addresses where address_street_number='20' and address_street_1='History Lane');
+
+-- Move it twice: 20 -> 20A -> 20B. Two superseded stints, zero for the original.
+update projects set project_current_address_id =
+  (select address_id from addresses where address_street_number='20A' and address_street_1='History Lane')
+where project_id = (select project_id from p38);
+update projects set project_current_address_id =
+  (select address_id from addresses where address_street_number='20B' and address_street_1='History Lane')
+where project_id = (select project_id from p38);
+
+select case
+  when (select count(*) from address_history h, p38
+        where h.address_history_project_id = p38.project_id) = 2
+   and (select count(*) from address_history h, p38
+        where h.address_history_project_id = p38.project_id
+          and h.address_history_role = 'current') = 2
+  then 'ok  two moves, two superseded stints, both role current'
+  else 'FAIL: expected 2 current-role history rows, got ' ||
+       (select count(*)::text from address_history h, p38
+        where h.address_history_project_id = p38.project_id)
+end;
+
+-- The tiling: first stint starts at the project's creation; second starts where the
+-- first ended; both ended in order.
+select case
+  when (select array_agg(a.address_street_number order by h.address_history_valid_from)
+        from address_history h
+        join addresses a on a.address_id = h.address_history_address_id
+        where h.address_history_project_id = (select project_id from p38)) = array['20','20A']
+   and (select min(h.address_history_valid_from) from address_history h
+        where h.address_history_project_id = (select project_id from p38))
+       = (select project_created_at from p38)
+   and (select bool_and(tiles) from (
+         select h.address_history_valid_from =
+                coalesce(lag(h.address_history_valid_to) over (order by h.address_history_valid_from),
+                         (select project_created_at from p38)) as tiles
+         from address_history h
+         where h.address_history_project_id = (select project_id from p38)) t)
+  then 'ok  the periods tile: creation -> first move -> second move, no gaps'
+  else 'FAIL: history periods do not tile'
+end;
+rollback;

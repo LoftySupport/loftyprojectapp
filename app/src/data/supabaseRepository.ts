@@ -4,9 +4,11 @@ import { createStubRepository } from "./stubRepository";
 import { MAX_SPLIT } from "./types";
 import type {
   ActivityEntry,
+  AddressHistoryEntry,
   CommentEntry,
   Job,
   JobSplit,
+  NewAddress,
   NewProfile,
   NewJob,
   NewProject,
@@ -53,6 +55,7 @@ const WIRED: RepositoryMethod[] = [
   "currentProfile", "listProfiles",
   "createProfile", "updateProfile", "setProfileActive", "listActivity",
   "listComments", "addComment", "updateProject", "moveProjectStage",
+  "setProjectCurrentAddress", "listAddressHistory",
   "listStages", "listTeams", "listTemplatePhases"
 ];
 
@@ -338,6 +341,29 @@ export function createSupabaseRepository(): Repository {
   // Pinned to the narrowed type: the build's tsc does not carry `if (!client)` into a
   // nested function the way the editor's does, and `db` makes the narrowing explicit.
   const db: SupabaseClient = client;
+
+  /**
+   * Insert one address row and return its id. The same normalisation everywhere: blank
+   * strings become null before they can pass a NOT NULL as a street named nothing.
+   */
+  async function insertAddress(a: NewAddress): Promise<string> {
+    const { data, error } = await db
+      .from("addresses")
+      .insert({
+        address_lot_number: emptyToNull(a.lotNumber),
+        address_street_number: emptyToNull(a.streetNumber),
+        address_street_1: emptyToNull(a.street1),
+        address_street_2: emptyToNull(a.street2),
+        address_suburb: a.suburb,
+        address_state: a.state ?? "SA",
+        address_postcode: a.postcode,
+        address_council: a.council ?? null
+      })
+      .select("address_id")
+      .single();
+    if (error) throw error;
+    return data.address_id;
+  }
 
   /** One project, re-read with its embeds — the read-back both project mutators share. */
   async function readProject(id: number): Promise<Project> {
@@ -712,12 +738,21 @@ export function createSupabaseRepository(): Repository {
         .single();
       if (addressError) throw addressError;
 
-      // original_address_id is left unset: the database's default_current_address
-      // trigger points it at the same row, which is what "it has not moved yet" means.
+      // A second block on the form means "already renamed": the first address is the
+      // immutable original and this one is where the project now is. No history row —
+      // the original was never this project's current address for any period.
+      const currentId = input.newAddress
+        ? await insertAddress(input.newAddress)
+        : address.address_id;
+
+      // original_address_id: set explicitly when the pair differs; otherwise left for
+      // the database's default_current_address trigger, which is what "it has not moved
+      // yet" means.
       const { data, error } = await client
         .from("projects")
         .insert({
-          project_current_address_id: address.address_id,
+          project_original_address_id: input.newAddress ? address.address_id : undefined,
+          project_current_address_id: currentId,
           project_name: emptyToNull(input.name),
           project_type: input.projectType,
           project_proposed_dwellings: input.proposedDwellings ?? null,
@@ -1006,6 +1041,48 @@ export function createSupabaseRepository(): Repository {
         throw new Error(`Project ${id} was not updated — it no longer exists, or you do not have permission.`);
       }
       return await readProject(id);
+    },
+
+    async setProjectCurrentAddress(id: number, address: NewAddress): Promise<Project> {
+      const addressId = await insertAddress(address);
+      // The repoint. guard_original_address leaves the original alone, and the 0042
+      // trigger records the outgoing current address's stint in address_history.
+      const { data: updated, error } = await client
+        .from("projects")
+        .update({ project_current_address_id: addressId })
+        .eq("project_id", id)
+        .select("project_id");
+      if (error) throw error;
+      if (!updated?.length) {
+        throw new Error(`Project ${id} was not updated — it no longer exists, or you do not have permission.`);
+      }
+      return await readProject(id);
+    },
+
+    async listAddressHistory(ref: { projectId?: number; jobId?: string }): Promise<AddressHistoryEntry[]> {
+      let q = client
+        .from("address_history")
+        .select("address_history_id, address_history_role, address_history_valid_from, address_history_valid_to, addresses!address_history_address_history_address_id_fkey(address_consolidated)");
+      if (ref.projectId != null) q = q.eq("address_history_project_id", ref.projectId);
+      else if (ref.jobId != null) q = q.eq("address_history_job_id", ref.jobId);
+      else throw new Error("listAddressHistory needs a projectId or a jobId.");
+
+      const { data, error } = await q.order("address_history_valid_to", { ascending: false });
+      if (error) throw error;
+      type Row = {
+        address_history_id: number;
+        address_history_role: "original" | "current";
+        address_history_valid_from: string;
+        address_history_valid_to: string;
+        addresses: { address_consolidated: string | null } | null;
+      };
+      return (data as unknown as Row[]).map(r => ({
+        id: r.address_history_id,
+        role: r.address_history_role,
+        address: r.addresses?.address_consolidated ?? null,
+        validFrom: r.address_history_valid_from,
+        validTo: r.address_history_valid_to
+      }));
     },
 
     async deleteProject(id: number): Promise<void> {

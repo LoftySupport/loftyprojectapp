@@ -1067,3 +1067,12 @@ code { overflow-wrap: anywhere; }
 .comment { padding: var(--space-8) 0; border-top: 1px solid var(--layout-border-color); }
 .comment.latest { border-top: none; }
 .comment-meta { display: flex; gap: var(--space-8); align-items: baseline; margin-bottom: 2px; }
+
+/* The secondary address block — on the create form and the record page. Indented and
+   bordered so "which address am I editing" has a visual answer. */
+.new-address-block {
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-medium);
+  padding: var(--space-12);
+  margin-top: var(--space-8);
+}

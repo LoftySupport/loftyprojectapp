@@ -52,7 +52,7 @@ import "./ui.css";
  */
 
 /** Shared between both dialogs, because a job may sit at its own address. */
-function AddressFields({
+export function AddressFields({
   value,
   onChange
 }: {
@@ -353,6 +353,10 @@ export function NewProjectDialog({
 }) {
   const repo = useRepository();
   const [address, setAddress] = useState<NewAddress>(EMPTY_ADDRESS);
+  // The "Add another address" block — for legacy imports, where the address the site
+  // was bought under is already out of date. Null while the block is closed; the first
+  // address becomes the immutable original and this one the current address.
+  const [newAddress, setNewAddress] = useState<NewAddress | null>(null);
   const [name, setName] = useState("");
   const [projectType, setProjectType] = useState<ProjectType | null>(null);
   const [dwellings, setDwellings] = useState("");
@@ -371,10 +375,12 @@ export function NewProjectDialog({
 
   // projectType is required by the database now, so the button waits for it rather than
   // letting the insert come back with a not-null violation.
-  const valid = addressIsValid(address) && projectType !== null && dwellingsValid;
+  const valid = addressIsValid(address) && projectType !== null && dwellingsValid
+    && (newAddress === null || addressIsValid(newAddress));
 
   const reset = () => {
     setAddress(EMPTY_ADDRESS);
+    setNewAddress(null);
     setName("");
     setProjectType(null);
     setDwellings("");
@@ -389,6 +395,7 @@ export function NewProjectDialog({
     try {
       const project = await repo.createProject({
         address,
+        newAddress,
         name,
         projectType: projectType!,
         proposedDwellings: dwellingCount
@@ -479,6 +486,31 @@ export function NewProjectDialog({
               />
             </Field>
             <AddressFields value={address} onChange={setAddress} />
+
+            {/* Amber, 25 August: "on project creation the option to add another address
+                adds in a secondary lot of address information which is labelled 'new
+                address' which is the new current address." The first block above then
+                becomes the immutable original — which is the whole point for a legacy
+                import, where the purchase address is already out of date. */}
+            {newAddress === null ? (
+              <Button kind="tertiary" size="small" onClick={() => setNewAddress(EMPTY_ADDRESS)}>
+                + Add another address
+              </Button>
+            ) : (
+              <div className="new-address-block">
+                <div className="panel-head">
+                  <Text type="text2" weight="bold">New address</Text>
+                  <Button kind="tertiary" size="small" onClick={() => setNewAddress(null)}>
+                    Remove
+                  </Button>
+                </div>
+                <Text type="text3" color="secondary" element="p" ellipsis={false}>
+                  This becomes the current address. The one above is kept as the original
+                  and cannot be changed later.
+                </Text>
+                <AddressFields value={newAddress} onChange={setNewAddress} />
+              </div>
+            )}
           </div>
         )}
         {error && <Problem>{error}</Problem>}

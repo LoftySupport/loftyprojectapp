@@ -2,6 +2,7 @@ import { TEAM_SEED } from "./types";
 import type { Repository, RepositoryMethod } from "./repository";
 import type {
   ActivityEntry,
+  AddressHistoryEntry,
   CommentEntry,
   Job,
   Profile,
@@ -147,6 +148,10 @@ export function createStubRepository(): Repository {
     async updateProject(): Promise<Project> {
       throw new Error("Editing a project needs Supabase.");
     },
+    async setProjectCurrentAddress(): Promise<Project> {
+      throw new Error("Adding an address needs Supabase.");
+    },
+    async listAddressHistory(): Promise<AddressHistoryEntry[]> { return []; },
     async deleteProject(): Promise<void> {
       throw new Error("Removing a project needs Supabase.");
     },
