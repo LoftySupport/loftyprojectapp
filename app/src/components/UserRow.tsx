@@ -80,6 +80,8 @@ function ReadingRow({
 }) {
   const { labels } = useTeamLabels();
   const st = profileStatus(p);
+  // Null until the lookup can answer — see useTeamLabels. Rendering the slug in the
+  // meantime is what put `lofty_general` in this column in the first place.
   const teams = labels(p.teams);
 
   return (
@@ -92,8 +94,10 @@ function ReadingRow({
       <td className="muted">{p.jobTitle ?? "—"}</td>
       <td className="muted">{p.email}</td>
       {/* Names, not slugs. `profiles.teams` holds foreign keys — `lofty_general` — and
-          rendering them raw is what put "lofty_general" on the dashboard greeting. */}
-      <td>{teams.length ? teams.join(", ") : "—"}</td>
+          rendering them raw is what put "lofty_general" on the dashboard greeting.
+          Three states: no memberships is an em dash, resolved names are the names, and
+          a lookup that has not landed is blank rather than a column of foreign keys. */}
+      <td>{!p.teams.length ? "—" : teams ? teams.join(", ") : ""}</td>
       <td>{p.permission}</td>
       <td><span className={`status-pill is-${st}`}>{st}</span></td>
       {/* "Never" and "not yet" are different facts: never signed in versus signed in

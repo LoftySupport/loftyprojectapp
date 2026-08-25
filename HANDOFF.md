@@ -6,7 +6,7 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 and before it, the spine review described there, because that is the only category of
 change that gets expensive once 200 jobs are in.
 
-Last updated: 2026-08-24.
+Last updated: 2026-08-25.
 
 ---
 
@@ -49,6 +49,35 @@ check is "open a dropdown inside it", not "read the CSS".
   entries recording enums Postgres no longer has — `projects.project_type`,
   `projects.project_status`, `jobs.job_status` (all `0028`) and `jobs.job_stage` (`0035`).
   Those are corrected.
+
+### The team-name fix needed a second pass
+
+The first one resolved `profiles.teams` through `teamName()` and stopped there, and Amber
+reported the dashboard **still** showing `lofty_general`. It was not a stale deploy —
+production had the merged bundle and it was calling the resolver.
+
+`teamName(id, from)` falls back to the id when the lookup has no row for it. That fallback
+is right where it was written: a job owned by a retired team must render *something*. It is
+wrong as a loading state, and the dashboard is where that bites hardest — the page's
+loading gate waits on `listJobs()`, so somebody with **no jobs** clears it instantly while
+the teams read is still in flight, and the slug gets painted as though it were the name.
+If the read fails outright, it stays there forever.
+
+Reproduced both, against a build of the merge commit, before changing anything:
+
+| teams read | before | after |
+| --- | --- | --- |
+| slow (3s) | `lofty_general`, then the name | blank, then the name |
+| fails | `lofty_general` **permanently** | "Team names unavailable" |
+
+`useTeamLabels().labels()` now returns **null** rather than a slug when the lookup cannot
+answer, which forces every caller to say so. `boardModel` already had this right — it puts
+the teams query in its own loading gate, *"without them every owning team renders as its
+slug"* — and the three screens that read a person's memberships did not.
+
+**The general rule, worth keeping:** a foreign key on screen is a stand-in, and the house
+rule against inventing a value covers it. Anywhere a slug is resolved through a lookup, the
+unresolved case needs its own answer — not the raw key.
 
 ### Still open
 

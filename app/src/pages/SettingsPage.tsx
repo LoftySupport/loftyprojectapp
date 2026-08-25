@@ -40,8 +40,9 @@ export function SettingsPage({
   onThemeChange: (t: SystemTheme) => void;
 }) {
   const { profile } = useAuth();
-  // Names, not the slugs `profiles.teams` stores — see useTeamLabels.
-  const { labels: teamLabels } = useTeamLabels();
+  // Names, not the slugs `profiles.teams` stores — see useTeamLabels. `resolved` is
+  // what keeps a foreign key off the screen while the lookup is still in flight.
+  const { labels: teamLabels, resolved: teamsResolved } = useTeamLabels();
 
   return (
     <>
@@ -70,8 +71,10 @@ export function SettingsPage({
             label="Teams"
             hint="you can sit in more than one"
             token="profiles.teams"
-            value={profile?.teams.length ? teamLabels(profile.teams).join(", ") : null}
-            known={Boolean(profile)}
+            value={profile?.teams.length ? teamLabels(profile.teams)?.join(", ") ?? null : null}
+            /* Not known until the names are: without this the row falls through to
+               "No team assigned" for anyone whose lookup has not landed yet. */
+            known={Boolean(profile) && teamsResolved}
             empty={
               <span className="field-empty">
                 No team assigned — ask an administrator to add you to one.
