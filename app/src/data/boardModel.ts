@@ -42,6 +42,16 @@ export interface BoardJob {
   status: RecordStatus;
   /** The project's type, inherited through `job_display`. Null until somebody sets it. */
   projectType: ProjectType | null;
+  /**
+   * Who created the job, by name.
+   *
+   * NOT the assignee, and labelled apart from it everywhere it shows. Lofty read an
+   * empty "Assigned to" as a mistake — "there is 10 jobs assigned to me" — and the
+   * database is unambiguous: all ten have `job_created_by` set to her and
+   * `job_assignee_id` null. Two facts, and collapsing them into one column is how a
+   * board comes to claim work is allocated when nothing has been.
+   */
+  createdBy: string | null;
   /** Derived from stageEnteredAt on every read. Never stored, so it cannot go stale. */
   daysInStage: number;
   /**
@@ -69,12 +79,9 @@ export interface BoardProject {
   /** The date being worked towards, or null when none is set. */
   targetCompletion: string | null;
   /**
-   * The project's current address as text.
-   *
-   * Taken from its jobs rather than from a second query: `job_display` already resolves
-   * `project_current_address` on every job, so a project with jobs has its address in
-   * hand. Null for a project with none — and null is the honest answer there, not a
-   * blank standing in for one, which is why the card still falls back to a token.
+   * The project's current address as text, resolved on the read by an embed that names
+   * its foreign key. Null only when the address row is genuinely unreadable, which is
+   * what the card's token still covers.
    */
   currentAddress: string | null;
   /**
@@ -121,9 +128,13 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
   const { data: jobs, loading: jLoading, error: jError } =
     useQuery(r => r.listJobs(), [], [reloadKey]);
   const { teams, loading: tLoading } = useTeams();
+  // Names for the audit columns. Small and cached by the query hook — 47 rows — and it
+  // is the only way to turn `job_created_by` into something a person recognises.
+  const { data: profiles, loading: prLoading } = useQuery(r => r.listProfiles(), []);
 
   return useMemo(() => {
     const now = Date.now();
+    const nameOf = new Map(profiles.map(p => [p.id, p.fullName]));
 
     const boardJobs: BoardJob[] = jobs.map(j => ({
       jobNumber: j.id,
@@ -133,6 +144,7 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
       teamId: j.owningTeam,
       status: j.status,
       projectType: j.projectType,
+      createdBy: j.createdBy ? nameOf.get(j.createdBy) ?? null : null,
       daysInStage: daysSince(j.stageEnteredAt, now),
       currentAddress: j.currentAddress,
       originalAddress: j.originalAddress,
@@ -153,7 +165,11 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
       proposedDwellings: p.proposedDwellings,
       projectType: p.projectType,
       targetCompletion: p.targetCompletion,
-      currentAddress: (byProject.get(String(p.id)) ?? [])[0]?.projectAddress ?? null,
+      // The project's own address, not one borrowed from its first job. Deriving it
+      // from the jobs worked only because every project here has some — a project
+      // created and not yet split had no address at all, which is precisely the case
+      // the field exists for.
+      currentAddress: p.currentAddress,
       status: p.status
     }));
 
@@ -162,8 +178,8 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
       jobs: boardJobs,
       // Teams are in the gate too: without them every owning team renders as its slug,
       // which then matches none of the toolbar's Team options.
-      loading: pLoading || jLoading || tLoading,
+      loading: pLoading || jLoading || tLoading || prLoading,
       error: pError ?? jError
     };
-  }, [projects, jobs, teams, pLoading, jLoading, tLoading, pError, jError]);
+  }, [projects, jobs, teams, profiles, pLoading, jLoading, tLoading, prLoading, pError, jError]);
 }

@@ -207,6 +207,7 @@ export function JobsPage() {
                     team={j.team}
                     address={j.currentAddress}
                     projectType={j.projectType}
+                    createdBy={j.createdBy}
                     status={j.status}
                     onOpen={() => openOne(j)}
                   />
@@ -229,6 +230,7 @@ export function JobsPage() {
                 <th>Stage</th>
                 <th>Team</th>
                 <th>Assigned to</th>
+                <th>Created by</th>
                 <th className="num">Days in stage</th>
                 <th>Status</th>
               </tr>
@@ -240,7 +242,7 @@ export function JobsPage() {
             {groups.filter(g => g.jobs.length > 0).map(g => (
               <tbody key={g.key} className="group">
                 <tr className="group-head">
-                  <th scope="colgroup" colSpan={9}>
+                  <th scope="colgroup" colSpan={10}>
                     <span className="group-name">{g.key}</span>
                     <span className="group-count">
                       {g.jobs.length} job{g.jobs.length === 1 ? "" : "s"}
@@ -260,6 +262,7 @@ export function JobsPage() {
                     <td>{j.stage}</td>
                     <td>{j.team}</td>
                     <td><Token>profiles.full_name</Token></td>
+                    <td className="muted">{j.createdBy ?? "—"}</td>
                     <td className="num">{j.daysInStage}</td>
                     <td><StatusPill status={j.status} /></td>
                   </tr>

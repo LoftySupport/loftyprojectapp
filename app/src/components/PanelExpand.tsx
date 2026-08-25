@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button } from "@vibe/core";
-import { Collapse, Expand } from "@vibe/icons";
+import { Fullscreen, FullscreenClose } from "@vibe/icons";
 import "./ui.css";
 
 /**
@@ -14,11 +14,10 @@ import "./ui.css";
  *
  * WHY IT DISAPPEARS ON A NARROW SCREEN
  *
- *   A panel is `min(460px, 100vw)` and expanded is `min(1100px, 100vw)`. The two are
+ *   A panel is `min(460px, 100vw)` and expanded is the whole window. The two are
  *   identical at 460 and below, so beneath that the control is a button that visibly
- *   does nothing. 560 is where expanding first buys about a hundred pixels — the same
- *   threshold, and the same reasoning, as the rail's collapse toggle being hidden on a
- *   phone.
+ *   does nothing — the same threshold, and the same reasoning, as the rail's collapse
+ *   toggle being hidden on a phone.
  */
 const EXPAND_WORTH_IT = 560;
 
@@ -72,7 +71,10 @@ export function ExpandButton({
       aria-label={label}
       aria-pressed={expanded}
     >
-      {expanded ? <Collapse size={16} aria-hidden /> : <Expand size={16} aria-hidden />}
+      {/* The four-arrows-outward pair, which is what "expand to full screen" looks like
+          everywhere else. `Expand`/`Collapse` are Vibe's chevron pair and read as
+          "open this section". */}
+      {expanded ? <FullscreenClose size={16} aria-hidden /> : <Fullscreen size={16} aria-hidden />}
     </Button>
   );
 }

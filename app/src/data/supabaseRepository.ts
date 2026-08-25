@@ -81,8 +81,19 @@ const PROFILE_COLUMNS =
  * deliberate act. Neither list embeds anything, so neither can hit the PGRST201 ambiguity
  * that PROFILE_COLUMNS has to name its way around.
  */
+/**
+ * The embed NAMES ITS CONSTRAINT, and has to.
+ *
+ * `projects` has two foreign keys to `addresses` — current and original — so an
+ * unqualified `addresses(...)` embed is ambiguous and PostgREST refuses it with
+ * PGRST201. That is the same shape that took sign-in down in August, and it is why the
+ * project's address was read as an id and never as text: the column list asked for
+ * `project_current_address_id` and nothing resolved it, so every project card and
+ * project table row rendered {{project_display.current_address}} over an address the
+ * database had.
+ */
 const PROJECT_COLUMNS =
-  "project_id, project_name, project_original_address_id, project_current_address_id, project_type, project_status, project_proposed_dwellings, project_owning_team, project_assignee_id, project_start_date, project_target_completion, project_end_date, project_created_at, project_created_by, project_updated_at, project_updated_by";
+  "project_id, project_name, project_original_address_id, project_current_address_id, project_type, project_status, project_proposed_dwellings, project_owning_team, project_assignee_id, project_start_date, project_target_completion, project_end_date, project_created_at, project_created_by, project_updated_at, project_updated_by, addresses!projects_project_current_address_id_fkey(address_consolidated)";
 
 // Read from `job_display`, not from `jobs`. The view resolves both of the job's
 // addresses and its project's, which the base table only carries as uuids — so a card
@@ -940,6 +951,9 @@ type ProjectRow = {
   project_end_date: string | null;
   project_created_at: string; project_created_by: string | null;
   project_updated_at: string; project_updated_by: string | null;
+  // The embed above. PostgREST returns an object for a to-one relationship, and null
+  // when the row it points at is not readable.
+  addresses: { address_consolidated: string | null } | null;
 };
 
 function toProject(r: ProjectRow): Project {
@@ -949,6 +963,8 @@ function toProject(r: ProjectRow): Project {
     name: r.project_name,
     originalAddressId: r.project_original_address_id,
     currentAddressId: r.project_current_address_id,
+    // The address as text, resolved by the embed rather than by a second request.
+    currentAddress: r.addresses?.address_consolidated ?? null,
     projectType: r.project_type,
     status: r.project_status,
     proposedDwellings: r.project_proposed_dwellings,

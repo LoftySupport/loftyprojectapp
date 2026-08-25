@@ -150,10 +150,21 @@ function AddressFields({
         />
       </Field>
       {councilAvailable && (
-        <Field label="Council region" hint="in the LGA's own order">
+        <Field label="Council region" hint="all 68 South Australian councils, A–Z">
           <Select
             aria-label="Council region"
-            options={toOptions([...SA_COUNCILS])}
+            /* Sorted here rather than in SA_COUNCILS, which is kept in the order the
+               LGA list publishes them — that constant is what the CHECK constraint is
+               written against, and reordering it would invite somebody to assume the
+               order means something. Sorting the options changes what a person reads
+               and nothing else.
+
+               `localeCompare` so "City of Adelaide" and "Adelaide Hills Council" land
+               where somebody looking for either would expect, rather than every "City
+               of…" collecting under C. */
+            options={toOptions(
+              [...SA_COUNCILS].sort((a, b) => councilSortKey(a).localeCompare(councilSortKey(b)))
+            )}
             value={value.council ?? null}
             onChange={v => set("council", v as SaCouncil)}
             placeholder="Select a council"
@@ -218,6 +229,16 @@ const EMPTY_ADDRESS: NewAddress = {
 };
 
 const filled = (v: string | null | undefined) => !!v?.trim();
+
+/**
+ * What a council sorts under.
+ *
+ * "City of Burnside" is looked for under B and "District Council of Ceduna" under C —
+ * the leading form of address is not the name. Stripping it is what makes an A–Z list
+ * findable rather than three long runs of "City of…", "District Council of…" and "The…".
+ */
+const COUNCIL_PREFIX = /^(the |city of |district council of |regional council of |town of |corporation of )/i;
+const councilSortKey = (name: string) => name.replace(COUNCIL_PREFIX, "");
 
 /**
  * The rules the `addresses` table enforces, checked here so the Create button greys out

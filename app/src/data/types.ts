@@ -213,6 +213,13 @@ export interface Project {
   name: string | null;
   originalAddressId: Uuid | null;
   currentAddressId: Uuid;
+  /**
+   * The current address as text, resolved on the read.
+   *
+   * The id alone is what every project screen had, which is why they all rendered
+   * {{project_display.current_address}} over an address the database was holding.
+   */
+  currentAddress: string | null;
   /** Who is primarily accountable. A `teams.team_id` slug. */
   owningTeam: TeamId | null;
   assigneeId: Uuid | null;

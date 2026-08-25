@@ -413,7 +413,7 @@
 /* The drawer widens the way the create panel does — same widths, same transition, so
    "expand" means one thing in this app rather than two. */
 .drawer { transition: width var(--motion-productive-medium) var(--motion-timing-transition); }
-.drawer.is-expanded { width: min(1100px, 100vw); }
+.drawer.is-expanded { width: 100vw; }
 .drawer-body { flex: 1; overflow-y: auto; padding: var(--space-16); }
 
 /* ---- template phases ----------------------------------------------------- */
@@ -683,8 +683,11 @@ code { overflow-wrap: anywhere; }
 /* Expanded: the full window, less a margin so it still reads as a layer over the page
    rather than a navigation. No centring and no darker scrim — the difference from the
    dialog this replaces is exactly that the page behind stays legible. */
+/* The whole window. It was capped at 1100px, which on a wide screen left the page
+   showing down one side and did not read as full screen at all — which is the thing
+   the control says it does. */
 .create-panel.is-expanded {
-  width: min(1100px, 100vw);
+  width: 100vw;
 }
 
 .create-panel-head {
@@ -722,8 +725,8 @@ code { overflow-wrap: anywhere; }
    leaving it on produces a scrollbar inside a scrollbar. */
 .create-panel .create-form { max-height: none; overflow: visible; flex: none; }
 
-/* Two columns once there is room for them. Nine fields down a 1100px window is a very
-   long thin form with the whole right half empty. */
+/* Two columns once there is room for them. Nine fields down a full-width window is a
+   very long thin form with the whole right half empty. */
 @media (min-width: 720px) {
   .create-panel.is-expanded .create-form {
     display: grid;
