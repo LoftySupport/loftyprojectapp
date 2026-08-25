@@ -292,10 +292,16 @@ export interface Job {
   engagedTeams: TeamId[];
   assigneeId: Uuid | null;
   /**
-   * No `projectType`. A job's type is its project's type, read through `job_display` —
-   * a commercial project does not contain residential jobs, so a second field would
-   * only ever be a chance to disagree with the first.
+   * The project's type, resolved by `job_display` — never stored on the job.
+   *
+   * This said "No `projectType`" and meant it about the *column*: a commercial project
+   * does not contain residential jobs, so a second stored field would only ever be a
+   * chance to disagree with the first. That still holds. What the view resolves is not a
+   * second fact, it is the same one read in one request instead of two — and while this
+   * field was absent every job card and job table row rendered
+   * {{job_display.project_type}} for a value the view was already returning.
    */
+  projectType: ProjectType | null;
 
   /**
    * The addresses as text, resolved by `job_display` rather than by a second request.

@@ -95,7 +95,7 @@ const PROJECT_COLUMNS =
 //
 // Writes still go to `jobs` — a view is not the place to insert through.
 const JOB_COLUMNS =
-  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_created_at, job_created_by, job_updated_at, job_updated_by, job_current_address, job_original_address, project_current_address";
+  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_created_at, job_created_by, job_updated_at, job_updated_by, job_current_address, job_original_address, project_current_address, project_type";
 
 /**
  * `""` and `"   "` are how a browser reports a field somebody did not fill in, and they
@@ -956,6 +956,7 @@ type JobRow = {
   // Resolved by the view, not present on the table.
   job_current_address: string; job_original_address: string | null;
   project_current_address: string;
+  project_type: Job["projectType"];
 };
 
 function toJob(r: JobRow): Job {
@@ -979,6 +980,10 @@ function toJob(r: JobRow): Job {
     updatedBy: r.job_updated_by,
     currentAddress: r.job_current_address,
     originalAddress: r.job_original_address,
-    projectCurrentAddress: r.project_current_address
+    projectCurrentAddress: r.project_current_address,
+    // Inherited from the project through the view, never stored on the job. `job_display`
+    // has exposed it since 0028; this read simply never asked for it, so every card and
+    // every table row rendered {{job_display.project_type}} for a value one column away.
+    projectType: r.project_type
   };
 }

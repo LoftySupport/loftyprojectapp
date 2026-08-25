@@ -5,6 +5,7 @@ import { useCheckpoints, useTemplatePhases } from "../data/useLookups";
 import type { BoardJob } from "../data/boardModel";
 import { StatusPill } from "./RecordCards";
 import { PropertySlots } from "./PropertySlots";
+import { ExpandButton, usePanelExpand } from "./PanelExpand";
 import { Token } from "./Token";
 import "./ui.css";
 
@@ -18,6 +19,10 @@ import "./ui.css";
 export function JobDrawer({ job, onClose }: { job: BoardJob; onClose: () => void }) {
   const panel = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  // The drawer had no way to widen — the same record, the same shape of panel, and the
+  // control only on the create side. `open` is always true here: this component is
+  // mounted only while the drawer is showing.
+  const { expanded, canExpand, toggle } = usePanelExpand(true);
 
   // Once, on mount. Keyed on `onClose` this re-ran whenever the parent re-rendered and
   // pulled focus back to the drawer — the same fault that let the create form accept
@@ -48,7 +53,7 @@ export function JobDrawer({ job, onClose }: { job: BoardJob; onClose: () => void
     <>
       <div className="drawer-overlay" onClick={onClose} />
       <aside
-        className="drawer"
+        className={`drawer${expanded ? " is-expanded" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label={`Job ${job.jobNumber}`}
@@ -92,9 +97,12 @@ export function JobDrawer({ job, onClose }: { job: BoardJob; onClose: () => void
               {" "}· {job.projectAddress ?? <Token>job_display.project_current_address</Token>}
             </Text>
           </div>
-          <Button kind="tertiary" size="small" onClick={onClose} aria-label="Close">
-            ×
-          </Button>
+          <div className="drawer-actions">
+            {canExpand && <ExpandButton expanded={expanded} onToggle={toggle} />}
+            <Button kind="tertiary" size="small" onClick={onClose} aria-label="Close">
+              ×
+            </Button>
+          </div>
         </header>
 
         <div className="drawer-body stack">

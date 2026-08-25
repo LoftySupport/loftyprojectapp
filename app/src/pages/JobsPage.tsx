@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { Button, Counter, Heading, Text } from "@vibe/core";
-import { RECORD_STATUS_LABELS, RECORD_STATUSES } from "../data/types";
+import { PROJECT_TYPE_LABELS, RECORD_STATUS_LABELS, RECORD_STATUSES } from "../data/types";
 import { useStages, useTeams, useTemplatePhases } from "../data/useLookups";
 import { useBoardRecords, type BoardJob } from "../data/boardModel";
 import { jobMatchesQuery, matchedOnPreviousAddress, useSearch } from "../data/SearchProvider";
@@ -206,6 +206,7 @@ export function JobsPage() {
                     stageName={j.stage}
                     team={j.team}
                     address={j.currentAddress}
+                    projectType={j.projectType}
                     status={j.status}
                     onOpen={() => openOne(j)}
                   />
@@ -237,8 +238,12 @@ export function JobsPage() {
                 <tr key={j.jobNumber} onClick={() => openOne(j)}>
                   <td>{j.jobNumber}</td>
                   <td>{j.projectNumber}</td>
-                  <td><Token>addresses.consolidated_address</Token></td>
-                  <td><Token>job_display.project_type</Token></td>
+                  <td>{j.currentAddress ?? <Token>addresses.consolidated_address</Token>}</td>
+                  <td>
+                    {j.projectType
+                      ? PROJECT_TYPE_LABELS[j.projectType]
+                      : <Token>job_display.project_type</Token>}
+                  </td>
                   <td>{j.stage}</td>
                   <td>{j.team}</td>
                   <td><Token>profiles.full_name</Token></td>

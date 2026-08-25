@@ -381,6 +381,14 @@
    cannot close is a trap, so this is load-bearing, not cosmetic. */
 .drawer-head > :first-child { min-width: 0; }
 .drawer-head > :last-child { flex-shrink: 0; }
+/* Expand and close, on one line. Same shape as `.create-panel-actions`, because the two
+   panel heads are the same object with different contents. */
+.drawer-actions { display: flex; align-items: center; gap: var(--space-4); flex-shrink: 0; }
+
+/* The drawer widens the way the create panel does — same widths, same transition, so
+   "expand" means one thing in this app rather than two. */
+.drawer { transition: width var(--motion-productive-medium) var(--motion-timing-transition); }
+.drawer.is-expanded { width: min(1100px, 100vw); }
 .drawer-body { flex: 1; overflow-y: auto; padding: var(--space-16); }
 
 /* ---- template phases ----------------------------------------------------- */
@@ -707,7 +715,9 @@ code { overflow-wrap: anywhere; }
   /* Same reasoning as the drawer's close button: on a touch screen this is the control
      everyone reaches for first, so it gets a finger rather than the 24px minimum. */
   .create-panel-actions .sb-btn,
-  .create-panel-actions button { min-width: 40px; min-height: 40px; }
+  .create-panel-actions button,
+  .drawer-actions .sb-btn,
+  .drawer-actions button { min-width: 40px; min-height: 40px; }
 }
 
 /* ---- create dialogs -------------------------------------------------------

@@ -11,6 +11,7 @@ import { LoadProblem, NoResults, NothingYet, PreviousAddressNote } from "../comp
 import { SavedViewTabs } from "../components/SavedViewTabs";
 import { ProjectCard, StatusPill } from "../components/RecordCards";
 import { PropertySlots } from "../components/PropertySlots";
+import { PROJECT_TYPE_LABELS } from "../data/types";
 import { Token } from "../components/Token";
 import { Toolbar } from "../components/Toolbar";
 import { toOptions } from "../components/Select";
@@ -221,6 +222,9 @@ export function ProjectsPage() {
               key={p.projectNumber}
               projectNumber={p.projectNumber}
               jobNumbers={p.jobs.map(j => j.jobNumber)}
+              address={p.currentAddress}
+              projectType={p.projectType}
+              targetCompletion={p.targetCompletion}
               status={p.status}
               onOpen={() => openOne(p)}
             />
@@ -239,10 +243,20 @@ export function ProjectsPage() {
               {rows.map(p => (
                 <tr key={p.projectNumber} onClick={() => openOne(p)}>
                   <td>{p.projectNumber}</td>
-                  <td><Token>project_display.current_address</Token></td>
+                  <td>{p.currentAddress ?? <Token>project_display.current_address</Token>}</td>
+                  {/* Still a token: the suburb is its own column on `addresses` and the
+                      board never reads it — only the consolidated line comes through. */}
                   <td><Token>addresses.suburb</Token></td>
-                  <td><Token>projects.project_type</Token></td>
-                  <td><Token>projects.target_completion</Token></td>
+                  <td>
+                    {p.projectType
+                      ? PROJECT_TYPE_LABELS[p.projectType]
+                      : <Token>projects.project_type</Token>}
+                  </td>
+                  <td>
+                    {p.targetCompletion
+                      ? new Date(p.targetCompletion).toLocaleDateString()
+                      : <Token>projects.target_completion</Token>}
+                  </td>
                   <td className="num">{p.jobs.length}</td>
                   <td><StatusPill status={p.status} /></td>
                 </tr>

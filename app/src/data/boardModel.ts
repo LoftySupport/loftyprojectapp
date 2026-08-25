@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "./DataProvider";
 import { useTeams } from "./useLookups";
-import { teamName, type RecordStatus, type TeamId } from "./types";
+import { teamName, type ProjectType, type RecordStatus, type TeamId } from "./types";
 
 /**
  * What the boards render, built from real records.
@@ -40,6 +40,8 @@ export interface BoardJob {
   /** The slug, for anything keyed rather than labelled. */
   teamId: TeamId;
   status: RecordStatus;
+  /** The project's type, inherited through `job_display`. Null until somebody sets it. */
+  projectType: ProjectType | null;
   /** Derived from stageEnteredAt on every read. Never stored, so it cannot go stale. */
   daysInStage: number;
   /**
@@ -63,6 +65,18 @@ export interface BoardProject {
   jobs: BoardJob[];
   /** What was intended at creation. Null when nobody said. */
   proposedDwellings: number | null;
+  projectType: ProjectType | null;
+  /** The date being worked towards, or null when none is set. */
+  targetCompletion: string | null;
+  /**
+   * The project's current address as text.
+   *
+   * Taken from its jobs rather than from a second query: `job_display` already resolves
+   * `project_current_address` on every job, so a project with jobs has its address in
+   * hand. Null for a project with none — and null is the honest answer there, not a
+   * blank standing in for one, which is why the card still falls back to a token.
+   */
+  currentAddress: string | null;
   /**
    * The project's own status column, not the worst of its jobs.
    *
@@ -71,7 +85,6 @@ export interface BoardProject {
    * would quietly overrule them.
    */
   status: RecordStatus;
-  currentAddress?: string | null;
   originalAddress?: string | null;
 }
 
@@ -119,6 +132,7 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
       team: teamName(j.owningTeam, teams),
       teamId: j.owningTeam,
       status: j.status,
+      projectType: j.projectType,
       daysInStage: daysSince(j.stageEnteredAt, now),
       currentAddress: j.currentAddress,
       originalAddress: j.originalAddress,
@@ -137,6 +151,9 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
       projectId: p.id,
       jobs: byProject.get(String(p.id)) ?? [],
       proposedDwellings: p.proposedDwellings,
+      projectType: p.projectType,
+      targetCompletion: p.targetCompletion,
+      currentAddress: (byProject.get(String(p.id)) ?? [])[0]?.projectAddress ?? null,
       status: p.status
     }));
 
