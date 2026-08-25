@@ -19,14 +19,22 @@ export function JobDrawer({ job, onClose }: { job: BoardJob; onClose: () => void
   const panel = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
+  // Once, on mount. Keyed on `onClose` this re-ran whenever the parent re-rendered and
+  // pulled focus back to the drawer — the same fault that let the create form accept
+  // only one keystroke at a time. See CreatePanel for the long version.
   useEffect(() => {
     panel.current?.focus();
+  }, []);
+
+  const close = useRef(onClose);
+  close.current = onClose;
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") close.current();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, []);
 
   const { expectedDaysByStage } = useTemplatePhases();
   const { byStage: checkpointsByStage } = useCheckpoints();

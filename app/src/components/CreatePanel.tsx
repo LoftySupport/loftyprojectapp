@@ -70,18 +70,38 @@ export function CreatePanel({
     return () => mq.removeEventListener("change", onChange);
   }, []);
 
-  // Escape closes, and focus moves into the panel when it opens. A panel you can only
-  // leave with the mouse is a trap for anyone driving from the keyboard — the same
-  // reason JobDrawer does this.
+  /**
+   * Focus moves into the panel WHEN IT OPENS, and only then.
+   *
+   * This was one effect with `onClose` in its dependencies, and `onClose` is a fresh
+   * closure on every render at every call site — `onClose={close}`, where `close` is
+   * defined in the component body. So the effect re-ran after each keystroke and called
+   * `panel.current?.focus()` again, pulling focus out of the field being typed into.
+   * Typing one letter into "Project name" put the caret on the panel and the next letter
+   * went nowhere: the form accepted exactly one character per click.
+   *
+   * `[open]` alone is the fix. Focusing on open is a deliberate behaviour — a panel you
+   * can only leave with the mouse is a trap for anyone driving from the keyboard — and
+   * it is a thing that happens once, not a thing that re-asserts itself on every render.
+   */
+  useEffect(() => {
+    if (open) panel.current?.focus();
+  }, [open]);
+
+  /**
+   * Escape closes. Separate from the focus effect, and reading `onClose` through a ref,
+   * so a new closure re-binds nothing and cannot drag focus with it.
+   */
+  const close = useRef(onClose);
+  close.current = onClose;
   useEffect(() => {
     if (!open) return;
-    panel.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") close.current();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open]);
 
   // Collapsed again on close, so the next thing opened is a panel rather than inheriting
   // whatever the last person left it as.

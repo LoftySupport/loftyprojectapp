@@ -113,8 +113,8 @@ export function UserDialog({
             <TextField id="user-last" inputAriaLabel="Last name"
               value={form.lastName} onChange={v => set("lastName", v)} />
           </Field>
-          <Field label="Email" required hint="their real address — what the app shows">
-            <TextField id="user-email" inputAriaLabel="Email" placeholder="name@lofty.com.au"
+          <Field label="Email" required hint="their real address — what the app shows, usually @lofty.com.au">
+            <TextField id="user-email" inputAriaLabel="Email"
               value={form.email} onChange={v => set("email", v)} />
           </Field>
           <Field
@@ -122,7 +122,6 @@ export function UserDialog({
             hint="how their login is matched — usually @loftybg.onmicrosoft.com"
           >
             <TextField id="user-login-email" inputAriaLabel="Microsoft sign-in address"
-              placeholder="name@loftybg.onmicrosoft.com"
               value={form.loginEmail ?? ""} onChange={v => set("loginEmail", v || null)} />
           </Field>
           <Field label="Job title">

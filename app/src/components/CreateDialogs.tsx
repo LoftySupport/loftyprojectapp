@@ -32,6 +32,21 @@ import "./ui.css";
  *
  *   `Field`, `Problem` and `Result` came out of this file into `Form.tsx`, because a
  *   second copy of them in `UserDialogs` had drifted onto class names nothing styles.
+ *
+ * NO PLACEHOLDERS ON THE TEXT FIELDS, DELIBERATELY
+ *
+ *   Lofty: *"remove the placeholder info on the fields, it is confusing to work out what
+ *   you have typed and what you haven't."* Grey example text sits in the same box, in
+ *   the same position, at the same size as a real value — so a nine-field form looked
+ *   filled in when it was empty, and the only way to check was to click into each one.
+ *   Every field here has a label and most have a hint, so the example was saying a third
+ *   time what two visible lines already said.
+ *
+ *   The dropdowns keep theirs. "Select a type" is not an example of a value, it is the
+ *   name of the empty state, and it is the only thing distinguishing "nothing chosen"
+ *   from a choice. `InlineNewProjectRow` keeps its placeholders too, for the stronger
+ *   version of the same reason: a row in a table has no labels, so there the placeholder
+ *   IS the label.
  */
 
 /** Shared between both dialogs, because a job may sit at its own address. */
@@ -55,13 +70,23 @@ function AddressFields({
 
   return (
     <>
-      <Field label="Lot number" hint="as it appears on the plan of division">
+      <Field label="Lot number" hint="as it appears on the plan of division — 12A is a lot number">
         <TextField
           value={value.lotNumber ?? ""}
           onChange={v => set("lotNumber", v || null)}
-          placeholder="12A"
           id="addr-lot-number"
           inputAriaLabel="Lot number"
+        />
+      </Field>
+      {/* Second, not fourth. An address is said "Lot 12A, Unit 3, 42 Ironbark Road" —
+          the unit sits above the street number, so the form asks in that order rather
+          than leaving somebody to scroll back up past the street to fill it in. */}
+      <Field label="Unit / level" hint="anything above the street line">
+        <TextField
+          value={value.street2 ?? ""}
+          onChange={v => set("street2", v || null)}
+          id="addr-street-2"
+          inputAriaLabel="Unit or level"
         />
       </Field>
       <Field
@@ -71,7 +96,6 @@ function AddressFields({
         <TextField
           value={value.streetNumber ?? ""}
           onChange={v => set("streetNumber", v || null)}
-          placeholder="42"
           id="addr-street-number"
           inputAriaLabel="Street number"
         />
@@ -90,25 +114,14 @@ function AddressFields({
         <TextField
           value={value.street1 ?? ""}
           onChange={v => set("street1", v || null)}
-          placeholder="Ironbark Road"
           id="addr-street-1"
           inputAriaLabel="Street"
-        />
-      </Field>
-      <Field label="Unit / level" hint="anything above the street line">
-        <TextField
-          value={value.street2 ?? ""}
-          onChange={v => set("street2", v || null)}
-          placeholder="Unit 3"
-          id="addr-street-2"
-          inputAriaLabel="Unit or level"
         />
       </Field>
       <Field label="Suburb" required>
         <TextField
           value={value.suburb}
           onChange={v => set("suburb", v)}
-          placeholder="Golden Grove"
           id="addr-suburb"
           inputAriaLabel="Suburb"
           required
@@ -131,7 +144,6 @@ function AddressFields({
         <TextField
           value={value.postcode}
           onChange={v => set("postcode", v)}
-          placeholder="5125"
           id="addr-postcode"
           inputAriaLabel="Postcode"
           required
@@ -185,6 +197,20 @@ function OwningTeamField({
     </Field>
   );
 }
+
+/**
+ * The team a new job starts with.
+ *
+ * This used to be null on purpose — *"a default would mean nobody ever chose"* — and
+ * Lofty's answer is that the choice is not in doubt: every job starts in Acquisition &
+ * Development, which is the team that owns the first lifecycle stage. So the default is
+ * not a guess standing in for a decision, it is the decision, and leaving the field
+ * empty made somebody restate it on every job.
+ *
+ * Still a picker, and still changeable before saving — a job that genuinely starts
+ * elsewhere is one selection away.
+ */
+const FIRST_TEAM: TeamId = "acquisition_development";
 
 const EMPTY_ADDRESS: NewAddress = {
   street1: "", suburb: "", state: "SA", postcode: "", council: null,
@@ -340,7 +366,6 @@ export function NewProjectDialog({
               <TextField
                 value={name}
                 onChange={setName}
-                placeholder="Mt Gambier division"
                 id="project-name"
                 inputAriaLabel="Project name"
               />
@@ -361,7 +386,6 @@ export function NewProjectDialog({
               <TextField
                 value={dwellings}
                 onChange={setDwellings}
-                placeholder="4"
                 id="project-dwellings"
                 inputAriaLabel="Proposed dwellings"
                 validation={
@@ -392,9 +416,7 @@ export function NewJobDialog({
 }) {
   const repo = useRepository();
   const [projectId, setProjectId] = useState<string | null>(null);
-  // No default. The database has none either, deliberately: this decides whose work the
-  // job is, and a default would mean nobody ever chose.
-  const [owningTeam, setOwningTeam] = useState<TeamId | null>(null);
+  const [owningTeam, setOwningTeam] = useState<TeamId | null>(FIRST_TEAM);
   const [ownAddress, setOwnAddress] = useState(false);
   const [address, setAddress] = useState<NewAddress>(EMPTY_ADDRESS);
   const [saving, setSaving] = useState(false);
@@ -406,7 +428,7 @@ export function NewJobDialog({
 
   const reset = () => {
     setProjectId(null);
-    setOwningTeam(null);
+    setOwningTeam(FIRST_TEAM);
     setOwnAddress(false);
     setAddress(EMPTY_ADDRESS);
     setError(null);
@@ -531,7 +553,7 @@ export function SplitProjectDialog({
   const repo = useRepository();
   const [count, setCount] = useState("");
   const [startLot, setStartLot] = useState("");
-  const [owningTeam, setOwningTeam] = useState<TeamId | null>(null);
+  const [owningTeam, setOwningTeam] = useState<TeamId | null>(FIRST_TEAM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<string[] | null>(null);
@@ -542,7 +564,7 @@ export function SplitProjectDialog({
     if (!show) return;
     setCount(suggestedCount ? String(suggestedCount) : "");
     setStartLot(String(nextLot ?? 1));
-    setOwningTeam(null);
+    setOwningTeam(FIRST_TEAM);
     setError(null);
     setCreated(null);
     setSaving(false);
@@ -617,7 +639,6 @@ export function SplitProjectDialog({
               <TextField
                 value={count}
                 onChange={setCount}
-                placeholder="4"
                 id="split-count"
                 inputAriaLabel="How many jobs"
                 validation={
@@ -632,7 +653,6 @@ export function SplitProjectDialog({
               <TextField
                 value={startLot}
                 onChange={setStartLot}
-                placeholder="1"
                 id="split-start-lot"
                 inputAriaLabel="First lot number"
                 validation={
