@@ -520,8 +520,29 @@ export function createSupabaseRepository(): Repository {
       const { data: people, error: peopleError } = await q;
       if (peopleError) throw peopleError;
 
-      const rows = (people ?? []) as unknown as { id: string; auth_user_id: string | null; full_name: string }[];
-      const byAuthId = new Map(rows.filter(r => r.auth_user_id).map(r => [r.auth_user_id!, r.full_name]));
+      /**
+       * The PREFIXED column names, which is what the select above asks for.
+       *
+       * This cast claimed `{ id, auth_user_id, full_name }` — the names these columns had
+       * before 0028 renamed them. `as unknown as` silences the compiler completely, so
+       * nothing caught it: every row came back with `auth_user_id: undefined`, the filter
+       * below dropped all of them, `authIds` was empty and the function returned `[]`
+       * before it ever read the audit table.
+       *
+       * So activity looked like it was not being recorded when it was — 221 rows of it,
+       * including the profile edits made minutes before the report. A lie in a cast is
+       * worse than a missing type, because it reads as though somebody checked.
+       */
+      const rows = (people ?? []) as unknown as {
+        profile_id: string;
+        profile_auth_user_id: string | null;
+        profile_full_name: string;
+      }[];
+      const byAuthId = new Map(
+        rows
+          .filter(r => r.profile_auth_user_id)
+          .map(r => [r.profile_auth_user_id!, r.profile_full_name])
+      );
       const authIds = [...byAuthId.keys()];
       if (!authIds.length) return [];
 
