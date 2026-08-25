@@ -230,6 +230,19 @@ export interface Project {
   proposedDwellings: number | null;
   projectType: ProjectType | null;
   status: RecordStatus;
+  /**
+   * Where the project sits in the five-phase lifecycle — the same five words a job uses.
+   *
+   * Its jobs may legitimately be at different phases; this is the project's own answer.
+   * `projectStageFromJobs` on the repository computes what it WOULD be if it followed
+   * the lowest job, which is offered rather than applied — see 0039 for why that is not
+   * a trigger.
+   */
+  stage: StageName;
+  /** When it entered that phase. Days-in-phase is derived on read, never stored. */
+  stageEnteredAt: IsoDateTime;
+  /** The project's SharePoint folder. Its jobs' folders are subfolders, held on them. */
+  sharepointUrl: string | null;
   startDate: IsoDate | null;
   targetCompletion: IsoDate | null;
   /** Actual, as opposed to target. */
@@ -298,6 +311,8 @@ export interface Job {
    */
   engagedTeams: TeamId[];
   assigneeId: Uuid | null;
+  /** This job's own SharePoint subfolder, inside its project's folder. */
+  sharepointUrl: string | null;
   /**
    * The project's type, resolved by `job_display` — never stored on the job.
    *

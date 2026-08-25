@@ -93,7 +93,7 @@ const PROFILE_COLUMNS =
  * database had.
  */
 const PROJECT_COLUMNS =
-  "project_id, project_name, project_original_address_id, project_current_address_id, project_type, project_status, project_proposed_dwellings, project_owning_team, project_assignee_id, project_start_date, project_target_completion, project_end_date, project_created_at, project_created_by, project_updated_at, project_updated_by, addresses!projects_project_current_address_id_fkey(address_consolidated)";
+  "project_id, project_name, project_original_address_id, project_current_address_id, project_type, project_status, project_proposed_dwellings, project_owning_team, project_assignee_id, project_start_date, project_target_completion, project_end_date, project_stage, project_stage_entered_at, project_sharepoint_url, project_created_at, project_created_by, project_updated_at, project_updated_by, addresses!projects_project_current_address_id_fkey(address_consolidated)";
 
 // Read from `job_display`, not from `jobs`. The view resolves both of the job's
 // addresses and its project's, which the base table only carries as uuids — so a card
@@ -106,7 +106,7 @@ const PROJECT_COLUMNS =
 //
 // Writes still go to `jobs` — a view is not the place to insert through.
 const JOB_COLUMNS =
-  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_created_at, job_created_by, job_updated_at, job_updated_by, job_current_address, job_original_address, project_current_address, project_type";
+  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_sharepoint_url, job_created_at, job_created_by, job_updated_at, job_updated_by, job_current_address, job_original_address, project_current_address, project_type";
 
 /**
  * `""` and `"   "` are how a browser reports a field somebody did not fill in, and they
@@ -987,6 +987,8 @@ type ProjectRow = {
   project_owning_team: TeamId | null; project_assignee_id: string | null;
   project_start_date: string | null; project_target_completion: string | null;
   project_end_date: string | null;
+  project_stage: Project["stage"]; project_stage_entered_at: string;
+  project_sharepoint_url: string | null;
   project_created_at: string; project_created_by: string | null;
   project_updated_at: string; project_updated_by: string | null;
   // The embed above. PostgREST returns an object for a to-one relationship, and null
@@ -1005,6 +1007,9 @@ function toProject(r: ProjectRow): Project {
     currentAddress: r.addresses?.address_consolidated ?? null,
     projectType: r.project_type,
     status: r.project_status,
+    stage: r.project_stage,
+    stageEnteredAt: r.project_stage_entered_at,
+    sharepointUrl: r.project_sharepoint_url,
     proposedDwellings: r.project_proposed_dwellings,
     owningTeam: r.project_owning_team,
     assigneeId: r.project_assignee_id,
@@ -1026,6 +1031,7 @@ type JobRow = {
   job_stage: StageName; job_stage_entered_at: string;
   job_owning_team: TeamId; job_engaged_teams: TeamId[];
   job_assignee_id: string | null;
+  job_sharepoint_url: string | null;
   job_created_at: string; job_created_by: string | null;
   job_updated_at: string; job_updated_by: string | null;
   // Resolved by the view, not present on the table.
@@ -1049,6 +1055,7 @@ function toJob(r: JobRow): Job {
     owningTeam: r.job_owning_team,
     engagedTeams: r.job_engaged_teams ?? [],
     assigneeId: r.job_assignee_id,
+    sharepointUrl: r.job_sharepoint_url,
     createdAt: r.job_created_at,
     createdBy: r.job_created_by,
     updatedAt: r.job_updated_at,
