@@ -956,3 +956,61 @@ code { overflow-wrap: anywhere; }
 .cell-edit { min-width: 140px; }
 .cell-edit-wide { min-width: 200px; }
 .row-editing-problem { margin: 0 0 var(--space-8); }
+
+/* ---- the permission matrix -----------------------------------------------
+   A dot rather than a tick or a word, because the grid is read down a column —
+   "what does a manager get" — and five columns of "Yes" is five columns of noise.
+   The screen-reader text beside each says which it is; the dot is decoration. */
+.perm-cell { text-align: center; }
+.perm-yes { color: var(--positive-ink); font-size: 14px; }
+.perm-no { color: var(--layout-border-color); }
+/* Visible to a screen reader, not on screen. The dot alone would announce as a
+   character, or as nothing at all. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---- the suburb suggestions ----------------------------------------------
+   A combobox rather than a Dropdown, because a suburb not on a list published in July
+   still has to be typeable — the suggestions help, they do not gate. */
+.suburb-field { position: relative; }
+.suburb-suggestions {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: var(--space-4);
+  list-style: none;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--primary-background-color);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-small);
+  box-shadow: var(--box-shadow-medium);
+}
+.suburb-suggestion {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-8);
+  width: 100%;
+  padding: var(--space-8);
+  background: none;
+  border: 0;
+  border-radius: var(--border-radius-small);
+  font: var(--font-text2-normal);
+  color: var(--primary-text-color);
+  text-align: left;
+  cursor: pointer;
+}
+.suburb-suggestion.is-active { background: var(--primary-background-hover-color); }
+.suburb-postcode { font: var(--font-text3-normal); color: var(--secondary-text-color); font-variant-numeric: tabular-nums; }

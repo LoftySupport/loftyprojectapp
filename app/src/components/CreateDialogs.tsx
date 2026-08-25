@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, Text, TextField } from "@vibe/core";
 import { CreatePanel } from "./CreatePanel";
 import { Field, Problem, Result } from "./Form";
 import { Select, toOptions } from "./Select";
 import { useRepository } from "../data/DataProvider";
 import { useTeams } from "../data/useLookups";
+import { councilForSuburb, isAmbiguousSuburb, postcodeForSuburb } from "../data/saSuburbs";
+import { SuburbField } from "./SuburbField";
 import {
   AU_STATES, MAX_SPLIT, PROJECT_TYPE_LABELS, PROJECT_TYPES, SA_COUNCILS,
   type NewAddress, type ProjectType, type SaCouncil, type TeamId
@@ -59,6 +61,57 @@ function AddressFields({
 }) {
   const set = <K extends keyof NewAddress>(key: K, v: NewAddress[K]) =>
     onChange({ ...value, [key]: v });
+
+  /**
+   * Typing a suburb fills in its council.
+   *
+   * From the list Lofty supplied — "Councils by Suburb/Locality as at 1 July 2026" —
+   * so it is the LGA's own answer rather than a guess from a postcode. Postcodes were
+   * the obvious key and are the wrong one: they cross council boundaries routinely,
+   * where a suburb almost never does.
+   *
+   * WHAT IT WILL NOT DO
+   *
+   *   Overwrite a council somebody chose. `autoFilled` remembers the last value this
+   *   put there, so re-typing the suburb corrects its own answer and leaves a manual
+   *   one alone — the field is a suggestion, not a lock.
+   *
+   *   Answer for the four suburbs that sit in two councils. Those clear the field and
+   *   say so, because a council on a lodged application is not worth being confidently
+   *   wrong about.
+   */
+  const autoFilled = useRef<SaCouncil | null>(null);
+  const onSuburb = (suburb: string) => {
+    const next: NewAddress = { ...value, suburb };
+    if ((value.state ?? "SA") === "SA") {
+      const chosenByHand = value.council !== null && value.council !== autoFilled.current;
+      if (!chosenByHand) {
+        const found = councilForSuburb(suburb);
+        next.council = found;
+        autoFilled.current = found;
+      }
+      // Typed in full rather than picked — same answer, so fill the postcode too, but
+      // never over one already there.
+      if (!value.postcode.trim()) {
+        const code = postcodeForSuburb(suburb);
+        if (code) next.postcode = code;
+      }
+    }
+    onChange(next);
+  };
+
+  /** A suburb chosen from the list: postcode and council are known, so both go in. */
+  const onSuburbPicked = (suburb: string, postcode: string | null, council: string | null) => {
+    const next: NewAddress = { ...value, suburb };
+    if (postcode) next.postcode = postcode;
+    if ((value.state ?? "SA") === "SA") {
+      next.council = council as NewAddress["council"];
+      autoFilled.current = council as SaCouncil | null;
+    }
+    onChange(next);
+  };
+
+  const ambiguous = isAmbiguousSuburb(value.suburb);
 
   // The council enum is SA-only and the database enforces it with a CHECK, so the
   // picker disappears rather than offering values that would be rejected on save.
@@ -118,14 +171,18 @@ function AddressFields({
           inputAriaLabel="Street"
         />
       </Field>
-      <Field label="Suburb" required>
-        <TextField
-          value={value.suburb}
-          onChange={v => set("suburb", v)}
-          id="addr-suburb"
-          inputAriaLabel="Suburb"
-          required
-        />
+      <Field
+        label="Suburb"
+        required
+        hint={
+          ambiguous
+            ? `${value.suburb} sits in two councils — pick the right one below`
+            : councilAvailable && value.council && value.council === autoFilled.current
+              ? "council filled in from the LGA list"
+              : undefined
+        }
+      >
+        <SuburbField value={value.suburb} onType={onSuburb} onPick={onSuburbPicked} />
       </Field>
       <Field label="State">
         <Select
@@ -150,7 +207,14 @@ function AddressFields({
         />
       </Field>
       {councilAvailable && (
-        <Field label="Council region" hint="all 68 South Australian councils, A–Z">
+        <Field
+          label="Council region"
+          hint={
+            ambiguous
+              ? "this suburb spans two councils — the list cannot choose for you"
+              : "filled in from the suburb where the list is unambiguous · all 68, A–Z"
+          }
+        >
           <Select
             aria-label="Council region"
             /* Sorted here rather than in SA_COUNCILS, which is kept in the order the

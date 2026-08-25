@@ -2,6 +2,7 @@ import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { Counter, Heading, Tab, TabList, Text } from "@vibe/core";
 import { groupByStage, usePropertyDefs, useStages } from "../data/useLookups";
 import { DictionaryPage } from "./DictionaryPage";
+import { PermissionsPage } from "./PermissionsPage";
 import { WiringPage } from "./WiringPage";
 import "../components/ui.css";
 
@@ -24,6 +25,7 @@ import "../components/ui.css";
 
 const SECTIONS = [
   { slug: "properties",  label: "Properties" },
+  { slug: "permissions", label: "Permissions" },
   { slug: "dictionary",  label: "Dictionary" },
   { slug: "wiring",      label: "Wiring" },
   { slug: "automations", label: "Automations" }
@@ -53,6 +55,9 @@ export function SetupPage() {
 
       <div style={{ marginTop: "var(--space-16)" }}>
         {section === "properties"  && <Properties />}
+        {/* Moved off Admin. Admin is about people; a permission model is configuration,
+            which is what this screen is for. */}
+        {section === "permissions" && <PermissionsPage />}
         {section === "dictionary"  && <DictionaryPage />}
         {section === "wiring"      && <WiringPage />}
         {section === "automations" && <Automations />}

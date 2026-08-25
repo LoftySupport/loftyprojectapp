@@ -11,7 +11,6 @@ import {
 } from "../data/types";
 import { useStages, useTeamLabels, useTeams, useTemplatePhases } from "../data/useLookups";
 import { useBoardRecords } from "../data/boardModel";
-import { Token } from "../components/Token";
 import "../components/ui.css";
 
 /**
@@ -34,16 +33,17 @@ export function AdminPage() {
         </Text>
       </div>
 
+      {/* Permissions moved to Setup — Admin is who works here, Setup is how the app is
+          configured, and the matrix that used to sit here was five invented objects over
+          a table that does not exist. */}
       <TabList activeTabId={tab} onTabChange={setTab}>
         <Tab>Users</Tab>
         <Tab>Teams</Tab>
-        <Tab>Permissions</Tab>
       </TabList>
 
       <div style={{ marginTop: "var(--space-16)" }}>
         {tab === 0 && <Users />}
         {tab === 1 && <Teams />}
-        {tab === 2 && <Permissions />}
       </div>
     </>
   );
@@ -321,42 +321,3 @@ function Teams() {
   );
 }
 
-/** The `permission_level` enum, in ladder order. Read left to right: each rung has
- *  everything the one before it has. Maps onto Microsoft Teams permission levels when
- *  that sync lands. */
-const PERMISSIONS = ["viewer", "user", "manager", "admin", "superadmin"];
-const OBJECTS = ["Project", "Job", "Checklist", "Comment", "Report"];
-
-function Permissions() {
-  return (
-    <section className="panel">
-      <div className="panel-head">
-        <Text type="text2" weight="bold">Permission grants</Text>
-        <Text type="text3" color="secondary">
-          A ladder, not a set — each rung has everything to its left. Read down a column
-          to see one permission level’s version of the app.
-        </Text>
-      </div>
-      <div className="data-table-wrap">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Object</th>
-              {PERMISSIONS.map(r => <th key={r}>{r}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {OBJECTS.map(o => (
-              <tr key={o}>
-                <td><strong>{o}</strong></td>
-                {PERMISSIONS.map(r => (
-                  <td key={r}><Token>permission_grants.action</Token></td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
