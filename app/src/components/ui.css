@@ -1014,3 +1014,65 @@ code { overflow-wrap: anywhere; }
 }
 .suburb-suggestion.is-active { background: var(--primary-background-hover-color); }
 .suburb-postcode { font: var(--font-text3-normal); color: var(--secondary-text-color); font-variant-numeric: tabular-nums; }
+
+/* ---- the split's per-job rows --------------------------------------------
+   Creating jobs from a project needs somewhere to put what differs per lot — a lot
+   number that might be "2B", and the number the job had in the old system. A count and
+   a starting number cannot express either, so the batch is a small editable list. */
+.split-rows { margin-top: var(--space-12); }
+.split-rows-head { margin-bottom: var(--space-8); }
+.split-row {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: var(--space-8);
+  align-items: start;
+  padding: var(--space-4) 0;
+}
+/* A header row rather than a label on every field: forty labels down a panel is forty
+   lines of the same two words. */
+.split-row-head {
+  font: var(--font-text3-medium);
+  color: var(--secondary-text-color);
+  padding-bottom: 0;
+}
+
+/* A card that can be picked up says so — the grab cursor is the only affordance HTML5
+   drag gives us for free, and without it the feature is invisible. Only applied when
+   grouping is by Stage and the person is manager or above; JobsPage decides that. */
+.board-card-draggable { cursor: grab; }
+.board-card-draggable:active { cursor: grabbing; }
+
+/* A field-row whose value side holds a value AND a control beside it — the stage with
+   its move picker, the folder link with its input. */
+.field-inline { display: flex; align-items: center; gap: var(--space-8); }
+
+/* The three project dates. A native date input, dressed to sit in a field-row the way
+   Vibe's small TextField does — and empty when no date is set, never a stand-in. */
+.date-input {
+  height: 32px;
+  padding: 0 var(--space-8);
+  border: 1px solid var(--ui-border-color);
+  border-radius: var(--border-radius-small);
+  background: var(--primary-background-color);
+  color: var(--primary-text-color);
+  font: inherit;
+  font-size: 14px;
+}
+.date-input:focus { outline: none; border-color: var(--primary-color); }
+
+/* The comment thread. The newest one is the record's latest update and reads larger;
+   the rest are its history. */
+.comment-composer { display: flex; gap: var(--space-8); margin-bottom: var(--space-12); }
+.comment-composer > :first-child { flex: 1; }
+.comment { padding: var(--space-8) 0; border-top: 1px solid var(--layout-border-color); }
+.comment.latest { border-top: none; }
+.comment-meta { display: flex; gap: var(--space-8); align-items: baseline; margin-bottom: 2px; }
+
+/* The secondary address block — on the create form and the record page. Indented and
+   bordered so "which address am I editing" has a visual answer. */
+.new-address-block {
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-medium);
+  padding: var(--space-12);
+  margin-top: var(--space-8);
+}

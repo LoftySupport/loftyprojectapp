@@ -154,6 +154,15 @@ export interface AddressHistory {
   createdAt: IsoDateTime;
 }
 
+/** A history stint with its address resolved to text — what the record page lists. */
+export interface AddressHistoryEntry {
+  id: number;
+  role: "original" | "current";
+  address: string | null;
+  validFrom: IsoDateTime;
+  validTo: IsoDateTime;
+}
+
 /**
  * Two addresses, not one. `original` is where the project started and never moves —
  * it is what contracts and old paperwork refer to. `current` is what every card, board
@@ -220,6 +229,11 @@ export interface Project {
    * {{project_display.current_address}} over an address the database was holding.
    */
   currentAddress: string | null;
+  /** The original address as text — null until the project has been renamed away from it. */
+  originalAddress: string | null;
+  /** The current address's suburb and council, read through the same embed. */
+  suburb: string | null;
+  council: string | null;
   /** Who is primarily accountable. A `teams.team_id` slug. */
   owningTeam: TeamId | null;
   assigneeId: Uuid | null;
@@ -230,6 +244,19 @@ export interface Project {
   proposedDwellings: number | null;
   projectType: ProjectType | null;
   status: RecordStatus;
+  /**
+   * Where the project sits in the five-phase lifecycle — the same five words a job uses.
+   *
+   * Its jobs may legitimately be at different phases; this is the project's own answer.
+   * `projectStageFromJobs` on the repository computes what it WOULD be if it followed
+   * the lowest job, which is offered rather than applied — see 0039 for why that is not
+   * a trigger.
+   */
+  stage: StageName;
+  /** When it entered that phase. Days-in-phase is derived on read, never stored. */
+  stageEnteredAt: IsoDateTime;
+  /** The project's SharePoint folder. Its jobs' folders are subfolders, held on them. */
+  sharepointUrl: string | null;
   startDate: IsoDate | null;
   targetCompletion: IsoDate | null;
   /** Actual, as opposed to target. */
@@ -239,6 +266,18 @@ export interface Project {
   createdBy: Uuid | null;
   updatedAt: IsoDateTime;
   updatedBy: Uuid | null;
+}
+
+/**
+ * What the record page may change on a project. Dates arrive as 'YYYY-MM-DD' or null
+ * (clearing a date is a legitimate edit); the SharePoint URL must be https or null —
+ * the database CHECK is the authority and its refusal is shown verbatim.
+ */
+export interface ProjectPatch {
+  startDate?: IsoDate | null;
+  targetCompletion?: IsoDate | null;
+  endDate?: IsoDate | null;
+  sharepointUrl?: string | null;
 }
 
 /** The joined shape the cards read — `project_display`. */
@@ -298,6 +337,14 @@ export interface Job {
    */
   engagedTeams: TeamId[];
   assigneeId: Uuid | null;
+  /** This job's own SharePoint subfolder, inside its project's folder. */
+  sharepointUrl: string | null;
+  /**
+   * The project's folder, resolved by `job_display` rather than copied — the record page
+   * shows both links, and a copy would be a second place for it to be wrong the day a
+   * site is moved. Same rule as `projectCurrentAddress` below.
+   */
+  projectSharepointUrl: string | null;
   /**
    * The project's type, resolved by `job_display` — never stored on the job.
    *
@@ -764,6 +811,11 @@ export interface Comment extends RecordRef {
   updatedBy: Uuid | null;
 }
 
+/** A comment with its author's name resolved on the read — what a thread renders. */
+export interface CommentEntry extends Comment {
+  authorName: string | null;
+}
+
 /**
  * One entry in the readable feed — "Deanna moved this to Construction".
  *
@@ -848,11 +900,15 @@ export interface TemplateCheckpoint {
 
 // -------------------------------------------------------------- properties
 
-export type PropertyScope = "project" | "job";
+export const PROPERTY_SCOPES = ["project", "job"] as const;
+export type PropertyScope = (typeof PROPERTY_SCOPES)[number];
 
-export type PropertyFormat =
-  | "text" | "number" | "currency" | "date" | "checkbox"
-  | "file" | "single select" | "multi select" | "person" | "link";
+/** Mirrors the CHECK in 0043 exactly — the picker offers only what the database takes. */
+export const PROPERTY_FORMATS = [
+  "text", "number", "currency", "date", "checkbox",
+  "file", "single select", "multi select", "person", "link"
+] as const;
+export type PropertyFormat = (typeof PROPERTY_FORMATS)[number];
 
 /**
  * `property_defs`. A property IS a field — the two words mean the same thing.
@@ -870,11 +926,31 @@ export interface PropertyDef {
   label: string;
   scope: PropertyScope;
   stageName: string;
+  /** The slug, for edits; `teamName` is the display name resolved on the read. */
+  teamId: TeamId;
   teamName: string;
   format: PropertyFormat;
   /** Required to *leave* its stage, not required to create the record. */
   required: boolean;
   automation?: string;
+  /** Order among its stage's slots — data, not alphabet. */
+  position: number;
+}
+
+/**
+ * Defining a field. The key is the identity and the database checks it is a slug;
+ * everything else can change later without the values losing their parent.
+ */
+export interface NewPropertyDef {
+  key: string;
+  label: string;
+  scope: PropertyScope;
+  stageName: string;
+  teamId: TeamId;
+  format: PropertyFormat;
+  required?: boolean;
+  automation?: string | null;
+  position?: number;
 }
 
 // ------------------------------------------------------------------ creating
@@ -918,6 +994,13 @@ export interface NewAddress {
 
 export interface NewProject {
   address: NewAddress;
+  /**
+   * The "Add another address" block on the create form — for legacy imports, where the
+   * address a project was bought under is already out of date. When present, the FIRST
+   * address becomes the immutable original and THIS one becomes the current address.
+   * Amber: "labelled 'new address' which is the new current address."
+   */
+  newAddress?: NewAddress | null;
   /**
    * What people call it — "Mt Gambier division". Optional, because most projects are
    * known by their address and a name would only repeat it; useful precisely when the
@@ -965,10 +1048,38 @@ export interface NewProject {
  */
 export const MAX_SPLIT = 60;
 
+/**
+ * One job in a split, as the person entering it described it.
+ *
+ * Lofty, 25 August: creating jobs from a project needs "space to add in details such as
+ * job address (if known) such as 2a launceston ave might now be lot 1, 2a launceston,
+ * lot 2b, 2a launceston etc and also the old job number as well from the old system."
+ *
+ * So a lot is not always "1, 2, 3": `2B` is a real lot number, which is why this is text
+ * rather than a number and why the batch is a list rather than a count and a start.
+ */
+export interface SplitLot {
+  /** As it appears on the plan of division — "1", "2B", "14A". */
+  lotNumber: string;
+  /**
+   * The number this job has in SiteBook or Trello, when it is a job that already exists
+   * there. Unique across `jobs`, and nullable — jobs created here have none.
+   */
+  jobNumberOld?: string | null;
+}
+
 export interface JobSplit {
   projectId: number;
-  /** How many jobs to create. */
+  /** How many jobs to create. Ignored when `lots` is given, which says both. */
   count: number;
+  /**
+   * The lots themselves, when the person named them.
+   *
+   * Present, this is the batch — its length is the count and its order is the order.
+   * Absent, `count` and `startLot` generate "1, 2, 3…" as they always did, which is
+   * still what the inline row and the create-then-split flow want.
+   */
+  lots?: SplitLot[];
   /**
    * Required, and not defaulted — the same reason `NewJob.owningTeam` is not. One team
    * for the batch: at a split every lot is with whoever is starting the site, and they

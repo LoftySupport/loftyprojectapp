@@ -1,7 +1,10 @@
 import { TEAM_SEED } from "./types";
+import type { DictionaryOverride } from "./dictionary";
 import type { Repository, RepositoryMethod } from "./repository";
 import type {
   ActivityEntry,
+  AddressHistoryEntry,
+  CommentEntry,
   Job,
   Profile,
   Project,
@@ -105,6 +108,10 @@ export function createStubRepository(): Repository {
       throw new Error("Changing a user's status needs Supabase.");
     },
     async listActivity(): Promise<ActivityEntry[]> { return []; },
+    async listComments(): Promise<CommentEntry[]> { return []; },
+    async addComment(): Promise<CommentEntry> {
+      throw new Error("Posting an update needs Supabase.");
+    },
 
     // ---- creating: refuse rather than pretend ---------------------------
     // The other stubs answer with empty arrays, which is honest — there are no records
@@ -133,6 +140,19 @@ export function createStubRepository(): Repository {
     async deleteJob(): Promise<void> {
       throw new Error("Removing a job needs Supabase.");
     },
+    async moveJobStage(): Promise<Job> {
+      throw new Error("Moving a job between stages needs Supabase.");
+    },
+    async moveProjectStage(): Promise<Project> {
+      throw new Error("Moving a project between stages needs Supabase.");
+    },
+    async updateProject(): Promise<Project> {
+      throw new Error("Editing a project needs Supabase.");
+    },
+    async setProjectCurrentAddress(): Promise<Project> {
+      throw new Error("Adding an address needs Supabase.");
+    },
+    async listAddressHistory(): Promise<AddressHistoryEntry[]> { return []; },
     async deleteProject(): Promise<void> {
       throw new Error("Removing a project needs Supabase.");
     },
@@ -168,6 +188,19 @@ export function createStubRepository(): Repository {
      * were never once rendered while they were being written.
      */
     async listTemplateCheckpoints(): Promise<TemplateCheckpoint[]> { return []; },
-    async listPropertyDefs(): Promise<PropertyDef[]> { return []; }
+    async listPropertyDefs(): Promise<PropertyDef[]> { return []; },
+    async listDictionaryOverrides(): Promise<DictionaryOverride[]> { return []; },
+    async saveDictionaryOverride(): Promise<DictionaryOverride> {
+      throw new Error("Saving a dictionary edit needs Supabase.");
+    },
+    async createPropertyDef(): Promise<PropertyDef> {
+      throw new Error("Defining a property needs Supabase.");
+    },
+    async updatePropertyDef(): Promise<PropertyDef> {
+      throw new Error("Editing a property needs Supabase.");
+    },
+    async deletePropertyDef(): Promise<void> {
+      throw new Error("Removing a property needs Supabase.");
+    }
   };
 }

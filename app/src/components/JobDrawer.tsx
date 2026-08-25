@@ -6,6 +6,9 @@ import type { BoardJob } from "../data/boardModel";
 import { StatusPill } from "./RecordCards";
 import { PropertySlots } from "./PropertySlots";
 import { ExpandButton, usePanelExpand } from "./PanelExpand";
+import { JOB_MOVE_NOTE, MoveStageControl } from "./MoveStageDialog";
+import { CommentsPanel } from "./CommentsPanel";
+import { useRepository } from "../data/DataProvider";
 import { Token } from "./Token";
 import "./ui.css";
 
@@ -16,9 +19,15 @@ import "./ui.css";
  * Escape closes it and focus moves into the panel on open, because a drawer you can
  * only leave with the mouse is a trap for anyone driving from the keyboard.
  */
-export function JobDrawer({ job, onClose }: { job: BoardJob; onClose: () => void }) {
+export function JobDrawer({ job, onClose, onMoved }: {
+  job: BoardJob;
+  onClose: () => void;
+  /** Bumps the board's reload after a stage move, so the card is already in its new column when the drawer closes. */
+  onMoved: () => void;
+}) {
   const panel = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const repo = useRepository();
   // The drawer had no way to widen — the same record, the same shape of panel, and the
   // control only on the create side. `open` is always true here: this component is
   // mounted only while the drawer is showing.
@@ -130,6 +139,22 @@ export function JobDrawer({ job, onClose }: { job: BoardJob; onClose: () => void
               </div>
               <Text type="text2" weight="medium">{job.stage}</Text>
             </div>
+            {/* Manager and above; the component hides itself below that, the same line
+                the database draws (0038). Only later phases are offered — see
+                MoveStageControl for why — and choosing one asks for confirmation,
+                because a lifecycle move cannot be undone. */}
+            <div className="field-row">
+              <div className="field-label">
+                <Text type="text2">Move</Text>
+              </div>
+              <MoveStageControl
+                subject={job.jobNumber}
+                stage={job.stage}
+                move={to => repo.moveJobStage(job.jobNumber, to)}
+                note={JOB_MOVE_NOTE}
+                onMoved={onMoved}
+              />
+            </div>
             <div className="field-row">
               <div className="field-label">
                 <Text type="text2">Days in stage</Text>
@@ -167,19 +192,9 @@ export function JobDrawer({ job, onClose }: { job: BoardJob; onClose: () => void
           {/* Then the job's own — twenty jobs, twenty answers. */}
           <PropertySlots scope="job" title="Job properties" />
 
-          <section className="panel">
-            <div className="panel-head">
-              <Text type="text2" weight="bold">Activity &amp; comments</Text>
-            </div>
-            <div className="stack-tight">
-              <Text type="text3" color="secondary">
-                <Token>activity.description</Token>
-              </Text>
-              <Text type="text3" color="secondary">
-                <Token>comments.author_name</Token> — <Token>comments.body</Token>
-              </Text>
-            </div>
-          </section>
+          {/* The job's own thread — the same shape the project has, because Amber's
+              "latest update" is one rule for both kinds of record. */}
+          <CommentsPanel jobId={job.jobNumber} title="Updates & comments" />
         </div>
       </aside>
     </>

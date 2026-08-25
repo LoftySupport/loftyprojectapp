@@ -12,6 +12,8 @@ import {
   type DictionaryStatus
 } from "../data/dictionary";
 import { usePermission } from "../data/PermissionProvider";
+import { useQuery, useRepository } from "../data/DataProvider";
+import { Problem } from "../components/Form";
 import { useStages, useTeams } from "../data/useLookups";
 import { Select, toOptions } from "../components/Select";
 import "../components/ui.css";
@@ -30,10 +32,10 @@ import "./DictionaryPage.css";
  *   admin           plus set status
  *   superadmin      plus archive an entry
  *
- * Edits are held in page state. They are not persisted anywhere yet, because there is
- * nowhere to persist them to — this array is the source of truth until a
- * `data_dictionary` table exists, and pretending otherwise would lose someone's work.
- * That is said on the page rather than left to be discovered.
+ * Edits persist since 0044: `dictionary_overrides` holds Lofty's words on top of the
+ * repo's entries — one row per edited entry, null fields meaning the repo's wording
+ * stands. Typing stays local; a field saves when you leave it, a status the moment it
+ * changes. The ladder above is enforced in the database, not just reflected here.
  */
 /**
  * The two statuses that describe what a property USED to be.
@@ -65,10 +67,75 @@ export function DictionaryPage() {
   const [edits, setEdits] = useState<Record<string, Partial<DictionaryEntry>>>({});
   const [openRow, setOpenRow] = useState<string | null>(null);
 
-  const merged = useMemo(
-    () => DICTIONARY.map(d => ({ ...d, ...edits[d.id] })),
-    [edits]
-  );
+  const repo = useRepository();
+  const [reload, setReload] = useState(0);
+  const { data: overrides } = useQuery(r => r.listDictionaryOverrides(), [], [reload]);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  /**
+   * Three layers, in order: the repo's entry, the saved override, the keystroke not yet
+   * saved. Only an override's non-null fields apply — null means the repo's wording
+   * stands, which is what lets one field be Lofty's while the rest stay the code's.
+   */
+  const merged = useMemo(() => {
+    const byId = new Map(overrides.map(o => [o.id, o]));
+    return DICTIONARY.map(d => {
+      const o = byId.get(d.id);
+      return {
+        ...d,
+        ...(o?.friendlyName != null && { friendlyName: o.friendlyName }),
+        ...(o?.definition != null && { definition: o.definition }),
+        ...(o?.status != null && { status: o.status }),
+        ...(o && { updatedAt: o.updatedAt.slice(0, 10) }),
+        ...edits[d.id]
+      };
+    });
+  }, [overrides, edits]);
+
+  /**
+   * The blur-save for the two wording fields. Sends only what changed against what the
+   * merged view already shows; clears the local copy on success so the saved override
+   * takes over without a flicker.
+   */
+  async function persistWording(id: string) {
+    const local = edits[id];
+    if (!local || (!("friendlyName" in local) && !("definition" in local))) return;
+    setSaveError(null);
+    try {
+      await repo.saveDictionaryOverride(id, {
+        ...("friendlyName" in local && { friendlyName: local.friendlyName }),
+        ...("definition" in local && { definition: local.definition })
+      });
+      setEdits(prev => {
+        const { friendlyName: _f, definition: _d, ...rest } = prev[id] ?? {};
+        void _f; void _d;
+        const next = { ...prev };
+        if (Object.keys(rest).length) next[id] = rest; else delete next[id];
+        return next;
+      });
+      setReload(k => k + 1);
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  /** Status saves the moment it changes — a dropdown has no blur worth waiting for. */
+  async function persistStatus(id: string, status: DictionaryStatus) {
+    setSaveError(null);
+    try {
+      await repo.saveDictionaryOverride(id, { status });
+      setEdits(prev => {
+        const { status: _s, ...rest } = prev[id] ?? {};
+        void _s;
+        const next = { ...prev };
+        if (Object.keys(rest).length) next[id] = rest; else delete next[id];
+        return next;
+      });
+      setReload(k => k + 1);
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : String(e));
+    }
+  }
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -184,6 +251,7 @@ export function DictionaryPage() {
           </div>
 
           <PermissionNote canEditWording={canEditWording} canEditStatus={canEditStatus} canArchive={canArchive} />
+          {saveError && <Problem>{saveError}</Problem>}
 
           {/* Said rather than left to be noticed: a count that quietly disagrees with the
               tiles above it is how somebody concludes the page is broken. */}
@@ -219,6 +287,7 @@ export function DictionaryPage() {
                             id={`name-${d.id}`}
                             value={d.friendlyName}
                             onChange={v => edit(d.id, { friendlyName: v })}
+                            onBlur={() => persistWording(d.id)}
                             size="small"
                             inputAriaLabel={`Lofty name for ${d.id}`}
                           />
@@ -231,6 +300,7 @@ export function DictionaryPage() {
                           <TextArea
                             value={d.definition}
                             onChange={e => edit(d.id, { definition: e.target.value })}
+                            onBlur={() => persistWording(d.id)}
                             rows={3}
                             aria-label={`Definition for ${d.id}`}
                           />
@@ -248,7 +318,10 @@ export function DictionaryPage() {
                             aria-label={`Status for ${d.id}`}
                             options={DICTIONARY_STATUSES.map(s => ({ value: s, label: STATUS_LABELS[s] }))}
                             value={d.status}
-                            onChange={v => edit(d.id, { status: v as DictionaryStatus })}
+                            onChange={v => {
+                              edit(d.id, { status: v as DictionaryStatus });
+                              persistStatus(d.id, v as DictionaryStatus);
+                            }}
                           />
                         ) : (
                           <span className={`status-pill dict-${STATUS_TONE[d.status]}`}>
@@ -292,7 +365,10 @@ export function DictionaryPage() {
                                 <Button
                                   kind="tertiary"
                                   size="small"
-                                  onClick={() => edit(d.id, { status: "archived" })}
+                                  onClick={() => {
+                                    edit(d.id, { status: "archived" });
+                                    persistStatus(d.id, "archived");
+                                  }}
                                 >
                                   Archive this property
                                 </Button>

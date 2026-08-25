@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
-import { Button, Heading, Text } from "@vibe/core";
+import { Button, Heading, Text, TextField } from "@vibe/core";
 import { useStages, useTeams } from "../data/useLookups";
 import { useBoardRecords, type BoardProject } from "../data/boardModel";
 import { matchedOnPreviousAddress, projectMatchesQuery, useSearch } from "../data/SearchProvider";
@@ -11,12 +11,18 @@ import { LoadProblem, NoResults, NothingYet, PreviousAddressNote } from "../comp
 import { SavedViewTabs } from "../components/SavedViewTabs";
 import { ProjectCard, StatusPill } from "../components/RecordCards";
 import { PropertySlots } from "../components/PropertySlots";
-import { PROJECT_TYPE_LABELS } from "../data/types";
+import { PROJECT_TYPE_LABELS, type StageName } from "../data/types";
+import { MoveStageControl, PROJECT_MOVE_NOTE } from "../components/MoveStageDialog";
+import { daysSince } from "../data/boardModel";
 import { Token } from "../components/Token";
 import { Toolbar } from "../components/Toolbar";
 import { toOptions } from "../components/Select";
 import { NewProjectDialog, SplitProjectDialog } from "../components/CreateDialogs";
 import { InlineNewProjectRow } from "../components/InlineNewProjectRow";
+import { CommentsPanel } from "../components/CommentsPanel";
+import { AddressFields } from "../components/CreateDialogs";
+import { useQuery } from "../data/DataProvider";
+import type { NewAddress } from "../data/types";
 import { usePermission } from "../data/PermissionProvider";
 import { useRepository } from "../data/DataProvider";
 import "../components/ui.css";
@@ -127,6 +133,7 @@ export function ProjectsPage() {
       <>
         {splitDialog}
         <ProjectDetail
+          key={open.projectId}
           project={open}
           onBack={() => navigate(`/projects${search}`)}
           onChanged={refresh}
@@ -244,9 +251,7 @@ export function ProjectsPage() {
                 <tr key={p.projectNumber} onClick={() => openOne(p)}>
                   <td>{p.projectNumber}</td>
                   <td>{p.currentAddress ?? <Token>project_display.current_address</Token>}</td>
-                  {/* Still a token: the suburb is its own column on `addresses` and the
-                      board never reads it — only the consolidated line comes through. */}
-                  <td><Token>addresses.suburb</Token></td>
+                  <td>{p.suburb ?? <Token>addresses.suburb</Token>}</td>
                   <td>
                     {p.projectType
                       ? PROJECT_TYPE_LABELS[p.projectType]
@@ -291,6 +296,48 @@ function ProjectDetail({
   const { can } = usePermission();
   const [removing, setRemoving] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [folderUrl, setFolderUrl] = useState(project.sharepointUrl ?? "");
+  // The "Add another address" form. Null while closed; a NewAddress being edited while
+  // open. Saving repoints the current address — the outgoing one lands in the history
+  // below by trigger (0042), which is what keeps an old contract's address findable.
+  const [addingAddress, setAddingAddress] = useState<NewAddress | null>(null);
+  const [savingAddress, setSavingAddress] = useState(false);
+  const { data: pastAddresses } = useQuery(
+    r => r.listAddressHistory({ projectId: project.projectId }),
+    [],
+    [project.projectId, project.currentAddress]
+  );
+
+  async function saveNewAddress() {
+    if (!addingAddress) return;
+    setSavingAddress(true);
+    setSaveError(null);
+    try {
+      await repo.setProjectCurrentAddress(project.projectId, addingAddress);
+      setAddingAddress(null);
+      onChanged();
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSavingAddress(false);
+    }
+  }
+
+  /**
+   * One field at a time, straight through the seam. The patch carries only the key
+   * being edited, so saving a date cannot clear the folder — and onChanged re-reads,
+   * which is how the row proves the database accepted it rather than assuming.
+   */
+  async function saveField(patch: Parameters<typeof repo.updateProject>[1]) {
+    setSaveError(null);
+    try {
+      await repo.updateProject(project.projectId, patch);
+      onChanged();
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : String(e));
+    }
+  }
 
   async function removeJob(jobNumber: string) {
     setRemoving(jobNumber);
@@ -310,7 +357,9 @@ function ProjectDetail({
       <div className="page-head page-head-row">
         <div>
           <Button kind="tertiary" size="small" onClick={onBack}>← Projects</Button>
-          <Heading type="h2" weight="bold"><Token>project_display.current_address</Token></Heading>
+          <Heading type="h2" weight="bold">
+            {project.currentAddress ?? <Token>project_display.current_address</Token>}
+          </Heading>
           <Text type="text2" color="secondary">
             Project {project.projectNumber} · {project.jobs.length} jobs
           </Text>
@@ -330,25 +379,174 @@ function ProjectDetail({
             </div>
             <Text type="text2" weight="medium">{project.projectNumber}</Text>
           </div>
-          {[
-            /* The simplified `projects`: a number, two addresses, a type, a status and
-               three dates. Client, notes and the rest are property definitions now — they
-               render in the slot list below rather than as columns here. */
-            ["Current address", "project_display.current_address"],
-            ["Original address", "project_display.original_address"],
-            ["Suburb", "addresses.suburb"],
-            ["Council region", "addresses.council"],
-            ["Type", "projects.project_type"],
-            ["Start date", "projects.start_date"],
-            ["Target completion", "projects.target_completion"],
-            ["End date", "projects.end_date"]
-          ].map(([label, token]) => (
+          {/* The simplified `projects`: a number, two addresses, a type, a status and
+              three dates. Client, notes and the rest are property definitions now — they
+              render in the slot list below rather than as columns here. Every row here
+              is a real read since the embeds landed; a Token remains only where the
+              column is genuinely empty. */}
+          {([
+            ["Current address", project.currentAddress, "project_display.current_address"],
+            ["Original address", project.originalAddress, "project_display.original_address"],
+            ["Suburb", project.suburb, "addresses.suburb"],
+            ["Council region", project.council, "addresses.council"],
+            ["Type", project.projectType ? PROJECT_TYPE_LABELS[project.projectType] : null, "projects.project_type"]
+          ] as const).map(([label, value, token]) => (
             <div className="field-row" key={label}>
               <div className="field-label"><Text type="text2">{label}</Text></div>
-              <Token>{token}</Token>
+              {value != null
+                ? <Text type="text2" weight="medium">{value}</Text>
+                : <Token>{token}</Token>}
             </div>
           ))}
+
+          {/* The lifecycle. The same forwards-only picker the job drawer has — Amber's
+              rule covers both — with the same confirmation, and the same line the
+              database draws at manager. The days count is derived on every read. */}
+          <div className="field-row">
+            <div className="field-label">
+              <Text type="text2">Project stage</Text>
+              <div className="field-hint">
+                {daysSince(project.stageEnteredAt)}d in phase · follows its slowest job, and only forwards
+              </div>
+            </div>
+            <div className="field-inline">
+              <Text type="text2" weight="medium">{project.stage}</Text>
+              <MoveStageControl
+                subject={`Project ${project.projectNumber}`}
+                stage={project.stage}
+                move={(to: StageName) => repo.moveProjectStage(project.projectId, to)}
+                note={PROJECT_MOVE_NOTE}
+                onMoved={onChanged}
+              />
+            </div>
+          </div>
+
+          {saveError && (
+            <div className="create-problem" role="alert">
+              <Text type="text2" ellipsis={false}>{saveError}</Text>
+            </div>
+          )}
+
+          {/* The three dates. Editable at `user` and above, which is the update policy
+              on projects — a date input holding nothing is a date nobody set, never a
+              stand-in. Saving happens on change; the read-back is the board reload. */}
+          {([
+            ["Start date", "startDate", project.startDate],
+            ["Target completion", "targetCompletion", project.targetCompletion],
+            ["End date", "endDate", project.endDate]
+          ] as const).map(([label, key, value]) => (
+            <div className="field-row" key={key}>
+              <div className="field-label"><Text type="text2">{label}</Text></div>
+              {can("user") ? (
+                <input
+                  type="date"
+                  className="date-input"
+                  aria-label={label}
+                  defaultValue={value ?? ""}
+                  onChange={e => saveField({ [key]: e.target.value || null })}
+                />
+              ) : value != null ? (
+                <Text type="text2" weight="medium">{new Date(value).toLocaleDateString()}</Text>
+              ) : (
+                <Token>{`projects.${key === "startDate" ? "start_date" : key === "endDate" ? "end_date" : "target_completion"}`}</Token>
+              )}
+            </div>
+          ))}
+
+          {/* The project's folder. Its jobs' folders are subfolders held on the jobs —
+              one link per record, so this row is one link. The CHECK in the database
+              (https, not blank) is the validator; its refusal shows here verbatim. */}
+          <div className="field-row">
+            <div className="field-label">
+              <Text type="text2">SharePoint folder</Text>
+              <div className="field-hint">each job holds its own subfolder link</div>
+            </div>
+            <div className="field-inline">
+              {project.sharepointUrl && (
+                <a href={project.sharepointUrl} target="_blank" rel="noreferrer" className="link-button">
+                  Open folder
+                </a>
+              )}
+              {can("user") && (
+                <TextField
+                  size="small"
+                  id={`sharepoint-${project.projectId}`}
+                  inputAriaLabel="SharePoint folder URL"
+                  value={folderUrl}
+                  onChange={v => setFolderUrl(v)}
+                  onBlur={() => {
+                    if ((folderUrl.trim() || null) !== (project.sharepointUrl ?? null)) {
+                      saveField({ sharepointUrl: folderUrl.trim() || null });
+                    }
+                  }}
+                />
+              )}
+            </div>
+          </div>
         </section>
+
+        <section className="panel">
+          <div className="panel-head">
+            <Text type="text2" weight="bold">Addresses</Text>
+            {can("user") && addingAddress === null && (
+              <Button size="small" kind="secondary" onClick={() => setAddingAddress({ suburb: "", postcode: "" })}>
+                + Add another address
+              </Button>
+            )}
+          </div>
+          <Text type="text3" color="secondary" element="p" ellipsis={false}>
+            The original address never changes — it is what the site was bought as, and
+            what old paperwork says. Adding a new address makes it the current one; every
+            previous address stays here and stays searchable.
+          </Text>
+
+          {addingAddress !== null && (
+            <div className="new-address-block">
+              <div className="panel-head">
+                <Text type="text2" weight="bold">New address</Text>
+              </div>
+              <div className="create-form">
+                <AddressFields value={addingAddress} onChange={setAddingAddress} />
+              </div>
+              <div className="field-inline" style={{ marginTop: "var(--space-8)" }}>
+                <Button
+                  size="small"
+                  onClick={saveNewAddress}
+                  disabled={savingAddress || !addingAddress.suburb.trim() || !addingAddress.postcode.trim()}
+                >
+                  {savingAddress ? "Saving…" : "Make this the current address"}
+                </Button>
+                <Button size="small" kind="tertiary" onClick={() => setAddingAddress(null)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {pastAddresses.length > 0 && (
+            <div className="data-table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr><th>Address</th><th>Was</th><th>From</th><th>Until</th></tr>
+                </thead>
+                <tbody>
+                  {pastAddresses.map(h => (
+                    <tr key={h.id}>
+                      <td>{h.address ?? <Token>addresses.consolidated_address</Token>}</td>
+                      <td>{h.role}</td>
+                      <td>{new Date(h.validFrom).toLocaleDateString()}</td>
+                      <td>{new Date(h.validTo).toLocaleDateString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        {/* The newest comment IS the latest update — one mechanism, not a field and a
+            feed that could disagree. */}
+        <CommentsPanel projectId={project.projectId} />
 
         {/* Project-level fields, in the stage that captures each one. */}
         <PropertySlots scope="project" />
@@ -400,7 +598,7 @@ function ProjectDetail({
                     onClick={() => navigate(`/jobs/${encodeURIComponent(j.jobNumber)}`)}
                   >
                     <td>{j.jobNumber}</td>
-                    <td><Token>addresses.consolidated_address</Token></td>
+                    <td>{j.currentAddress ?? <Token>addresses.consolidated_address</Token>}</td>
                     <td>{j.stage}</td>
                     <td>{j.team}</td>
                     <td><StatusPill status={j.status} /></td>

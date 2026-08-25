@@ -92,6 +92,17 @@ begin
     when others then raise warning 'FAIL: unexpected on pipelines (%)', sqlerrm;
   end;
 
+  -- 0043: defining what the company captures is process design, same bar as pipelines.
+  begin
+    insert into property_defs (property_def_key, property_def_label, property_def_scope,
+                               property_def_stage, property_def_owning_team, property_def_format)
+    values ('sneaky_field', 'Sneaky', 'project', 'Construction', 'design', 'text');
+    raise warning 'FAIL: a non-superadmin defined a property';
+  exception
+    when insufficient_privilege then raise notice 'ok  property_defs refused a write below superadmin';
+    when others then raise warning 'FAIL: unexpected on property_defs (%)', sqlerrm;
+  end;
+
   -- RLS on DELETE and UPDATE FILTERS ROWS; it does not raise. A policy that denies
   -- everything makes the statement affect zero rows and succeed quietly, so these two
   -- have to count rows rather than catch an exception. Testing them the other way
@@ -207,8 +218,33 @@ begin
   -- 1. The lifecycle. A column on `jobs`, so RLS filters rows rather than raising —
   --    ROW_COUNT, not the absence of an exception. Three probes in 0035 reported a pass
   --    because a statement that touches nothing succeeds.
+  --
+  --    Forwards only: 0039 made the lifecycle linear, and the first version of this
+  --    probe swept every job to Construction — including a fixture already past it,
+  --    which the guard rightly refused. The probe now moves only the jobs that are
+  --    behind, which is the only move a manager is allowed anyway.
+  -- 0044: the dictionary ladder's first rung. Wording is a manager's; status is not.
   begin
-    update jobs set job_stage = 'Construction' where job_stage is distinct from 'Construction';
+    insert into dictionary_overrides (dictionary_override_id, dictionary_override_friendly_name)
+    values ('jobs.job_stage', 'Phase')
+    on conflict (dictionary_override_id)
+    do update set dictionary_override_friendly_name = 'Phase';
+    raise notice 'ok  a manager retitled a dictionary entry';
+  exception when others then raise warning 'FAIL: manager dictionary wording refused (%)', sqlerrm;
+  end;
+
+  begin
+    update dictionary_overrides set dictionary_override_status = 'updates_required'
+     where dictionary_override_id = 'jobs.job_stage';
+    raise warning 'FAIL: a manager set a dictionary status — that is admin''s';
+  exception
+    when insufficient_privilege then raise notice 'ok  dictionary status refused below admin';
+    when others then raise warning 'FAIL: unexpected on dictionary status (%)', sqlerrm;
+  end;
+
+  begin
+    update jobs set job_stage = 'Construction'
+     where lifecycle_position(job_stage) < lifecycle_position('Construction');
     get diagnostics moved = row_count;
     if moved > 0 then
       raise notice 'ok  a manager moved % job(s) to another lifecycle phase', moved;

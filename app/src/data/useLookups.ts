@@ -88,8 +88,8 @@ export function useCheckpoints() {
  */
 const COLUMN_BACKED_KEYS = ["address", "type", "contract", "deposit", "drawings"];
 
-export function usePropertyDefs() {
-  const { data, loading } = useQuery(r => r.listPropertyDefs(), []);
+export function usePropertyDefs(reloadKey: number = 0) {
+  const { data, loading } = useQuery(r => r.listPropertyDefs(), [], [reloadKey]);
 
   /** The slots that render on a record — those without a column of their own. */
   const slotsFor = useMemo(

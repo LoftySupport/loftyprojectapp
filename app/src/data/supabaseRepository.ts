@@ -1,16 +1,22 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Repository, RepositoryMethod } from "./repository";
+import type { DictionaryOverride } from "./dictionary";
 import { createStubRepository } from "./stubRepository";
 import { MAX_SPLIT } from "./types";
 import type {
   ActivityEntry,
+  AddressHistoryEntry,
+  CommentEntry,
   Job,
   JobSplit,
+  NewAddress,
   NewProfile,
+  NewPropertyDef,
   NewJob,
   NewProject,
   Profile,
   Project,
+  ProjectPatch,
   PropertyDef,
   Stage,
   StageName,
@@ -40,16 +46,21 @@ import type {
 
 // Add a method name here as you implement it. The Wiring page reads this.
 //
-// listTemplateCheckpoints and listPropertyDefs are the only two left, and neither is
-// waiting on wiring: `pipeline_stage_tasks` and `property_defs` do not exist. They return
-// empty rather than a seed, so the Wiring page shows them as the two things genuinely not
-// built rather than as two more methods somebody forgot.
+// listTemplateCheckpoints is the only one left, and it is not waiting on wiring:
+// `pipeline_stage_tasks` does not exist. It returns empty rather than a seed, so the
+// Wiring page shows it as the one thing genuinely not built rather than as a method
+// somebody forgot. property_defs came off this list with 0043.
 const WIRED: RepositoryMethod[] = [
   "listProjects", "getProject", "listJobs", "getJob",
   "createProject", "createJob", "createJobsFromSplit", "deleteJob", "deleteProject",
+  "moveJobStage",
   "currentProfile", "listProfiles",
   "createProfile", "updateProfile", "setProfileActive", "listActivity",
-  "listStages", "listTeams", "listTemplatePhases"
+  "listComments", "addComment", "updateProject", "moveProjectStage",
+  "setProjectCurrentAddress", "listAddressHistory",
+  "listStages", "listTeams", "listTemplatePhases",
+  "listPropertyDefs", "createPropertyDef", "updatePropertyDef", "deletePropertyDef",
+  "listDictionaryOverrides", "saveDictionaryOverride"
 ];
 
 /**
@@ -93,7 +104,7 @@ const PROFILE_COLUMNS =
  * database had.
  */
 const PROJECT_COLUMNS =
-  "project_id, project_name, project_original_address_id, project_current_address_id, project_type, project_status, project_proposed_dwellings, project_owning_team, project_assignee_id, project_start_date, project_target_completion, project_end_date, project_created_at, project_created_by, project_updated_at, project_updated_by, addresses!projects_project_current_address_id_fkey(address_consolidated)";
+  "project_id, project_name, project_original_address_id, project_current_address_id, project_type, project_status, project_proposed_dwellings, project_owning_team, project_assignee_id, project_start_date, project_target_completion, project_end_date, project_stage, project_stage_entered_at, project_sharepoint_url, project_created_at, project_created_by, project_updated_at, project_updated_by, addresses!projects_project_current_address_id_fkey(address_consolidated, address_suburb, address_council), original:addresses!projects_project_original_address_id_fkey(address_consolidated)";
 
 // Read from `job_display`, not from `jobs`. The view resolves both of the job's
 // addresses and its project's, which the base table only carries as uuids — so a card
@@ -106,7 +117,7 @@ const PROJECT_COLUMNS =
 //
 // Writes still go to `jobs` — a view is not the place to insert through.
 const JOB_COLUMNS =
-  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_created_at, job_created_by, job_updated_at, job_updated_by, job_current_address, job_original_address, project_current_address, project_type";
+  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_sharepoint_url, job_created_at, job_created_by, job_updated_at, job_updated_by, job_current_address, job_original_address, project_current_address, project_sharepoint_url, project_type";
 
 /**
  * `""` and `"   "` are how a browser reports a field somebody did not fill in, and they
@@ -119,6 +130,42 @@ const emptyToNull = (v: string | null | undefined): string | null => {
 };
 
 const TEAM_COLUMNS = "team_id, team_name, team_position, team_is_active";
+
+/**
+ * `comments` points at `profiles` twice (created_by, updated_by), so the author embed
+ * names its constraint — the PGRST201 rule, same as everywhere else.
+ */
+const COMMENT_COLUMNS =
+  "comment_id, project_id, job_id, task_id, variation_id, comment_body, parent_comment_id, comment_edited_at, comment_created_at, comment_created_by, comment_updated_at, comment_updated_by, author:profiles!comments_comment_created_by_fkey(profile_full_name)";
+
+type CommentRow = {
+  comment_id: string;
+  project_id: number | null; job_id: string | null;
+  task_id: string | null; variation_id: string | null;
+  comment_body: string; parent_comment_id: string | null;
+  comment_edited_at: string | null;
+  comment_created_at: string; comment_created_by: string | null;
+  comment_updated_at: string; comment_updated_by: string | null;
+  author: { profile_full_name: string | null } | null;
+};
+
+function toComment(r: CommentRow): CommentEntry {
+  return {
+    id: r.comment_id,
+    projectId: r.project_id,
+    jobId: r.job_id,
+    taskId: r.task_id,
+    variationId: r.variation_id,
+    body: r.comment_body,
+    parentCommentId: r.parent_comment_id,
+    editedAt: r.comment_edited_at,
+    createdAt: r.comment_created_at,
+    createdBy: r.comment_created_by,
+    updatedAt: r.comment_updated_at,
+    updatedBy: r.comment_updated_by,
+    authorName: r.author?.profile_full_name ?? null
+  };
+}
 
 const ADDRESS_COLUMNS =
   "address_id, address_lot_number, address_street_number, address_street_1, address_street_2, address_suburb, address_state, address_postcode, address_council";
@@ -294,6 +341,44 @@ export function createSupabaseRepository(): Repository {
   if (!client) return stub;
 
   const lifecycleStages = () => loadLifecycleStages(client);
+
+  // Pinned to the narrowed type: the build's tsc does not carry `if (!client)` into a
+  // nested function the way the editor's does, and `db` makes the narrowing explicit.
+  const db: SupabaseClient = client;
+
+  /**
+   * Insert one address row and return its id. The same normalisation everywhere: blank
+   * strings become null before they can pass a NOT NULL as a street named nothing.
+   */
+  async function insertAddress(a: NewAddress): Promise<string> {
+    const { data, error } = await db
+      .from("addresses")
+      .insert({
+        address_lot_number: emptyToNull(a.lotNumber),
+        address_street_number: emptyToNull(a.streetNumber),
+        address_street_1: emptyToNull(a.street1),
+        address_street_2: emptyToNull(a.street2),
+        address_suburb: a.suburb,
+        address_state: a.state ?? "SA",
+        address_postcode: a.postcode,
+        address_council: a.council ?? null
+      })
+      .select("address_id")
+      .single();
+    if (error) throw error;
+    return data.address_id;
+  }
+
+  /** One project, re-read with its embeds — the read-back both project mutators share. */
+  async function readProject(id: number): Promise<Project> {
+    const { data, error } = await db
+      .from("projects")
+      .select(PROJECT_COLUMNS)
+      .eq("project_id", id)
+      .single();
+    if (error) throw error;
+    return toProject(data as unknown as ProjectRow);
+  }
 
   // Bound rather than returned inline: listTemplatePhases reads the same team list
   // listTeams returns, and calling it through the object keeps one definition of what a
@@ -592,6 +677,40 @@ export function createSupabaseRepository(): Repository {
       return entries.sort((a, b) => b.at.localeCompare(a.at)).slice(0, limit);
     },
 
+    async listComments(ref: { projectId?: number; jobId?: string }, limit = 50): Promise<CommentEntry[]> {
+      let q = client.from("comments").select(COMMENT_COLUMNS);
+      // Exactly one ref, the same rule the CHECK enforces — asking with neither would
+      // quietly return every comment in the company.
+      if (ref.projectId != null) q = q.eq("project_id", ref.projectId);
+      else if (ref.jobId != null) q = q.eq("job_id", ref.jobId);
+      else throw new Error("listComments needs a projectId or a jobId.");
+
+      const { data, error } = await q
+        .order("comment_created_at", { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return (data as unknown as CommentRow[]).map(toComment);
+    },
+
+    async addComment(ref: { projectId?: number; jobId?: string }, body: string): Promise<CommentEntry> {
+      if (ref.projectId == null && ref.jobId == null) {
+        throw new Error("addComment needs a projectId or a jobId.");
+      }
+      // The author is NOT sent: comments_stamp_created_by fills it from the session,
+      // which is the only version of "who wrote this" a client cannot forge.
+      const { data, error } = await client
+        .from("comments")
+        .insert({
+          project_id: ref.projectId ?? null,
+          job_id: ref.jobId ?? null,
+          comment_body: body.trim()
+        })
+        .select(COMMENT_COLUMNS)
+        .single();
+      if (error) throw error;
+      return toComment(data as unknown as CommentRow);
+    },
+
     // ---- creating -------------------------------------------------------
     // The first two methods that actually write. Both are two inserts, and both are
     // deliberately *not* wrapped in a transaction, because PostgREST has no way to
@@ -623,12 +742,21 @@ export function createSupabaseRepository(): Repository {
         .single();
       if (addressError) throw addressError;
 
-      // original_address_id is left unset: the database's default_current_address
-      // trigger points it at the same row, which is what "it has not moved yet" means.
+      // A second block on the form means "already renamed": the first address is the
+      // immutable original and this one is where the project now is. No history row —
+      // the original was never this project's current address for any period.
+      const currentId = input.newAddress
+        ? await insertAddress(input.newAddress)
+        : address.address_id;
+
+      // original_address_id: set explicitly when the pair differs; otherwise left for
+      // the database's default_current_address trigger, which is what "it has not moved
+      // yet" means.
       const { data, error } = await client
         .from("projects")
         .insert({
-          project_current_address_id: address.address_id,
+          project_original_address_id: input.newAddress ? address.address_id : undefined,
+          project_current_address_id: currentId,
           project_name: emptyToNull(input.name),
           project_type: input.projectType,
           project_proposed_dwellings: input.proposedDwellings ?? null,
@@ -716,15 +844,6 @@ export function createSupabaseRepository(): Repository {
      * numbers, and a number that was issued should not be handed out twice.
      */
     async createJobsFromSplit(input: JobSplit): Promise<Job[]> {
-      if (!Number.isInteger(input.count) || input.count < 1) {
-        throw new Error("Number of jobs must be a whole number, 1 or more.");
-      }
-      if (input.count > MAX_SPLIT) {
-        throw new Error(
-          `${input.count} jobs is more than this creates at once (limit ${MAX_SPLIT}). ` +
-          "Split it into two goes, or check the number is right."
-        );
-      }
 
       const { data: project, error: projectError } = await client
         .from("projects")
@@ -744,10 +863,47 @@ export function createSupabaseRepository(): Repository {
 
       const firstLot = input.startLot ?? 1;
 
+      /**
+       * How many were asked for — the list's length when there is one, the count when
+       * there is not. Checked BEFORE the list is built, so "99 jobs" is refused as over
+       * the limit rather than becoming an empty list refused as "1 or more"; and so a
+       * caller cannot send eighty lots past a limit that exists to stop exactly that.
+       */
+      const requested = input.lots?.length ?? input.count;
+      if (!Number.isInteger(requested) || requested < 1) {
+        throw new Error("Number of jobs must be a whole number, 1 or more.");
+      }
+      if (requested > MAX_SPLIT) {
+        throw new Error(
+          `${requested} jobs is more than this creates at once (limit ${MAX_SPLIT}). ` +
+          "Split it into two goes, or check the number is right."
+        );
+      }
+
+      /**
+       * The lots, either as the person named them or generated from a count.
+       *
+       * Named ones can be "2B" — Lofty's own example — which is why lot numbers are
+       * text and why the mapping back from inserted addresses no longer sorts them
+       * numerically.
+       */
+      const lots: { lotNumber: string; jobNumberOld?: string | null }[] =
+        input.lots?.length
+          ? input.lots
+          : Array.from({ length: input.count }, (_, i) => ({ lotNumber: String(firstLot + i) }));
+
+      if (lots.some(l => !l.lotNumber.trim())) {
+        throw new Error("Every job needs a lot number.");
+      }
+      const duplicate = lots.find((l, i) => lots.findIndex(o => o.lotNumber === l.lotNumber) !== i);
+      if (duplicate) {
+        throw new Error(`Lot ${duplicate.lotNumber} is listed twice — each job needs its own lot number.`);
+      }
+
       // address_consolidated is left out: build_consolidated_address() composes it, and
       // a value sent from here would be overwritten anyway — or worse, not be.
-      const rows = Array.from({ length: input.count }, (_, i) => ({
-        address_lot_number: String(firstLot + i),
+      const rows = lots.map(lot => ({
+        address_lot_number: lot.lotNumber,
         // A lot has a lot number, not a street number — the street number arrives when
         // the titles do, which is exactly the rename the address history exists for.
         address_street_number: null,
@@ -765,20 +921,30 @@ export function createSupabaseRepository(): Repository {
         .select("address_id, address_lot_number");
       if (addressError) throw addressError;
 
-      // Insert order is not return order for a bulk insert, so sort by the lot number we
-      // set rather than trusting the array to come back the way it went in.
-      const ordered = (addresses ?? []).slice().sort(
-        (a, b) => Number(a.address_lot_number) - Number(b.address_lot_number)
-      );
+      /**
+       * Matched back by lot number, not sorted by it.
+       *
+       * Insert order is not return order for a bulk insert, so the rows have to be
+       * re-identified. This sorted `Number(lot)` — which works for "1, 2, 3" and puts
+       * "2B" wherever NaN happens to land, silently pairing a job with another lot's
+       * address. Lot numbers are unique within the batch (checked above), so the lot
+       * string is the key, and the order is the one the person typed.
+       */
+      const byLot = new Map((addresses ?? []).map(a => [a.address_lot_number, a.address_id]));
 
       const created: Job[] = [];
-      for (const address of ordered) {
+      for (const lot of lots) {
+        const addressId = byLot.get(lot.lotNumber);
+        if (!addressId) throw new Error(`Lot ${lot.lotNumber} did not get an address.`);
         const { data, error } = await client
           .from("jobs")
           .insert({
             project_id: input.projectId,
             job_owning_team: input.owningTeam,
-            job_current_address_id: address.address_id,
+            job_current_address_id: addressId,
+            // Null rather than "" — the column is unique, and empty strings collide
+            // with each other where nulls do not.
+            job_number_old: lot.jobNumberOld?.trim() || null,
             job_stage: input.stage ?? "Acquisition & Development",
             job_status: input.status ?? "on_track"
           })
@@ -790,7 +956,7 @@ export function createSupabaseRepository(): Repository {
           // without being told.
           throw new Error(
             created.length
-              ? `Created ${created.length} of ${input.count} jobs, then: ${error.message}`
+              ? `Created ${created.length} of ${lots.length} jobs, then: ${error.message}`
               : error.message
           );
         }
@@ -813,6 +979,114 @@ export function createSupabaseRepository(): Repository {
       if (!data?.length) {
         throw new Error(`Job ${id} was not removed — it no longer exists, or you do not have permission.`);
       }
+    },
+
+    /**
+     * The write goes to `jobs`; the read-back comes from `job_display`, because that is
+     * where the restamped `job_stage_entered_at` and the rest of the card's columns live.
+     *
+     * Zero rows updated is a refusal, not a success: RLS filters rather than raises on
+     * UPDATE, so a viewer's move would otherwise "succeed" against nothing and the board
+     * would quietly snap back. The guards that DO raise — manager-only (0038), forwards
+     * only (0039) — come through as errors with the database's own sentence, which is
+     * better than any message invented here.
+     */
+    async moveJobStage(id: string, stage: StageName): Promise<Job> {
+      const { data: updated, error } = await client
+        .from("jobs")
+        .update({ job_stage: stage })
+        .eq("job_id", id)
+        .select("job_id");
+      if (error) throw error;
+      if (!updated?.length) {
+        throw new Error(`Job ${id} was not moved — it no longer exists, or you do not have permission.`);
+      }
+
+      const { data, error: readError } = await client
+        .from("job_display")
+        .select(JOB_COLUMNS)
+        .eq("job_id", id)
+        .single();
+      if (readError) throw readError;
+      return toJob(data as unknown as JobRow);
+    },
+
+    /** Same shape as moveJobStage: the write to the table, the read-back with embeds. */
+    async moveProjectStage(id: number, stage: StageName): Promise<Project> {
+      const { data: updated, error } = await client
+        .from("projects")
+        .update({ project_stage: stage })
+        .eq("project_id", id)
+        .select("project_id");
+      if (error) throw error;
+      if (!updated?.length) {
+        throw new Error(`Project ${id} was not moved — it no longer exists, or you do not have permission.`);
+      }
+      return await readProject(id);
+    },
+
+    async updateProject(id: number, patch: ProjectPatch): Promise<Project> {
+      // Only the keys the caller sent. `undefined` means "not this edit", null means
+      // "clear it" — a distinction Object.entries keeps and a spread would flatten.
+      const row: Record<string, string | null> = {};
+      if ("startDate" in patch) row.project_start_date = patch.startDate ?? null;
+      if ("targetCompletion" in patch) row.project_target_completion = patch.targetCompletion ?? null;
+      if ("endDate" in patch) row.project_end_date = patch.endDate ?? null;
+      if ("sharepointUrl" in patch) row.project_sharepoint_url = emptyToNull(patch.sharepointUrl);
+      if (Object.keys(row).length === 0) return await readProject(id);
+
+      const { data: updated, error } = await client
+        .from("projects")
+        .update(row)
+        .eq("project_id", id)
+        .select("project_id");
+      if (error) throw error;
+      if (!updated?.length) {
+        throw new Error(`Project ${id} was not updated — it no longer exists, or you do not have permission.`);
+      }
+      return await readProject(id);
+    },
+
+    async setProjectCurrentAddress(id: number, address: NewAddress): Promise<Project> {
+      const addressId = await insertAddress(address);
+      // The repoint. guard_original_address leaves the original alone, and the 0042
+      // trigger records the outgoing current address's stint in address_history.
+      const { data: updated, error } = await client
+        .from("projects")
+        .update({ project_current_address_id: addressId })
+        .eq("project_id", id)
+        .select("project_id");
+      if (error) throw error;
+      if (!updated?.length) {
+        throw new Error(`Project ${id} was not updated — it no longer exists, or you do not have permission.`);
+      }
+      return await readProject(id);
+    },
+
+    async listAddressHistory(ref: { projectId?: number; jobId?: string }): Promise<AddressHistoryEntry[]> {
+      let q = client
+        .from("address_history")
+        .select("address_history_id, address_history_role, address_history_valid_from, address_history_valid_to, addresses!address_history_address_history_address_id_fkey(address_consolidated)");
+      if (ref.projectId != null) q = q.eq("address_history_project_id", ref.projectId);
+      else if (ref.jobId != null) q = q.eq("address_history_job_id", ref.jobId);
+      else throw new Error("listAddressHistory needs a projectId or a jobId.");
+
+      const { data, error } = await q.order("address_history_valid_to", { ascending: false });
+      if (error) throw error;
+      type Row = {
+        address_history_id: number;
+        address_history_role: "original" | "current";
+        address_history_valid_from: string;
+        address_history_valid_to: string;
+        addresses: { address_consolidated: string | null } | null;
+      };
+      return (data as unknown as Row[]).map(r => ({
+        id: r.address_history_id,
+        role: r.address_history_role,
+        address: r.addresses?.address_consolidated ?? null,
+        validFrom: r.address_history_valid_from,
+        validTo: r.address_history_valid_to
+      }));
     },
 
     async deleteProject(id: number): Promise<void> {
@@ -920,20 +1194,166 @@ export function createSupabaseRepository(): Repository {
     },
 
     /**
-     * Empty until `property_defs` exists.
+     * `property_defs` since 0043. It starts empty — the eleven invented definitions
+     * this used to return are the reason it does: five named a stage that does not
+     * exist, and nobody could tell a missing field from one never defined. What comes
+     * back now is only ever what somebody at Lofty typed in.
      *
-     * Same reasoning as the checkpoints. The eleven this used to return were plausible —
-     * site address, pour date, contract value — which is exactly what made them dangerous:
-     * five of them named a stage that does not exist and simply did not render, and nobody
-     * could tell the difference between a field that was missing and a field that was
-     * never defined.
+     * The team's display name rides the read as an embed, so the table never shows a
+     * slug where Setup › Teams shows a name.
      */
     async listPropertyDefs(): Promise<PropertyDef[]> {
-      return [];
+      const { data, error } = await client
+        .from("property_defs")
+        .select(PROPERTY_DEF_COLUMNS)
+        .order("property_def_stage")
+        .order("property_def_position")
+        .order("property_def_label");
+      if (error) throw error;
+      return (data as unknown as PropertyDefRow[]).map(toPropertyDef);
+    },
+
+    async createPropertyDef(input: NewPropertyDef): Promise<PropertyDef> {
+      const { data, error } = await client
+        .from("property_defs")
+        .insert({
+          property_def_key: input.key,
+          property_def_label: input.label,
+          property_def_scope: input.scope,
+          property_def_stage: input.stageName,
+          property_def_owning_team: input.teamId,
+          property_def_format: input.format,
+          property_def_required: input.required ?? false,
+          property_def_automation: emptyToNull(input.automation),
+          property_def_position: input.position ?? 0
+        })
+        .select(PROPERTY_DEF_COLUMNS)
+        .single();
+      if (error) throw error;
+      return toPropertyDef(data as unknown as PropertyDefRow);
+    },
+
+    async updatePropertyDef(key: string, patch: Partial<Omit<NewPropertyDef, "key">>): Promise<PropertyDef> {
+      const row: Record<string, unknown> = {};
+      if ("label" in patch) row.property_def_label = patch.label;
+      if ("scope" in patch) row.property_def_scope = patch.scope;
+      if ("stageName" in patch) row.property_def_stage = patch.stageName;
+      if ("teamId" in patch) row.property_def_owning_team = patch.teamId;
+      if ("format" in patch) row.property_def_format = patch.format;
+      if ("required" in patch) row.property_def_required = patch.required;
+      if ("automation" in patch) row.property_def_automation = emptyToNull(patch.automation);
+      if ("position" in patch) row.property_def_position = patch.position;
+
+      const { data, error } = await client
+        .from("property_defs")
+        .update(row)
+        .eq("property_def_key", key)
+        .select(PROPERTY_DEF_COLUMNS)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) {
+        throw new Error(`Property ${key} was not updated — it no longer exists, or you do not have permission.`);
+      }
+      return toPropertyDef(data as unknown as PropertyDefRow);
+    },
+
+    async listDictionaryOverrides(): Promise<DictionaryOverride[]> {
+      const { data, error } = await client
+        .from("dictionary_overrides")
+        .select(DICT_OVERRIDE_COLUMNS);
+      if (error) throw error;
+      return (data as unknown as DictOverrideRow[]).map(toDictOverride);
+    },
+
+    async saveDictionaryOverride(
+      id: string,
+      patch: { friendlyName?: string | null; definition?: string | null; status?: DictionaryOverride["status"] }
+    ): Promise<DictionaryOverride> {
+      // Upsert with only the fields being changed: PostgREST's ON CONFLICT UPDATE sets
+      // only the payload's columns, so retitling cannot blank a definition.
+      const row: Record<string, unknown> = { dictionary_override_id: id };
+      if ("friendlyName" in patch) row.dictionary_override_friendly_name = emptyToNull(patch.friendlyName);
+      if ("definition" in patch) row.dictionary_override_definition = emptyToNull(patch.definition);
+      if ("status" in patch) row.dictionary_override_status = patch.status;
+
+      const { data, error } = await client
+        .from("dictionary_overrides")
+        .upsert(row, { onConflict: "dictionary_override_id" })
+        .select(DICT_OVERRIDE_COLUMNS)
+        .single();
+      if (error) throw error;
+      return toDictOverride(data as unknown as DictOverrideRow);
+    },
+
+    async deletePropertyDef(key: string): Promise<void> {
+      const { data, error } = await client
+        .from("property_defs")
+        .delete()
+        .eq("property_def_key", key)
+        .select("property_def_key");
+      if (error) throw error;
+      if (!data?.length) {
+        throw new Error(`Property ${key} was not removed — it no longer exists, or you do not have permission.`);
+      }
     }
   };
 
   return repo;
+}
+
+// No editor embed, deliberately: nothing in this schema stamps updated_by (created_by
+// is trigger-stamped, but it names the FIRST editor forever). A name that is null or
+// wrong is worse than the date alone, so the date alone is what comes back.
+const DICT_OVERRIDE_COLUMNS =
+  "dictionary_override_id, dictionary_override_friendly_name, dictionary_override_definition, dictionary_override_status, dictionary_override_updated_at";
+
+type DictOverrideRow = {
+  dictionary_override_id: string;
+  dictionary_override_friendly_name: string | null;
+  dictionary_override_definition: string | null;
+  dictionary_override_status: DictionaryOverride["status"];
+  dictionary_override_updated_at: string;
+};
+
+function toDictOverride(r: DictOverrideRow): DictionaryOverride {
+  return {
+    id: r.dictionary_override_id,
+    friendlyName: r.dictionary_override_friendly_name,
+    definition: r.dictionary_override_definition,
+    status: r.dictionary_override_status,
+    updatedAt: r.dictionary_override_updated_at
+  };
+}
+
+const PROPERTY_DEF_COLUMNS =
+  "property_def_key, property_def_label, property_def_scope, property_def_stage, property_def_owning_team, property_def_format, property_def_required, property_def_automation, property_def_position, teams!property_defs_property_def_owning_team_fkey(team_name)";
+
+type PropertyDefRow = {
+  property_def_key: string;
+  property_def_label: string;
+  property_def_scope: PropertyDef["scope"];
+  property_def_stage: string;
+  property_def_owning_team: TeamId;
+  property_def_format: PropertyDef["format"];
+  property_def_required: boolean;
+  property_def_automation: string | null;
+  property_def_position: number;
+  teams: { team_name: string | null } | null;
+};
+
+function toPropertyDef(r: PropertyDefRow): PropertyDef {
+  return {
+    key: r.property_def_key,
+    label: r.property_def_label,
+    scope: r.property_def_scope,
+    stageName: r.property_def_stage,
+    teamId: r.property_def_owning_team,
+    teamName: r.teams?.team_name ?? r.property_def_owning_team,
+    format: r.property_def_format,
+    required: r.property_def_required,
+    automation: r.property_def_automation ?? undefined,
+    position: r.property_def_position
+  };
 }
 
 // ---------------------------------------------------------------- row mappers
@@ -949,11 +1369,15 @@ type ProjectRow = {
   project_owning_team: TeamId | null; project_assignee_id: string | null;
   project_start_date: string | null; project_target_completion: string | null;
   project_end_date: string | null;
+  project_stage: Project["stage"]; project_stage_entered_at: string;
+  project_sharepoint_url: string | null;
   project_created_at: string; project_created_by: string | null;
   project_updated_at: string; project_updated_by: string | null;
-  // The embed above. PostgREST returns an object for a to-one relationship, and null
-  // when the row it points at is not readable.
-  addresses: { address_consolidated: string | null } | null;
+  // The embeds above. PostgREST returns an object for a to-one relationship, and null
+  // when the row it points at is not readable. `original` is the aliased second embed —
+  // two FKs to addresses is the PGRST201 shape, so both name their constraint.
+  addresses: { address_consolidated: string | null; address_suburb: string | null; address_council: string | null } | null;
+  original: { address_consolidated: string | null } | null;
 };
 
 function toProject(r: ProjectRow): Project {
@@ -965,8 +1389,14 @@ function toProject(r: ProjectRow): Project {
     currentAddressId: r.project_current_address_id,
     // The address as text, resolved by the embed rather than by a second request.
     currentAddress: r.addresses?.address_consolidated ?? null,
+    suburb: r.addresses?.address_suburb ?? null,
+    council: r.addresses?.address_council ?? null,
+    originalAddress: r.original?.address_consolidated ?? null,
     projectType: r.project_type,
     status: r.project_status,
+    stage: r.project_stage,
+    stageEnteredAt: r.project_stage_entered_at,
+    sharepointUrl: r.project_sharepoint_url,
     proposedDwellings: r.project_proposed_dwellings,
     owningTeam: r.project_owning_team,
     assigneeId: r.project_assignee_id,
@@ -988,11 +1418,13 @@ type JobRow = {
   job_stage: StageName; job_stage_entered_at: string;
   job_owning_team: TeamId; job_engaged_teams: TeamId[];
   job_assignee_id: string | null;
+  job_sharepoint_url: string | null;
   job_created_at: string; job_created_by: string | null;
   job_updated_at: string; job_updated_by: string | null;
   // Resolved by the view, not present on the table.
   job_current_address: string; job_original_address: string | null;
   project_current_address: string;
+  project_sharepoint_url: string | null;
   project_type: Job["projectType"];
 };
 
@@ -1011,6 +1443,7 @@ function toJob(r: JobRow): Job {
     owningTeam: r.job_owning_team,
     engagedTeams: r.job_engaged_teams ?? [],
     assigneeId: r.job_assignee_id,
+    sharepointUrl: r.job_sharepoint_url,
     createdAt: r.job_created_at,
     createdBy: r.job_created_by,
     updatedAt: r.job_updated_at,
@@ -1018,9 +1451,11 @@ function toJob(r: JobRow): Job {
     currentAddress: r.job_current_address,
     originalAddress: r.job_original_address,
     projectCurrentAddress: r.project_current_address,
+    projectSharepointUrl: r.project_sharepoint_url,
     // Inherited from the project through the view, never stored on the job. `job_display`
     // has exposed it since 0028; this read simply never asked for it, so every card and
     // every table row rendered {{job_display.project_type}} for a value one column away.
     projectType: r.project_type
   };
 }
+

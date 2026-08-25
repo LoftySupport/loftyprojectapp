@@ -1,14 +1,21 @@
+import type { DictionaryOverride } from "./dictionary";
 import type {
   ActivityEntry,
+  AddressHistoryEntry,
+  CommentEntry,
   Job,
   JobSplit,
   NewProfile,
   NewJob,
   NewProject,
+  NewAddress,
+  NewPropertyDef,
   Profile,
   Project,
+  ProjectPatch,
   PropertyDef,
   Stage,
+  StageName,
   Team,
   TemplateCheckpoint,
   TemplatePhase
@@ -62,6 +69,19 @@ export interface Repository {
   /** One person's history, or a whole team's. Newest first. */
   listActivity(opts: { profileId?: string; team?: string; limit?: number }): Promise<ActivityEntry[]>;
 
+  /**
+   * The comment thread on one record, newest first — the newest one IS the project's
+   * "latest update". Exactly one of the two refs, matching the CHECK on `comments`.
+   */
+  listComments(ref: { projectId?: number; jobId?: string }, limit?: number): Promise<CommentEntry[]>;
+
+  /**
+   * Post an update. The author is stamped by the database from the session — sending it
+   * from here would let the client claim to be somebody. Blank bodies are refused by the
+   * CHECK before this ever matters.
+   */
+  addComment(ref: { projectId?: number; jobId?: string }, body: string): Promise<CommentEntry>;
+
   // ---- creating ---------------------------------------------------------
   // Return the created record rather than void: the caller needs the number the
   // database assigned — projectNo, jobNumber — and a round trip to fetch it would be
@@ -97,6 +117,43 @@ export interface Repository {
   deleteJob(id: string): Promise<void>;
 
   /**
+   * Move a job to another lifecycle stage.
+   *
+   * The database is the authority on both rules — who (manager and above, 0038) and
+   * which way (forwards only, 0039) — so this sends the move and reports the refusal
+   * verbatim if one comes back. The app's `can()` check hides the control; it is not
+   * the security. Returns the job re-read through `job_display`, because the move
+   * restamps `job_stage_entered_at` and can advance the project underneath it (0041).
+   */
+  moveJobStage(id: string, stage: StageName): Promise<Job>;
+
+  /**
+   * The project's own lifecycle move — same two rules as a job's, enforced in the same
+   * place: manager and above, forwards only. The trigger from 0041 also calls this
+   * column its own; a manual move and an inherited one land identically.
+   */
+  moveProjectStage(id: number, stage: StageName): Promise<Project>;
+
+  /**
+   * The editable facts on a project's record page: the three dates and the SharePoint
+   * folder. `user` and above by policy. Only the keys present are written, so a blank
+   * date field arriving as undefined cannot null a date somebody set.
+   */
+  updateProject(id: number, patch: ProjectPatch): Promise<Project>;
+
+  /**
+   * Give a project a new current address — the "add another address" on the record
+   * page, for legacy imports and for sites that get renamed. The original never moves
+   * (guard_original_address, admin-only, and even then recorded); the outgoing current
+   * address lands in address_history by trigger, which is what keeps an old contract's
+   * address findable.
+   */
+  setProjectCurrentAddress(id: number, address: NewAddress): Promise<Project>;
+
+  /** Every address a record has had and when it stopped applying. Newest first. */
+  listAddressHistory(ref: { projectId?: number; jobId?: string }): Promise<AddressHistoryEntry[]>;
+
+  /**
    * Remove a project and every job under it — `jobs.project_id` cascades. Admin-only by
    * policy, and the same address caveat applies.
    */
@@ -110,6 +167,29 @@ export interface Repository {
   listTemplatePhases(): Promise<TemplatePhase[]>;
   listTemplateCheckpoints(): Promise<TemplateCheckpoint[]>;
   listPropertyDefs(): Promise<PropertyDef[]>;
+
+  /** Lofty's words on top of the repo's dictionary — see DictionaryOverride. */
+  listDictionaryOverrides(): Promise<DictionaryOverride[]>;
+
+  /**
+   * Save an edit to one entry. Upserts, sending only the fields being changed, so
+   * retitling cannot blank a definition somebody else wrote. The ladder is enforced in
+   * the database: manager for wording, admin for status, superadmin to archive.
+   */
+  saveDictionaryOverride(
+    id: string,
+    patch: { friendlyName?: string | null; definition?: string | null; status?: DictionaryOverride["status"] }
+  ): Promise<DictionaryOverride>;
+
+  /**
+   * Defining, changing and retiring fields — superadmin by policy, the same bar as
+   * pipelines, because deciding what the company captures is process design. The key
+   * is immutable from the UI; the database could cascade a rename, but offering it
+   * casually would detach what people call a field from what the import calls it.
+   */
+  createPropertyDef(input: NewPropertyDef): Promise<PropertyDef>;
+  updatePropertyDef(key: string, patch: Partial<Omit<NewPropertyDef, "key">>): Promise<PropertyDef>;
+  deletePropertyDef(key: string): Promise<void>;
 }
 
 export type RepositoryMethod = Exclude<keyof Repository, "name" | "wired">;
@@ -126,16 +206,28 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "updateProfile",
   "setProfileActive",
   "listActivity",
+  "listComments",
+  "addComment",
   "createProject",
   "createJob",
   "createJobsFromSplit",
   "deleteJob",
   "deleteProject",
+  "moveJobStage",
+  "moveProjectStage",
+  "updateProject",
+  "setProjectCurrentAddress",
+  "listAddressHistory",
   "listStages",
   "listTeams",
   "listTemplatePhases",
   "listTemplateCheckpoints",
-  "listPropertyDefs"
+  "listPropertyDefs",
+  "listDictionaryOverrides",
+  "saveDictionaryOverride",
+  "createPropertyDef",
+  "updatePropertyDef",
+  "deletePropertyDef"
 ];
 
 /** Human labels for the wiring checklist on the Status page. */
@@ -151,11 +243,18 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   updateProfile: "profiles",
   setProfileActive: "profiles",
   listActivity: "activity_audit",
+  listComments: "comments",
+  addComment: "comments",
   createProject: "projects + addresses",
   createJob: "jobs",
   createJobsFromSplit: "jobs + addresses",
   deleteJob: "jobs",
   deleteProject: "projects",
+  moveJobStage: "jobs",
+  moveProjectStage: "projects",
+  updateProject: "projects",
+  setProjectCurrentAddress: "projects + addresses",
+  listAddressHistory: "address_history",
   // Both became tables — `teams` in 0026, `pipeline_stages` in 0029. The labels
   // said "enum" long after that stopped being true, on the one screen whose entire
   // job is to say what is backed by what.
@@ -163,5 +262,10 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   listTeams: "teams",
   listTemplatePhases: "pipeline_stages",
   listTemplateCheckpoints: "pipeline_stage_tasks (not built)",
-  listPropertyDefs: "property_defs (not built)"
+  listPropertyDefs: "property_defs",
+  listDictionaryOverrides: "dictionary_overrides",
+  saveDictionaryOverride: "dictionary_overrides",
+  createPropertyDef: "property_defs",
+  updatePropertyDef: "property_defs",
+  deletePropertyDef: "property_defs"
 };
