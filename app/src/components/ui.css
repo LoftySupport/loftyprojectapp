@@ -265,6 +265,31 @@
   vertical-align: top;
 }
 .data-table tbody tr:hover { background: var(--primary-background-hover-color); }
+
+/* ---- grouped rows --------------------------------------------------------
+   The table view answers the same "Group by" the board does, so switching between
+   them reorders the same jobs rather than showing two unrelated lists.
+
+   One `tbody` per group rather than a stray `tr`: a group is a row group, which is
+   what `tbody` means, and it is what lets a screen reader announce the heading as
+   covering the rows beneath it via `scope="colgroup"`. */
+.data-table tbody.group + tbody.group .group-head > th { padding-top: var(--space-20); }
+.data-table .group-head > th {
+  padding: var(--space-8) var(--space-12);
+  background: var(--allgrey-background-color);
+  border-bottom: 1px solid var(--layout-border-color);
+  /* The band reads as a divider first and a label second, so the colour sits on the
+     leading edge rather than washing the whole row. */
+  box-shadow: inset 3px 0 0 var(--primary-color);
+  text-align: left;
+  font: var(--font-text2-bold);
+  color: var(--primary-text-color);
+}
+/* Not a row you can open — only the jobs under it are. */
+.data-table .group-head:hover { background: none; }
+.data-table .group-head { cursor: default; }
+.group-name { margin-inline-end: var(--space-8); }
+.group-count { font: var(--font-text3-normal); color: var(--secondary-text-color); }
 .data-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* ---- property slots ------------------------------------------------------

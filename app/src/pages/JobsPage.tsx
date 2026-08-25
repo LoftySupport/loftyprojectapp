@@ -233,25 +233,39 @@ export function JobsPage() {
                 <th>Status</th>
               </tr>
             </thead>
-            <tbody>
-              {rows.map(j => (
-                <tr key={j.jobNumber} onClick={() => openOne(j)}>
-                  <td>{j.jobNumber}</td>
-                  <td>{j.projectNumber}</td>
-                  <td>{j.currentAddress ?? <Token>addresses.consolidated_address</Token>}</td>
-                  <td>
-                    {j.projectType
-                      ? PROJECT_TYPE_LABELS[j.projectType]
-                      : <Token>job_display.project_type</Token>}
-                  </td>
-                  <td>{j.stage}</td>
-                  <td>{j.team}</td>
-                  <td><Token>profiles.full_name</Token></td>
-                  <td className="num">{j.daysInStage}</td>
-                  <td><StatusPill status={j.status} /></td>
+            {/* One tbody per group, so the table answers the same "Group by" the board
+                does. Empty groups are dropped here where the board keeps them: a column
+                with no cards is a place to drag one to, and a heading with no rows under
+                it is just a heading. */}
+            {groups.filter(g => g.jobs.length > 0).map(g => (
+              <tbody key={g.key} className="group">
+                <tr className="group-head">
+                  <th scope="colgroup" colSpan={9}>
+                    <span className="group-name">{g.key}</span>
+                    <span className="group-count">
+                      {g.jobs.length} job{g.jobs.length === 1 ? "" : "s"}
+                    </span>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
+                {g.jobs.map(j => (
+                  <tr key={j.jobNumber} onClick={() => openOne(j)}>
+                    <td>{j.jobNumber}</td>
+                    <td>{j.projectNumber}</td>
+                    <td>{j.currentAddress ?? <Token>addresses.consolidated_address</Token>}</td>
+                    <td>
+                      {j.projectType
+                        ? PROJECT_TYPE_LABELS[j.projectType]
+                        : <Token>job_display.project_type</Token>}
+                    </td>
+                    <td>{j.stage}</td>
+                    <td>{j.team}</td>
+                    <td><Token>profiles.full_name</Token></td>
+                    <td className="num">{j.daysInStage}</td>
+                    <td><StatusPill status={j.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            ))}
           </table>
         </div>
       )}
