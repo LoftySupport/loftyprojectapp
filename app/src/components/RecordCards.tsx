@@ -13,6 +13,26 @@ import "./ui.css";
  * shape when they bind, it just stops showing braces.
  */
 
+/**
+ * Whether the status pill shows on a card.
+ *
+ * Lofty, 25 August: *"hide health status (don't remove it, just hide it until we have a
+ * plan for it) on all cards."*
+ *
+ * There is no health column — `health_statuses` is parked in the dictionary, deliberately
+ * unbuilt, because health is calculated and nobody has decided its inputs. What the cards
+ * show is `status`, which the schema is emphatic is a different thing: what a person sets,
+ * not what the system works out. On screen it does not read as that difference. Every
+ * record defaults to `on_track` at creation and nothing maintains it, so the pill has been
+ * telling everyone that everything is on track — which is the calculated claim it is not
+ * entitled to make.
+ *
+ * Hidden, not removed: the column stays, the component stays, `StatusPill` still renders
+ * on the drawer and in the tables where it is labelled as status. Flip this to bring it
+ * back on the cards in one line, once there is a plan.
+ */
+export const SHOW_STATUS_ON_CARDS = false;
+
 export function StatusPill({ status }: { status: RecordStatus }) {
   return <span className={`status-pill ${status}`}>{RECORD_STATUS_LABELS[status]}</span>;
 }
@@ -65,7 +85,7 @@ export function JobCard({
         {/* The number leads. It is the thing on the contract, and it carries the project
             in its first half — 1001-01 is job 01 of project 1001. */}
         <Text type="text2" weight="medium">{jobNumber}</Text>
-        <StatusPill status={status} />
+        {SHOW_STATUS_ON_CARDS && <StatusPill status={status} />}
       </header>
 
       {/* And the address underneath, which is what a person recognises. `ellipsis={false}`
@@ -147,7 +167,7 @@ export function ProjectCard({
     >
       <header className="card-top">
         <Text type="text3" color="secondary">Project {projectNumber}</Text>
-        <StatusPill status={status} />
+        {SHOW_STATUS_ON_CARDS && <StatusPill status={status} />}
       </header>
 
       <Text type="text1" weight="medium" ellipsis={false}>

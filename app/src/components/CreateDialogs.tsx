@@ -9,7 +9,7 @@ import { councilForSuburb, isAmbiguousSuburb, postcodeForSuburb } from "../data/
 import { SuburbField } from "./SuburbField";
 import {
   AU_STATES, MAX_SPLIT, PROJECT_TYPE_LABELS, PROJECT_TYPES, SA_COUNCILS,
-  type NewAddress, type ProjectType, type SaCouncil, type TeamId
+  type NewAddress, type ProjectType, type SaCouncil, type SplitLot, type TeamId
 } from "../data/types";
 import "./ui.css";
 
@@ -639,6 +639,17 @@ export function SplitProjectDialog({
   const [count, setCount] = useState("");
   const [startLot, setStartLot] = useState("");
   const [owningTeam, setOwningTeam] = useState<TeamId | null>(FIRST_TEAM);
+  /**
+   * One row per job, so the details that differ per lot have somewhere to go.
+   *
+   * Lofty: 2A Launceston Ave becomes "lot 1, 2A Launceston" and "lot 2B, 2A Launceston",
+   * and each job also carries the number it had in the old system. Neither fits a count
+   * and a starting number — 2B is not 2, and an old job number is per job by definition.
+   *
+   * Seeded from the count so the common case is still "type 4 and go", and editable so
+   * the uncommon one is possible at all.
+   */
+  const [lots, setLots] = useState<SplitLot[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<string[] | null>(null);
@@ -649,6 +660,7 @@ export function SplitProjectDialog({
     if (!show) return;
     setCount(suggestedCount ? String(suggestedCount) : "");
     setStartLot(String(nextLot ?? 1));
+    setLots([]);
     setOwningTeam(FIRST_TEAM);
     setError(null);
     setCreated(null);
@@ -660,10 +672,37 @@ export function SplitProjectDialog({
   // of a limit drift, and the one people meet first should not be the looser one.
   const countValid = whole(count) && Number(count) <= MAX_SPLIT;
   const lotValid = whole(startLot);
-  const valid = countValid && lotValid && owningTeam !== null;
 
   const n = Number(count);
   const first = Number(startLot);
+
+  /**
+   * The rows as they will be sent: the edited list once there is one, otherwise the
+   * count and starting number generating "1, 2, 3…" exactly as before.
+   *
+   * Kept derived rather than written into state on every keystroke, so changing the
+   * count still reflows the list and does not fight what has been typed into it.
+   */
+  const rows: SplitLot[] = lots.length
+    ? lots
+    : countValid && lotValid
+      ? Array.from({ length: n }, (_, i) => ({ lotNumber: String(first + i), jobNumberOld: "" }))
+      : [];
+
+  /**
+   * Editing a row takes a copy of the derived list into state.
+   *
+   * From then on `rows` is that copy, so the list stops reflowing from the count and
+   * keeps what was typed. Clearing it again is what the count field's own handler does.
+   */
+  const editRow = (index: number, patch: Partial<SplitLot>) =>
+    setLots(rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+
+  const duplicateLot = rows.find((l, i) => rows.findIndex(o => o.lotNumber.trim() === l.lotNumber.trim()) !== i);
+  const blankLot = rows.some(l => !l.lotNumber.trim());
+  /** The Create button waits on the rows too, or a duplicate lot fails at the insert. */
+  const canCreate = countValid && lotValid && owningTeam !== null
+    && rows.length > 0 && !duplicateLot && !blankLot;
 
   async function save() {
     if (!projectId || !owningTeam) return;
@@ -674,7 +713,10 @@ export function SplitProjectDialog({
         projectId,
         count: n,
         owningTeam,
-        startLot: first
+        startLot: first,
+        // The list as edited. The repository takes its length as the count and its
+        // order as the order.
+        lots: rows
       });
       setCreated(jobs.map(j => j.id));
       onCreated?.();
@@ -701,7 +743,7 @@ export function SplitProjectDialog({
           : (
             <>
               <Button kind="tertiary" onClick={onClose}>Cancel</Button>
-              <Button onClick={save} disabled={!valid || saving}>
+              <Button onClick={save} disabled={!canCreate || saving}>
                 {saving
                   ? "Creating…"
                   : countValid
@@ -723,7 +765,7 @@ export function SplitProjectDialog({
             <Field label="How many jobs" required hint="one per dwelling">
               <TextField
                 value={count}
-                onChange={setCount}
+                onChange={v => { setCount(v); setLots([]); }}
                 id="split-count"
                 inputAriaLabel="How many jobs"
                 validation={
@@ -734,10 +776,10 @@ export function SplitProjectDialog({
               />
             </Field>
 
-            <Field label="First lot number" hint="the rest count up from here">
+            <Field label="First lot number" hint="the rest count up from here — edit any of them below">
               <TextField
                 value={startLot}
-                onChange={setStartLot}
+                onChange={v => { setStartLot(v); setLots([]); }}
                 id="split-start-lot"
                 inputAriaLabel="First lot number"
                 validation={
@@ -754,13 +796,47 @@ export function SplitProjectDialog({
               hint="the same team for every job in this batch — they diverge later"
             />
 
-            {countValid && lotValid && (
-              <div className="create-preview">
-                <Text type="text3" color="secondary" ellipsis={false}>
-                  {n === 1
-                    ? `Lot ${first}, at the project's address.`
-                    : `Lots ${first}–${first + n - 1}, each at the project's address with its own lot number. Job numbers are issued by the database, continuing from any that already exist.`}
-                </Text>
+            {rows.length > 0 && (
+              <div className="split-rows">
+                <div className="split-rows-head">
+                  <Text type="text2" weight="bold">
+                    {rows.length} job{rows.length === 1 ? "" : "s"}, each at the project's address
+                  </Text>
+                  <Text type="text3" color="secondary" ellipsis={false}>
+                    A lot number can be anything on the plan — 2B as readily as 2. The old
+                    job number is the one this job has in SiteBook or Trello; leave it
+                    blank for a job that is new here. Job numbers themselves are issued by
+                    the database, continuing from any that already exist.
+                  </Text>
+                </div>
+                <div className="split-row split-row-head" aria-hidden="true">
+                  <span>Lot</span><span>Old job number</span>
+                </div>
+                {rows.map((row, i) => (
+                  <div className="split-row" key={i}>
+                    <TextField
+                      value={row.lotNumber}
+                      onChange={v => editRow(i, { lotNumber: v })}
+                      size="small"
+                      id={`split-lot-${i}`}
+                      inputAriaLabel={`Lot number for job ${i + 1}`}
+                      validation={
+                        !row.lotNumber.trim()
+                          ? { status: "error", text: "Needed" }
+                          : duplicateLot && duplicateLot.lotNumber.trim() === row.lotNumber.trim()
+                            ? { status: "error", text: "Listed twice" }
+                            : undefined
+                      }
+                    />
+                    <TextField
+                      value={row.jobNumberOld ?? ""}
+                      onChange={v => editRow(i, { jobNumberOld: v })}
+                      size="small"
+                      id={`split-old-${i}`}
+                      inputAriaLabel={`Old job number for job ${i + 1}`}
+                    />
+                  </div>
+                ))}
               </div>
             )}
           </div>

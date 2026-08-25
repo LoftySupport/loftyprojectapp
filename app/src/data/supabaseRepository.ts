@@ -716,15 +716,6 @@ export function createSupabaseRepository(): Repository {
      * numbers, and a number that was issued should not be handed out twice.
      */
     async createJobsFromSplit(input: JobSplit): Promise<Job[]> {
-      if (!Number.isInteger(input.count) || input.count < 1) {
-        throw new Error("Number of jobs must be a whole number, 1 or more.");
-      }
-      if (input.count > MAX_SPLIT) {
-        throw new Error(
-          `${input.count} jobs is more than this creates at once (limit ${MAX_SPLIT}). ` +
-          "Split it into two goes, or check the number is right."
-        );
-      }
 
       const { data: project, error: projectError } = await client
         .from("projects")
@@ -744,10 +735,47 @@ export function createSupabaseRepository(): Repository {
 
       const firstLot = input.startLot ?? 1;
 
+      /**
+       * How many were asked for — the list's length when there is one, the count when
+       * there is not. Checked BEFORE the list is built, so "99 jobs" is refused as over
+       * the limit rather than becoming an empty list refused as "1 or more"; and so a
+       * caller cannot send eighty lots past a limit that exists to stop exactly that.
+       */
+      const requested = input.lots?.length ?? input.count;
+      if (!Number.isInteger(requested) || requested < 1) {
+        throw new Error("Number of jobs must be a whole number, 1 or more.");
+      }
+      if (requested > MAX_SPLIT) {
+        throw new Error(
+          `${requested} jobs is more than this creates at once (limit ${MAX_SPLIT}). ` +
+          "Split it into two goes, or check the number is right."
+        );
+      }
+
+      /**
+       * The lots, either as the person named them or generated from a count.
+       *
+       * Named ones can be "2B" — Lofty's own example — which is why lot numbers are
+       * text and why the mapping back from inserted addresses no longer sorts them
+       * numerically.
+       */
+      const lots: { lotNumber: string; jobNumberOld?: string | null }[] =
+        input.lots?.length
+          ? input.lots
+          : Array.from({ length: input.count }, (_, i) => ({ lotNumber: String(firstLot + i) }));
+
+      if (lots.some(l => !l.lotNumber.trim())) {
+        throw new Error("Every job needs a lot number.");
+      }
+      const duplicate = lots.find((l, i) => lots.findIndex(o => o.lotNumber === l.lotNumber) !== i);
+      if (duplicate) {
+        throw new Error(`Lot ${duplicate.lotNumber} is listed twice — each job needs its own lot number.`);
+      }
+
       // address_consolidated is left out: build_consolidated_address() composes it, and
       // a value sent from here would be overwritten anyway — or worse, not be.
-      const rows = Array.from({ length: input.count }, (_, i) => ({
-        address_lot_number: String(firstLot + i),
+      const rows = lots.map(lot => ({
+        address_lot_number: lot.lotNumber,
         // A lot has a lot number, not a street number — the street number arrives when
         // the titles do, which is exactly the rename the address history exists for.
         address_street_number: null,
@@ -765,20 +793,30 @@ export function createSupabaseRepository(): Repository {
         .select("address_id, address_lot_number");
       if (addressError) throw addressError;
 
-      // Insert order is not return order for a bulk insert, so sort by the lot number we
-      // set rather than trusting the array to come back the way it went in.
-      const ordered = (addresses ?? []).slice().sort(
-        (a, b) => Number(a.address_lot_number) - Number(b.address_lot_number)
-      );
+      /**
+       * Matched back by lot number, not sorted by it.
+       *
+       * Insert order is not return order for a bulk insert, so the rows have to be
+       * re-identified. This sorted `Number(lot)` — which works for "1, 2, 3" and puts
+       * "2B" wherever NaN happens to land, silently pairing a job with another lot's
+       * address. Lot numbers are unique within the batch (checked above), so the lot
+       * string is the key, and the order is the one the person typed.
+       */
+      const byLot = new Map((addresses ?? []).map(a => [a.address_lot_number, a.address_id]));
 
       const created: Job[] = [];
-      for (const address of ordered) {
+      for (const lot of lots) {
+        const addressId = byLot.get(lot.lotNumber);
+        if (!addressId) throw new Error(`Lot ${lot.lotNumber} did not get an address.`);
         const { data, error } = await client
           .from("jobs")
           .insert({
             project_id: input.projectId,
             job_owning_team: input.owningTeam,
-            job_current_address_id: address.address_id,
+            job_current_address_id: addressId,
+            // Null rather than "" — the column is unique, and empty strings collide
+            // with each other where nulls do not.
+            job_number_old: lot.jobNumberOld?.trim() || null,
             job_stage: input.stage ?? "Acquisition & Development",
             job_status: input.status ?? "on_track"
           })
@@ -790,7 +828,7 @@ export function createSupabaseRepository(): Repository {
           // without being told.
           throw new Error(
             created.length
-              ? `Created ${created.length} of ${input.count} jobs, then: ${error.message}`
+              ? `Created ${created.length} of ${lots.length} jobs, then: ${error.message}`
               : error.message
           );
         }

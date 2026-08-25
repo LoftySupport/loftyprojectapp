@@ -1014,3 +1014,24 @@ code { overflow-wrap: anywhere; }
 }
 .suburb-suggestion.is-active { background: var(--primary-background-hover-color); }
 .suburb-postcode { font: var(--font-text3-normal); color: var(--secondary-text-color); font-variant-numeric: tabular-nums; }
+
+/* ---- the split's per-job rows --------------------------------------------
+   Creating jobs from a project needs somewhere to put what differs per lot — a lot
+   number that might be "2B", and the number the job had in the old system. A count and
+   a starting number cannot express either, so the batch is a small editable list. */
+.split-rows { margin-top: var(--space-12); }
+.split-rows-head { margin-bottom: var(--space-8); }
+.split-row {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: var(--space-8);
+  align-items: start;
+  padding: var(--space-4) 0;
+}
+/* A header row rather than a label on every field: forty labels down a panel is forty
+   lines of the same two words. */
+.split-row-head {
+  font: var(--font-text3-medium);
+  color: var(--secondary-text-color);
+  padding-bottom: 0;
+}

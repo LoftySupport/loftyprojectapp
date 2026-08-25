@@ -965,10 +965,38 @@ export interface NewProject {
  */
 export const MAX_SPLIT = 60;
 
+/**
+ * One job in a split, as the person entering it described it.
+ *
+ * Lofty, 25 August: creating jobs from a project needs "space to add in details such as
+ * job address (if known) such as 2a launceston ave might now be lot 1, 2a launceston,
+ * lot 2b, 2a launceston etc and also the old job number as well from the old system."
+ *
+ * So a lot is not always "1, 2, 3": `2B` is a real lot number, which is why this is text
+ * rather than a number and why the batch is a list rather than a count and a start.
+ */
+export interface SplitLot {
+  /** As it appears on the plan of division — "1", "2B", "14A". */
+  lotNumber: string;
+  /**
+   * The number this job has in SiteBook or Trello, when it is a job that already exists
+   * there. Unique across `jobs`, and nullable — jobs created here have none.
+   */
+  jobNumberOld?: string | null;
+}
+
 export interface JobSplit {
   projectId: number;
-  /** How many jobs to create. */
+  /** How many jobs to create. Ignored when `lots` is given, which says both. */
   count: number;
+  /**
+   * The lots themselves, when the person named them.
+   *
+   * Present, this is the batch — its length is the count and its order is the order.
+   * Absent, `count` and `startLot` generate "1, 2, 3…" as they always did, which is
+   * still what the inline row and the create-then-split flow want.
+   */
+  lots?: SplitLot[];
   /**
    * Required, and not defaulted — the same reason `NewJob.owningTeam` is not. One team
    * for the batch: at a split every lot is with whoever is starting the site, and they
