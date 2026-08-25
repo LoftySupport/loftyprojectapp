@@ -30,6 +30,21 @@ export const DICTIONARY_STATUSES = [
 ] as const;
 export type DictionaryStatus = (typeof DICTIONARY_STATUSES)[number];
 
+/**
+ * Lofty's words on top of the repo's entry — one row per entry somebody edited, from
+ * `dictionary_overrides` (0044). Null fields mean the repo's wording stands; the page
+ * merges on read. Sweeping an override back into this file and deleting the row is the
+ * maintenance path.
+ */
+export interface DictionaryOverride {
+  id: string;
+  friendlyName: string | null;
+  definition: string | null;
+  status: DictionaryStatus | null;
+  /** When the override last changed. No editor name: nothing stamps updated_by, and a name that is null or stale is worse than the date alone. */
+  updatedAt: string;
+}
+
 export const STATUS_LABELS: Record<DictionaryStatus, string> = {
   to_do: "To do",
   created: "Created",

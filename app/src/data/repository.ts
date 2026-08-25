@@ -1,3 +1,4 @@
+import type { DictionaryOverride } from "./dictionary";
 import type {
   ActivityEntry,
   AddressHistoryEntry,
@@ -167,6 +168,19 @@ export interface Repository {
   listTemplateCheckpoints(): Promise<TemplateCheckpoint[]>;
   listPropertyDefs(): Promise<PropertyDef[]>;
 
+  /** Lofty's words on top of the repo's dictionary — see DictionaryOverride. */
+  listDictionaryOverrides(): Promise<DictionaryOverride[]>;
+
+  /**
+   * Save an edit to one entry. Upserts, sending only the fields being changed, so
+   * retitling cannot blank a definition somebody else wrote. The ladder is enforced in
+   * the database: manager for wording, admin for status, superadmin to archive.
+   */
+  saveDictionaryOverride(
+    id: string,
+    patch: { friendlyName?: string | null; definition?: string | null; status?: DictionaryOverride["status"] }
+  ): Promise<DictionaryOverride>;
+
   /**
    * Defining, changing and retiring fields — superadmin by policy, the same bar as
    * pipelines, because deciding what the company captures is process design. The key
@@ -209,6 +223,8 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "listTemplatePhases",
   "listTemplateCheckpoints",
   "listPropertyDefs",
+  "listDictionaryOverrides",
+  "saveDictionaryOverride",
   "createPropertyDef",
   "updatePropertyDef",
   "deletePropertyDef"
@@ -247,6 +263,8 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   listTemplatePhases: "pipeline_stages",
   listTemplateCheckpoints: "pipeline_stage_tasks (not built)",
   listPropertyDefs: "property_defs",
+  listDictionaryOverrides: "dictionary_overrides",
+  saveDictionaryOverride: "dictionary_overrides",
   createPropertyDef: "property_defs",
   updatePropertyDef: "property_defs",
   deletePropertyDef: "property_defs"

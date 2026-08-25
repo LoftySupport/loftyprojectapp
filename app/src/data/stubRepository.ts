@@ -1,4 +1,5 @@
 import { TEAM_SEED } from "./types";
+import type { DictionaryOverride } from "./dictionary";
 import type { Repository, RepositoryMethod } from "./repository";
 import type {
   ActivityEntry,
@@ -188,6 +189,10 @@ export function createStubRepository(): Repository {
      */
     async listTemplateCheckpoints(): Promise<TemplateCheckpoint[]> { return []; },
     async listPropertyDefs(): Promise<PropertyDef[]> { return []; },
+    async listDictionaryOverrides(): Promise<DictionaryOverride[]> { return []; },
+    async saveDictionaryOverride(): Promise<DictionaryOverride> {
+      throw new Error("Saving a dictionary edit needs Supabase.");
+    },
     async createPropertyDef(): Promise<PropertyDef> {
       throw new Error("Defining a property needs Supabase.");
     },

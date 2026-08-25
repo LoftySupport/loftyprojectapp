@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Repository, RepositoryMethod } from "./repository";
+import type { DictionaryOverride } from "./dictionary";
 import { createStubRepository } from "./stubRepository";
 import { MAX_SPLIT } from "./types";
 import type {
@@ -58,7 +59,8 @@ const WIRED: RepositoryMethod[] = [
   "listComments", "addComment", "updateProject", "moveProjectStage",
   "setProjectCurrentAddress", "listAddressHistory",
   "listStages", "listTeams", "listTemplatePhases",
-  "listPropertyDefs", "createPropertyDef", "updatePropertyDef", "deletePropertyDef"
+  "listPropertyDefs", "createPropertyDef", "updatePropertyDef", "deletePropertyDef",
+  "listDictionaryOverrides", "saveDictionaryOverride"
 ];
 
 /**
@@ -1255,6 +1257,34 @@ export function createSupabaseRepository(): Repository {
       return toPropertyDef(data as unknown as PropertyDefRow);
     },
 
+    async listDictionaryOverrides(): Promise<DictionaryOverride[]> {
+      const { data, error } = await client
+        .from("dictionary_overrides")
+        .select(DICT_OVERRIDE_COLUMNS);
+      if (error) throw error;
+      return (data as unknown as DictOverrideRow[]).map(toDictOverride);
+    },
+
+    async saveDictionaryOverride(
+      id: string,
+      patch: { friendlyName?: string | null; definition?: string | null; status?: DictionaryOverride["status"] }
+    ): Promise<DictionaryOverride> {
+      // Upsert with only the fields being changed: PostgREST's ON CONFLICT UPDATE sets
+      // only the payload's columns, so retitling cannot blank a definition.
+      const row: Record<string, unknown> = { dictionary_override_id: id };
+      if ("friendlyName" in patch) row.dictionary_override_friendly_name = emptyToNull(patch.friendlyName);
+      if ("definition" in patch) row.dictionary_override_definition = emptyToNull(patch.definition);
+      if ("status" in patch) row.dictionary_override_status = patch.status;
+
+      const { data, error } = await client
+        .from("dictionary_overrides")
+        .upsert(row, { onConflict: "dictionary_override_id" })
+        .select(DICT_OVERRIDE_COLUMNS)
+        .single();
+      if (error) throw error;
+      return toDictOverride(data as unknown as DictOverrideRow);
+    },
+
     async deletePropertyDef(key: string): Promise<void> {
       const { data, error } = await client
         .from("property_defs")
@@ -1269,6 +1299,30 @@ export function createSupabaseRepository(): Repository {
   };
 
   return repo;
+}
+
+// No editor embed, deliberately: nothing in this schema stamps updated_by (created_by
+// is trigger-stamped, but it names the FIRST editor forever). A name that is null or
+// wrong is worse than the date alone, so the date alone is what comes back.
+const DICT_OVERRIDE_COLUMNS =
+  "dictionary_override_id, dictionary_override_friendly_name, dictionary_override_definition, dictionary_override_status, dictionary_override_updated_at";
+
+type DictOverrideRow = {
+  dictionary_override_id: string;
+  dictionary_override_friendly_name: string | null;
+  dictionary_override_definition: string | null;
+  dictionary_override_status: DictionaryOverride["status"];
+  dictionary_override_updated_at: string;
+};
+
+function toDictOverride(r: DictOverrideRow): DictionaryOverride {
+  return {
+    id: r.dictionary_override_id,
+    friendlyName: r.dictionary_override_friendly_name,
+    definition: r.dictionary_override_definition,
+    status: r.dictionary_override_status,
+    updatedAt: r.dictionary_override_updated_at
+  };
 }
 
 const PROPERTY_DEF_COLUMNS =

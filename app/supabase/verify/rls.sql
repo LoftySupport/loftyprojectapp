@@ -223,6 +223,25 @@ begin
   --    probe swept every job to Construction — including a fixture already past it,
   --    which the guard rightly refused. The probe now moves only the jobs that are
   --    behind, which is the only move a manager is allowed anyway.
+  -- 0044: the dictionary ladder's first rung. Wording is a manager's; status is not.
+  begin
+    insert into dictionary_overrides (dictionary_override_id, dictionary_override_friendly_name)
+    values ('jobs.job_stage', 'Phase')
+    on conflict (dictionary_override_id)
+    do update set dictionary_override_friendly_name = 'Phase';
+    raise notice 'ok  a manager retitled a dictionary entry';
+  exception when others then raise warning 'FAIL: manager dictionary wording refused (%)', sqlerrm;
+  end;
+
+  begin
+    update dictionary_overrides set dictionary_override_status = 'updates_required'
+     where dictionary_override_id = 'jobs.job_stage';
+    raise warning 'FAIL: a manager set a dictionary status — that is admin''s';
+  exception
+    when insufficient_privilege then raise notice 'ok  dictionary status refused below admin';
+    when others then raise warning 'FAIL: unexpected on dictionary status (%)', sqlerrm;
+  end;
+
   begin
     update jobs set job_stage = 'Construction'
      where lifecycle_position(job_stage) < lifecycle_position('Construction');
