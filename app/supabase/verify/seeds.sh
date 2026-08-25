@@ -158,8 +158,10 @@ for const, table in (("PROJECT_COLUMNS", "projects"),
         check(f"{const} is a single string literal postgrest-js can read", False)
         continue
     # Strip embeds — `profile_teams!fk(team_id, ...)` names another table's columns, and
-    # embed resolution is embeds.sh's job, not this one.
-    select = re.sub(r'[a-z_]+![a-z_]+\([^)]*\)', '', m.group(1))
+    # embed resolution is embeds.sh's job, not this one. The optional `alias:` prefix is
+    # PostgREST's renamed-embed form; the first version of this pattern left the alias
+    # behind, which then read as a column called `original:` and failed a correct list.
+    select = re.sub(r'(?:[a-z_]+:)?[a-z_]+![a-z_]+\([^)]*\)', '', m.group(1))
     names = [n.strip() for n in select.split(",") if n.strip()]
     missing = [n for n in names if f"{table}.{n}" not in db_columns]
     check(

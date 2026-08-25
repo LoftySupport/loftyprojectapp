@@ -19,6 +19,7 @@ import { Toolbar } from "../components/Toolbar";
 import { toOptions } from "../components/Select";
 import { NewProjectDialog, SplitProjectDialog } from "../components/CreateDialogs";
 import { InlineNewProjectRow } from "../components/InlineNewProjectRow";
+import { CommentsPanel } from "../components/CommentsPanel";
 import { usePermission } from "../data/PermissionProvider";
 import { useRepository } from "../data/DataProvider";
 import "../components/ui.css";
@@ -455,6 +456,10 @@ function ProjectDetail({
             </div>
           </div>
         </section>
+
+        {/* The newest comment IS the latest update — one mechanism, not a field and a
+            feed that could disagree. */}
+        <CommentsPanel projectId={project.projectId} />
 
         {/* Project-level fields, in the stage that captures each one. */}
         <PropertySlots scope="project" />

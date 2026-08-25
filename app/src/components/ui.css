@@ -1059,3 +1059,11 @@ code { overflow-wrap: anywhere; }
   font-size: 14px;
 }
 .date-input:focus { outline: none; border-color: var(--primary-color); }
+
+/* The comment thread. The newest one is the record's latest update and reads larger;
+   the rest are its history. */
+.comment-composer { display: flex; gap: var(--space-8); margin-bottom: var(--space-12); }
+.comment-composer > :first-child { flex: 1; }
+.comment { padding: var(--space-8) 0; border-top: 1px solid var(--layout-border-color); }
+.comment.latest { border-top: none; }
+.comment-meta { display: flex; gap: var(--space-8); align-items: baseline; margin-bottom: 2px; }

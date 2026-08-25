@@ -1,5 +1,6 @@
 import type {
   ActivityEntry,
+  CommentEntry,
   Job,
   JobSplit,
   NewProfile,
@@ -63,6 +64,19 @@ export interface Repository {
 
   /** One person's history, or a whole team's. Newest first. */
   listActivity(opts: { profileId?: string; team?: string; limit?: number }): Promise<ActivityEntry[]>;
+
+  /**
+   * The comment thread on one record, newest first — the newest one IS the project's
+   * "latest update". Exactly one of the two refs, matching the CHECK on `comments`.
+   */
+  listComments(ref: { projectId?: number; jobId?: string }, limit?: number): Promise<CommentEntry[]>;
+
+  /**
+   * Post an update. The author is stamped by the database from the session — sending it
+   * from here would let the client claim to be somebody. Blank bodies are refused by the
+   * CHECK before this ever matters.
+   */
+  addComment(ref: { projectId?: number; jobId?: string }, body: string): Promise<CommentEntry>;
 
   // ---- creating ---------------------------------------------------------
   // Return the created record rather than void: the caller needs the number the
@@ -153,6 +167,8 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "updateProfile",
   "setProfileActive",
   "listActivity",
+  "listComments",
+  "addComment",
   "createProject",
   "createJob",
   "createJobsFromSplit",
@@ -181,6 +197,8 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   updateProfile: "profiles",
   setProfileActive: "profiles",
   listActivity: "activity_audit",
+  listComments: "comments",
+  addComment: "comments",
   createProject: "projects + addresses",
   createJob: "jobs",
   createJobsFromSplit: "jobs + addresses",

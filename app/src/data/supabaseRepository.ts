@@ -4,6 +4,7 @@ import { createStubRepository } from "./stubRepository";
 import { MAX_SPLIT } from "./types";
 import type {
   ActivityEntry,
+  CommentEntry,
   Job,
   JobSplit,
   NewProfile,
@@ -51,6 +52,7 @@ const WIRED: RepositoryMethod[] = [
   "moveJobStage",
   "currentProfile", "listProfiles",
   "createProfile", "updateProfile", "setProfileActive", "listActivity",
+  "listComments", "addComment", "updateProject", "moveProjectStage",
   "listStages", "listTeams", "listTemplatePhases"
 ];
 
@@ -121,6 +123,42 @@ const emptyToNull = (v: string | null | undefined): string | null => {
 };
 
 const TEAM_COLUMNS = "team_id, team_name, team_position, team_is_active";
+
+/**
+ * `comments` points at `profiles` twice (created_by, updated_by), so the author embed
+ * names its constraint — the PGRST201 rule, same as everywhere else.
+ */
+const COMMENT_COLUMNS =
+  "comment_id, project_id, job_id, task_id, variation_id, comment_body, parent_comment_id, comment_edited_at, comment_created_at, comment_created_by, comment_updated_at, comment_updated_by, author:profiles!comments_comment_created_by_fkey(profile_full_name)";
+
+type CommentRow = {
+  comment_id: string;
+  project_id: number | null; job_id: string | null;
+  task_id: string | null; variation_id: string | null;
+  comment_body: string; parent_comment_id: string | null;
+  comment_edited_at: string | null;
+  comment_created_at: string; comment_created_by: string | null;
+  comment_updated_at: string; comment_updated_by: string | null;
+  author: { profile_full_name: string | null } | null;
+};
+
+function toComment(r: CommentRow): CommentEntry {
+  return {
+    id: r.comment_id,
+    projectId: r.project_id,
+    jobId: r.job_id,
+    taskId: r.task_id,
+    variationId: r.variation_id,
+    body: r.comment_body,
+    parentCommentId: r.parent_comment_id,
+    editedAt: r.comment_edited_at,
+    createdAt: r.comment_created_at,
+    createdBy: r.comment_created_by,
+    updatedAt: r.comment_updated_at,
+    updatedBy: r.comment_updated_by,
+    authorName: r.author?.profile_full_name ?? null
+  };
+}
 
 const ADDRESS_COLUMNS =
   "address_id, address_lot_number, address_street_number, address_street_1, address_street_2, address_suburb, address_state, address_postcode, address_council";
@@ -297,9 +335,13 @@ export function createSupabaseRepository(): Repository {
 
   const lifecycleStages = () => loadLifecycleStages(client);
 
+  // Pinned to the narrowed type: the build's tsc does not carry `if (!client)` into a
+  // nested function the way the editor's does, and `db` makes the narrowing explicit.
+  const db: SupabaseClient = client;
+
   /** One project, re-read with its embeds — the read-back both project mutators share. */
   async function readProject(id: number): Promise<Project> {
-    const { data, error } = await client
+    const { data, error } = await db
       .from("projects")
       .select(PROJECT_COLUMNS)
       .eq("project_id", id)
@@ -603,6 +645,40 @@ export function createSupabaseRepository(): Repository {
       ];
 
       return entries.sort((a, b) => b.at.localeCompare(a.at)).slice(0, limit);
+    },
+
+    async listComments(ref: { projectId?: number; jobId?: string }, limit = 50): Promise<CommentEntry[]> {
+      let q = client.from("comments").select(COMMENT_COLUMNS);
+      // Exactly one ref, the same rule the CHECK enforces — asking with neither would
+      // quietly return every comment in the company.
+      if (ref.projectId != null) q = q.eq("project_id", ref.projectId);
+      else if (ref.jobId != null) q = q.eq("job_id", ref.jobId);
+      else throw new Error("listComments needs a projectId or a jobId.");
+
+      const { data, error } = await q
+        .order("comment_created_at", { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return (data as unknown as CommentRow[]).map(toComment);
+    },
+
+    async addComment(ref: { projectId?: number; jobId?: string }, body: string): Promise<CommentEntry> {
+      if (ref.projectId == null && ref.jobId == null) {
+        throw new Error("addComment needs a projectId or a jobId.");
+      }
+      // The author is NOT sent: comments_stamp_created_by fills it from the session,
+      // which is the only version of "who wrote this" a client cannot forge.
+      const { data, error } = await client
+        .from("comments")
+        .insert({
+          project_id: ref.projectId ?? null,
+          job_id: ref.jobId ?? null,
+          comment_body: body.trim()
+        })
+        .select(COMMENT_COLUMNS)
+        .single();
+      if (error) throw error;
+      return toComment(data as unknown as CommentRow);
     },
 
     // ---- creating -------------------------------------------------------

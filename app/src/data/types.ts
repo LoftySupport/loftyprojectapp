@@ -802,6 +802,11 @@ export interface Comment extends RecordRef {
   updatedBy: Uuid | null;
 }
 
+/** A comment with its author's name resolved on the read — what a thread renders. */
+export interface CommentEntry extends Comment {
+  authorName: string | null;
+}
+
 /**
  * One entry in the readable feed — "Deanna moved this to Construction".
  *

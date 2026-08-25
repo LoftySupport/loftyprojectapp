@@ -7,6 +7,7 @@ import { StatusPill } from "./RecordCards";
 import { PropertySlots } from "./PropertySlots";
 import { ExpandButton, usePanelExpand } from "./PanelExpand";
 import { JOB_MOVE_NOTE, MoveStageControl } from "./MoveStageDialog";
+import { CommentsPanel } from "./CommentsPanel";
 import { useRepository } from "../data/DataProvider";
 import { Token } from "./Token";
 import "./ui.css";
@@ -191,19 +192,9 @@ export function JobDrawer({ job, onClose, onMoved }: {
           {/* Then the job's own — twenty jobs, twenty answers. */}
           <PropertySlots scope="job" title="Job properties" />
 
-          <section className="panel">
-            <div className="panel-head">
-              <Text type="text2" weight="bold">Activity &amp; comments</Text>
-            </div>
-            <div className="stack-tight">
-              <Text type="text3" color="secondary">
-                <Token>activity.description</Token>
-              </Text>
-              <Text type="text3" color="secondary">
-                <Token>comments.author_name</Token> — <Token>comments.body</Token>
-              </Text>
-            </div>
-          </section>
+          {/* The job's own thread — the same shape the project has, because Amber's
+              "latest update" is one rule for both kinds of record. */}
+          <CommentsPanel jobId={job.jobNumber} title="Updates & comments" />
         </div>
       </aside>
     </>

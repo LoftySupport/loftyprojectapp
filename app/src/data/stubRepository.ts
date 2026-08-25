@@ -2,6 +2,7 @@ import { TEAM_SEED } from "./types";
 import type { Repository, RepositoryMethod } from "./repository";
 import type {
   ActivityEntry,
+  CommentEntry,
   Job,
   Profile,
   Project,
@@ -105,6 +106,10 @@ export function createStubRepository(): Repository {
       throw new Error("Changing a user's status needs Supabase.");
     },
     async listActivity(): Promise<ActivityEntry[]> { return []; },
+    async listComments(): Promise<CommentEntry[]> { return []; },
+    async addComment(): Promise<CommentEntry> {
+      throw new Error("Posting an update needs Supabase.");
+    },
 
     // ---- creating: refuse rather than pretend ---------------------------
     // The other stubs answer with empty arrays, which is honest — there are no records

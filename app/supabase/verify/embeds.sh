@@ -98,6 +98,23 @@ for tbl in $AMBIGUOUS; do
   fi
 done
 
+# ---------------------------------------------------------------------------
+# And the names themselves. Naming a foreign key is only protection if the name is
+# real — `profiles!comments_comment_createdby_fkey` (one underscore short) passes the
+# count above and returns PGRST200 at runtime. Every name written after a `!` has to
+# be a constraint the database actually has.
+NAMED=$(echo "$CODE" | grep -oE '[a-z_]+![a-z_]+' | grep -v '!inner' | cut -d'!' -f2 | sort -u)
+for con in $NAMED; do
+  FOUND=$($PSQL -c "select count(*) from pg_constraint where conname = '${con}';" | tr -d ' ')
+  if [ "$FOUND" = "0" ]; then
+    echo "FAIL: the embed names constraint '${con}', which does not exist."
+    FAILED=1
+  fi
+done
+if [ -n "$NAMED" ] && [ "$FAILED" -eq 0 ]; then
+  echo "ok  every named constraint in an embed exists ($(echo "$NAMED" | wc -l | tr -d ' ') checked)"
+fi
+
 if [ "$FAILED" -ne 0 ]; then
   echo
   echo "An embed of a table with several foreign keys to the same parent must say which"
