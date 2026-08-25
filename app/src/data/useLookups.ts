@@ -32,9 +32,9 @@ export function useStages() {
  * has to come back from the query and be narrowed here.
  */
 export function useTeams() {
-  const { data, loading } = useQuery(r => r.listTeams(), []);
+  const { data, loading, error } = useQuery(r => r.listTeams(), []);
   const names = useMemo(() => data.filter(t => t.isActive).map(t => t.name), [data]);
-  return { teams: data, teamNames: names, loading };
+  return { teams: data, teamNames: names, loading, error };
 }
 
 /**
@@ -117,30 +117,48 @@ export function groupByStage(
  * `profiles.teams` is a list of slugs — `lofty_general`, `pre_construction_admin` —
  * because that is what the foreign key holds, and three screens were rendering it
  * straight: the dashboard greeted you with "lofty_general", Settings showed it under
- * "Teams", and the Admin table listed it in the Teams column. `boardModel` already
- * resolves the owning team on a job through `teamName()`; nothing did the same for a
- * person's memberships.
+ * "Teams", and the Admin table listed it in the Teams column.
  *
- * Retired teams are included deliberately. A picker must not *offer* Commercial, but a
- * person still recorded in it has to render as "Commercial" rather than as a slug —
- * exactly the distinction `useTeams` draws between `teams` and `teamNames`.
+ * WHY `labels` RETURNS NULL RATHER THAN THE SLUG
  *
- * While the lookup is still loading there is nothing to resolve with, and `teamName`
- * falls back to the id. That is the honest answer for one frame — a placeholder name
- * would be inventing one — and it settles as soon as the query lands.
+ *   Resolving through `teamName()` alone was not enough, and the first fix shipped with
+ *   this hole in it. `teamName(id, [])` falls back to the id — deliberately, so a job
+ *   owned by a retired team is not blank — which means every caller renders a raw
+ *   foreign key for as long as the lookup has not answered. On the dashboard that window
+ *   is wide open: the page's loading gate waits on `listJobs()`, and somebody with no
+ *   jobs gets an instant empty answer there while the teams read is still in flight. So
+ *   "lofty_general" was painted as though it were the name, exactly as before.
+ *
+ *   `boardModel` already had the answer — it puts the teams query into its own loading
+ *   gate, "without them every owning team renders as its slug". This does the same thing
+ *   one level down: until the lookup can answer, there is no answer, and a caller has to
+ *   say so rather than being handed something that looks like one. It is the house rule
+ *   about never filling a gap with a plausible value, and a slug is a plausible value.
+ *
+ * Retired teams are still resolved, once the lookup is there. A picker must not *offer*
+ * Commercial, but a person recorded in it has to render as "Commercial" — which is the
+ * distinction `useTeams` draws between `teams` and `teamNames`.
  */
 export function useTeamLabels() {
-  const { teams, loading } = useTeams();
+  const { teams, loading, error } = useTeams();
 
-  const label = useCallback((id: TeamId | string) => teamName(id, teams), [teams]);
+  /** True once the lookup can actually answer. Empty-and-loaded is not resolved: an
+   *  empty `teams` table means "not seeded", which is a gap, not a set of no teams. */
+  const resolved = !loading && !error && teams.length > 0;
 
-  /** The joined form the three screens above all want. Empty stays empty. */
+  const label = useCallback(
+    (id: TeamId | string): string | null => (resolved ? teamName(id, teams) : null),
+    [teams, resolved]
+  );
+
+  /** Names for a set of ids, or null while the lookup cannot answer. */
   const labels = useCallback(
-    (ids: readonly (TeamId | string)[]) => ids.map(id => teamName(id, teams)),
-    [teams]
+    (ids: readonly (TeamId | string)[]): string[] | null =>
+      resolved ? ids.map(id => teamName(id, teams)) : null,
+    [teams, resolved]
   );
 
   // `teams` is passed straight through so a screen that both resolves names and offers
   // a picker does not have to call two hooks and run the query twice.
-  return { teams, label, labels, loading };
+  return { teams, label, labels, resolved, loading, error };
 }

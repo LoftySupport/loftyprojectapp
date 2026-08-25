@@ -109,7 +109,9 @@ function Users() {
       name: (p: Profile) => p.fullName,
       jobTitle: (p: Profile) => p.jobTitle,
       email: (p: Profile) => p.email,
-      teams: (p: Profile) => labels(p.teams).join(", "),
+      // Null while the lookup is in flight, which sorts as a blank — right, because the
+      // column is blank too. Sorting slugs would order by a string nobody can see.
+      teams: (p: Profile) => labels(p.teams)?.join(", ") ?? null,
       // The ladder's own order, not alphabetical: viewer to superadmin is a sequence,
       // and sorting it a-z would interleave the rungs.
       permission: (p: Profile) => PERMISSION_LEVELS.indexOf(p.permission),

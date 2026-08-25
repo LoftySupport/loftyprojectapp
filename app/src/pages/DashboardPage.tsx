@@ -32,7 +32,7 @@ function Empty({ children }: { children: React.ReactNode }) {
 export function DashboardPage() {
   const { data: jobs, loading } = useQuery(r => r.listJobs(), []);
   const { profile } = useAuth();
-  const { labels } = useTeamLabels();
+  const { labels, error: teamsError } = useTeamLabels();
 
   // Joined rather than reduced to one: somebody can sit in several teams, and picking
   // the first would quietly answer a question this page is not asking.
@@ -44,11 +44,23 @@ export function DashboardPage() {
   // Through `labels`, because `profile.teams` is a list of foreign keys. This greeted
   // Amber with "lofty_general" — the slug, rendered straight — where the rest of the app
   // had long since started resolving a job's owning team through the same lookup.
+  //
+  // FOUR outcomes, and the fourth is the one that made it "still showing lofty_general"
+  // after the first fix. This page's loading gate below waits on `listJobs()`, and
+  // somebody with no jobs clears it immediately — while the teams read is still in
+  // flight. `labels` returns null for that window rather than the slug, so there is
+  // something real to render instead of a foreign key that looks like a name.
+  const teamNames = profile?.teams.length ? labels(profile.teams) : null;
   const teamLabel: React.ReactNode = !profile
     ? <Token>profiles.teams</Token>
-    : profile.teams.length
-      ? labels(profile.teams).join(", ")
-      : <span className="pd-unassigned">No team assigned</span>;
+    : !profile.teams.length
+      ? <span className="pd-unassigned">No team assigned</span>
+      : teamNames
+        ? teamNames.join(", ")
+        // Blank while it loads — this is the greeting row, and a spinner in it would be
+        // louder than the thing it is waiting for. If the lookup actually failed, say so:
+        // silence forever reads as "you are in no team", which is a different fact.
+        : <span className="pd-unassigned">{teamsError ? "Team names unavailable" : ""}</span>;
 
   if (loading) {
     return (
