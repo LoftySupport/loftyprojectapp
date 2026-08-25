@@ -47,6 +47,7 @@ import type {
 const WIRED: RepositoryMethod[] = [
   "listProjects", "getProject", "listJobs", "getJob",
   "createProject", "createJob", "createJobsFromSplit", "deleteJob", "deleteProject",
+  "moveJobStage",
   "currentProfile", "listProfiles",
   "createProfile", "updateProfile", "setProfileActive", "listActivity",
   "listStages", "listTeams", "listTemplatePhases"
@@ -851,6 +852,36 @@ export function createSupabaseRepository(): Repository {
       if (!data?.length) {
         throw new Error(`Job ${id} was not removed — it no longer exists, or you do not have permission.`);
       }
+    },
+
+    /**
+     * The write goes to `jobs`; the read-back comes from `job_display`, because that is
+     * where the restamped `job_stage_entered_at` and the rest of the card's columns live.
+     *
+     * Zero rows updated is a refusal, not a success: RLS filters rather than raises on
+     * UPDATE, so a viewer's move would otherwise "succeed" against nothing and the board
+     * would quietly snap back. The guards that DO raise — manager-only (0038), forwards
+     * only (0039) — come through as errors with the database's own sentence, which is
+     * better than any message invented here.
+     */
+    async moveJobStage(id: string, stage: StageName): Promise<Job> {
+      const { data: updated, error } = await client
+        .from("jobs")
+        .update({ job_stage: stage })
+        .eq("job_id", id)
+        .select("job_id");
+      if (error) throw error;
+      if (!updated?.length) {
+        throw new Error(`Job ${id} was not moved — it no longer exists, or you do not have permission.`);
+      }
+
+      const { data, error: readError } = await client
+        .from("job_display")
+        .select(JOB_COLUMNS)
+        .eq("job_id", id)
+        .single();
+      if (readError) throw readError;
+      return toJob(data as unknown as JobRow);
     },
 
     async deleteProject(id: number): Promise<void> {

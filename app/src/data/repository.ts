@@ -9,6 +9,7 @@ import type {
   Project,
   PropertyDef,
   Stage,
+  StageName,
   Team,
   TemplateCheckpoint,
   TemplatePhase
@@ -97,6 +98,17 @@ export interface Repository {
   deleteJob(id: string): Promise<void>;
 
   /**
+   * Move a job to another lifecycle stage.
+   *
+   * The database is the authority on both rules — who (manager and above, 0038) and
+   * which way (forwards only, 0039) — so this sends the move and reports the refusal
+   * verbatim if one comes back. The app's `can()` check hides the control; it is not
+   * the security. Returns the job re-read through `job_display`, because the move
+   * restamps `job_stage_entered_at` and can advance the project underneath it (0041).
+   */
+  moveJobStage(id: string, stage: StageName): Promise<Job>;
+
+  /**
    * Remove a project and every job under it — `jobs.project_id` cascades. Admin-only by
    * policy, and the same address caveat applies.
    */
@@ -131,6 +143,7 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "createJobsFromSplit",
   "deleteJob",
   "deleteProject",
+  "moveJobStage",
   "listStages",
   "listTeams",
   "listTemplatePhases",
@@ -156,6 +169,7 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   createJobsFromSplit: "jobs + addresses",
   deleteJob: "jobs",
   deleteProject: "projects",
+  moveJobStage: "jobs",
   // Both became tables — `teams` in 0026, `pipeline_stages` in 0029. The labels
   // said "enum" long after that stopped being true, on the one screen whose entire
   // job is to say what is backed by what.

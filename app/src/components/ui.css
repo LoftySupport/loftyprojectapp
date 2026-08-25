@@ -1035,3 +1035,9 @@ code { overflow-wrap: anywhere; }
   color: var(--secondary-text-color);
   padding-bottom: 0;
 }
+
+/* A card that can be picked up says so — the grab cursor is the only affordance HTML5
+   drag gives us for free, and without it the feature is invisible. Only applied when
+   grouping is by Stage and the person is manager or above; JobsPage decides that. */
+.board-card-draggable { cursor: grab; }
+.board-card-draggable:active { cursor: grabbing; }

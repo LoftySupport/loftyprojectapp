@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { Button, Counter, Heading, Text } from "@vibe/core";
 import { PROJECT_TYPE_LABELS, RECORD_STATUS_LABELS, RECORD_STATUSES } from "../data/types";
@@ -12,6 +12,9 @@ import { LoadProblem, NoResults, NothingYet, PreviousAddressNote } from "../comp
 import { SavedViewTabs } from "../components/SavedViewTabs";
 import { JobCard, StatusPill } from "../components/RecordCards";
 import { JobDrawer } from "../components/JobDrawer";
+import { MoveStageDialog, isForwardMove } from "../components/MoveStageDialog";
+import { usePermission } from "../data/PermissionProvider";
+import type { StageName } from "../data/types";
 import { Token } from "../components/Token";
 import { Toolbar } from "../components/Toolbar";
 import { toOptions } from "../components/Select";
@@ -35,11 +38,32 @@ export function JobsPage() {
   // No create state and no project list any more: nothing is created from this page, so
   // there is nothing to re-read after and no picker to feed. Both went with the New job
   // dialog — see the note above the toolbar.
-  const { jobs: all, loading, error } = useBoardRecords();
+  // Bumped after a stage move, so the board re-reads and the card is in its new
+  // column rather than where the stale list left it — the same mechanism the create
+  // dialogs use on the projects page.
+  const [reloadKey, setReloadKey] = useState(0);
+  const { jobs: all, loading, error } = useBoardRecords(reloadKey);
+  const { can } = usePermission();
+
 
   const {
     view, setView, grouping, setGrouping, filters, setFilters, saved, setSaved, search
   } = useBoardParams({ view: "Board", grouping: "Stage" });
+  /**
+   * Drag a card between columns — but only when the columns ARE the lifecycle, and only
+   * for people the database would let finish the move. Grouped by Team the columns are
+   * ownership, by Status they are a label, and dropping a card there has no meaning a
+   * write could honour.
+   *
+   * The drop does not move anything by itself: it opens the same confirmation the
+   * drawer's picker uses, because Lofty's rule is about lifecycle moves however they
+   * are asked for. Dropping on an earlier column is refused during the drag — the
+   * column never accepts the drop, so the browser shows not-allowed instead of letting
+   * the card land and bounce back with an error.
+   */
+  const dragEnabled = grouping === "Stage" && can("manager");
+  const [dragged, setDragged] = useState<BoardJob | null>(null);
+  const [pendingMove, setPendingMove] = useState<{ job: BoardJob; to: StageName } | null>(null);
 
   const { jobNumber } = useParams();
   const navigate = useNavigate();
@@ -185,7 +209,23 @@ export function JobsPage() {
       {view === "Board" && !noMatches && !loading && all.length > 0 && (
         <div className="board">
           {groups.map(g => (
-            <section className="board-column" key={g.key}>
+            <section
+              className="board-column"
+              key={g.key}
+              onDragOver={e => {
+                if (dragEnabled && dragged && isForwardMove(dragged.stage, g.key)) {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                }
+              }}
+              onDrop={e => {
+                if (dragEnabled && dragged && isForwardMove(dragged.stage, g.key)) {
+                  e.preventDefault();
+                  setPendingMove({ job: dragged, to: g.key as StageName });
+                }
+                setDragged(null);
+              }}
+            >
               <div className="board-column-head">
                 <div>
                   <Text type="text3" color="secondary">{grouping}</Text>
@@ -200,17 +240,29 @@ export function JobsPage() {
                 </div>
               ) : (
                 g.jobs.map(j => (
-                  <JobCard
+                  <div
                     key={j.jobNumber}
-                    jobNumber={j.jobNumber}
-                    stageName={j.stage}
-                    team={j.team}
-                    address={j.currentAddress}
-                    projectType={j.projectType}
-                    createdBy={j.createdBy}
-                    status={j.status}
-                    onOpen={() => openOne(j)}
-                  />
+                    className={dragEnabled ? "board-card-draggable" : undefined}
+                    draggable={dragEnabled}
+                    onDragStart={e => {
+                      setDragged(j);
+                      e.dataTransfer.effectAllowed = "move";
+                      // Some browsers refuse to start a drag with no data at all.
+                      e.dataTransfer.setData("text/plain", j.jobNumber);
+                    }}
+                    onDragEnd={() => setDragged(null)}
+                  >
+                    <JobCard
+                      jobNumber={j.jobNumber}
+                      stageName={j.stage}
+                      team={j.team}
+                      address={j.currentAddress}
+                      projectType={j.projectType}
+                      createdBy={j.createdBy}
+                      status={j.status}
+                      onOpen={() => openOne(j)}
+                    />
+                  </div>
                 ))
               )}
             </section>
@@ -338,7 +390,26 @@ export function JobsPage() {
         </div>
       )}
 
-      {openJob && <JobDrawer job={openJob} onClose={() => navigate(`/jobs${search}`)} />}
+      {openJob && (
+        <JobDrawer
+          job={openJob}
+          onClose={() => navigate(`/jobs${search}`)}
+          onMoved={() => setReloadKey(k => k + 1)}
+        />
+      )}
+
+      {/* The confirmation a drop opens. Same dialog as the drawer's picker — Lofty's
+          rule is one rule, so it is one component. */}
+      {pendingMove && (
+        <MoveStageDialog
+          show
+          jobNumber={pendingMove.job.jobNumber}
+          fromStage={pendingMove.job.stage}
+          toStage={pendingMove.to}
+          onClose={() => setPendingMove(null)}
+          onMoved={() => setReloadKey(k => k + 1)}
+        />
+      )}
     </>
   );
 }

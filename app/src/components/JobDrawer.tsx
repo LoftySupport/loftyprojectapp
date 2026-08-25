@@ -6,6 +6,7 @@ import type { BoardJob } from "../data/boardModel";
 import { StatusPill } from "./RecordCards";
 import { PropertySlots } from "./PropertySlots";
 import { ExpandButton, usePanelExpand } from "./PanelExpand";
+import { MoveStageControl } from "./MoveStageDialog";
 import { Token } from "./Token";
 import "./ui.css";
 
@@ -16,7 +17,12 @@ import "./ui.css";
  * Escape closes it and focus moves into the panel on open, because a drawer you can
  * only leave with the mouse is a trap for anyone driving from the keyboard.
  */
-export function JobDrawer({ job, onClose }: { job: BoardJob; onClose: () => void }) {
+export function JobDrawer({ job, onClose, onMoved }: {
+  job: BoardJob;
+  onClose: () => void;
+  /** Bumps the board's reload after a stage move, so the card is already in its new column when the drawer closes. */
+  onMoved: () => void;
+}) {
   const panel = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   // The drawer had no way to widen — the same record, the same shape of panel, and the
@@ -129,6 +135,16 @@ export function JobDrawer({ job, onClose }: { job: BoardJob; onClose: () => void
                 <Text type="text2">Phase</Text>
               </div>
               <Text type="text2" weight="medium">{job.stage}</Text>
+            </div>
+            {/* Manager and above; the component hides itself below that, the same line
+                the database draws (0038). Only later phases are offered — see
+                MoveStageControl for why — and choosing one asks for confirmation,
+                because a lifecycle move cannot be undone. */}
+            <div className="field-row">
+              <div className="field-label">
+                <Text type="text2">Move</Text>
+              </div>
+              <MoveStageControl jobNumber={job.jobNumber} stage={job.stage} onMoved={onMoved} />
             </div>
             <div className="field-row">
               <div className="field-label">
