@@ -81,8 +81,19 @@ const PROFILE_COLUMNS =
  * deliberate act. Neither list embeds anything, so neither can hit the PGRST201 ambiguity
  * that PROFILE_COLUMNS has to name its way around.
  */
+/**
+ * The embed NAMES ITS CONSTRAINT, and has to.
+ *
+ * `projects` has two foreign keys to `addresses` — current and original — so an
+ * unqualified `addresses(...)` embed is ambiguous and PostgREST refuses it with
+ * PGRST201. That is the same shape that took sign-in down in August, and it is why the
+ * project's address was read as an id and never as text: the column list asked for
+ * `project_current_address_id` and nothing resolved it, so every project card and
+ * project table row rendered {{project_display.current_address}} over an address the
+ * database had.
+ */
 const PROJECT_COLUMNS =
-  "project_id, project_name, project_original_address_id, project_current_address_id, project_type, project_status, project_proposed_dwellings, project_owning_team, project_assignee_id, project_start_date, project_target_completion, project_end_date, project_created_at, project_created_by, project_updated_at, project_updated_by";
+  "project_id, project_name, project_original_address_id, project_current_address_id, project_type, project_status, project_proposed_dwellings, project_owning_team, project_assignee_id, project_start_date, project_target_completion, project_end_date, project_created_at, project_created_by, project_updated_at, project_updated_by, addresses!projects_project_current_address_id_fkey(address_consolidated)";
 
 // Read from `job_display`, not from `jobs`. The view resolves both of the job's
 // addresses and its project's, which the base table only carries as uuids — so a card
@@ -95,7 +106,7 @@ const PROJECT_COLUMNS =
 //
 // Writes still go to `jobs` — a view is not the place to insert through.
 const JOB_COLUMNS =
-  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_created_at, job_created_by, job_updated_at, job_updated_by, job_current_address, job_original_address, project_current_address";
+  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_created_at, job_created_by, job_updated_at, job_updated_by, job_current_address, job_original_address, project_current_address, project_type";
 
 /**
  * `""` and `"   "` are how a browser reports a field somebody did not fill in, and they
@@ -520,8 +531,29 @@ export function createSupabaseRepository(): Repository {
       const { data: people, error: peopleError } = await q;
       if (peopleError) throw peopleError;
 
-      const rows = (people ?? []) as unknown as { id: string; auth_user_id: string | null; full_name: string }[];
-      const byAuthId = new Map(rows.filter(r => r.auth_user_id).map(r => [r.auth_user_id!, r.full_name]));
+      /**
+       * The PREFIXED column names, which is what the select above asks for.
+       *
+       * This cast claimed `{ id, auth_user_id, full_name }` — the names these columns had
+       * before 0028 renamed them. `as unknown as` silences the compiler completely, so
+       * nothing caught it: every row came back with `auth_user_id: undefined`, the filter
+       * below dropped all of them, `authIds` was empty and the function returned `[]`
+       * before it ever read the audit table.
+       *
+       * So activity looked like it was not being recorded when it was — 221 rows of it,
+       * including the profile edits made minutes before the report. A lie in a cast is
+       * worse than a missing type, because it reads as though somebody checked.
+       */
+      const rows = (people ?? []) as unknown as {
+        profile_id: string;
+        profile_auth_user_id: string | null;
+        profile_full_name: string;
+      }[];
+      const byAuthId = new Map(
+        rows
+          .filter(r => r.profile_auth_user_id)
+          .map(r => [r.profile_auth_user_id!, r.profile_full_name])
+      );
       const authIds = [...byAuthId.keys()];
       if (!authIds.length) return [];
 
@@ -919,6 +951,9 @@ type ProjectRow = {
   project_end_date: string | null;
   project_created_at: string; project_created_by: string | null;
   project_updated_at: string; project_updated_by: string | null;
+  // The embed above. PostgREST returns an object for a to-one relationship, and null
+  // when the row it points at is not readable.
+  addresses: { address_consolidated: string | null } | null;
 };
 
 function toProject(r: ProjectRow): Project {
@@ -928,6 +963,8 @@ function toProject(r: ProjectRow): Project {
     name: r.project_name,
     originalAddressId: r.project_original_address_id,
     currentAddressId: r.project_current_address_id,
+    // The address as text, resolved by the embed rather than by a second request.
+    currentAddress: r.addresses?.address_consolidated ?? null,
     projectType: r.project_type,
     status: r.project_status,
     proposedDwellings: r.project_proposed_dwellings,
@@ -956,6 +993,7 @@ type JobRow = {
   // Resolved by the view, not present on the table.
   job_current_address: string; job_original_address: string | null;
   project_current_address: string;
+  project_type: Job["projectType"];
 };
 
 function toJob(r: JobRow): Job {
@@ -979,6 +1017,10 @@ function toJob(r: JobRow): Job {
     updatedBy: r.job_updated_by,
     currentAddress: r.job_current_address,
     originalAddress: r.job_original_address,
-    projectCurrentAddress: r.project_current_address
+    projectCurrentAddress: r.project_current_address,
+    // Inherited from the project through the view, never stored on the job. `job_display`
+    // has exposed it since 0028; this read simply never asked for it, so every card and
+    // every table row rendered {{job_display.project_type}} for a value one column away.
+    projectType: r.project_type
   };
 }

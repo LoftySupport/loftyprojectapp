@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { Button, Counter, Heading, Text } from "@vibe/core";
-import { RECORD_STATUS_LABELS, RECORD_STATUSES } from "../data/types";
+import { PROJECT_TYPE_LABELS, RECORD_STATUS_LABELS, RECORD_STATUSES } from "../data/types";
 import { useStages, useTeams, useTemplatePhases } from "../data/useLookups";
 import { useBoardRecords, type BoardJob } from "../data/boardModel";
 import { jobMatchesQuery, matchedOnPreviousAddress, useSearch } from "../data/SearchProvider";
@@ -206,6 +206,8 @@ export function JobsPage() {
                     stageName={j.stage}
                     team={j.team}
                     address={j.currentAddress}
+                    projectType={j.projectType}
+                    createdBy={j.createdBy}
                     status={j.status}
                     onOpen={() => openOne(j)}
                   />
@@ -228,25 +230,45 @@ export function JobsPage() {
                 <th>Stage</th>
                 <th>Team</th>
                 <th>Assigned to</th>
+                <th>Created by</th>
                 <th className="num">Days in stage</th>
                 <th>Status</th>
               </tr>
             </thead>
-            <tbody>
-              {rows.map(j => (
-                <tr key={j.jobNumber} onClick={() => openOne(j)}>
-                  <td>{j.jobNumber}</td>
-                  <td>{j.projectNumber}</td>
-                  <td><Token>addresses.consolidated_address</Token></td>
-                  <td><Token>job_display.project_type</Token></td>
-                  <td>{j.stage}</td>
-                  <td>{j.team}</td>
-                  <td><Token>profiles.full_name</Token></td>
-                  <td className="num">{j.daysInStage}</td>
-                  <td><StatusPill status={j.status} /></td>
+            {/* One tbody per group, so the table answers the same "Group by" the board
+                does. Empty groups are dropped here where the board keeps them: a column
+                with no cards is a place to drag one to, and a heading with no rows under
+                it is just a heading. */}
+            {groups.filter(g => g.jobs.length > 0).map(g => (
+              <tbody key={g.key} className="group">
+                <tr className="group-head">
+                  <th scope="colgroup" colSpan={10}>
+                    <span className="group-name">{g.key}</span>
+                    <span className="group-count">
+                      {g.jobs.length} job{g.jobs.length === 1 ? "" : "s"}
+                    </span>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
+                {g.jobs.map(j => (
+                  <tr key={j.jobNumber} onClick={() => openOne(j)}>
+                    <td>{j.jobNumber}</td>
+                    <td>{j.projectNumber}</td>
+                    <td>{j.currentAddress ?? <Token>addresses.consolidated_address</Token>}</td>
+                    <td>
+                      {j.projectType
+                        ? PROJECT_TYPE_LABELS[j.projectType]
+                        : <Token>job_display.project_type</Token>}
+                    </td>
+                    <td>{j.stage}</td>
+                    <td>{j.team}</td>
+                    <td><Token>profiles.full_name</Token></td>
+                    <td className="muted">{j.createdBy ?? "—"}</td>
+                    <td className="num">{j.daysInStage}</td>
+                    <td><StatusPill status={j.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            ))}
           </table>
         </div>
       )}

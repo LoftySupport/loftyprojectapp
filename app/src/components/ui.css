@@ -265,6 +265,31 @@
   vertical-align: top;
 }
 .data-table tbody tr:hover { background: var(--primary-background-hover-color); }
+
+/* ---- grouped rows --------------------------------------------------------
+   The table view answers the same "Group by" the board does, so switching between
+   them reorders the same jobs rather than showing two unrelated lists.
+
+   One `tbody` per group rather than a stray `tr`: a group is a row group, which is
+   what `tbody` means, and it is what lets a screen reader announce the heading as
+   covering the rows beneath it via `scope="colgroup"`. */
+.data-table tbody.group + tbody.group .group-head > th { padding-top: var(--space-20); }
+.data-table .group-head > th {
+  padding: var(--space-8) var(--space-12);
+  background: var(--allgrey-background-color);
+  border-bottom: 1px solid var(--layout-border-color);
+  /* The band reads as a divider first and a label second, so the colour sits on the
+     leading edge rather than washing the whole row. */
+  box-shadow: inset 3px 0 0 var(--primary-color);
+  text-align: left;
+  font: var(--font-text2-bold);
+  color: var(--primary-text-color);
+}
+/* Not a row you can open — only the jobs under it are. */
+.data-table .group-head:hover { background: none; }
+.data-table .group-head { cursor: default; }
+.group-name { margin-inline-end: var(--space-8); }
+.group-count { font: var(--font-text3-normal); color: var(--secondary-text-color); }
 .data-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* ---- property slots ------------------------------------------------------
@@ -381,6 +406,14 @@
    cannot close is a trap, so this is load-bearing, not cosmetic. */
 .drawer-head > :first-child { min-width: 0; }
 .drawer-head > :last-child { flex-shrink: 0; }
+/* Expand and close, on one line. Same shape as `.create-panel-actions`, because the two
+   panel heads are the same object with different contents. */
+.drawer-actions { display: flex; align-items: center; gap: var(--space-4); flex-shrink: 0; }
+
+/* The drawer widens the way the create panel does — same widths, same transition, so
+   "expand" means one thing in this app rather than two. */
+.drawer { transition: width var(--motion-productive-medium) var(--motion-timing-transition); }
+.drawer.is-expanded { width: 100vw; }
 .drawer-body { flex: 1; overflow-y: auto; padding: var(--space-16); }
 
 /* ---- template phases ----------------------------------------------------- */
@@ -650,8 +683,11 @@ code { overflow-wrap: anywhere; }
 /* Expanded: the full window, less a margin so it still reads as a layer over the page
    rather than a navigation. No centring and no darker scrim — the difference from the
    dialog this replaces is exactly that the page behind stays legible. */
+/* The whole window. It was capped at 1100px, which on a wide screen left the page
+   showing down one side and did not read as full screen at all — which is the thing
+   the control says it does. */
 .create-panel.is-expanded {
-  width: min(1100px, 100vw);
+  width: 100vw;
 }
 
 .create-panel-head {
@@ -689,8 +725,8 @@ code { overflow-wrap: anywhere; }
    leaving it on produces a scrollbar inside a scrollbar. */
 .create-panel .create-form { max-height: none; overflow: visible; flex: none; }
 
-/* Two columns once there is room for them. Nine fields down a 1100px window is a very
-   long thin form with the whole right half empty. */
+/* Two columns once there is room for them. Nine fields down a full-width window is a
+   very long thin form with the whole right half empty. */
 @media (min-width: 720px) {
   .create-panel.is-expanded .create-form {
     display: grid;
@@ -707,7 +743,9 @@ code { overflow-wrap: anywhere; }
   /* Same reasoning as the drawer's close button: on a touch screen this is the control
      everyone reaches for first, so it gets a finger rather than the 24px minimum. */
   .create-panel-actions .sb-btn,
-  .create-panel-actions button { min-width: 40px; min-height: 40px; }
+  .create-panel-actions button,
+  .drawer-actions .sb-btn,
+  .drawer-actions button { min-width: 40px; min-height: 40px; }
 }
 
 /* ---- create dialogs -------------------------------------------------------
@@ -918,3 +956,61 @@ code { overflow-wrap: anywhere; }
 .cell-edit { min-width: 140px; }
 .cell-edit-wide { min-width: 200px; }
 .row-editing-problem { margin: 0 0 var(--space-8); }
+
+/* ---- the permission matrix -----------------------------------------------
+   A dot rather than a tick or a word, because the grid is read down a column —
+   "what does a manager get" — and five columns of "Yes" is five columns of noise.
+   The screen-reader text beside each says which it is; the dot is decoration. */
+.perm-cell { text-align: center; }
+.perm-yes { color: var(--positive-ink); font-size: 14px; }
+.perm-no { color: var(--layout-border-color); }
+/* Visible to a screen reader, not on screen. The dot alone would announce as a
+   character, or as nothing at all. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---- the suburb suggestions ----------------------------------------------
+   A combobox rather than a Dropdown, because a suburb not on a list published in July
+   still has to be typeable — the suggestions help, they do not gate. */
+.suburb-field { position: relative; }
+.suburb-suggestions {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: var(--space-4);
+  list-style: none;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--primary-background-color);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-small);
+  box-shadow: var(--box-shadow-medium);
+}
+.suburb-suggestion {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-8);
+  width: 100%;
+  padding: var(--space-8);
+  background: none;
+  border: 0;
+  border-radius: var(--border-radius-small);
+  font: var(--font-text2-normal);
+  color: var(--primary-text-color);
+  text-align: left;
+  cursor: pointer;
+}
+.suburb-suggestion.is-active { background: var(--primary-background-hover-color); }
+.suburb-postcode { font: var(--font-text3-normal); color: var(--secondary-text-color); font-variant-numeric: tabular-nums; }

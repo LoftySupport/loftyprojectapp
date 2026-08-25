@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "./DataProvider";
 import { useTeams } from "./useLookups";
-import { teamName, type RecordStatus, type TeamId } from "./types";
+import { teamName, type ProjectType, type RecordStatus, type TeamId } from "./types";
 
 /**
  * What the boards render, built from real records.
@@ -40,6 +40,18 @@ export interface BoardJob {
   /** The slug, for anything keyed rather than labelled. */
   teamId: TeamId;
   status: RecordStatus;
+  /** The project's type, inherited through `job_display`. Null until somebody sets it. */
+  projectType: ProjectType | null;
+  /**
+   * Who created the job, by name.
+   *
+   * NOT the assignee, and labelled apart from it everywhere it shows. Lofty read an
+   * empty "Assigned to" as a mistake — "there is 10 jobs assigned to me" — and the
+   * database is unambiguous: all ten have `job_created_by` set to her and
+   * `job_assignee_id` null. Two facts, and collapsing them into one column is how a
+   * board comes to claim work is allocated when nothing has been.
+   */
+  createdBy: string | null;
   /** Derived from stageEnteredAt on every read. Never stored, so it cannot go stale. */
   daysInStage: number;
   /**
@@ -63,6 +75,15 @@ export interface BoardProject {
   jobs: BoardJob[];
   /** What was intended at creation. Null when nobody said. */
   proposedDwellings: number | null;
+  projectType: ProjectType | null;
+  /** The date being worked towards, or null when none is set. */
+  targetCompletion: string | null;
+  /**
+   * The project's current address as text, resolved on the read by an embed that names
+   * its foreign key. Null only when the address row is genuinely unreadable, which is
+   * what the card's token still covers.
+   */
+  currentAddress: string | null;
   /**
    * The project's own status column, not the worst of its jobs.
    *
@@ -71,7 +92,6 @@ export interface BoardProject {
    * would quietly overrule them.
    */
   status: RecordStatus;
-  currentAddress?: string | null;
   originalAddress?: string | null;
 }
 
@@ -108,9 +128,13 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
   const { data: jobs, loading: jLoading, error: jError } =
     useQuery(r => r.listJobs(), [], [reloadKey]);
   const { teams, loading: tLoading } = useTeams();
+  // Names for the audit columns. Small and cached by the query hook — 47 rows — and it
+  // is the only way to turn `job_created_by` into something a person recognises.
+  const { data: profiles, loading: prLoading } = useQuery(r => r.listProfiles(), []);
 
   return useMemo(() => {
     const now = Date.now();
+    const nameOf = new Map(profiles.map(p => [p.id, p.fullName]));
 
     const boardJobs: BoardJob[] = jobs.map(j => ({
       jobNumber: j.id,
@@ -119,6 +143,8 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
       team: teamName(j.owningTeam, teams),
       teamId: j.owningTeam,
       status: j.status,
+      projectType: j.projectType,
+      createdBy: j.createdBy ? nameOf.get(j.createdBy) ?? null : null,
       daysInStage: daysSince(j.stageEnteredAt, now),
       currentAddress: j.currentAddress,
       originalAddress: j.originalAddress,
@@ -137,6 +163,13 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
       projectId: p.id,
       jobs: byProject.get(String(p.id)) ?? [],
       proposedDwellings: p.proposedDwellings,
+      projectType: p.projectType,
+      targetCompletion: p.targetCompletion,
+      // The project's own address, not one borrowed from its first job. Deriving it
+      // from the jobs worked only because every project here has some — a project
+      // created and not yet split had no address at all, which is precisely the case
+      // the field exists for.
+      currentAddress: p.currentAddress,
       status: p.status
     }));
 
@@ -145,8 +178,8 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
       jobs: boardJobs,
       // Teams are in the gate too: without them every owning team renders as its slug,
       // which then matches none of the toolbar's Team options.
-      loading: pLoading || jLoading || tLoading,
+      loading: pLoading || jLoading || tLoading || prLoading,
       error: pError ?? jError
     };
-  }, [projects, jobs, teams, pLoading, jLoading, tLoading, pError, jError]);
+  }, [projects, jobs, teams, profiles, pLoading, jLoading, tLoading, prLoading, pError, jError]);
 }

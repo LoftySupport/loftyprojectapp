@@ -213,6 +213,13 @@ export interface Project {
   name: string | null;
   originalAddressId: Uuid | null;
   currentAddressId: Uuid;
+  /**
+   * The current address as text, resolved on the read.
+   *
+   * The id alone is what every project screen had, which is why they all rendered
+   * {{project_display.current_address}} over an address the database was holding.
+   */
+  currentAddress: string | null;
   /** Who is primarily accountable. A `teams.team_id` slug. */
   owningTeam: TeamId | null;
   assigneeId: Uuid | null;
@@ -292,10 +299,16 @@ export interface Job {
   engagedTeams: TeamId[];
   assigneeId: Uuid | null;
   /**
-   * No `projectType`. A job's type is its project's type, read through `job_display` —
-   * a commercial project does not contain residential jobs, so a second field would
-   * only ever be a chance to disagree with the first.
+   * The project's type, resolved by `job_display` — never stored on the job.
+   *
+   * This said "No `projectType`" and meant it about the *column*: a commercial project
+   * does not contain residential jobs, so a second stored field would only ever be a
+   * chance to disagree with the first. That still holds. What the view resolves is not a
+   * second fact, it is the same one read in one request instead of two — and while this
+   * field was absent every job card and job table row rendered
+   * {{job_display.project_type}} for a value the view was already returning.
    */
+  projectType: ProjectType | null;
 
   /**
    * The addresses as text, resolved by `job_display` rather than by a second request.

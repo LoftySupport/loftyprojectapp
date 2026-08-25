@@ -1,5 +1,7 @@
 import { Text } from "@vibe/core";
-import { RECORD_STATUS_LABELS, type RecordStatus } from "../data/types";
+import {
+  PROJECT_TYPE_LABELS, RECORD_STATUS_LABELS, type ProjectType, type RecordStatus
+} from "../data/types";
 import { Token } from "./Token";
 import "./ui.css";
 
@@ -20,6 +22,8 @@ export function JobCard({
   stageName,
   team,
   address,
+  projectType,
+  createdBy,
   status = "on_track",
   onOpen
 }: {
@@ -36,6 +40,10 @@ export function JobCard({
    * placeholder for work not done.
    */
   address?: string | null;
+  /** The project's type, inherited through `job_display`. Null until somebody sets it. */
+  projectType?: string | null;
+  /** Who created it. Labelled as that, never as the assignee — they are two facts. */
+  createdBy?: string | null;
   status?: RecordStatus;
   onOpen?: () => void;
 }) {
@@ -70,7 +78,13 @@ export function JobCard({
 
       <dl className="card-meta">
         <dt><Text type="text3" color="secondary">Type</Text></dt>
-        <dd><Text type="text3"><Token>job_display.project_type</Token></Text></dd>
+        <dd>
+          <Text type="text3">
+            {projectType
+              ? PROJECT_TYPE_LABELS[projectType as ProjectType] ?? projectType
+              : <Token>job_display.project_type</Token>}
+          </Text>
+        </dd>
         <dt><Text type="text3" color="secondary">Stage</Text></dt>
         <dd><Text type="text3">{stageName}</Text></dd>
       </dl>
@@ -80,9 +94,18 @@ export function JobCard({
             "SB", which is a person who does not work here — and the name beside it was
             already saying, honestly, that the assignee is unbound. */}
         <div className="card-who">
+          {/* No job has an assignee yet, so the token below is the honest answer to
+              "who is on this". The creator is a different question and the database
+              does know it — shown underneath and labelled, rather than filling the
+              assignee's line with somebody who was never assigned. */}
           <div>
             <Text type="text3" weight="medium">{team}</Text>
             <Text type="text3" color="secondary"><Token>profiles.full_name</Token></Text>
+            {createdBy && (
+              <Text type="text3" color="secondary" ellipsis={false}>
+                Created by {createdBy}
+              </Text>
+            )}
           </div>
         </div>
       </footer>
@@ -93,11 +116,18 @@ export function JobCard({
 export function ProjectCard({
   projectNumber,
   jobNumbers,
+  address,
+  projectType,
+  targetCompletion,
   status = "on_track",
   onOpen
 }: {
   projectNumber: string;
   jobNumbers: string[];
+  /** Read through from the project's jobs — null for a project that has none yet. */
+  address?: string | null;
+  projectType?: string | null;
+  targetCompletion?: string | null;
   status?: RecordStatus;
   onOpen?: () => void;
 }) {
@@ -120,7 +150,9 @@ export function ProjectCard({
         <StatusPill status={status} />
       </header>
 
-      <Text type="text1" weight="medium"><Token>project_display.current_address</Token></Text>
+      <Text type="text1" weight="medium" ellipsis={false}>
+        {address ?? <Token>project_display.current_address</Token>}
+      </Text>
 
       <div className="card-divider" />
 
@@ -128,9 +160,21 @@ export function ProjectCard({
         <dt><Text type="text3" color="secondary">Suburb</Text></dt>
         <dd><Text type="text3"><Token>addresses.suburb</Token></Text></dd>
         <dt><Text type="text3" color="secondary">Type</Text></dt>
-        <dd><Text type="text3"><Token>projects.project_type</Token></Text></dd>
+        <dd>
+          <Text type="text3">
+            {projectType
+              ? PROJECT_TYPE_LABELS[projectType as ProjectType] ?? projectType
+              : <Token>projects.project_type</Token>}
+          </Text>
+        </dd>
         <dt><Text type="text3" color="secondary">Target</Text></dt>
-        <dd><Text type="text3"><Token>projects.target_completion</Token></Text></dd>
+        <dd>
+          <Text type="text3">
+            {targetCompletion
+              ? new Date(targetCompletion).toLocaleDateString()
+              : <Token>projects.target_completion</Token>}
+          </Text>
+        </dd>
       </dl>
 
       <div className="card-divider" />

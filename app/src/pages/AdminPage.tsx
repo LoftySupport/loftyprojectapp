@@ -11,7 +11,6 @@ import {
 } from "../data/types";
 import { useStages, useTeamLabels, useTeams, useTemplatePhases } from "../data/useLookups";
 import { useBoardRecords } from "../data/boardModel";
-import { Token } from "../components/Token";
 import "../components/ui.css";
 
 /**
@@ -34,16 +33,17 @@ export function AdminPage() {
         </Text>
       </div>
 
+      {/* Permissions moved to Setup — Admin is who works here, Setup is how the app is
+          configured, and the matrix that used to sit here was five invented objects over
+          a table that does not exist. */}
       <TabList activeTabId={tab} onTabChange={setTab}>
         <Tab>Users</Tab>
         <Tab>Teams</Tab>
-        <Tab>Permissions</Tab>
       </TabList>
 
       <div style={{ marginTop: "var(--space-16)" }}>
         {tab === 0 && <Users />}
         {tab === 1 && <Teams />}
-        {tab === 2 && <Permissions />}
       </div>
     </>
   );
@@ -236,31 +236,44 @@ function Users() {
   );
 }
 
-type TeamColumn = "team" | "phases" | "jobs";
+type TeamColumn = "team" | "phases" | "jobs" | "members";
 
 function Teams() {
-  const { teamNames } = useTeams();
+  const { teams: allTeams, teamNames } = useTeams();
   const { stageNames } = useStages();
   const { teamsByStage } = useTemplatePhases();
   const { jobs } = useBoardRecords();
+  // The members. `profiles.teams` is a list of team slugs, so this is a read the app
+  // already does everywhere else — the column just never asked for it and rendered
+  // {{profiles.full_name}} over forty-seven memberships the database was holding.
+  const { data: profiles } = useQuery<Profile[]>(repo => repo.listProfiles(), []);
 
   // Derived once, so the sort reads the same numbers the cells render rather than
   // recounting the jobs inside a comparator on every comparison.
   const rows = useMemo(
     () =>
-      teamNames.map(t => ({
-        team: t,
-        owned: stageNames.filter(s => (teamsByStage[s] ?? []).includes(t)),
-        held: jobs.filter(j => j.team === t).length
-      })),
-    [teamNames, stageNames, teamsByStage, jobs]
+      teamNames.map(t => {
+        // Names come from the lookup, membership is stored by slug — so the row has to
+        // carry both. Matching on the display name would break the day a team is renamed.
+        const slug = allTeams.find(x => x.name === t)?.id;
+        return {
+          team: t,
+          owned: stageNames.filter(s => (teamsByStage[s] ?? []).includes(t)),
+          held: jobs.filter(j => j.team === t).length,
+          members: slug
+            ? profiles.filter(p => p.active && p.teams.includes(slug as TeamId))
+            : []
+        };
+      }),
+    [teamNames, allTeams, stageNames, teamsByStage, jobs, profiles]
   );
 
   const columns = useMemo(
     () => ({
       team: (r: (typeof rows)[number]) => r.team,
       phases: (r: (typeof rows)[number]) => r.owned.join(", "),
-      jobs: (r: (typeof rows)[number]) => r.held
+      jobs: (r: (typeof rows)[number]) => r.held,
+      members: (r: (typeof rows)[number]) => r.members.length
     }),
     []
   );
@@ -283,7 +296,7 @@ function Teams() {
               <SortHeader column={"team" as TeamColumn} label="Team" sort={sort} onSort={toggle} />
               <SortHeader column={"phases" as TeamColumn} label="Phases owned" sort={sort} onSort={toggle} />
               <SortHeader column={"jobs" as TeamColumn} label="Jobs held" sort={sort} onSort={toggle} className="num" />
-              <th scope="col">Members</th>
+              <SortHeader column={"members" as TeamColumn} label="Members" sort={sort} onSort={toggle} />
             </tr>
           </thead>
           <tbody>
@@ -292,7 +305,13 @@ function Teams() {
                 <td><strong>{r.team}</strong></td>
                 <td className="muted">{r.owned.join(", ") || "—"}</td>
                 <td className="num">{r.held}</td>
-                <td><Token>profiles.full_name</Token></td>
+                {/* Active members only: a deactivated person is not on the team any more
+                    in any sense that matters to somebody reading this column. */}
+                <td>
+                  {r.members.length
+                    ? r.members.map(m => m.fullName).join(", ")
+                    : <span className="muted">No members</span>}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -302,42 +321,3 @@ function Teams() {
   );
 }
 
-/** The `permission_level` enum, in ladder order. Read left to right: each rung has
- *  everything the one before it has. Maps onto Microsoft Teams permission levels when
- *  that sync lands. */
-const PERMISSIONS = ["viewer", "user", "manager", "admin", "superadmin"];
-const OBJECTS = ["Project", "Job", "Checklist", "Comment", "Report"];
-
-function Permissions() {
-  return (
-    <section className="panel">
-      <div className="panel-head">
-        <Text type="text2" weight="bold">Permission grants</Text>
-        <Text type="text3" color="secondary">
-          A ladder, not a set — each rung has everything to its left. Read down a column
-          to see one permission level’s version of the app.
-        </Text>
-      </div>
-      <div className="data-table-wrap">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Object</th>
-              {PERMISSIONS.map(r => <th key={r}>{r}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {OBJECTS.map(o => (
-              <tr key={o}>
-                <td><strong>{o}</strong></td>
-                {PERMISSIONS.map(r => (
-                  <td key={r}><Token>permission_grants.action</Token></td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
