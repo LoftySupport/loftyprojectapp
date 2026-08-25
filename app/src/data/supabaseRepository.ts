@@ -11,6 +11,7 @@ import type {
   NewProject,
   Profile,
   Project,
+  ProjectPatch,
   PropertyDef,
   Stage,
   StageName,
@@ -94,7 +95,7 @@ const PROFILE_COLUMNS =
  * database had.
  */
 const PROJECT_COLUMNS =
-  "project_id, project_name, project_original_address_id, project_current_address_id, project_type, project_status, project_proposed_dwellings, project_owning_team, project_assignee_id, project_start_date, project_target_completion, project_end_date, project_stage, project_stage_entered_at, project_sharepoint_url, project_created_at, project_created_by, project_updated_at, project_updated_by, addresses!projects_project_current_address_id_fkey(address_consolidated)";
+  "project_id, project_name, project_original_address_id, project_current_address_id, project_type, project_status, project_proposed_dwellings, project_owning_team, project_assignee_id, project_start_date, project_target_completion, project_end_date, project_stage, project_stage_entered_at, project_sharepoint_url, project_created_at, project_created_by, project_updated_at, project_updated_by, addresses!projects_project_current_address_id_fkey(address_consolidated, address_suburb, address_council), original:addresses!projects_project_original_address_id_fkey(address_consolidated)";
 
 // Read from `job_display`, not from `jobs`. The view resolves both of the job's
 // addresses and its project's, which the base table only carries as uuids — so a card
@@ -295,6 +296,17 @@ export function createSupabaseRepository(): Repository {
   if (!client) return stub;
 
   const lifecycleStages = () => loadLifecycleStages(client);
+
+  /** One project, re-read with its embeds — the read-back both project mutators share. */
+  async function readProject(id: number): Promise<Project> {
+    const { data, error } = await client
+      .from("projects")
+      .select(PROJECT_COLUMNS)
+      .eq("project_id", id)
+      .single();
+    if (error) throw error;
+    return toProject(data as unknown as ProjectRow);
+  }
 
   // Bound rather than returned inline: listTemplatePhases reads the same team list
   // listTeams returns, and calling it through the object keeps one definition of what a
@@ -884,6 +896,42 @@ export function createSupabaseRepository(): Repository {
       return toJob(data as unknown as JobRow);
     },
 
+    /** Same shape as moveJobStage: the write to the table, the read-back with embeds. */
+    async moveProjectStage(id: number, stage: StageName): Promise<Project> {
+      const { data: updated, error } = await client
+        .from("projects")
+        .update({ project_stage: stage })
+        .eq("project_id", id)
+        .select("project_id");
+      if (error) throw error;
+      if (!updated?.length) {
+        throw new Error(`Project ${id} was not moved — it no longer exists, or you do not have permission.`);
+      }
+      return await readProject(id);
+    },
+
+    async updateProject(id: number, patch: ProjectPatch): Promise<Project> {
+      // Only the keys the caller sent. `undefined` means "not this edit", null means
+      // "clear it" — a distinction Object.entries keeps and a spread would flatten.
+      const row: Record<string, string | null> = {};
+      if ("startDate" in patch) row.project_start_date = patch.startDate ?? null;
+      if ("targetCompletion" in patch) row.project_target_completion = patch.targetCompletion ?? null;
+      if ("endDate" in patch) row.project_end_date = patch.endDate ?? null;
+      if ("sharepointUrl" in patch) row.project_sharepoint_url = emptyToNull(patch.sharepointUrl);
+      if (Object.keys(row).length === 0) return await readProject(id);
+
+      const { data: updated, error } = await client
+        .from("projects")
+        .update(row)
+        .eq("project_id", id)
+        .select("project_id");
+      if (error) throw error;
+      if (!updated?.length) {
+        throw new Error(`Project ${id} was not updated — it no longer exists, or you do not have permission.`);
+      }
+      return await readProject(id);
+    },
+
     async deleteProject(id: number): Promise<void> {
       const { data, error } = await client
         .from("projects").delete().eq("project_id", id).select("project_id");
@@ -1022,9 +1070,11 @@ type ProjectRow = {
   project_sharepoint_url: string | null;
   project_created_at: string; project_created_by: string | null;
   project_updated_at: string; project_updated_by: string | null;
-  // The embed above. PostgREST returns an object for a to-one relationship, and null
-  // when the row it points at is not readable.
-  addresses: { address_consolidated: string | null } | null;
+  // The embeds above. PostgREST returns an object for a to-one relationship, and null
+  // when the row it points at is not readable. `original` is the aliased second embed —
+  // two FKs to addresses is the PGRST201 shape, so both name their constraint.
+  addresses: { address_consolidated: string | null; address_suburb: string | null; address_council: string | null } | null;
+  original: { address_consolidated: string | null } | null;
 };
 
 function toProject(r: ProjectRow): Project {
@@ -1036,6 +1086,9 @@ function toProject(r: ProjectRow): Project {
     currentAddressId: r.project_current_address_id,
     // The address as text, resolved by the embed rather than by a second request.
     currentAddress: r.addresses?.address_consolidated ?? null,
+    suburb: r.addresses?.address_suburb ?? null,
+    council: r.addresses?.address_council ?? null,
+    originalAddress: r.original?.address_consolidated ?? null,
     projectType: r.project_type,
     status: r.project_status,
     stage: r.project_stage,
@@ -1102,3 +1155,4 @@ function toJob(r: JobRow): Job {
     projectType: r.project_type
   };
 }
+

@@ -220,6 +220,11 @@ export interface Project {
    * {{project_display.current_address}} over an address the database was holding.
    */
   currentAddress: string | null;
+  /** The original address as text — null until the project has been renamed away from it. */
+  originalAddress: string | null;
+  /** The current address's suburb and council, read through the same embed. */
+  suburb: string | null;
+  council: string | null;
   /** Who is primarily accountable. A `teams.team_id` slug. */
   owningTeam: TeamId | null;
   assigneeId: Uuid | null;
@@ -252,6 +257,18 @@ export interface Project {
   createdBy: Uuid | null;
   updatedAt: IsoDateTime;
   updatedBy: Uuid | null;
+}
+
+/**
+ * What the record page may change on a project. Dates arrive as 'YYYY-MM-DD' or null
+ * (clearing a date is a legitimate edit); the SharePoint URL must be https or null —
+ * the database CHECK is the authority and its refusal is shown verbatim.
+ */
+export interface ProjectPatch {
+  startDate?: IsoDate | null;
+  targetCompletion?: IsoDate | null;
+  endDate?: IsoDate | null;
+  sharepointUrl?: string | null;
 }
 
 /** The joined shape the cards read — `project_display`. */

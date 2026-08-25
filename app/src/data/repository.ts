@@ -7,6 +7,7 @@ import type {
   NewProject,
   Profile,
   Project,
+  ProjectPatch,
   PropertyDef,
   Stage,
   StageName,
@@ -109,6 +110,20 @@ export interface Repository {
   moveJobStage(id: string, stage: StageName): Promise<Job>;
 
   /**
+   * The project's own lifecycle move — same two rules as a job's, enforced in the same
+   * place: manager and above, forwards only. The trigger from 0041 also calls this
+   * column its own; a manual move and an inherited one land identically.
+   */
+  moveProjectStage(id: number, stage: StageName): Promise<Project>;
+
+  /**
+   * The editable facts on a project's record page: the three dates and the SharePoint
+   * folder. `user` and above by policy. Only the keys present are written, so a blank
+   * date field arriving as undefined cannot null a date somebody set.
+   */
+  updateProject(id: number, patch: ProjectPatch): Promise<Project>;
+
+  /**
    * Remove a project and every job under it — `jobs.project_id` cascades. Admin-only by
    * policy, and the same address caveat applies.
    */
@@ -144,6 +159,8 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "deleteJob",
   "deleteProject",
   "moveJobStage",
+  "moveProjectStage",
+  "updateProject",
   "listStages",
   "listTeams",
   "listTemplatePhases",
@@ -170,6 +187,8 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   deleteJob: "jobs",
   deleteProject: "projects",
   moveJobStage: "jobs",
+  moveProjectStage: "projects",
+  updateProject: "projects",
   // Both became tables — `teams` in 0026, `pipeline_stages` in 0029. The labels
   // said "enum" long after that stopped being true, on the one screen whose entire
   // job is to say what is backed by what.

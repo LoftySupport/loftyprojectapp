@@ -6,7 +6,8 @@ import type { BoardJob } from "../data/boardModel";
 import { StatusPill } from "./RecordCards";
 import { PropertySlots } from "./PropertySlots";
 import { ExpandButton, usePanelExpand } from "./PanelExpand";
-import { MoveStageControl } from "./MoveStageDialog";
+import { JOB_MOVE_NOTE, MoveStageControl } from "./MoveStageDialog";
+import { useRepository } from "../data/DataProvider";
 import { Token } from "./Token";
 import "./ui.css";
 
@@ -25,6 +26,7 @@ export function JobDrawer({ job, onClose, onMoved }: {
 }) {
   const panel = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const repo = useRepository();
   // The drawer had no way to widen — the same record, the same shape of panel, and the
   // control only on the create side. `open` is always true here: this component is
   // mounted only while the drawer is showing.
@@ -144,7 +146,13 @@ export function JobDrawer({ job, onClose, onMoved }: {
               <div className="field-label">
                 <Text type="text2">Move</Text>
               </div>
-              <MoveStageControl jobNumber={job.jobNumber} stage={job.stage} onMoved={onMoved} />
+              <MoveStageControl
+                subject={job.jobNumber}
+                stage={job.stage}
+                move={to => repo.moveJobStage(job.jobNumber, to)}
+                note={JOB_MOVE_NOTE}
+                onMoved={onMoved}
+              />
             </div>
             <div className="field-row">
               <div className="field-label">

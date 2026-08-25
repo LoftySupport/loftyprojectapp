@@ -1041,3 +1041,21 @@ code { overflow-wrap: anywhere; }
    grouping is by Stage and the person is manager or above; JobsPage decides that. */
 .board-card-draggable { cursor: grab; }
 .board-card-draggable:active { cursor: grabbing; }
+
+/* A field-row whose value side holds a value AND a control beside it — the stage with
+   its move picker, the folder link with its input. */
+.field-inline { display: flex; align-items: center; gap: var(--space-8); }
+
+/* The three project dates. A native date input, dressed to sit in a field-row the way
+   Vibe's small TextField does — and empty when no date is set, never a stand-in. */
+.date-input {
+  height: 32px;
+  padding: 0 var(--space-8);
+  border: 1px solid var(--ui-border-color);
+  border-radius: var(--border-radius-small);
+  background: var(--primary-background-color);
+  color: var(--primary-text-color);
+  font: inherit;
+  font-size: 14px;
+}
+.date-input:focus { outline: none; border-color: var(--primary-color); }

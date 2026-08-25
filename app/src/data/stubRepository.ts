@@ -136,6 +136,12 @@ export function createStubRepository(): Repository {
     async moveJobStage(): Promise<Job> {
       throw new Error("Moving a job between stages needs Supabase.");
     },
+    async moveProjectStage(): Promise<Project> {
+      throw new Error("Moving a project between stages needs Supabase.");
+    },
+    async updateProject(): Promise<Project> {
+      throw new Error("Editing a project needs Supabase.");
+    },
     async deleteProject(): Promise<void> {
       throw new Error("Removing a project needs Supabase.");
     },

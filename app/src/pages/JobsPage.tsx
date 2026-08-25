@@ -12,7 +12,8 @@ import { LoadProblem, NoResults, NothingYet, PreviousAddressNote } from "../comp
 import { SavedViewTabs } from "../components/SavedViewTabs";
 import { JobCard, StatusPill } from "../components/RecordCards";
 import { JobDrawer } from "../components/JobDrawer";
-import { MoveStageDialog, isForwardMove } from "../components/MoveStageDialog";
+import { JOB_MOVE_NOTE, MoveStageDialog, isForwardMove } from "../components/MoveStageDialog";
+import { useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import type { StageName } from "../data/types";
 import { Token } from "../components/Token";
@@ -44,6 +45,7 @@ export function JobsPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const { jobs: all, loading, error } = useBoardRecords(reloadKey);
   const { can } = usePermission();
+  const repo = useRepository();
 
 
   const {
@@ -403,9 +405,11 @@ export function JobsPage() {
       {pendingMove && (
         <MoveStageDialog
           show
-          jobNumber={pendingMove.job.jobNumber}
+          subject={pendingMove.job.jobNumber}
           fromStage={pendingMove.job.stage}
           toStage={pendingMove.to}
+          move={to => repo.moveJobStage(pendingMove.job.jobNumber, to)}
+          note={JOB_MOVE_NOTE}
           onClose={() => setPendingMove(null)}
           onMoved={() => setReloadKey(k => k + 1)}
         />

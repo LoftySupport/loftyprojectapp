@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Modal, ModalContent, ModalFooter, ModalHeader, Text } from "@vibe/core";
 import { STAGE_NAMES, type StageName } from "../data/types";
-import { useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { Problem } from "./Form";
 import { Select } from "./Select";
@@ -38,17 +37,21 @@ export const stagesAhead = (from: string): StageName[] =>
  * the database's sentence names the actual rule.
  */
 export function MoveStageDialog({
-  show, jobNumber, fromStage, toStage, onClose, onMoved
+  show, subject, fromStage, toStage, move, note, onClose, onMoved
 }: {
   show: boolean;
-  jobNumber: string;
+  /** What is being moved, as the title says it — "1042-01", or "Project 1042". */
+  subject: string;
   fromStage: string;
   toStage: StageName | null;
+  /** The write itself. A job and a project confirm identically; only this differs. */
+  move: (to: StageName) => Promise<unknown>;
+  /** The consequence worth stating — what else moves, or does not, with this one. */
+  note: string;
   onClose: () => void;
   /** Called after the database accepted the move, so the caller can re-read the board. */
   onMoved: () => void;
 }) {
-  const repo = useRepository();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,7 +66,7 @@ export function MoveStageDialog({
     setSaving(true);
     setError(null);
     try {
-      await repo.moveJobStage(jobNumber, toStage);
+      await move(toStage);
       onMoved();
       onClose();
     } catch (e) {
@@ -75,7 +78,7 @@ export function MoveStageDialog({
 
   return (
     <Modal show={show} onClose={onClose} id="move-job-stage">
-      <ModalHeader title={`Move ${jobNumber} to ${toStage ?? ""}`} />
+      <ModalHeader title={`Move ${subject} to ${toStage ?? ""}`} />
       <ModalContent>
         <Text type="text2" element="p" ellipsis={false}>
           From <strong>{fromStage}</strong> to <strong>{toStage}</strong>.
@@ -88,8 +91,7 @@ export function MoveStageDialog({
         )}
         <Text type="text3" color="secondary" ellipsis={false}>
           The lifecycle only moves forwards, so this cannot be undone by moving it back.
-          If every job on the project has now passed this phase, the project moves up
-          with it.
+          {" "}{note}
         </Text>
         {error && <Problem>{error}</Problem>}
       </ModalContent>
@@ -117,10 +119,12 @@ export function MoveStageDialog({
  * the picker back to empty.
  */
 export function MoveStageControl({
-  jobNumber, stage, onMoved
+  subject, stage, move, note, onMoved
 }: {
-  jobNumber: string;
+  subject: string;
   stage: string;
+  move: (to: StageName) => Promise<unknown>;
+  note: string;
   onMoved: () => void;
 }) {
   const { can } = usePermission();
@@ -140,7 +144,7 @@ export function MoveStageControl({
   return (
     <>
       <Select
-        aria-label={`Move ${jobNumber} to a later phase`}
+        aria-label={`Move ${subject} to a later phase`}
         placeholder="Move to…"
         options={ahead.map(s => ({ value: s, label: s }))}
         value={null}
@@ -148,15 +152,25 @@ export function MoveStageControl({
       />
       <MoveStageDialog
         show={target != null}
-        jobNumber={jobNumber}
+        subject={subject}
         fromStage={stage}
         toStage={target}
+        move={move}
+        note={note}
         onClose={() => setTarget(null)}
         onMoved={onMoved}
       />
     </>
   );
 }
+
+/** The sentence a job's confirmation adds — the project can move with it. */
+export const JOB_MOVE_NOTE =
+  "If every job on the project has now passed this phase, the project moves up with it.";
+
+/** And a project's — its jobs do not follow it. */
+export const PROJECT_MOVE_NOTE =
+  "Its jobs stay where they are — each one moves on its own.";
 
 /**
  * Kept exported for the board: dropping a card on an earlier column is refused before

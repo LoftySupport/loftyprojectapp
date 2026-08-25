@@ -92,7 +92,16 @@ export interface BoardProject {
    * would quietly overrule them.
    */
   status: RecordStatus;
-  originalAddress?: string | null;
+  originalAddress: string | null;
+  /** The current address's suburb and council, from the same embed as the address. */
+  suburb: string | null;
+  council: string | null;
+  /** The project's own lifecycle phase — 0039. Its jobs may be elsewhere. */
+  stage: string;
+  stageEnteredAt: string;
+  startDate: string | null;
+  endDate: string | null;
+  sharepointUrl: string | null;
 }
 
 const DAY = 86_400_000;
@@ -170,6 +179,14 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
       // created and not yet split had no address at all, which is precisely the case
       // the field exists for.
       currentAddress: p.currentAddress,
+      originalAddress: p.originalAddress,
+      suburb: p.suburb,
+      council: p.council,
+      stage: p.stage,
+      stageEnteredAt: p.stageEnteredAt,
+      startDate: p.startDate,
+      endDate: p.endDate,
+      sharepointUrl: p.sharepointUrl,
       status: p.status
     }));
 
