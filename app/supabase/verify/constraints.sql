@@ -302,4 +302,37 @@ BEGIN
     -- The trigger raises a bare exception, so this catches by class rather than by code.
     WHEN raise_exception THEN RAISE NOTICE 'ok  a job cannot sit at a locality — it needs a street';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on the job address guard (%)', SQLERRM; END;
+
+  -- 0043: a property definition's three vocabularies are all CHECKed.
+  BEGIN
+    INSERT INTO property_defs (property_def_key, property_def_label, property_def_scope,
+                               property_def_stage, property_def_owning_team, property_def_format)
+    VALUES ('Bad Key', 'X', 'project', 'Construction', 'design', 'text');
+    RAISE WARNING 'FAIL: a property key with spaces and capitals was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  property_defs_key_is_a_slug rejected "Bad Key"';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  property_defs_key_is_a_slug)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO property_defs (property_def_key, property_def_label, property_def_scope,
+                               property_def_stage, property_def_owning_team, property_def_format)
+    VALUES ('fencing_type', 'Fencing type', 'site', 'Construction', 'design', 'text');
+    RAISE WARNING 'FAIL: a property at scope "site" was accepted — project and job are the only levels';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  property_defs_scope_is_project_or_job rejected "site"';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  property_defs_scope)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO property_defs (property_def_key, property_def_label, property_def_scope,
+                               property_def_stage, property_def_owning_team, property_def_format)
+    VALUES ('fencing_type', 'Fencing type', 'project', 'Framing', 'design', 'text');
+    RAISE WARNING 'FAIL: a property capturing at stage "Framing" was accepted — not a lifecycle stage';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  property_defs_stage_is_a_lifecycle_stage rejected "Framing"';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  property_defs_stage)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO property_defs (property_def_key, property_def_label, property_def_scope,
+                               property_def_stage, property_def_owning_team, property_def_format)
+    VALUES ('fencing_type', 'Fencing type', 'project', 'Construction', 'design', 'paragraph');
+    RAISE WARNING 'FAIL: a property with format "paragraph" was accepted — not a known format';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  property_defs_format_is_known rejected "paragraph"';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  property_defs_format)', SQLERRM; END;
 END $$;

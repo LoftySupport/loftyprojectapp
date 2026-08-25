@@ -10,6 +10,7 @@ import type {
   JobSplit,
   NewAddress,
   NewProfile,
+  NewPropertyDef,
   NewJob,
   NewProject,
   Profile,
@@ -44,10 +45,10 @@ import type {
 
 // Add a method name here as you implement it. The Wiring page reads this.
 //
-// listTemplateCheckpoints and listPropertyDefs are the only two left, and neither is
-// waiting on wiring: `pipeline_stage_tasks` and `property_defs` do not exist. They return
-// empty rather than a seed, so the Wiring page shows them as the two things genuinely not
-// built rather than as two more methods somebody forgot.
+// listTemplateCheckpoints is the only one left, and it is not waiting on wiring:
+// `pipeline_stage_tasks` does not exist. It returns empty rather than a seed, so the
+// Wiring page shows it as the one thing genuinely not built rather than as a method
+// somebody forgot. property_defs came off this list with 0043.
 const WIRED: RepositoryMethod[] = [
   "listProjects", "getProject", "listJobs", "getJob",
   "createProject", "createJob", "createJobsFromSplit", "deleteJob", "deleteProject",
@@ -56,7 +57,8 @@ const WIRED: RepositoryMethod[] = [
   "createProfile", "updateProfile", "setProfileActive", "listActivity",
   "listComments", "addComment", "updateProject", "moveProjectStage",
   "setProjectCurrentAddress", "listAddressHistory",
-  "listStages", "listTeams", "listTemplatePhases"
+  "listStages", "listTeams", "listTemplatePhases",
+  "listPropertyDefs", "createPropertyDef", "updatePropertyDef", "deletePropertyDef"
 ];
 
 /**
@@ -1190,20 +1192,114 @@ export function createSupabaseRepository(): Repository {
     },
 
     /**
-     * Empty until `property_defs` exists.
+     * `property_defs` since 0043. It starts empty — the eleven invented definitions
+     * this used to return are the reason it does: five named a stage that does not
+     * exist, and nobody could tell a missing field from one never defined. What comes
+     * back now is only ever what somebody at Lofty typed in.
      *
-     * Same reasoning as the checkpoints. The eleven this used to return were plausible —
-     * site address, pour date, contract value — which is exactly what made them dangerous:
-     * five of them named a stage that does not exist and simply did not render, and nobody
-     * could tell the difference between a field that was missing and a field that was
-     * never defined.
+     * The team's display name rides the read as an embed, so the table never shows a
+     * slug where Setup › Teams shows a name.
      */
     async listPropertyDefs(): Promise<PropertyDef[]> {
-      return [];
+      const { data, error } = await client
+        .from("property_defs")
+        .select(PROPERTY_DEF_COLUMNS)
+        .order("property_def_stage")
+        .order("property_def_position")
+        .order("property_def_label");
+      if (error) throw error;
+      return (data as unknown as PropertyDefRow[]).map(toPropertyDef);
+    },
+
+    async createPropertyDef(input: NewPropertyDef): Promise<PropertyDef> {
+      const { data, error } = await client
+        .from("property_defs")
+        .insert({
+          property_def_key: input.key,
+          property_def_label: input.label,
+          property_def_scope: input.scope,
+          property_def_stage: input.stageName,
+          property_def_owning_team: input.teamId,
+          property_def_format: input.format,
+          property_def_required: input.required ?? false,
+          property_def_automation: emptyToNull(input.automation),
+          property_def_position: input.position ?? 0
+        })
+        .select(PROPERTY_DEF_COLUMNS)
+        .single();
+      if (error) throw error;
+      return toPropertyDef(data as unknown as PropertyDefRow);
+    },
+
+    async updatePropertyDef(key: string, patch: Partial<Omit<NewPropertyDef, "key">>): Promise<PropertyDef> {
+      const row: Record<string, unknown> = {};
+      if ("label" in patch) row.property_def_label = patch.label;
+      if ("scope" in patch) row.property_def_scope = patch.scope;
+      if ("stageName" in patch) row.property_def_stage = patch.stageName;
+      if ("teamId" in patch) row.property_def_owning_team = patch.teamId;
+      if ("format" in patch) row.property_def_format = patch.format;
+      if ("required" in patch) row.property_def_required = patch.required;
+      if ("automation" in patch) row.property_def_automation = emptyToNull(patch.automation);
+      if ("position" in patch) row.property_def_position = patch.position;
+
+      const { data, error } = await client
+        .from("property_defs")
+        .update(row)
+        .eq("property_def_key", key)
+        .select(PROPERTY_DEF_COLUMNS)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) {
+        throw new Error(`Property ${key} was not updated — it no longer exists, or you do not have permission.`);
+      }
+      return toPropertyDef(data as unknown as PropertyDefRow);
+    },
+
+    async deletePropertyDef(key: string): Promise<void> {
+      const { data, error } = await client
+        .from("property_defs")
+        .delete()
+        .eq("property_def_key", key)
+        .select("property_def_key");
+      if (error) throw error;
+      if (!data?.length) {
+        throw new Error(`Property ${key} was not removed — it no longer exists, or you do not have permission.`);
+      }
     }
   };
 
   return repo;
+}
+
+const PROPERTY_DEF_COLUMNS =
+  "property_def_key, property_def_label, property_def_scope, property_def_stage, property_def_owning_team, property_def_format, property_def_required, property_def_automation, property_def_position, teams!property_defs_property_def_owning_team_fkey(team_name)";
+
+type PropertyDefRow = {
+  property_def_key: string;
+  property_def_label: string;
+  property_def_scope: PropertyDef["scope"];
+  property_def_stage: string;
+  property_def_owning_team: TeamId;
+  property_def_format: PropertyDef["format"];
+  property_def_required: boolean;
+  property_def_automation: string | null;
+  property_def_position: number;
+  teams: { team_name: string | null } | null;
+};
+
+function toPropertyDef(r: PropertyDefRow): PropertyDef {
+  return {
+    key: r.property_def_key,
+    label: r.property_def_label,
+    scope: r.property_def_scope,
+    stageName: r.property_def_stage,
+    teamId: r.property_def_owning_team,
+    teamName: r.teams?.team_name ?? r.property_def_owning_team,
+    format: r.property_def_format,
+    required: r.property_def_required,
+    automation: r.property_def_automation ?? undefined,
+    position: r.property_def_position
+  };
 }
 
 // ---------------------------------------------------------------- row mappers

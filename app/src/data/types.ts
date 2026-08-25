@@ -900,11 +900,15 @@ export interface TemplateCheckpoint {
 
 // -------------------------------------------------------------- properties
 
-export type PropertyScope = "project" | "job";
+export const PROPERTY_SCOPES = ["project", "job"] as const;
+export type PropertyScope = (typeof PROPERTY_SCOPES)[number];
 
-export type PropertyFormat =
-  | "text" | "number" | "currency" | "date" | "checkbox"
-  | "file" | "single select" | "multi select" | "person" | "link";
+/** Mirrors the CHECK in 0043 exactly — the picker offers only what the database takes. */
+export const PROPERTY_FORMATS = [
+  "text", "number", "currency", "date", "checkbox",
+  "file", "single select", "multi select", "person", "link"
+] as const;
+export type PropertyFormat = (typeof PROPERTY_FORMATS)[number];
 
 /**
  * `property_defs`. A property IS a field — the two words mean the same thing.
@@ -922,11 +926,31 @@ export interface PropertyDef {
   label: string;
   scope: PropertyScope;
   stageName: string;
+  /** The slug, for edits; `teamName` is the display name resolved on the read. */
+  teamId: TeamId;
   teamName: string;
   format: PropertyFormat;
   /** Required to *leave* its stage, not required to create the record. */
   required: boolean;
   automation?: string;
+  /** Order among its stage's slots — data, not alphabet. */
+  position: number;
+}
+
+/**
+ * Defining a field. The key is the identity and the database checks it is a slug;
+ * everything else can change later without the values losing their parent.
+ */
+export interface NewPropertyDef {
+  key: string;
+  label: string;
+  scope: PropertyScope;
+  stageName: string;
+  teamId: TeamId;
+  format: PropertyFormat;
+  required?: boolean;
+  automation?: string | null;
+  position?: number;
 }
 
 // ------------------------------------------------------------------ creating

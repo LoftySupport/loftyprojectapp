@@ -92,6 +92,17 @@ begin
     when others then raise warning 'FAIL: unexpected on pipelines (%)', sqlerrm;
   end;
 
+  -- 0043: defining what the company captures is process design, same bar as pipelines.
+  begin
+    insert into property_defs (property_def_key, property_def_label, property_def_scope,
+                               property_def_stage, property_def_owning_team, property_def_format)
+    values ('sneaky_field', 'Sneaky', 'project', 'Construction', 'design', 'text');
+    raise warning 'FAIL: a non-superadmin defined a property';
+  exception
+    when insufficient_privilege then raise notice 'ok  property_defs refused a write below superadmin';
+    when others then raise warning 'FAIL: unexpected on property_defs (%)', sqlerrm;
+  end;
+
   -- RLS on DELETE and UPDATE FILTERS ROWS; it does not raise. A policy that denies
   -- everything makes the statement affect zero rows and succeed quietly, so these two
   -- have to count rows rather than catch an exception. Testing them the other way

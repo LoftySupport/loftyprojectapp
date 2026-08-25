@@ -8,6 +8,7 @@ import type {
   NewJob,
   NewProject,
   NewAddress,
+  NewPropertyDef,
   Profile,
   Project,
   ProjectPatch,
@@ -165,6 +166,16 @@ export interface Repository {
   listTemplatePhases(): Promise<TemplatePhase[]>;
   listTemplateCheckpoints(): Promise<TemplateCheckpoint[]>;
   listPropertyDefs(): Promise<PropertyDef[]>;
+
+  /**
+   * Defining, changing and retiring fields — superadmin by policy, the same bar as
+   * pipelines, because deciding what the company captures is process design. The key
+   * is immutable from the UI; the database could cascade a rename, but offering it
+   * casually would detach what people call a field from what the import calls it.
+   */
+  createPropertyDef(input: NewPropertyDef): Promise<PropertyDef>;
+  updatePropertyDef(key: string, patch: Partial<Omit<NewPropertyDef, "key">>): Promise<PropertyDef>;
+  deletePropertyDef(key: string): Promise<void>;
 }
 
 export type RepositoryMethod = Exclude<keyof Repository, "name" | "wired">;
@@ -197,7 +208,10 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "listTeams",
   "listTemplatePhases",
   "listTemplateCheckpoints",
-  "listPropertyDefs"
+  "listPropertyDefs",
+  "createPropertyDef",
+  "updatePropertyDef",
+  "deletePropertyDef"
 ];
 
 /** Human labels for the wiring checklist on the Status page. */
@@ -232,5 +246,8 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   listTeams: "teams",
   listTemplatePhases: "pipeline_stages",
   listTemplateCheckpoints: "pipeline_stage_tasks (not built)",
-  listPropertyDefs: "property_defs (not built)"
+  listPropertyDefs: "property_defs",
+  createPropertyDef: "property_defs",
+  updatePropertyDef: "property_defs",
+  deletePropertyDef: "property_defs"
 };

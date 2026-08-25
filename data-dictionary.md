@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-210 properties across 37 tables.
+219 properties across 37 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 34 | Specified here, not yet in the migration |
-| Created | 160 | In the migration and the types |
+| Created | 169 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -303,6 +303,15 @@
 | `property_defs.required` | Required to exit stage | Whether the job can leave the stage without this filled in. Not the same as required to create the record. | `boolean` | — | Not null, default false. | OPEN QUESTION: some fields will mean 'required to create'. Those are different columns. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `property_defs.automation` | Automation | What setting this field triggers — notify, block stage exit, start an SLA clock, recalculate dates. | `text` | — | Nullable. | — | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `property_defs.archived_at` | Archived on | Retires a field without losing the history of what was captured in it. | `timestamptz` | — | Nullable. | — | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
+| `property_defs.property_def_key` | Property | What the company captures on a record beyond the schema — a property IS a field. Rows, not columns, so a team can add one without a migration. | `text` | — | Primary key. CHECK property_defs_key_is_a_slug: lowercase letters, digits and underscores, starting with a letter. | The future property_values table keys on it, ON UPDATE CASCADE — renaming a key carries its values with it. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `property_defs.property_def_label` | Label | What the field is called on screen — "Fencing type", "Pour date". | `text` | — | Not null. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `property_defs.property_def_scope` | Level | Where the value lives: on the project (one answer for the whole site) or on each job. Exclusive — a project property cannot be overridden per job. | `text` | — | Not null. CHECK in ('project','job'). | Drives which slot list a record page renders. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `property_defs.property_def_stage` | Captured at | Which lifecycle stage captures this field — a pour date is a property of a job that happens to be filled in during Construction. | `text` | — | Not null. CHECK against the five lifecycle stages, same words as projects and jobs. | Not an FK to pipeline_stages: the lifecycle is the shared vocabulary; a team's own pipeline is that team's business. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `property_defs.property_def_owning_team` | Captured by | Which team is answerable for filling it in. | `text` | — | Not null. | FK → teams(team_id) ON UPDATE CASCADE. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `property_defs.property_def_format` | Format | What shape the value takes — the ten formats the app renders. | `text` | — | Not null. CHECK in (text, number, currency, date, checkbox, file, single select, multi select, person, link). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `property_defs.property_def_required` | Required | Required to LEAVE the stage that captures it — not required to create the record. | `boolean` | — | Not null, default false. | A stage-exit check reads it once property values exist. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `property_defs.property_def_automation` | Automation | A note about how the value arrives on its own, when it does. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `property_defs.property_def_position` | Position | Where it sits among its stage's slots. Data, not alphabet: the person defining the fields decides what order a form asks its questions in. | `integer` | — | Not null, default 0. | Indexed with the stage. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `property_values`
 

@@ -187,6 +187,15 @@ export function createStubRepository(): Repository {
      * were never once rendered while they were being written.
      */
     async listTemplateCheckpoints(): Promise<TemplateCheckpoint[]> { return []; },
-    async listPropertyDefs(): Promise<PropertyDef[]> { return []; }
+    async listPropertyDefs(): Promise<PropertyDef[]> { return []; },
+    async createPropertyDef(): Promise<PropertyDef> {
+      throw new Error("Defining a property needs Supabase.");
+    },
+    async updatePropertyDef(): Promise<PropertyDef> {
+      throw new Error("Editing a property needs Supabase.");
+    },
+    async deletePropertyDef(): Promise<void> {
+      throw new Error("Removing a property needs Supabase.");
+    }
   };
 }

@@ -874,6 +874,17 @@ export const DICTIONARY: DictionaryEntry[] = [
   e("activity.author_id", "Author", "Who wrote it. Null for system events.", "uuid", "Nullable.", "FK → profiles(id).", "to_do", PROPOSED),
   e("activity.mentions", "Mentions", "Who was @mentioned, for the notification fan-out.", "jsonb", "uuid[], default '{}'.", "Each entry references profiles(id).", "to_do", PROPOSED),
 
+  // ------------------------------------------------------- property_defs (built)
+  e("property_defs.property_def_key", "Property", "What the company captures on a record beyond the schema — a property IS a field. Rows, not columns, so a team can add one without a migration.", "text", "Primary key. CHECK property_defs_key_is_a_slug: lowercase letters, digits and underscores, starting with a letter.", "The future property_values table keys on it, ON UPDATE CASCADE — renaming a key carries its values with it.", "created"),
+  e("property_defs.property_def_label", "Label", "What the field is called on screen — \"Fencing type\", \"Pour date\".", "text", "Not null.", "—", "created"),
+  e("property_defs.property_def_scope", "Level", "Where the value lives: on the project (one answer for the whole site) or on each job. Exclusive — a project property cannot be overridden per job.", "text", "Not null. CHECK in ('project','job').", "Drives which slot list a record page renders.", "created"),
+  e("property_defs.property_def_stage", "Captured at", "Which lifecycle stage captures this field — a pour date is a property of a job that happens to be filled in during Construction.", "text", "Not null. CHECK against the five lifecycle stages, same words as projects and jobs.", "Not an FK to pipeline_stages: the lifecycle is the shared vocabulary; a team's own pipeline is that team's business.", "created"),
+  e("property_defs.property_def_owning_team", "Captured by", "Which team is answerable for filling it in.", "text", "Not null.", "FK → teams(team_id) ON UPDATE CASCADE.", "created"),
+  e("property_defs.property_def_format", "Format", "What shape the value takes — the ten formats the app renders.", "text", "Not null. CHECK in (text, number, currency, date, checkbox, file, single select, multi select, person, link).", "—", "created"),
+  e("property_defs.property_def_required", "Required", "Required to LEAVE the stage that captures it — not required to create the record.", "boolean", "Not null, default false.", "A stage-exit check reads it once property values exist.", "created"),
+  e("property_defs.property_def_automation", "Automation", "A note about how the value arrives on its own, when it does.", "text", "Nullable.", "—", "created"),
+  e("property_defs.property_def_position", "Position", "Where it sits among its stage's slots. Data, not alphabet: the person defining the fields decides what order a form asks its questions in.", "integer", "Not null, default 0.", "Indexed with the stage.", "created"),
+
   // ------------------------------------------------------- templates and perms
   e("template_phases.expected_days", "Expected days", "How long a phase should take. What the Gantt measures actual time in stage against.", "integer", "Nullable.", "Keyed by template plus the stage enum; the owning team is a team enum value. Neither is an FK.", "to_do", PROPOSED),
   e("template_checkpoints.label", "Checkpoint", "One thing a phase expects done before handover. Instantiated per job as job_checkpoints.", "text", "Not null.", "Copied to job_checkpoints.label when a job is created from a template.", "to_do", PROPOSED),
