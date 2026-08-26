@@ -374,6 +374,12 @@ App today: absent. Mutation call sites: app/src/components/CreateDialogs.tsx (cr
 
 #### G3 · Styled tooltips — **A**
 
+**Update (rev 3, later): unparked and built.** `@vibe/tooltip` ships full types even
+though core's bundle doesn't re-export them — pinned as a direct dependency at the exact
+version core already carries. Swept over the icon-only controls: collapsed rail items and
+the rail toggle (position right), the bell, the Ask FAB, the expand button — each showing
+on focus as well as hover, which the native titles never did.
+
 **Update (rev 3, 26 Aug): deferred with a reason.** This Vibe build does not export
 `Tooltip` through the core type bundle, so the sweep would mean untyped imports or a new
 dependency. Native `title`/`aria-label` coverage stands; revisit on the next Vibe
@@ -1655,6 +1661,12 @@ App today: app/src/pages/ReportsPage.tsx (all three tabs' tables)
 ---
 
 #### G39 · Working preferences — **A**
+
+**Update (rev 3, later): Q9's second layer is built.** Session-persistent view state —
+change board→table or set a filter, go elsewhere, come back: the choice holds. The URL
+stays the source of truth (a link naming its own state always wins; only a bare arrival
+is refilled), per board, sessionStorage so a new day starts clean. Remaining from Q9:
+profile-roaming defaults and user-saved views — both schema work for their own PRs.
 
 **Update (rev 3, 26 Aug): the A-half is built.** Landing page and default jobs view are
 real (`data/preferences.ts`, localStorage — the theme's precedent), applied at the index

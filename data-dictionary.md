@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-221 properties across 38 tables.
+248 properties across 42 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 172 | In the migration and the types |
+| Created | 199 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -130,6 +130,17 @@ Merged into the sa_council enum in 0003. It held 68 rows nobody maintained, plus
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `council_regions.id` | Council (merged) | Merged into the sa_council enum on addresses. The table held 68 rows nobody maintained, plus the audit quartet and a touch trigger to look after them. A council is now a value on the address, not a row it points at. | `uuid` | — | Table dropped in 0003. | Superseded by addresses.council. The state filter it used to provide is the addresses_council_is_sa CHECK; the active flag has no equivalent, because Postgres cannot drop an enum value. | Merged | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
+## `dictionary_overrides`
+
+Lofty's words on top of the repo's dictionary — one row per entry somebody reworded on the Dictionary page (0044), null fields meaning the repo's wording stands. Sweeping an override back into dictionary.ts and deleting the row is the maintenance path.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `dictionary_overrides.dictionary_override_id` | Overridden entry | Which dictionary entry Lofty reworded — the same table.column id the repo's array keys on. One row per edited entry; deleting the row restores the repo's wording. | `text` | — | Primary key. CHECK: table.column shape. | Merged over DICTIONARY on read by the Dictionary page. Sweeping an override back into dictionary.ts and deleting the row is the maintenance path. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `dictionary_overrides.dictionary_override_friendly_name` | Friendly name override | Lofty's name for the property, when it differs from the repo's. Null means the repo's stands. | `text` | — | Nullable — but at least one of the three override fields must be set, or the row says nothing. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `dictionary_overrides.dictionary_override_definition` | Definition override | Lofty's wording of what the property means. | `text` | — | Nullable, same at-least-one rule. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `dictionary_overrides.dictionary_override_status` | Status override | An admin's re-statement of where the property stands. | `text` | — | Nullable. CHECK against the five dictionary statuses. | Manager+ per the 0044 policy; status editing gated at admin in the app. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
 ## `divisions`
 
 Removed — never a Lofty concept. The prototype invented it, derived it from the project type, and relabelled development work "Land"; projects.project_type already carries the real distinction. Kept so the next person can see it was dropped on purpose.
@@ -187,6 +198,30 @@ The read view behind the boards: jobs joined to their addresses and their projec
 | `job_display.job_is_current` | Is current | Whether the job is still live — not completed, cancelled or archived. Derived from status every time it is read, never stored. | `view` | — | Read-only. is_current(jobs.job_status). | Mirrors the isCurrent() helper in the app. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `job_display.job_id` | Job number | The job number, joined for the board and for search. | `view` | — | Read-only. The job number and the key are the same value. | jobs.job_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `job_display.job_current_address` | Job address (current) | The consolidated current address, joined for the board and for search. | `view` | — | Read-only. | jobs ⋈ addresses on job_current_address_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `job_pipeline_positions`
+
+Where a job is, per pipeline — one position in each process it runs through, because a single stage column can only hold one answer. Blocked is a STATE here, not a stage: a waiting job greys in place and names the team it waits on, instead of pretending it moved.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `job_pipeline_positions.job_id` | Job | Where a job is, per pipeline — one position in each process it runs through, which is the whole point: a single stage column can only hold one answer. | `text` | — | Part of the primary key with pipeline_id. | FK → jobs ON UPDATE CASCADE ON DELETE CASCADE. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `job_pipeline_positions.pipeline_stage_id` | At stage | The stage the job is parked at — guarded to belong to the same pipeline, or every board would disagree about where it is. | `uuid` | — | Not null. Composite FK (pipeline_id, pipeline_stage_id) → pipeline_stages. | The board query groups on it. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `job_pipeline_positions.job_pipeline_position_state` | State | active · waiting · done. Blocked is a STATE, not a stage: a job waiting on Estimating has not left the stage it is in — the card greys in place instead of lying about where it is. | `text` | — | Not null, default 'active'. CHECK on the three values, and waiting requires a team to be waiting on. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `job_pipeline_positions.job_pipeline_position_waiting_on` | Waiting on | Who it is waiting on, when it is waiting — a team, not free text, so 'what is Estimating holding up' is a query. | `text` | — | Nullable; required when the state is waiting. | FK → teams(team_id) ON UPDATE CASCADE. Partially indexed. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `job_pipeline_positions.job_pipeline_position_entered_at` | Entered on | When the job arrived at this stage of this pipeline. | `timestamptz` | — | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `job_stage_events`
+
+Every stage move, logged the moment it happens — because time in stage cannot be reconstructed later, and the schema has already lost that history once (job_stages, dropped in 0006). Written by trigger only; deliberately no FKs to stages, so the log survives a vocabulary change.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `job_stage_events.job_stage_event_id` | Stage event | One move, logged the moment it happens — because time in stage CANNOT be reconstructed later. job_stages was dropped in 0006 and that history is gone once; this stops it happening twice. | `bigint` | — | Primary key, GENERATED ALWAYS AS IDENTITY. | Written by trigger, never by the app. Durations are a window function over this log. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `job_stage_events.job_stage_event_from_stage_id` | From | Where the job was. Nullable — the first event has no previous stage — and deliberately not an FK: a log must survive a stage being retired. | `uuid` | — | Nullable. No FK. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `job_stage_events.job_stage_event_to_stage_id` | To | Where it moved to. Same no-FK reasoning: it records what WAS true. | `uuid` | — | Not null. No FK. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `job_stage_events.job_stage_event_at` | When | The moment of the move — the timestamp durations are measured between. | `timestamptz` | — | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `job_stage_events.job_stage_event_by` | By | Who moved it. Null for a trigger or an import. | `uuid` | — | Nullable. | FK → profiles(profile_id). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `job_stages`
 
@@ -259,12 +294,32 @@ The permission model as data — which rung of the ladder reaches how far: none,
 
 ## `pipeline_stages`
 
-A position within a pipeline — the build lifecycle's seven stages are its rows (0029, reseeded by 0035 and 0045), which is what lets the vocabulary change without an ALTER TYPE. Only its two SLA columns are dictionaried so far — expected days and the at-risk lead, the pair the Setup → Automations editor writes; the rest of the table is still in the uncovered list above.
+A position within a pipeline — the build lifecycle's seven stages are its rows (0029, reseeded by 0035 and 0045), which is what lets the vocabulary change without an ALTER TYPE. Covered from its identity through the SLA pair the Setup → Automations editor writes.
 
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `pipeline_stages.pipeline_stage_expected_days` | Expected days in stage | How long a record should sit in this stage — what "on time" means for it, and what overdue is measured past. Null means no SLA is set, which is a real state and not zero: an invented number was exactly what the old Gantt drew bars against. | `integer` | — | smallint. Nullable. CHECK (> 0). | Read by listTemplatePhases as TemplatePhase.expectedDays; edited per stage in Setup → Automations (superadmin, by the 0029 policy). The at-risk lead must be shorter than it. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `pipeline_stages.pipeline_stage_at_risk_lead_days` | At-risk lead | How many days before the expected-days deadline the record starts flagging at risk (Amber's Q1, 0047). Past the deadline itself is overdue — there is no third number. | `integer` | — | smallint. Nullable. CHECK pipeline_stages_at_risk_lead_is_positive (> 0) and pipeline_stages_at_risk_lead_fits_the_expectation — a lead needs an expectation to lead, and must be shorter than it, or it would flag the record at risk on arrival. Both proved biting in 0047. | Read by listTemplatePhases as TemplatePhase.atRiskLeadDays; edited beside the expectation in Setup → Automations. The health calculation (parked — see health_statuses) is its intended consumer. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `pipeline_stages.pipeline_stage_id` | Stage | A position within a pipeline. Rows, not an enum — which is what lets the vocabulary change (0035, 0045 both reseeded it) without an ALTER TYPE. | `uuid` | — | Primary key. Also unique with pipeline_id, the target of job_pipeline_positions' composite FK. | The build lifecycle's seven stages are its best-known rows. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `pipeline_stages.pipeline_id` | Pipeline | Which process the stage belongs to. | `uuid` | — | Not null. Unique with position. | FK → pipelines ON DELETE CASCADE. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `pipeline_stages.pipeline_stage_name` | Stage name | What the stage is called — the seven lifecycle names live here. | `text` | — | Not null. | Mirrored by the CHECKs on jobs.job_stage and projects.project_stage for the lifecycle pipeline. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `pipeline_stages.pipeline_stage_position` | Order | Where the stage sits — the board's column order. | `integer` | — | smallint. Not null. Unique with pipeline_id. | lifecycle_position() reads it for the lifecycle. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `pipeline_stages.pipeline_stage_type` | Kind | open, won, lost — or archived (0045): what lets a board tell 'left the process' from 'stalled in it'. | `text` | — | Not null, default 'open'. CHECK on the four values. | Completed is won, Closed is archived, Cancelled is lost. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `pipeline_stages.pipeline_stage_owning_team` | Owning team | Which team picks the job up at this stage. Null on every lifecycle stage by decision — ownership lives on nested pipelines' stages. | `text` | — | Nullable. | FK → teams(team_id) ON UPDATE CASCADE. Read by listTemplatePhases. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `pipeline_stages.pipeline_stage_is_external` | External wait | Council, the EER consultant, SA Water — flagged so a statutory 28 days is not a team's overdue. | `boolean` | — | Not null, default false. | Excluded from team SLA reporting when that lands. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `pipelines`
+
+A process, as rows — and processes nest: Pre-construction elaborates a lifecycle stage, a team's own pipeline elaborates one of Pre-construction's, to whatever depth the team needs. Keyed twice on purpose: the slug for machines, the name for renaming. Retiring one is a flag.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `pipelines.pipeline_id` | Pipeline | A process, as a row. Pipelines nest: Pre-construction elaborates a lifecycle stage, Working Drawings elaborates a pre-construction stage, to whatever depth a team needs. | `uuid` | — | Primary key, default gen_random_uuid(). | Referenced by pipeline_stages, job_pipeline_positions and job_stage_events. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `pipelines.pipeline_key` | Pipeline key | The stable machine name — 'build_lifecycle'. What seed data and the import reference; the name beside it is the renameable half. | `text` | — | Not null. Unique. CHECK: slug shape. | How the app finds the lifecycle without hardcoding a uuid. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `pipelines.pipeline_name` | Pipeline name | What the process is called on screen. | `text` | — | Not null. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `pipelines.pipeline_scope` | Scope | Whether the pipeline runs over projects or jobs. | `text` | — | Not null. CHECK in ('project','job'). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `pipelines.pipeline_parent_stage_id` | Elaborates | The stage of another pipeline this one details — the nesting, in one column. Null means a root pipeline. | `uuid` | — | Nullable. No cascade: deleting a stage another pipeline hangs off fails loudly. Partial unique — a stage is elaborated by at most one pipeline. A trigger refuses cycles. | FK → pipeline_stages(pipeline_stage_id). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `pipelines.pipeline_is_active` | Active | Retiring a process is a flag, the same posture as teams and tags. | `boolean` | — | Not null, default true. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `profile_teams`
 

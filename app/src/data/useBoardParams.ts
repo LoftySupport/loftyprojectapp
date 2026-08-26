@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 import { GROUPINGS, VIEWS, type Grouping, type ToolbarFilter, type View } from "../components/Toolbar";
 import { DEFAULT_SAVED_VIEW, savedViewBySlug, type SavedView } from "./savedViews";
@@ -60,6 +60,37 @@ export interface BoardParams {
 export function useBoardParams(defaults: { view: View; grouping: Grouping }): BoardParams {
   const [params, setParams] = useSearchParams();
   const location = useLocation();
+
+  /**
+   * Session-persistent view state (Amber's Q9, layer two): change board→table or set a
+   * filter, go somewhere else, come back — the choice holds. The URL stays the source
+   * of truth; this only refills it when you arrive bare. Keyed per board (the first
+   * path segment), sessionStorage so a new day starts clean, and a link that names its
+   * own state still wins because a non-empty query is never overwritten.
+   */
+  const boardKey = `lofty.view.${location.pathname.split("/")[1] || "home"}`;
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current) return;
+    restored.current = true;
+    if (location.search !== "") return;
+    try {
+      const last = sessionStorage.getItem(boardKey);
+      if (last) setParams(new URLSearchParams(last), { replace: true });
+    } catch {
+      // Storage refused — the bare board is the correct fallback.
+    }
+    // Once, on arrival. boardKey is stable for the life of this page component.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (!restored.current) return;
+    try {
+      sessionStorage.setItem(boardKey, params.toString());
+    } catch {
+      // Same fallback: this session just won't remember.
+    }
+  }, [boardKey, params]);
 
   /** An unknown value falls back to the default — a mistyped link should land somewhere. */
   const view = (VIEWS as readonly string[]).includes(params.get("view") ?? "")

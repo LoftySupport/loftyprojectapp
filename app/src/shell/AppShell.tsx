@@ -9,6 +9,7 @@ import {
 } from "@vibe/icons";
 import { initialsOf, useAuth } from "../data/AuthProvider";
 import { useSearch } from "../data/SearchProvider";
+import { Tooltip } from "@vibe/tooltip";
 import { AskDockProvider } from "../components/AskDock";
 import { NotificationsBell } from "../components/NotificationsBell";
 import { ToastsProvider } from "../components/Toasts";
@@ -150,29 +151,32 @@ function Rail({
           alt="Lofty"
           className={"app-logo" + (collapsed ? " app-logo-mark" : "")}
         />
-        <button
-          type="button"
-          className="app-side-toggle"
-          onClick={onToggleCollapsed}
-          aria-expanded={!collapsed}
-          aria-label={collapsed ? "Expand navigation" : "Collapse navigation to icons"}
-          title={collapsed ? "Expand navigation" : "Collapse navigation"}
-        >
-          {collapsed
-            ? <NavigationChevronRight aria-hidden size={16} />
-            : <NavigationChevronLeft aria-hidden size={16} />}
-        </button>
+        {/* G3 — the styled tooltip, from @vibe/tooltip (pinned to the version core
+            already carries; core's own bundle doesn't export the type). Shows on focus
+            as well as hover, which the native title never did. */}
+        <Tooltip content={collapsed ? "Expand navigation" : "Collapse navigation"} position="right">
+          <button
+            type="button"
+            className="app-side-toggle"
+            onClick={onToggleCollapsed}
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? "Expand navigation" : "Collapse navigation to icons"}
+          >
+            {collapsed
+              ? <NavigationChevronRight aria-hidden size={16} />
+              : <NavigationChevronLeft aria-hidden size={16} />}
+          </button>
+        </Tooltip>
       </div>
 
       <nav className="app-nav" aria-label="Main">
         {PAGES.map(p => {
           const Icon = p.icon;
-          return (
+          const link = (
             <NavLink
               key={p.to}
               to={p.to}
               end={p.end}
-              title={collapsed ? p.label : undefined}
               // On a phone the rail is a drawer over the page — leaving it open on top of
               // the destination you just chose is the thing everyone complains about.
               onClick={onCloseDrawer}
@@ -181,6 +185,15 @@ function Rail({
               <span className="app-nav-icon" aria-hidden><Icon size={20} /></span>
               <span className="app-nav-label">{p.label}</span>
             </NavLink>
+          );
+          // Collapsed, the icon is all a sighted person gets — the tooltip names it on
+          // hover AND focus, which the old native title never did for a keyboard.
+          return collapsed ? (
+            <Tooltip key={p.to} content={p.label} position="right">
+              {link}
+            </Tooltip>
+          ) : (
+            link
           );
         })}
       </nav>

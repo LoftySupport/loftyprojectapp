@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { Button, Text } from "@vibe/core";
 import { Robot } from "@vibe/icons";
+import { Tooltip } from "@vibe/tooltip";
 import "./ui.css";
 
 /**
@@ -87,6 +88,7 @@ export function AskDockProvider({ children }: { children: ReactNode }) {
         </aside>
       )}
 
+      <Tooltip content="Ask Lofty" position="left">
       <button
         type="button"
         className="ask-fab"
@@ -96,6 +98,7 @@ export function AskDockProvider({ children }: { children: ReactNode }) {
       >
         <Robot size={22} aria-hidden />
       </button>
+      </Tooltip>
     </Ctx.Provider>
   );
 }

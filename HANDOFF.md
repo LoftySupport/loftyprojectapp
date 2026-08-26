@@ -190,10 +190,27 @@ An eleventh batch:
 
 **Where the parity work now stands**: every one of the 48 comparison-doc gaps is
 shipped, shipped-as-shell with a self-naming placeholder, or explicitly
-parked with its reason recorded in the doc (G3 Vibe Tooltip untyped · G10 mirror
+parked with its reason recorded in the doc (G10 mirror
 scrollbar until boards are wide · G22 scheduling checklists until the real process ·
 G31 single-add until variations · G45 permissions matrix until permission_grants).
 The artifact carries a shipped/shell badge per gap and six open questions for Amber.
+
+A twelfth batch:
+- **Styled tooltips unparked** (G3): `@vibe/tooltip` ships full types — pinned as a
+  direct dependency at the exact version core already carries — and swept over the
+  icon-only controls (collapsed rail, rail toggle, bell, Ask FAB, expand button).
+  On focus as well as hover.
+- **Session-persistent view state** (Amber's Q9, layer two): board/view/filter choices
+  hold across page switches; a link naming its own state always wins; sessionStorage
+  so a new day starts clean.
+- **The dictionary covers every live table now** — the 0029 pipeline machinery
+  (pipelines, pipeline_stages completed, job_pipeline_positions, job_stage_events)
+  and dictionary_overrides joined with key-column entries and purpose descriptions:
+  248 properties, 42 tables. The uncovered-tables note is retired.
+
+Still open from Q9, each a schema change for its own PR after this one merges:
+**profile-roaming preferences** (a preferences home on the profile) and
+**user-saved views** (a saved_views table + RLS + the tabs grow a user section).
 
 Still open from this session: **four live tables still have no dictionary entries**
 — `pipelines`, `job_pipeline_positions`, `job_stage_events` (0029) and

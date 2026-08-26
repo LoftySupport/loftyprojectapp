@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@vibe/core";
 import { Fullscreen, FullscreenClose } from "@vibe/icons";
+import { Tooltip } from "@vibe/tooltip";
 import "./ui.css";
 
 /**
@@ -64,6 +65,7 @@ export function ExpandButton({
 }) {
   const label = expanded ? "Shrink to a panel" : "Expand to full screen";
   return (
+    <Tooltip content={label} position="bottom">
     <Button
       kind="tertiary"
       size="small"
@@ -76,5 +78,6 @@ export function ExpandButton({
           "open this section". */}
       {expanded ? <FullscreenClose size={16} aria-hidden /> : <Fullscreen size={16} aria-hidden />}
     </Button>
+    </Tooltip>
   );
 }

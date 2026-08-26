@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Dialog, DialogContentContainer, Text } from "@vibe/core";
 import { Notifications } from "@vibe/icons";
+import { Tooltip } from "@vibe/tooltip";
 import "./ui.css";
 
 /**
@@ -64,6 +65,7 @@ export function NotificationsBell() {
         showTrigger={[]}
         hideTrigger={[]}
       >
+        <Tooltip content="Notifications — coming soon" position="bottom">
         <button
           type="button"
           className="notif-bell-trigger"
@@ -77,6 +79,7 @@ export function NotificationsBell() {
               claim the system is watching when it is not yet. */}
           <Notifications size={20} aria-hidden />
         </button>
+        </Tooltip>
       </Dialog>
     </span>
   );
