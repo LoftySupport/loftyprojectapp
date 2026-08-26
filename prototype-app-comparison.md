@@ -806,7 +806,10 @@ App today: app/src/pages/JobsPage.tsx:291-317 (token table)
 properties · Activity &amp; comments · Departments), sticky while the drawer stays open;
 docked remains one scrolled column. All-properties and Activity carry real
 `PropertySlots`/`CommentsPanel` plus declared coming-soon notes; Departments renders the
-handoff shape as a labelled placeholder (G21 still parked for real history).
+handoff shape as a labelled placeholder (G21 still parked for real history). Later the
+same day: the **docked head stacks** — four controls beside a full street address had
+left the title reading "Lot 1, 28…", so docked, the actions now sit on their own line
+under the full address; expanded keeps the single row.
 
 ![Docked drawer](docs/comparison-screenshots/drawer-docked.png)
 ![Fullscreen — Main info](docs/comparison-screenshots/drawer-fullscreen-main.png)

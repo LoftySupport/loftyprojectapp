@@ -208,15 +208,19 @@ A twelfth batch:
   and dictionary_overrides joined with key-column entries and purpose descriptions:
   248 properties, 42 tables. The uncovered-tables note is retired.
 
+A thirteenth batch:
+- **The docked drawer head stacks** — four controls beside a full street address left
+  the title reading "Lot 1, 28…" in a 460px panel. Docked, the actions get their own
+  line under the title (`ui.css`, keyed off `.drawer:not(.is-expanded)`); expanded,
+  one row fits and stays. Verified both ways with a seeded screenshot.
+
 Still open from Q9, each a schema change for its own PR after this one merges:
 **profile-roaming preferences** (a preferences home on the profile) and
 **user-saved views** (a saved_views table + RLS + the tabs grow a user section).
 
-Still open from this session: **four live tables still have no dictionary entries**
-— `pipelines`, `job_pipeline_positions`, `job_stage_events` (0029) and
-`dictionary_overrides` (0044) — and `pipeline_stages` is only covered for its two
-SLA columns. Nothing yet *consumes* the SLA numbers: the at-risk/overdue flags on
-boards wait on the health calculation (see the parked `health_statuses`).
+Still open from this session: nothing yet *consumes* the SLA numbers — the
+at-risk/overdue flags on boards wait on the health calculation (see the parked
+`health_statuses`).
 
 **A session note for PR #37 (25 Aug — stage moves, comments, property_defs, project
 editing, address history) was never written**; `prototype-app-comparison.md` §1.5

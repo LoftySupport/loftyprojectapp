@@ -454,6 +454,12 @@
   padding: var(--space-16);
   border-bottom: 1px solid var(--layout-border-color);
 }
+/* Docked, the head stacks: four controls beside a full street address left the title
+   reading "Lot 1, 28…" in a 460px panel. The actions get their own line under the
+   title — every control keeps its size, the address keeps its words. Expanded, one
+   row fits and stays. */
+.drawer:not(.is-expanded) .drawer-head { flex-direction: column; align-items: stretch; }
+.drawer:not(.is-expanded) .drawer-actions { justify-content: flex-end; }
 /* `min-width: 0` on the title block, `flex-shrink: 0` on the close button. Without
    the pair the breadcrumb and address claim their intrinsic width and push the ×
    past the edge of the panel — and on a phone, where the drawer covers the whole
