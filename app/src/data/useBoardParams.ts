@@ -31,6 +31,7 @@ const KEY_BY_FIELD: Record<string, string> = {
   "Team": "team",
   "Team member": "member",
   "Status": "status",
+  "Date": "date",
   "Type": "type",
   "Tag": "tag"
 };

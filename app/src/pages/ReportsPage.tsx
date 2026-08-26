@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Heading, Tab, TabList, Text } from "@vibe/core";
+import { Button, Heading, Tab, TabList, Text } from "@vibe/core";
 import { RECORD_STATUS_LABELS } from "../data/types";
 import { useStages, useTeams } from "../data/useLookups";
 import { useBoardRecords } from "../data/boardModel";
@@ -175,9 +175,15 @@ export function ReportsPage() {
       )}
 
       {tab === 2 && !noMatches && !loading && all.length > 0 && (
-        <section className="panel" style={{ marginTop: "var(--space-16)" }}>
+        <section className="panel report-print-root" style={{ marginTop: "var(--space-16)" }}>
           <div className="panel-head">
             <Text type="text2" weight="bold">Every job, every status</Text>
+            {/* G37 — the browser's own print, with print CSS that drops the chrome.
+                What you filtered is what prints; the print-only line says so. */}
+            <Button size="small" kind="secondary" onClick={() => window.print()}>Print</Button>
+          </div>
+          <div className="print-only">
+            Lofty job report · {new Date().toLocaleDateString()} · {jobs.length} job{jobs.length === 1 ? "" : "s"} shown
           </div>
           <div className="data-table-wrap">
             <table className="data-table">

@@ -1121,6 +1121,10 @@ handed.
 
 #### G24 · "Open job file" (SharePoint link) — **C**
 
+**Update (rev 3, 26 Aug): built.** The drawer's Main info gained a Folders panel with
+both links — the job's own subfolder and its project's folder, per Lofty's rule — and an
+honest "no folder linked yet" when unset. `BoardJob` carries both URLs now.
+
 **Prototype.** A primary button on Main info opening the job's SharePoint file — mocked as
 a fake page clearly labelled as such (`openDummySharePoint`, `index.html:9905-9939`; the
 Microsoft-style styling was kept deliberately, it imitates an external system,
@@ -1553,6 +1557,10 @@ renders honestly where none are set. Cancelled records are excluded from overrun
 
 #### G37 · Printable job report — **A**
 
+**Update (rev 3, 26 Aug): built.** A Print button on the Job report tab plus print CSS:
+chrome, toolbar, tabs and the dock drop out; a print-only line states the date and how
+many jobs the filters left in; rows avoid page breaks.
+
 ![Job report](docs/comparison-screenshots/reports-job-report.png)
 
 **Prototype.** The Job report tab is built to print: a report header stating generated
@@ -1837,6 +1845,12 @@ App today: app/src/pages/AdminPage.tsx:311-343 (token grid)
 
 #### G46 · Date-range filter — **C**
 
+**Update (rev 3, 26 Aug): real, on the one date every job carries.** The Date select
+filters on when a job entered its current stage — "Moved stage in last 7/30 days / this
+month", labels saying the semantics out loud — riding the same filters array as the
+chips, so it lands in the URL (`?date=7d`) and the Showing count. Latest-activity and
+dated-property ranges can widen it later; the inert select is gone.
+
 ![Date range popover](docs/comparison-screenshots/daterange-popover.png)
 
 **Prototype.** A working date filter: trigger showing "Any date" / "Jul 1 – Jul 17" /
@@ -1907,6 +1921,10 @@ shows real names with an honest "Unassigned" column.
 ---
 
 #### G48 · Live-region announcements — **A**
+
+**Update (rev 3, 26 Aug): built** — the toolbar's "Showing N of M" is mirrored into a
+visually-hidden `role=status` region, so filtering is no longer silent to a screen
+reader.
 
 **Prototype.** A visually-hidden `role=status` live region announced "{N} of {M} jobs
 shown. {filter description}" on every render, debounced 120ms — filtering was previously

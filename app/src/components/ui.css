@@ -1394,3 +1394,35 @@ code { overflow-wrap: anywhere; }
   .gantt { --gantt-left: 160px; }
   .cal-cell { min-height: 64px; }
 }
+
+/* Screen-reader-only. The classic clip pattern; display:none would silence it. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---- print (G37) ----------------------------------------------------------
+   The browser's own print, with the chrome dropped: what you filtered is what
+   prints, and the print-only line says when and how many. */
+.print-only { display: none; }
+@media print {
+  .app-side, .app-header, .app-foot, .app-side-scrim, .ask-fab, .ask-dock,
+  .toolbar, .saved-views, .drag-hint, .bulk-bar, .app-alert,
+  [role="tablist"], .panel-head button { display: none !important; }
+  .app-main { padding: 0 !important; }
+  .panel { border: 0 !important; box-shadow: none !important; padding: 0 !important; }
+  .data-table-wrap { overflow: visible !important; }
+  tr { break-inside: avoid; }
+  .print-only {
+    display: block;
+    font: var(--font-text3-normal);
+    color: var(--secondary-text-color);
+    margin-bottom: var(--space-8);
+  }
+}

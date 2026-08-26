@@ -153,6 +153,17 @@ An eighth batch — **the Gantt and the calendar are real** (G13/G14):
   Entries are the two dates a job really has — stage entered, and SLA due where set.
 - `BoardJob` gained `stageEnteredAt` so both can place time.
 
+A ninth batch:
+- **The Date filter is real** (G46): "moved stage in last 7/30 days / this month",
+  matched on `job_stage_entered_at`, in the URL as `?date=7d`, riding the same filters
+  array as the chips. The inert select is gone.
+- **The drawer shows both folders** (G24): job subfolder + project folder, honest
+  "no folder linked yet" when unset; `BoardJob` carries both URLs.
+- **The job report prints** (G37): Print button + print CSS dropping the chrome, a
+  print-only date/count line, rows kept whole across pages.
+- **Filtering is audible** (G48): "Showing N of M" mirrored into a hidden
+  `role=status` live region.
+
 Still open from this session: **four live tables still have no dictionary entries**
 — `pipelines`, `job_pipeline_positions`, `job_stage_events` (0029) and
 `dictionary_overrides` (0044) — and `pipeline_stages` is only covered for its two

@@ -217,6 +217,36 @@ export function JobDrawer({ job, onClose, onMoved }: {
 
           <section className="panel">
             <div className="panel-head">
+              <Text type="text2" weight="bold">Folders</Text>
+              <Text type="text3" color="secondary">the job&apos;s subfolder, inside its project&apos;s</Text>
+            </div>
+            {/* Both links, per Lofty's rule — a job's page shows its own folder and its
+                project's, never its siblings'. An unlinked folder is a real state and
+                says so rather than hiding the row. */}
+            <div className="field-row">
+              <div className="field-label"><Text type="text2">Job folder</Text></div>
+              {job.sharepointUrl ? (
+                <a href={job.sharepointUrl} target="_blank" rel="noreferrer" className="link-button">
+                  Open job folder
+                </a>
+              ) : (
+                <Text type="text3" color="secondary">no folder linked yet</Text>
+              )}
+            </div>
+            <div className="field-row">
+              <div className="field-label"><Text type="text2">Project folder</Text></div>
+              {job.projectSharepointUrl ? (
+                <a href={job.projectSharepointUrl} target="_blank" rel="noreferrer" className="link-button">
+                  Open project folder
+                </a>
+              ) : (
+                <Text type="text3" color="secondary">no folder linked yet — set it on the project</Text>
+              )}
+            </div>
+          </section>
+
+          <section className="panel">
+            <div className="panel-head">
               <Text type="text2" weight="bold">Phase &amp; stage</Text>
             </div>
             <div className="field-row">
