@@ -634,7 +634,7 @@ export const DICTIONARY: DictionaryEntry[] = [
     "Where the project sits in the lifecycle everybody shares — four working phases, then Completed, Closed (the archive, hidden by default) and Cancelled. Its jobs may be at different phases; this is the project's own answer, following its slowest non-cancelled job upwards.",
     "text",
     "Not null, default 'Acquisition & Development'. CHECK projects_stage_is_a_lifecycle_stage on the seven names (0045). Indexed. Manager and above to change it; forwards only, except that Cancelled may be entered from any live stage and left backwards on revival.",
-    "Paired with project_stage_entered_at, which a trigger moves. project_stage_from_jobs() excludes cancelled jobs; lifecycle_archive() moves 12-months-Completed-or-Cancelled on to Closed. While cancelled, nothing fires for it.",
+    "Paired with project_stage_entered_at, which a trigger moves. Two triggers keep the pair honest both ways: the slowest live job pulls the project up (0041), and moving the project pushes its lagging jobs up with it (0046) — cancelled and archived jobs sit out of both. lifecycle_archive() moves 12-months-Completed-or-Cancelled on to Closed. While cancelled, nothing fires for it.",
     "created"),
   e("projects.project_stage_entered_at", "Entered this phase",
     "When the project moved into the phase it is in. Days-in-phase is worked out from it on every read rather than stored, so it cannot go stale.",

@@ -263,6 +263,7 @@ export function MoveStageControl({
 export const JOB_MOVE_NOTE =
   "If every job on the project has now passed this phase, the project moves up with it.";
 
-/** And a project's — its jobs do not follow it. */
+/** And a project's — its lagging jobs come with it (0046, Amber's rule). */
 export const PROJECT_MOVE_NOTE =
-  "Its jobs stay where they are — each one moves on its own.";
+  "Every job still behind this phase moves up with it. Jobs already at or past it, " +
+  "cancelled or archived, stay where they are.";

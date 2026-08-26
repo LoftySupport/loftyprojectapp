@@ -4,6 +4,7 @@ import type {
   AddressHistoryEntry,
   CommentEntry,
   Job,
+  JobPatch,
   JobSplit,
   NewProfile,
   NewJob,
@@ -128,6 +129,14 @@ export interface Repository {
   moveJobStage(id: string, stage: StageName): Promise<Job>;
 
   /**
+   * Ownership and assignment on a job — the two facts the bulk bar and the drawer may
+   * change without a lifecycle move. Patch-shaped like updateProject: only the keys
+   * present are written, and `assigneeId: null` un-assigns. `user` and above by
+   * policy; RLS is the authority and a refusal is shown verbatim.
+   */
+  updateJob(id: string, patch: JobPatch): Promise<Job>;
+
+  /**
    * The project's own lifecycle move — same two rules as a job's, enforced in the same
    * place: manager and above, forwards only. The trigger from 0041 also calls this
    * column its own; a manual move and an inherited one land identically.
@@ -214,6 +223,7 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "deleteJob",
   "deleteProject",
   "moveJobStage",
+  "updateJob",
   "moveProjectStage",
   "updateProject",
   "setProjectCurrentAddress",
@@ -251,6 +261,7 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   deleteJob: "jobs",
   deleteProject: "projects",
   moveJobStage: "jobs",
+  updateJob: "jobs",
   moveProjectStage: "projects",
   updateProject: "projects",
   setProjectCurrentAddress: "projects + addresses",

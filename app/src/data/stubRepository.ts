@@ -51,6 +51,7 @@ const SEEDED = {
 };
 
 
+
 export const SEED_STAGES: Stage[] = [
   { id: 1, name: "Acquisition & Development", position: 1, ...SEEDED },
   { id: 2, name: "Pre-construction", position: 2, ...SEEDED },
@@ -145,6 +146,9 @@ export function createStubRepository(): Repository {
     },
     async moveJobStage(): Promise<Job> {
       throw new Error("Moving a job between stages needs Supabase.");
+    },
+    async updateJob(): Promise<Job> {
+      throw new Error("Editing a job needs Supabase.");
     },
     async moveProjectStage(): Promise<Project> {
       throw new Error("Moving a project between stages needs Supabase.");

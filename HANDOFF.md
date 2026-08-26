@@ -12,10 +12,10 @@ Last updated: 2026-08-26.
 
 ## Session of 2026-08-26 — the lifecycle grows Completed, Closed and Cancelled
 
-**`0045` — the migration has not been applied to the live database yet.** Apply it
-before relying on anything below; the app's stub and types already speak the new
-vocabulary, so against the un-migrated database the extra stages exist in the UI but
-the CHECKs would refuse them.
+**`0045` and `0046` are applied to the live database** (verified: the seven-stage
+pipeline, the `lifecycle_archive` cron entry and the cascade trigger all present).
+The database also now holds real rows — 5 projects, 44 jobs — that Amber created;
+treat writes accordingly.
 
 - **Seven lifecycle positions** (Amber, 25 Aug): the four working phases, then
   **Completed** (what 0035 called Closed — done, won), **Closed** (the archive —
@@ -53,10 +53,27 @@ the CHECKs would refuse them.
   `executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'` — the
   pinned Playwright wants a browser build the image doesn't carry.
 
+Added later the same day, on Amber's follow-ups:
+- **A project move carries its jobs** (`0046`): moving a project forward brings every
+  job behind the new phase up to it; jobs already at or past it, cancelled or archived
+  stay put. With 0041 the pair is closed both ways and cannot loop — the cascade lands
+  the minimum exactly on the project's stage, and 0041's clamp only fires on
+  *strictly ahead*.
+- **Bulk edit on the jobs table**: checkboxes + a bar with Move to… (manager+, one
+  confirmation for the batch that says how many actually move), Set team… and Assign
+  to… — the last two via the new patch-shaped `updateJob` (owning team, assignee;
+  `user`+ by the existing policy). Writes go one at a time so a refusal names its job.
+- **The projects list stopped hiding what it knew**: cards now show the project's
+  stage, real suburb, and each job's own lot address (capped at 8 with an
+  "open the project" line — project 1006 has 30); the table gained a Stage column.
+  The data was resolved all along (G26's join); the components hadn't been updated
+  to render it.
+
 Still open from this session: the SLA editor (Setup → Automations; needs the at-risk
-lead column beside `pipeline_stage_expected_days`), project/job **assignee editing**
-(columns exist, no update path), and the auto-assign-to-Acquisition-&-Development
-default on job creation (Amber's Q2).
+lead column beside `pipeline_stage_expected_days`), **single-record assignee editing
+in the drawer** (`updateJob` now exists; the bulk bar uses it, the drawer doesn't
+yet), and the auto-assign-to-Acquisition-&-Development default on job creation
+(Amber's Q2).
 
 **A session note for PR #37 (25 Aug — stage moves, comments, property_defs, project
 editing, address history) was never written**; `prototype-app-comparison.md` §1.5

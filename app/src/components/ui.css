@@ -371,6 +371,33 @@
 .bar-fill { height: 100%; background: var(--primary-color); border-radius: var(--border-radius-small); }
 .bar-num { font: var(--font-text3-normal); color: var(--secondary-text-color); font-variant-numeric: tabular-nums; }
 
+/* ---- bulk edit (jobs table) ---------------------------------------------- */
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-12);
+  padding: var(--space-8) var(--space-16);
+  margin-bottom: var(--space-12);
+  background: var(--primary-selected-color);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-medium);
+}
+.bulk-actions { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; }
+.bulk-actions > * { min-width: 150px; }
+/* Native checkboxes, on brand and at a real target size. */
+.bulk-col { width: 36px; }
+.bulk-col input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary-color);
+  cursor: pointer;
+  /* The 16px box is the visual; the padding-box trick is not worth it in a cell —
+     the whole 36px cell is clickable via the label-less input's own hit slop plus
+     the stopPropagation cell around it. */
+}
+.bulk-col { text-align: center; vertical-align: middle; }
+
 /* ---- drawer --------------------------------------------------------------
    The drawer and its overlay cover the MAIN AREA, not the app. Nav and header stay
    visible and usable beside and above them — the shell publishes where the main area

@@ -138,17 +138,23 @@ export function JobCard({
 
 export function ProjectCard({
   projectNumber,
-  jobNumbers,
+  jobs,
   address,
+  suburb,
+  stage,
   projectType,
   targetCompletion,
   status = "on_track",
   onOpen
 }: {
   projectNumber: string;
-  jobNumbers: string[];
-  /** Read through from the project's jobs — null for a project that has none yet. */
+  /** The project's jobs, each with its own lot address for the list at the foot. */
+  jobs: { jobNumber: string; address: string | null }[];
+  /** The project's current address — null for a project that has none yet. */
   address?: string | null;
+  suburb?: string | null;
+  /** The project's own lifecycle stage — follows its slowest live job (0041). */
+  stage?: string | null;
   projectType?: string | null;
   targetCompletion?: string | null;
   status?: RecordStatus;
@@ -180,8 +186,14 @@ export function ProjectCard({
       <div className="card-divider" />
 
       <dl className="card-meta">
+        <dt><Text type="text3" color="secondary">Stage</Text></dt>
+        <dd><Text type="text3">{stage}</Text></dd>
         <dt><Text type="text3" color="secondary">Suburb</Text></dt>
-        <dd><Text type="text3"><Token>addresses.suburb</Token></Text></dd>
+        <dd>
+          <Text type="text3">
+            {suburb ?? <Token>addresses.suburb</Token>}
+          </Text>
+        </dd>
         <dt><Text type="text3" color="secondary">Type</Text></dt>
         <dd>
           <Text type="text3">
@@ -203,15 +215,26 @@ export function ProjectCard({
       <div className="card-divider" />
 
       <Text type="text3" color="secondary">
-        {jobNumbers.length} job{jobNumbers.length === 1 ? "" : "s"} on this project
+        {jobs.length} job{jobs.length === 1 ? "" : "s"} on this project
       </Text>
       <div className="stack-tight">
-        {jobNumbers.map(no => (
-          <div key={no}>
-            <Text type="text3" weight="medium" element="span">{no}</Text>{" "}
-            <Token>addresses.consolidated_address</Token>
+        {/* Each job's own lot address, resolved — a wall of thirty tokens on a
+            thirty-lot project read as "the app doesn't show addresses", when the only
+            thing missing was passing them down. Capped so that project is a card, not
+            a column. */}
+        {jobs.slice(0, 8).map(j => (
+          <div key={j.jobNumber}>
+            <Text type="text3" weight="medium" element="span">{j.jobNumber}</Text>{" "}
+            <Text type="text3" color="secondary" element="span">
+              {j.address ?? <Token>addresses.consolidated_address</Token>}
+            </Text>
           </div>
         ))}
+        {jobs.length > 8 && (
+          <Text type="text3" color="secondary">
+            and {jobs.length - 8} more — open the project to see them all
+          </Text>
+        )}
       </div>
     </article>
   );

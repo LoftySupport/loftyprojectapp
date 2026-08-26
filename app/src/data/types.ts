@@ -280,6 +280,16 @@ export interface ProjectPatch {
   sharepointUrl?: string | null;
 }
 
+/**
+ * What may change on a job outside a lifecycle move (which is `moveJobStage`, with its
+ * own rules). Ownership and assignment, per Amber's Q2: both editable in the app.
+ * `assigneeId: null` un-assigns — a real edit, distinct from "not this edit".
+ */
+export interface JobPatch {
+  owningTeam?: TeamId;
+  assigneeId?: Uuid | null;
+}
+
 /** The joined shape the cards read — `project_display`. */
 export interface ProjectDisplay {
   id: Uuid;
