@@ -25,11 +25,15 @@ import "./ui.css";
  * Escape closes it and focus moves into the panel on open, because a drawer you can
  * only leave with the mouse is a trap for anyone driving from the keyboard.
  */
-export function JobDrawer({ job, onClose, onMoved }: {
+export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
   job: BoardJob;
   onClose: () => void;
   /** Bumps the board's reload after a stage move, so the card is already in its new column when the drawer closes. */
   onMoved: () => void;
+  /** Every job the drawer can jump to (G19) — the board's rows, unfiltered. */
+  siblings?: BoardJob[];
+  /** Jump to another job WITHOUT closing — the whole point of searching in here. */
+  onJump?: (j: BoardJob) => void;
 }) {
   const panel = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -95,6 +99,19 @@ export function JobDrawer({ job, onClose, onMoved }: {
       setWhoBusy(false);
     }
   };
+
+  // In-drawer search (G19): find another job and jump to it without losing the drawer.
+  // Reset when the record changes, or the last search haunts the next job.
+  const [find, setFind] = useState("");
+  useEffect(() => { setFind(""); }, [job.jobNumber]);
+  const q = find.trim().toLowerCase();
+  const found = q
+    ? siblings
+        .filter(s =>
+          s.jobNumber !== job.jobNumber &&
+          `${s.jobNumber} ${s.currentAddress ?? ""}`.toLowerCase().includes(q))
+        .slice(0, 5)
+    : [];
 
   // Undefined, not 14: no stage has an expected duration set, and inventing one here
   // put a number under "Days in stage" that read as a target somebody had agreed.
@@ -186,6 +203,29 @@ export function JobDrawer({ job, onClose, onMoved }: {
         )}
 
         <div className="drawer-body stack">
+          {onJump && siblings.length > 1 && (
+            <div className="drawer-find">
+              <input
+                type="search"
+                placeholder="Find another job…"
+                aria-label="Find another job"
+                value={find}
+                onChange={e => setFind(e.target.value)}
+              />
+              {found.length > 0 && (
+                <div className="drawer-find-results">
+                  {found.map(s2 => (
+                    <button type="button" key={s2.jobNumber} onClick={() => onJump(s2)}>
+                      <strong>{s2.jobNumber}</strong> {s2.currentAddress ?? ""} · {s2.stage}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {q && found.length === 0 && (
+                <Text type="text3" color="secondary">No other job matches “{find.trim()}”.</Text>
+              )}
+            </div>
+          )}
           {(!expanded || tab === 0) && (<>
           <section className="panel">
             <div className="panel-head">

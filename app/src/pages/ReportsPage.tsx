@@ -120,6 +120,12 @@ export function ReportsPage() {
             <Tile n={stalled} label="Stalled" />
             <Tile n={avgDays} label="Avg days in stage" />
           </div>
+          {/* G34 — the two counts the prototype had that these tiles do not: both wait
+              on wiring, and a tile showing 0 would claim they were checked. */}
+          <Text type="text3" color="secondary" ellipsis={false}>
+            Blocked-by-dependency and ownership-conflict counts join these tiles once
+            task dependencies and the conflict flag are wired.
+          </Text>
 
           <div className="stat-row">
             <BarPanel title="Jobs by stage" rows={byStage} colourFor={k => STAGE_ACCENTS[k]?.strip} />
@@ -174,6 +180,22 @@ export function ReportsPage() {
             {byTeam.map(r => (
               <Bar key={r.key} label={r.key} n={r.n} max={byTeam[0]?.n ?? 1} />
             ))}
+          </section>
+
+          {/* G36 — declared, not faked: the overrun and bottleneck analytics need SLA
+              history to accumulate before there is anything true to draw. */}
+          <section className="panel">
+            <div className="panel-head">
+              <Text type="text2" weight="bold">Overruns &amp; bottlenecks</Text>
+              <Text type="text3" color="secondary">coming soon</Text>
+            </div>
+            <Text type="text2" color="secondary" ellipsis={false}>
+              Once stage SLAs are set (Setup → Automations) and jobs accumulate history
+              against them, this panel shows where time is actually lost: phases running
+              past their expected days, and the team queue everything waits behind.
+              Nothing shows until it is measured — an invented bottleneck sends someone
+              to fix the wrong thing.
+            </Text>
           </section>
         </div>
       )}

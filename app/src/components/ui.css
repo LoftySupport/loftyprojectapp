@@ -1475,3 +1475,52 @@ code { overflow-wrap: anywhere; }
 }
 .pgantt-bar.is-over { background: var(--lofty-orange-strong, #b8482a); }
 @media (max-width: 900px) { .pgantt-left { flex-basis: 130px; width: 130px; } }
+
+/* The column head as a drill-down — a button that reads like the heading it is. */
+.board-col-drill {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--border-radius-small);
+}
+.board-col-drill:hover { text-decoration: underline; }
+.board-col-drill:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+
+/* In-drawer job search (G19) — jump without closing. */
+.drawer-find { position: relative; }
+.drawer-find input {
+  width: 100%;
+  border: 1px solid var(--ui-border-color);
+  border-radius: var(--border-radius-small);
+  padding: 6px var(--space-8);
+  font: var(--font-text2-normal);
+  background: var(--primary-background-color);
+  color: inherit;
+}
+.drawer-find input:focus { outline: none; border-color: var(--primary-color); }
+.drawer-find-results {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-small);
+  margin-top: var(--space-4);
+  overflow: hidden;
+}
+.drawer-find-results button {
+  border: 0;
+  background: var(--primary-background-color);
+  text-align: left;
+  padding: var(--space-8) var(--space-12);
+  font: var(--font-text3-normal);
+  color: inherit;
+  cursor: pointer;
+  border-top: 1px solid var(--layout-border-color);
+}
+.drawer-find-results button:first-child { border-top: 0; }
+.drawer-find-results button:hover { background: var(--primary-background-hover-color); }

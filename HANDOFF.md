@@ -179,6 +179,22 @@ A tenth batch:
   "Request changes" in the drawer, each answering with what is coming rather than
   doing nothing silently.
 
+An eleventh batch:
+- **Column drill-down as navigation** (G8): a stage column's heading filters to the
+  phase and regroups by team, in one URL. This surfaced and fixed a real
+  `useBoardParams` bug — two writes in one handler were two navigations, the second
+  erasing the first (`setMany` composes them now; `write` also went functional).
+- **In-drawer job search** (G19): find another job, jump without closing.
+- **Reports declare their gaps** (G34/G36): the missing blocked/conflict counts and
+  the overruns-and-bottlenecks panel each say what they wait for.
+
+**Where the parity work now stands**: every one of the 48 comparison-doc gaps is
+shipped, shipped-as-shell with a self-naming placeholder, or explicitly
+parked with its reason recorded in the doc (G3 Vibe Tooltip untyped · G10 mirror
+scrollbar until boards are wide · G22 scheduling checklists until the real process ·
+G31 single-add until variations · G45 permissions matrix until permission_grants).
+The artifact carries a shipped/shell badge per gap and six open questions for Amber.
+
 Still open from this session: **four live tables still have no dictionary entries**
 — `pipelines`, `job_pipeline_positions`, `job_stage_events` (0029) and
 `dictionary_overrides` (0044) — and `pipeline_stages` is only covered for its two

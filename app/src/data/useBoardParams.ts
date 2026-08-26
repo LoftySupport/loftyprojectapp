@@ -46,6 +46,8 @@ export interface BoardParams {
   setGrouping: (g: Grouping) => void;
   filters: ToolbarFilter[];
   setFilters: (f: ToolbarFilter[]) => void;
+  /** Several changes in one navigation — see the drill-down note in the implementation. */
+  setMany: (changes: { grouping?: Grouping; filters?: ToolbarFilter[] }) => void;
   saved: SavedView;
   setSaved: (slug: string) => void;
   /**
@@ -86,14 +88,21 @@ export function useBoardParams(defaults: { view: View; grouping: Grouping }): Bo
     return out;
   }, [params]);
 
-  /** One writer, so every control drops its own default the same way. */
+  /**
+   * One writer, so every control drops its own default the same way. The functional
+   * form, not a snapshot of `params`: two writes in one handler (the drill-down sets
+   * the Stage filter AND the grouping) each cloned the same stale snapshot, and the
+   * second silently erased the first.
+   */
   const write = useCallback(
     (mutate: (next: URLSearchParams) => void) => {
-      const next = new URLSearchParams(params);
-      mutate(next);
-      setParams(next, { replace: true });
+      setParams(prev => {
+        const next = new URLSearchParams(prev);
+        mutate(next);
+        return next;
+      }, { replace: true });
     },
-    [params, setParams]
+    [setParams]
   );
 
   const setView = useCallback(
@@ -113,25 +122,45 @@ export function useBoardParams(defaults: { view: View; grouping: Grouping }): Bo
     [write]
   );
 
+  /** The filter keys, rewritten wholesale — shared by setFilters and setMany. */
+  const writeFilterKeys = (next: URLSearchParams, list: ToolbarFilter[]) => {
+    for (const key of Object.values(KEY_BY_FIELD)) next.delete(key);
+    for (const f of list) {
+      const key = KEY_BY_FIELD[f.field];
+      if (key) next.set(key, f.value ?? "");
+    }
+  };
+
+  /**
+   * Several changes in ONE navigation. Two setter calls in one handler are two
+   * navigations, and the second reads the location before the first has landed — the
+   * drill-down set the Stage filter and the grouping and kept only the grouping.
+   */
+  const setMany = useCallback(
+    (changes: { grouping?: Grouping; filters?: ToolbarFilter[] }) =>
+      write(next => {
+        if (changes.grouping !== undefined) {
+          if (changes.grouping === defaults.grouping) next.delete("group");
+          else next.set("group", changes.grouping);
+        }
+        if (changes.filters) writeFilterKeys(next, changes.filters);
+      }),
+    [write, defaults.grouping]
+  );
+
   const setFilters = useCallback(
     (list: ToolbarFilter[]) =>
-      write(next => {
-        // Rewritten wholesale rather than diffed: the caller hands over the complete set,
-        // and clearing every key first is what makes "Clear" and "remove one" the same
-        // code path instead of two that can disagree.
-        for (const key of Object.values(KEY_BY_FIELD)) next.delete(key);
-        for (const f of list) {
-          const key = KEY_BY_FIELD[f.field];
-          if (key) next.set(key, f.value ?? "");
-        }
-      }),
+      // Rewritten wholesale rather than diffed: the caller hands over the complete set,
+      // and clearing every key first is what makes "Clear" and "remove one" the same
+      // code path instead of two that can disagree.
+      write(next => writeFilterKeys(next, list)),
     [write]
   );
 
   return {
     view, setView,
     grouping, setGrouping,
-    filters, setFilters,
+    filters, setFilters, setMany,
     saved, setSaved,
     search: location.search
   };

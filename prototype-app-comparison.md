@@ -566,6 +566,13 @@ G18's `activity_events` writer covers this); and the lifecycle revision's
 
 #### G8 · Column drill-down pages — **B**
 
+**Update (rev 3, 26 Aug): built as navigation, not a page.** The prototype's
+drill-down asked "who holds what inside this phase"; the board already answers that,
+so a stage column's heading now drills — filter to the phase, regroup by team, in one
+URL (`?group=Team&stage=Pre-construction`), linkable and Back-able like everything
+else. Fixing it surfaced a real bug: two `useBoardParams` writes in one handler were
+two navigations and the second erased the first — `setMany` now composes them.
+
 ![Column drill-down](docs/comparison-screenshots/drilldown-column.png)
 ![Scheduling drill-down](docs/comparison-screenshots/drilldown-scheduling.png)
 
@@ -954,6 +961,10 @@ comment edit/delete UI. The merge rule and mention-chip spec above remain the ta
 ---
 
 #### G19 · In-drawer search and jump — **A**
+
+**Update (rev 3, 26 Aug): built.** A find field at the top of the drawer matches the
+other jobs by number or address (top five), and picking one jumps the drawer to it
+without closing — board state rides along in the URL. Resets when the record changes.
 
 ![Drawer search results](docs/comparison-screenshots/drawer-search-results.png)
 
@@ -1507,6 +1518,10 @@ Cancelled records are excluded from every alert here (lifecycle revision).
 
 #### G34 · Report KPIs: blocked, conflicts — **C**
 
+**Update (rev 3, 26 Aug): declared.** A line under the overview tiles says the two
+counts join once task dependencies and the conflict flag are wired — a tile showing 0
+would claim they were checked.
+
 ![Portfolio overview](docs/comparison-screenshots/reports-portfolio.png)
 
 **Prototype.** Seven KPI tiles: the app's five plus **Blocked by dependency** and
@@ -1549,6 +1564,10 @@ App today: app/src/pages/ReportsPage.tsx (BarPanel)
 ---
 
 #### G36 · Leadership analytics: overruns, bottlenecks — **D**
+
+**Update (rev 3, 26 Aug): declared.** The Leadership tab carries an
+"Overruns &amp; bottlenecks — coming soon" panel saying exactly what it waits for: SLAs
+set, and history accumulating against them. Nothing draws until it is measured.
 
 ![Leadership summary](docs/comparison-screenshots/reports-leadership.png)
 

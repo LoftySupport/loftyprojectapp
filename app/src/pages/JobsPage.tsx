@@ -60,7 +60,7 @@ export function JobsPage() {
 
 
   const {
-    view, setView, grouping, setGrouping, filters, setFilters, saved, setSaved, search
+    view, setView, grouping, setGrouping, filters, setFilters, setMany, saved, setSaved, search
     // The default view is the preference (G39); a link that names its own view still
     // wins, because the URL is the record of what somebody sent you.
   } = useBoardParams({ view: readPrefs().defaultJobsView, grouping: "Stage" });
@@ -348,10 +348,31 @@ export function JobsPage() {
               }}
             >
               <div className="board-column-head">
-                <div>
-                  <Text type="text3" color="secondary">{grouping}</Text>
-                  <Text type="text2" weight="medium">{g.key}</Text>
-                </div>
+                {/* Drill-down (G8), as navigation rather than a page of its own: the
+                    prototype's drill-down asked "who holds what inside this phase",
+                    and the board already answers that — filtered to the phase,
+                    regrouped by team, in the URL like everything else. */}
+                {grouping === "Stage" ? (
+                  <button
+                    type="button"
+                    className="board-col-drill"
+                    title={`Open ${g.key} grouped by team`}
+                    onClick={() =>
+                      setMany({
+                        grouping: "Team",
+                        filters: [...filters.filter(f => f.field !== "Stage"), { field: "Stage", value: g.key }]
+                      })
+                    }
+                  >
+                    <Text type="text3" color="secondary">{grouping}</Text>
+                    <Text type="text2" weight="medium">{g.key} ›</Text>
+                  </button>
+                ) : (
+                  <div>
+                    <Text type="text3" color="secondary">{grouping}</Text>
+                    <Text type="text2" weight="medium">{g.key}</Text>
+                  </div>
+                )}
                 {/* Ink-on-tint, per the accent rule — the one place the column's colour
                     repeats, so the chip and the strip read as one system. */}
                 <span className="col-count">{g.jobs.length}</span>
@@ -540,6 +561,8 @@ export function JobsPage() {
 
       {openJob && (
         <JobDrawer
+          siblings={all}
+          onJump={openOne}
           job={openJob}
           onClose={() => navigate(`/jobs${search}`)}
           onMoved={() => setReloadKey(k => k + 1)}
