@@ -709,6 +709,13 @@ App today: app/src/pages/JobsPage.tsx:219-252 (Table view);
 
 #### G13 · Real Gantt — **B + C**
 
+**Update (rev 3, 26 Aug): built against real facts.** A day-grid Gantt
+(`JobsGantt.tsx`): sticky left column, weekend shading, phase-tinted band rows, an
+orange today line — and each bar is the job's stay in its CURRENT stage: solid elapsed
+(real), tinted on to entered + expected days where the stage has an SLA, rust when past
+it. The prototype's fabricated duration model was not ported, exactly as this entry
+said; dependency connectors still wait on G6's task wiring.
+
 ![Gantt view](docs/comparison-screenshots/gantt-view.png)
 
 **Prototype.** A full day-grid Gantt (`renderGantt`, `index.html:9709-9835`): sticky
@@ -742,6 +749,13 @@ App today: app/src/pages/JobsPage.tsx:254-289 (bar list)
 ---
 
 #### G14 · Real calendar — **C**
+
+**Update (rev 3, 26 Aug): built, placing only dates that exist.** The month grid
+(`MonthCalendar.tsx`): Monday-start, weekend/outside shading, ringed today cell, ‹/Today/›
+navigation, 3-per-day with "+N more", click-to-drawer — and the jump-to-nearest-month
+empty state survived the port. Entries are the two real dates a job has: the day it
+entered its stage, and the SLA due day where one is set. Dated step-properties join
+these when they land.
 
 ![Calendar view](docs/comparison-screenshots/calendar-view.png)
 

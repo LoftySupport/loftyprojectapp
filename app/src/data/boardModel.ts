@@ -72,6 +72,8 @@ export interface BoardJob {
   assigneeTeams: string[];
   /** Derived from stageEnteredAt on every read. Never stored, so it cannot go stale. */
   daysInStage: number;
+  /** When the current stay began — what the Gantt and calendar place in time. */
+  stageEnteredAt: string;
   /**
    * Resolved by `job_display` since 0036 — the card shows the job number and the address
    * together, because neither reads as a place on its own.
@@ -184,6 +186,7 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
       assigneeId: j.assigneeId ?? null,
       assigneeTeams: j.assigneeId ? teamsOf.get(j.assigneeId) ?? [] : [],
       daysInStage: daysSince(j.stageEnteredAt, now),
+      stageEnteredAt: j.stageEnteredAt,
       currentAddress: j.currentAddress,
       originalAddress: j.originalAddress,
       projectAddress: j.projectCurrentAddress

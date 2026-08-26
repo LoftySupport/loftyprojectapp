@@ -143,6 +143,16 @@ A seventh batch:
 - Tooltip sweep (G3) deferred: this Vibe build doesn't export `Tooltip` in the core
   type bundle. Native titles stand; revisit on the next Vibe upgrade.
 
+An eighth batch — **the Gantt and the calendar are real** (G13/G14):
+- `JobsGantt.tsx`: a day-grid over real facts only — each bar is the job's stay in its
+  current stage (solid elapsed, tinted SLA window, rust past due), phase-tinted band
+  rows, weekend shading, orange today line, sticky left column. The prototype's
+  invented duration model was NOT ported. Dependencies wait on task wiring.
+- `MonthCalendar.tsx`: Monday-start month grid with today ring, ‹/Today/› nav,
+  "+N more" overflow, click-to-drawer, and the jump-to-nearest-month empty state.
+  Entries are the two dates a job really has — stage entered, and SLA due where set.
+- `BoardJob` gained `stageEnteredAt` so both can place time.
+
 Still open from this session: **four live tables still have no dictionary entries**
 — `pipelines`, `job_pipeline_positions`, `job_stage_events` (0029) and
 `dictionary_overrides` (0044) — and `pipeline_stages` is only covered for its two
