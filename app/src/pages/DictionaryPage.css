@@ -51,6 +51,15 @@
   padding: var(--space-8) 0;
 }
 
+/* What the table is for, at the top of its card. A sentence, so it gets a measure —
+   full-panel lines are unreadable at this width. */
+.dict-table-purpose {
+  margin: 0 0 var(--space-12);
+  max-width: 72ch;
+  font: var(--font-text2-normal);
+  color: var(--secondary-text-color);
+}
+
 .dict-note { margin-bottom: var(--space-16); }
 .dict-note code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;

@@ -6,6 +6,7 @@ import {
   DICTIONARY_TABLES,
   STATUS_LABELS,
   STATUS_TONE,
+  TABLE_DESCRIPTIONS,
   countByStatus,
   type AllowedValues,
   type DictionaryEntry,
@@ -503,6 +504,9 @@ function Tables({ rows }: { rows: DictionaryEntry[] }) {
                 {cols.length} propert{cols.length === 1 ? "y" : "ies"} · {done} built
               </Text>
             </div>
+            <p className="dict-table-purpose">
+              {TABLE_DESCRIPTIONS[t] ?? "No purpose recorded for this table yet."}
+            </p>
             <div className="data-table-wrap">
               <table className="data-table">
                 <thead>

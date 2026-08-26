@@ -69,11 +69,20 @@ Added later the same day, on Amber's follow-ups:
   The data was resolved all along (G26's join); the components hadn't been updated
   to render it.
 
+Later the same day: **every table in the dictionary now carries a purpose
+description** (`TABLE_DESCRIPTIONS` in `dictionary.ts` — rendered at the top of each
+card on the Tables tab and under each heading in `data-dictionary.md`). The generator
+refuses to write the file if the map and `DICTIONARY_TABLES` differ in either
+direction, and that refusal was watched firing before it was trusted.
+
 Still open from this session: the SLA editor (Setup → Automations; needs the at-risk
 lead column beside `pipeline_stage_expected_days`), **single-record assignee editing
 in the drawer** (`updateJob` now exists; the bulk bar uses it, the drawer doesn't
 yet), and the auto-assign-to-Acquisition-&-Development default on job creation
-(Amber's Q2).
+(Amber's Q2). Also surfaced while writing the descriptions: **five live tables have
+no dictionary entries at all** — `pipelines`, `pipeline_stages`,
+`job_pipeline_positions`, `job_stage_events` (0029) and `dictionary_overrides`
+(0044) — so they have no card to describe either.
 
 **A session note for PR #37 (25 Aug — stage moves, comments, property_defs, project
 editing, address history) was never written**; `prototype-app-comparison.md` §1.5
