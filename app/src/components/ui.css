@@ -478,7 +478,14 @@
    stay usable. "Full screen" meaning the full app hid the nav under the record, and
    the way back out of a full-screen job was gone with it. */
 .drawer.is-expanded { width: calc(100vw - var(--shell-rail-w, 0px)); }
-.drawer-body { flex: 1; overflow-y: auto; padding: var(--space-16); }
+/* Bottom padding clears the Ask FAB (48px + its 24px inset), which floats fixed over
+   the drawer's corner — scrolled to the end, the last row's value sat under it. */
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-16);
+  padding-bottom: calc(48px + 2 * var(--space-24));
+}
 
 /* ---- template phases ----------------------------------------------------- */
 .phase-grid {
