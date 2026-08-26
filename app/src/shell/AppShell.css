@@ -400,6 +400,12 @@ html, body, #root { height: 100%; }
      binding banner, so there is one child left and nothing to wrap — kept because the
      next thing added here would reintroduce the fault silently. */
   .app-header-right { flex-shrink: 1; min-width: 0; flex-wrap: nowrap; }
+  /* The two icon triggers hold their size when the row squeezes — the bell's arrival
+     was shrinking the avatar button to 16px at 320, failing the 24px tap target. The
+     search field is the flexible one; identity and the bell are not. The tighter gap
+     pays for the rigidity: at 320 the row was otherwise 4px too wide. */
+  .app-header-right > *, .notif-bell-trigger, .user-menu-trigger { flex-shrink: 0; }
+  .app-header-right { gap: var(--space-4); }
   /* The avatar carries the identity here. The name is an unbound token 200px wide,
      which is a whole line of a small screen to say what the circle already says. */
   .app-user .sb-token, .app-user-name { display: none; }

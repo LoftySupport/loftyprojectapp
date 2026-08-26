@@ -97,6 +97,27 @@ A fourth batch, after PR #39 merged (the branch was restarted from `main`):
   expected days; there is no third number. **Applied to the live database.**
   `pipeline_stages` thereby got its first two dictionary entries.
 
+A fifth batch — the prototype-parity shells (Amber: match the prototype, placeholders
+where the data is not real yet; every placeholder names itself):
+- **Phase accents on the board** (`theme/accents.ts`): the prototype's two-family ramp
+  re-cut for seven positions — teal office pair, rust site pair, Completed green,
+  Closed grey, Cancelled negative — as per-column CSS vars with ink-on-tint count
+  chips. Plus the drag-hint pill, shown only when dragging is actually enabled.
+- **Drawer fullscreen tabs**: Main info · All properties · Activity & comments ·
+  Departments, prototype-style, docked staying one scroll. All-properties and Activity
+  carry the real components plus coming-soon notes; Departments is a labelled
+  placeholder until handoffs write the activity feed.
+- **Ask Lofty dock** (`AskDock.tsx`): FAB + 380px dock with scope line, preview
+  questions and a disabled input, all saying coming soon; "Ask about this job" in the
+  drawer opens it pre-scoped. One assistant, not two.
+- **Notifications bell** (`NotificationsBell.tsx`): header bell, no badge (no real
+  count exists), panel naming the seven signals and what each waits on.
+- **Dashboard**: your actual assigned jobs as cards (it counted every job in the
+  company as yours before), real Assigned count, em dashes for Need you/Overdue, and
+  right-rail panels that say what will fill them. No invented numbers anywhere.
+- Responsive sweep back to 50/50 (the bell had squeezed the avatar button to 16px at
+  320; icons no longer shrink and the right cluster's gap tightened).
+
 Still open from this session: **four live tables still have no dictionary entries**
 — `pipelines`, `job_pipeline_positions`, `job_stage_events` (0029) and
 `dictionary_overrides` (0044) — and `pipeline_stages` is only covered for its two

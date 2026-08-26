@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import {
-  Button, Counter, Heading, Modal, ModalBasicLayout, ModalContent, ModalFooter,
+  Button, Heading, Modal, ModalBasicLayout, ModalContent, ModalFooter,
   ModalHeader, Text
 } from "@vibe/core";
 import {
@@ -21,6 +21,7 @@ import { JOB_MOVE_NOTE, MoveStageDialog, isForwardMove } from "../components/Mov
 import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import type { StageName, TeamId } from "../data/types";
+import { accentStyle, columnAccent } from "../theme/accents";
 import { Token } from "../components/Token";
 import { Toolbar } from "../components/Toolbar";
 import { Problem, Result } from "../components/Form";
@@ -271,12 +272,21 @@ export function JobsPage() {
 
       {noMatches && <NoResults noun="jobs" />}
 
+      {/* The drag hint, from the prototype's view header — shown only when dragging is
+          actually possible, so it never promises what the rung below manager lacks. */}
+      {view === "Board" && dragEnabled && !loading && all.length > 0 && (
+        <div className="drag-hint">
+          <Text type="text3" color="secondary">Drag cards between columns to move a job</Text>
+        </div>
+      )}
+
       {view === "Board" && !noMatches && !loading && all.length > 0 && (
         <div className="board">
-          {groups.map(g => (
+          {groups.map((g, gi) => (
             <section
               className="board-column"
               key={g.key}
+              style={accentStyle(columnAccent(grouping, g.key, gi))}
               onDragOver={e => {
                 if (dragEnabled && dragged && isForwardMove(dragged.stage, g.key)) {
                   e.preventDefault();
@@ -296,7 +306,9 @@ export function JobsPage() {
                   <Text type="text3" color="secondary">{grouping}</Text>
                   <Text type="text2" weight="medium">{g.key}</Text>
                 </div>
-                <Counter count={g.jobs.length} kind="line" />
+                {/* Ink-on-tint, per the accent rule — the one place the column's colour
+                    repeats, so the chip and the strip read as one system. */}
+                <span className="col-count">{g.jobs.length}</span>
               </div>
 
               {g.jobs.length === 0 ? (

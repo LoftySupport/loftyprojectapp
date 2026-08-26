@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { BreadcrumbsBar, BreadcrumbItem, Button, Heading, Text } from "@vibe/core";
+import { BreadcrumbsBar, BreadcrumbItem, Button, Heading, Tab, TabList, Text } from "@vibe/core";
 import { useMilestones, useTemplatePhases, useTeams } from "../data/useLookups";
 import type { BoardJob } from "../data/boardModel";
 import type { TeamId } from "../data/types";
@@ -13,6 +13,7 @@ import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { Select } from "./Select";
 import { Problem } from "./Form";
+import { useAskDock } from "./AskDock";
 import { Token } from "./Token";
 import "./ui.css";
 
@@ -36,6 +37,12 @@ export function JobDrawer({ job, onClose, onMoved }: {
   // control only on the create side. `open` is always true here: this component is
   // mounted only while the drawer is showing.
   const { expanded, canExpand, toggle } = usePanelExpand(true);
+  const { openAsk } = useAskDock();
+
+  // The fullscreen tab, sticky while the drawer stays open — editing a field must not
+  // bounce the view back to Main info (the prototype's rule). Docked has no tabs: a
+  // 420-wide column reads better as one scroll than as four hidden ones.
+  const [tab, setTab] = useState(0);
 
   // Once, on mount. Keyed on `onClose` this re-ran whenever the parent re-rendered and
   // pulled focus back to the drawer — the same fault that let the create form accept
@@ -133,6 +140,11 @@ export function JobDrawer({ job, onClose, onMoved }: {
             </Text>
           </div>
           <div className="drawer-actions">
+            {/* Opens the one AI surface, scoped — "opening from a job is itself the
+                question". The dock says coming soon; the entry point is real. */}
+            <Button kind="secondary" size="small" onClick={() => openAsk(`job ${job.jobNumber}`)}>
+              Ask about this job
+            </Button>
             {canExpand && <ExpandButton expanded={expanded} onToggle={toggle} />}
             <Button kind="tertiary" size="small" onClick={onClose} aria-label="Close">
               ×
@@ -140,7 +152,22 @@ export function JobDrawer({ job, onClose, onMoved }: {
           </div>
         </header>
 
+        {/* Fullscreen gets the prototype's tab bar; docked stays one scrolled column —
+            in a 460px panel four hidden columns read worse than one scroll. The same
+            sections render either way; the tabs only choose which show. */}
+        {expanded && (
+          <div className="drawer-tabs">
+            <TabList activeTabId={tab} onTabChange={setTab}>
+              <Tab>Main info</Tab>
+              <Tab>All properties</Tab>
+              <Tab>Activity &amp; comments</Tab>
+              <Tab>Departments</Tab>
+            </TabList>
+          </div>
+        )}
+
         <div className="drawer-body stack">
+          {(!expanded || tab === 0) && (<>
           <section className="panel">
             <div className="panel-head">
               <Text type="text2" weight="bold">Who it’s with</Text>
@@ -235,7 +262,9 @@ export function JobDrawer({ job, onClose, onMoved }: {
               </div>
             ))}
           </section>
+          </>)}
 
+          {(!expanded || tab === 1) && (<>
           {/* The site's own facts, above the job's — fencing, pegging, the developer, the
               council. One answer for the whole project, shown here rather than copied,
               so twenty jobs on one site cannot quietly disagree about it.
@@ -251,9 +280,59 @@ export function JobDrawer({ job, onClose, onMoved }: {
           {/* Then the job's own — twenty jobs, twenty answers. */}
           <PropertySlots scope="job" title="Job properties" />
 
+          {expanded && (
+            <section className="panel">
+              <div className="panel-head">
+                <Text type="text2" weight="bold">All properties</Text>
+                <Text type="text3" color="secondary">grouped by stage — fills as definitions land</Text>
+              </div>
+              <Text type="text2" color="secondary" ellipsis={false}>
+                Job properties land in here, grouped by the stage that captures them —
+                fencing type, pour date, and whatever else Lofty defines. Add definitions
+                in Setup → Properties and they appear on every job.
+              </Text>
+            </section>
+          )}
+          </>)}
+
+          {(!expanded || tab === 2) && (<>
+          {expanded && (
+            <section className="panel">
+              <div className="panel-head">
+                <Text type="text2" weight="bold">Activity</Text>
+                <Text type="text3" color="secondary">coming soon</Text>
+              </div>
+              <Text type="text2" color="secondary" ellipsis={false}>
+                System entries — stage moves, team handoffs, edits — will interleave with
+                the comments below once the activity feed is wired. The comments are live
+                now.
+              </Text>
+            </section>
+          )}
           {/* The job's own thread — the same shape the project has, because Amber's
               "latest update" is one rule for both kinds of record. */}
           <CommentsPanel jobId={job.jobNumber} title="Updates & comments" />
+          </>)}
+
+          {expanded && tab === 3 && (
+            <section className="panel">
+              <div className="panel-head">
+                <Text type="text2" weight="bold">Departments</Text>
+                <Text type="text3" color="secondary">handoff view — coming soon</Text>
+              </div>
+              <Text type="text2" color="secondary" ellipsis={false}>
+                Where every team stands on this job, in the order it passes through them —
+                who had it, who has it, who is next, with the fields each team works with.
+                It builds from real handoff history once team changes write the activity
+                feed; the states below are the shape, not the facts.
+              </Text>
+              <div className="dept-placeholder" aria-hidden>
+                <div className="dept-block is-done">Handed on — team a</div>
+                <div className="dept-block is-current">Current owner — team b</div>
+                <div className="dept-block">Not started — team c</div>
+              </div>
+            </section>
+          )}
         </div>
       </aside>
     </>

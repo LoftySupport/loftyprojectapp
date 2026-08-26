@@ -278,6 +278,11 @@ entries were resolved between revisions):
 
 #### G1 · Notifications — bell, badge, panel, seven derived signals — **C + D**
 
+**Update (rev 3, 26 Aug): the bell and panel exist as a declared placeholder.** A header
+bell (`NotificationsBell.tsx`) opens a panel naming the seven signals and what each waits
+on — no badge, because there is no real count to show. The notification model (table,
+triggers, read state) remains the C-class work.
+
 ![Notifications panel](docs/comparison-screenshots/notifications-panel.png)
 
 **Prototype.** A bell in the header with a red pill counter; clicking opens a 400px panel
@@ -404,6 +409,12 @@ App today: app/src/shell/AppShell.tsx:266-300 (header), src/data/SearchProvider.
 ---
 
 #### G5 · Phase-accent colour system on board columns — **B**
+
+**Update (rev 3, 26 Aug): built.** The ramp is re-cut for the seven-position lifecycle in
+`app/src/theme/accents.ts` — teal office pair, rust site pair, semantic ends (Completed
+green, Closed grey, Cancelled negative ink) — applied per column as CSS custom properties
+with an ink-on-tint count chip; non-stage groupings cycle the families. Judging the ramp
+against populated columns (the B in the class) still deserves Amber's eye.
 
 ![Board by stage](docs/comparison-screenshots/board-by-stage.png)
 
@@ -746,6 +757,12 @@ App today: app/src/pages/JobsPage.tsx:291-317 (token table)
 
 #### G15 · Drawer: fullscreen toggle and tabs — **A**
 
+**Update (rev 3, 26 Aug): built.** Fullscreen shows the four-tab bar (Main info · All
+properties · Activity &amp; comments · Departments), sticky while the drawer stays open;
+docked remains one scrolled column. All-properties and Activity carry real
+`PropertySlots`/`CommentsPanel` plus declared coming-soon notes; Departments renders the
+handoff shape as a labelled placeholder (G21 still parked for real history).
+
 ![Docked drawer](docs/comparison-screenshots/drawer-docked.png)
 ![Fullscreen — Main info](docs/comparison-screenshots/drawer-fullscreen-main.png)
 
@@ -1030,6 +1047,11 @@ App today: app/src/components/JobDrawer.tsx (empty milestones panel);
 ---
 
 #### G23 · "Ask" callout and AI dock — **D**
+
+**Update (rev 3, 26 Aug): the shell exists, saying coming soon.** The FAB and 380px dock
+(`AskDock.tsx`) with the scope line and example questions shown as previews, plus the
+"Ask about this job" callout in the drawer head opening it pre-scoped. Nothing answers —
+the dock says so — and the fact-assembly wiring stays the D→build step.
 
 ![AI dock](docs/comparison-screenshots/ai-dock.png)
 
@@ -1369,6 +1391,13 @@ App today: app/src/components/CreateDialogs.tsx (NewProjectDialog), shell Create
 ---
 
 #### G33 · Populated personal dashboard — **C + D**
+
+**Update (rev 3, 26 Aug): the real tiles are real, the rest declare themselves.** The
+middle column renders your actual assigned jobs (the assignee binding), sorted
+most-days-first with days-against-SLA when a stage has one; "N jobs assigned to you" and
+the Assigned count are live. Need-you/Overdue show em dashes (nothing computes health
+yet), the hero says what it waits for, and the three right-rail panels say what will fill
+them. It also stopped counting every job in the company as yours (`jobs.length`).
 
 ![Personal dashboard (as Priya Nair, team member)](docs/comparison-screenshots/dashboard-personal.png)
 

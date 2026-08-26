@@ -156,9 +156,30 @@
   flex-shrink: 0;
   background: var(--primary-background-color);
   border: 1px solid var(--layout-border-color);
-  border-top: 4px solid var(--primary-color);
+  /* The phase strip. Containers encode phase, records encode health — the accent vars
+     come from theme/accents.ts per column; the primary green is only the fallback. */
+  border-top: 4px solid var(--col-accent, var(--primary-color));
   border-radius: var(--border-radius-medium);
   padding: var(--space-12);
+}
+/* The count chip repeats the column's colour as ink-on-tint — the one repeat allowed. */
+.col-count {
+  font: var(--font-text3-normal);
+  font-weight: 600;
+  color: var(--col-ink, var(--secondary-text-color));
+  background: var(--col-tint, var(--allgrey-background-color));
+  border-radius: 999px;
+  padding: 1px 8px;
+  min-width: 24px;
+  text-align: center;
+}
+.drag-hint {
+  display: inline-flex;
+  align-items: center;
+  background: var(--allgrey-background-color);
+  border-radius: 999px;
+  padding: 2px var(--space-12);
+  margin-bottom: var(--space-12);
 }
 .board-column-head {
   display: flex;
@@ -1115,3 +1136,121 @@ code { overflow-wrap: anywhere; }
   padding: var(--space-12);
   margin-top: var(--space-8);
 }
+
+/* ---- Ask Lofty dock ------------------------------------------------------
+   The one AI surface. Floating over everything except modals (drawer and scrims sit
+   at 40/41; Vibe's portaled dialogs at 10001), which is what a dock is. */
+.ask-fab {
+  position: fixed;
+  right: var(--space-24);
+  bottom: var(--space-24);
+  z-index: 45;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: var(--primary-color);
+  color: var(--text-color-on-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--box-shadow-medium);
+}
+.ask-fab:hover { background: var(--primary-hover-color); }
+.ask-fab:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+.ask-dock {
+  position: fixed;
+  right: var(--space-24);
+  bottom: calc(48px + 2 * var(--space-24));
+  z-index: 45;
+  width: min(380px, calc(100vw - 2 * var(--space-24)));
+  background: var(--primary-background-color);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-medium);
+  box-shadow: var(--box-shadow-medium);
+  display: flex;
+  flex-direction: column;
+}
+.ask-dock-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: var(--space-12) var(--space-16);
+  border-bottom: 1px solid var(--layout-border-color);
+}
+.ask-dock-body { padding: var(--space-12) var(--space-16); }
+.ask-dock-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  margin-top: var(--space-12);
+}
+.ask-dock-chip {
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+  background: var(--allgrey-background-color);
+  border-radius: 999px;
+  padding: 2px var(--space-12);
+}
+.ask-dock-input { padding: var(--space-12) var(--space-16); border-top: 1px solid var(--layout-border-color); }
+.ask-dock-input input {
+  width: 100%;
+  border: 1px solid var(--ui-border-color);
+  border-radius: var(--border-radius-small);
+  padding: 6px var(--space-8);
+  font: var(--font-text2-normal);
+  background: var(--allgrey-background-color);
+  color: var(--secondary-text-color);
+}
+
+/* ---- notifications bell -------------------------------------------------- */
+.notif-bell-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--border-radius-small);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.notif-bell-trigger:hover { background: var(--primary-selected-color); }
+.notif-panel { width: min(400px, 80vw); padding: var(--space-4); }
+.notif-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-8);
+  margin-bottom: var(--space-4);
+}
+.notif-panel-note { margin: 0 0 var(--space-8); }
+.notif-signal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.notif-signal-list li { padding: var(--space-8) 0; border-top: 1px solid var(--layout-border-color); }
+
+/* ---- drawer fullscreen tabs ---------------------------------------------- */
+.drawer-tabs {
+  padding: 0 var(--space-24);
+  border-bottom: 1px solid var(--layout-border-color);
+}
+
+/* The departments placeholder — the handoff shape with its three states, dimmed
+   because they are the shape, not the facts. */
+.dept-placeholder { display: flex; flex-direction: column; gap: var(--space-8); margin-top: var(--space-12); }
+.dept-block {
+  font: var(--font-text2-normal);
+  color: var(--secondary-text-color);
+  border-left: 3px solid var(--ui-border-color);
+  background: var(--allgrey-background-color);
+  border-radius: 0 var(--border-radius-small) var(--border-radius-small) 0;
+  padding: var(--space-8) var(--space-12);
+}
+.dept-block.is-current { border-left-color: var(--lofty-orange, #d96435); }
+.dept-block.is-done { border-left-color: var(--positive-color, #00854d); }

@@ -9,6 +9,8 @@ import {
 } from "@vibe/icons";
 import { initialsOf, useAuth } from "../data/AuthProvider";
 import { useSearch } from "../data/SearchProvider";
+import { AskDockProvider } from "../components/AskDock";
+import { NotificationsBell } from "../components/NotificationsBell";
 import { greetingName } from "../data/types";
 import "./AppShell.css";
 
@@ -241,6 +243,7 @@ export function AppShell() {
   useEffect(() => { setDrawerOpen(false); }, [location.pathname]);
 
   return (
+    <AskDockProvider>
     <div className={"app-shell" + (narrow ? " is-narrow" : "")}>
       <a className="skip-link" href="#main">Skip to content</a>
 
@@ -295,6 +298,7 @@ export function AppShell() {
           </span>
 
           <div className="app-header-right">
+            <NotificationsBell />
             <UserMenu />
           </div>
         </header>
@@ -336,5 +340,6 @@ export function AppShell() {
         </footer>
       </div>
     </div>
+    </AskDockProvider>
   );
 }
