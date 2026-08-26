@@ -67,7 +67,7 @@ select address_history_project_id, address_history_role from address_history;
 select project_id, project_current_address, project_is_current from project_display;
 select job_id, project_id, job_is_current, job_suburb from job_display order by job_id limit 2;
 
-\echo '--- 12. the lifecycle pipeline seeded its nine stages, in order'
+\echo '--- 12. the lifecycle pipeline holds its stages, in order'
 select pipeline_stage_position, pipeline_stage_name, pipeline_stage_type, pipeline_stage_owning_team
 from pipeline_stages ps join pipelines p using (pipeline_id)
 where p.pipeline_key = 'build_lifecycle' order by pipeline_stage_position;

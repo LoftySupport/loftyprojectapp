@@ -203,6 +203,17 @@ change to make now, per `HANDOFF.md`):
 - Every alerting feature in this document (G1, G33, G36) inherits the rule: **cancelled
   records are excluded from signals.**
 
+> **Implemented, 26 Aug (`0045` + app, same branch):** the seven positions (Closed
+> renamed Completed; Closed the archive; Cancelled with the revival carve-out), the
+> guards, the `lifecycle_archive()` 12-month clock (pg_cron where present), cancelled
+> jobs excluded from the project roll-up, the Cancel…/Revive to… controls in the stage
+> picker, saved views hiding Closed by default, and the reversal logged in
+> `schema-plan.md`. Also landed with it: assignee bound everywhere (the column existed
+> since 0028 — cards, table, drawer and Team-member grouping now show real names), the
+> Team filter matching membership per Amber's rule, modal padding fixed at its cause
+> (`ModalBasicLayout` + body-level brand tokens for everything Vibe portals out of the
+> ThemeProvider), and panels that cover the main area instead of the nav.
+
 ---
 
 ## 2. Gap catalogue
@@ -1801,6 +1812,14 @@ App today: app/src/components/Toolbar.tsx:22-30 (FILTERABLE + rationale);
 an assignee team + user. Once those columns land, "put each back the moment its column
 exists" fires for `member` — and the assignee-*team* property also means the existing Team
 filter should be checked against which team field it filters (owning vs assignee).
+
+**Update (rev 3, 26 Aug): the Team filter question is answered and implemented.** Amber:
+it "should just read 'team', and anyone who owns a job, if they are in that team (even if
+they have multiple teams), it should show." So there is one Team filter and no separate
+person filter: a job matches Design when Design owns it **or** its assignee sits in
+Design (`filtering.ts`, via `BoardJob.assigneeTeams`). Team-member *grouping* also works
+now — `job_assignee_id` existed since 0028 and `boardModel` resolves it, so grouping
+shows real names with an honest "Unassigned" column.
 
 ---
 

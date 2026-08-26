@@ -125,7 +125,9 @@ export function JobsPage() {
       : grouping === "Project" ? j.projectNumber
       : grouping === "Team" ? j.team
       : grouping === "Status" ? RECORD_STATUS_LABELS[j.status]
-      : "{{profiles.full_name}}";
+      // The assignee resolves to a real name now (boardModel). A job with nobody on it
+      // groups under its own honest heading rather than under a token.
+      : j.assigneeName ?? "Unassigned";
 
     const order: string[] =
       grouping === "Stage" ? viewStages
@@ -261,6 +263,7 @@ export function JobsPage() {
                       address={j.currentAddress}
                       projectType={j.projectType}
                       createdBy={j.createdBy}
+                      assigneeName={j.assigneeName}
                       status={j.status}
                       onOpen={() => openOne(j)}
                     />
@@ -315,7 +318,7 @@ export function JobsPage() {
                     </td>
                     <td>{j.stage}</td>
                     <td>{j.team}</td>
-                    <td><Token>profiles.full_name</Token></td>
+                    <td>{j.assigneeName ?? "—"}</td>
                     <td className="muted">{j.createdBy ?? "—"}</td>
                     <td className="num">{j.daysInStage}</td>
                     <td><StatusPill status={j.status} /></td>

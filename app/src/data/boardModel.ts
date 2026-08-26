@@ -52,6 +52,22 @@ export interface BoardJob {
    * board comes to claim work is allocated when nothing has been.
    */
   createdBy: string | null;
+  /**
+   * The assignee, resolved to a name. `jobs.job_assignee_id` has existed since 0028;
+   * what was missing was this resolution — every "Assigned to" rendered a token while
+   * the column sat unbound. Null means nobody is assigned, which is a real state and
+   * renders as an em dash, not as a token: the app can answer, and the answer is
+   * "no one".
+   */
+  assigneeName: string | null;
+  /**
+   * The team NAMES the assignee sits in — resolved from `profile_teams` through the
+   * profile, plural because people sit in more than one. Amber, 26 August: the Team
+   * filter "should just read 'team' and anyone who owns a job, if they are in that
+   * team (even if they have multiple teams), it should show" — so the filter matches
+   * this list as well as the owning team, and there is no separate person filter.
+   */
+  assigneeTeams: string[];
   /** Derived from stageEnteredAt on every read. Never stored, so it cannot go stale. */
   daysInStage: number;
   /**
@@ -144,6 +160,11 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
   return useMemo(() => {
     const now = Date.now();
     const nameOf = new Map(profiles.map(p => [p.id, p.fullName]));
+    // Team memberships per person, resolved to display names once rather than on every
+    // filter comparison — the Team filter's options are names, so this compares equal.
+    const teamsOf = new Map(
+      profiles.map(p => [p.id, p.teams.map(t => teamName(t, teams))])
+    );
 
     const boardJobs: BoardJob[] = jobs.map(j => ({
       jobNumber: j.id,
@@ -154,6 +175,8 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
       status: j.status,
       projectType: j.projectType,
       createdBy: j.createdBy ? nameOf.get(j.createdBy) ?? null : null,
+      assigneeName: j.assigneeId ? nameOf.get(j.assigneeId) ?? null : null,
+      assigneeTeams: j.assigneeId ? teamsOf.get(j.assigneeId) ?? [] : [],
       daysInStage: daysSince(j.stageEnteredAt, now),
       currentAddress: j.currentAddress,
       originalAddress: j.originalAddress,

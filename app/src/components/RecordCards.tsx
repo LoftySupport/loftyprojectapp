@@ -44,6 +44,7 @@ export function JobCard({
   address,
   projectType,
   createdBy,
+  assigneeName,
   status = "on_track",
   onOpen
 }: {
@@ -64,6 +65,8 @@ export function JobCard({
   projectType?: string | null;
   /** Who created it. Labelled as that, never as the assignee — they are two facts. */
   createdBy?: string | null;
+  /** Who is assigned, resolved to a name by boardModel. Null = nobody, shown as —. */
+  assigneeName?: string | null;
   status?: RecordStatus;
   onOpen?: () => void;
 }) {
@@ -114,13 +117,13 @@ export function JobCard({
             "SB", which is a person who does not work here — and the name beside it was
             already saying, honestly, that the assignee is unbound. */}
         <div className="card-who">
-          {/* No job has an assignee yet, so the token below is the honest answer to
-              "who is on this". The creator is a different question and the database
-              does know it — shown underneath and labelled, rather than filling the
-              assignee's line with somebody who was never assigned. */}
+          {/* The assignee resolves through boardModel now that job_assignee_id is
+              read. An em dash means nobody is assigned — a real answer, not an
+              absence — and the creator stays underneath, labelled as a different
+              fact rather than filling the assignee's line. */}
           <div>
             <Text type="text3" weight="medium">{team}</Text>
-            <Text type="text3" color="secondary"><Token>profiles.full_name</Token></Text>
+            <Text type="text3" color="secondary">{assigneeName ?? "—"}</Text>
             {createdBy && (
               <Text type="text3" color="secondary" ellipsis={false}>
                 Created by {createdBy}

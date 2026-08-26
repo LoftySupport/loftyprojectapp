@@ -22,7 +22,15 @@ html, body, #root { height: 100%; }
   flex: 1 0 auto;
   min-height: 100%;
   min-width: 0;
+  /* The chrome's geometry, published for anything that overlays the page. The job
+     drawer and the create panel cover the MAIN AREA, not the app: nav and header stay
+     visible and usable beside and above them (Amber, 26 August — a full-screen panel
+     "should just cover the main part of the app"). These two variables are the whole
+     contract: left edge of the main area, and its top. */
+  --shell-rail-w: 232px;
+  --shell-header-h: 64px;
 }
+.app-shell:has(.app-side.is-collapsed) { --shell-rail-w: 68px; }
 .app-body {
   display: flex;
   flex-direction: column;
@@ -154,9 +162,18 @@ html, body, #root { height: 100%; }
   gap: var(--space-12);
   background: var(--lofty-header-bg);
   color: var(--fixed-light-color);
-  padding: var(--space-12) var(--space-24);
+  padding: 0 var(--space-24);
   flex-shrink: 0;
   min-width: 0;
+  /* Sticky, like the rail beside it: the chrome stays put while the page scrolls, so
+     a panel that starts below the header lines up with it at any scroll position —
+     without this, the drawer's top edge would only match the header at the top of the
+     page. Fixed height for the same reason: the offset the panels use has to be a
+     number, and every row inside is 40px or less. */
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  height: var(--shell-header-h);
 }
 
 .app-menu-button {
@@ -327,6 +344,9 @@ html, body, #root { height: 100%; }
    900px, not 720px: the cut is now "does a 232px rail plus a readable board fit",
    which bites earlier than the old "does the header cluster fit beside the nav". */
 @media (max-width: 900px) {
+  /* The rail is an off-canvas drawer here, so the main area starts at the left edge —
+     panels that key off the rail's width must not leave a 232px dead strip. */
+  .app-shell, .app-shell:has(.app-side.is-collapsed) { --shell-rail-w: 0px; }
   .app-side {
     position: fixed;
     top: 0;

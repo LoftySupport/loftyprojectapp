@@ -516,6 +516,21 @@ a bad reason is `cancelled`, which is a status. Position says where a job got to
 says how it went, and collapsing them makes "cancelled during construction"
 unrepresentable.
 
+> **Reversed, 26 August 2026 (`0045`), on Amber's rule — kept above for its reasoning,
+> which shaped the reversal.** Cancelled becomes a position after all, because it needs
+> position *behaviour* a status cannot carry: a 12-month clock that moves it to the
+> archive, an exemption from every notification, automation and health alert, and a
+> revival path — **the one backward move the lifecycle allows**. The lifecycle is now
+> seven positions: the four working phases, then **Completed** (what this section's
+> "Closed" meant — done, won), **Closed** (the archive: reached 12 months after
+> Completed *or* Cancelled by the `lifecycle_archive()` clock, hidden by default and
+> shown by the Closed saved view), and **Cancelled**. What the original decision
+> protected is not lost: "cancelled during Construction" stays representable, because
+> `job_stage_entered_at` keeps when it was cancelled and the audit trail keeps where it
+> was cancelled from. `record_status` still carries `cancelled` as how it went;
+> `project_stage_from_jobs()` excludes cancelled jobs so a project neither waits for
+> nor follows them.
+
 **Everything else is still moving.** Lofty's words: *"the process map will always be an
 evolving process"*. So the nested pipelines are deliberately not seeded — the mechanism
 exists, the content waits. The first one to build is Design's, because it is the one

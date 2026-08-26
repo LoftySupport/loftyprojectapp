@@ -70,6 +70,12 @@
   cursor: pointer;
   font: var(--font-text3-normal);
   color: var(--link-color, var(--primary-color));
+  /* A 16px-tall line is a real link but a failing tap target — the responsive sweep
+     flagged every "N values" toggle at 93x16. Flex centring plus a min-height keeps
+     the text where it was while the hit area clears WCAG's 24px. */
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
 }
 .dict-values > summary::marker { color: var(--secondary-text-color); }
 .dict-value-list {

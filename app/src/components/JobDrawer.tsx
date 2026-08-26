@@ -120,11 +120,12 @@ export function JobDrawer({ job, onClose, onMoved }: {
               <Text type="text2" weight="bold">Who it’s with</Text>
               <StatusPill status={job.status} />
             </div>
-            {/* Same as the card: no invented initials while the assignee is unbound. */}
+            {/* Same as the card: the assignee resolves through boardModel now, and an
+                em dash is the honest answer when nobody is assigned. */}
             <div className="card-who">
               <div>
                 <Text type="text3" weight="medium">{job.team}</Text>
-                <Text type="text3" color="secondary"><Token>profiles.full_name</Token></Text>
+                <Text type="text3" color="secondary">{job.assigneeName ?? "—"}</Text>
               </div>
             </div>
           </section>

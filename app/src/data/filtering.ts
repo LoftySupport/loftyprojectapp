@@ -18,7 +18,12 @@ function jobMatchesOne(j: BoardJob, f: ToolbarFilter): boolean {
   if (f.value == null || f.value === "") return true;
   switch (f.field) {
     case "Stage": return j.stage === f.value;
-    case "Team": return j.team === f.value;
+    // One Team filter, two ways to belong to it. Amber, 26 August: it "should just
+    // read 'team' and anyone who owns a job, if they are in that team (even if they
+    // have multiple teams), it should show." So a job matches Design when Design is
+    // its owning team OR its assignee sits in Design — and there is deliberately no
+    // separate person filter alongside this one.
+    case "Team": return j.team === f.value || j.assigneeTeams.includes(f.value);
     // The Status select carries the enum as its value and the label as its text, so this
     // compares against the enum. Comparing labels would break the moment one is reworded.
     case "Status": return j.status === f.value;
