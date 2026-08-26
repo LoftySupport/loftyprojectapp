@@ -1,5 +1,10 @@
+import { useState } from "react";
 import { ButtonGroup, Heading, Text, Toggle } from "@vibe/core";
 import { useAuth } from "../data/AuthProvider";
+import {
+  JOBS_VIEWS, LANDING_PAGES, readPrefs, writePrefs,
+  type JobsView, type LandingPage
+} from "../data/preferences";
 import { useTeamLabels } from "../data/useLookups";
 import { SYSTEM_THEMES, type SystemTheme } from "../theme/loftyTheme";
 import { Select, toOptions } from "../components/Select";
@@ -40,6 +45,7 @@ export function SettingsPage({
   onThemeChange: (t: SystemTheme) => void;
 }) {
   const { profile } = useAuth();
+  const [prefs, setPrefs] = useState(readPrefs);
   // Names, not the slugs `profiles.teams` stores — see useTeamLabels. `resolved` is
   // what keeps a foreign key off the screen while the lookup is still in flight.
   const { labels: teamLabels, resolved: teamsResolved } = useTeamLabels();
@@ -89,20 +95,24 @@ export function SettingsPage({
           <div className="panel-head">
             <Text type="text2" weight="bold">Where you land</Text>
           </div>
-          <Row label="Landing page" hint="the page you open on">
+          {/* Real since G39 — these rendered as inert selects, the one thing this app
+              otherwise refuses to ship. Saved on this device (the theme's precedent);
+              the hint owns up to that, because Amber's Q9 wants them roaming with the
+              profile, which is a Phase C preferences home. */}
+          <Row label="Landing page" hint="the page you open on — saved on this device; roaming comes with profile preferences">
             <Select
               aria-label="Landing page"
-              options={toOptions(["Dashboard", "Projects", "Jobs", "Reports"])}
-              value="Dashboard"
-              onChange={() => {}}
+              options={toOptions([...LANDING_PAGES])}
+              value={prefs.landingPage}
+              onChange={v => setPrefs(writePrefs({ landingPage: v as LandingPage }))}
             />
           </Row>
-          <Row label="Default jobs view">
+          <Row label="Default jobs view" hint="what the Jobs page opens as when the link doesn't say">
             <Select
               aria-label="Default jobs view"
-              options={toOptions(["Board", "Table", "Gantt", "Calendar"])}
-              value="Board"
-              onChange={() => {}}
+              options={toOptions([...JOBS_VIEWS])}
+              value={prefs.defaultJobsView}
+              onChange={v => setPrefs(writePrefs({ defaultJobsView: v as JobsView }))}
             />
           </Row>
           <Row label="Theme" hint="Vibe ships light, dark and black">

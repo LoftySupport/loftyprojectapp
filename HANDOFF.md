@@ -118,6 +118,19 @@ where the data is not real yet; every placeholder names itself):
 - Responsive sweep back to 50/50 (the bell had squeezed the avatar button to 16px at
   320; icons no longer shrink and the right cluster's gap tightened).
 
+A sixth batch — the A-class polish:
+- **Toasts** (`Toasts.tsx`), fired only where success is otherwise invisible: job
+  removed, user saved/added/deactivated. Bottom-centre; note the gotcha — Vibe's Toast
+  is already `position: fixed; top: 0`, so overriding `bottom` without `top: auto`
+  stretches it the full height of the screen (watched happening).
+- **Working preferences** (`data/preferences.ts`, G39): landing page and default jobs
+  view are real, localStorage for now with the hint owning up to it; Amber's Q9
+  roaming/saved-views layers still need their Phase C home.
+- **Report rows open the job** (G38), and the report tables stopped rendering tokens
+  for the address and assignee the board model already resolves.
+- **New-project preview** (G32) states consequences without guessing the number; the
+  header search widens on focus (G4).
+
 Still open from this session: **four live tables still have no dictionary entries**
 — `pipelines`, `job_pipeline_positions`, `job_stage_events` (0029) and
 `dictionary_overrides` (0044) — and `pipeline_stages` is only covered for its two

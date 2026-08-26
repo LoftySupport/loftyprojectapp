@@ -22,6 +22,7 @@ import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import type { StageName, TeamId } from "../data/types";
 import { accentStyle, columnAccent } from "../theme/accents";
+import { readPrefs } from "../data/preferences";
 import { Token } from "../components/Token";
 import { Toolbar } from "../components/Toolbar";
 import { Problem, Result } from "../components/Form";
@@ -57,7 +58,9 @@ export function JobsPage() {
 
   const {
     view, setView, grouping, setGrouping, filters, setFilters, saved, setSaved, search
-  } = useBoardParams({ view: "Board", grouping: "Stage" });
+    // The default view is the preference (G39); a link that names its own view still
+    // wins, because the URL is the record of what somebody sent you.
+  } = useBoardParams({ view: readPrefs().defaultJobsView, grouping: "Stage" });
   /**
    * Drag a card between columns — but only when the columns ARE the lifecycle, and only
    * for people the database would let finish the move. Grouped by Team the columns are

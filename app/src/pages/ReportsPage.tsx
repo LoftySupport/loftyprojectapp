@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Heading, Tab, TabList, Text } from "@vibe/core";
 import { RECORD_STATUS_LABELS } from "../data/types";
 import { useStages, useTeams } from "../data/useLookups";
@@ -22,6 +23,8 @@ import "../components/ui.css";
 export function ReportsPage() {
   const [tab, setTab] = useState(0);
   const [filters, setFilters] = useState<ToolbarFilter[]>([]);
+  // Report rows open the job (G38) — the one table family that didn't navigate.
+  const navigate = useNavigate();
 
   const { stageNames } = useStages();
   const { teamNames } = useTeams();
@@ -135,12 +138,12 @@ export function ReportsPage() {
                 </thead>
                 <tbody>
                   {attention.map(j => (
-                    <tr key={j.jobNumber}>
+                    <tr key={j.jobNumber} onClick={() => navigate(`/jobs/${encodeURIComponent(j.jobNumber)}`)} style={{ cursor: "pointer" }}>
                       <td>{j.jobNumber}</td>
-                      <td><Token>addresses.consolidated_address</Token></td>
+                      <td>{j.currentAddress ?? <Token>addresses.consolidated_address</Token>}</td>
                       <td>{j.stage}</td>
                       <td>{j.team}</td>
-                      <td><Token>profiles.full_name</Token></td>
+                      <td>{j.assigneeName ?? "\u2014"}</td>
                       <td className="num">{j.daysInStage}</td>
                       <td><StatusPill status={j.status} /></td>
                     </tr>
@@ -186,10 +189,10 @@ export function ReportsPage() {
               </thead>
               <tbody>
                 {jobs.map(j => (
-                  <tr key={j.jobNumber}>
+                  <tr key={j.jobNumber} onClick={() => navigate(`/jobs/${encodeURIComponent(j.jobNumber)}`)} style={{ cursor: "pointer" }}>
                     <td>{j.jobNumber}</td>
                     <td>{j.projectNumber}</td>
-                    <td><Token>addresses.consolidated_address</Token></td>
+                    <td>{j.currentAddress ?? <Token>addresses.consolidated_address</Token>}</td>
                     <td>{j.stage}</td>
                     <td>{j.team}</td>
                     <td className="num">{j.daysInStage}</td>

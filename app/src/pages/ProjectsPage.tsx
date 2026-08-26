@@ -20,6 +20,7 @@ import { Select, toOptions } from "../components/Select";
 import { NewProjectDialog, SplitProjectDialog } from "../components/CreateDialogs";
 import { InlineNewProjectRow } from "../components/InlineNewProjectRow";
 import { CommentsPanel } from "../components/CommentsPanel";
+import { useToasts } from "../components/Toasts";
 import { AddressFields } from "../components/CreateDialogs";
 import { useQuery } from "../data/DataProvider";
 import type { NewAddress } from "../data/types";
@@ -364,6 +365,7 @@ function ProjectDetail({
   const navigate = useNavigate();
   const repo = useRepository();
   const { can } = usePermission();
+  const { toast } = useToasts();
   const [removing, setRemoving] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -414,6 +416,9 @@ function ProjectDetail({
     setRemoveError(null);
     try {
       await repo.deleteJob(jobNumber);
+      // A toast because the row is gone the moment this succeeds — there is nowhere
+      // on screen left to say it worked.
+      toast(`Job ${jobNumber} removed.`, "normal");
       onChanged();
     } catch (e) {
       setRemoveError(e instanceof Error ? e.message : String(e));

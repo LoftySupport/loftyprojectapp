@@ -511,6 +511,21 @@ export function NewProjectDialog({
                 <AddressFields value={newAddress} onChange={setNewAddress} />
               </div>
             )}
+
+            {/* What this creates (G32). The number itself is the sequence's to give —
+                previewing a guess would promise a number somebody else can take first —
+                so the preview states the consequences, not the value. */}
+            <div className="create-preview">
+              <Text type="text3" color="secondary" ellipsis={false}>
+                <strong>What this creates:</strong> a project on the next free number
+                (1000-series), owned by Acquisition &amp; Development, opening in
+                Acquisition &amp; Development phase with 0 jobs
+                {dwellingCount
+                  ? ` — you'll be offered its ${dwellingCount} job${dwellingCount === 1 ? "" : "s"} (numbered -01 up) straight after.`
+                  : " — its first job will be numbered -01 when you split it."}
+                {" "}A project with no jobs has no progress or health to show.
+              </Text>
+            </div>
           </div>
         )}
         {error && <Problem>{error}</Problem>}

@@ -333,7 +333,10 @@ html, body, #root { height: 100%; }
 .app-permission { min-width: 130px; }
 
 /* Wide enough for an address fragment, and it gives up width before the nav does. */
-.app-search { min-width: 200px; max-width: 320px; flex: 1 1 200px; }
+/* Widens on focus — the prototype's affordance: the control you are typing into
+   gets the room while you use it. */
+.app-search { min-width: 200px; max-width: 320px; flex: 1 1 200px; transition: max-width 150ms ease; }
+.app-search:focus-within { max-width: 420px; }
 
 /* ---- narrow screens ------------------------------------------------------
    Below 900px the rail cannot share a line with the page and still leave the board

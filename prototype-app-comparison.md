@@ -343,6 +343,11 @@ bell and panel.
 
 #### G2 · Toasts on mutations — **A**
 
+**Update (rev 3, 26 Aug): built, with the prototype's restraint.** A `ToastsProvider`
+in the shell; fired only where success is otherwise invisible — job removed (the row is
+gone), user saved/added/deactivated (the panel closes). Bottom-centre; errors stay
+inline and verbatim. The create dialogs already confirm in place, so they don't toast.
+
 **Prototype.** A Vibe-spec toast layer (bottom-centre, auto-dismiss 5s, positive/negative/
 warning variants, optional action button, `vibeToast`, `index.html:10707-10731`). Fired in
 exactly four places — push-comment, push-property ("Manager updated on 4 jobs."), post
@@ -390,6 +395,8 @@ App today: native title= only, e.g. app/src/shell/AppShell.tsx:145-149
 ---
 
 #### G4 · Header search polish — **A** (minor)
+
+**Update (rev 3, 26 Aug): built** — the search widens on focus (320→420px, 150ms).
 
 **Prototype.** The header search widens 220px → 280px on focus with a 150ms transition and
 lightens its background (`index.html:415-434`).
@@ -1369,6 +1376,10 @@ patterns rather than resurrecting it as-is.
 
 #### G32 · New-project "what this creates" preview — **A**
 
+**Update (rev 3, 26 Aug): built.** The panel states the consequences — next free
+1000-series number (the value itself is the sequence's to give, so it is not guessed),
+opening team and phase, the -01 job numbering, and the no-jobs-no-health note.
+
 **Prototype.** The new-project modal's right column previews: the project number it will
 take, what its first job would be numbered, jobs 0, and the note "A project with no jobs
 shows 0% progress and no health until its first job is created"
@@ -1542,6 +1553,10 @@ App today: app/src/pages/ReportsPage.tsx (Job report tab, plain table)
 
 #### G38 · Clickable report rows — **A**
 
+**Update (rev 3, 26 Aug): built** — attention and job-report rows open the job. The
+same pass resolved two stale tokens: the report tables now show the real address and
+assignee the board model has carried since PR #37/PR #39.
+
 **Prototype.** Every report row/attention row opens the job's drawer.
 
 **App today.** Reports rows are inert — the one table family in the app that doesn't
@@ -1560,6 +1575,12 @@ App today: app/src/pages/ReportsPage.tsx (all three tabs' tables)
 ---
 
 #### G39 · Working preferences — **A**
+
+**Update (rev 3, 26 Aug): the A-half is built.** Landing page and default jobs view are
+real (`data/preferences.ts`, localStorage — the theme's precedent), applied at the index
+route and as `useBoardParams`' default; a link naming its own view still wins. The hint
+owns up to device-local storage. The C-half — profile-roaming defaults, session view
+state, user-saved views (Amber's Q9 layers) — still needs its preferences home.
 
 ![Settings](docs/comparison-screenshots/settings.png)
 

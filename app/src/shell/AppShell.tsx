@@ -11,6 +11,7 @@ import { initialsOf, useAuth } from "../data/AuthProvider";
 import { useSearch } from "../data/SearchProvider";
 import { AskDockProvider } from "../components/AskDock";
 import { NotificationsBell } from "../components/NotificationsBell";
+import { ToastsProvider } from "../components/Toasts";
 import { greetingName } from "../data/types";
 import "./AppShell.css";
 
@@ -243,6 +244,7 @@ export function AppShell() {
   useEffect(() => { setDrawerOpen(false); }, [location.pathname]);
 
   return (
+    <ToastsProvider>
     <AskDockProvider>
     <div className={"app-shell" + (narrow ? " is-narrow" : "")}>
       <a className="skip-link" href="#main">Skip to content</a>
@@ -341,5 +343,6 @@ export function AppShell() {
       </div>
     </div>
     </AskDockProvider>
+    </ToastsProvider>
   );
 }

@@ -6,6 +6,7 @@ import { CreatePanel } from "./CreatePanel";
 import { Field, Problem } from "./Form";
 import { MultiSelect, Select, toOptions } from "./Select";
 import { useRepository } from "../data/DataProvider";
+import { useToasts } from "./Toasts";
 import { useTeams } from "../data/useLookups";
 import {
   PERMISSION_LEVELS,
@@ -50,6 +51,7 @@ export function UserDialog({
   onSaved: () => void;
 }) {
   const repo = useRepository();
+  const { toast } = useToasts();
   const [form, setForm] = useState<NewProfile>(EMPTY);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +82,11 @@ export function UserDialog({
     try {
       if (profile) await repo.updateProfile(profile.id, form);
       else await repo.createProfile(form);
+      // A toast because the panel closes on success — the confirmation would
+      // otherwise vanish with it.
+      toast(profile
+        ? `${form.firstName} ${form.lastName}'s profile saved.`
+        : `${form.firstName} ${form.lastName} added.`);
       onSaved();
       onClose();
     } catch (e) {
@@ -213,6 +220,7 @@ export function DeactivateDialog({
   onSaved: () => void;
 }) {
   const repo = useRepository();
+  const { toast } = useToasts();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const restoring = profile ? !profile.active : false;
@@ -223,6 +231,7 @@ export function DeactivateDialog({
     setError(null);
     try {
       await repo.setProfileActive(profile.id, restoring);
+      toast(restoring ? `${profile.fullName} restored.` : `${profile.fullName} deactivated.`, "normal");
       onSaved();
       onClose();
     } catch (e) {

@@ -1254,3 +1254,13 @@ code { overflow-wrap: anywhere; }
 }
 .dept-block.is-current { border-left-color: var(--lofty-orange, #d96435); }
 .dept-block.is-done { border-left-color: var(--positive-color, #00854d); }
+
+/* ---- toasts --------------------------------------------------------------
+   Bottom-centre, the prototype's spot. Vibe's own rule is fixed top-centre — it
+   already carries position/left/transform, so this overrides only the edge; setting
+   bottom WITHOUT top:auto stretches the toast the full height of the screen. */
+.app-toast {
+  top: auto;
+  bottom: var(--space-24);
+  z-index: 46;
+}
