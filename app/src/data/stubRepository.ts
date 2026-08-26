@@ -50,12 +50,16 @@ const SEEDED = {
   updatedBy: null
 };
 
+
+
 export const SEED_STAGES: Stage[] = [
   { id: 1, name: "Acquisition & Development", position: 1, ...SEEDED },
   { id: 2, name: "Pre-construction", position: 2, ...SEEDED },
   { id: 3, name: "Construction", position: 3, ...SEEDED },
   { id: 4, name: "Handover & Maintenance", position: 4, ...SEEDED },
-  { id: 5, name: "Closed", position: 5, ...SEEDED }
+  { id: 5, name: "Completed", position: 5, ...SEEDED },
+  { id: 6, name: "Closed", position: 6, ...SEEDED },
+  { id: 7, name: "Cancelled", position: 7, ...SEEDED }
 ];
 
 /**
@@ -142,6 +146,9 @@ export function createStubRepository(): Repository {
     },
     async moveJobStage(): Promise<Job> {
       throw new Error("Moving a job between stages needs Supabase.");
+    },
+    async updateJob(): Promise<Job> {
+      throw new Error("Editing a job needs Supabase.");
     },
     async moveProjectStage(): Promise<Project> {
       throw new Error("Moving a project between stages needs Supabase.");

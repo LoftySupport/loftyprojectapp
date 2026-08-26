@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { Button, Modal, ModalContent, ModalFooter, ModalHeader, Text, TextField } from "@vibe/core";
+import {
+  Button, Modal, ModalBasicLayout, ModalContent, ModalFooter, ModalHeader, Text, TextField
+} from "@vibe/core";
 import { CreatePanel } from "./CreatePanel";
 import { Field, Problem } from "./Form";
 import { MultiSelect, Select, toOptions } from "./Select";
@@ -232,6 +234,9 @@ export function DeactivateDialog({
 
   return (
     <Modal show={show} onClose={onClose} id="deactivate-user">
+      {/* ModalBasicLayout is where Vibe's modal padding lives — without it the header
+          and content sit flush against the edges. Same fix as MoveStageDialog. */}
+      <ModalBasicLayout>
       <ModalHeader title={restoring ? `Restore ${profile?.fullName}` : `Deactivate ${profile?.fullName}`} />
       <ModalContent>
         <Text type="text2" element="p" ellipsis={false}>
@@ -245,6 +250,7 @@ export function DeactivateDialog({
         </Text>
         {error && <Problem>{error}</Problem>}
       </ModalContent>
+      </ModalBasicLayout>
       <ModalFooter
         primaryButton={{
           text: saving ? "Saving…" : restoring ? "Restore" : "Deactivate",

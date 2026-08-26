@@ -21,6 +21,40 @@
   --lofty-header-text-muted: #a9c6c8;
 }
 
+/* ---------------------------------------------------------------------------
+   The brand tokens, again, at body level — for PORTALS.
+
+   ThemeProvider scopes its generated CSS to its own wrapper div, and Vibe renders
+   every Modal and every Dropdown menu into document.body, OUTSIDE that wrapper. So a
+   modal's primary button painted monday.com blue while the button that opened it was
+   Lofty green. Same values as loftyTheme.ts (which still wins inside the wrapper by
+   specificity — these are the fallback for everything portaled out of it). The dark
+   overrides key off the body classes App.tsx already mirrors.
+   --------------------------------------------------------------------------- */
+/* body.light-app-theme, not bare body: Vibe puts its own palette on the
+   .light-app-theme class the body carries, and a class out-specifies an element. */
+body, body.light-app-theme {
+  --primary-color: #005058;
+  --primary-hover-color: #00393f;
+  --primary-selected-color: #d3e3e4;
+  --primary-selected-hover-color: #bcd4d6;
+  --text-color-on-primary: #ffffff;
+  --brand-color: #005058;
+  --brand-hover-color: #00393f;
+  --text-color-on-brand: #ffffff;
+}
+body.dark-app-theme,
+body.black-app-theme {
+  --primary-color: #4db3bd;
+  --primary-hover-color: #59c2cc;
+  --primary-selected-color: #173c41;
+  --primary-selected-hover-color: #1d4a50;
+  --text-color-on-primary: #12141f;
+  --brand-color: #4db3bd;
+  --brand-hover-color: #59c2cc;
+  --text-color-on-brand: #12141f;
+}
+
 .dark-app-theme {
   --lofty-orange-strong: #ff9478;
   --lofty-orange-tint: #3d2a24;

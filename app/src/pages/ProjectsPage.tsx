@@ -228,8 +228,10 @@ export function ProjectsPage() {
             <ProjectCard
               key={p.projectNumber}
               projectNumber={p.projectNumber}
-              jobNumbers={p.jobs.map(j => j.jobNumber)}
+              jobs={p.jobs.map(j => ({ jobNumber: j.jobNumber, address: j.currentAddress ?? null }))}
               address={p.currentAddress}
+              suburb={p.suburb}
+              stage={p.stage}
               projectType={p.projectType}
               targetCompletion={p.targetCompletion}
               status={p.status}
@@ -242,7 +244,7 @@ export function ProjectsPage() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Project</th><th>Address</th><th>Suburb</th><th>Type</th>
+                <th>Project</th><th>Address</th><th>Suburb</th><th>Stage</th><th>Type</th>
                 <th>Target completion</th><th className="num">Jobs</th><th>Status</th>
               </tr>
             </thead>
@@ -252,6 +254,7 @@ export function ProjectsPage() {
                   <td>{p.projectNumber}</td>
                   <td>{p.currentAddress ?? <Token>project_display.current_address</Token>}</td>
                   <td>{p.suburb ?? <Token>addresses.suburb</Token>}</td>
+                  <td>{p.stage}</td>
                   <td>
                     {p.projectType
                       ? PROJECT_TYPE_LABELS[p.projectType]
@@ -270,7 +273,7 @@ export function ProjectsPage() {
                   toolbar button opens the panel; this is for when you are already
                   looking at the list and want three more sites in it. */}
               {can("user") && (
-                <InlineNewProjectRow columns={7} onCreated={refresh} />
+                <InlineNewProjectRow columns={8} onCreated={refresh} />
               )}
             </tbody>
           </table>

@@ -36,7 +36,7 @@ TEAMS = [
 # row below used one of them. Kept honest by verify/seeds.sh, which reads this file.
 STAGES = [
     "Acquisition & Development", "Pre-construction", "Construction",
-    "Handover & Maintenance", "Closed",
+    "Handover & Maintenance", "Completed", "Closed", "Cancelled",
 ]
 STATUSES = ["on_track", "at_risk", "behind_schedule", "on_hold", "completed", "cancelled", "archived"]
 PROJECT_TYPES = ["residential", "commercial", "development"]

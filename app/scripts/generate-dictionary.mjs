@@ -48,7 +48,24 @@ function emit(tsPath) {
 
 emit(srcPath);
 const tmp = join(dir, "dictionary.mjs");
-const { DICTIONARY, DICTIONARY_TABLES, STATUS_LABELS } = await import(pathToFileURL(tmp).href);
+const { DICTIONARY, DICTIONARY_TABLES, STATUS_LABELS, TABLE_DESCRIPTIONS } =
+  await import(pathToFileURL(tmp).href);
+
+// Every table gets a purpose line, and only real tables get one. Refusing to write the
+// file beats writing it with a hole in it — a missing description would just render as
+// a table that apparently needs no explaining, which is the one thing none of them is.
+const undescribed = DICTIONARY_TABLES.filter(t => !TABLE_DESCRIPTIONS[t]);
+const orphaned = Object.keys(TABLE_DESCRIPTIONS).filter(t => !DICTIONARY_TABLES.includes(t));
+if (undescribed.length || orphaned.length) {
+  if (undescribed.length) {
+    console.error(`No TABLE_DESCRIPTIONS entry for: ${undescribed.join(", ")}`);
+  }
+  if (orphaned.length) {
+    console.error(`TABLE_DESCRIPTIONS names tables the dictionary does not: ${orphaned.join(", ")}`);
+  }
+  console.error("Fix TABLE_DESCRIPTIONS in src/data/dictionary.ts — nothing was written.");
+  process.exit(1);
+}
 
 const esc = s => String(s ?? "").replace(/\|/g, "\\|").replace(/\n/g, " ");
 
@@ -97,6 +114,8 @@ lines.push("");
 for (const table of DICTIONARY_TABLES) {
   const cols = DICTIONARY.filter(d => d.table === table);
   lines.push(`## \`${table}\``);
+  lines.push("");
+  lines.push(TABLE_DESCRIPTIONS[table]);
   lines.push("");
   lines.push("| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |");
   lines.push("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");

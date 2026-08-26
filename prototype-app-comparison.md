@@ -9,6 +9,21 @@ A readable version with the screenshots inline is published at
 https://claude.ai/code/artifact/4f096b79-6608-47ca-9259-a6d030f651ce — show that one to
 people; edit this file.
 
+**Revision 2 — 25 Aug 2026, later the same day.** Two things landed after the first
+version, and this revision folds both in:
+
+1. **The app moved.** PR #37 merged (commits `dadf7c9`…`4867f85`, migrations `0039`–`0044`):
+   stage moves with drag-and-drop, real comments, `property_defs` as a table with a Setup
+   screen, project-page editing, address history, project lifecycle stage, SharePoint
+   columns, per-lot split numbers. §1.5 is the delta ledger; every affected entry carries
+   an **Update (rev 2)** paragraph, and the summary table shows current classes.
+2. **Amber answered the ten questions** (plus a lifecycle-stages note). §1.6 records the
+   decisions and what each unblocks; §5's questions are now marked answered.
+
+One caution for readers: `HANDOFF.md` has **not** been updated for PR #37 — its "most
+recent session" section still describes the session before it. Where this document cites
+HANDOFF for state of play, the app is now ahead of it.
+
 **Screenshots.** Every prototype surface referenced here is captured in
 `docs/comparison-screenshots/` (33 PNGs, taken from the live prototype at 1440×900 with the
 prototype banner dismissed, signed in as *Demo Admin* unless noted). The app side could not
@@ -103,61 +118,158 @@ Paths are from each repo's root. Line numbers are correct on 2026-08-25; the fun
 component name is included so the reference survives drift. Both codebases are mapped in
 Appendix A so you can navigate without re-deriving structure.
 
+### 1.5 What PR #37 changed (rev 2 delta ledger)
+
+Merged the same day as revision 1, PR #37 (+3,004/−142 across 28 app/doc files, migrations
+`0039`–`0044`, two new components) closed or reshaped a slice of this catalogue. Verified
+against source on 25 Aug:
+
+**Now real:**
+
+| Landed | Where | Gaps affected |
+|---|---|---|
+| **Stage moves, both gestures**: board drag (native HTML5, manager+, Stage grouping only, backward drops refused *during* the drag), a forward-only picker in the drawer and on the project page, one confirmation modal naming from→to and warning on phase skips | `JobsPage.tsx:66,217-256`, `MoveStageDialog.tsx`, `moveJobStage`/`moveProjectStage` (`supabaseRepository.ts:994-1026`), DB guards in `0038`/`0039` | G7 largely built · G16 partially |
+| **Comments, read + write**: `CommentsPanel` on the job drawer and project page; author stamped by trigger; newest comment is the record's "Latest update" | `CommentsPanel.tsx`, `listComments`/`addComment` (`supabaseRepository.ts:680-712`) | G18 partially · G6, G46 unblocked |
+| **`property_defs` is a table with a screen**: Setup → Properties creates, deletes, and toggles `required`; superadmin-gated in the app and by policy; ships empty (nothing seeded, by design) | `0043`, `SetupPage.tsx:109-350`, four repository methods | G42 largely built · G17 narrows to `property_values` |
+| **Dictionary edits persist** to `dictionary_overrides` (overrides, not a copy) | `0044`, `DictionaryPage.tsx:78-93` | closes rev 1's "edits live in page state" caveat |
+| **Project page reads and writes**: address/suburb/council/type resolved; three dates + SharePoint URL editable via a patch-shaped `updateProject`; "+ Add another address" with a history table (`0042`'s trigger finally written) | `ProjectsPage.tsx:283-626`, `supabaseRepository.ts:1028-1090` | G29 largely built · G26's join **fixed** (`boardModel.ts:170-191` now populates addresses, dates, stage) |
+| **Project lifecycle stage**, following its slowest job, forwards only, by trigger | `0039`, `0041`, shown at `ProjectsPage.tsx:405-422` | new since rev 1 |
+| **SharePoint folder columns on both tables**; project page has the editable URL + "Open folder" link | `0040`, `ProjectsPage.tsx:459-485` | G24 drops to class A — job-side UI only |
+| **Per-lot lot numbers and old job numbers** on the split, validated before any insert | `CreateDialogs.tsx`, `supabaseRepository.ts:846-973` | split flow richer |
+| **Status pill hidden on cards** (`SHOW_STATUS_ON_CARDS = false`) — still shown in drawer and tables | `RecordCards.tsx:33` | G5/G6 note |
+
+**Confirmed unchanged** (rev 1's claims stand): toolbar filters and the inert date control,
+saved views, jobs/projects table sorting (SortableTable still Admin-only), drawer structure
+(no tabs; checkpoints still an empty disabled list), assignee (token everywhere),
+notifications, toasts, tooltips, dashboard, reports, templates, mentions UI, and a
+human-readable activity feed (`activity_events` still has no writer — a stage move lands in
+the forensic `activity_audit` only).
+
+### 1.6 Decisions from Amber (25 Aug 2026)
+
+The ten questions in §5, answered. Recorded here in full because several re-class gaps:
+
+1. **At-risk / overdue** — defined per stage in an **SLA editor that lives in the
+   Automations screen** (not built yet): stage name + **expected days in stage** + an
+   **at-risk lead** (days before due at which the job flags at-risk). Overdue = in the
+   stage longer than the set days. → G43's spec is final (and its home is Setup →
+   Automations, not a new "Process" section); unblocks the D-side of G1, G13, G33, G36.
+2. **Assignment** — jobs get an **assignee team and an assignee user property**, editable
+   in the app; **projects get the same**; every job is **auto-assigned to Acquisition &
+   Development on creation**. → A schema change (columns on jobs and projects), then every
+   assignee-blocked item (G6 footer, G33 my-jobs, G47 Team-member filter, G18 mentions
+   fan-out, G1 signals) becomes ordinary C-class wiring.
+3. **AI dock** — **survives.** G23's decision resolves to yes; build once comments, SLAs
+   and assignment give it real context to assemble.
+4. **Notifications** — **this phase, in-app**: the dashboard surfaces and the header bell.
+   Teams and email channels come later. → G1's channel question answered; G40's matrix
+   narrows to in-app until then.
+5. **Drag-and-drop** — "yes definitely". Confirmed the same day it shipped (§1.5); G7's
+   remaining work is polish, not permission.
+6. **Single-job creation / variations** — **variations will exist**; how is to be
+   confirmed. G31 stays open on the details, not the principle.
+7. **Push project→jobs** — applies to **what is set at project creation**; the push
+   pattern survives for those properties. Details to firm up alongside 6. (G30)
+8. **Waiting-on / change requests** — **yes, modelled as part of the variation request**;
+   details TBC but "very important to keep". (G25 confirmed, tied to variations.)
+9. **Preferences** — three layers, all wanted: **profile-backed defaults** (log in
+   anywhere, land on your defaults), **session-persistent view state** (switch pages and
+   come back — your view/filter choices hold), and **user-saved views** (beyond the three
+   fixed tabs). → G39 grows from "make the selects real" to a small feature: profile
+   preference storage + the existing URL state persisted per session + a saved-views table.
+10. **Empty columns** — **keep them visible.** The app's current always-render behaviour
+    is the decision; G11 closes.
+
+**Lifecycle revision (Amber's note, recorded verbatim in substance).** The lifecycle needs
+positions beyond today's five: a job or project can be **Completed**, and after **12
+months** in Completed (or Cancelled) it moves to **Closed** — hidden by default, visible by
+filter. **Cancelled** is its own position: a job can be cancelled without being complete.
+Cancelled is **the only exception to forwards-only** — a cancelled job may be revived and
+move backwards to a working stage. Once cancelled, its data is neither changed nor deleted,
+but **no notifications, automations, or health alerts fire** for it.
+
+Consequences worth flagging before Phase B (this is spine-level — the cheapest kind of
+change to make now, per `HANDOFF.md`):
+- `STAGE_NAMES` / the stage CHECKs (`types.ts:857-864`, `0035`, `0039`) hold five values
+  ending in Closed; this revision implies **Completed, Closed, and Cancelled** as distinct
+  positions with a 12-month automation between them.
+- It **revises `schema-plan.md`'s recorded decision** that "cancellation is not a phase —
+  it's a status"; the schema plan should log the reversal with this reasoning, not silently
+  flip.
+- The new forwards-only guards (`0039`'s `jobs_guard_linear_stage` /
+  `projects_guard_linear_stage`, `0041`'s slowest-job clamp) need a **cancelled-revival
+  carve-out**, and the 12-month Completed→Closed move is the first real automation
+  (`pg_cron` is already installed).
+- Every alerting feature in this document (G1, G33, G36) inherits the rule: **cancelled
+  records are excluded from signals.**
+
+> **Implemented, 26 Aug (`0045` + app, same branch):** the seven positions (Closed
+> renamed Completed; Closed the archive; Cancelled with the revival carve-out), the
+> guards, the `lifecycle_archive()` 12-month clock (pg_cron where present), cancelled
+> jobs excluded from the project roll-up, the Cancel…/Revive to… controls in the stage
+> picker, saved views hiding Closed by default, and the reversal logged in
+> `schema-plan.md`. Also landed with it: assignee bound everywhere (the column existed
+> since 0028 — cards, table, drawer and Team-member grouping now show real names), the
+> Team filter matching membership per Amber's rule, modal padding fixed at its cause
+> (`ModalBasicLayout` + body-level brand tokens for everything Vibe portals out of the
+> ThemeProvider), and panels that cover the main area instead of the nav.
+
 ---
 
 ## 2. Gap catalogue
 
-Summary (details follow; ✦ = has a screenshot):
+Summary (details follow; ✦ = has a screenshot; classes are **as of rev 2** — struck-through
+entries were resolved between revisions):
 
-| # | Gap | Class |
+| # | Gap | Class (rev 2) |
 |---|---|---|
-| G1 | Notifications: bell, badge, panel, seven derived signals ✦ | C+D |
+| G1 | Notifications: bell, badge, panel, seven derived signals ✦ | C — channels & thresholds decided |
 | G2 | Toasts on mutations | A |
 | G3 | Styled tooltips | A |
 | G4 | Header search polish (focus-widen) | A |
 | G5 | Phase-accent colour system on board columns ✦ | B |
 | G6 | Job card content ✦ | C (mixed) |
-| G7 | Drag-and-drop between stage columns | B |
+| G7 | ~~Drag-and-drop between stage columns~~ | **Largely built** (PR #37) |
 | G8 | Column drill-down pages ✦ | B |
 | G9 | View header: title, filter sentence, breadcrumbs, collapse, drag hint ✦ | A |
 | G10 | Mirror top scrollbar over wide views | A |
-| G11 | Empty-column policy (skip vs render) | A |
+| G11 | ~~Empty-column policy (skip vs render)~~ | **Closed** — keep visible (Amber) |
 | G12 | Jobs table: columns and sorting ✦ | A (partial C) |
 | G13 | Real Gantt ✦ | B+C |
 | G14 | Real calendar ✦ | C |
 | G15 | Drawer: fullscreen toggle and tabs ✦ | A |
-| G16 | Drawer: editable controls and the single write path | C |
-| G17 | All-properties view ✦ | C |
-| G18 | Unified activity & comments feed with @mentions ✦ | C |
+| G16 | Drawer: editable controls and the single write path | C — stage move built |
+| G17 | All-properties view ✦ | C — now on `property_values` |
+| G18 | Unified activity & comments feed with @mentions ✦ | C — comments built |
 | G19 | In-drawer search and jump ✦ | A |
 | G20 | Drawer polish: project chip, Esc two-step, focus, scroll preservation | A |
 | G21 | Departments / handoff view ✦ | D |
 | G22 | Scheduling checklists ✦ | D |
-| G23 | "Ask" callout and AI dock ✦ | D |
-| G24 | "Open job file" (SharePoint link) | C |
-| G25 | "Request changes" flow | D |
-| G26 | Project cards: progress, per-job lines ✦ | B+C |
-| G27 | Project table columns ✦ | C |
-| G28 | Project Gantt and calendar ✦ | C |
-| G29 | Project detail editing ✦ | C |
-| G30 | Push-to-jobs ✦ | D |
-| G31 | Job creation from template with preview ✦ | D |
+| G23 | "Ask" callout and AI dock ✦ | C — decided: it survives |
+| G24 | Job file / SharePoint folder links | **A** — data ready, UI only |
+| G25 | "Request changes" flow | D — confirmed, via variations |
+| G26 | Project cards: progress, per-job lines ✦ | B — join fixed (PR #37) |
+| G27 | Project table columns ✦ | B+C |
+| G28 | Project Gantt and calendar ✦ | B — dates now editable |
+| G29 | ~~Project detail editing~~ ✦ | **Largely built** (PR #37) |
+| G30 | Push-to-jobs ✦ | D — narrowed to creation-set properties |
+| G31 | Job creation from template with preview ✦ | D — variations TBC |
 | G32 | New-project "what this creates" preview | A |
-| G33 | Populated personal dashboard ✦ | C+D |
+| G33 | Populated personal dashboard ✦ | C — all three blockers answered |
 | G34 | Report KPIs: blocked, conflicts ✦ | C |
 | G35 | Phase-coloured report bars | B |
-| G36 | Leadership analytics: overruns, bottlenecks ✦ | D |
+| G36 | Leadership analytics: overruns, bottlenecks ✦ | C — SLA spec final |
 | G37 | Printable job report ✦ | A |
 | G38 | Clickable report rows | A |
-| G39 | Settings: working preferences ✦ | A |
-| G40 | Settings: notification matrix persistence ✦ | C+D |
+| G39 | Preferences, view persistence, saved views ✦ | A+C — scope grew (Amber) |
+| G40 | Settings: notification matrix persistence ✦ | C — in-app first |
 | G41 | Template / checkpoint editing ✦ | D |
-| G42 | Property-definition editing ✦ | C |
-| G43 | Stage SLA editor (Setup → Process) | A |
+| G42 | ~~Property-definition editing~~ ✦ | **Largely built** (PR #37) |
+| G43 | Stage SLA editor (in Setup → Automations) | A — spec final, the unlock |
 | G44 | Team management UI ✦ | A |
 | G45 | Permissions matrix, real ✦ | C |
-| G46 | Date-range filter ✦ | C |
-| G47 | Additional filter fields | C |
+| G46 | Date-range filter ✦ | C — comments give it a date |
+| G47 | Additional filter fields | C — assignee model decided |
 | G48 | Live-region announcements | A |
 
 ### Shell & chrome
@@ -212,6 +324,15 @@ Prototype: loftyprojectboard/index.html:8799-8918 (types, buildNotifications, pa
 App today: absent. Header lives in app/src/shell/AppShell.tsx:266-300; the seven event
            names already exist at app/src/pages/SettingsPage.tsx:18-26
 ```
+
+**Update (rev 2).** The D-side largely resolved: channels are decided (in-app — dashboard
+surfaces + the header bell — this phase; Teams/email later, per Amber Q4), overdue and
+at-risk thresholds are defined by the SLA spec (Q1: expected days + an at-risk lead per
+stage), and the assignee model is decided (Q2). Mentions still need a UI (the
+`comment_mentions` table already exists, `0032`), incoming-work still needs redefining
+against nested-pipeline ownership, and per the lifecycle revision **cancelled records
+never fire notifications**. Class is now plain C: build the table + triggers, then the
+bell and panel.
 
 ---
 
@@ -314,6 +435,12 @@ App today: app/src/components/ui.css:159 (single primary top border);
            columns render at app/src/pages/JobsPage.tsx:185-217
 ```
 
+**Update (rev 2).** Cards no longer carry a status pill at all (`SHOW_STATUS_ON_CARDS =
+false`, `RecordCards.tsx:33` — still shown in the drawer and tables). When the ramp lands,
+revisit whether health returns to records per the containers-encode-phase /
+records-encode-health rule; and note the lifecycle revision may add positions (Completed /
+Closed / Cancelled), so cut the ramp against the final phase list, not today's five.
+
 ---
 
 #### G6 · Job card content — **C (mixed)**
@@ -361,6 +488,14 @@ App today: app/src/components/RecordCards.tsx:18-91 (JobCard);
            app/src/data/boardModel.ts:105-141 (what a card can currently know)
 ```
 
+**Update (rev 2).** Three elements moved: the *latest-update line* is now feasible — the
+newest comment is the record's "Latest update" (`CommentsPanel.tsx`), so a card line needs
+only a per-card read of the newest comment; the *assignee footer* is decided (Q2: jobs and
+projects get an assignee team + user, auto-assigned to Acquisition & Development on
+creation) — a schema change, then ordinary wiring; and the *status pill* is currently
+hidden on cards entirely (`RecordCards.tsx:33`). Waiting-on now rides the variations model
+(Q8). Tags, dependency flag, and conflict remain as written.
+
 ---
 
 #### G7 · Drag-and-drop between stage columns — **B**
@@ -389,6 +524,20 @@ Prototype: loftyprojectboard/index.html:6889-6929 (drag handlers), 7210-7219
 App today: absent. Board columns app/src/pages/JobsPage.tsx:185-217; write path would be a
            new method in app/src/data/repository.ts
 ```
+
+**Update (rev 2): largely built, the same day.** PR #37 shipped stage moves better than
+the prototype's: board drag (native HTML5, `JobsPage.tsx:217-256`), enabled only when
+grouped by Stage **and** `can("manager")` (`:66`); backward drops are refused *during* the
+drag; a drop opens a **confirmation modal** naming from→to and warning when the move skips
+phases (`MoveStageDialog.tsx:39-108`) — a step the prototype never had; the drawer and
+project page carry a forward-only picker (`MoveStageControl`), which doubles as the
+keyboard path; and the database enforces manager+ and forwards-only itself (`0038`,
+`0039`), with `moveJobStage` surfacing an RLS-filtered zero-row update as a refusal
+(`supabaseRepository.ts:994-1012`). Amber confirmed the feature the same day ("yes
+definitely"). Remaining: the drag-hint pill in the view header (with G9); a
+human-readable feed entry for moves (writes land only in the forensic `activity_audit` —
+G18's `activity_events` writer covers this); and the lifecycle revision's
+**cancelled-revival carve-out** in the forwards-only guards.
 
 ---
 
@@ -492,6 +641,11 @@ filter on the group list.
 Prototype: loftyprojectboard/index.html:6883
 App today: app/src/pages/JobsPage.tsx:185-217
 ```
+
+**Update (rev 2): closed.** Amber decided — keep empty columns visible; the app's current
+always-render behaviour is the decision. (One wrinkle from the lifecycle revision: Closed
+is *hidden by default, visible by filter*, so always-render applies to the working phases,
+with Closed/Cancelled appearing only when filtered in.)
 
 ### Jobs — table, Gantt, calendar
 
@@ -655,6 +809,15 @@ App today: read-only: app/src/components/JobDrawer.tsx; no updateJob in
            app/src/data/repository.ts; inline-edit idiom to copy: app/src/components/UserRow.tsx:118-237
 ```
 
+**Update (rev 2).** The pattern this entry asked for now exists twice: `moveJobStage`
+(method + DB-side guard triggers + a confirming dialog, PR #37) and the patch-shaped
+`updateProject` (`supabaseRepository.ts:1028-1048`, `"key" in patch` so undefined ≠ null)
+— new job-field editing should copy those, not invent a third shape. The drawer's editable
+surface today: the stage move and the comment box. Assignee/team editing is now
+**decided** (Q2: assignee team + user columns on jobs and projects, auto-assigned to
+Acquisition & Development on creation) — schema first, then an `updateJob` following the
+`updateProject` precedent, then the selects.
+
 ---
 
 #### G17 · All-properties view — **C**
@@ -684,6 +847,13 @@ Prototype: loftyprojectboard/index.html:10256-10316 (allPropsHtml), 10234-10254
 App today: app/src/components/PropertySlots.tsx (renders nothing until property_defs
            exists); app/src/data/supabaseRepository.ts:877-901 (the empty returns)
 ```
+
+**Update (rev 2).** `property_defs` now exists (`0043`) with a working Setup screen
+(G42), but it ships empty — nothing seeded, by design — so the slot panels still render
+nothing until a superadmin defines fields. And even then the *value* half is still a
+token: `property_values` has no table and no repository method
+(`PropertySlots.tsx:73`). This gap's blocker narrows from "the definitions table" to
+"**`property_values`**".
 
 ---
 
@@ -720,6 +890,17 @@ Prototype: loftyprojectboard/index.html:10018-10031 (merge), 10318-10328 (panel)
 App today: app/src/components/JobDrawer.tsx (two token lines); types exist in
            app/src/data/types.ts; no feed methods in app/src/data/repository.ts
 ```
+
+**Update (rev 2): comments are built.** `CommentsPanel` (new in PR #37) reads and writes
+real comments on both jobs and projects — `listComments`/`addComment`
+(`supabaseRepository.ts:680-712`), author stamped by trigger, newest first, Enter submits,
+`can("user")`-gated; it sits in the drawer as "Updates & comments" (`JobDrawer.tsx:197`)
+and on the project page as "Latest update" (`ProjectsPage.tsx:549`). Still missing, and
+the panel says so itself (`CommentsPanel.tsx:20-23`): the **unified** feed —
+`activity_events` has no writer, so stage moves land only in the forensic
+`activity_audit`; **mentions** — `comment_mentions` exists in the DB (`0032`) with no UI
+or method (and Q2's assignee decision now gives mentions someone to fan out to); and
+comment edit/delete UI. The merge rule and mention-chip spec above remain the target.
 
 ---
 
@@ -877,6 +1058,11 @@ Prototype: loftyprojectboard/index.html:8761-8797 (dock), 7459-7560 (answers, as
 App today: absent
 ```
 
+**Update (rev 2): decided — it survives** (Amber, Q3). The open question closes as yes.
+Sequencing stands: build once comments (now real), SLAs (G43) and assignment (Q2) give the
+dock real context to assemble; the fact-assembly spec above is what a real model call gets
+handed.
+
 ---
 
 #### G24 · "Open job file" (SharePoint link) — **C**
@@ -896,6 +1082,16 @@ plain external link button in the drawer head region — no mock page, obviously
 Prototype: loftyprojectboard/index.html:9905-9939 (openDummySharePoint — the button, not the mock)
 App today: absent; document types in app/src/data/types.ts
 ```
+
+**Update (rev 2): now class A — the data landed, only the UI is missing.** `0040` added
+`projects.project_sharepoint_url` and `jobs.job_sharepoint_url` (https-checked); the
+project page already has the editable URL field and an "Open folder" link
+(`ProjectsPage.tsx:459-485`); the job's own and its project's URLs are selected and typed
+(`Job.sharepointUrl` / `Job.projectSharepointUrl`, `types.ts:340-347`) — but **nothing
+renders them on the job**: the drawer has no folder row and `BoardJob` doesn't carry the
+fields (`boardModel.ts:32-69`). Remaining work: two link rows in the drawer (own folder +
+project folder, per Lofty's rule that a job shows both), and carrying the fields through
+`boardModel`.
 
 ---
 
@@ -919,6 +1115,12 @@ trivial once modelled; model first.
 Prototype: loftyprojectboard/index.html:6938-6942 (card block), 10170-10226 (button in Main info)
 App today: absent
 ```
+
+**Update (rev 2): confirmed wanted** (Amber, Q8): waiting-on / change requests are
+modelled **as part of the variation request** — details TBC but "very important to keep".
+The `variations` tables already exist in the schema; when the variation flow is designed
+(with G31), the amber card block, the panel row, and the notification type above are the
+UI spec waiting for it.
 
 ### Projects
 
@@ -956,6 +1158,16 @@ App today: app/src/components/RecordCards.tsx:93-151 (ProjectCard);
            app/src/data/boardModel.ts:74-75 + 135-141 (the unpopulated address fields)
 ```
 
+**Update (rev 2): the join fix landed.** `useBoardRecords` now populates `currentAddress`,
+`originalAddress`, `suburb`, `council`, `stage`, `stageEnteredAt`, `startDate`, `endDate`,
+`targetCompletion`, `sharepointUrl` on every `BoardProject` (`boardModel.ts:170-191`, via
+the embed in `PROJECT_COLUMNS`) — project addresses resolve on cards, tables and the
+detail header the moment Phase B supplies rows. Remaining as written: the progress bar
+(projects now *have* a lifecycle stage that follows the slowest job, `0041` — so a
+position-based progress read is finally computable), the per-job `.pjl` lines (last
+activity needs G18's feed), and the worst-of health roll-up — noting cards currently show
+no status pill at all (`RecordCards.tsx:33`).
+
 ---
 
 #### G27 · Project table columns — **C**
@@ -977,6 +1189,10 @@ not return. Add sorting via the existing `SortableTable` while touching it (with
 Prototype: loftyprojectboard/index.html:8149-8186 (renderProjectList)
 App today: app/src/pages/ProjectsPage.tsx:152-261 (list mode, Table view)
 ```
+
+**Update (rev 2).** Address, suburb and target now resolve (G26's join fix). Remaining:
+progress + the at-risk flag (with G26), and sorting — the projects table is still plain
+`<th>`s, `SortableTable` still Admin-only.
 
 ---
 
@@ -1007,6 +1223,11 @@ Prototype: loftyprojectboard/index.html:8193-8260 (renderProjectGantt), 9636-966
 App today: app/src/pages/ProjectsPage.tsx (Toolbar views prop restricted to Board/Table)
 ```
 
+**Update (rev 2): unblocked.** Start, target and end dates are now real, editable columns
+on the project page (`ProjectsPage.tsx:433-454`) and carried on `BoardProject` — the data
+gap is gone. Class drops to B: build against real rows after Phase B, and it remains the
+cheaper, earlier win than the job gantt.
+
 ---
 
 #### G29 · Project detail editing — **C**
@@ -1035,6 +1256,17 @@ Prototype: loftyprojectboard/index.html:8403-8506 (detail + updateProjectPropert
 App today: app/src/pages/ProjectsPage.tsx:264-414 (ProjectDetail, read-only);
            no updateProject in app/src/data/repository.ts
 ```
+
+**Update (rev 2): largely built.** The project page now reads real values
+(address/suburb/council/type resolved) and **writes**: the three dates and the SharePoint
+URL through a patch-shaped `updateProject` (`ProjectsPage.tsx:433-483`,
+`supabaseRepository.ts:1028-1048`); "+ Add another address" with the history table is live
+(`ProjectsPage.tsx:488-545`, trigger in `0042`) — exactly the address-specific flow this
+entry asked for, not a text field. It also gained things the prototype never had: a
+project lifecycle stage with days-in-phase and a forward-only move control
+(`ProjectsPage.tsx:405-422`), following its slowest job by trigger (`0041`). Remaining:
+name and type are not editable (check whether they should be), and per Q2 the project
+gains editable assignee team + user.
 
 ---
 
@@ -1067,6 +1299,11 @@ Prototype: loftyprojectboard/index.html:8509-8666 (openPushModal, renderPushModa
 App today: absent; panel shell to use: app/src/components/CreatePanel.tsx
 ```
 
+**Update (rev 2).** Amber (Q7): push applies to **what is set at project creation** — the
+pattern survives, scoped to creation-set properties. Which exact fields that means (type?
+dates? the new assignee team/user from Q2?) firms up alongside the variations design; the
+diff-preview interaction spec above stands.
+
 ---
 
 #### G31 · Job creation from template with preview — **D**
@@ -1098,6 +1335,13 @@ Prototype: loftyprojectboard/index.html:7259-7451 (modal, preview, createJobFrom
 App today: split flow in app/src/components/CreateDialogs.tsx; dormant NewJobDialog at
            CreateDialogs.tsx:405-520; placement decision at app/src/pages/JobsPage.tsx:143-150
 ```
+
+**Update (rev 2).** Amber (Q6): **variations will exist** — how is to be confirmed. The
+principle is settled, only the mechanism is open. Note the split flow itself grew per-lot
+lot numbers and old job numbers in PR #37 (`createJobsFromSplit` now validates lots before
+any insert), so the dormant `NewJobDialog` is further behind the current creation idiom
+than at rev 1 — when variations are designed, rebuild against the split flow's validation
+patterns rather than resurrecting it as-is.
 
 ---
 
@@ -1156,6 +1400,13 @@ Prototype: loftyprojectboard/index.html:8926-9070 (renderUserDashboard, slices a
 App today: app/src/pages/DashboardPage.tsx (static; unused .pd-card CSS at
            DashboardPage.css:117-197 maps to the prototype's card anatomy)
 ```
+
+**Update (rev 2).** All three blockers now have answers: assignment (Q2 — assignee team +
+user columns, auto-assigned to Acquisition & Development on creation), overdue/at-risk
+thresholds (Q1 — the SLA spec), and notifications land **on the dashboard and the bell
+this phase** (Q4), which makes this page one of the two notification surfaces, not just a
+summary. Class drops to C: build each tile as its input lands, still never before.
+Cancelled records are excluded from every alert here (lifecycle revision).
 
 ### Reports
 
@@ -1227,6 +1478,12 @@ Prototype: loftyprojectboard/index.html:9090-9206 (renderLeadershipDashboard), 1
 App today: app/src/pages/ReportsPage.tsx (Leadership summary tab)
 ```
 
+**Update (rev 2).** The SLA spec is final (Q1): expected days **plus an at-risk lead**
+per stage — which gives this report a band the prototype never had (approaching-due, not
+just over). Class drops to C: lights up per stage as G43's editor gets values; still
+renders honestly where none are set. Cancelled records are excluded from overrun figures
+(lifecycle revision).
+
 ---
 
 #### G37 · Printable job report — **A**
@@ -1297,6 +1554,20 @@ App today: app/src/pages/SettingsPage.tsx:94-107 (inert selects); theme persiste
            precedent at app/src/App.tsx:84-96
 ```
 
+**Update (rev 2): the scope grew.** Amber (Q9) wants three layers, so the localStorage
+recommendation above is superseded:
+1. **Profile-backed defaults** — landing page and default views roam: log in anywhere,
+   land on your preferences. That's a preferences home on the profile (a column or small
+   table), not localStorage.
+2. **Session-persistent view state** — change board→table or set a filter, switch pages,
+   come back: the choice holds. The URL already carries this state (`useBoardParams`);
+   what's needed is remembering the last board query string per session and re-applying
+   it on return.
+3. **User-saved views** — beyond the three fixed tabs (`savedViews.ts`): users save a
+   named view (view + grouping + filters). Needs a `saved_views` table (owner, name,
+   query state) + RLS, and the tabs component grows a user section.
+Class becomes A (wire the selects to the store) + C (the preferences/saved-views tables).
+
 ---
 
 #### G40 · Notification matrix persistence — **C + D**
@@ -1318,6 +1589,11 @@ same honesty rule as G39.
 Prototype: loftyprojectboard/index.html:7566-7593 (types, channels, defaults)
 App today: app/src/pages/SettingsPage.tsx:18-26, 133-140 (uncontrolled toggles)
 ```
+
+**Update (rev 2).** Channels decided (Q4): in-app (dashboard + bell) this phase, Teams
+and email later. Until those channels exist the matrix should show only the in-app
+column — or say the rest isn't live yet. The quiet defaults still apply when email/Teams
+arrive.
 
 ### Templates, Setup, Admin
 
@@ -1376,9 +1652,18 @@ Prototype: loftyprojectboard/index.html:7741-7984 (formats, scopes, automations,
 App today: app/src/pages/SetupPage.tsx:87-147 (read-only Properties), :72-85 (Automations)
 ```
 
+**Update (rev 2): largely built.** `property_defs` is a real table (`0043`) and Setup →
+Properties now **creates, deletes, and toggles required** — add form with auto-slugged
+key, level, capture stage, team, format, automation (`SetupPage.tsx:109-350`),
+superadmin-gated in the app and by policy, shipping empty by design. Remaining: a general
+edit form (`updatePropertyDef` supports every field but the UI only edits `required`,
+`SetupPage.tsx:320-328`); archive-instead-of-delete is worth considering once real
+definitions accumulate; and the value side is G17's `property_values`. The board-filter
+bound still applies to what this screen may create.
+
 ---
 
-#### G43 · Stage SLA editor (Setup → Process) — **A**
+#### G43 · Stage SLA editor (in Setup → Automations, per rev 2) — **A**
 
 **Prototype.** Expected days per phase were hardcoded constants — superseded as data, but
 they powered every overdue/overrun feature (G1, G13, G33, G36).
@@ -1398,6 +1683,16 @@ Prototype: loftyprojectboard/index.html:9079-9088 (PHASE_EXPECTED_DAYS — super
 App today: no editor; values read via app/src/data/useLookups.ts (expectedDaysByStage —
            absent-not-zero rule at useLookups.ts:56-62); Setup shell at app/src/pages/SetupPage.tsx
 ```
+
+**Update (rev 2): the spec is final** (Q1), and its home moved — the SLA editor lives in
+the **Automations screen** (Setup → Automations, currently "Not built yet."), not a new
+Process section. Per stage: the stage name, **expected days in stage**, and an **at-risk
+lead** (days before due at which the job flags at-risk); overdue = in the stage longer
+than the set days; blank = no limit, never defaulted. That's one more column than the
+schema holds today (`pipeline_stage_expected_days` exists; the at-risk lead needs a
+sibling, e.g. `pipeline_stage_at_risk_days`) — a small migration, then the editor. Still
+class A-adjacent and still the unlock for G1, G13, G33 and G36; the lifecycle revision
+adds one rule: SLA clocks don't run on cancelled records.
 
 ---
 
@@ -1482,6 +1777,11 @@ App today: app/src/components/Toolbar.tsx:104-111 (inert select);
            app/src/data/useBoardParams.ts (URL state to extend)
 ```
 
+**Update (rev 2).** Comments now give every job and project a real dated event
+(`comment_created_at`), so "filter by latest activity date" finally has a source — the
+first workable basis for making the Date control real. Dated step-properties remain the
+richer source later.
+
 ---
 
 #### G47 · Additional filter fields — **C**
@@ -1507,6 +1807,19 @@ Prototype: loftyprojectboard/index.html:6283-6321 (FILTER_DEFS)
 App today: app/src/components/Toolbar.tsx:22-30 (FILTERABLE + rationale);
            app/src/data/useBoardParams.ts (reserved keys); app/src/data/filtering.ts
 ```
+
+**Update (rev 2).** The Team-member filter's blocker is resolved on paper: Q2 gives jobs
+an assignee team + user. Once those columns land, "put each back the moment its column
+exists" fires for `member` — and the assignee-*team* property also means the existing Team
+filter should be checked against which team field it filters (owning vs assignee).
+
+**Update (rev 3, 26 Aug): the Team filter question is answered and implemented.** Amber:
+it "should just read 'team', and anyone who owns a job, if they are in that team (even if
+they have multiple teams), it should show." So there is one Team filter and no separate
+person filter: a job matches Design when Design owns it **or** its assignee sits in
+Design (`filtering.ts`, via `BoardJob.assigneeTeams`). Team-member *grouping* also works
+now — `job_assignee_id` existed since 0028 and `boardModel` resolves it, so grouping
+shows real names with an honest "Unassigned" column.
 
 ---
 
@@ -1554,6 +1867,12 @@ Porting must not regress these — several are direct fixes of prototype problem
   — not 4,700 lines of lookalike CSS.
 - **Search that knows about address history** — matches on original addresses with a
   notice.
+- **(rev 2) Stage moves done properly** — a confirmation naming from→to with a
+  phase-skip warning, forwards-only and manager+ enforced *in the database* by trigger,
+  and a picker that doubles as the keyboard path. The prototype's drag just moved the
+  card. Also: address history with a visible timeline, dictionary overrides, and a
+  project stage that follows its slowest job by trigger — none of which the prototype
+  modelled.
 
 ## 4. Suggested implementation order
 
@@ -1587,35 +1906,56 @@ G1+G40 notifications · G21 departments/handoff · G22 checklists · G23 AI dock
 G25 change requests · G30 push-to-jobs · G31 creation flow · G36 leadership analytics ·
 G41 template editing.
 
-## 5. Questions for Amber
+**Rev 2 restatement.** PR #37 and the answers emptied or moved several packages, so the
+order now reads:
 
-The decisions this document cannot make (mostly restating HANDOFF's open list, now with
-their UI consequences attached):
+- **Done since rev 1:** G26's address join · G7 drag-and-drop · G29 project editing ·
+  G42 property definitions (largely) · G18's comment half · G11 (decision: closed).
+- **P2 (small wiring, outsized payoff) becomes:** G43 the SLA editor — now fully specified
+  (Q1) with one small migration for the at-risk lead column, still **the single highest-
+  leverage unbuilt item** · G44 teams UI · G24 job folder links (now UI-only) · G39's
+  select wiring · the **lifecycle revision** (Completed/Closed/Cancelled + the
+  cancelled-revival carve-out) — spine-level, so it belongs *before* Phase B and before
+  more forwards-only machinery accretes.
+- **New schema queue from the answers:** assignee team + user on jobs and projects with
+  the auto-assign-to-Acquisition-&-Development default (Q2) · preference storage and a
+  `saved_views` table (Q9) · the at-risk lead column (Q1). All "anything that becomes a
+  property — any time" changes.
+- **P3 (after Phase B)** unchanged: ramp, card content, drill-downs, project gantt,
+  job gantt last. **P4/P5** as above, minus what moved.
 
-1. **What makes a job at-risk / overdue?** (HANDOFF decision 1.) Blocks: kanban-by-health,
-   dashboard workload, needs-attention, stalled/overdue notifications, leadership
-   overruns. The cheap first step regardless of the answer is G43 — an editor so expected
-   days can exist at all.
-2. **How is a person assigned to a job?** A column on jobs, via tasks, or not at all?
-   Blocks every assignee display, "my jobs", member filtering/grouping, mentions fan-out.
-   Cheap to add per HANDOFF's property rule — but it's a model choice, not a UI one.
-3. **Does the AI dock survive** (react-migration's open question), given concept-spec
-   deferred AI features? If yes, the context-assembly spec is ready; if no, G23 closes.
-4. **Do notifications happen this phase**, and through which channels? The prototype's
-   quiet defaults are worth keeping; the seven signals need re-deriving per §G1.
-5. **Is drag-and-drop wanted at all?** It implies stage moves are a casual gesture; the
-   permission answer (managers move between stages) suggests yes for managers — confirm
-   before Package 3 builds it.
-6. **Does single-job creation return** alongside the lot-split (the variation-in-
-   construction scenario), and if so is it template-driven?
-7. **What is pushable** project→jobs in the current schema (G30) — status? comments?
-   properties? Or park the pattern?
-8. **Does "waiting on / change request" become a modelled thing** (G25)? It feeds cards,
-   the dashboard, and a notification type.
-9. **Preference persistence**: is per-browser (localStorage) enough for landing page /
-   default view / density, or should they roam with the profile?
-10. **The empty-column question** (G11): with five fixed phases, should empty columns
-    stay visible? (Recommend yes; decide after B.)
+## 5. Questions for Amber — answered 25 Aug 2026
+
+All ten were answered the day this document shipped; the full decisions are recorded in
+§1.6 and folded into the entries. In brief (✅ = settled, ◐ = settled in principle,
+details still owed):
+
+1. ✅ **At-risk / overdue** — per-stage SLA in the Automations screen: expected days +
+   an at-risk lead; overdue = past expected. (G43 spec final.)
+2. ✅ **Assignment** — assignee team + user columns on jobs *and* projects, editable;
+   auto-assigned to Acquisition & Development on creation.
+3. ✅ **AI dock** — survives.
+4. ✅ **Notifications** — this phase, in-app (dashboard + bell); Teams/email later.
+5. ✅ **Drag-and-drop** — "yes definitely" (and it shipped the same day, PR #37).
+6. ◐ **Single-job creation** — variations will exist; mechanism TBC.
+7. ◐ **Push project→jobs** — applies to creation-set properties; exact field list TBC.
+8. ◐ **Waiting-on / change requests** — yes, modelled inside the variation request;
+   details TBC, "very important to keep".
+9. ✅ **Preferences** — profile-backed defaults + session-persistent view state +
+   user-saved views. (G39 scope grew accordingly.)
+10. ✅ **Empty columns** — keep them visible.
+
+**Still owed (the new open list):**
+- The **variation model** — it now carries three features (single-job creation, waiting-on
+  /change requests, and part of push): what a variation is, who raises it, what it blocks.
+- The **lifecycle revision details** (§1.6): exact position list (Completed / Closed /
+  Cancelled alongside today's five), the 12-month Completed→Closed automation, the
+  cancelled-revival carve-out in the forwards-only guards — and logging the reversal in
+  `schema-plan.md` (it currently records "cancellation is a status, not a phase").
+- Whether the existing **Team filter** should read owning team, assignee team, or offer
+  both once Q2's columns land (G47).
+- `HANDOFF.md` needs its PR #37 session note — it currently describes the app as it was
+  before stage moves, comments, property_defs and project editing existed.
 
 ---
 

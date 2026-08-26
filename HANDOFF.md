@@ -6,7 +6,87 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 and before it, the spine review described there, because that is the only category of
 change that gets expensive once 200 jobs are in.
 
-Last updated: 2026-08-25.
+Last updated: 2026-08-26.
+
+---
+
+## Session of 2026-08-26 — the lifecycle grows Completed, Closed and Cancelled
+
+**`0045` and `0046` are applied to the live database** (verified: the seven-stage
+pipeline, the `lifecycle_archive` cron entry and the cascade trigger all present).
+The database also now holds real rows — 5 projects, 44 jobs — that Amber created;
+treat writes accordingly.
+
+- **Seven lifecycle positions** (Amber, 25 Aug): the four working phases, then
+  **Completed** (what 0035 called Closed — done, won), **Closed** (the archive —
+  reached 12 months after Completed or Cancelled by the `lifecycle_archive()` clock,
+  scheduled daily where pg_cron exists; hidden by default, shown by the Closed saved
+  view), and **Cancelled** (stopped without completing; **the one backward move the
+  lifecycle allows** — revival; fires no notifications, automations or health alerts
+  while there). This reverses `schema-plan.md`'s "cancellation is a status, not a
+  phase" — the reversal and its reasoning are logged there, next to the original.
+- **The guards carry the carve-outs** (`guard_lifecycle_is_linear`): Closed is
+  terminal for people; anything live may move to Cancelled; anything may leave
+  Cancelled. `project_stage_from_jobs()` excludes cancelled jobs, so a project
+  neither waits for nor follows them.
+- **The drawer's stage control grew the verbs**: Move (forwards, linear run only),
+  **Cancel…** (working phases only — a completed job isn't cancellable), and
+  **Revive to…** on a cancelled record. One confirmation dialog, three sets of copy.
+- **Assignee is bound** — `job_assignee_id` existed since 0028; `boardModel` now
+  resolves it to a name and to the person's teams, so cards, the table, the drawer
+  and Team-member grouping show real names, and an em dash when nobody is assigned.
+- **The Team filter matches membership** (Amber, 26 Aug): one filter named Team; a
+  job shows when the team owns it *or* its assignee sits in that team, however many
+  teams the person is in. There is deliberately no separate person filter.
+- **Panels cover the main area, not the app**: the header is sticky with a fixed
+  height, the shell publishes `--shell-rail-w`/`--shell-header-h`, and the drawer,
+  create panel and their scrims key off both — expand no longer hides the nav.
+- **Modal padding fixed at its cause**: Vibe's padding lives in `ModalBasicLayout`,
+  which neither modal used; both wrap it now. And Vibe portals modals and dropdown
+  menus to `document.body`, *outside* ThemeProvider's wrapper — the move dialog's
+  primary button was monday-blue. The brand tokens are now also declared at body
+  level in `tokens.css` (as `body.light-app-theme` etc., because Vibe's own palette
+  sits on those classes and out-specifies a bare `body`).
+- The responsive sweep is green again — the `/setup/dictionary` "N values" toggles
+  were failing the 24px tap-target check on `main` (93×16); the summary now carries
+  a 24px min-height. Note for this container: run the sweep with
+  `executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'` — the
+  pinned Playwright wants a browser build the image doesn't carry.
+
+Added later the same day, on Amber's follow-ups:
+- **A project move carries its jobs** (`0046`): moving a project forward brings every
+  job behind the new phase up to it; jobs already at or past it, cancelled or archived
+  stay put. With 0041 the pair is closed both ways and cannot loop — the cascade lands
+  the minimum exactly on the project's stage, and 0041's clamp only fires on
+  *strictly ahead*.
+- **Bulk edit on the jobs table**: checkboxes + a bar with Move to… (manager+, one
+  confirmation for the batch that says how many actually move), Set team… and Assign
+  to… — the last two via the new patch-shaped `updateJob` (owning team, assignee;
+  `user`+ by the existing policy). Writes go one at a time so a refusal names its job.
+- **The projects list stopped hiding what it knew**: cards now show the project's
+  stage, real suburb, and each job's own lot address (capped at 8 with an
+  "open the project" line — project 1006 has 30); the table gained a Stage column.
+  The data was resolved all along (G26's join); the components hadn't been updated
+  to render it.
+
+Later the same day: **every table in the dictionary now carries a purpose
+description** (`TABLE_DESCRIPTIONS` in `dictionary.ts` — rendered at the top of each
+card on the Tables tab and under each heading in `data-dictionary.md`). The generator
+refuses to write the file if the map and `DICTIONARY_TABLES` differ in either
+direction, and that refusal was watched firing before it was trusted.
+
+Still open from this session: the SLA editor (Setup → Automations; needs the at-risk
+lead column beside `pipeline_stage_expected_days`), **single-record assignee editing
+in the drawer** (`updateJob` now exists; the bulk bar uses it, the drawer doesn't
+yet), and the auto-assign-to-Acquisition-&-Development default on job creation
+(Amber's Q2). Also surfaced while writing the descriptions: **five live tables have
+no dictionary entries at all** — `pipelines`, `pipeline_stages`,
+`job_pipeline_positions`, `job_stage_events` (0029) and `dictionary_overrides`
+(0044) — so they have no card to describe either.
+
+**A session note for PR #37 (25 Aug — stage moves, comments, property_defs, project
+editing, address history) was never written**; `prototype-app-comparison.md` §1.5
+carries the full delta ledger for it.
 
 ---
 

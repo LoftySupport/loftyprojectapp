@@ -1,7 +1,12 @@
 import { useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
-import { Button, Counter, Heading, Text } from "@vibe/core";
-import { PROJECT_TYPE_LABELS, RECORD_STATUS_LABELS, RECORD_STATUSES } from "../data/types";
+import {
+  Button, Counter, Heading, Modal, ModalBasicLayout, ModalContent, ModalFooter,
+  ModalHeader, Text
+} from "@vibe/core";
+import {
+  LINEAR_STAGES, PROJECT_TYPE_LABELS, RECORD_STATUS_LABELS, RECORD_STATUSES
+} from "../data/types";
 import { useStages, useTeams, useTemplatePhases } from "../data/useLookups";
 import { useBoardRecords, type BoardJob } from "../data/boardModel";
 import { jobMatchesQuery, matchedOnPreviousAddress, useSearch } from "../data/SearchProvider";
@@ -13,12 +18,13 @@ import { SavedViewTabs } from "../components/SavedViewTabs";
 import { JobCard, StatusPill } from "../components/RecordCards";
 import { JobDrawer } from "../components/JobDrawer";
 import { JOB_MOVE_NOTE, MoveStageDialog, isForwardMove } from "../components/MoveStageDialog";
-import { useRepository } from "../data/DataProvider";
+import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
-import type { StageName } from "../data/types";
+import type { StageName, TeamId } from "../data/types";
 import { Token } from "../components/Token";
 import { Toolbar } from "../components/Toolbar";
-import { toOptions } from "../components/Select";
+import { Problem, Result } from "../components/Form";
+import { Select, toOptions } from "../components/Select";
 import "../components/ui.css";
 
 /**
@@ -34,7 +40,7 @@ import "../components/ui.css";
  */
 export function JobsPage() {
   const { stages, stageNames } = useStages();
-  const { teamNames } = useTeams();
+  const { teams, teamNames } = useTeams();
   const { expectedDaysByStage } = useTemplatePhases();
   // No create state and no project list any more: nothing is created from this page, so
   // there is nothing to re-read after and no picker to feed. Both went with the New job
@@ -118,6 +124,61 @@ export function JobsPage() {
     }
   };
 
+  /**
+   * Bulk edit, on the table view (Amber, 26 August: "a select button in table view so
+   * you can select multiple jobs at once and edit — e.g. assign to team or person or
+   * stage"). Selection is page state, not URL state: a half-made selection is a draft,
+   * and a link that arrives with jobs pre-selected would be a trap.
+   *
+   * Team and assignee apply on choice — they are ordinary edits. A stage move confirms
+   * first, because that is the lifecycle rule everywhere else; one confirmation covers
+   * the batch and says how many actually move. Writes go one at a time so a single
+   * refusal (RLS, a guard) names its job instead of failing the lot.
+   */
+  const { data: profiles } = useQuery(r => r.listProfiles(), []);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkNote, setBulkNote] = useState<{ ok: string | null; err: string | null }>({ ok: null, err: null });
+  const [bulkStage, setBulkStage] = useState<StageName | null>(null);
+
+  const selectedJobs = useMemo(() => rows.filter(j => selected.has(j.jobNumber)), [rows, selected]);
+  const allSelected = rows.length > 0 && rows.every(j => selected.has(j.jobNumber));
+  const toggleOne = (no: string) =>
+    setSelected(s => {
+      const next = new Set(s);
+      if (next.has(no)) next.delete(no); else next.add(no);
+      return next;
+    });
+  const toggleAll = () =>
+    setSelected(allSelected ? new Set() : new Set(rows.map(j => j.jobNumber)));
+  const clearSelection = () => { setSelected(new Set()); setBulkNote({ ok: null, err: null }); };
+
+  async function bulkApply(done: string, jobs: BoardJob[], apply: (j: BoardJob) => Promise<unknown>, skipped = 0) {
+    if (bulkBusy) return;
+    setBulkBusy(true);
+    setBulkNote({ ok: null, err: null });
+    let applied = 0;
+    const failures: string[] = [];
+    for (const j of jobs) {
+      try { await apply(j); applied++; }
+      catch (e) { failures.push(`${j.jobNumber} — ${e instanceof Error ? e.message : String(e)}`); }
+    }
+    setBulkBusy(false);
+    setReloadKey(k => k + 1);
+    const summary =
+      `${applied} ${done}` +
+      (skipped > 0 ? ` · ${skipped} left as ${skipped === 1 ? "it was" : "they were"}` : "");
+    if (failures.length === 0) setBulkNote({ ok: summary, err: null });
+    else setBulkNote({ ok: null, err: `${summary} · ${failures.length} refused: ${failures[0]}` });
+  }
+
+  // Jobs a bulk stage move would actually touch — already at or past the target,
+  // cancelled or archived stay put, the same rule a project cascade follows (0046).
+  const bulkMovable = useMemo(
+    () => (bulkStage ? selectedJobs.filter(j => isForwardMove(j.stage, bulkStage)) : []),
+    [selectedJobs, bulkStage]
+  );
+
   /** Group keys in a deterministic order — pipeline order for stages, else as listed. */
   const groups = useMemo(() => {
     const keyOf = (j: BoardJob) =>
@@ -125,7 +186,9 @@ export function JobsPage() {
       : grouping === "Project" ? j.projectNumber
       : grouping === "Team" ? j.team
       : grouping === "Status" ? RECORD_STATUS_LABELS[j.status]
-      : "{{profiles.full_name}}";
+      // The assignee resolves to a real name now (boardModel). A job with nobody on it
+      // groups under its own honest heading rather than under a token.
+      : j.assigneeName ?? "Unassigned";
 
     const order: string[] =
       grouping === "Stage" ? viewStages
@@ -261,6 +324,7 @@ export function JobsPage() {
                       address={j.currentAddress}
                       projectType={j.projectType}
                       createdBy={j.createdBy}
+                      assigneeName={j.assigneeName}
                       status={j.status}
                       onOpen={() => openOne(j)}
                     />
@@ -273,10 +337,69 @@ export function JobsPage() {
       )}
 
       {view === "Table" && !noMatches && !loading && all.length > 0 && (
-        <div className="panel data-table-wrap">
+        <>
+          {can("user") && selected.size > 0 && (
+            <div className="bulk-bar" role="region" aria-label="Bulk edit">
+              <Text type="text2" weight="medium">
+                {selected.size} selected
+              </Text>
+              <Button kind="tertiary" size="small" onClick={clearSelection} disabled={bulkBusy}>
+                Clear
+              </Button>
+              <div className="bulk-actions">
+                {can("manager") && (
+                  <Select
+                    aria-label="Move the selected jobs to a later phase"
+                    placeholder="Move to…"
+                    options={LINEAR_STAGES.map(s => ({ value: s, label: s }))}
+                    value={null}
+                    onChange={v => setBulkStage(v as StageName)}
+                  />
+                )}
+                <Select
+                  aria-label="Set the owning team on the selected jobs"
+                  placeholder="Set team…"
+                  options={teams.filter(t => t.isActive).map(t => ({ value: t.id, label: t.name }))}
+                  value={null}
+                  onChange={v => {
+                    if (v) bulkApply("moved to the team", selectedJobs, j => repo.updateJob(j.jobNumber, { owningTeam: v as TeamId }));
+                  }}
+                />
+                <Select
+                  aria-label="Assign the selected jobs to a person"
+                  placeholder="Assign to…"
+                  options={[
+                    { value: "— nobody —", label: "— nobody —" },
+                    ...profiles.map(p => ({ value: p.id, label: p.fullName }))
+                  ]}
+                  value={null}
+                  onChange={v => {
+                    if (!v) return;
+                    const id = v === "— nobody —" ? null : v;
+                    bulkApply(id ? "assigned" : "unassigned", selectedJobs,
+                      j => repo.updateJob(j.jobNumber, { assigneeId: id }));
+                  }}
+                />
+              </div>
+              {bulkBusy && <Text type="text3" color="secondary">Saving…</Text>}
+              {bulkNote.ok && <Result>{bulkNote.ok}</Result>}
+              {bulkNote.err && <Problem>{bulkNote.err}</Problem>}
+            </div>
+          )}
+          <div className="panel data-table-wrap">
           <table className="data-table">
             <thead>
               <tr>
+                {can("user") && (
+                  <th className="bulk-col">
+                    <input
+                      type="checkbox"
+                      aria-label={allSelected ? "Clear the selection" : "Select every job shown"}
+                      checked={allSelected}
+                      onChange={toggleAll}
+                    />
+                  </th>
+                )}
                 <th>Job</th>
                 <th>Project</th>
                 <th>Address</th>
@@ -296,7 +419,7 @@ export function JobsPage() {
             {groups.filter(g => g.jobs.length > 0).map(g => (
               <tbody key={g.key} className="group">
                 <tr className="group-head">
-                  <th scope="colgroup" colSpan={10}>
+                  <th scope="colgroup" colSpan={can("user") ? 11 : 10}>
                     <span className="group-name">{g.key}</span>
                     <span className="group-count">
                       {g.jobs.length} job{g.jobs.length === 1 ? "" : "s"}
@@ -305,6 +428,17 @@ export function JobsPage() {
                 </tr>
                 {g.jobs.map(j => (
                   <tr key={j.jobNumber} onClick={() => openOne(j)}>
+                    {can("user") && (
+                      <td className="bulk-col" onClick={e => e.stopPropagation()}>
+                        {/* The row opens the drawer; the checkbox must not. */}
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${j.jobNumber}`}
+                          checked={selected.has(j.jobNumber)}
+                          onChange={() => toggleOne(j.jobNumber)}
+                        />
+                      </td>
+                    )}
                     <td>{j.jobNumber}</td>
                     <td>{j.projectNumber}</td>
                     <td>{j.currentAddress ?? <Token>addresses.consolidated_address</Token>}</td>
@@ -315,7 +449,7 @@ export function JobsPage() {
                     </td>
                     <td>{j.stage}</td>
                     <td>{j.team}</td>
-                    <td><Token>profiles.full_name</Token></td>
+                    <td>{j.assigneeName ?? "—"}</td>
                     <td className="muted">{j.createdBy ?? "—"}</td>
                     <td className="num">{j.daysInStage}</td>
                     <td><StatusPill status={j.status} /></td>
@@ -324,7 +458,8 @@ export function JobsPage() {
               </tbody>
             ))}
           </table>
-        </div>
+          </div>
+        </>
       )}
 
       {view === "Gantt" && !noMatches && !loading && all.length > 0 && (
@@ -414,6 +549,42 @@ export function JobsPage() {
           onMoved={() => setReloadKey(k => k + 1)}
         />
       )}
+
+      {/* The batch version of the lifecycle confirmation — one modal for the whole
+          selection, saying how many actually move. Jobs already at or past the target,
+          cancelled or archived, are left as they are (the same rule the project
+          cascade in 0046 follows), and that is said before, not discovered after. */}
+      <Modal show={bulkStage != null} onClose={() => setBulkStage(null)} id="bulk-move-stage">
+        <ModalBasicLayout>
+          <ModalHeader title={`Move ${bulkMovable.length} job${bulkMovable.length === 1 ? "" : "s"} to ${bulkStage ?? ""}`} />
+          <ModalContent>
+            <Text type="text2" element="p" ellipsis={false}>
+              {bulkMovable.length} of the {selectedJobs.length} selected will move.
+              {selectedJobs.length - bulkMovable.length > 0 &&
+                ` The other ${selectedJobs.length - bulkMovable.length} are already at or past ${bulkStage}, cancelled, or archived — they stay where they are.`}
+            </Text>
+            <Text type="text3" color="secondary" ellipsis={false}>
+              The lifecycle only moves forwards, so this cannot be undone by moving them
+              back. {JOB_MOVE_NOTE}
+            </Text>
+          </ModalContent>
+        </ModalBasicLayout>
+        <ModalFooter
+          primaryButton={{
+            text: bulkBusy ? "Moving…" : "Move",
+            disabled: bulkBusy || bulkMovable.length === 0,
+            onClick: async () => {
+              const target = bulkStage;
+              if (!target) return;
+              const skipped = selectedJobs.length - bulkMovable.length;
+              setBulkStage(null);
+              await bulkApply(`moved to ${target}`, bulkMovable,
+                j => repo.moveJobStage(j.jobNumber, target), skipped);
+            }
+          }}
+          secondaryButton={{ text: "Cancel", onClick: () => setBulkStage(null) }}
+        />
+      </Modal>
     </>
   );
 }

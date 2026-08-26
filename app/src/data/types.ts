@@ -280,6 +280,16 @@ export interface ProjectPatch {
   sharepointUrl?: string | null;
 }
 
+/**
+ * What may change on a job outside a lifecycle move (which is `moveJobStage`, with its
+ * own rules). Ownership and assignment, per Amber's Q2: both editable in the app.
+ * `assigneeId: null` un-assigns — a real edit, distinct from "not this edit".
+ */
+export interface JobPatch {
+  owningTeam?: TeamId;
+  assigneeId?: Uuid | null;
+}
+
 /** The joined shape the cards read — `project_display`. */
 export interface ProjectDisplay {
   id: Uuid;
@@ -859,9 +869,37 @@ export const STAGE_NAMES = [
   "Pre-construction",
   "Construction",
   "Handover & Maintenance",
-  "Closed"
+  "Completed",
+  "Closed",
+  "Cancelled"
 ] as const;
 export type StageName = (typeof STAGE_NAMES)[number];
+
+/**
+ * The lifecycle grew two positions in 0045, from Amber's rule of 25 August:
+ *
+ *   - **Completed** (position 5) is what 0035 called "Closed" — done, won, still on
+ *     the board.
+ *   - **Closed** (position 6) is the archive: reached 12 months after Completed or
+ *     Cancelled (a pg_cron clock), hidden by default and visible by filter — which in
+ *     this app is the "Closed" saved view.
+ *   - **Cancelled** (position 7) is stopped-without-completing. It sits outside the
+ *     forwards-only run: any live stage may move TO it, and it is the one stage a
+ *     record may leave BACKWARDS (revival). While cancelled, a record keeps its data
+ *     but fires no notifications, automations or health alerts.
+ *
+ * The three slices below exist so nothing re-derives these rules from indexes.
+ */
+
+/** The four phases where work actually happens. Cancel is offered from these. */
+export const WORKING_STAGES = STAGE_NAMES.slice(0, 4) as readonly StageName[];
+
+/**
+ * The forwards-only run, in order: the four working phases, then Completed, then the
+ * archive. Cancelled is deliberately not in it — it is entered sideways and left
+ * backwards, and `isForwardMove` treats it specially rather than by index.
+ */
+export const LINEAR_STAGES = STAGE_NAMES.slice(0, 6) as readonly StageName[];
 
 /** Stages are a seeded lookup, ordered — this order is the board's column order. */
 export interface Stage extends Audited {

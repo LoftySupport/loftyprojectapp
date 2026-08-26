@@ -33,13 +33,25 @@ export interface SavedView {
 
 export const SAVED_VIEWS: SavedView[] = [
   {
+    // Everything except the archive. Amber, 25 August: Closed is "not visible by
+    // default but visible by filter" — and in this app the Closed view below IS that
+    // filter. Cancelled stays visible here on purpose: a cancelled job is a fact
+    // people need to see (and maybe revive), not an archived one.
     slug: "all",
     label: "All jobs",
-    stages: []
+    stages: [
+      "Acquisition & Development",
+      "Pre-construction",
+      "Construction",
+      "Handover & Maintenance",
+      "Completed",
+      "Cancelled"
+    ]
   },
   {
     // The cut people actually make. "Show me what is on" is asked far more often than
     // "show me everything in Construction", which the Stage filter already does.
+    // Completed and Cancelled are both out: neither is work that is on.
     slug: "live",
     label: "Live",
     stages: [
@@ -50,9 +62,8 @@ export const SAVED_VIEWS: SavedView[] = [
     ]
   },
   {
-    // Closed is the one terminal phase. A job that stopped for a bad reason is
-    // *cancelled*, which is a status — so this is not "everything finished with", and
-    // deliberately so: position says where a job got to, status says how it went.
+    // The archive — 0045. A record lands here 12 months after Completed or Cancelled,
+    // moved by the lifecycle_archive clock, and this view is the one place it shows.
     slug: "closed",
     label: "Closed",
     stages: ["Closed"]

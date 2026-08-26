@@ -8,6 +8,7 @@ import type {
   AddressHistoryEntry,
   CommentEntry,
   Job,
+  JobPatch,
   JobSplit,
   NewAddress,
   NewProfile,
@@ -54,6 +55,7 @@ const WIRED: RepositoryMethod[] = [
   "listProjects", "getProject", "listJobs", "getJob",
   "createProject", "createJob", "createJobsFromSplit", "deleteJob", "deleteProject",
   "moveJobStage",
+  "updateJob",
   "currentProfile", "listProfiles",
   "createProfile", "updateProfile", "setProfileActive", "listActivity",
   "listComments", "addComment", "updateProject", "moveProjectStage",
@@ -1000,6 +1002,38 @@ export function createSupabaseRepository(): Repository {
       if (error) throw error;
       if (!updated?.length) {
         throw new Error(`Job ${id} was not moved — it no longer exists, or you do not have permission.`);
+      }
+
+      const { data, error: readError } = await client
+        .from("job_display")
+        .select(JOB_COLUMNS)
+        .eq("job_id", id)
+        .single();
+      if (readError) throw readError;
+      return toJob(data as unknown as JobRow);
+    },
+
+    async updateJob(id: string, patch: JobPatch): Promise<Job> {
+      // Only the keys the caller sent — same rule as updateProject: undefined means
+      // "not this edit", null (on assigneeId) means "un-assign".
+      const row: Record<string, string | null> = {};
+      if ("owningTeam" in patch && patch.owningTeam !== undefined) row.job_owning_team = patch.owningTeam;
+      if ("assigneeId" in patch) row.job_assignee_id = patch.assigneeId ?? null;
+      if (Object.keys(row).length === 0) {
+        const { data, error } = await client
+          .from("job_display").select(JOB_COLUMNS).eq("job_id", id).single();
+        if (error) throw error;
+        return toJob(data as unknown as JobRow);
+      }
+
+      const { data: updated, error } = await client
+        .from("jobs")
+        .update(row)
+        .eq("job_id", id)
+        .select("job_id");
+      if (error) throw error;
+      if (!updated?.length) {
+        throw new Error(`Job ${id} was not updated — it no longer exists, or you do not have permission.`);
       }
 
       const { data, error: readError } = await client

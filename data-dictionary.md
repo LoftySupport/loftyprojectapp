@@ -9,8 +9,8 @@
 
 | Status | Count | Means |
 | --- | --- | --- |
-| To do | 34 | Specified here, not yet in the migration |
-| Created | 169 | In the migration and the types |
+| To do | 33 | Specified here, not yet in the migration |
+| Created | 170 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -18,6 +18,8 @@
 ---
 
 ## `activity`
+
+The concept spec's one-table feed — events and comments together, because the UI interleaves them. The built schema answers the same need with two tables, comments and activity_events, interleaved on read; these entries are kept as the shape that was proposed before that split.
 
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -31,6 +33,8 @@
 
 ## `activity_audit`
 
+The forensic log. A trigger writes one row for every insert, update and delete on the tracked tables, whole rows as jsonb — which is where stage history lives now that job_stages is gone. Admin reading, never a drawer; built outside the numbered migrations.
+
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `activity_audit.id` | Audit entry | One row per change to a tracked table. The trg_activity_audit_row trigger fires after every insert, update and delete on profiles, addresses, projects and jobs — profile_teams was the fifth until 0022 folded it into profiles.teams. | `integer` | — | Primary key, bigint identity. The only index on the table. | Written by log_activity_audit(). Not written by the app. | Created | 2026-08-01 · Amber Beaumont — outside the migrations | 2026-08-01 · Amber Beaumont — outside the migrations |
@@ -43,6 +47,8 @@
 
 ## `activity_events`
 
+The readable feed — "moved this to Construction" as a kind plus its nouns, rendered into a sentence by the app rather than stored as one. Append-only: triggers write it, nobody edits it, and neither it nor activity_audit can be derived from the other.
+
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `activity_events.activity_event_id` | Activity entry | One line of the readable feed — "Deanna moved this to Construction". Distinct from activity_audit, which is the forensic column-level log: admin-only, whole rows as jsonb, and unreadable in a drawer. Neither can be derived from the other. | `bigint` | — | Primary key, GENERATED ALWAYS AS IDENTITY. | Append-only: no INSERT, UPDATE or DELETE policy at all. Triggers write it, and triggers do not need one. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
@@ -50,6 +56,8 @@
 | `activity_events.activity_event_detail` | Detail | The nouns the sentence needs: which stage, which team, which field. jsonb because the shape differs per kind and the alternative is thirty nullable columns. | `jsonb` | — | Not null, default '{}'. | Surfaced by job_timeline.entry_detail. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `address_history`
+
+The middle of the address timeline. The record itself holds only its original and current addresses; every superseded assignment lands here, which is what lets "12 Test Street" still find project 1042 years after it became "20 Corner Street".
 
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -64,6 +72,8 @@
 | `address_history.address_history_created_at` | Recorded on | When the history row was written. | `timestamptz` | — | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `addresses`
+
+An address as a record, stored once and pointed at — addresses get corrected and changed, a lot renumbered by council, a typo found at handover, and everything that held a copy would keep the old text. The consolidated string is assembled here by trigger so every card, export and search reads exactly the same words.
 
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -85,11 +95,15 @@
 
 ## `build_stages`
 
+The construction sub-stages inside the Construction phase — slab, frame, lock-up and so on. Proposed and not built: the lifecycle stays the shared vocabulary, and what a team does inside a phase is that team's own pipeline.
+
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `build_stages.id` | Build stage | The construction sub-stage inside Construction & execution — slab, frame, lock-up and so on. | `integer` | — | Primary key. | Referenced by jobs.build_stage_id. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 
 ## `comment_mentions`
+
+Who was @-mentioned in which comment, as rows rather than parsed out of the body on read — a mention that disappears when somebody fixes a typo is not a notification. The null read_at rows are the unread queue, and only the mentioned person can mark theirs read.
 
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -98,6 +112,8 @@
 | `comment_mentions.comment_mention_read_at` | Read on | When they saw it. Null means unread, which is the whole point of the table — a mention nobody can mark as read is a notification that never stops. | `timestamptz` | — | Nullable. Partially indexed where null, because that is the only query. | Only the mentioned person may set it: the RLS policy compares profile_id to current_profile_id() on both USING and WITH CHECK. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `comments`
+
+What people write on a record. Threaded one level deep in practice, marked edited only when the body actually changes, and interleaved with activity_events on read to make the feed people see.
 
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -108,11 +124,15 @@
 
 ## `council_regions`
 
+Merged into the sa_council enum in 0003. It held 68 rows nobody maintained, plus the audit columns and a touch trigger to look after them; a council is now a value on the address, not a row it points at.
+
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `council_regions.id` | Council (merged) | Merged into the sa_council enum on addresses. The table held 68 rows nobody maintained, plus the audit quartet and a touch trigger to look after them. A council is now a value on the address, not a row it points at. | `uuid` | — | Table dropped in 0003. | Superseded by addresses.council. The state filter it used to provide is the addresses_council_is_sa CHECK; the active flag has no equivalent, because Postgres cannot drop an enum value. | Merged | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `divisions`
+
+Removed — never a Lofty concept. The prototype invented it, derived it from the project type, and relabelled development work "Land"; projects.project_type already carries the real distinction. Kept so the next person can see it was dropped on purpose.
 
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -120,12 +140,16 @@
 
 ## `document_links`
 
+One place a document is attached — a separate table because the same soil report belongs to a project and to every job on it, and parent columns on documents would mean four copies of one PDF with four names to drift.
+
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `document_links.document_link_id` | Attachment | One place a document is attached. Separate from the document itself because the same soil report belongs to a project AND to every job on it — four parent columns on `documents` would mean four copies of one PDF and four places for its name to drift. | `uuid` | — | Primary key. | FK → documents(document_id) ON DELETE CASCADE. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `document_links.project_id` | Attached to project | Set when the parent is a project. | `integer` | — | Nullable. CHECK document_links_one_parent: exactly one of the four parents. | FK → projects(project_id). Partially indexed, and partially UNIQUE with document_id so the same file cannot be attached to the same record twice — a full four-column unique would never fire, because a null never equals a null. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `documents`
+
+A file, held once however many records point at it. Versions chain through supersedes rather than counting up, and a row can exist before the bytes do — "the signed contract", still outstanding, is a real state.
 
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -139,17 +163,23 @@
 
 ## `health_statuses`
 
+Parked, deliberately. Health is calculated, not set — is it on schedule, over budget, has an issue been raised — and the inputs are still to be decided. Nothing gets built until the calculation is settled, because a guessed column bakes in the wrong answer. Distinct from status, which a person sets.
+
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `health_statuses.id` | Health status | PARKED — deliberately not built yet. Health is calculated, not set: is it on schedule, is it over budget, has an issue been raised. The inputs are still to be decided, and inventing a column before they are known would bake in the wrong answer. Distinct from status, which is what a person sets. | `text` | — | Not in the schema. Awaiting the list of inputs it is calculated from. | Will be derived, not stored — no column until the calculation is settled. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 
 ## `job_address_search`
 
+A search view: one row per job per address role, current and original alike, backed by the trigram index on the consolidated string — so a search on either address finds the job, and the result can say which one it hit.
+
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `job_address_search.address_role` | Matched address | Whether a search hit the job's current or original address. Worth showing: a hit on an original address is a hint that whoever searched is working from stale information. | `view` | — | Read-only. 'current' \| 'original'. | One row per (job, address role), so a match on either address finds the job. Backed by a trigram index on addresses.consolidated_address. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `job_display`
+
+The read view behind the boards: jobs joined to their addresses and their project, so one query returns the consolidated address, the inherited project type and whether the job is current, without each screen rebuilding the joins.
 
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -160,6 +190,8 @@
 
 ## `job_stages`
 
+Dropped in 0006. One row per job per stage was the wrong shape for the question every board load asks — the current position moved onto the job as stage and stage_entered_at in 0004, and past transitions live in activity_audit.
+
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `job_stages.id` | Job stage (removed) | Removed. It was one row per job per stage with entered_at and exited_at, and answering "what stage is this job in" meant finding the row with a null exited_at — the wrong shape for a query the board makes on every load. 0004 moved the current position onto the job as stage and stage_entered_at, which left this table holding only the durations of stages a job had already left. Nothing wrote to it and no screen read it, so 0006 dropped it. | `uuid` | — | Table dropped in 0006. | Current position is jobs.stage + jobs.stage_entered_at. Past transitions are in activity_audit, whose trigger captures whole rows — an update changing jobs.stage leaves old_row->>'stage', new_row->>'stage' and changed_at. | Merged | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
@@ -167,11 +199,15 @@
 
 ## `job_types`
 
+Merged into projects.project_type. A job's type is its project's type — a commercial project does not contain residential jobs — so a second column could only ever disagree with the first. Jobs read it through job_display.
+
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `job_types.id` | Job type (merged) | Merged into the project_type enum. A job's type is its project's type — a commercial project does not contain residential jobs, so a second column would only ever be a chance to disagree with the first. Read it through job_display.project_type. | `integer` | — | Table dropped. | Superseded by projects.project_type, inherited by jobs through the job_display view. | Merged | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 
 ## `jobs`
+
+One dwelling's build — "1042-01", which is both what Lofty says out loud and the primary key. Carries the lifecycle stage, the owning team and assignee, both addresses, the engaged teams and the SharePoint folder: the board is mostly this table.
 
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -184,9 +220,9 @@
 | `jobs.job_engaged_teams` | Engaged teams | Every team currently holding the job. "One team at a time" is an aspiration rather than a fact — a variation in construction can have Selections, Estimating and Scheduling all working the same job at once — so the row-level permission check has to ask "any team engaged", not "the team that owns it". | `text` | — | text[]. Not null, default '{}'. GIN indexed, because && is the operator every permission check will use. | An array cannot carry a foreign key, so jobs_validate_engaged_teams checks every value against teams(team_id) on write. Same pattern the multi-select property options will need. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `jobs.job_original_address_id` | Original address | The job's address as first recorded — what the contract says and what an email from last year refers to. Never moves. Not displayed, but always searchable. | `uuid` | — | Nullable. Falls back from current in a trigger. Indexed, because half of address search hits this column. | FK → addresses(id). Exposed by job_display.original_address and job_address_search. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `jobs.job_current_address_id` | Current address | What every card, board and search result shows. Identical to the original until something changes — a lot renumbered by council, a street renamed, a typo found at handover. | `uuid` | — | Not null. Falls back to the original in a trigger. Indexed. | FK → addresses(id). Exposed by job_display.current_address and job_address_search. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `jobs.job_stage` | Stage | Which of the five lifecycle phases the job is in now, and the single answer to that question. The board filters on this column every load. What a team does *inside* a phase is a nested pipeline, not a value here. | `text` | `Acquisition & Development` · `Pre-construction` · `Construction` · `Handover & Maintenance` · `Closed` — CHECK `jobs_stage_is_a_lifecycle_stage` | Not null, default 'Acquisition & Development'. Indexed. CHECK jobs_stage_is_a_lifecycle_stage on the five names. Text rather than an enum since 0035, in that migration's words: a vocabulary that changes must be able to lose a value, and an enum cannot. | Replaced the proposed jobs.stage_id in 0004; the `stage` enum it used was dropped in 0035. Paired with job_stage_entered_at, which a trigger moves whenever this changes. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `jobs.job_stage` | Stage | Where the job is in the lifecycle, and the single answer to that question: four working phases, then Completed (done), Closed (the archive — 12 months after Completed or Cancelled, hidden by default and shown by the Closed view) and Cancelled (stopped without completing; revivable; fires no alerts). What a team does *inside* a phase is a nested pipeline, not a value here. | `text` | `Acquisition & Development` · `Pre-construction` · `Construction` · `Handover & Maintenance` · `Completed` · `Closed` · `Cancelled` — CHECK `jobs_stage_is_a_lifecycle_stage` | Not null, default 'Acquisition & Development'. Indexed. CHECK jobs_stage_is_a_lifecycle_stage on the seven names (0045). Forwards only, with Cancelled the one exception both ways: enterable from any live stage, leavable backwards on revival. Text rather than an enum since 0035 — a vocabulary that changes must be able to lose a value, and this one just did it again. | Replaced the proposed jobs.stage_id in 0004; the `stage` enum was dropped in 0035; 0045 renamed Closed to Completed and added the archive and Cancelled. Paired with job_stage_entered_at, which a trigger moves — and which is therefore also the archive clock's input. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `jobs.job_owning_team` | Owning team | The one team holding the job right now. "One job, one team at a time" is the whole model. | `text` | read from rows in `teams` | Not null. FK → teams(team_id) ON UPDATE CASCADE. | An FK since 0026, which made teams a table. It was a `team` enum value from 0004 until then — the reason it changed is that a team gets renamed and retired, and neither is something an enum does well. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `jobs.job_assignee_id` | Assigned to | The person responsible inside the owning team. | `uuid` | — | Nullable. | FK → profiles(id). | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
+| `jobs.job_assignee_id` | Assigned to | The person responsible for the job. Null means nobody is assigned — a real state the boards show as an em dash, never as a stand-in name. The Team filter matches through this too: a job shows under Design when Design owns it or when its assignee sits in Design. | `uuid` | — | Nullable. | FK → profiles(id). Resolved to a name and to the person's teams in the app's board model. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `jobs.job_status` | Status | Where the job stands — the same seven values as a project. What someone sets, not what the system works out. | `text` | `on_track` · `at_risk` · `behind_schedule` · `on_hold` · `completed` · `cancelled` · `archived` — CHECK `jobs_job_status_check` | Not null, default 'on_track'. CHECK on the seven values; the `record_status` enum they came from was dropped in 0028. | Feeds is_current(job_status). Exposed by job_display.job_status and job_display.job_is_current. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `jobs.job_sharepoint_url` | SharePoint folder | This job's own subfolder inside its project's folder. A job's record page shows this and the project's; it does not show its siblings'. | `text` | — | Nullable. CHECK jobs_sharepoint_url_is_https. | The project's folder is read through the project rather than copied here — a copy would be a second place for it to be wrong the day a site moves. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `jobs.source_system` | Source system | Where the record originated — HubSpot, SharePoint, SiteBook, Trello. | `text` | — | Nullable. | — | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
@@ -203,6 +239,8 @@
 
 ## `login_activity`
 
+One row per authentication event, copied out of auth.users with the email denormalised so the row survives account deletion. Read most-recent-first, which is what its index is for. Built outside the numbered migrations.
+
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `login_activity.id` | Login entry | One row per authentication event. | `integer` | — | Primary key, bigint identity. | Written from auth.users by log_login_activity_from_auth_users(). | Created | 2026-08-01 · Amber Beaumont — outside the migrations | 2026-08-01 · Amber Beaumont — outside the migrations |
@@ -212,12 +250,16 @@
 
 ## `permission_grants`
 
+The permission model as data — which rung of the ladder reaches how far: none, own, team, team_hierarchy, all. Still to do; today the ladder is compared by ordinal directly in the RLS policies.
+
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `permission_grants.permission` | Permission | Which rung of the ladder this grant applies to. | `enum` | — | permission_level. Part of the composite primary key. | Keyed off the permission_level enum rather than a roles table. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `permission_grants.scope` | Scope | How wide the grant reaches — none, own, team, team_hierarchy, all. There is no 'division' scope: divisions were a prototype invention, not a Lofty concept. | `text` | — | Not null, CHECK against the scope list. | Each value maps to an RLS predicate. 'team' and 'team_hierarchy' both read profiles.teams, which is an array — the predicate is an overlap test, not a join, since 0022. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 
 ## `profile_teams`
+
+Who is in which team — and whether they manage it, which is the column that justifies the table existing twice. 0022 folded membership into an array because it carried nothing of its own; managing is something of its own, and a person can be in four teams while managing three, so the table came back.
 
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -229,6 +271,8 @@
 | `profile_teams.joined_at` | Joined on (merged) | Merged into created_at. This was recorded as built and never was — 0001 gave profile_teams the standard audit quartet and no joined_at, and a membership row is created when the person joins, so created_at already answers it. Caught by cross-checking the dictionary against information_schema. | `timestamptz` | — | Never created; the table itself was dropped in 0022. | Superseded by profile_teams.created_at, and then by profiles.teams. | Merged | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `profiles`
+
+A person, existing before they ever sign in — that is what makes a pre-created staff list possible. The Microsoft account links itself on first sign-in, every RLS policy resolves auth.uid() through here, and nobody is hard-deleted: their name is on years of activity.
 
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -251,11 +295,15 @@
 
 ## `project_address_search`
 
+The same search view as job_address_search, for projects — one row per project per address role.
+
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `project_address_search.address_role` | Matched address | The same, for projects. | `view` | — | Read-only. 'current' \| 'original'. | One row per (project, address role). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `project_display`
+
+The read view for project cards: projects joined to their addresses, so suburb, council and both consolidated addresses come back in one row without the app touching addresses itself.
 
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -264,6 +312,8 @@
 | `project_display.project_council` | Council region | The council of the project's current address, carried through so a card can show it without joining addresses itself. The council's name, not an id — it has been an enum value since 0003. | `view` | — | Read-only. sa_council. | Reads addresses.address_council via project_current_address_id. Replaced project_display.council_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `projects`
+
+The site — 1042, one row per development, one to many jobs beneath it. Holds the facts the whole site shares (type, addresses, SharePoint folder) that jobs read through rather than copy, and its own lifecycle stage — pulled up by its slowest live job, and pushing lagging jobs up when it is moved.
 
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -278,7 +328,7 @@
 | `projects.project_current_address_id` | Current address | What every card, board and search shows. Identical to the original until something changes. | `uuid` | — | Not null. A blank value falls back to original_address_id in a trigger, so a caller only has to supply one. Indexed. | FK → addresses(id). Exposed by project_display.current_address. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `projects.project_type` | Project type | Residential, commercial or development. | `text` | `residential` · `commercial` · `development` — CHECK `projects_project_type_check` | Nullable. CHECK (project_type in ('residential','commercial','development')). Text with a check since 0028 — the `project_type` enum was dropped there, and this entry said `enum` for four migrations afterwards. | Inherited by jobs through the job_display view — a job never sets its own. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `projects.project_status` | Status | Where the project stands. A record is in exactly one of these at a time: on track, at risk, behind schedule, on hold, completed, cancelled or archived. This is what someone sets — it is not health. | `text` | `on_track` · `at_risk` · `behind_schedule` · `on_hold` · `completed` · `cancelled` · `archived` — CHECK `projects_project_status_check` | Not null, default 'on_track'. CHECK on the seven values — the same set as jobs.job_status, which was the `record_status` enum until 0028 dropped it. Labels are snake_case because they are codes, not copy — the app maps them for display, so a rename is not a data migration. | Feeds is_current(status) — anything not completed, cancelled or archived is current. Exposed by project_display.status. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `projects.project_stage` | Stage | Where the project sits in the five-phase lifecycle everybody shares. Its jobs may be at different phases — this is the project's own answer, which can be set by hand or brought in line with the lowest job. | `text` | — | Not null, default 'Acquisition & Development'. CHECK projects_stage_is_a_lifecycle_stage on the five names. Indexed. Manager and above to change it, and only ever forwards. | Paired with project_stage_entered_at, which a trigger moves. project_stage_from_jobs() computes what it would inherit; it is offered rather than applied, because inheriting can point backwards. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `projects.project_stage` | Stage | Where the project sits in the lifecycle everybody shares — four working phases, then Completed, Closed (the archive, hidden by default) and Cancelled. Its jobs may be at different phases; this is the project's own answer, following its slowest non-cancelled job upwards. | `text` | — | Not null, default 'Acquisition & Development'. CHECK projects_stage_is_a_lifecycle_stage on the seven names (0045). Indexed. Manager and above to change it; forwards only, except that Cancelled may be entered from any live stage and left backwards on revival. | Paired with project_stage_entered_at, which a trigger moves. Two triggers keep the pair honest both ways: the slowest live job pulls the project up (0041), and moving the project pushes its lagging jobs up with it (0046) — cancelled and archived jobs sit out of both. lifecycle_archive() moves 12-months-Completed-or-Cancelled on to Closed. While cancelled, nothing fires for it. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `projects.project_stage_entered_at` | Entered this phase | When the project moved into the phase it is in. Days-in-phase is worked out from it on every read rather than stored, so it cannot go stale. | `timestamptz` | — | Not null, default now(). Moved by a trigger whenever project_stage changes. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `projects.project_sharepoint_url` | SharePoint folder | The project's folder. Each of its jobs has a subfolder inside it, held on the job — so a project with three jobs shows four links, one per record rather than a list on one of them. | `text` | — | Nullable. CHECK projects_sharepoint_url_is_https — https and not blank. Deliberately loose: tenants, personal sites and shortened links all look different. | Read alongside jobs.job_sharepoint_url on a job's record page. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `projects.project_start_date` | Start date | When work began. | `date` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
@@ -290,6 +340,8 @@
 | `projects.project_updated_by` | Updated by | Who last changed it. | `uuid` | — | Nullable. | FK → profiles(id). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `property_defs`
+
+A field defined as a row, not a column — which is what lets a team add what it captures without a schema migration. The property_def_* columns are built; the earlier proposed spelling is kept alongside them, still marked to do, as the record of the first shape. Values wait on property_values.
 
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -315,11 +367,15 @@
 
 ## `property_values`
 
+One row per property per record, sparse by design — an unset field has no row at all, and the shape of the value is checked against its definition's format. Not built yet: property_defs is live and waiting on it.
+
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `property_values.value` | Field value | One row per (property, record). Sparse by design — an unset field has no row at all. | `jsonb` | — | Shape enforced against property_defs.format. | Composite primary key (property_def_id, subject_type, subject_id). subject_type CHECK in ('project','job'); the scope check on property_defs is what stops a project field being set on a job. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 
 ## `stages`
+
+Merged into the stage enum in 0004 — eight seeded values that were the business process, not data anyone maintained. That enum was itself dropped in 0035, and the lifecycle now lives as text under CHECKs with pipeline_stages as its lookup; kept for both steps of the reasoning.
 
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -328,11 +384,15 @@
 
 ## `taggings`
 
+Where a tag is applied — one row per tag per record. Deliberately no primary key across the four parent columns, because a null never equals a null; four partial unique indexes stop the same tag landing on the same record twice.
+
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `taggings.tag_id` | Tag | Which tag is applied. | `text` | — | Not null. | FK → tags(tag_id) ON UPDATE CASCADE ON DELETE CASCADE. No primary key across the four parent columns: a null never equals a null, so such a key would let the same tag be applied twice. Four partial unique indexes do the job instead. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `tags`
+
+Free labels for a board — "Council hold", "Design variation" — the same shape as teams and for the same reason: the list is data, it will change, and a retired tag must leave the pickers without breaking the records that carry it.
 
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -343,6 +403,8 @@
 
 ## `task_dependencies`
 
+The edges between tasks — which one waits for which, with the lag carried on the edge because Lofty's process map puts its SLAs on the arrows, not the steps. Triggers refuse cycles and refuse edges between tasks on different records.
+
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `task_dependencies.task_id` | Task | The task that waits. | `uuid` | — | Part of the primary key. CHECK task_dependencies_not_self. | FK → tasks(task_id) ON DELETE CASCADE. A trigger refuses any edge that would close a cycle, and another refuses an edge between tasks on different records. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
@@ -350,6 +412,8 @@
 | `task_dependencies.task_dependency_lag_days` | Lag | How many days after the predecessor finishes this one is due. On the edge rather than on the task because Lofty's process map puts its SLAs on the ARROWS — "Within 14 Days" labels a transition between two steps, not either step itself. | `integer` | — | smallint. Not null, default 0. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `tasks`
+
+One thing to be done. A checklist item instantiated from a template and a task somebody typed live in the same table, because they differ only by origin; completion is a timestamp with deliberately no boolean beside it, and the external flag keeps council's statutory 28 days off Design's overdue report.
 
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -370,6 +434,8 @@
 
 ## `teams`
 
+A team as a row, keyed by slug so a rename never rewrites anything pointing at it, retirable by flag. That flag is the whole reason the enum had to go: ALTER TYPE has no DROP VALUE, so an enum value added by mistake is permanent.
+
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `teams.team_id` | Team | A team, as a row. The slug is the key — 'design', 'sales_admin' — so a team reads out of a query result without a join, and renaming the label never rewrites anything pointing at it. | `text` | — | Primary key. CHECK (team_id ~ '^[a-z][a-z0-9_]*$'). Stable: this never changes, which is what lets it be a foreign key everywhere. | Referenced by profile_teams.team_id, jobs.job_owning_team, projects.project_owning_team, and checked by trigger for every value in jobs.job_engaged_teams. Replaced the `team` Postgres enum, which was specified as a table in 0001, became an enum in 0004, and came back. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
@@ -380,17 +446,23 @@
 
 ## `template_checkpoints`
 
+One thing a phase expects done before handover, copied to the job when it is created from a template. Proposed, not built — and not seeded until Lofty writes the real checkpoints; the 36 the prototype showed were invented, which is exactly what this table must never contain.
+
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `template_checkpoints.label` | Checkpoint | One thing a phase expects done before handover. Instantiated per job as job_checkpoints. | `text` | — | Not null. | Copied to job_checkpoints.label when a job is created from a template. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 
 ## `template_phases`
 
+How long each phase of a process template should take — what a Gantt measures actual time-in-stage against. Proposed, not built; the expected-days that exist today live on pipeline_stages, which the coming SLA editor will edit.
+
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `template_phases.expected_days` | Expected days | How long a phase should take. What the Gantt measures actual time in stage against. | `integer` | — | Nullable. | Keyed by template plus the stage enum; the owning team is a team enum value. Neither is an FK. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 
 ## `variation_reopened_tasks`
+
+Which tasks a variation sent back, each with a snapshot of whether it was already finished — the number that settles a process argument, and one that cannot be reconstructed later because the reopening itself destroys the evidence.
 
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -400,6 +472,8 @@
 | `variation_reopened_tasks.variation_reopened_task_completed_at` | Had been finished on | When the task had been completed, before the variation reopened it. Snapshotted with the flag above. | `timestamptz` | — | Nullable — null when the task was not finished. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `variations`
+
+One change to a job, as a record rather than a flag on it, because three teams raising conflicting changes at once is the problem this exists for. Carries who asked and why, what it costs, and a per-job number that is never reissued once it has been in an email to a client.
 
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |

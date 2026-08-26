@@ -1,63 +1,95 @@
 import { useState } from "react";
-import { Modal, ModalContent, ModalFooter, ModalHeader, Text } from "@vibe/core";
-import { STAGE_NAMES, type StageName } from "../data/types";
+import {
+  Button, Modal, ModalBasicLayout, ModalContent, ModalFooter, ModalHeader, Text
+} from "@vibe/core";
+import {
+  LINEAR_STAGES, STAGE_NAMES, WORKING_STAGES, type StageName
+} from "../data/types";
 import { usePermission } from "../data/PermissionProvider";
 import { Problem } from "./Form";
 import { Select } from "./Select";
 import "./ui.css";
 
 /**
- * Where a stage sits in the five-phase lifecycle. STAGE_NAMES is already in board
- * order, so the index IS the position — the same fact `lifecycle_position()` holds in
- * Postgres, read from the same list the CHECK constraints were written from.
+ * Where a stage sits in the lifecycle. STAGE_NAMES is already in board order, so the
+ * index IS the position — the same fact `lifecycle_position()` holds in Postgres, read
+ * from the same list the CHECK constraints were written from.
  */
 export const stagePosition = (stage: string): number =>
   STAGE_NAMES.indexOf(stage as StageName);
 
-/** The stages a job at `from` may still reach. Forwards only — 0039 refuses the rest. */
-export const stagesAhead = (from: string): StageName[] =>
-  STAGE_NAMES.filter(s => stagePosition(s) > stagePosition(from));
+const isLinear = (stage: string): boolean =>
+  (LINEAR_STAGES as readonly string[]).includes(stage);
 
 /**
- * The confirmation for a lifecycle move. Lofty, 25 August: "any manager, admin or super
- * admin can move stages with a popup modal asking for confirmation if moving lifecycle
- * stages. in a pipeline no modal popup is require[d]."
+ * The stages a record at `from` may still reach by moving FORWARDS. The linear run
+ * only — Cancelled is entered by cancelling and left by reviving, never offered here,
+ * and nothing moves forwards out of Cancelled or Closed.
+ */
+export const stagesAhead = (from: string): StageName[] =>
+  isLinear(from)
+    ? LINEAR_STAGES.filter(s => stagePosition(s) > stagePosition(from))
+    : [];
+
+/**
+ * Whether a drag from one board column to another is a legal forward move. The board
+ * calls this while the drag is still in the air, so an illegal drop is refused before
+ * it lands. Cancelling and reviving are deliberate acts with their own confirmations —
+ * neither is a thing a card drag should do, so both ends must be on the linear run.
+ */
+export function isForwardMove(from: string, to: string): boolean {
+  return isLinear(from) && isLinear(to) && stagePosition(to) > stagePosition(from);
+}
+
+type MoveVerb = "Move" | "Cancel" | "Revive";
+
+/**
+ * The confirmation for a lifecycle change. Lofty, 25 August: "any manager, admin or
+ * super admin can move stages with a popup modal asking for confirmation if moving
+ * lifecycle stages. in a pipeline no modal popup is require[d]."
  *
  * A Modal rather than a panel for the same reason DeactivateDialog is one: a
- * confirmation is supposed to interrupt. And it interrupts because the move is
- * irreversible by design — the lifecycle only goes forwards, so there is no "move it
- * back" to reach for afterwards. The dialog says that instead of letting the refusal
- * be discovered on the next attempt.
+ * confirmation is supposed to interrupt. Three verbs share it because they are one
+ * decision — "this record's place in the lifecycle changes" — with different
+ * consequences, and the copy states the consequence that belongs to each:
  *
- * The team pipelines (`job_pipeline_positions`) are a different object and get no modal;
- * this component is only ever mounted for a lifecycle move.
+ *   - **Move** is irreversible by design. The lifecycle only goes forwards, so there
+ *     is no "move it back" to reach for afterwards, and the dialog says that.
+ *   - **Cancel** is the opposite: explicitly revivable (Amber's one backward
+ *     exception), and while cancelled nothing fires — no notifications, automations
+ *     or health alerts. Twelve months on, the clock archives it to Closed.
+ *   - **Revive** is that backward exception being used.
+ *
+ * The team pipelines (`job_pipeline_positions`) are a different object and get no
+ * modal; this component is only ever mounted for a lifecycle change.
  *
  * The app's `can("manager")` hides the controls that open this; the database's guards
- * (0038, 0039) are the security. If a refusal comes back anyway, it is shown verbatim —
- * the database's sentence names the actual rule.
+ * (0038, 0039, 0045) are the security. A refusal is shown verbatim — the database's
+ * sentence names the actual rule.
  */
 export function MoveStageDialog({
-  show, subject, fromStage, toStage, move, note, onClose, onMoved
+  show, subject, fromStage, toStage, verb = "Move", move, note, onClose, onMoved
 }: {
   show: boolean;
   /** What is being moved, as the title says it — "1042-01", or "Project 1042". */
   subject: string;
   fromStage: string;
   toStage: StageName | null;
+  verb?: MoveVerb;
   /** The write itself. A job and a project confirm identically; only this differs. */
   move: (to: StageName) => Promise<unknown>;
   /** The consequence worth stating — what else moves, or does not, with this one. */
   note: string;
   onClose: () => void;
-  /** Called after the database accepted the move, so the caller can re-read the board. */
+  /** Called after the database accepted the change, so the caller can re-read. */
   onMoved: () => void;
 }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // How far the move jumps. Skipping phases is legal — linear means no backwards, not
-  // no shortcuts — but a jump past two phases is worth saying out loud before it lands.
-  const skipped = toStage
+  // How far a forward move jumps. Skipping phases is legal — linear means no
+  // backwards, not no shortcuts — but a jump past two phases is worth saying out loud.
+  const skipped = verb === "Move" && toStage
     ? stagePosition(toStage) - stagePosition(fromStage) - 1
     : 0;
 
@@ -76,9 +108,19 @@ export function MoveStageDialog({
     }
   }
 
+  const title =
+    verb === "Cancel" ? `Cancel ${subject}`
+    : verb === "Revive" ? `Revive ${subject} to ${toStage ?? ""}`
+    : `Move ${subject} to ${toStage ?? ""}`;
+
   return (
     <Modal show={show} onClose={onClose} id="move-job-stage">
-      <ModalHeader title={`Move ${subject} to ${toStage ?? ""}`} />
+      {/* The layout wrapper is where Vibe's modal padding lives — header and content
+          composed without it sit flush against the modal's edges, which is exactly how
+          this dialog first shipped and exactly how it looked. Footer stays outside,
+          per Vibe's own composition. */}
+      <ModalBasicLayout>
+      <ModalHeader title={title} />
       <ModalContent>
         <Text type="text2" element="p" ellipsis={false}>
           From <strong>{fromStage}</strong> to <strong>{toStage}</strong>.
@@ -90,33 +132,54 @@ export function MoveStageDialog({
           </Text>
         )}
         <Text type="text3" color="secondary" ellipsis={false}>
-          The lifecycle only moves forwards, so this cannot be undone by moving it back.
+          {verb === "Cancel"
+            ? "While cancelled it keeps its data but fires nothing — no notifications, " +
+              "automations or health alerts. It can be revived later; if it stays " +
+              "cancelled, twelve months from now it archives to Closed."
+            : verb === "Revive"
+            ? "Revival is the one backward move the lifecycle allows. Back on the " +
+              "board, it counts and alerts like any other record."
+            : "The lifecycle only moves forwards, so this cannot be undone by moving " +
+              "it back."}
           {" "}{note}
         </Text>
         {error && <Problem>{error}</Problem>}
       </ModalContent>
+      </ModalBasicLayout>
       <ModalFooter
         primaryButton={{
-          text: saving ? "Moving…" : "Move",
+          text: saving
+            ? "Saving…"
+            : verb === "Cancel" ? `Cancel ${subject}`
+            : verb === "Revive" ? "Revive"
+            : "Move",
           onClick: go,
           disabled: saving || !toStage
         }}
-        secondaryButton={{ text: "Cancel", onClick: onClose }}
+        secondaryButton={{
+          // "Cancel" as the dismiss label under a "Cancel the job" primary would be
+          // two buttons fighting over one word.
+          text: verb === "Cancel" ? "Keep it as it is" : "Cancel",
+          onClick: onClose
+        }}
       />
     </Modal>
   );
 }
 
 /**
- * The picker that opens the dialog — the drawer's "move this job" control.
+ * The picker that opens the dialog — the drawer's and project page's stage control.
  *
- * Offers only the stages still ahead: a dropdown listing "Acquisition & Development"
- * to a job at Construction would be offering a choice the database refuses, and the
- * refusal would arrive after the person had already decided. At `Closed` there is
- * nowhere left to go and the control says so instead of rendering an empty menu.
+ * Offers only what the database would accept, because a menu of refusals is a menu of
+ * traps. Three shapes, one per kind of stage:
  *
- * Selecting does not move anything — it opens the confirmation, and cancelling puts
- * the picker back to empty.
+ *   - On the linear run: "Move to…" over the stages still ahead, plus — from a working
+ *     phase only — a "Cancel…" action. Completed is done, so cancelling it stopped
+ *     making sense the moment it finished ("a job can be cancelled but it isn't
+ *     complete" — the two are different endings, not a sequence).
+ *   - At Cancelled: "Revive to…" over the working phases — the one backward move.
+ *   - At Closed: a sentence. The archive is terminal, and the control says so instead
+ *     of rendering an empty menu.
  */
 export function MoveStageControl({
   subject, stage, move, note, onMoved
@@ -129,18 +192,50 @@ export function MoveStageControl({
 }) {
   const { can } = usePermission();
   const [target, setTarget] = useState<StageName | null>(null);
+  const [verb, setVerb] = useState<MoveVerb>("Move");
 
   if (!can("manager")) return null;
 
-  const ahead = stagesAhead(stage);
-  if (ahead.length === 0) {
+  const open = (v: MoveVerb, to: StageName) => { setVerb(v); setTarget(to); };
+
+  if (stage === "Closed") {
     return (
       <Text type="text3" color="secondary">
-        Closed is the last phase — there is nowhere further to move it.
+        Closed is the archive — nothing moves out of it.
       </Text>
     );
   }
 
+  const dialog = (
+    <MoveStageDialog
+      show={target != null}
+      subject={subject}
+      fromStage={stage}
+      toStage={target}
+      verb={verb}
+      move={move}
+      note={note}
+      onClose={() => setTarget(null)}
+      onMoved={onMoved}
+    />
+  );
+
+  if (stage === "Cancelled") {
+    return (
+      <>
+        <Select
+          aria-label={`Revive ${subject} to a working phase`}
+          placeholder="Revive to…"
+          options={WORKING_STAGES.map(s => ({ value: s, label: s }))}
+          value={null}
+          onChange={v => open("Revive", v as StageName)}
+        />
+        {dialog}
+      </>
+    );
+  }
+
+  const ahead = stagesAhead(stage);
   return (
     <>
       <Select
@@ -148,18 +243,18 @@ export function MoveStageControl({
         placeholder="Move to…"
         options={ahead.map(s => ({ value: s, label: s }))}
         value={null}
-        onChange={v => setTarget(v as StageName)}
+        onChange={v => open("Move", v as StageName)}
       />
-      <MoveStageDialog
-        show={target != null}
-        subject={subject}
-        fromStage={stage}
-        toStage={target}
-        move={move}
-        note={note}
-        onClose={() => setTarget(null)}
-        onMoved={onMoved}
-      />
+      {(WORKING_STAGES as readonly string[]).includes(stage) && (
+        <Button
+          kind="tertiary"
+          size="small"
+          onClick={() => open("Cancel", "Cancelled")}
+        >
+          Cancel…
+        </Button>
+      )}
+      {dialog}
     </>
   );
 }
@@ -168,15 +263,7 @@ export function MoveStageControl({
 export const JOB_MOVE_NOTE =
   "If every job on the project has now passed this phase, the project moves up with it.";
 
-/** And a project's — its jobs do not follow it. */
+/** And a project's — its lagging jobs come with it (0046, Amber's rule). */
 export const PROJECT_MOVE_NOTE =
-  "Its jobs stay where they are — each one moves on its own.";
-
-/**
- * Kept exported for the board: dropping a card on an earlier column is refused before
- * the drag even lands (the column does not accept the drop), but a click-driven path
- * can still ask, and the answer should be the same sentence everywhere.
- */
-export function isForwardMove(from: string, to: string): boolean {
-  return stagePosition(to) > stagePosition(from);
-}
+  "Every job still behind this phase moves up with it. Jobs already at or past it, " +
+  "cancelled or archived, stay where they are.";

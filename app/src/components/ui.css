@@ -371,19 +371,53 @@
 .bar-fill { height: 100%; background: var(--primary-color); border-radius: var(--border-radius-small); }
 .bar-num { font: var(--font-text3-normal); color: var(--secondary-text-color); font-variant-numeric: tabular-nums; }
 
-/* ---- drawer -------------------------------------------------------------- */
+/* ---- bulk edit (jobs table) ---------------------------------------------- */
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-12);
+  padding: var(--space-8) var(--space-16);
+  margin-bottom: var(--space-12);
+  background: var(--primary-selected-color);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-medium);
+}
+.bulk-actions { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; }
+.bulk-actions > * { min-width: 150px; }
+/* Native checkboxes, on brand and at a real target size. */
+.bulk-col { width: 36px; }
+.bulk-col input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary-color);
+  cursor: pointer;
+  /* The 16px box is the visual; the padding-box trick is not worth it in a cell —
+     the whole 36px cell is clickable via the label-less input's own hit slop plus
+     the stopPropagation cell around it. */
+}
+.bulk-col { text-align: center; vertical-align: middle; }
+
+/* ---- drawer --------------------------------------------------------------
+   The drawer and its overlay cover the MAIN AREA, not the app. Nav and header stay
+   visible and usable beside and above them — the shell publishes where the main area
+   starts as --shell-rail-w / --shell-header-h, and every offset here reads those.
+   The fallbacks are for the responsive harness, which mounts pages without the shell. */
 .drawer-overlay {
   position: fixed;
-  inset: 0;
+  top: var(--shell-header-h, 0px);
+  left: var(--shell-rail-w, 0px);
+  right: 0;
+  bottom: 0;
   background: rgba(0, 0, 0, 0.45);
   z-index: 40;
 }
 .drawer {
   position: fixed;
-  top: 0;
+  top: var(--shell-header-h, 0px);
   right: 0;
   bottom: 0;
-  width: min(460px, 100vw);
+  width: min(460px, calc(100vw - var(--shell-rail-w, 0px)));
   z-index: 41;
   display: flex;
   flex-direction: column;
@@ -413,7 +447,10 @@
 /* The drawer widens the way the create panel does — same widths, same transition, so
    "expand" means one thing in this app rather than two. */
 .drawer { transition: width var(--motion-productive-medium) var(--motion-timing-transition); }
-.drawer.is-expanded { width: 100vw; }
+/* Expanded: the whole MAIN AREA — everything except the rail and the header, which
+   stay usable. "Full screen" meaning the full app hid the nav under the record, and
+   the way back out of a full-screen job was gone with it. */
+.drawer.is-expanded { width: calc(100vw - var(--shell-rail-w, 0px)); }
 .drawer-body { flex: 1; overflow-y: auto; padding: var(--space-16); }
 
 /* ---- template phases ----------------------------------------------------- */
@@ -658,7 +695,12 @@ code { overflow-wrap: anywhere; }
    -------------------------------------------------------------------------- */
 .create-panel-scrim {
   position: fixed;
-  inset: 0;
+  /* Main area only, same contract as the drawer's overlay: the chrome stays out from
+     under the scrim, so nav and header remain visible and clickable. */
+  top: var(--shell-header-h, 0px);
+  left: var(--shell-rail-w, 0px);
+  right: 0;
+  bottom: 0;
   z-index: 40;
   /* Lighter than the drawer's 0.45. The point of a panel over a dialog is that the list
      behind stays readable; a scrim dark enough to hide it gives that back. */
@@ -666,10 +708,10 @@ code { overflow-wrap: anywhere; }
 }
 .create-panel {
   position: fixed;
-  top: 0;
+  top: var(--shell-header-h, 0px);
   right: 0;
   bottom: 0;
-  width: min(460px, 100vw);
+  width: min(460px, calc(100vw - var(--shell-rail-w, 0px)));
   z-index: 41;
   display: flex;
   flex-direction: column;
@@ -680,14 +722,11 @@ code { overflow-wrap: anywhere; }
      and leave the panel mid-slide if it is toggled twice quickly. */
   transition: width var(--motion-productive-medium) var(--motion-timing-transition);
 }
-/* Expanded: the full window, less a margin so it still reads as a layer over the page
-   rather than a navigation. No centring and no darker scrim — the difference from the
-   dialog this replaces is exactly that the page behind stays legible. */
-/* The whole window. It was capped at 1100px, which on a wide screen left the page
-   showing down one side and did not read as full screen at all — which is the thing
-   the control says it does. */
+/* Expanded: the whole MAIN AREA. It was 100vw, which covered the rail and the header
+   too — "full screen" is the full working area, not the whole app with its own way
+   out hidden (Amber, 26 August). */
 .create-panel.is-expanded {
-  width: 100vw;
+  width: calc(100vw - var(--shell-rail-w, 0px));
 }
 
 .create-panel-head {

@@ -631,10 +631,10 @@ export const DICTIONARY: DictionaryEntry[] = [
     "Feeds is_current(status) — anything not completed, cancelled or archived is current. Exposed by project_display.status.",
     "created"),
   e("projects.project_stage", "Stage",
-    "Where the project sits in the five-phase lifecycle everybody shares. Its jobs may be at different phases — this is the project's own answer, which can be set by hand or brought in line with the lowest job.",
+    "Where the project sits in the lifecycle everybody shares — four working phases, then Completed, Closed (the archive, hidden by default) and Cancelled. Its jobs may be at different phases; this is the project's own answer, following its slowest non-cancelled job upwards.",
     "text",
-    "Not null, default 'Acquisition & Development'. CHECK projects_stage_is_a_lifecycle_stage on the five names. Indexed. Manager and above to change it, and only ever forwards.",
-    "Paired with project_stage_entered_at, which a trigger moves. project_stage_from_jobs() computes what it would inherit; it is offered rather than applied, because inheriting can point backwards.",
+    "Not null, default 'Acquisition & Development'. CHECK projects_stage_is_a_lifecycle_stage on the seven names (0045). Indexed. Manager and above to change it; forwards only, except that Cancelled may be entered from any live stage and left backwards on revival.",
+    "Paired with project_stage_entered_at, which a trigger moves. Two triggers keep the pair honest both ways: the slowest live job pulls the project up (0041), and moving the project pushes its lagging jobs up with it (0046) — cancelled and archived jobs sit out of both. lifecycle_archive() moves 12-months-Completed-or-Cancelled on to Closed. While cancelled, nothing fires for it.",
     "created"),
   e("projects.project_stage_entered_at", "Entered this phase",
     "When the project moved into the phase it is in. Days-in-phase is worked out from it on every read rather than stored, so it cannot go stale.",
@@ -709,16 +709,18 @@ export const DICTIONARY: DictionaryEntry[] = [
     "FK → addresses(id). Exposed by job_display.current_address and job_address_search.",
     "created"),
   e("jobs.job_stage", "Stage",
-    "Which of the five lifecycle phases the job is in now, and the single answer to that question. The board filters on this column every load. What a team does *inside* a phase is a nested pipeline, not a value here.",
+    "Where the job is in the lifecycle, and the single answer to that question: four working phases, then Completed (done), Closed (the archive — 12 months after Completed or Cancelled, hidden by default and shown by the Closed view) and Cancelled (stopped without completing; revivable; fires no alerts). What a team does *inside* a phase is a nested pipeline, not a value here.",
     "text",
-    "Not null, default 'Acquisition & Development'. Indexed. CHECK jobs_stage_is_a_lifecycle_stage on the five names. Text rather than an enum since 0035, in that migration's words: a vocabulary that changes must be able to lose a value, and an enum cannot.",
-    "Replaced the proposed jobs.stage_id in 0004; the `stage` enum it used was dropped in 0035. Paired with job_stage_entered_at, which a trigger moves whenever this changes.",
+    "Not null, default 'Acquisition & Development'. Indexed. CHECK jobs_stage_is_a_lifecycle_stage on the seven names (0045). Forwards only, with Cancelled the one exception both ways: enterable from any live stage, leavable backwards on revival. Text rather than an enum since 0035 — a vocabulary that changes must be able to lose a value, and this one just did it again.",
+    "Replaced the proposed jobs.stage_id in 0004; the `stage` enum was dropped in 0035; 0045 renamed Closed to Completed and added the archive and Cancelled. Paired with job_stage_entered_at, which a trigger moves — and which is therefore also the archive clock's input.",
     "created"),
   e("jobs.job_owning_team", "Owning team", "The one team holding the job right now. \"One job, one team at a time\" is the whole model.",
     "text", "Not null. FK → teams(team_id) ON UPDATE CASCADE.",
     "An FK since 0026, which made teams a table. It was a `team` enum value from 0004 until then — the reason it changed is that a team gets renamed and retired, and neither is something an enum does well.",
     "created"),
-  e("jobs.job_assignee_id", "Assigned to", "The person responsible inside the owning team.", "uuid", "Nullable.", "FK → profiles(id).", "to_do", PROPOSED),
+  e("jobs.job_assignee_id", "Assigned to",
+    "The person responsible for the job. Null means nobody is assigned — a real state the boards show as an em dash, never as a stand-in name. The Team filter matches through this too: a job shows under Design when Design owns it or when its assignee sits in Design.",
+    "uuid", "Nullable.", "FK → profiles(id). Resolved to a name and to the person's teams in the app's board model.", "created"),
   e("jobs.job_status", "Status",
     "Where the job stands — the same seven values as a project. What someone sets, not what the system works out.",
     "text", "Not null, default 'on_track'. CHECK on the seven values; the `record_status` enum they came from was dropped in 0028.",
@@ -914,6 +916,98 @@ export const DICTIONARY: DictionaryEntry[] = [
 // ---------------------------------------------------------------- derived views
 
 export const DICTIONARY_TABLES: string[] = [...new Set(DICTIONARY.map(d => d.table))].sort();
+
+/**
+ * What each table is FOR — purpose and standing, not a column list; the entries under
+ * each one already say what it holds. Shown at the top of the table's card on the
+ * Tables tab and under its heading in the generated markdown.
+ *
+ * Every table in DICTIONARY_TABLES must have one, and only those tables may: the
+ * generator refuses to write the markdown when the two sets differ (proved by removing
+ * an entry and watching it refuse), and the page shows a missing one as a gap rather
+ * than papering over it.
+ *
+ * Five live tables have no dictionary entries at all, so there is no card to describe:
+ * pipelines, pipeline_stages, job_pipeline_positions and job_stage_events (0029, the
+ * nested-pipeline machinery) and dictionary_overrides (0044, this page's own edits).
+ * Recorded here so the gap is a known one, not a discovered one.
+ */
+export const TABLE_DESCRIPTIONS: Record<string, string> = {
+  activity:
+    "The concept spec's one-table feed — events and comments together, because the UI interleaves them. The built schema answers the same need with two tables, comments and activity_events, interleaved on read; these entries are kept as the shape that was proposed before that split.",
+  activity_audit:
+    "The forensic log. A trigger writes one row for every insert, update and delete on the tracked tables, whole rows as jsonb — which is where stage history lives now that job_stages is gone. Admin reading, never a drawer; built outside the numbered migrations.",
+  activity_events:
+    "The readable feed — \"moved this to Construction\" as a kind plus its nouns, rendered into a sentence by the app rather than stored as one. Append-only: triggers write it, nobody edits it, and neither it nor activity_audit can be derived from the other.",
+  address_history:
+    "The middle of the address timeline. The record itself holds only its original and current addresses; every superseded assignment lands here, which is what lets \"12 Test Street\" still find project 1042 years after it became \"20 Corner Street\".",
+  addresses:
+    "An address as a record, stored once and pointed at — addresses get corrected and changed, a lot renumbered by council, a typo found at handover, and everything that held a copy would keep the old text. The consolidated string is assembled here by trigger so every card, export and search reads exactly the same words.",
+  build_stages:
+    "The construction sub-stages inside the Construction phase — slab, frame, lock-up and so on. Proposed and not built: the lifecycle stays the shared vocabulary, and what a team does inside a phase is that team's own pipeline.",
+  comment_mentions:
+    "Who was @-mentioned in which comment, as rows rather than parsed out of the body on read — a mention that disappears when somebody fixes a typo is not a notification. The null read_at rows are the unread queue, and only the mentioned person can mark theirs read.",
+  comments:
+    "What people write on a record. Threaded one level deep in practice, marked edited only when the body actually changes, and interleaved with activity_events on read to make the feed people see.",
+  council_regions:
+    "Merged into the sa_council enum in 0003. It held 68 rows nobody maintained, plus the audit columns and a touch trigger to look after them; a council is now a value on the address, not a row it points at.",
+  divisions:
+    "Removed — never a Lofty concept. The prototype invented it, derived it from the project type, and relabelled development work \"Land\"; projects.project_type already carries the real distinction. Kept so the next person can see it was dropped on purpose.",
+  document_links:
+    "One place a document is attached — a separate table because the same soil report belongs to a project and to every job on it, and parent columns on documents would mean four copies of one PDF with four names to drift.",
+  documents:
+    "A file, held once however many records point at it. Versions chain through supersedes rather than counting up, and a row can exist before the bytes do — \"the signed contract\", still outstanding, is a real state.",
+  health_statuses:
+    "Parked, deliberately. Health is calculated, not set — is it on schedule, over budget, has an issue been raised — and the inputs are still to be decided. Nothing gets built until the calculation is settled, because a guessed column bakes in the wrong answer. Distinct from status, which a person sets.",
+  job_address_search:
+    "A search view: one row per job per address role, current and original alike, backed by the trigram index on the consolidated string — so a search on either address finds the job, and the result can say which one it hit.",
+  job_display:
+    "The read view behind the boards: jobs joined to their addresses and their project, so one query returns the consolidated address, the inherited project type and whether the job is current, without each screen rebuilding the joins.",
+  job_stages:
+    "Dropped in 0006. One row per job per stage was the wrong shape for the question every board load asks — the current position moved onto the job as stage and stage_entered_at in 0004, and past transitions live in activity_audit.",
+  job_types:
+    "Merged into projects.project_type. A job's type is its project's type — a commercial project does not contain residential jobs — so a second column could only ever disagree with the first. Jobs read it through job_display.",
+  jobs:
+    "One dwelling's build — \"1042-01\", which is both what Lofty says out loud and the primary key. Carries the lifecycle stage, the owning team and assignee, both addresses, the engaged teams and the SharePoint folder: the board is mostly this table.",
+  login_activity:
+    "One row per authentication event, copied out of auth.users with the email denormalised so the row survives account deletion. Read most-recent-first, which is what its index is for. Built outside the numbered migrations.",
+  permission_grants:
+    "The permission model as data — which rung of the ladder reaches how far: none, own, team, team_hierarchy, all. Still to do; today the ladder is compared by ordinal directly in the RLS policies.",
+  profile_teams:
+    "Who is in which team — and whether they manage it, which is the column that justifies the table existing twice. 0022 folded membership into an array because it carried nothing of its own; managing is something of its own, and a person can be in four teams while managing three, so the table came back.",
+  profiles:
+    "A person, existing before they ever sign in — that is what makes a pre-created staff list possible. The Microsoft account links itself on first sign-in, every RLS policy resolves auth.uid() through here, and nobody is hard-deleted: their name is on years of activity.",
+  project_address_search:
+    "The same search view as job_address_search, for projects — one row per project per address role.",
+  project_display:
+    "The read view for project cards: projects joined to their addresses, so suburb, council and both consolidated addresses come back in one row without the app touching addresses itself.",
+  projects:
+    "The site — 1042, one row per development, one to many jobs beneath it. Holds the facts the whole site shares (type, addresses, SharePoint folder) that jobs read through rather than copy, and its own lifecycle stage — pulled up by its slowest live job, and pushing lagging jobs up when it is moved.",
+  property_defs:
+    "A field defined as a row, not a column — which is what lets a team add what it captures without a schema migration. The property_def_* columns are built; the earlier proposed spelling is kept alongside them, still marked to do, as the record of the first shape. Values wait on property_values.",
+  property_values:
+    "One row per property per record, sparse by design — an unset field has no row at all, and the shape of the value is checked against its definition's format. Not built yet: property_defs is live and waiting on it.",
+  stages:
+    "Merged into the stage enum in 0004 — eight seeded values that were the business process, not data anyone maintained. That enum was itself dropped in 0035, and the lifecycle now lives as text under CHECKs with pipeline_stages as its lookup; kept for both steps of the reasoning.",
+  taggings:
+    "Where a tag is applied — one row per tag per record. Deliberately no primary key across the four parent columns, because a null never equals a null; four partial unique indexes stop the same tag landing on the same record twice.",
+  tags:
+    "Free labels for a board — \"Council hold\", \"Design variation\" — the same shape as teams and for the same reason: the list is data, it will change, and a retired tag must leave the pickers without breaking the records that carry it.",
+  task_dependencies:
+    "The edges between tasks — which one waits for which, with the lag carried on the edge because Lofty's process map puts its SLAs on the arrows, not the steps. Triggers refuse cycles and refuse edges between tasks on different records.",
+  tasks:
+    "One thing to be done. A checklist item instantiated from a template and a task somebody typed live in the same table, because they differ only by origin; completion is a timestamp with deliberately no boolean beside it, and the external flag keeps council's statutory 28 days off Design's overdue report.",
+  teams:
+    "A team as a row, keyed by slug so a rename never rewrites anything pointing at it, retirable by flag. That flag is the whole reason the enum had to go: ALTER TYPE has no DROP VALUE, so an enum value added by mistake is permanent.",
+  template_checkpoints:
+    "One thing a phase expects done before handover, copied to the job when it is created from a template. Proposed, not built — and not seeded until Lofty writes the real checkpoints; the 36 the prototype showed were invented, which is exactly what this table must never contain.",
+  template_phases:
+    "How long each phase of a process template should take — what a Gantt measures actual time-in-stage against. Proposed, not built; the expected-days that exist today live on pipeline_stages, which the coming SLA editor will edit.",
+  variation_reopened_tasks:
+    "Which tasks a variation sent back, each with a snapshot of whether it was already finished — the number that settles a process argument, and one that cannot be reconstructed later because the reopening itself destroys the evidence.",
+  variations:
+    "One change to a job, as a record rather than a flag on it, because three teams raising conflicting changes at once is the problem this exists for. Carries who asked and why, what it costs, and a per-job number that is never reissued once it has been in an email to a client."
+};
 
 export function entriesFor(table: string): DictionaryEntry[] {
   return DICTIONARY.filter(d => d.table === table);
