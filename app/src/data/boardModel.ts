@@ -60,6 +60,8 @@ export interface BoardJob {
    * "no one".
    */
   assigneeName: string | null;
+  /** The assignee's id, for the drawer's editor — the name above is for reading. */
+  assigneeId: string | null;
   /**
    * The team NAMES the assignee sits in — resolved from `profile_teams` through the
    * profile, plural because people sit in more than one. Amber, 26 August: the Team
@@ -115,6 +117,9 @@ export interface BoardProject {
   /** The project's own lifecycle phase — 0039. Its jobs may be elsewhere. */
   stage: string;
   stageEnteredAt: string;
+  /** Who holds the project — editable on the detail page, per Amber's Q2. */
+  owningTeam: TeamId | null;
+  assigneeId: string | null;
   startDate: string | null;
   endDate: string | null;
   sharepointUrl: string | null;
@@ -176,6 +181,7 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
       projectType: j.projectType,
       createdBy: j.createdBy ? nameOf.get(j.createdBy) ?? null : null,
       assigneeName: j.assigneeId ? nameOf.get(j.assigneeId) ?? null : null,
+      assigneeId: j.assigneeId ?? null,
       assigneeTeams: j.assigneeId ? teamsOf.get(j.assigneeId) ?? [] : [],
       daysInStage: daysSince(j.stageEnteredAt, now),
       currentAddress: j.currentAddress,
@@ -207,6 +213,8 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
       council: p.council,
       stage: p.stage,
       stageEnteredAt: p.stageEnteredAt,
+      owningTeam: p.owningTeam,
+      assigneeId: p.assigneeId,
       startDate: p.startDate,
       endDate: p.endDate,
       sharepointUrl: p.sharepointUrl,

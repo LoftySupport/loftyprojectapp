@@ -2,13 +2,14 @@ import { useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { Button, Checkbox, Counter, Heading, Tab, TabList, Text, TextField } from "@vibe/core";
 import { groupByStage, usePropertyDefs, useStages, useTeams } from "../data/useLookups";
-import { useRepository } from "../data/DataProvider";
+import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { Field, Problem } from "../components/Form";
 import { Select } from "../components/Select";
 import {
-  PROPERTY_FORMATS, PROPERTY_SCOPES,
-  type NewPropertyDef, type PropertyDef, type PropertyFormat, type PropertyScope, type TeamId
+  PROPERTY_FORMATS, PROPERTY_SCOPES, WORKING_STAGES,
+  type NewPropertyDef, type PropertyDef, type PropertyFormat, type PropertyScope,
+  type StageName, type TeamId
 } from "../data/types";
 import { DictionaryPage } from "./DictionaryPage";
 import { PermissionsPage } from "./PermissionsPage";
@@ -76,25 +77,146 @@ export function SetupPage() {
 }
 
 /**
- * Nothing here yet, and saying so beats an empty panel.
+ * The SLA editor (Amber's Q1), then the honest note about everything else.
  *
- * Automations are already half-present in the schema — `property_defs.automation` names
- * one per field — but nothing defines or runs them. This tab exists because the grouping
- * is the point: when they land, this is where they go, rather than becoming a tenth nav
- * item.
+ * Per stage: the expected days in stage, and the at-risk lead — how many days before
+ * that deadline the record starts flagging at risk. Overdue needs no third number; it
+ * is simply past the expected days. Only the four working phases take an SLA: a
+ * Completed job is not late, the archive runs on a fixed clock, and a Cancelled job
+ * fires no alerts by rule.
+ *
+ * Superadmin to edit — the 0029 policy on pipeline_stages, because the SLA is part of
+ * what the stages ARE. Everyone else reads the numbers, or the em dash that honestly
+ * says nobody has set one.
  */
 function Automations() {
+  const repo = useRepository();
+  const { can } = usePermission();
+  const [reloadKey, setReloadKey] = useState(0);
+  const { data: phases } = useQuery(r => r.listTemplatePhases(), [], [reloadKey]);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const canEdit = can("superadmin");
+
+  const byName = new Map(phases.map(p => [p.stageName, p]));
+
+  const save = async (stage: StageName, patch: { expectedDays?: number | null; atRiskLeadDays?: number | null }) => {
+    setSaving(stage);
+    setProblem(null);
+    try {
+      await repo.updateStageSla(stage, patch);
+      setReloadKey(k => k + 1);
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  // Committed on blur, not per keystroke — one write per edit, like the date fields.
+  // Blank clears: an unset SLA is a real state, and it is not zero.
+  const parse = (raw: string): number | null => {
+    const trimmed = raw.trim();
+    if (trimmed === "") return null;
+    const n = Number(trimmed);
+    return Number.isFinite(n) ? Math.trunc(n) : null;
+  };
+
   return (
-    <section className="panel">
-      <div className="panel-head">
-        <Text type="text2" weight="bold">Automations</Text>
-      </div>
-      <Text type="text2" color="secondary" ellipsis={false}>
-        Not built yet. A property definition can already name an automation — the field
-        that fills its value in without anyone typing it — but there is nothing here to
-        define or run them. When there is, it belongs on this tab.
-      </Text>
-    </section>
+    <>
+      <section className="panel">
+        <div className="panel-head">
+          <Text type="text2" weight="bold">Stage SLAs</Text>
+          <Text type="text3" color="secondary">
+            {canEdit ? "blank means no SLA — saving happens when you leave a field" : "read-only below superadmin"}
+          </Text>
+        </div>
+        <Text type="text2" color="secondary" ellipsis={false}>
+          How long a record should sit in each working phase, and how many days before
+          that deadline it starts flagging at risk. Past the expected days is overdue —
+          there is no third number. Completed, Closed and Cancelled take no SLA: done is
+          not late, the archive runs on its own clock, and cancelled records fire no
+          alerts by rule.
+        </Text>
+        <div className="data-table-wrap" style={{ marginTop: "var(--space-12)" }}>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Stage</th>
+                <th>Expected days in stage</th>
+                <th>At risk (days before due)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {WORKING_STAGES.map(stage => {
+                const phase = byName.get(stage);
+                const expected = phase?.expectedDays ?? null;
+                const lead = phase?.atRiskLeadDays ?? null;
+                return (
+                  // Keyed on the values too, so a save's read-back resets the inputs'
+                  // defaultValue to what the database actually accepted.
+                  <tr key={`${stage}:${expected ?? ""}:${lead ?? ""}`}>
+                    <td><Text type="text2" weight="medium">{stage}</Text></td>
+                    <td>
+                      {canEdit ? (
+                        <input
+                          type="number"
+                          min={1}
+                          className="date-input"
+                          aria-label={`Expected days in ${stage}`}
+                          defaultValue={expected ?? ""}
+                          disabled={saving === stage}
+                          onBlur={e => {
+                            const next = parse(e.target.value);
+                            if (next !== expected) save(stage, { expectedDays: next });
+                          }}
+                        />
+                      ) : (
+                        <Text type="text2">{expected ?? "—"}</Text>
+                      )}
+                    </td>
+                    <td>
+                      {canEdit ? (
+                        <input
+                          type="number"
+                          min={1}
+                          className="date-input"
+                          aria-label={`At-risk lead for ${stage}`}
+                          defaultValue={lead ?? ""}
+                          disabled={saving === stage}
+                          onBlur={e => {
+                            const next = parse(e.target.value);
+                            if (next !== lead) save(stage, { atRiskLeadDays: next });
+                          }}
+                        />
+                      ) : (
+                        <Text type="text2">{lead ?? "—"}</Text>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {saving && <Text type="text3" color="secondary">Saving…</Text>}
+        {problem && <Problem>{problem}</Problem>}
+      </section>
+
+      {/* Automations proper are still half-present in the schema — `property_defs.automation`
+          names one per field — but nothing defines or runs them. The tab keeps saying so
+          rather than showing an empty list. */}
+      <section className="panel" style={{ marginTop: "var(--space-16)" }}>
+        <div className="panel-head">
+          <Text type="text2" weight="bold">Automations</Text>
+        </div>
+        <Text type="text2" color="secondary" ellipsis={false}>
+          Not built yet. A property definition can already name an automation — the field
+          that fills its value in without anyone typing it — but there is nothing here to
+          define or run them. When there is, it belongs on this tab.
+        </Text>
+      </section>
+    </>
   );
 }
 

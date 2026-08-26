@@ -1,6 +1,6 @@
 import { Chips, Counter, Heading, Text } from "@vibe/core";
 import { PROJECT_TYPES, PROJECT_TYPE_LABELS } from "../data/types";
-import { useCheckpoints, usePropertyDefs, useStages, useTemplatePhases } from "../data/useLookups";
+import { useMilestones, usePropertyDefs, useStages, useTemplatePhases } from "../data/useLookups";
 import "../components/ui.css";
 
 /**
@@ -8,10 +8,10 @@ import "../components/ui.css";
  *
  * Half of this page is now real and half of it is missing, and the difference matters
  * more than either half. The phases and the team that picks each one up come from
- * `pipeline_stages`. The checkpoints and the fields do not exist: `pipeline_stage_tasks`
+ * `pipeline_stages`. The milestones and the fields do not exist: `pipeline_stage_tasks`
  * and `property_defs` are specified and not built.
  *
- * What this page used to show instead was 36 checkpoints and 11 field definitions that
+ * What this page used to show instead was 36 milestones and 11 field definitions that
  * were invented — "Slab poured", "Defect walkthrough", plausible enough that the page's
  * own comment described them as "the process itself". They were not. The real process is
  * the 57-step preconstruction schedule and the process map, both still being revised, and
@@ -24,10 +24,10 @@ import "../components/ui.css";
 export function TemplatesPage() {
   const { stageNames } = useStages();
   const { teamsByStage, expectedDaysByStage } = useTemplatePhases();
-  const { byStage: checkpointsByStage, checkpoints } = useCheckpoints();
+  const { byStage: milestonesByStage, milestones } = useMilestones();
   const { slotsFor } = usePropertyDefs();
 
-  const checkpointCount = checkpoints.length;
+  const milestoneCount = milestones.length;
   const jobFields = slotsFor("job");
 
   return (
@@ -41,15 +41,15 @@ export function TemplatesPage() {
           </Text>
         </div>
         <Text type="text3" color="secondary">
-          {stageNames.length} phases · {checkpointCount} checkpoints
+          {stageNames.length} phases · {milestoneCount} milestones
         </Text>
       </div>
 
-      {(checkpointCount === 0 || jobFields.length === 0) && (
+      {(milestoneCount === 0 || jobFields.length === 0) && (
         <div className="search-note">
           <Text type="text3" ellipsis={false}>
             The <strong>phases</strong> and the team that owns each one are read from the
-            database. The <strong>checkpoints</strong> and <strong>fields</strong> are not
+            database. The <strong>milestones</strong> and <strong>fields</strong> are not
             configured yet — those tables are not built, and the lists that used to appear
             here were written to fill the space rather than taken from Lofty's process.
           </Text>
@@ -91,16 +91,16 @@ export function TemplatesPage() {
               <div className="card-divider" style={{ margin: "var(--space-12) 0" }} />
 
               <div className="panel-head">
-                <Text type="text3" weight="bold">Checkpoints</Text>
-                <Counter count={checkpointsByStage[stage]?.length ?? 0} kind="line" />
+                <Text type="text3" weight="bold">Milestones</Text>
+                <Counter count={milestonesByStage[stage]?.length ?? 0} kind="line" />
               </div>
-              {(checkpointsByStage[stage] ?? []).length === 0 ? (
+              {(milestonesByStage[stage] ?? []).length === 0 ? (
                 <Text type="text3" color="secondary" ellipsis={false}>
                   None defined yet.
                 </Text>
               ) : (
-                (checkpointsByStage[stage] ?? []).map(c => (
-                  <div className="checkpoint" key={c.label}>
+                (milestonesByStage[stage] ?? []).map(c => (
+                  <div className="milestone" key={c.label}>
                     <input type="checkbox" disabled aria-label={c.label} />
                     <Text type="text3">{c.label}</Text>
                   </div>
@@ -115,7 +115,7 @@ export function TemplatesPage() {
                     <Counter count={fields.length} kind="line" />
                   </div>
                   {fields.map(f => (
-                    <div className="checkpoint" key={f.key}>
+                    <div className="milestone" key={f.key}>
                       <Text type="text3">
                         {f.label}
                         {f.required && <span className="slot-required">required</span>}

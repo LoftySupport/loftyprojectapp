@@ -11,7 +11,7 @@ import type {
   PropertyDef,
   Stage,
   Team,
-  TemplateCheckpoint,
+  TemplateMilestone,
   TemplatePhase
 } from "./types";
 
@@ -29,7 +29,7 @@ import type {
  * fails if they stop matching what the migrations create.
  *
  * The other three lookups used to be seeded too, and should not have been. Template
- * phases carried an invented owning team and an invented expected duration; checkpoints
+ * phases carried an invented owning team and an invented expected duration; milestones
  * and property definitions were 36 and 11 rows of plausible fiction. None of them existed
  * anywhere in the database, so seeding them meant this stub and production disagreed about
  * what the app contains — and the more convincing answer was the wrong one. They now say
@@ -78,7 +78,7 @@ export const SEED_TEAMS: Team[] = TEAM_SEED.map(t => ({ ...t }));
 
 export function createStubRepository(): Repository {
   // Stages and teams only. The other three answer honestly rather than fully — phases
-  // without their owning team, checkpoints and properties not at all — and calling that
+  // without their owning team, milestones and properties not at all — and calling that
   // "wired" on the Wiring page would overstate what a backendless run can tell you.
   const wired = new Set<RepositoryMethod>(["listStages", "listTeams"]);
 
@@ -181,20 +181,25 @@ export function createStubRepository(): Repository {
         stageId: s.id,
         stageName: s.name,
         owningTeamNames: [],
-        expectedDays: null
+        expectedDays: null,
+        atRiskLeadDays: null
       }));
+    },
+
+    async updateStageSla(): Promise<never> {
+      throw new Error("Editing stage SLAs needs Supabase.");
     },
 
     /**
      * Empty, matching what the database says.
      *
      * `pipeline_stage_tasks` and `property_defs` are not built, so the Supabase repository
-     * answers both with []. The stub used to answer with 36 checkpoints and 11 field
+     * answers both with []. The stub used to answer with 36 milestones and 11 field
      * definitions, which meant a developer running without a backend saw a different — and
      * more convincing — app than anybody with one, and the empty states this app now needs
      * were never once rendered while they were being written.
      */
-    async listTemplateCheckpoints(): Promise<TemplateCheckpoint[]> { return []; },
+    async listTemplateMilestones(): Promise<TemplateMilestone[]> { return []; },
     async listPropertyDefs(): Promise<PropertyDef[]> { return []; },
     async listDictionaryOverrides(): Promise<DictionaryOverride[]> { return []; },
     async saveDictionaryOverride(): Promise<DictionaryOverride> {

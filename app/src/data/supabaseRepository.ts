@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Repository, RepositoryMethod } from "./repository";
 import type { DictionaryOverride } from "./dictionary";
 import { createStubRepository } from "./stubRepository";
-import { MAX_SPLIT } from "./types";
+import { MAX_SPLIT, OPENING_TEAM } from "./types";
 import type {
   ActivityEntry,
   AddressHistoryEntry,
@@ -23,7 +23,7 @@ import type {
   StageName,
   Team,
   TeamId,
-  TemplateCheckpoint,
+  TemplateMilestone,
   TemplatePhase
 } from "./types";
 
@@ -47,7 +47,7 @@ import type {
 
 // Add a method name here as you implement it. The Wiring page reads this.
 //
-// listTemplateCheckpoints is the only one left, and it is not waiting on wiring:
+// listTemplateMilestones is the only one left, and it is not waiting on wiring:
 // `pipeline_stage_tasks` does not exist. It returns empty rather than a seed, so the
 // Wiring page shows it as the one thing genuinely not built rather than as a method
 // somebody forgot. property_defs came off this list with 0043.
@@ -60,7 +60,7 @@ const WIRED: RepositoryMethod[] = [
   "createProfile", "updateProfile", "setProfileActive", "listActivity",
   "listComments", "addComment", "updateProject", "moveProjectStage",
   "setProjectCurrentAddress", "listAddressHistory",
-  "listStages", "listTeams", "listTemplatePhases",
+  "listStages", "listTeams", "listTemplatePhases", "updateStageSla",
   "listPropertyDefs", "createPropertyDef", "updatePropertyDef", "deletePropertyDef",
   "listDictionaryOverrides", "saveDictionaryOverride"
 ];
@@ -173,7 +173,7 @@ const ADDRESS_COLUMNS =
   "address_id, address_lot_number, address_street_number, address_street_1, address_street_2, address_suburb, address_state, address_postcode, address_council";
 
 const STAGE_COLUMNS =
-  "pipeline_stage_id, pipeline_stage_name, pipeline_stage_position, pipeline_stage_owning_team, pipeline_stage_expected_days, pipeline_stage_created_at, pipeline_stage_created_by, pipeline_stage_updated_at, pipeline_stage_updated_by";
+  "pipeline_stage_id, pipeline_stage_name, pipeline_stage_position, pipeline_stage_owning_team, pipeline_stage_expected_days, pipeline_stage_at_risk_lead_days, pipeline_stage_created_at, pipeline_stage_created_by, pipeline_stage_updated_at, pipeline_stage_updated_by";
 
 interface StageRow {
   pipeline_stage_id: string;
@@ -181,6 +181,7 @@ interface StageRow {
   pipeline_stage_position: number;
   pipeline_stage_owning_team: TeamId | null;
   pipeline_stage_expected_days: number | null;
+  pipeline_stage_at_risk_lead_days: number | null;
   pipeline_stage_created_at: string;
   pipeline_stage_created_by: string | null;
   pipeline_stage_updated_at: string;
@@ -760,6 +761,9 @@ export function createSupabaseRepository(): Repository {
           project_original_address_id: input.newAddress ? address.address_id : undefined,
           project_current_address_id: currentId,
           project_name: emptyToNull(input.name),
+          // Amber, 26 Aug: every new record opens with Acquisition & Development. The
+          // project form has no team field, so this is written rather than defaulted.
+          project_owning_team: OPENING_TEAM,
           project_type: input.projectType,
           project_proposed_dwellings: input.proposedDwellings ?? null,
           project_status: input.status ?? "on_track",
@@ -1067,6 +1071,8 @@ export function createSupabaseRepository(): Repository {
       if ("targetCompletion" in patch) row.project_target_completion = patch.targetCompletion ?? null;
       if ("endDate" in patch) row.project_end_date = patch.endDate ?? null;
       if ("sharepointUrl" in patch) row.project_sharepoint_url = emptyToNull(patch.sharepointUrl);
+      if ("owningTeam" in patch && patch.owningTeam !== undefined) row.project_owning_team = patch.owningTeam;
+      if ("assigneeId" in patch) row.project_assignee_id = patch.assigneeId ?? null;
       if (Object.keys(row).length === 0) return await readProject(id);
 
       const { data: updated, error } = await client
@@ -1142,8 +1148,8 @@ export function createSupabaseRepository(): Repository {
      * and the app and the database disagreed about who owns Working Drawings for weeks
      * without either being wrong enough to notice.
      *
-     * `template_checkpoints` and `property_defs` do not exist. They are Phase C. The seed
-     * answered them with a plausible invention — 36 checkpoints and 11 field definitions
+     * `template_milestones` and `property_defs` do not exist. They are Phase C. The seed
+     * answered them with a plausible invention — 36 milestones and 11 field definitions
      * that nobody at Lofty wrote — and a plausible invention is the worst of the three
      * options, because it is the one that gets treated as the process and quoted back at
      * people. Empty is the true answer, and the screens say so.
@@ -1210,20 +1216,58 @@ export function createSupabaseRepository(): Repository {
         owningTeamNames: r.pipeline_stage_owning_team
           ? [nameOf.get(r.pipeline_stage_owning_team) ?? r.pipeline_stage_owning_team]
           : [],
-        expectedDays: r.pipeline_stage_expected_days
+        expectedDays: r.pipeline_stage_expected_days,
+        atRiskLeadDays: r.pipeline_stage_at_risk_lead_days
       }));
+    },
+
+    /**
+     * The SLA, per lifecycle stage — expected days in stage and the at-risk lead (0047).
+     *
+     * Keyed by stage name, the vocabulary every screen already shares. `null` clears —
+     * an unset SLA is a real state — and the CHECKs (lead needs an expectation, lead
+     * shorter than it) refuse here with their names, shown verbatim by the editor.
+     * Superadmin by the 0029 policy: the SLA is part of what the stages ARE.
+     */
+    async updateStageSla(
+      stage: StageName,
+      patch: { expectedDays?: number | null; atRiskLeadDays?: number | null }
+    ): Promise<TemplatePhase[]> {
+      const row: Record<string, number | null> = {};
+      if ("expectedDays" in patch) row.pipeline_stage_expected_days = patch.expectedDays ?? null;
+      if ("atRiskLeadDays" in patch) row.pipeline_stage_at_risk_lead_days = patch.atRiskLeadDays ?? null;
+      if (Object.keys(row).length === 0) return await repo.listTemplatePhases();
+
+      const { data: pipeline, error: pipelineError } = await db
+        .from("pipelines")
+        .select("pipeline_id")
+        .eq("pipeline_key", "build_lifecycle")
+        .single();
+      if (pipelineError) throw pipelineError;
+
+      const { data: updated, error } = await db
+        .from("pipeline_stages")
+        .update(row)
+        .eq("pipeline_id", pipeline.pipeline_id)
+        .eq("pipeline_stage_name", stage)
+        .select("pipeline_stage_id");
+      if (error) throw error;
+      if (!updated?.length) {
+        throw new Error(`The ${stage} stage was not updated — editing stage SLAs needs superadmin.`);
+      }
+      return await repo.listTemplatePhases();
     },
 
     /**
      * Empty until the process exists.
      *
-     * `pipeline_stage_tasks` is specified and not built, and the 36 checkpoints this used
+     * `pipeline_stage_tasks` is specified and not built, and the 36 milestones this used
      * to return — "Slab poured", "Defect walkthrough" — were invented to give the template
      * card something to show. The real ones are the 57-step preconstruction schedule and
      * the process map, both still being revised by Lofty, and both needing a person to map
      * each step to a team before they can be loaded.
      */
-    async listTemplateCheckpoints(): Promise<TemplateCheckpoint[]> {
+    async listTemplateMilestones(): Promise<TemplateMilestone[]> {
       return [];
     },
 

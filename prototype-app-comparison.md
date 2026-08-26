@@ -140,7 +140,7 @@ against source on 25 Aug:
 
 **Confirmed unchanged** (rev 1's claims stand): toolbar filters and the inert date control,
 saved views, jobs/projects table sorting (SortableTable still Admin-only), drawer structure
-(no tabs; checkpoints still an empty disabled list), assignee (token everywhere),
+(no tabs; milestones still an empty disabled list), assignee (token everywhere),
 notifications, toasts, tooltips, dashboard, reports, templates, mentions UI, and a
 human-readable activity feed (`activity_events` still has no writer — a stage move lands in
 the forensic `activity_audit` only).
@@ -263,7 +263,7 @@ entries were resolved between revisions):
 | G38 | Clickable report rows | A |
 | G39 | Preferences, view persistence, saved views ✦ | A+C — scope grew (Amber) |
 | G40 | Settings: notification matrix persistence ✦ | C — in-app first |
-| G41 | Template / checkpoint editing ✦ | D |
+| G41 | Template / milestone editing ✦ | D |
 | G42 | ~~Property-definition editing~~ ✦ | **Largely built** (PR #37) |
 | G43 | Stage SLA editor (in Setup → Automations) | A — spec final, the unlock |
 | G44 | Team management UI ✦ | A |
@@ -1006,14 +1006,14 @@ complete/pending markers; a user-typed value is never overwritten by a tick,
 scheduling drill-down in real time. The handover doc calls this "where the prototype comes
 closest to the real thing" (`prototype-handover.md:219-232`).
 
-**App today.** The drawer's Checkpoints panel renders disabled checkboxes from
-`listTemplateCheckpoints` — which returns `[]` because `pipeline_stage_tasks` doesn't
+**App today.** The drawer's Milestones panel ("checkpoints" until 26 Aug — Lofty's
+word is milestones) renders disabled checkboxes from `listTemplateMilestones` — which returns `[]` because `pipeline_stage_tasks` doesn't
 exist; the panel is an empty box (and needs an empty-state message even before this gap is
 filled — one-line fix in `JobDrawer.tsx`).
 
 **To implement (D).** Blocked on the real process decision: the 57 preconstruction steps
 have no home; the current design direction is **dated properties with a thin position on
-top** (~126 property definitions) rather than checkpoint rows (`HANDOFF.md:1079-1179`),
+top** (~126 property definitions) rather than milestone rows (`HANDOFF.md:1079-1179`),
 with two open sub-questions (auto-move position when a date is filled; does each step want
 a person as well as a date). When it lands, the prototype's interaction spec is the
 valuable part: tick↔date coupling, don't-overwrite-typed-values, board-position coupling,
@@ -1023,8 +1023,8 @@ invented.
 ```
 Prototype: loftyprojectboard/index.html:10086-10127 (render), 10579-10629 (toggle/date/value
            rules), 5958-5990 (step lists — do not seed from these)
-App today: app/src/components/JobDrawer.tsx (empty checkpoints panel);
-           app/src/data/supabaseRepository.ts:886 (listTemplateCheckpoints → [])
+App today: app/src/components/JobDrawer.tsx (empty milestones panel);
+           app/src/data/supabaseRepository.ts:886 (listTemplateMilestones → [])
 ```
 
 ---
@@ -1324,7 +1324,7 @@ code from before that decision).
 **To implement (D).** Two decisions first: does single-job creation return alongside the
 lot-split (the split *is* the current model's answer to "one per lot"; a variation raised
 mid-construction is the known case that might need a single add — it's one of Phase B's
-hard scenarios, `HANDOFF.md:989-995`), and what a "template" is once checkpoints are dated
+hard scenarios, `HANDOFF.md:989-995`), and what a "template" is once milestones are dated
 properties (G22). The preview pattern — show the derived number and consequences before
 committing — is already half-present in the app's split panel and should extend to
 whatever creation flows exist. If single-add returns, resurrect and update `NewJobDialog`
@@ -1599,12 +1599,12 @@ arrive.
 
 ---
 
-#### G41 · Template / checkpoint editing — **D**
+#### G41 · Template / milestone editing — **D**
 
 ![Templates](docs/comparison-screenshots/templates.png)
 
 **Prototype.** Per-type templates (Residential/Commercial/Development toggles; Development
-skips a phase, and the page says so), a required-fields block, and **in-place checkpoint
+skips a phase, and the page says so), a required-fields block, and **in-place milestone
 editing** for admins — borderless inputs, hover-revealed remove, add button, empty value
 deletes; edits immediately affect the new-job preview (`renderJobTemplate`,
 `index.html:9256-9322`; editing `:9236-9254`).
@@ -1613,10 +1613,10 @@ deletes; edits immediately affect the new-job preview (`renderJobTemplate`,
 owning team set" / "No expected duration set" / "None defined yet." throughout; the
 type chips were made `readOnly` because they filtered nothing (`TemplatesPage.tsx:59-70`).
 
-**To implement (D).** Same blocker as G22 — checkpoints have no home until the process
+**To implement (D).** Same blocker as G22 — milestones have no home until the process
 decision. When steps become dated properties, "template editing" becomes property-
 definition management (G42) plus per-type applicability; the prototype's inline-edit
-interaction ports to whatever that screen is. Do not build a checkpoint editor for a table
+interaction ports to whatever that screen is. Do not build a milestone editor for a table
 that isn't the chosen model.
 
 ```
