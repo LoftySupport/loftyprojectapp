@@ -75,14 +75,33 @@ card on the Tables tab and under each heading in `data-dictionary.md`). The gene
 refuses to write the file if the map and `DICTIONARY_TABLES` differ in either
 direction, and that refusal was watched firing before it was trusted.
 
-Still open from this session: the SLA editor (Setup → Automations; needs the at-risk
-lead column beside `pipeline_stage_expected_days`), **single-record assignee editing
-in the drawer** (`updateJob` now exists; the bulk bar uses it, the drawer doesn't
-yet), and the auto-assign-to-Acquisition-&-Development default on job creation
-(Amber's Q2). Also surfaced while writing the descriptions: **five live tables have
-no dictionary entries at all** — `pipelines`, `pipeline_stages`,
-`job_pipeline_positions`, `job_stage_events` (0029) and `dictionary_overrides`
-(0044) — so they have no card to describe either.
+A fourth batch, after PR #39 merged (the branch was restarted from `main`):
+- **Checkpoints are milestones now** (Amber, 26 Aug: "change the name of checkpoints
+  to milestones throughout"). Identifiers, UI copy, the dictionary (the proposed
+  table is `template_milestones`, rename logged in its entry) and forward-looking
+  docs all say milestones; genuinely historical text — the 36 invented ones the old
+  seed showed — keeps the old word, because that is what they were called.
+- **The drawer edits who holds the job**: Team and Assigned to selects in "Who it's
+  with", through the same `updateJob` the bulk bar uses, at the same `user`+ rung.
+  Below `user` it reads as before.
+- **Projects say who holds them too**: `BoardProject` and `ProjectPatch` carry
+  owning team and assignee; the detail page gained the same two selects
+  (`WhoHoldsIt`), and `createProject` writes Acquisition & Development outright —
+  Amber's Q2: every new record opens with A&D. Jobs already did (the dialogs'
+  pre-selected `FIRST_TEAM`, now aliased to `OPENING_TEAM` in `types.ts`).
+- **The SLA editor exists** (Setup → Automations; Amber's Q1). `0047` added
+  `pipeline_stage_at_risk_lead_days` beside the expectation — CHECKed to need an
+  expectation and be shorter than it, both proved biting in the migration — and the
+  tab edits expected days + at-risk lead for the four working phases. Superadmin, by
+  0029's policy: the SLA is part of what the stages are. Overdue is past the
+  expected days; there is no third number. **Applied to the live database.**
+  `pipeline_stages` thereby got its first two dictionary entries.
+
+Still open from this session: **four live tables still have no dictionary entries**
+— `pipelines`, `job_pipeline_positions`, `job_stage_events` (0029) and
+`dictionary_overrides` (0044) — and `pipeline_stages` is only covered for its two
+SLA columns. Nothing yet *consumes* the SLA numbers: the at-risk/overdue flags on
+boards wait on the health calculation (see the parked `health_statuses`).
 
 **A session note for PR #37 (25 Aug — stage moves, comments, property_defs, project
 editing, address history) was never written**; `prototype-app-comparison.md` §1.5
@@ -361,7 +380,8 @@ rather than typed.
    Lofty's own numbering merges them; and where the three terminal states live, given
    `record_status` already has `on_hold` and `cancelled` and two places recording the same
    fact will drift.
-2. **The 57 preconstruction steps have no home.** `template_checkpoints` is the nearest
+2. **The 57 preconstruction steps have no home.** `template_milestones` (renamed from
+   `template_checkpoints`, 26 Aug — Lofty's word is milestones) is the nearest
    structure and its seeded rows are **four invented placeholders per stage** — not Lofty's.
    Mapping the steps onto stages, deciding which are skippable, and deciding whether their
    SLA days should drive the board's "days in stage" are all business decisions.
@@ -390,7 +410,7 @@ rather than typed.
 
 `profiles` (47 rows) is the only business table with data. `addresses`, `projects` and
 `jobs` exist and are empty. `property_defs`, `property_values`, `comments`, `activity`,
-`permission_grants`, `template_phases` and `template_checkpoints` **do not exist yet** — the
+`permission_grants`, `template_phases` and `template_milestones` **do not exist yet** — the
 lookups fall back to the seed in `stubRepository.ts`, which is why boards render columns
 with nothing in them. Every remaining token on screen is one of those two cases.
 
@@ -1156,7 +1176,7 @@ Carried forward and still open. The first two block real screens.
    What is *not* built is a screen to edit it. RLS says superadmin — proved in `rls.sql`,
    which watches a manager be refused — so the control belongs in Setup → Process
    alongside the stage editor, and neither exists yet.
-3. **The real checkpoints and the real field list.** Lofty, 23 August: *"the process map
+3. **The real milestones and the real field list.** Lofty, 23 August: *"the process map
    will always be an evolving process"*, and the certain property list is not ready to be
    split into job-level and project-level yet.
 
@@ -1344,11 +1364,11 @@ client, and no component may import seed data directly.** If a screen needs some
 is not on the interface, add a method.
 
 The second half was learned the hard way and is worth not re-learning. The lookups —
-teams, template phases, checkpoints, property definitions — spent a while as module
+teams, template phases, milestones, property definitions — spent a while as module
 constants in a `lookups.ts`, imported straight into nine files. They read like
 configuration, but every one is a real Supabase table, and the day they were seeded all
 nine files would have had to change. That is now fixed: they come through
-`listTeams()`, `listTemplatePhases()`, `listTemplateCheckpoints()` and
+`listTeams()`, `listTemplatePhases()`, `listTemplateMilestones()` and
 `listPropertyDefs()`, and `app/src/data/useLookups.ts` holds the hooks that read them.
 
 **If it will live in Postgres, it belongs on the interface, however static it looks

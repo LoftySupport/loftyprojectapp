@@ -18,7 +18,7 @@ import type {
   Stage,
   StageName,
   Team,
-  TemplateCheckpoint,
+  TemplateMilestone,
   TemplatePhase
 } from "./types";
 
@@ -34,7 +34,7 @@ import type {
  * here, add a method — don't reach around the seam.
  *
  * That second half was learned the hard way. The lookups below (teams, template phases,
- * checkpoints, property definitions) spent a while as module constants imported straight
+ * milestones, property definitions) spent a while as module constants imported straight
  * into nine files. They read like configuration, but every one is a real Supabase table,
  * and the day they were seeded all nine files would have had to change — the exact
  * rewrite this interface exists to prevent. If it will live in Postgres, it belongs
@@ -174,7 +174,16 @@ export interface Repository {
   listStages(): Promise<Stage[]>;
   listTeams(): Promise<Team[]>;
   listTemplatePhases(): Promise<TemplatePhase[]>;
-  listTemplateCheckpoints(): Promise<TemplateCheckpoint[]>;
+  /**
+   * The SLA per lifecycle stage — expected days in stage and the at-risk lead (0047),
+   * keyed by stage name. `null` clears a number; the fresh phase list comes back as
+   * proof the database accepted it. Superadmin, by the 0029 policy on pipeline_stages.
+   */
+  updateStageSla(
+    stage: StageName,
+    patch: { expectedDays?: number | null; atRiskLeadDays?: number | null }
+  ): Promise<TemplatePhase[]>;
+  listTemplateMilestones(): Promise<TemplateMilestone[]>;
   listPropertyDefs(): Promise<PropertyDef[]>;
 
   /** Lofty's words on top of the repo's dictionary — see DictionaryOverride. */
@@ -231,7 +240,8 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "listStages",
   "listTeams",
   "listTemplatePhases",
-  "listTemplateCheckpoints",
+  "updateStageSla",
+  "listTemplateMilestones",
   "listPropertyDefs",
   "listDictionaryOverrides",
   "saveDictionaryOverride",
@@ -272,7 +282,8 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   listStages: "pipeline_stages",
   listTeams: "teams",
   listTemplatePhases: "pipeline_stages",
-  listTemplateCheckpoints: "pipeline_stage_tasks (not built)",
+  updateStageSla: "pipeline_stages",
+  listTemplateMilestones: "pipeline_stage_tasks (not built)",
   listPropertyDefs: "property_defs",
   listDictionaryOverrides: "dictionary_overrides",
   saveDictionaryOverride: "dictionary_overrides",

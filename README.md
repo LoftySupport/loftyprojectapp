@@ -111,6 +111,6 @@ Board, Table, Gantt and Calendar — the same four names on Jobs, Board and Tabl
 Projects. Grouping by Stage, Project, Team, Team member or Status. One date control
 holding the whole range, and filters you add and remove, each arriving unset.
 
-A job drawer with breadcrumbs, checkpoints, the definition-driven field slots and the
+A job drawer with breadcrumbs, milestones, the definition-driven field slots and the
 activity feed. Cards are keyboard-operable; the drawer takes focus on open and closes on
 Escape.

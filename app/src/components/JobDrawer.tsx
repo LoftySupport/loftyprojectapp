@@ -1,14 +1,18 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { BreadcrumbsBar, BreadcrumbItem, Button, Heading, Text } from "@vibe/core";
-import { useCheckpoints, useTemplatePhases } from "../data/useLookups";
+import { useMilestones, useTemplatePhases, useTeams } from "../data/useLookups";
 import type { BoardJob } from "../data/boardModel";
+import type { TeamId } from "../data/types";
 import { StatusPill } from "./RecordCards";
 import { PropertySlots } from "./PropertySlots";
 import { ExpandButton, usePanelExpand } from "./PanelExpand";
 import { JOB_MOVE_NOTE, MoveStageControl } from "./MoveStageDialog";
 import { CommentsPanel } from "./CommentsPanel";
-import { useRepository } from "../data/DataProvider";
+import { useQuery, useRepository } from "../data/DataProvider";
+import { usePermission } from "../data/PermissionProvider";
+import { Select } from "./Select";
+import { Problem } from "./Form";
 import { Token } from "./Token";
 import "./ui.css";
 
@@ -51,12 +55,34 @@ export function JobDrawer({ job, onClose, onMoved }: {
   }, []);
 
   const { expectedDaysByStage } = useTemplatePhases();
-  const { byStage: checkpointsByStage } = useCheckpoints();
+  const { byStage: milestonesByStage } = useMilestones();
+
+  // Editing who holds the job — the same `updateJob` the bulk bar writes through, at
+  // the same rung (`user`+, backed by the `users update jobs` policy). One record here,
+  // so the write saves on change and the board reloads behind the drawer.
+  const { can } = usePermission();
+  const { teams } = useTeams();
+  const { data: profiles } = useQuery(r => r.listProfiles(), []);
+  const [whoBusy, setWhoBusy] = useState(false);
+  const [whoErr, setWhoErr] = useState<string | null>(null);
+  const saveWho = async (patch: { owningTeam?: TeamId; assigneeId?: string | null }) => {
+    if (whoBusy) return;
+    setWhoBusy(true);
+    setWhoErr(null);
+    try {
+      await repo.updateJob(job.jobNumber, patch);
+      onMoved();
+    } catch (err) {
+      setWhoErr(err instanceof Error ? err.message : String(err));
+    } finally {
+      setWhoBusy(false);
+    }
+  };
 
   // Undefined, not 14: no stage has an expected duration set, and inventing one here
   // put a number under "Days in stage" that read as a target somebody had agreed.
   const expected = expectedDaysByStage[job.stage];
-  const checkpoints = checkpointsByStage[job.stage] ?? [];
+  const milestones = milestonesByStage[job.stage] ?? [];
 
   return (
     <>
@@ -120,14 +146,46 @@ export function JobDrawer({ job, onClose, onMoved }: {
               <Text type="text2" weight="bold">Who it’s with</Text>
               <StatusPill status={job.status} />
             </div>
-            {/* Same as the card: the assignee resolves through boardModel now, and an
-                em dash is the honest answer when nobody is assigned. */}
-            <div className="card-who">
-              <div>
-                <Text type="text3" weight="medium">{job.team}</Text>
-                <Text type="text3" color="secondary">{job.assigneeName ?? "—"}</Text>
+            {/* Same facts as the card, editable from `user` up — the rung the database
+                already enforces on this write. Below that, read-only, and an em dash
+                stays the honest answer when nobody is assigned. */}
+            {can("user") ? (
+              <>
+                <div className="field-row">
+                  <div className="field-label">
+                    <Text type="text2">Team</Text>
+                  </div>
+                  <Select
+                    aria-label="Owning team"
+                    options={teams.filter(t => t.isActive).map(t => ({ value: t.id, label: t.name }))}
+                    value={job.teamId}
+                    onChange={v => { if (v !== job.teamId) saveWho({ owningTeam: v as TeamId }); }}
+                  />
+                </div>
+                <div className="field-row">
+                  <div className="field-label">
+                    <Text type="text2">Assigned to</Text>
+                  </div>
+                  <Select
+                    aria-label="Assignee"
+                    placeholder="— nobody —"
+                    clearable
+                    options={profiles.map(p => ({ value: p.id, label: p.fullName }))}
+                    value={job.assigneeId}
+                    onChange={v => { if (v !== job.assigneeId) saveWho({ assigneeId: v }); }}
+                  />
+                </div>
+                {whoBusy && <Text type="text3" color="secondary">Saving…</Text>}
+                {whoErr && <Problem>{whoErr}</Problem>}
+              </>
+            ) : (
+              <div className="card-who">
+                <div>
+                  <Text type="text3" weight="medium">{job.team}</Text>
+                  <Text type="text3" color="secondary">{job.assigneeName ?? "—"}</Text>
+                </div>
               </div>
-            </div>
+            )}
           </section>
 
           <section className="panel">
@@ -167,11 +225,11 @@ export function JobDrawer({ job, onClose, onMoved }: {
 
           <section className="panel">
             <div className="panel-head">
-              <Text type="text2" weight="bold">Checkpoints</Text>
+              <Text type="text2" weight="bold">Milestones</Text>
               <Text type="text3" color="secondary">from the template for this phase</Text>
             </div>
-            {checkpoints.map(c => (
-              <div className="checkpoint" key={c.label}>
+            {milestones.map(c => (
+              <div className="milestone" key={c.label}>
                 <input type="checkbox" disabled aria-label={c.label} />
                 <Text type="text2">{c.label}</Text>
               </div>

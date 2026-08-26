@@ -11,12 +11,12 @@ import { LoadProblem, NoResults, NothingYet, PreviousAddressNote } from "../comp
 import { SavedViewTabs } from "../components/SavedViewTabs";
 import { ProjectCard, StatusPill } from "../components/RecordCards";
 import { PropertySlots } from "../components/PropertySlots";
-import { PROJECT_TYPE_LABELS, type StageName } from "../data/types";
+import { PROJECT_TYPE_LABELS, type StageName, type TeamId } from "../data/types";
 import { MoveStageControl, PROJECT_MOVE_NOTE } from "../components/MoveStageDialog";
 import { daysSince } from "../data/boardModel";
 import { Token } from "../components/Token";
 import { Toolbar } from "../components/Toolbar";
-import { toOptions } from "../components/Select";
+import { Select, toOptions } from "../components/Select";
 import { NewProjectDialog, SplitProjectDialog } from "../components/CreateDialogs";
 import { InlineNewProjectRow } from "../components/InlineNewProjectRow";
 import { CommentsPanel } from "../components/CommentsPanel";
@@ -283,6 +283,73 @@ export function ProjectsPage() {
   );
 }
 
+/**
+ * The project's team and assignee, editable from `user` up — the rung the projects
+ * update policy already enforces. Saves on change; the read-back is `onChanged`'s
+ * reload, the same proof-by-re-read the dates use. Below `user` it reads only, and an
+ * em dash stays the honest answer for "nobody".
+ */
+function WhoHoldsIt({ project, onChanged, onError }: {
+  project: BoardProject;
+  onChanged: () => void;
+  onError: (message: string | null) => void;
+}) {
+  const repo = useRepository();
+  const { can } = usePermission();
+  const { teams } = useTeams();
+  const { data: profiles } = useQuery(r => r.listProfiles(), []);
+
+  const save = async (patch: { owningTeam?: TeamId; assigneeId?: string | null }) => {
+    onError(null);
+    try {
+      await repo.updateProject(project.projectId, patch);
+      onChanged();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const assigneeName = project.assigneeId
+    ? profiles.find(p => p.id === project.assigneeId)?.fullName ?? "—"
+    : "—";
+
+  return (
+    <>
+      <div className="field-row">
+        <div className="field-label"><Text type="text2">Team</Text></div>
+        {can("user") ? (
+          <Select
+            aria-label="Owning team"
+            placeholder="— no team —"
+            options={teams.filter(t => t.isActive).map(t => ({ value: t.id, label: t.name }))}
+            value={project.owningTeam}
+            onChange={v => { if (v !== project.owningTeam) save({ owningTeam: v as TeamId }); }}
+          />
+        ) : (
+          <Text type="text2" weight="medium">
+            {project.owningTeam ? teams.find(t => t.id === project.owningTeam)?.name ?? project.owningTeam : "—"}
+          </Text>
+        )}
+      </div>
+      <div className="field-row">
+        <div className="field-label"><Text type="text2">Assigned to</Text></div>
+        {can("user") ? (
+          <Select
+            aria-label="Assignee"
+            placeholder="— nobody —"
+            clearable
+            options={profiles.map(p => ({ value: p.id, label: p.fullName }))}
+            value={project.assigneeId}
+            onChange={v => { if (v !== project.assigneeId) save({ assigneeId: v }); }}
+          />
+        ) : (
+          <Text type="text2" weight="medium">{assigneeName}</Text>
+        )}
+      </div>
+    </>
+  );
+}
+
 function ProjectDetail({
   project,
   onBack,
@@ -401,6 +468,11 @@ function ProjectDetail({
                 : <Token>{token}</Token>}
             </div>
           ))}
+
+          {/* Who holds the project — the same pair the job drawer edits, at the same
+              rung (`user`+, the update policy on projects). New projects open with
+              Acquisition & Development (Amber's Q2); this is where that changes. */}
+          <WhoHoldsIt project={project} onChanged={onChanged} onError={setSaveError} />
 
           {/* The lifecycle. The same forwards-only picker the job drawer has — Amber's
               rule covers both — with the same confirmation, and the same line the

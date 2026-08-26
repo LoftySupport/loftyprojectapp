@@ -21,7 +21,7 @@ export function WiringPage() {
   // than there is.
   const LOOKUPS: RepositoryMethod[] = [
     "listStages", "listTeams", "listTemplatePhases",
-    "listTemplateCheckpoints", "listPropertyDefs"
+    "listTemplateMilestones", "listPropertyDefs"
   ];
 
   const rows = ALL_METHODS.map(method => ({
@@ -58,7 +58,7 @@ export function WiringPage() {
 
       <Section
         title="Lookups"
-        note="The business process — stages, teams, template phases, checkpoints, property definitions. Seeded rather than user-created, so the stub answers them honestly: the board has its columns and the drawer its field slots before any table exists. They still come through the seam, so seeding them in Supabase changes one method and no screens."
+        note="The business process — stages, teams, template phases, milestones, property definitions. Seeded rather than user-created, so the stub answers them honestly: the board has its columns and the drawer its field slots before any table exists. They still come through the seam, so seeding them in Supabase changes one method and no screens."
         rows={lookups}
         configured={configured}
       />

@@ -8,7 +8,7 @@ import { useTeams } from "../data/useLookups";
 import { councilForSuburb, isAmbiguousSuburb, postcodeForSuburb } from "../data/saSuburbs";
 import { SuburbField } from "./SuburbField";
 import {
-  AU_STATES, MAX_SPLIT, PROJECT_TYPE_LABELS, PROJECT_TYPES, SA_COUNCILS,
+  AU_STATES, MAX_SPLIT, OPENING_TEAM, PROJECT_TYPE_LABELS, PROJECT_TYPES, SA_COUNCILS,
   type NewAddress, type ProjectType, type SaCouncil, type SplitLot, type TeamId
 } from "../data/types";
 import "./ui.css";
@@ -285,7 +285,7 @@ function OwningTeamField({
  * Still a picker, and still changeable before saving — a job that genuinely starts
  * elsewhere is one selection away.
  */
-const FIRST_TEAM: TeamId = "acquisition_development";
+const FIRST_TEAM: TeamId = OPENING_TEAM;
 
 const EMPTY_ADDRESS: NewAddress = {
   street1: "", suburb: "", state: "SA", postcode: "", council: null,

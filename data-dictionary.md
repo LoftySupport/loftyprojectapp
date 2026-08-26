@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-219 properties across 37 tables.
+221 properties across 38 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 170 | In the migration and the types |
+| Created | 172 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -257,6 +257,15 @@ The permission model as data — which rung of the ladder reaches how far: none,
 | `permission_grants.permission` | Permission | Which rung of the ladder this grant applies to. | `enum` | — | permission_level. Part of the composite primary key. | Keyed off the permission_level enum rather than a roles table. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `permission_grants.scope` | Scope | How wide the grant reaches — none, own, team, team_hierarchy, all. There is no 'division' scope: divisions were a prototype invention, not a Lofty concept. | `text` | — | Not null, CHECK against the scope list. | Each value maps to an RLS predicate. 'team' and 'team_hierarchy' both read profiles.teams, which is an array — the predicate is an overlap test, not a join, since 0022. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 
+## `pipeline_stages`
+
+A position within a pipeline — the build lifecycle's seven stages are its rows (0029, reseeded by 0035 and 0045), which is what lets the vocabulary change without an ALTER TYPE. Only its two SLA columns are dictionaried so far — expected days and the at-risk lead, the pair the Setup → Automations editor writes; the rest of the table is still in the uncovered list above.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `pipeline_stages.pipeline_stage_expected_days` | Expected days in stage | How long a record should sit in this stage — what "on time" means for it, and what overdue is measured past. Null means no SLA is set, which is a real state and not zero: an invented number was exactly what the old Gantt drew bars against. | `integer` | — | smallint. Nullable. CHECK (> 0). | Read by listTemplatePhases as TemplatePhase.expectedDays; edited per stage in Setup → Automations (superadmin, by the 0029 policy). The at-risk lead must be shorter than it. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `pipeline_stages.pipeline_stage_at_risk_lead_days` | At-risk lead | How many days before the expected-days deadline the record starts flagging at risk (Amber's Q1, 0047). Past the deadline itself is overdue — there is no third number. | `integer` | — | smallint. Nullable. CHECK pipeline_stages_at_risk_lead_is_positive (> 0) and pipeline_stages_at_risk_lead_fits_the_expectation — a lead needs an expectation to lead, and must be shorter than it, or it would flag the record at risk on arrival. Both proved biting in 0047. | Read by listTemplatePhases as TemplatePhase.atRiskLeadDays; edited beside the expectation in Setup → Automations. The health calculation (parked — see health_statuses) is its intended consumer. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
 ## `profile_teams`
 
 Who is in which team — and whether they manage it, which is the column that justifies the table existing twice. 0022 folded membership into an array because it carried nothing of its own; managing is something of its own, and a person can be in four teams while managing three, so the table came back.
@@ -444,13 +453,13 @@ A team as a row, keyed by slug so a rename never rewrites anything pointing at i
 | `teams.team_is_active` | Active | Whether the team is still one. Retiring Commercial is one flag: it leaves every picker while every row that ever referenced it still resolves. This is the whole reason the enum had to go — ALTER TYPE has no DROP VALUE, so an enum value added by mistake is permanent. | `boolean` | — | Not null, default true. Twelve teams seeded true; Commercial, Executive and Admin seeded false. | Filtered out of the team pickers in the app. Never used to hide history. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `teams.parent_team_id` | Parent team (merged) | Never built, and not revived when teams became a real table. It existed for a team_hierarchy permission scope to walk, but every seeded team had a null parent, so the hierarchy was never real. The scopes settled as none / own / team / all, none of which walks a tree. | `uuid` | — | Never created. | No replacement, deliberately. If a hierarchy is genuinely wanted later it is a second table of edges, not a column here — teams belong to more than one grouping in practice. | Merged | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
-## `template_checkpoints`
+## `template_milestones`
 
-One thing a phase expects done before handover, copied to the job when it is created from a template. Proposed, not built — and not seeded until Lofty writes the real checkpoints; the 36 the prototype showed were invented, which is exactly what this table must never contain.
+One thing a phase expects done before handover, copied to the job when it is created from a template. Proposed, not built — and not seeded until Lofty writes the real milestones; the 36 the prototype showed were invented, which is exactly what this table must never contain.
 
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `template_checkpoints.label` | Checkpoint | One thing a phase expects done before handover. Instantiated per job as job_checkpoints. | `text` | — | Not null. | Copied to job_checkpoints.label when a job is created from a template. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
+| `template_milestones.label` | Milestone | One thing a phase expects done before handover. Instantiated per job as job_milestones. Renamed from template_checkpoints (Amber, 26 Aug) — Lofty's word is milestones, and nothing was built under the old name. | `text` | — | Not null. | Copied to job_milestones.label when a job is created from a template. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 
 ## `template_phases`
 

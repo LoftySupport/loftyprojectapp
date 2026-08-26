@@ -391,7 +391,8 @@ Two things exist that are in the neighbourhood of this process, and neither is i
 
 - **`stages`** — the eight above. A job sits in exactly one, and `jobs.stage` is the
   single answer to "where is this job". The board's columns are these.
-- **`template_checkpoints`** — `stageId`, `label`, `position`: what a stage expects done
+- **`template_milestones`** (renamed from `template_checkpoints`, 26 Aug) — `stageId`,
+  `label`, `position`: what a stage expects done
   before it hands over. The seeded data has **four invented placeholder checkpoints per
   stage**, written to give the UI something to render. They are not Lofty's steps.
 

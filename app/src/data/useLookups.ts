@@ -1,14 +1,14 @@
 import { useCallback, useMemo } from "react";
 import { useQuery } from "./DataProvider";
 import { teamName } from "./types";
-import type { PropertyDef, PropertyScope, TeamId, TemplateCheckpoint } from "./types";
+import type { PropertyDef, PropertyScope, TeamId, TemplateMilestone } from "./types";
 
 /**
  * The lookups, read through the seam.
  *
  * These replace what used to be `lookups.ts` — a module of exported constants that nine
  * files imported directly. They read like configuration, but every one is a real
- * Supabase table (`stages`, `teams`, `template_phases`, `template_checkpoints`,
+ * Supabase table (`stages`, `teams`, `template_phases`, `template_milestones`,
  * `property_defs`). The day they were seeded, all nine files would have had to change:
  * the exact rewrite the repository seam exists to prevent.
  *
@@ -69,16 +69,16 @@ export function useTemplatePhases() {
   return { phases: data, teamsByStage, expectedDaysByStage, loading };
 }
 
-export function useCheckpoints() {
-  const { data, loading } = useQuery(r => r.listTemplateCheckpoints(), []);
+export function useMilestones() {
+  const { data, loading } = useQuery(r => r.listTemplateMilestones(), []);
 
   const byStage = useMemo(() => {
-    const out: Record<string, TemplateCheckpoint[]> = {};
+    const out: Record<string, TemplateMilestone[]> = {};
     data.forEach(c => { (out[c.stageName] ??= []).push(c); });
     return out;
   }, [data]);
 
-  return { checkpoints: data, byStage, loading };
+  return { milestones: data, byStage, loading };
 }
 
 /**

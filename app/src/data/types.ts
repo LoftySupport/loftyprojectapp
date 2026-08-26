@@ -278,6 +278,9 @@ export interface ProjectPatch {
   targetCompletion?: IsoDate | null;
   endDate?: IsoDate | null;
   sharepointUrl?: string | null;
+  /** Ownership and assignment — editable on projects as on jobs (Amber's Q2). */
+  owningTeam?: TeamId;
+  assigneeId?: Uuid | null;
 }
 
 /**
@@ -573,6 +576,16 @@ export const TEAM_IDS = [
   "finance", "maintenance", "lofty_general", "commercial", "executive", "admin"
 ] as const;
 export type TeamId = (typeof TEAM_IDS)[number];
+
+/**
+ * The team every new record opens with — Acquisition & Development, the team that owns
+ * the first lifecycle stage. Not a guess standing in for a decision: Amber, 26 August,
+ * "all jobs auto-assigned to Acquisition & Development on creation", projects included.
+ * The create dialogs pre-select it (still a picker — a job that genuinely starts
+ * elsewhere is one selection away) and `createProject` writes it outright, since the
+ * project form has no team field to override it with.
+ */
+export const OPENING_TEAM: TeamId = "acquisition_development";
 
 /** The label for a slug, falling back to the slug itself rather than to blank. */
 export const teamName = (id: TeamId | string, from: readonly Team[] = TEAM_SEED): string =>
@@ -926,10 +939,16 @@ export interface TemplatePhase {
    * is nullable for exactly this reason: an unset SLA is a real state, and it is not zero.
    */
   expectedDays: number | null;
+  /**
+   * How many days before the expected-days deadline the record starts flagging at risk
+   * (0047). Null when no lead is set. The database requires an expectation and a lead
+   * shorter than it — the editor shows its refusal verbatim rather than pre-empting it.
+   */
+  atRiskLeadDays: number | null;
 }
 
-/** `template_checkpoints` — what a phase expects done before it hands over. */
-export interface TemplateCheckpoint {
+/** `template_milestones` — what a phase expects done before it hands over. */
+export interface TemplateMilestone {
   stageId: number;
   stageName: string;
   label: string;
@@ -1148,11 +1167,10 @@ export interface JobSplit {
 export interface NewJob {
   projectId: number;
   /**
-   * Required, and deliberately not defaulted anywhere.
-   *
-   * This is what the permission ladder reads to decide whose work a job is. A default
-   * would file every job created without a team under one team, and nobody would ever
-   * see the prompt that would have made them choose.
+   * Required at the seam — a caller must always say whose work the job is, because the
+   * permission ladder reads it. The dialogs pre-select OPENING_TEAM (Amber, 26 Aug:
+   * every job opens with Acquisition & Development), which reversed "deliberately not
+   * defaulted anywhere": the default stopped being a guess when it became her decision.
    */
   owningTeam: TeamId;
   address?: NewAddress;

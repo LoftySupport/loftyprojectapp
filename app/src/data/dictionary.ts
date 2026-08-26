@@ -902,9 +902,24 @@ export const DICTIONARY: DictionaryEntry[] = [
   e("property_defs.property_def_automation", "Automation", "A note about how the value arrives on its own, when it does.", "text", "Nullable.", "—", "created"),
   e("property_defs.property_def_position", "Position", "Where it sits among its stage's slots. Data, not alphabet: the person defining the fields decides what order a form asks its questions in.", "integer", "Not null, default 0.", "Indexed with the stage.", "created"),
 
+  // ----------------------------------------------------- pipeline_stages (SLA)
+  // The lifecycle's lookup (0029, reseeded 0035 and 0045). Only its two SLA columns are
+  // dictionaried so far — the first entries the table has had at all.
+  e("pipeline_stages.pipeline_stage_expected_days", "Expected days in stage",
+    "How long a record should sit in this stage — what \"on time\" means for it, and what overdue is measured past. Null means no SLA is set, which is a real state and not zero: an invented number was exactly what the old Gantt drew bars against.",
+    "integer", "smallint. Nullable. CHECK (> 0).",
+    "Read by listTemplatePhases as TemplatePhase.expectedDays; edited per stage in Setup → Automations (superadmin, by the 0029 policy). The at-risk lead must be shorter than it.",
+    "created"),
+  e("pipeline_stages.pipeline_stage_at_risk_lead_days", "At-risk lead",
+    "How many days before the expected-days deadline the record starts flagging at risk (Amber's Q1, 0047). Past the deadline itself is overdue — there is no third number.",
+    "integer",
+    "smallint. Nullable. CHECK pipeline_stages_at_risk_lead_is_positive (> 0) and pipeline_stages_at_risk_lead_fits_the_expectation — a lead needs an expectation to lead, and must be shorter than it, or it would flag the record at risk on arrival. Both proved biting in 0047.",
+    "Read by listTemplatePhases as TemplatePhase.atRiskLeadDays; edited beside the expectation in Setup → Automations. The health calculation (parked — see health_statuses) is its intended consumer.",
+    "created"),
+
   // ------------------------------------------------------- templates and perms
   e("template_phases.expected_days", "Expected days", "How long a phase should take. What the Gantt measures actual time in stage against.", "integer", "Nullable.", "Keyed by template plus the stage enum; the owning team is a team enum value. Neither is an FK.", "to_do", PROPOSED),
-  e("template_checkpoints.label", "Checkpoint", "One thing a phase expects done before handover. Instantiated per job as job_checkpoints.", "text", "Not null.", "Copied to job_checkpoints.label when a job is created from a template.", "to_do", PROPOSED),
+  e("template_milestones.label", "Milestone", "One thing a phase expects done before handover. Instantiated per job as job_milestones. Renamed from template_checkpoints (Amber, 26 Aug) — Lofty's word is milestones, and nothing was built under the old name.", "text", "Not null.", "Copied to job_milestones.label when a job is created from a template.", "to_do", PROPOSED),
   e("permission_grants.permission", "Permission", "Which rung of the ladder this grant applies to.", "enum", "permission_level. Part of the composite primary key.", "Keyed off the permission_level enum rather than a roles table.", "to_do", PROPOSED),
   e("permission_grants.scope", "Scope",
     "How wide the grant reaches — none, own, team, team_hierarchy, all. There is no 'division' scope: divisions were a prototype invention, not a Lofty concept.",
@@ -927,9 +942,10 @@ export const DICTIONARY_TABLES: string[] = [...new Set(DICTIONARY.map(d => d.tab
  * an entry and watching it refuse), and the page shows a missing one as a gap rather
  * than papering over it.
  *
- * Five live tables have no dictionary entries at all, so there is no card to describe:
- * pipelines, pipeline_stages, job_pipeline_positions and job_stage_events (0029, the
- * nested-pipeline machinery) and dictionary_overrides (0044, this page's own edits).
+ * Four live tables have no dictionary entries at all, so there is no card to describe:
+ * pipelines, job_pipeline_positions and job_stage_events (0029, the nested-pipeline
+ * machinery) and dictionary_overrides (0044, this page's own edits). pipeline_stages
+ * joined the dictionary with 0047's SLA columns, its description says how partially.
  * Recorded here so the gap is a known one, not a discovered one.
  */
 export const TABLE_DESCRIPTIONS: Record<string, string> = {
@@ -971,6 +987,8 @@ export const TABLE_DESCRIPTIONS: Record<string, string> = {
     "One dwelling's build — \"1042-01\", which is both what Lofty says out loud and the primary key. Carries the lifecycle stage, the owning team and assignee, both addresses, the engaged teams and the SharePoint folder: the board is mostly this table.",
   login_activity:
     "One row per authentication event, copied out of auth.users with the email denormalised so the row survives account deletion. Read most-recent-first, which is what its index is for. Built outside the numbered migrations.",
+  pipeline_stages:
+    "A position within a pipeline — the build lifecycle's seven stages are its rows (0029, reseeded by 0035 and 0045), which is what lets the vocabulary change without an ALTER TYPE. Only its two SLA columns are dictionaried so far — expected days and the at-risk lead, the pair the Setup → Automations editor writes; the rest of the table is still in the uncovered list above.",
   permission_grants:
     "The permission model as data — which rung of the ladder reaches how far: none, own, team, team_hierarchy, all. Still to do; today the ladder is compared by ordinal directly in the RLS policies.",
   profile_teams:
@@ -999,8 +1017,8 @@ export const TABLE_DESCRIPTIONS: Record<string, string> = {
     "One thing to be done. A checklist item instantiated from a template and a task somebody typed live in the same table, because they differ only by origin; completion is a timestamp with deliberately no boolean beside it, and the external flag keeps council's statutory 28 days off Design's overdue report.",
   teams:
     "A team as a row, keyed by slug so a rename never rewrites anything pointing at it, retirable by flag. That flag is the whole reason the enum had to go: ALTER TYPE has no DROP VALUE, so an enum value added by mistake is permanent.",
-  template_checkpoints:
-    "One thing a phase expects done before handover, copied to the job when it is created from a template. Proposed, not built — and not seeded until Lofty writes the real checkpoints; the 36 the prototype showed were invented, which is exactly what this table must never contain.",
+  template_milestones:
+    "One thing a phase expects done before handover, copied to the job when it is created from a template. Proposed, not built — and not seeded until Lofty writes the real milestones; the 36 the prototype showed were invented, which is exactly what this table must never contain.",
   template_phases:
     "How long each phase of a process template should take — what a Gantt measures actual time-in-stage against. Proposed, not built; the expected-days that exist today live on pipeline_stages, which the coming SLA editor will edit.",
   variation_reopened_tasks:
