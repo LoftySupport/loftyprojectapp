@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button, Heading, Tab, TabList, Text } from "@vibe/core";
-import { RECORD_STATUS_LABELS } from "../data/types";
+import { PROJECT_TYPES, PROJECT_TYPE_LABELS, RECORD_STATUS_LABELS } from "../data/types";
 import { useStages, useTeams } from "../data/useLookups";
 import { useBoardRecords } from "../data/boardModel";
 import { jobMatchesQuery, matchedOnPreviousAddress, useSearch } from "../data/SearchProvider";
@@ -11,6 +11,7 @@ import { Token } from "../components/Token";
 import { Toolbar, type ToolbarFilter } from "../components/Toolbar";
 import { toOptions } from "../components/Select";
 import { jobMatchesFilters } from "../data/filtering";
+import { STAGE_ACCENTS } from "../theme/accents";
 import "../components/ui.css";
 
 /**
@@ -64,7 +65,10 @@ export function ReportsPage() {
     .sort((a, b) => b.daysInStage - a.daysInStage);
 
   const optionsFor = (field: string) =>
-    field === "Stage" ? toOptions(stageNames) : field === "Team" ? toOptions(teamNames) : [];
+    field === "Stage" ? toOptions(stageNames)
+    : field === "Team" ? toOptions(teamNames)
+    : field === "Type" ? PROJECT_TYPES.map(t => ({ value: t, label: PROJECT_TYPE_LABELS[t] }))
+    : [];
 
   return (
     <>
@@ -118,7 +122,7 @@ export function ReportsPage() {
           </div>
 
           <div className="stat-row">
-            <BarPanel title="Jobs by stage" rows={byStage} />
+            <BarPanel title="Jobs by stage" rows={byStage} colourFor={k => STAGE_ACCENTS[k]?.strip} />
             <BarPanel title="Jobs by team" rows={byTeam} />
           </div>
 
@@ -223,19 +227,27 @@ function Tile({ n, label }: { n: number; label: string }) {
   );
 }
 
-function Bar({ label, n, max }: { label: string; n: number; max: number }) {
+function Bar({ label, n, max, colour }: { label: string; n: number; max: number; colour?: string }) {
   return (
     <div className="bar-row">
       <Text type="text3">{label}</Text>
       <div className="bar-track">
-        <div className="bar-fill" style={{ width: `${max ? (n / max) * 100 : 0}%` }} />
+        <div
+          className="bar-fill"
+          style={{ width: `${max ? (n / max) * 100 : 0}%`, ...(colour ? { background: colour } : {}) }}
+        />
       </div>
       <span className="bar-num">{n}</span>
     </div>
   );
 }
 
-function BarPanel({ title, rows }: { title: string; rows: { key: string; n: number }[] }) {
+function BarPanel({ title, rows, colourFor }: {
+  title: string;
+  rows: { key: string; n: number }[];
+  /** G35 — the stage bars wear their phase colour, the same ramp as the board. */
+  colourFor?: (key: string) => string | undefined;
+}) {
   const max = Math.max(1, ...rows.map(r => r.n));
   return (
     <section className="panel">
@@ -243,7 +255,7 @@ function BarPanel({ title, rows }: { title: string; rows: { key: string; n: numb
         <Text type="text2" weight="bold">{title}</Text>
       </div>
       {rows.map(r => (
-        <Bar key={r.key} label={r.key} n={r.n} max={max} />
+        <Bar key={r.key} label={r.key} n={r.n} max={max} colour={colourFor?.(r.key)} />
       ))}
     </section>
   );

@@ -2,8 +2,8 @@ import { useState } from "react";
 import { ButtonGroup, Heading, Text, Toggle } from "@vibe/core";
 import { useAuth } from "../data/AuthProvider";
 import {
-  JOBS_VIEWS, LANDING_PAGES, readPrefs, writePrefs,
-  type JobsView, type LandingPage
+  JOBS_VIEWS, LANDING_PAGES, readNotifMatrix, readPrefs, writeNotifChoice, writePrefs,
+  type JobsView, type LandingPage, type NotifChannel
 } from "../data/preferences";
 import { useTeamLabels } from "../data/useLookups";
 import { SYSTEM_THEMES, type SystemTheme } from "../theme/loftyTheme";
@@ -46,6 +46,8 @@ export function SettingsPage({
 }) {
   const { profile } = useAuth();
   const [prefs, setPrefs] = useState(readPrefs);
+  // The matrix's saved choices — overrides on the quiet defaults below (G40).
+  const [notifs, setNotifs] = useState(readNotifMatrix);
   // Names, not the slugs `profiles.teams` stores — see useTeamLabels. `resolved` is
   // what keeps a foreign key off the screen while the lookup is still in flight.
   const { labels: teamLabels, resolved: teamsResolved } = useTeamLabels();
@@ -131,7 +133,8 @@ export function SettingsPage({
             <Text type="text2" weight="bold">Notifications</Text>
             <Text type="text3" color="secondary">
               Defaults are deliberately quiet — the fastest way to lose people is a
-              notification firehose in week one.
+              notification firehose in week one. Choices save on this device; delivery
+              starts when notifications are built — in-app first, Teams and email later.
             </Text>
           </div>
           <div className="data-table-wrap">
@@ -140,14 +143,19 @@ export function SettingsPage({
                 <tr><th>Event</th><th>In-app</th><th>Email</th><th>Teams</th></tr>
               </thead>
               <tbody>
-                {EVENTS.map(([e, inApp, email, teams]) => (
-                  <tr key={e}>
-                    <td>{e}</td>
-                    <td><Toggle isDefaultSelected={inApp} aria-label={`${e} in-app`} size="small" /></td>
-                    <td><Toggle isDefaultSelected={email} aria-label={`${e} by email`} size="small" /></td>
-                    <td><Toggle isDefaultSelected={teams} aria-label={`${e} in Teams`} size="small" /></td>
-                  </tr>
-                ))}
+                {EVENTS.map(([e, ...defaults]) => {
+                  const row = notifs[e] ?? defaults;
+                  const set = (channel: NotifChannel) => (on: boolean) =>
+                    setNotifs(writeNotifChoice(e, channel, on, defaults));
+                  return (
+                    <tr key={e}>
+                      <td>{e}</td>
+                      <td><Toggle isSelected={row[0]} onChange={set(0)} aria-label={`${e} in-app`} size="small" /></td>
+                      <td><Toggle isSelected={row[1]} onChange={set(1)} aria-label={`${e} by email`} size="small" /></td>
+                      <td><Toggle isSelected={row[2]} onChange={set(2)} aria-label={`${e} in Teams`} size="small" /></td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

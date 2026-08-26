@@ -58,3 +58,33 @@ export const LANDING_ROUTES: Record<LandingPage, string> = {
   Jobs: "/jobs",
   Reports: "/reports"
 };
+
+/**
+ * The notification matrix's choices (G40). Overrides only — the quiet defaults live
+ * with the matrix itself — and device-local like the rest, with the screen owning up.
+ * Delivery starts when notifications are built (in-app first, per Q4); recording the
+ * choice now means nobody re-answers seven questions later.
+ */
+const NOTIF_KEY = "lofty.notifs";
+export type NotifChannel = 0 | 1 | 2; // in-app · email · teams
+
+export function readNotifMatrix(): Record<string, boolean[]> {
+  try {
+    return JSON.parse(localStorage.getItem(NOTIF_KEY) ?? "{}") as Record<string, boolean[]>;
+  } catch {
+    return {};
+  }
+}
+
+export function writeNotifChoice(event: string, channel: NotifChannel, on: boolean, defaults: boolean[]): Record<string, boolean[]> {
+  const all = readNotifMatrix();
+  const row = all[event] ?? [...defaults];
+  row[channel] = on;
+  const next = { ...all, [event]: row };
+  try {
+    localStorage.setItem(NOTIF_KEY, JSON.stringify(next));
+  } catch {
+    // Storage refused — the choice still applies this session.
+  }
+  return next;
+}

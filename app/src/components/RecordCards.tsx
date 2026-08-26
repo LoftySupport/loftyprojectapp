@@ -149,7 +149,7 @@ export function ProjectCard({
 }: {
   projectNumber: string;
   /** The project's jobs, each with its own lot address for the list at the foot. */
-  jobs: { jobNumber: string; address: string | null }[];
+  jobs: { jobNumber: string; address: string | null; stage?: string }[];
   /** The project's current address — null for a project that has none yet. */
   address?: string | null;
   suburb?: string | null;
@@ -184,6 +184,23 @@ export function ProjectCard({
       </Text>
 
       <div className="card-divider" />
+
+      {/* Progress (G26), derived from the one real per-job fact the card holds:
+          how many of the project's jobs have reached Completed or beyond. The
+          prototype's task-based progress joins when tasks are wired. */}
+      {jobs.length > 0 && (() => {
+        const done = jobs.filter(j => j.stage === "Completed" || j.stage === "Closed").length;
+        return (
+          <div className="card-progress">
+            <div className="card-progress-track">
+              <div className="card-progress-fill" style={{ width: `${(done / jobs.length) * 100}%` }} />
+            </div>
+            <Text type="text3" color="secondary">
+              {done} of {jobs.length} job{jobs.length === 1 ? "" : "s"} completed
+            </Text>
+          </div>
+        );
+      })()}
 
       <dl className="card-meta">
         <dt><Text type="text3" color="secondary">Stage</Text></dt>

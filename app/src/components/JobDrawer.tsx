@@ -14,6 +14,7 @@ import { usePermission } from "../data/PermissionProvider";
 import { Select } from "./Select";
 import { Problem } from "./Form";
 import { useAskDock } from "./AskDock";
+import { useToasts } from "./Toasts";
 import { Token } from "./Token";
 import "./ui.css";
 
@@ -38,6 +39,7 @@ export function JobDrawer({ job, onClose, onMoved }: {
   // mounted only while the drawer is showing.
   const { expanded, canExpand, toggle } = usePanelExpand(true);
   const { openAsk } = useAskDock();
+  const { toast } = useToasts();
 
   // The fullscreen tab, sticky while the drawer stays open — editing a field must not
   // bounce the view back to Main info (the prototype's rule). Docked has no tabs: a
@@ -51,11 +53,19 @@ export function JobDrawer({ job, onClose, onMoved }: {
     panel.current?.focus();
   }, []);
 
+  // Esc is a two-step in fullscreen (G20): the first press shrinks back to the docked
+  // panel — the state you came from — and the second closes. Losing the whole drawer to
+  // one keypress from fullscreen threw away your place twice over.
   const close = useRef(onClose);
   close.current = onClose;
+  const esc = useRef<() => void>(() => {});
+  esc.current = () => {
+    if (expanded) toggle();
+    else close.current();
+  };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close.current();
+      if (e.key === "Escape") esc.current();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -142,6 +152,15 @@ export function JobDrawer({ job, onClose, onMoved }: {
           <div className="drawer-actions">
             {/* Opens the one AI surface, scoped — "opening from a job is itself the
                 question". The dock says coming soon; the entry point is real. */}
+            {/* G25 — the entry point ships; the flow rides the variations model
+                (Amber's Q8: waiting-on is part of the variation request). */}
+            <Button
+              kind="tertiary"
+              size="small"
+              onClick={() => toast("Request changes comes with variations — it will raise one on this job and flag what it's waiting on.", "normal")}
+            >
+              Request changes
+            </Button>
             <Button kind="secondary" size="small" onClick={() => openAsk(`job ${job.jobNumber}`)}>
               Ask about this job
             </Button>

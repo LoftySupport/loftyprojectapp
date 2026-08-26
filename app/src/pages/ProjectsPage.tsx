@@ -11,7 +11,7 @@ import { LoadProblem, NoResults, NothingYet, PreviousAddressNote } from "../comp
 import { SavedViewTabs } from "../components/SavedViewTabs";
 import { ProjectCard, StatusPill } from "../components/RecordCards";
 import { PropertySlots } from "../components/PropertySlots";
-import { PROJECT_TYPE_LABELS, type StageName, type TeamId } from "../data/types";
+import { PROJECT_TYPES, PROJECT_TYPE_LABELS, type StageName, type TeamId } from "../data/types";
 import { MoveStageControl, PROJECT_MOVE_NOTE } from "../components/MoveStageDialog";
 import { daysSince } from "../data/boardModel";
 import { Token } from "../components/Token";
@@ -19,6 +19,7 @@ import { Toolbar } from "../components/Toolbar";
 import { Select, toOptions } from "../components/Select";
 import { NewProjectDialog, SplitProjectDialog } from "../components/CreateDialogs";
 import { InlineNewProjectRow } from "../components/InlineNewProjectRow";
+import { ProjectsGantt } from "../components/ProjectsGantt";
 import { CommentsPanel } from "../components/CommentsPanel";
 import { useToasts } from "../components/Toasts";
 import { AddressFields } from "../components/CreateDialogs";
@@ -111,6 +112,7 @@ export function ProjectsPage() {
       case "Stage": return toOptions(viewStages);
       case "Team": return toOptions(teamNames);
       case "Status": return statusOptions();
+      case "Type": return PROJECT_TYPES.map(t => ({ value: t, label: PROJECT_TYPE_LABELS[t] }));
       default: return [];
     }
   };
@@ -183,7 +185,7 @@ export function ProjectsPage() {
       />
 
       <Toolbar
-        views={["Board", "Table"]}
+        views={["Board", "Table", "Gantt"]}
         view={view}
         onViewChange={setView}
         filters={filters}
@@ -229,7 +231,7 @@ export function ProjectsPage() {
             <ProjectCard
               key={p.projectNumber}
               projectNumber={p.projectNumber}
-              jobs={p.jobs.map(j => ({ jobNumber: j.jobNumber, address: j.currentAddress ?? null }))}
+              jobs={p.jobs.map(j => ({ jobNumber: j.jobNumber, address: j.currentAddress ?? null, stage: j.stage }))}
               address={p.currentAddress}
               suburb={p.suburb}
               stage={p.stage}
@@ -240,6 +242,8 @@ export function ProjectsPage() {
             />
           ))}
         </div>
+      ) : view === "Gantt" ? (
+        <ProjectsGantt rows={rows} onOpen={openOne} />
       ) : (
         <div className="panel data-table-wrap">
           <table className="data-table">
@@ -642,6 +646,15 @@ function ProjectDetail({
                     ` · ${project.jobs.length} created`}
                 </Text>
               )}
+              {/* G30 — the entry point ships, the flow rides variations (Amber's Q8).
+                  The button answers instead of doing nothing. */}
+              <Button
+                size="small"
+                kind="secondary"
+                onClick={() => toast("Push to jobs comes with variations — a project-level change will fan out to its jobs with a per-job preview.", "normal")}
+              >
+                Push to jobs…
+              </Button>
               <Button size="small" onClick={onSplit}>+ Create jobs</Button>
             </div>
           </div>

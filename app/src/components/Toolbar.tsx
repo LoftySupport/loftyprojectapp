@@ -22,12 +22,13 @@ export type Grouping = (typeof GROUPINGS)[number];
 /**
  * Only fields the data actually carries.
  *
- * "Team member", "Type" and "Tag" were on this list and are not any more. Nothing on a
- * job holds them yet, so choosing one narrowed nothing and the board sat there looking
- * broken — a control that lies about what it does is worse than one that is missing.
- * Put each back the moment its column exists.
+ * "Team member", "Type" and "Tag" were dropped when nothing on a job held them —
+ * a control that lies about what it does is worse than one that is missing. Type is
+ * back (G47): the project's type rides every job through job_display, so filtering on
+ * it narrows for real. Tag returns with tag wiring; there is deliberately no separate
+ * Team-member filter — the Team filter matches membership (Amber, 26 Aug).
  */
-export const FILTERABLE = ["Stage", "Team", "Status"] as const;
+export const FILTERABLE = ["Stage", "Team", "Status", "Type"] as const;
 
 /** `field` is the identity — a field appears at most once, so a separate id is a second
  *  way to say the same thing, and the query string keys off the field anyway. */

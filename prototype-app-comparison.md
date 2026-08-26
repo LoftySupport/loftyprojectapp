@@ -983,6 +983,11 @@ App today: absent; matcher at app/src/data/SearchProvider.tsx (jobMatchesQuery),
 
 #### G20 · Drawer polish: project chip, Esc two-step, focus, scroll preservation — **A**
 
+**Update (rev 3, 26 Aug): Esc is a two-step** — in fullscreen the first press shrinks
+back to the docked panel, the second closes. The project chip's job is done by the
+breadcrumb + project link already; scroll preservation joins with the drawer search
+(G19).
+
 **Prototype.** Four behaviours worth keeping:
 - The **project chip** in the head ("Evanston Park build programme · 1209") — "the job
   never appears without its parent, because 'which project is this?' is the first thing
@@ -1155,6 +1160,10 @@ project folder, per Lofty's rule that a job shows both), and carrying the fields
 
 #### G25 · "Request changes" flow — **D**
 
+**Update (rev 3, 26 Aug): the entry point ships** — "Request changes" in the drawer
+head, answering that the flow rides the variations model (Q8: waiting-on is part of the
+variation request).
+
 **Prototype.** A secondary button that flips to a green "Changes requested" state and
 badges the assignee with a count; the "waiting on" text shows on the card, on Main info
 (with a requester the prototype *guesses* from the wording — superseded, see §1.3), and
@@ -1185,6 +1194,11 @@ UI spec waiting for it.
 ---
 
 #### G26 · Project cards: progress, per-job lines — **B + C**
+
+**Update (rev 3, 26 Aug): progress is real.** The card's bar is jobs-completed over
+jobs-total — the one per-job fact the card already holds ("1 of 3 jobs completed") —
+with the prototype's task-based progress joining when tasks are wired. Per-job lot
+lines landed earlier (PR #39).
 
 ![Project cards](docs/comparison-screenshots/projects-cards.png)
 
@@ -1255,6 +1269,12 @@ progress + the at-risk flag (with G26), and sorting — the projects table is st
 ---
 
 #### G28 · Project Gantt and calendar — **C**
+
+**Update (rev 3, 26 Aug): the Gantt half is built.** Projects gained a Gantt view
+(`ProjectsGantt.tsx`) drawn from the two real dates a project carries — start date to
+target completion, month ticks, today line, rust when past target and not completed —
+and projects missing either date are listed underneath with where to set them, not
+estimated. The calendar half can reuse `MonthCalendar` when project dates deserve one.
 
 ![Project gantt](docs/comparison-screenshots/projects-gantt.png)
 
@@ -1329,6 +1349,10 @@ gains editable assignee team + user.
 ---
 
 #### G30 · Push-to-jobs — **D**
+
+**Update (rev 3, 26 Aug): the entry point ships.** A "Push to jobs…" button sits
+beside Create jobs on the project page and answers with what is coming — the flow
+itself rides the variations design (Q8), per Amber's placeholder rule.
 
 ![Push modal](docs/comparison-screenshots/push-modal.png)
 
@@ -1504,6 +1528,10 @@ App today: app/src/pages/ReportsPage.tsx (Portfolio overview tab)
 
 #### G35 · Phase-coloured report bars — **B**
 
+**Update (rev 3, 26 Aug): built** — the "Jobs by stage" bars wear the same ramp as the
+board's columns (`STAGE_ACCENTS`), so a report and the board it summarises read as one
+system.
+
 **Prototype.** "Jobs by stage" bars are filled in each phase's strip colour, so the report
 and the board speak the same colour language (`index.html:9324-9406` with `PHASE_COLORS`,
 `:9693-9696`).
@@ -1654,6 +1682,11 @@ Class becomes A (wire the selects to the store) + C (the preferences/saved-views
 ---
 
 #### G40 · Notification matrix persistence — **C + D**
+
+**Update (rev 3, 26 Aug): the matrix saves.** Toggles persist per device
+(`preferences.ts`), defaults staying deliberately quiet, and the panel owns up:
+delivery starts when notifications are built — in-app first (Q4), Teams/email later.
+Recording the choices now means nobody re-answers seven questions at rollout.
 
 **Prototype.** Seven event types × three channels (In-app / Email / Teams) as toggles,
 with deliberately quiet defaults — email only for mentions and change requests, Teams only
@@ -1882,6 +1915,13 @@ richer source later.
 ---
 
 #### G47 · Additional filter fields — **C**
+
+**Update (rev 3, 26 Aug): Type is back.** The project's type rides every job through
+`job_display`, so the Type filter narrows for real on all three list pages — enum as the
+value, labels free to change. Tag still waits on tag wiring; there is deliberately no
+Team-member filter (the Team filter matches membership). The same pass fixed the empty
+state: filters that empty a view now say "no jobs match the current filters" instead of
+blaming a search nobody typed.
 
 **Prototype.** Seven filters: type, stage, status, team, team member (jobs/reports);
 manager, division (projects) — with per-page validity and silent cleanup of stale keys

@@ -1426,3 +1426,52 @@ code { overflow-wrap: anywhere; }
     margin-bottom: var(--space-8);
   }
 }
+
+/* Project card progress (G26) — jobs completed over jobs total, a real derivation. */
+.card-progress { display: flex; align-items: center; gap: var(--space-8); }
+.card-progress-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--allgrey-background-color);
+  overflow: hidden;
+}
+.card-progress-fill { height: 100%; background: var(--positive-color, #00854d); }
+
+/* ---- projects timeline (G28) --------------------------------------------- */
+.pgantt { position: relative; }
+.pgantt-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--layout-border-color); }
+.pgantt-row:last-child { border-bottom: 0; }
+.pgantt-head { border-bottom: 1px solid var(--layout-border-color); height: 28px; }
+.pgantt-left {
+  flex: 0 0 200px;
+  width: 200px;
+  padding: var(--space-8) var(--space-12);
+  border-right: 1px solid var(--layout-border-color);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: left;
+  background: var(--primary-background-color);
+}
+.pgantt-project { border: 0; font: inherit; color: inherit; cursor: pointer; }
+.pgantt-project:hover { background: var(--primary-background-hover-color); }
+.pgantt-lane { position: relative; flex: 1; min-height: 44px; }
+.pgantt-tick {
+  position: absolute;
+  top: 4px;
+  transform: translateX(-50%);
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+  white-space: nowrap;
+}
+.pgantt-bar {
+  position: absolute;
+  top: 14px;
+  height: 16px;
+  border-radius: 4px;
+  background: var(--primary-color);
+  min-width: 6px;
+}
+.pgantt-bar.is-over { background: var(--lofty-orange-strong, #b8482a); }
+@media (max-width: 900px) { .pgantt-left { flex-basis: 130px; width: 130px; } }

@@ -164,6 +164,21 @@ A ninth batch:
 - **Filtering is audible** (G48): "Showing N of M" mirrored into a hidden
   `role=status` live region.
 
+A tenth batch:
+- **The Type filter is back** (G47) — the project's type rides every job, so it
+  narrows for real on Jobs, Projects and Reports. The zero-result state also stopped
+  blaming a search nobody typed ("no jobs match the current filters").
+- **Report stage bars wear the board's ramp** (G35); **project cards carry real
+  progress** — jobs completed over jobs total (G26).
+- **Projects gained a Gantt view** (G28): start → target from the two real date
+  columns, month ticks, today line, rust past target; undated projects listed, not
+  estimated.
+- **Esc is a two-step in the fullscreen drawer** (G20); **the notification matrix
+  saves** (G40, device-local, quiet defaults, panel owns up to when delivery starts).
+- **Variations entry points ship** (G30/G25): "Push to jobs…" on the project page and
+  "Request changes" in the drawer, each answering with what is coming rather than
+  doing nothing silently.
+
 Still open from this session: **four live tables still have no dictionary entries**
 — `pipelines`, `job_pipeline_positions`, `job_stage_events` (0029) and
 `dictionary_overrides` (0044) — and `pipeline_stages` is only covered for its two

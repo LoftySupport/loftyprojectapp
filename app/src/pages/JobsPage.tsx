@@ -5,7 +5,7 @@ import {
   ModalHeader, Text
 } from "@vibe/core";
 import {
-  LINEAR_STAGES, PROJECT_TYPE_LABELS, RECORD_STATUS_LABELS, RECORD_STATUSES
+  LINEAR_STAGES, PROJECT_TYPES, PROJECT_TYPE_LABELS, RECORD_STATUS_LABELS, RECORD_STATUSES
 } from "../data/types";
 import { useStages, useTeams, useTemplatePhases } from "../data/useLookups";
 import { useBoardRecords, type BoardJob } from "../data/boardModel";
@@ -127,6 +127,7 @@ export function JobsPage() {
       case "Stage": return toOptions(viewStages);
       case "Team": return toOptions(teamNames);
       case "Status": return statusOptions();
+      case "Type": return PROJECT_TYPES.map(t => ({ value: t, label: PROJECT_TYPE_LABELS[t] }));
       default: return [];
     }
   };
