@@ -131,6 +131,18 @@ A sixth batch — the A-class polish:
 - **New-project preview** (G32) states consequences without guessing the number; the
   header search widens on focus (G4).
 
+A seventh batch:
+- **The jobs table sorts** (G12) — the SortableTable idiom applied within each group,
+  stage by pipeline position, no default sort so the natural order survives.
+  `sortRows` extracted from `useTableSort` for the grouped case.
+- **Teams are manageable** (G44): rename + retire/restore on Admin → Teams through a
+  new `updateTeam` seam method (admin+, the 0026 policy), with the jobs-held guard
+  and retired teams listed dimmed for restoring. **Create-team deferred**: the
+  `TeamId` union is closed over the seeded slugs and `verify/seeds.sh` asserts stub
+  and database agree — opening that is its own change, not a side effect.
+- Tooltip sweep (G3) deferred: this Vibe build doesn't export `Tooltip` in the core
+  type bundle. Native titles stand; revisit on the next Vibe upgrade.
+
 Still open from this session: **four live tables still have no dictionary entries**
 — `pipelines`, `job_pipeline_positions`, `job_stage_events` (0029) and
 `dictionary_overrides` (0044) — and `pipeline_stages` is only covered for its two

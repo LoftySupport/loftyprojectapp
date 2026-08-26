@@ -17,6 +17,7 @@ import type {
   PropertyDef,
   Stage,
   StageName,
+  TeamId,
   Team,
   TemplateMilestone,
   TemplatePhase
@@ -173,6 +174,11 @@ export interface Repository {
   // them honestly — but they are tables, so they come through the seam.
   listStages(): Promise<Stage[]>;
   listTeams(): Promise<Team[]>;
+  /**
+   * Rename or retire a team (admin+, the 0026 policy). Retire is a flag, never a
+   * delete; the fresh list comes back as proof. The jobs-held guard is the screen's.
+   */
+  updateTeam(id: TeamId, patch: { name?: string; isActive?: boolean }): Promise<Team[]>;
   listTemplatePhases(): Promise<TemplatePhase[]>;
   /**
    * The SLA per lifecycle stage — expected days in stage and the at-risk lead (0047),
@@ -239,6 +245,7 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "listAddressHistory",
   "listStages",
   "listTeams",
+  "updateTeam",
   "listTemplatePhases",
   "updateStageSla",
   "listTemplateMilestones",
@@ -281,6 +288,7 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   // job is to say what is backed by what.
   listStages: "pipeline_stages",
   listTeams: "teams",
+  updateTeam: "teams",
   listTemplatePhases: "pipeline_stages",
   updateStageSla: "pipeline_stages",
   listTemplateMilestones: "pipeline_stage_tasks (not built)",

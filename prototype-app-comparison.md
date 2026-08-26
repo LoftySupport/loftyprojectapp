@@ -374,6 +374,11 @@ App today: absent. Mutation call sites: app/src/components/CreateDialogs.tsx (cr
 
 #### G3 · Styled tooltips — **A**
 
+**Update (rev 3, 26 Aug): deferred with a reason.** This Vibe build does not export
+`Tooltip` through the core type bundle, so the sweep would mean untyped imports or a new
+dependency. Native `title`/`aria-label` coverage stands; revisit on the next Vibe
+upgrade.
+
 **Prototype.** One shared tooltip element driven by `data-tooltip` attributes: styled,
 viewport-clamped, flips below when there's no room, shows on **focus as well as hover**,
 hides on Escape/scroll (`initTooltips`, `index.html:10737-10777`). Used on ~15 surfaces:
@@ -670,6 +675,12 @@ with Closed/Cancelled appearing only when filtered in.)
 ---
 
 #### G12 · Jobs table: columns and sorting — **A** (columns partially **C**)
+
+**Update (rev 3, 26 Aug): sorting built.** The jobs table sorts by any column via the
+same `SortableTable` idiom Admin uses — applied *within each group*, so "Group by" and
+sorting compose; stage sorts by pipeline position, not the alphabet; no default sort, so
+the natural pipeline order stays until a header is clicked. Extra columns still land with
+their data (tags/dependency C, Source at Phase B).
 
 ![Table view](docs/comparison-screenshots/table-view.png)
 
@@ -1747,6 +1758,14 @@ adds one rule: SLA clocks don't run on cancelled records.
 ---
 
 #### G44 · Team management UI — **A**
+
+**Update (rev 3, 26 Aug): largely built.** Admin → Teams renames (the slug never
+changes, so nothing breaks) and retires/restores — retire is a flag, per the 0026
+no-DELETE policy — with the jobs-held guard disabling retirement until jobs are handed
+on; retired teams stay listed, dimmed, so they can be restored. Members and jobs-held are
+real. **Creating a new team is deferred**: the app's `TeamId` union is closed over the
+seeded slugs (and `verify/seeds.sh` asserts stub and database agree), so create-team
+needs that type opened and the seed-check contract revisited — flagged, not fudged.
 
 ![Admin users (prototype)](docs/comparison-screenshots/admin-users.png)
 

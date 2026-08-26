@@ -1264,3 +1264,6 @@ code { overflow-wrap: anywhere; }
   bottom: var(--space-24);
   z-index: 46;
 }
+
+/* A retired team's row — present so it can be restored, dimmed so it reads as past. */
+.row-retired td { color: var(--secondary-text-color); }

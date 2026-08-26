@@ -18,6 +18,7 @@ import { SavedViewTabs } from "../components/SavedViewTabs";
 import { JobCard, StatusPill } from "../components/RecordCards";
 import { JobDrawer } from "../components/JobDrawer";
 import { JOB_MOVE_NOTE, MoveStageDialog, isForwardMove } from "../components/MoveStageDialog";
+import { SortHeader, sortRows, type SortState } from "../components/SortableTable";
 import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import type { StageName, TeamId } from "../data/types";
@@ -202,6 +203,45 @@ export function JobsPage() {
 
     return order.map(key => ({ key, jobs: rows.filter(j => keyOf(j) === key) }));
   }, [grouping, rows, viewStages, teamNames]);
+
+  /**
+   * Table sorting (G12) — the SortableTable idiom the Admin tables already use, applied
+   * within each group so "Group by" and "sort by" compose instead of fighting. No sort
+   * until a header is clicked: the natural order (pipeline order for stages) is itself
+   * meaningful, and a default sort would quietly erase it.
+   */
+  type JobsColumn = "job" | "project" | "address" | "type" | "stage" | "team" | "assignee" | "createdBy" | "days" | "status";
+  const [tableSort, setTableSort] = useState<SortState<JobsColumn> | null>(null);
+  const toggleTableSort = (key: JobsColumn) =>
+    setTableSort(sort =>
+      sort?.key === key
+        ? { key, direction: sort.direction === "asc" ? "desc" : "asc" }
+        : { key, direction: "asc" }
+    );
+  const jobColumns = useMemo<Record<JobsColumn, (j: BoardJob) => string | number | null>>(
+    () => ({
+      job: j => j.jobNumber,
+      project: j => Number(j.projectNumber),
+      address: j => j.currentAddress ?? null,
+      type: j => (j.projectType ? PROJECT_TYPE_LABELS[j.projectType] : null),
+      // Pipeline position, not the alphabet — "Construction" before "Pre-construction"
+      // alphabetically would be the lifecycle backwards.
+      stage: j => {
+        const at = viewStages.indexOf(j.stage);
+        return at === -1 ? null : at;
+      },
+      team: j => j.team,
+      assignee: j => j.assigneeName ?? null,
+      createdBy: j => j.createdBy ?? null,
+      days: j => j.daysInStage,
+      status: j => RECORD_STATUS_LABELS[j.status]
+    }),
+    [viewStages]
+  );
+  const tableGroups = useMemo(
+    () => (tableSort ? groups.map(g => ({ ...g, jobs: sortRows(g.jobs, jobColumns, tableSort) })) : groups),
+    [groups, jobColumns, tableSort]
+  );
 
   /**
    * A number nobody recognises goes back to the board, so a stale link is a board rather
@@ -415,23 +455,28 @@ export function JobsPage() {
                     />
                   </th>
                 )}
-                <th>Job</th>
-                <th>Project</th>
-                <th>Address</th>
-                <th>Type</th>
-                <th>Stage</th>
-                <th>Team</th>
-                <th>Assigned to</th>
-                <th>Created by</th>
-                <th className="num">Days in stage</th>
-                <th>Status</th>
+                {([
+                  ["job", "Job"], ["project", "Project"], ["address", "Address"],
+                  ["type", "Type"], ["stage", "Stage"], ["team", "Team"],
+                  ["assignee", "Assigned to"], ["createdBy", "Created by"],
+                  ["days", "Days in stage"], ["status", "Status"]
+                ] as const).map(([key, label]) => (
+                  <SortHeader
+                    key={key}
+                    column={key}
+                    label={label}
+                    sort={tableSort ?? { key: "" as JobsColumn, direction: "asc" }}
+                    onSort={toggleTableSort}
+                    className={key === "days" ? "num" : undefined}
+                  />
+                ))}
               </tr>
             </thead>
             {/* One tbody per group, so the table answers the same "Group by" the board
                 does. Empty groups are dropped here where the board keeps them: a column
                 with no cards is a place to drag one to, and a heading with no rows under
                 it is just a heading. */}
-            {groups.filter(g => g.jobs.length > 0).map(g => (
+            {tableGroups.filter(g => g.jobs.length > 0).map(g => (
               <tbody key={g.key} className="group">
                 <tr className="group-head">
                   <th scope="colgroup" colSpan={can("user") ? 11 : 10}>

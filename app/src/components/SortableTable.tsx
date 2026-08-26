@@ -39,6 +39,36 @@ function compare(a: SortValue, b: SortValue): number {
   return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
 }
 
+
+/**
+ * The sort itself, on its own so a grouped table (one tbody per group) can apply it
+ * per group while useTableSort keeps serving the flat case. Always a copy — sorting
+ * another memo's array in place is where "the order sticks" comes from.
+ */
+export function sortRows<T, K extends string>(
+  rows: T[],
+  columns: Record<K, (row: T) => SortValue>,
+  sort: SortState<K>
+): T[] {
+  const read = columns[sort.key];
+  if (!read) return rows;
+  const out = rows.slice();
+  const flip = sort.direction === "asc" ? 1 : -1;
+  out.sort((a, b) => {
+    const av = read(a);
+    const bv = read(b);
+    const aEmpty = isEmpty(av);
+    const bEmpty = isEmpty(bv);
+    // Decided before `flip` is applied, and never multiplied by it: that is the whole
+    // mechanism keeping blanks at the bottom of an ascending and a descending sort.
+    if (aEmpty && bEmpty) return 0;
+    if (aEmpty) return 1;
+    if (bEmpty) return -1;
+    return compare(av, bv) * flip;
+  });
+  return out;
+}
+
 export function useTableSort<T, K extends string>(
   rows: T[],
   /** One reader per sortable column, keyed by whatever the header calls it. */
@@ -47,28 +77,7 @@ export function useTableSort<T, K extends string>(
 ) {
   const [sort, setSort] = useState<SortState<K>>(initial);
 
-  const sorted = useMemo(() => {
-    const read = columns[sort.key];
-    if (!read) return rows;
-    // A copy, because `rows` is somebody else's array — sorting the result of another
-    // `useMemo` in place mutates that memo, and the next render then sorts an already
-    // reordered list. That is where "the order sticks" comes from.
-    const out = rows.slice();
-    const flip = sort.direction === "asc" ? 1 : -1;
-    out.sort((a, b) => {
-      const av = read(a);
-      const bv = read(b);
-      const aEmpty = isEmpty(av);
-      const bEmpty = isEmpty(bv);
-      // Decided before `flip` is applied, and never multiplied by it: that is the whole
-      // mechanism keeping blanks at the bottom of an ascending and a descending sort.
-      if (aEmpty && bEmpty) return 0;
-      if (aEmpty) return 1;
-      if (bEmpty) return -1;
-      return compare(av, bv) * flip;
-    });
-    return out;
-  }, [rows, columns, sort]);
+  const sorted = useMemo(() => sortRows(rows, columns, sort), [rows, columns, sort]);
 
   /** Click a header: the same column reverses, a new column starts ascending. */
   const toggle = (key: K) =>

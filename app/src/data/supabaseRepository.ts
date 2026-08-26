@@ -60,7 +60,7 @@ const WIRED: RepositoryMethod[] = [
   "createProfile", "updateProfile", "setProfileActive", "listActivity",
   "listComments", "addComment", "updateProject", "moveProjectStage",
   "setProjectCurrentAddress", "listAddressHistory",
-  "listStages", "listTeams", "listTemplatePhases", "updateStageSla",
+  "listStages", "listTeams", "updateTeam", "listTemplatePhases", "updateStageSla",
   "listPropertyDefs", "createPropertyDef", "updatePropertyDef", "deletePropertyDef",
   "listDictionaryOverrides", "saveDictionaryOverride"
 ];
@@ -1190,6 +1190,32 @@ export function createSupabaseRepository(): Repository {
         position: r.team_position,
         isActive: r.team_is_active
       }));
+    },
+
+    /**
+     * Rename or retire a team (G44). Rename is the whole reason the slug is the key —
+     * the label changes, nothing pointing at it does. Retire is a flag, never a delete:
+     * the 0026 policy deliberately grants no DELETE, because a deleted team dangles in
+     * every job_engaged_teams array that named it. Admin+, per that policy. The
+     * jobs-held guard lives in the UI — the database allows retiring a team with jobs
+     * (history must stay resolvable); the screen is where "reassign them first" belongs.
+     */
+    async updateTeam(id: TeamId, patch: { name?: string; isActive?: boolean }): Promise<Team[]> {
+      const row: Record<string, string | boolean> = {};
+      if (patch.name !== undefined) row.team_name = patch.name;
+      if (patch.isActive !== undefined) row.team_is_active = patch.isActive;
+      if (Object.keys(row).length === 0) return await repo.listTeams();
+
+      const { data: updated, error } = await db
+        .from("teams")
+        .update(row)
+        .eq("team_id", id)
+        .select("team_id");
+      if (error) throw error;
+      if (!updated?.length) {
+        throw new Error(`The team was not updated — editing teams needs admin.`);
+      }
+      return await repo.listTeams();
     },
 
     /**

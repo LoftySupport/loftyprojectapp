@@ -1,16 +1,19 @@
 import { useMemo, useState } from "react";
-import { Button, Heading, Search, Tab, TabList, Text } from "@vibe/core";
+import { Button, Heading, Search, Tab, TabList, Text, TextField } from "@vibe/core";
 import { useQuery } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { ActivityDialog, DeactivateDialog, UserDialog } from "../components/UserDialogs";
 import { Select, toOptions } from "../components/Select";
 import { SortHeader, useTableSort } from "../components/SortableTable";
 import { UserRow } from "../components/UserRow";
+import { Problem } from "../components/Form";
 import {
   PERMISSION_LEVELS, PROFILE_STATUSES, profileStatus, type Profile, type TeamId
 } from "../data/types";
-import { useStages, useTeamLabels, useTeams, useTemplatePhases } from "../data/useLookups";
+import { useStages, useTeamLabels, useTemplatePhases } from "../data/useLookups";
 import { useBoardRecords } from "../data/boardModel";
+import { useRepository } from "../data/DataProvider";
+import { useToasts } from "../components/Toasts";
 import "../components/ui.css";
 
 /**
@@ -239,33 +242,52 @@ function Users() {
 type TeamColumn = "team" | "phases" | "jobs" | "members";
 
 function Teams() {
-  const { teams: allTeams, teamNames } = useTeams();
+  const repo = useRepository();
+  const { can } = usePermission();
+  const { toast } = useToasts();
+  // Its own read rather than useTeams(), because editing needs a reload the shared
+  // lookup hook does not carry — and retired teams must appear here, dimmed, or there
+  // is nowhere to restore one from.
+  const [reloadKey, setReloadKey] = useState(0);
+  const { data: allTeams } = useQuery(r => r.listTeams(), [], [reloadKey]);
   const { stageNames } = useStages();
   const { teamsByStage } = useTemplatePhases();
   const { jobs } = useBoardRecords();
-  // The members. `profiles.teams` is a list of team slugs, so this is a read the app
-  // already does everywhere else — the column just never asked for it and rendered
-  // {{profiles.full_name}} over forty-seven memberships the database was holding.
-  const { data: profiles } = useQuery<Profile[]>(repo => repo.listProfiles(), []);
+  const { data: profiles } = useQuery<Profile[]>(r => r.listProfiles(), []);
 
-  // Derived once, so the sort reads the same numbers the cells render rather than
-  // recounting the jobs inside a comparator on every comparison.
+  // Rename state: which team, and the draft label.
+  const [renaming, setRenaming] = useState<TeamId | null>(null);
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const save = async (id: TeamId, patch: { name?: string; isActive?: boolean }, done: string) => {
+    if (busy) return;
+    setBusy(true);
+    setProblem(null);
+    try {
+      await repo.updateTeam(id, patch);
+      toast(done);
+      setRenaming(null);
+      setReloadKey(k => k + 1);
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const rows = useMemo(
     () =>
-      teamNames.map(t => {
-        // Names come from the lookup, membership is stored by slug — so the row has to
-        // carry both. Matching on the display name would break the day a team is renamed.
-        const slug = allTeams.find(x => x.name === t)?.id;
-        return {
-          team: t,
-          owned: stageNames.filter(s => (teamsByStage[s] ?? []).includes(t)),
-          held: jobs.filter(j => j.team === t).length,
-          members: slug
-            ? profiles.filter(p => p.active && p.teams.includes(slug as TeamId))
-            : []
-        };
-      }),
-    [teamNames, allTeams, stageNames, teamsByStage, jobs, profiles]
+      allTeams.map(t => ({
+        id: t.id,
+        team: t.name,
+        isActive: t.isActive,
+        owned: stageNames.filter(s => (teamsByStage[s] ?? []).includes(t.name)),
+        held: jobs.filter(j => j.team === t.name).length,
+        members: profiles.filter(p => p.active && p.teams.includes(t.id))
+      })),
+    [allTeams, stageNames, teamsByStage, jobs, profiles]
   );
 
   const columns = useMemo(
@@ -279,14 +301,15 @@ function Teams() {
   );
 
   const { sorted, sort, toggle } = useTableSort(rows, columns, { key: "team" as TeamColumn, direction: "asc" });
+  const canEdit = can("admin");
 
   return (
     <section className="panel">
       <div className="panel-head">
-        <Text type="text2" weight="bold">Teams ({teamNames.length})</Text>
+        <Text type="text2" weight="bold">Teams ({rows.filter(r => r.isActive).length} active)</Text>
         <Text type="text3" color="secondary">
-          Each team owns one or more phases. That mapping drives “one job, one team at a
-          time” and the handover between phases.
+          Rename freely — the slug underneath never changes, so nothing pointing at a team
+          breaks. Retire instead of delete; a team holding jobs must hand them on first.
         </Text>
       </div>
       <div className="data-table-wrap">
@@ -297,12 +320,40 @@ function Teams() {
               <SortHeader column={"phases" as TeamColumn} label="Phases owned" sort={sort} onSort={toggle} />
               <SortHeader column={"jobs" as TeamColumn} label="Jobs held" sort={sort} onSort={toggle} className="num" />
               <SortHeader column={"members" as TeamColumn} label="Members" sort={sort} onSort={toggle} />
+              {canEdit && <th aria-label="Actions" />}
             </tr>
           </thead>
           <tbody>
             {sorted.map(r => (
-              <tr key={r.team}>
-                <td><strong>{r.team}</strong></td>
+              <tr key={r.id} className={r.isActive ? undefined : "row-retired"}>
+                <td>
+                  {renaming === r.id ? (
+                    <div className="field-inline">
+                      <TextField
+                        inputAriaLabel={`Rename ${r.team}`}
+                        value={draft}
+                        onChange={setDraft}
+                        size="small"
+                        autoFocus
+                      />
+                      <Button
+                        size="small"
+                        disabled={busy || !draft.trim() || draft.trim() === r.team}
+                        onClick={() => save(r.id, { name: draft.trim() }, `${r.team} renamed to ${draft.trim()}.`)}
+                      >
+                        Save
+                      </Button>
+                      <Button size="small" kind="tertiary" onClick={() => setRenaming(null)}>
+                        Cancel
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <strong>{r.team}</strong>
+                      {!r.isActive && <span className="muted"> · retired</span>}
+                    </>
+                  )}
+                </td>
                 <td className="muted">{r.owned.join(", ") || "—"}</td>
                 <td className="num">{r.held}</td>
                 {/* Active members only: a deactivated person is not on the team any more
@@ -312,11 +363,44 @@ function Teams() {
                     ? r.members.map(m => m.fullName).join(", ")
                     : <span className="muted">No members</span>}
                 </td>
+                {canEdit && (
+                  <td className="num">
+                    <div className="field-inline">
+                      {renaming !== r.id && (
+                        <Button size="small" kind="tertiary" onClick={() => { setRenaming(r.id); setDraft(r.team); }}>
+                          Rename
+                        </Button>
+                      )}
+                      {r.isActive ? (
+                        <span title={r.held > 0 ? `Holding ${r.held} job${r.held === 1 ? "" : "s"} — reassign them first` : undefined}>
+                          <Button
+                            size="small"
+                            kind="tertiary"
+                            disabled={busy || r.held > 0}
+                            onClick={() => save(r.id, { isActive: false }, `${r.team} retired.`)}
+                          >
+                            {r.held > 0 ? `Retire (holds ${r.held})` : "Retire"}
+                          </Button>
+                        </span>
+                      ) : (
+                        <Button
+                          size="small"
+                          kind="tertiary"
+                          disabled={busy}
+                          onClick={() => save(r.id, { isActive: true }, `${r.team} restored.`)}
+                        >
+                          Restore
+                        </Button>
+                      )}
+                    </div>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      {problem && <Problem>{problem}</Problem>}
     </section>
   );
 }
