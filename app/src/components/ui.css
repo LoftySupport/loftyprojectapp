@@ -521,7 +521,27 @@
 
 /* The drawer widens the way the create panel does — same widths, same transition, so
    "expand" means one thing in this app rather than two. */
-.drawer { transition: width var(--motion-productive-medium) var(--motion-timing-transition); }
+/* Only the expand toggle animates. A width that eased on every drag frame lagged a
+   handful of pixels behind the pointer, which reads as the panel resisting you. */
+.drawer { transition: none; }
+.drawer.is-expanded { transition: width var(--motion-productive-medium) var(--motion-timing-transition); }
+
+/* The drag edge: 8px, half over the panel's left border, so the hand catches it. */
+.drawer-grip {
+  position: absolute;
+  left: -4px;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 1;
+  /* Invisible until wanted — a permanent stripe down the edge is furniture nobody
+     asked for. The hover and focus states are what say "this is a control". */
+  background: transparent;
+  touch-action: none;
+}
+.drawer-grip:hover, .drawer-grip:focus-visible { background: var(--primary-color); outline: none; }
+.drawer-grip:focus-visible { box-shadow: 0 0 0 2px var(--primary-background-color); }
 /* Expanded: the whole MAIN AREA — everything except the rail and the header, which
    stay usable. "Full screen" meaning the full app hid the nav under the record, and
    the way back out of a full-screen job was gone with it. */
