@@ -291,6 +291,14 @@ export interface ProjectPatch {
 export interface JobPatch {
   owningTeam?: TeamId;
   assigneeId?: Uuid | null;
+  /**
+   * The old Lofty number (Amber, 27 Aug: "the old job number is what everything is
+   * linked to and they will look it up"). SiteBook and Trello carry the same one, so
+   * this is how a job created by the import gets matched to everything outside the
+   * app. Editable from the drawer; null clears. Unique in the database — two jobs
+   * claiming the same old number is the collision this exists to prevent.
+   */
+  jobNumberOld?: string | null;
 }
 
 /** The joined shape the cards read — `project_display`. */

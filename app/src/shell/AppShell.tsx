@@ -4,9 +4,10 @@ import {
   Avatar, Dialog, DialogContentContainer, Text, TextField
 } from "@vibe/core";
 import {
-  Board, Chart, Doc, Home, Menu, NavigationChevronLeft, NavigationChevronRight,
-  Person, SettingsKnobs, Workspace
+  Doc, Home, Menu, NavigationChevronLeft, NavigationChevronRight,
+  Person, SettingsKnobs
 } from "@vibe/icons";
+import { HouseChart, HousePin, Houses } from "../theme/houseIcons";
 import { initialsOf, useAuth } from "../data/AuthProvider";
 import { useSearch } from "../data/SearchProvider";
 import { Tooltip } from "@vibe/tooltip";
@@ -20,15 +21,16 @@ import "./AppShell.css";
  * Every destination, each with an icon.
  *
  * The icon is not decoration here — collapsed, it is the only thing left, so it has to
- * carry the meaning on its own. Hence Board for Jobs rather than a generic list glyph,
- * and SettingsKnobs for Setup, which is the app's own configuration as opposed to the
- * person-shaped Admin beside it.
+ * carry the meaning on its own. The three record destinations wear Lofty's own house
+ * icons (Amber, 27 Aug): a project is a site on the map, the jobs are the houses on
+ * it, the reports are how the houses are doing. SettingsKnobs stays for Setup — the
+ * app's own configuration as opposed to the person-shaped Admin beside it.
  */
 const PAGES = [
   { to: "/", label: "Dashboard", icon: Home, end: true },
-  { to: "/projects", label: "Projects", icon: Workspace },
-  { to: "/jobs", label: "Jobs", icon: Board },
-  { to: "/reports", label: "Reports", icon: Chart },
+  { to: "/projects", label: "Projects", icon: HousePin },
+  { to: "/jobs", label: "Jobs", icon: Houses },
+  { to: "/reports", label: "Reports", icon: HouseChart },
   { to: "/templates", label: "Templates", icon: Doc },
   { to: "/admin", label: "Admin", icon: Person },
   // Setup replaced Dictionary and Wiring as separate destinations: configuration was

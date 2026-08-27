@@ -1023,6 +1023,9 @@ export function createSupabaseRepository(): Repository {
       const row: Record<string, string | null> = {};
       if ("owningTeam" in patch && patch.owningTeam !== undefined) row.job_owning_team = patch.owningTeam;
       if ("assigneeId" in patch) row.job_assignee_id = patch.assigneeId ?? null;
+      // Trimmed, and blank becomes null: the column is unique-over-non-nulls, so an
+      // empty string would collide with the next empty string where null never does.
+      if ("jobNumberOld" in patch) row.job_number_old = patch.jobNumberOld?.trim() || null;
       if (Object.keys(row).length === 0) {
         const { data, error } = await client
           .from("job_display").select(JOB_COLUMNS).eq("job_id", id).single();
@@ -1035,7 +1038,14 @@ export function createSupabaseRepository(): Repository {
         .update(row)
         .eq("job_id", id)
         .select("job_id");
-      if (error) throw error;
+      if (error) {
+        if (error.code === "23505" && "jobNumberOld" in patch) {
+          throw new Error(
+            `Lofty number ${patch.jobNumberOld?.trim()} is already on another job — search it to see which.`
+          );
+        }
+        throw error;
+      }
       if (!updated?.length) {
         throw new Error(`Job ${id} was not updated — it no longer exists, or you do not have permission.`);
       }

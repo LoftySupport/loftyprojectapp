@@ -81,6 +81,8 @@ export function matchedAddress(
 
 export interface SearchableJob {
   jobNumber: string;
+  /** The old Lofty number — the id everything outside the app still links by. */
+  jobNumberOld?: string | null;
   projectNumber?: string | number | null;
   stage?: string | null;
   team?: string | null;
@@ -102,6 +104,7 @@ export function jobMatchesQuery(job: SearchableJob, terms: string[]): boolean {
   return matchesTerms(
     [
       job.jobNumber,
+      job.jobNumberOld,
       job.projectNumber,
       job.stage,
       job.team,

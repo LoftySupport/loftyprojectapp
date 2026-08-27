@@ -218,6 +218,24 @@ A twelfth batch:
 - **Creating a team from the app is wanted next** — the closed `TeamId` union opens
   up, `createTeam` joins the seam, and the seed-agreement check gets revisited.
 
+A fifteenth batch, from Amber's next asks (27 Aug):
+- **The old Lofty number is first-class** ("it is what everything is linked to and
+  they will look it up"): `jobs.job_number_old` already existed; now the header
+  search and the in-drawer find match it, the drawer subtitle shows "Lofty #12345",
+  and a **Numbers & addresses** panel sits first in the drawer — job number, the
+  Lofty number **editable** (`user`+, through `updateJob`; the unique refusal comes
+  back as "already on another job — search it"), current address, and previous
+  address (honest "never renamed" when there is none).
+- **Lofty's own nav icons** — her three house drawings redrawn as strokes in
+  `theme/houseIcons.tsx`: Projects = house in a map pin, Jobs = two houses,
+  Reports = house with rising bars. Same size/currentColor contract as @vibe/icons.
+- **An unknown URL says so now** — there was no catch-all route, so a typo or stale
+  bookmark rendered a blank white page with no shell and no way back. `NotFound`
+  renders inside the shell, names the path, and links home.
+- **`npx tsc --noEmit` was a no-op all along** — the root tsconfig is solution-style
+  (`files: []`), so it type-checked nothing and exited 0. `npx tsc -b` is the real
+  check; this batch was the one that noticed, when a missing import sailed through.
+
 A fourteenth batch, from those answers:
 - **The board ramp is one family** — `theme/accents.ts` re-cut to teal deepening
   across the seven positions (verified ≥ 8.7:1 per chip).

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { BreadcrumbsBar, BreadcrumbItem, Button, Heading, Tab, TabList, Text } from "@vibe/core";
+import { BreadcrumbsBar, BreadcrumbItem, Button, Heading, Tab, TabList, Text, TextField } from "@vibe/core";
 import { useMilestones, useTemplatePhases, useTeams } from "../data/useLookups";
 import type { BoardJob } from "../data/boardModel";
 import type { TeamId } from "../data/types";
@@ -100,6 +100,29 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
     }
   };
 
+  // The old Lofty number (Amber, 27 Aug): what SiteBook, Trello and everyone's head
+  // link a job by, so it is addable right here. Draft-then-Save rather than on-blur —
+  // an identifier deserves a deliberate commit, and the unique refusal needs somewhere
+  // to land before focus has already gone.
+  const [oldNoDraft, setOldNoDraft] = useState(job.jobNumberOld ?? "");
+  const [oldNoBusy, setOldNoBusy] = useState(false);
+  const [oldNoErr, setOldNoErr] = useState<string | null>(null);
+  useEffect(() => { setOldNoDraft(job.jobNumberOld ?? ""); setOldNoErr(null); }, [job.jobNumber, job.jobNumberOld]);
+  const oldNoDirty = oldNoDraft.trim() !== (job.jobNumberOld ?? "");
+  const saveOldNo = async () => {
+    if (oldNoBusy || !oldNoDirty) return;
+    setOldNoBusy(true);
+    setOldNoErr(null);
+    try {
+      await repo.updateJob(job.jobNumber, { jobNumberOld: oldNoDraft.trim() || null });
+      onMoved();
+    } catch (err) {
+      setOldNoErr(err instanceof Error ? err.message : String(err));
+    } finally {
+      setOldNoBusy(false);
+    }
+  };
+
   // In-drawer search (G19): find another job and jump to it without losing the drawer.
   // Reset when the record changes, or the last search haunts the next job.
   const [find, setFind] = useState("");
@@ -109,7 +132,7 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
     ? siblings
         .filter(s =>
           s.jobNumber !== job.jobNumber &&
-          `${s.jobNumber} ${s.currentAddress ?? ""}`.toLowerCase().includes(q))
+          `${s.jobNumber} ${s.jobNumberOld ?? ""} ${s.currentAddress ?? ""}`.toLowerCase().includes(q))
         .slice(0, 5)
     : [];
 
@@ -159,7 +182,8 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
               {job.currentAddress ?? <Token>job_display.job_current_address</Token>}
             </Heading>
             <Text type="text3" color="secondary" element="div" ellipsis={false}>
-              {job.jobNumber} ·{" "}
+              {job.jobNumber}
+              {job.jobNumberOld && <> · Lofty #{job.jobNumberOld}</>} ·{" "}
               <Link to={`/projects/${job.projectNumber}`} onClick={onClose} className="link-button">
                 Project {job.projectNumber}
               </Link>
@@ -227,6 +251,61 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
             </div>
           )}
           {(!expanded || tab === 0) && (<>
+          {/* First, because it is how a job is looked up (Amber, 27 Aug): the old
+              Lofty number is what SiteBook, Trello and the paperwork link by, and the
+              addresses are what people say on the phone. */}
+          <section className="panel">
+            <div className="panel-head">
+              <Text type="text2" weight="bold">Numbers &amp; addresses</Text>
+              <Text type="text3" color="secondary">how this job is looked up</Text>
+            </div>
+            <div className="field-row">
+              <div className="field-label"><Text type="text2">Job number</Text></div>
+              <Text type="text2" weight="medium">{job.jobNumber}</Text>
+            </div>
+            <div className="field-row">
+              <div className="field-label">
+                <Text type="text2">Lofty number</Text>
+                <div className="field-hint">the old number — SiteBook and Trello use it</div>
+              </div>
+              {can("user") ? (
+                <div className="field-inline">
+                  <TextField
+                    inputAriaLabel="Old Lofty number"
+                    placeholder="e.g. 12345"
+                    size="small"
+                    value={oldNoDraft}
+                    onChange={setOldNoDraft}
+                  />
+                  {oldNoDirty && (
+                    <Button size="small" disabled={oldNoBusy} onClick={() => void saveOldNo()}>
+                      Save
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <Text type="text2" weight="medium">{job.jobNumberOld ?? "—"}</Text>
+              )}
+            </div>
+            {oldNoErr && <Problem>{oldNoErr}</Problem>}
+            <div className="field-row">
+              <div className="field-label"><Text type="text2">Current address</Text></div>
+              <Text type="text2" weight="medium">
+                {job.currentAddress ?? <Token>job_display.job_current_address</Token>}
+              </Text>
+            </div>
+            <div className="field-row">
+              <div className="field-label">
+                <Text type="text2">Previous address</Text>
+              </div>
+              {job.originalAddress ? (
+                <Text type="text2" weight="medium">{job.originalAddress}</Text>
+              ) : (
+                <Text type="text3" color="secondary">never renamed — always this address</Text>
+              )}
+            </div>
+          </section>
+
           <section className="panel">
             <div className="panel-head">
               <Text type="text2" weight="bold">Who it’s with</Text>

@@ -32,6 +32,12 @@ import { teamName, type ProjectType, type RecordStatus, type TeamId } from "./ty
 export interface BoardJob {
   /** '1042-01' — the job number and the primary key are the same thing. */
   jobNumber: string;
+  /**
+   * The old Lofty number — "12345". SiteBook, Trello and everyone's memory link by
+   * this, so search matches it and the drawer shows and edits it. Null for jobs born
+   * in the app, which is a real state, not a gap.
+   */
+  jobNumberOld: string | null;
   /** '1042' as text, because it is an identifier on screen and in the URL. */
   projectNumber: string;
   stage: string;
@@ -178,6 +184,7 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
 
     const boardJobs: BoardJob[] = jobs.map(j => ({
       jobNumber: j.id,
+      jobNumberOld: j.jobNumberOld,
       projectNumber: String(j.projectId),
       stage: j.stage,
       team: teamName(j.owningTeam, teams),

@@ -463,9 +463,23 @@ function ProjectDetail({
               render in the slot list below rather than as columns here. Every row here
               is a real read since the embeds landed; a Token remains only where the
               column is genuinely empty. */}
+          <div className="field-row">
+            <div className="field-label"><Text type="text2">Current address</Text></div>
+            {project.currentAddress != null
+              ? <Text type="text2" weight="medium">{project.currentAddress}</Text>
+              : <Token>project_display.current_address</Token>}
+          </div>
+          {/* Not in the token list below: a null original address is not an unwired
+              column, it means the project was never renamed — the same real state the
+              job drawer words the same way. The token here claimed a gap where the
+              database was answering plainly. */}
+          <div className="field-row">
+            <div className="field-label"><Text type="text2">Original address</Text></div>
+            {project.originalAddress != null
+              ? <Text type="text2" weight="medium">{project.originalAddress}</Text>
+              : <Text type="text3" color="secondary">never renamed — always this address</Text>}
+          </div>
           {([
-            ["Current address", project.currentAddress, "project_display.current_address"],
-            ["Original address", project.originalAddress, "project_display.original_address"],
             ["Suburb", project.suburb, "addresses.suburb"],
             ["Council region", project.council, "addresses.council"],
             ["Type", project.projectType ? PROJECT_TYPE_LABELS[project.projectType] : null, "projects.project_type"]

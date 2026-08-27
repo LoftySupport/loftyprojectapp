@@ -523,7 +523,9 @@ export function JobsPage() {
                         />
                       </td>
                     )}
-                    <td>{j.jobNumber}</td>
+                    {/* nowrap: "1042-01" breaking into "1042-" / "01" is unreadable
+                        as an identifier, and the identifier is what this column is. */}
+                    <td style={{ whiteSpace: "nowrap" }}>{j.jobNumber}</td>
                     <td>{j.projectNumber}</td>
                     <td>{j.currentAddress ?? <Token>addresses.consolidated_address</Token>}</td>
                     <td>
