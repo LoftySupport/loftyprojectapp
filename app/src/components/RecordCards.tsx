@@ -136,6 +136,28 @@ export function JobCard({
   );
 }
 
+/**
+ * A job's address with its project's site taken off the end — "Lot 1, 28 Corner Street,
+ * Wandi WA 6167" under project "28 Corner Street, Wandi WA 6167" becomes "Lot 1".
+ *
+ * Only when the job really does sit at the project's address: anything else is returned
+ * whole, which is what makes an outlier legible instead of hidden. Compared case- and
+ * space-insensitively, because the two strings come from separate address rows and a
+ * stray double space should not defeat the match.
+ */
+export function withoutSite(jobAddress: string, site: string | null): string {
+  if (!site?.trim()) return jobAddress;
+  // Matched with \\s+ between the site's words rather than by slicing a length: the two
+  // strings come from separate address rows, and "28 Corner  Street" with a double
+  // space made a length-based cut return "Lot 3,  2". Watched doing exactly that.
+  const escaped = site.trim().split(/\s+/).map(w => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const tail = new RegExp("[,\\u2013\\u2014-]?\\s*" + escaped.join("\\s+") + "\\s*$", "i");
+  const head = jobAddress.replace(tail, "").trim();
+  // No match, or nothing left because the job IS at the site: show the whole thing.
+  if (head === jobAddress.trim() || head === "") return jobAddress;
+  return head.replace(/[,\u2013\u2014-]\s*$/, "").trim() || jobAddress;
+}
+
 export function ProjectCard({
   projectNumber,
   jobs,
@@ -238,12 +260,19 @@ export function ProjectCard({
         {/* Each job's own lot address, resolved — a wall of thirty tokens on a
             thirty-lot project read as "the app doesn't show addresses", when the only
             thing missing was passing them down. Capped so that project is a card, not
-            a column. */}
+            a column.
+
+            Shown as what DIFFERS from the project's address: seven lines each ending
+            "28 Corner Street, Wandi WA 6167" under a card titled "28 Corner Street,
+            Wandi WA 6167" made the eye hunt thirty characters deep for the two that
+            change. A job genuinely somewhere else keeps its whole address — and now
+            stands out, because it is the only line that does. */}
         {jobs.slice(0, 8).map(j => (
           <div key={j.jobNumber}>
             <Text type="text3" weight="medium" element="span">{j.jobNumber}</Text>{" "}
             <Text type="text3" color="secondary" element="span">
-              {j.address ?? <Token>addresses.consolidated_address</Token>}
+              {j.address ? withoutSite(j.address, address ?? null)
+                         : <Token>addresses.consolidated_address</Token>}
             </Text>
           </div>
         ))}
