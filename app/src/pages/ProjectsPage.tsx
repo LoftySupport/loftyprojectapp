@@ -9,6 +9,7 @@ import { savedViewBySlug, stagesInView } from "../data/savedViews";
 import { activeFilterCount, projectMatchesFilters, statusOptions } from "../data/filtering";
 import { LoadProblem, NoResults, NothingYet, PreviousAddressNote } from "../components/SearchNotices";
 import { SavedViewTabs } from "../components/SavedViewTabs";
+import { useSavedViews } from "../data/useSavedViews";
 import { ProjectCard, StatusPill } from "../components/RecordCards";
 import { PropertySlots } from "../components/PropertySlots";
 import { PROJECT_TYPES, PROJECT_TYPE_LABELS, type StageName, type TeamId } from "../data/types";
@@ -65,6 +66,8 @@ export function ProjectsPage() {
   // and "Stage" is the one the toolbar would show if the control were ever turned on.
   const { view, setView, filters, setFilters, saved, setSaved, search } =
     useBoardParams({ view: "Board", grouping: "Stage" });
+  // This person's own saved views (0048) — the fourth tab onwards.
+  const myViews = useSavedViews("projects");
 
   const { projectNumber } = useParams();
   const navigate = useNavigate();
@@ -182,6 +185,14 @@ export function ProjectsPage() {
           const s = stagesInView(savedViewBySlug(slug), stageNames);
           return all.filter(p => p.jobs.length > 0 && p.jobs.some(j => s.includes(j.stage))).length;
         }}
+        userViews={myViews.views}
+        currentQuery={search}
+        basePath="/projects"
+        onOpenView={v => navigate(`/projects${v.query ? `?${v.query}` : ""}`, { replace: true })}
+        onSaveView={name => myViews.save(name, search.replace(/^\?/, ""))}
+        onDeleteView={v => { void myViews.remove(v.id); }}
+        saveProblem={myViews.problem}
+        saveBusy={myViews.busy}
       />
 
       <Toolbar

@@ -208,6 +208,18 @@ A twelfth batch:
   and dictionary_overrides joined with key-column entries and purpose descriptions:
   248 properties, 42 tables. The uncovered-tables note is retired.
 
+**`0048` is applied to the live database** — `saved_views`, Q9's third and last layer:
+a person saves the board they are looking at under a name and gets it back anywhere
+they sign in. The row stores the **query string verbatim**, because the URL is already
+the app's serialisation of "what am I looking at" and a second schema for the same fact
+could only disagree with it. Private by RLS (owner-only, all four verbs). The three
+built-in tabs stay in code and render first; a person's own follow after a rule, with
+"Save this view…" at the end of the row — visible exactly when the current board is not
+already saved, which makes its presence the answer to "is this kept?".
+The RLS probe in `verify/rls.sql` was **watched failing**: with the policy swapped for
+a permissive `using (true)` against the live database (rolled back), it reported another
+person's view as readable and let one be written onto them.
+
 **Amber's answers to the open questions (27 Aug)**, each now binding:
 - **One colour family, not two** — the board's ramp is Lofty's teal deepening across
   all seven lifecycle positions (`theme/accents.ts` re-cut, contrast re-verified).

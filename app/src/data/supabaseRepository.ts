@@ -24,7 +24,9 @@ import type {
   Team,
   TeamId,
   TemplateMilestone,
-  TemplatePhase
+  TemplatePhase,
+  SavedViewBoard,
+  UserSavedView
 } from "./types";
 
 /**
@@ -61,6 +63,7 @@ const WIRED: RepositoryMethod[] = [
   "listComments", "addComment", "updateProject", "moveProjectStage",
   "setProjectCurrentAddress", "listAddressHistory",
   "listStages", "listTeams", "updateTeam", "createTeam", "listTemplatePhases", "updateStageSla",
+  "listSavedViews", "saveView", "deleteSavedView",
   "listPropertyDefs", "createPropertyDef", "updatePropertyDef", "deletePropertyDef",
   "listDictionaryOverrides", "saveDictionaryOverride"
 ];
@@ -1261,6 +1264,64 @@ export function createSupabaseRepository(): Repository {
         throw error;
       }
       return await repo.listTeams();
+    },
+
+    // ---- saved views (0048) ----------------------------------------------
+    // No profile_id is ever sent from here: the policy compares the row's profile_id
+    // to current_profile_id(), and the column's default is not set — so the insert
+    // below names it from the signed-in profile the repository already holds. Reads
+    // need no owner filter either; RLS has already narrowed them to yours.
+
+    async listSavedViews(board: SavedViewBoard): Promise<UserSavedView[]> {
+      const { data, error } = await client
+        .from("saved_views")
+        .select("saved_view_id, saved_view_board, saved_view_name, saved_view_query")
+        .eq("saved_view_board", board)
+        .order("saved_view_created_at", { ascending: true });
+      if (error) throw error;
+      return (data ?? []).map(r => ({
+        id: r.saved_view_id,
+        board: r.saved_view_board as SavedViewBoard,
+        name: r.saved_view_name,
+        query: r.saved_view_query
+      }));
+    },
+
+    async saveView(board: SavedViewBoard, name: string, query: string): Promise<UserSavedView[]> {
+      const label = name.trim();
+      if (!label) throw new Error("A saved view needs a name.");
+      const me = await repo.currentProfile();
+      if (!me) throw new Error("Saving a view needs you to be signed in.");
+
+      const { error } = await client.from("saved_views").insert({
+        profile_id: me.id,
+        saved_view_board: board,
+        saved_view_name: label,
+        saved_view_query: query
+      });
+      if (error) {
+        // Insert, not upsert: overwriting a view somebody meant to keep is worse than
+        // refusing, and the refusal can name the clash.
+        if (error.code === "23505") {
+          throw new Error(`You already have a view called "${label}" on this board.`);
+        }
+        throw error;
+      }
+      return await repo.listSavedViews(board);
+    },
+
+    async deleteSavedView(id: string): Promise<UserSavedView[]> {
+      const { data, error } = await client
+        .from("saved_views")
+        .delete()
+        .eq("saved_view_id", id)
+        .select("saved_view_board");
+      if (error) throw error;
+      // RLS makes another person's view unreachable rather than forbidden, so a delete
+      // that matched nothing is the only signal that it was not yours (or is gone).
+      const board = data?.[0]?.saved_view_board as SavedViewBoard | undefined;
+      if (!board) throw new Error("That view was not removed — it no longer exists.");
+      return await repo.listSavedViews(board);
     },
 
     /**

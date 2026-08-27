@@ -20,7 +20,9 @@ import type {
   TeamId,
   Team,
   TemplateMilestone,
-  TemplatePhase
+  TemplatePhase,
+  SavedViewBoard,
+  UserSavedView
 } from "./types";
 
 /**
@@ -186,6 +188,19 @@ export interface Repository {
    */
   createTeam(name: string): Promise<Team[]>;
   listTemplatePhases(): Promise<TemplatePhase[]>;
+
+  // ---- saved views ------------------------------------------------------
+  /** The signed-in person's saved views for one board, oldest first. Owner-only by RLS. */
+  listSavedViews(board: SavedViewBoard): Promise<UserSavedView[]>;
+  /**
+   * Save the current board state under a name — the query string verbatim (0048).
+   * Insert, not upsert: a second view with the same name on the same board is refused
+   * by the unique constraint, and the refusal names the clash rather than silently
+   * overwriting a view the person meant to keep. The fresh list comes back as proof.
+   */
+  saveView(board: SavedViewBoard, name: string, query: string): Promise<UserSavedView[]>;
+  /** Remove one of your own saved views. RLS makes anyone else's unreachable. */
+  deleteSavedView(id: string): Promise<UserSavedView[]>;
   /**
    * The SLA per lifecycle stage — expected days in stage and the at-risk lead (0047),
    * keyed by stage name. `null` clears a number; the fresh phase list comes back as
@@ -254,6 +269,9 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "updateTeam",
   "createTeam",
   "listTemplatePhases",
+  "listSavedViews",
+  "saveView",
+  "deleteSavedView",
   "updateStageSla",
   "listTemplateMilestones",
   "listPropertyDefs",
@@ -297,6 +315,9 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   listTeams: "teams",
   updateTeam: "teams",
   createTeam: "teams",
+  listSavedViews: "saved_views",
+  saveView: "saved_views",
+  deleteSavedView: "saved_views",
   listTemplatePhases: "pipeline_stages",
   updateStageSla: "pipeline_stages",
   listTemplateMilestones: "pipeline_stage_tasks (not built)",

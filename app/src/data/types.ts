@@ -620,6 +620,26 @@ export const teamSlug = (name: string): string =>
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
 
+// ------------------------------------------------------------- saved views
+
+/** The boards that have saved views — the CHECK on `saved_views` names the same two. */
+export const SAVED_VIEW_BOARDS = ["jobs", "projects"] as const;
+export type SavedViewBoard = (typeof SAVED_VIEW_BOARDS)[number];
+
+/**
+ * A user-saved board state (0048, Amber's Q9 third layer): a name over the board's
+ * query string, stored verbatim. The URL is already the app's serialisation of "what
+ * am I looking at", so the row keeps that string and nothing else — unknown keys fall
+ * back harmlessly on read, exactly as a pasted link would.
+ */
+export interface UserSavedView {
+  id: Uuid;
+  board: SavedViewBoard;
+  name: string;
+  /** The query string without the leading '?'. */
+  query: string;
+}
+
 export const PROFILE_STATUSES = ["active", "pending", "inactive"] as const;
 export type ProfileStatus = (typeof PROFILE_STATUSES)[number];
 

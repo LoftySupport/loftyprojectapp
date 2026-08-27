@@ -954,6 +954,13 @@ export const DICTIONARY: DictionaryEntry[] = [
   e("dictionary_overrides.dictionary_override_definition", "Definition override", "Lofty's wording of what the property means.", "text", "Nullable, same at-least-one rule.", "—", "created"),
   e("dictionary_overrides.dictionary_override_status", "Status override", "An admin's re-statement of where the property stands.", "text", "Nullable. CHECK against the five dictionary statuses.", "Manager+ per the 0044 policy; status editing gated at admin in the app.", "created"),
 
+  // ------------------------------------------------------------ saved_views (0048)
+  e("saved_views.saved_view_id", "Saved view", "One board state a person kept under a name — Amber's Q9, third layer. The three built-in tabs (All jobs, Live, Closed) stay code; these render after them, per person.", "uuid", "Primary key, default gen_random_uuid().", "Private by RLS: the owner-only policy compares profile_id to current_profile_id(), so nobody sees anybody else's.", "created"),
+  e("saved_views.profile_id", "Whose view", "The person the view belongs to. Cascades on delete: a person's saved views are theirs and go with them.", "uuid", "Not null. FK → profiles(profile_id) ON DELETE CASCADE.", "Also the column the RLS policy filters on, and the leading column of the unique index that serves it.", "created"),
+  e("saved_views.saved_view_board", "Board", "Which board the view belongs to — jobs or projects, the URL's first path segment, the same key the session-level view memory uses.", "text", "Not null. CHECK: jobs | projects.", "CHECKed rather than an FK: these are two routes in the app, not rows in a table.", "created"),
+  e("saved_views.saved_view_name", "Name", "What the person calls it — \"My site work\". Unique per person per board, so choosing one is never a coin-toss between two of the same name.", "text", "Not null. CHECK: not blank after trimming. UNIQUE (profile_id, board, name).", "The duplicate is refused rather than overwritten: overwriting a view somebody meant to keep is worse than a message naming the clash.", "created"),
+  e("saved_views.saved_view_query", "The view itself", "The board's query string without the leading ?, stored verbatim — view mode, grouping, filters, saved-view slice, exactly as the address bar holds them.", "text", "Not null.", "The URL is already the app's serialisation of \"what am I looking at\"; a second schema for the same fact could only disagree with it. Unknown keys fall back harmlessly on read, exactly as a pasted link does.", "created"),
+
   // ------------------------------------------------------- templates and perms
   e("template_phases.expected_days", "Expected days", "How long a phase should take. What the Gantt measures actual time in stage against.", "integer", "Nullable.", "Keyed by template plus the stage enum; the owning team is a team enum value. Neither is an FK.", "to_do", PROPOSED),
   e("template_milestones.label", "Milestone", "One thing a phase expects done before handover. Instantiated per job as job_milestones. Renamed from template_checkpoints (Amber, 26 Aug) — Lofty's word is milestones, and nothing was built under the old name.", "text", "Not null.", "Copied to job_milestones.label when a job is created from a template.", "to_do", PROPOSED),
@@ -1033,6 +1040,8 @@ export const TABLE_DESCRIPTIONS: Record<string, string> = {
     "Every stage move, logged the moment it happens — because time in stage cannot be reconstructed later, and the schema has already lost that history once (job_stages, dropped in 0006). Written by trigger only; deliberately no FKs to stages, so the log survives a vocabulary change.",
   dictionary_overrides:
     "Lofty's words on top of the repo's dictionary — one row per entry somebody reworded on the Dictionary page (0044), null fields meaning the repo's wording stands. Sweeping an override back into dictionary.ts and deleting the row is the maintenance path.",
+  saved_views:
+    "A person's named board states (Amber's Q9, third layer) — the query string of a board, saved verbatim under a name, private to its owner by RLS. The three built-in tabs stay code; these render after them. Storing the URL rather than a parsed shape keeps one serialisation of \"what am I looking at\" instead of two that can disagree.",
   permission_grants:
     "The permission model as data — which rung of the ladder reaches how far: none, own, team, team_hierarchy, all. Still to do; today the ladder is compared by ordinal directly in the RLS policies.",
   profile_teams:

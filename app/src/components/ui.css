@@ -74,6 +74,45 @@
   text-align: center;
 }
 
+/* The row holds the tabs and, at its end, the affordance for keeping the current one.
+   One row, so "which view" and "keep this view" read as the same question. */
+.saved-views-row {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-8);
+  border-bottom: 1px solid var(--layout-border-color);
+  flex-wrap: wrap;
+}
+.saved-views-row .saved-views { border-bottom: 0; flex: 1 1 auto; min-width: 0; }
+.saved-views-row > .saved-view-namer,
+.saved-views-row > button { align-self: center; flex: 0 0 auto; }
+/* The built-ins are everybody's; what follows the rule is this person's. A rule rather
+   than a heading — the row still reads left to right as one question. */
+.saved-views-rule {
+  align-self: center;
+  width: 1px;
+  height: 18px;
+  background: var(--layout-border-color);
+  margin: 0 var(--space-4);
+  flex: 0 0 auto;
+}
+.saved-view.is-mine { gap: var(--space-4); }
+.saved-view.is-mine > a { text-decoration: none; color: inherit; display: inline-flex; align-items: center; }
+.saved-view-remove {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: var(--secondary-text-color);
+  font-size: 16px;
+  line-height: 1;
+  /* 24px so the sweep's tap-target check passes and a thumb can hit it. */
+  min-width: 24px;
+  min-height: 24px;
+  border-radius: var(--border-radius-small);
+}
+.saved-view-remove:hover { background: var(--negative-color-selected); color: var(--negative-color); }
+.saved-view-remove:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+
 .toolbar {
   display: flex;
   align-items: center;
@@ -86,7 +125,8 @@
 }
 /* Following the saved-view tabs, which already draw a rule — two 1px lines a row
    apart read as a mistake rather than as structure. */
-.saved-views + .toolbar { border-top: 0; }
+.saved-views + .toolbar,
+.saved-views-row + .toolbar { border-top: 0; }
 .toolbar-field { display: flex; align-items: center; gap: var(--space-8); }
 .toolbar-label {
   font: var(--font-text2-normal);

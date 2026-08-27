@@ -83,6 +83,36 @@ begin
     when others then raise warning 'FAIL: unexpected on stage log (%)', sqlerrm;
   end;
 
+  -- 0048: a saved view is private. Two halves, because they are different mechanisms:
+  -- the WITH CHECK stops you writing a view onto somebody else, and the USING stops you
+  -- reading or removing theirs. A policy with only the first would let anybody list the
+  -- whole company's saved views, which is a person's working habits.
+  begin
+    insert into saved_views (profile_id, saved_view_board, saved_view_name, saved_view_query)
+    values ((select profile_id from profiles
+              where profile_email <> 'behaviour-test@lofty.com.au' limit 1),
+            'jobs', '__rls_probe__', 'view=Table');
+    raise warning 'FAIL: a saved view was written onto somebody else';
+  exception
+    when insufficient_privilege then raise notice 'ok  saved_views refused a view written onto another person';
+    when others then raise warning 'FAIL: unexpected writing another person''s saved view (%)', sqlerrm;
+  end;
+
+  begin
+    -- Planted as the owner (this block runs as `authenticated`, so the insert itself is
+    -- the WITH CHECK passing for your own row), then read back and removed.
+    insert into saved_views (profile_id, saved_view_board, saved_view_name, saved_view_query)
+    values ((select profile_id from profiles where profile_email = 'behaviour-test@lofty.com.au'),
+            'jobs', '__rls_probe__', 'view=Table');
+    if (select count(*) from saved_views where saved_view_name = '__rls_probe__') = 1 then
+      raise notice 'ok  saved_views: your own view is yours to read';
+    else
+      raise warning 'FAIL: a person could not read the saved view they just made';
+    end if;
+    delete from saved_views where saved_view_name = '__rls_probe__';
+  exception when others then raise warning 'FAIL: unexpected on your own saved view (%)', sqlerrm;
+  end;
+
   begin
     insert into pipelines (pipeline_key, pipeline_name, pipeline_scope)
     values ('sneaky', 'Sneaky', 'job');
