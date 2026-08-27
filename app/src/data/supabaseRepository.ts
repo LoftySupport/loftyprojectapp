@@ -63,7 +63,7 @@ const WIRED: RepositoryMethod[] = [
   "listComments", "addComment", "updateProject", "moveProjectStage",
   "setProjectCurrentAddress", "listAddressHistory",
   "listStages", "listTeams", "updateTeam", "createTeam", "listTemplatePhases", "updateStageSla",
-  "listSavedViews", "saveView", "deleteSavedView",
+  "listSavedViews", "saveView", "deleteSavedView", "shareSavedView",
   "listMyPreferences", "saveMyPreferences",
   "listPropertyDefs", "createPropertyDef", "updatePropertyDef", "deletePropertyDef",
   "listDictionaryOverrides", "saveDictionaryOverride"
@@ -1282,16 +1282,27 @@ export function createSupabaseRepository(): Repository {
     async listSavedViews(board: SavedViewBoard): Promise<UserSavedView[]> {
       const { data, error } = await client
         .from("saved_views")
-        .select("saved_view_id, saved_view_board, saved_view_name, saved_view_query")
+        .select(
+          "saved_view_id, saved_view_board, saved_view_name, saved_view_query, saved_view_shared_with_team, profile_id, profiles!saved_views_profile_id_fkey(profile_first_name)"
+        )
         .eq("saved_view_board", board)
         .order("saved_view_created_at", { ascending: true });
       if (error) throw error;
-      return (data ?? []).map(r => ({
-        id: r.saved_view_id,
-        board: r.saved_view_board as SavedViewBoard,
-        name: r.saved_view_name,
-        query: r.saved_view_query
-      }));
+      const me = await repo.currentProfile();
+      return (data ?? []).map(r => {
+        const mine = r.profile_id === me?.id;
+        const owner = (r as unknown as { profiles?: { profile_first_name?: string } }).profiles;
+        return {
+          id: r.saved_view_id,
+          board: r.saved_view_board as SavedViewBoard,
+          name: r.saved_view_name,
+          query: r.saved_view_query,
+          sharedWithTeam: r.saved_view_shared_with_team ?? null,
+          // Null for your own: you know whose it is, and the name is shorter without it.
+          ownerName: mine ? null : owner?.profile_first_name ?? null,
+          isMine: mine
+        };
+      });
     },
 
     async saveView(board: SavedViewBoard, name: string, query: string): Promise<UserSavedView[]> {
@@ -1328,6 +1339,20 @@ export function createSupabaseRepository(): Repository {
       // that matched nothing is the only signal that it was not yours (or is gone).
       const board = data?.[0]?.saved_view_board as SavedViewBoard | undefined;
       if (!board) throw new Error("That view was not removed — it no longer exists.");
+      return await repo.listSavedViews(board);
+    },
+
+    async shareSavedView(id: string, team: TeamId | null): Promise<UserSavedView[]> {
+      const { data, error } = await client
+        .from("saved_views")
+        .update({ saved_view_shared_with_team: team })
+        .eq("saved_view_id", id)
+        .select("saved_view_board");
+      if (error) throw error;
+      // The update policy is owner-only, so a teammate's attempt matches nothing at
+      // all rather than erroring — which is the only signal that it was not theirs.
+      const board = data?.[0]?.saved_view_board as SavedViewBoard | undefined;
+      if (!board) throw new Error("That view was not changed — it is not yours to share.");
       return await repo.listSavedViews(board);
     },
 

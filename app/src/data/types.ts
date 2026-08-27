@@ -646,6 +646,16 @@ export interface UserSavedView {
   name: string;
   /** The query string without the leading '?'. */
   query: string;
+  /**
+   * The team it is shared with, or null for private — the default (0051). A shared
+   * view is readable by everyone in that team and editable only by whoever made it,
+   * which is why the read and write policies are separate.
+   */
+  sharedWithTeam: TeamId | null;
+  /** Whose it is, resolved — null for your own, since you know. */
+  ownerName: string | null;
+  /** True when it is yours: the only case where the edit controls appear. */
+  isMine: boolean;
 }
 
 export const PROFILE_STATUSES = ["active", "pending", "inactive"] as const;

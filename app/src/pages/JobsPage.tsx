@@ -8,6 +8,7 @@ import {
   LINEAR_STAGES, PROJECT_TYPES, PROJECT_TYPE_LABELS, RECORD_STATUS_LABELS, RECORD_STATUSES
 } from "../data/types";
 import { useStages, useTeams, useTemplatePhases } from "../data/useLookups";
+import { useAuth } from "../data/AuthProvider";
 import { useBoardRecords, type BoardJob } from "../data/boardModel";
 import { jobMatchesQuery, matchedOnPreviousAddress, useSearch } from "../data/SearchProvider";
 import { useBoardParams } from "../data/useBoardParams";
@@ -65,6 +66,13 @@ export function JobsPage() {
     // The default view is the preference (G39); a link that names its own view still
     // wins, because the URL is the record of what somebody sent you.
   } = useBoardParams({ view: readPrefs().defaultJobsView, grouping: "Stage" });
+  // The teams this person is in — sharing a view offers their own team, and offers
+  // nothing at all to somebody in none (0051).
+  const { profile: me } = useAuth();
+  const myTeams = useMemo(
+    () => teams.filter(t => t.isActive && (me?.teams ?? []).includes(t.id)),
+    [teams, me]
+  );
   // This person's own saved views (0048) — the fourth tab onwards.
   const myViews = useSavedViews("jobs");
   /**
@@ -283,6 +291,9 @@ export function JobsPage() {
         onOpenView={v => navigate(`/jobs${v.query ? `?${v.query}` : ""}`, { replace: true })}
         onSaveView={name => myViews.save(name, search.replace(/^\?/, ""))}
         onDeleteView={v => { void myViews.remove(v.id); }}
+        onShareView={(v, team) => { void myViews.share(v.id, team); }}
+        shareTeams={myTeams}
+        teamLabel={id => teams.find(t => t.id === id)?.name ?? id}
         saveProblem={myViews.problem}
         saveBusy={myViews.busy}
       />

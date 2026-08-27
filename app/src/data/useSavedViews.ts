@@ -58,7 +58,30 @@ export function useSavedViews(board: SavedViewBoard) {
     [repo, busy]
   );
 
-  return { views: views as UserSavedView[], loading, busy, problem, save, remove, clearProblem: () => setProblem(null) };
+  const share = useCallback(
+    async (id: string, team: string | null): Promise<boolean> => {
+      if (busy) return false;
+      setBusy(true);
+      setProblem(null);
+      try {
+        await repo.shareSavedView(id, team);
+        setReloadKey(k => k + 1);
+        return true;
+      } catch (e) {
+        setProblem(e instanceof Error ? e.message : String(e));
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [repo, busy]
+  );
+
+  return {
+    views: views as UserSavedView[],
+    loading, busy, problem, save, remove, share,
+    clearProblem: () => setProblem(null)
+  };
 }
 
 /**

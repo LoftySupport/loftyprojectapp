@@ -96,7 +96,22 @@
   margin: 0 var(--space-4);
   flex: 0 0 auto;
 }
-.saved-view.is-mine { gap: var(--space-4); }
+.saved-view.is-mine, .saved-view.is-theirs { gap: var(--space-4); }
+.saved-view.is-theirs > a { text-decoration: none; color: inherit; display: inline-flex; align-items: center; gap: var(--space-4); }
+/* A shared view says so in words, not with a badge: the row is already carrying enough
+   shapes, and "shared"/"share" is the same control saying which way it will go. */
+.saved-view-share {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+  min-height: 24px;
+  padding: 0 var(--space-4);
+  border-radius: var(--border-radius-small);
+}
+.saved-view-share:hover { background: var(--primary-background-hover-color); color: var(--primary-text-color); }
+.saved-view-share:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
 .saved-view.is-mine > a { text-decoration: none; color: inherit; display: inline-flex; align-items: center; }
 .saved-view-remove {
   border: 0;

@@ -183,6 +183,9 @@ export function createStubRepository(): Repository {
     async deleteSavedView(): Promise<never> {
       throw new Error("Removing a saved view needs Supabase.");
     },
+    async shareSavedView(): Promise<never> {
+      throw new Error("Sharing a view needs Supabase.");
+    },
 
     // Preferences roam with the profile, and without a backend there is no profile.
     // Empty on read — the app falls back to this device's localStorage, which is the

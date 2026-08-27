@@ -220,6 +220,20 @@ The RLS probe in `verify/rls.sql` was **watched failing**: with the policy swapp
 a permissive `using (true)` against the live database (rolled back), it reported another
 person's view as readable and let one be written onto them.
 
+**`0051` is applied to the live database** — `saved_view_shared_with_team`, the column
+0048 promised ("a column, not a redesign"). Amber, 27 Aug: *"team views matter, plan for
+them."* Private stays the default; sharing is a deliberate act on one view.
+
+**The read and write policies are now separate, and that split is the whole safety.**
+Read: your own, plus anything shared with a team you are in. Write: your own, always. A
+widened `for all` would have let anybody in Construction delete Deanna's view. Watched
+live, rolled back: a teammate sees the shared view, cannot see the private one, cannot
+edit or delete the shared one, and the owner can still stop sharing.
+
+The unique `(profile, board, name)` deliberately did **not** widen: two people may both
+call a view "Site this week", which is two people using the same words rather than a
+collision. The tab row carries whose it is instead.
+
 **`0050` is applied to the live database** — `user_preferences`, Q9's last layer.
 Landing page and default jobs view now follow the person to any machine they sign in on.
 

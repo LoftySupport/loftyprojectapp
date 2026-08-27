@@ -201,6 +201,12 @@ export interface Repository {
   saveView(board: SavedViewBoard, name: string, query: string): Promise<UserSavedView[]>;
   /** Remove one of your own saved views. RLS makes anyone else's unreachable. */
   deleteSavedView(id: string): Promise<UserSavedView[]>;
+  /**
+   * Share one of your views with a team, or `null` to make it private again (0051).
+   * Only the owner may — the update policy never sees the shared clause, so a
+   * teammate's attempt matches no row rather than being refused halfway.
+   */
+  shareSavedView(id: string, team: TeamId | null): Promise<UserSavedView[]>;
 
   // ---- preferences (0050) -----------------------------------------------
   /**
@@ -282,6 +288,7 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "listSavedViews",
   "saveView",
   "deleteSavedView",
+  "shareSavedView",
   "listMyPreferences",
   "saveMyPreferences",
   "updateStageSla",
@@ -330,6 +337,7 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   listSavedViews: "saved_views",
   saveView: "saved_views",
   deleteSavedView: "saved_views",
+  shareSavedView: "saved_views",
   listMyPreferences: "user_preferences",
   saveMyPreferences: "user_preferences",
   listTemplatePhases: "pipeline_stages",

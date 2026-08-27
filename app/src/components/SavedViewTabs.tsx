@@ -34,6 +34,9 @@ export function SavedViewTabs({
   onOpenView,
   onSaveView,
   onDeleteView,
+  onShareView,
+  shareTeams = [],
+  teamLabel,
   saveProblem,
   saveBusy
 }: {
@@ -50,6 +53,11 @@ export function SavedViewTabs({
   onOpenView?: (v: UserSavedView) => void;
   onSaveView?: (name: string) => Promise<boolean>;
   onDeleteView?: (v: UserSavedView) => void;
+  /** Share with a team, or null to make private again. Owner-only by policy. */
+  onShareView?: (v: UserSavedView, team: string | null) => void;
+  /** The teams this person is in — sharing offers the first, or nothing if they are in none. */
+  shareTeams?: { id: string; name: string }[];
+  teamLabel?: (id: string) => string;
   saveProblem?: string | null;
   saveBusy?: boolean;
 }) {
@@ -66,6 +74,10 @@ export function SavedViewTabs({
 
   const q = currentQuery.startsWith("?") ? currentQuery.slice(1) : currentQuery;
   const activeUserView = userViews.find(v => sameQuery(v.query, q));
+  // Yours first, then the team's. Same reasoning as the first rule: the row reads left
+  // to right from "everybody's" through "mine" to "my team's".
+  const mine = userViews.filter(v => v.isMine);
+  const theirs = userViews.filter(v => !v.isMine);
   // Already saved → nothing to save. The affordance appears exactly when it would do
   // something, so its presence is the answer to "is this view kept?".
   const canSave = Boolean(onSaveView) && !activeUserView;
@@ -110,9 +122,9 @@ export function SavedViewTabs({
           );
         })}
 
-        {userViews.length > 0 && <span className="saved-views-rule" aria-hidden />}
+        {mine.length > 0 && <span className="saved-views-rule" aria-hidden />}
 
-        {userViews.map(v => {
+        {mine.map(v => {
           const active = activeUserView?.id === v.id;
           return (
             <span key={v.id} className={"saved-view is-mine" + (active ? " is-active" : "")}>
@@ -129,8 +141,24 @@ export function SavedViewTabs({
                   {v.name}
                 </Text>
               </a>
-              {/* Removal only on the one you are looking at: a row of × buttons invites
-                  the mis-click it cannot undo, and you can always open a view first. */}
+              {/* Sharing and removing appear only on the view you have open, and only
+                  when it is yours — a row of controls on every tab invites the
+                  mis-click neither can undo. */}
+              {active && onShareView && shareTeams.length > 0 && (
+                <button
+                  type="button"
+                  className="saved-view-share"
+                  aria-label={v.sharedWithTeam
+                    ? `Stop sharing ${v.name}`
+                    : `Share ${v.name} with your team`}
+                  title={v.sharedWithTeam
+                    ? `Shared with ${teamLabel?.(v.sharedWithTeam) ?? v.sharedWithTeam} — click to make private`
+                    : "Share this view with your team"}
+                  onClick={() => onShareView(v, v.sharedWithTeam ? null : shareTeams[0].id)}
+                >
+                  {v.sharedWithTeam ? "shared" : "share"}
+                </button>
+              )}
               {active && onDeleteView && (
                 <button
                   type="button"
@@ -142,6 +170,34 @@ export function SavedViewTabs({
                   ×
                 </button>
               )}
+            </span>
+          );
+        })}
+        {theirs.length > 0 && <span className="saved-views-rule" aria-hidden />}
+
+        {theirs.map(v => {
+          const active = activeUserView?.id === v.id;
+          return (
+            <span key={v.id} className={"saved-view is-theirs" + (active ? " is-active" : "")}>
+              <a
+                href={basePath ? `${basePath}${v.query ? `?${v.query}` : ""}` : undefined}
+                aria-current={active ? "page" : undefined}
+                onClick={e => {
+                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                  e.preventDefault();
+                  onOpenView?.(v);
+                }}
+              >
+                <Text type="text2" element="span" weight={active ? "bold" : "normal"}>
+                  {v.name}
+                </Text>
+                {/* Whose it is, so two people may both call one "Site this week" without
+                    the row becoming a guess — which is why the unique constraint stayed
+                    per person rather than being widened. */}
+                {v.ownerName && (
+                  <Text type="text3" color="secondary" element="span"> · {v.ownerName}</Text>
+                )}
+              </a>
             </span>
           );
         })}

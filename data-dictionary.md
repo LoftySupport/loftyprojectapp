@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-256 properties across 44 tables.
+257 properties across 44 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 207 | In the migration and the types |
+| Created | 208 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -448,6 +448,7 @@ A person's named board states (Amber's Q9, third layer) — the query string of 
 | `saved_views.profile_id` | Whose view | The person the view belongs to. Cascades on delete: a person's saved views are theirs and go with them. | `uuid` | — | Not null. FK → profiles(profile_id) ON DELETE CASCADE. | Also the column the RLS policy filters on, and the leading column of the unique index that serves it. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `saved_views.saved_view_board` | Board | Which board the view belongs to — jobs or projects, the URL's first path segment, the same key the session-level view memory uses. | `text` | — | Not null. CHECK: jobs \| projects. | CHECKed rather than an FK: these are two routes in the app, not rows in a table. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `saved_views.saved_view_name` | Name | What the person calls it — "My site work". Unique per person per board, so choosing one is never a coin-toss between two of the same name. | `text` | — | Not null. CHECK: not blank after trimming. UNIQUE (profile_id, board, name). | The duplicate is refused rather than overwritten: overwriting a view somebody meant to keep is worse than a message naming the clash. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `saved_views.saved_view_shared_with_team` | Shared with | The team this view is handed to, or null for private — the default (0051, Amber: "team views matter"). A shared view is readable by everyone in that team and editable only by whoever made it. | `text` | — | Nullable. FK → teams(team_id). | The read and write policies are separate for exactly this: a widened for-all policy would have let anybody in the team delete the owner's view. Two people may still both call a view "Site this week" — the tab row carries whose it is rather than the constraint forbidding it. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `saved_views.saved_view_query` | The view itself | The board's query string without the leading ?, stored verbatim — view mode, grouping, filters, saved-view slice, exactly as the address bar holds them. | `text` | — | Not null. | The URL is already the app's serialisation of "what am I looking at"; a second schema for the same fact could only disagree with it. Unknown keys fall back harmlessly on read, exactly as a pasted link does. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `stages`

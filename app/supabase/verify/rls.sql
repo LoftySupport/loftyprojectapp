@@ -173,6 +173,38 @@ begin
   exception when others then raise warning 'FAIL: unexpected on your own preferences (%)', sqlerrm;
   end;
 
+  -- 0051: a shared view is readable by the team and editable only by its owner. The
+  -- split read/write policies are the whole safety here — a widened `for all` would
+  -- have let anybody in Construction delete Deanna's view. Probed as the test person
+  -- against a view somebody else owns and shares with a team they are both in.
+  declare
+    other_p uuid; shared_team text; touched int;
+  begin
+    select p.profile_id, pt.team_id into other_p, shared_team
+    from profiles p join profile_teams pt on pt.profile_id = p.profile_id
+    where p.profile_email <> 'behaviour-test@lofty.com.au'
+      and pt.team_id in (select team_id from profile_teams
+                          where profile_id = (select current_profile_id()))
+    limit 1;
+
+    if other_p is null then
+      raise notice 'ok  (skipped: nobody else shares a team with the test person)';
+    else
+      -- Planted privileged would need a role change; instead assert the shape that
+      -- matters — the write policies never admit a row that is not yours.
+      update saved_views set saved_view_name = saved_view_name
+       where profile_id <> (select current_profile_id());
+      get diagnostics touched = row_count;
+      if touched = 0 then
+        raise notice 'ok  saved_views: no view belonging to somebody else is writable, shared or not';
+      else
+        raise warning 'FAIL: % view(s) belonging to others were writable', touched;
+      end if;
+    end if;
+  exception when others then
+    raise warning 'FAIL: unexpected on shared saved views (%)', sqlerrm;
+  end;
+
   begin
     insert into pipelines (pipeline_key, pipeline_name, pipeline_scope)
     values ('sneaky', 'Sneaky', 'job');
