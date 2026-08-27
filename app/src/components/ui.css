@@ -545,7 +545,9 @@
 .phase-card {
   background: var(--primary-background-color);
   border: 1px solid var(--layout-border-color);
-  border-top: 4px solid var(--primary-color);
+  /* The lifecycle ramp, same as the board's columns — one vocabulary for one set of
+     phases. Falls back to the brand colour if a card is ever rendered without one. */
+  border-top: 4px solid var(--col-accent, var(--primary-color));
   border-radius: var(--border-radius-medium);
   padding: var(--space-16);
 }

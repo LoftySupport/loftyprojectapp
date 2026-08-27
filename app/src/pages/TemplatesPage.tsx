@@ -1,6 +1,7 @@
 import { Chips, Counter, Heading, Text } from "@vibe/core";
 import { PROJECT_TYPES, PROJECT_TYPE_LABELS } from "../data/types";
 import { useMilestones, usePropertyDefs, useStages, useTemplatePhases } from "../data/useLookups";
+import { accentStyle, columnAccent } from "../theme/accents";
 import "../components/ui.css";
 
 /**
@@ -73,7 +74,10 @@ export function TemplatesPage() {
         {stageNames.map((stage, i) => {
           const fields = jobFields.filter(f => f.stageName === stage);
           return (
-            <section className="phase-card" key={stage}>
+            /* The same ramp the board wears (theme/accents). These are the same seven
+               phases; wearing one flat colour here and a ramp there made the template
+               read as a different vocabulary from the board it describes. */
+            <section className="phase-card" key={stage} style={accentStyle(columnAccent("Stage", stage, i))}>
               <Text type="text3" color="secondary">Phase {i + 1}</Text>
               <Heading type="h3" weight="medium">{stage}</Heading>
 
