@@ -1092,9 +1092,40 @@ Bearer eyJhbGciOi…                → JWT failed verification     ← a projec
                                                                   account token
 ```
 
-So the header earns its place only once the token exists. If `SUPABASE_ACCESS_TOKEN` is
-not going to be set, take the header back out rather than leaving it — otherwise every
-interactive session loses OAuth for the sake of a remote one that has no token either.
+So the header earns its place only once the token exists. **It was taken back out the same
+day** — Amber, 27 August, asked for it removed rather than setting a token, so `.mcp.json`
+is byte-for-byte the file it was before the header, and OAuth works again everywhere it
+ever worked.
+
+The mechanism, since "disables OAuth fallback" is the sort of claim that should not be
+taken on trust. Without a header the server answers `401` **and offers a challenge**;
+with one it answers `401` and offers nothing, so a client has nothing to discover:
+
+```
+no Authorization header
+  HTTP/2 401
+  www-authenticate: Bearer error="invalid_request",
+    resource_metadata="https://mcp.supabase.com/.well-known/oauth-protected-resource/…"
+
+Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}
+  HTTP/2 401
+  (no www-authenticate at all)
+```
+
+That `resource_metadata` link is the whole OAuth flow's entry point. Sending any
+Authorization header suppresses it.
+
+**So the state of play is the one this project started in**, and it is a fair trade rather
+than a defeat: interactive sessions log in through the browser and reach the live
+database; remote sessions have no Supabase MCP and work through migration files and
+`check.sh` against a local `lofty_verify`, which is where schema changes belong anyway.
+`0036` and `0037` went out through the MCP server, and that is the exception rather than
+the pattern to repeat.
+
+**To turn it back on**, the whole change is three lines and the token must exist *first*:
+generate a personal access token at `supabase.com/dashboard/account/tokens`, set it as
+`SUPABASE_ACCESS_TOKEN` on the Claude Code remote environment, *then* add the header back.
+In that order — the reverse is what caused this.
 
 **What it can do, stated plainly.** The URL carries no `read_only=true` — that was added
 on 16 August and reverted a minute later, and the revert stands, so the server hands out
