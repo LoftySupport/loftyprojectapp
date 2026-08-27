@@ -1118,6 +1118,15 @@ code { overflow-wrap: anywhere; }
 /* A field-row whose value side holds a value AND a control beside it — the stage with
    its move picker, the folder link with its input. */
 .field-inline { display: flex; align-items: center; gap: var(--space-8); }
+/* The catch-all route's panel — an unknown URL says so instead of rendering nothing. */
+.not-found {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  align-items: flex-start;
+  padding: var(--space-24);
+}
+
 /* The add-team form under the Teams table: the input row, then the slug preview line. */
 .team-add {
   display: flex;

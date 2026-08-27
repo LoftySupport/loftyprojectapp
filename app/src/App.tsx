@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
-import { Loader, ThemeProvider } from "@vibe/core";
+import { BrowserRouter, Navigate, NavLink, Outlet, Route, Routes, useLocation } from "react-router-dom";
+import { Heading, Loader, Text, ThemeProvider } from "@vibe/core";
 import { loftyTheme, type SystemTheme } from "./theme/loftyTheme";
 import { AuthProvider, useAuth } from "./data/AuthProvider";
 import { LegalPage } from "./pages/LegalPage";
@@ -92,6 +92,27 @@ function Landing() {
   return <DashboardPage />;
 }
 
+/**
+ * The catch-all. Without it an unknown URL rendered a completely blank page — no shell,
+ * no message, no way back — which is the worst possible answer to a stale bookmark or a
+ * typo in a pasted link. Says what happened rather than silently redirecting: a person
+ * who followed a dead link deserves to know the link was dead, not to wonder why it
+ * landed them somewhere else.
+ */
+function NotFound() {
+  const location = useLocation();
+  return (
+    <section className="panel not-found">
+      <Heading type="h2">There's nothing at {location.pathname}</Heading>
+      <Text type="text2" color="secondary" element="p">
+        The address may have moved, or the link may have a typo. Everything in the app is
+        reachable from the navigation on the left.
+      </Text>
+      <NavLink to="/">Go to the dashboard</NavLink>
+    </section>
+  );
+}
+
 export default function App() {
   const [theme, setTheme] = useState<SystemTheme>(() => {
     const saved = localStorage.getItem(THEME_KEY) as SystemTheme | null;
@@ -154,6 +175,7 @@ export default function App() {
                   weeks and will be in somebody's bookmarks and Teams messages. */}
               <Route path="dictionary" element={<Navigate to="/setup/dictionary" replace />} />
               <Route path="wiring" element={<Navigate to="/setup/wiring" replace />} />
+              <Route path="*" element={<NotFound />} />
             </Route>
             </Route>
           </Routes>
