@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { Button, Heading, Text, TextField } from "@vibe/core";
 import { useStages, useTeams } from "../data/useLookups";
+import { useAuth } from "../data/AuthProvider";
 import { useBoardRecords, type BoardProject } from "../data/boardModel";
 import { matchedOnPreviousAddress, projectMatchesQuery, useSearch } from "../data/SearchProvider";
 import { useBoardParams } from "../data/useBoardParams";
@@ -9,6 +10,7 @@ import { savedViewBySlug, stagesInView } from "../data/savedViews";
 import { activeFilterCount, projectMatchesFilters, statusOptions } from "../data/filtering";
 import { LoadProblem, NoResults, NothingYet, PreviousAddressNote } from "../components/SearchNotices";
 import { SavedViewTabs } from "../components/SavedViewTabs";
+import { useSavedViews } from "../data/useSavedViews";
 import { ProjectCard, StatusPill } from "../components/RecordCards";
 import { PropertySlots } from "../components/PropertySlots";
 import { PROJECT_TYPES, PROJECT_TYPE_LABELS, type StageName, type TeamId } from "../data/types";
@@ -46,7 +48,7 @@ import "../components/ui.css";
  */
 export function ProjectsPage() {
   const { stageNames } = useStages();
-  const { teamNames } = useTeams();
+  const { teams, teamNames } = useTeams();
   // The inline add row is hidden below `user`, matching the insert policy on `projects`.
   // A control that offers to do what RLS will refuse is worse than no control — this is
   // the app's can() hiding it, and the policy is what actually decides.
@@ -65,6 +67,15 @@ export function ProjectsPage() {
   // and "Stage" is the one the toolbar would show if the control were ever turned on.
   const { view, setView, filters, setFilters, saved, setSaved, search } =
     useBoardParams({ view: "Board", grouping: "Stage" });
+  // The teams this person is in — sharing a view offers their own team, and offers
+  // nothing at all to somebody in none (0051).
+  const { profile: me } = useAuth();
+  const myTeams = useMemo(
+    () => teams.filter(t => t.isActive && (me?.teams ?? []).includes(t.id)),
+    [teams, me]
+  );
+  // This person's own saved views (0048) — the fourth tab onwards.
+  const myViews = useSavedViews("projects");
 
   const { projectNumber } = useParams();
   const navigate = useNavigate();
@@ -182,6 +193,17 @@ export function ProjectsPage() {
           const s = stagesInView(savedViewBySlug(slug), stageNames);
           return all.filter(p => p.jobs.length > 0 && p.jobs.some(j => s.includes(j.stage))).length;
         }}
+        userViews={myViews.views}
+        currentQuery={search}
+        basePath="/projects"
+        onOpenView={v => navigate(`/projects${v.query ? `?${v.query}` : ""}`, { replace: true })}
+        onSaveView={name => myViews.save(name, search.replace(/^\?/, ""))}
+        onDeleteView={v => { void myViews.remove(v.id); }}
+        onShareView={(v, team) => { void myViews.share(v.id, team); }}
+        shareTeams={myTeams}
+        teamLabel={id => teams.find(t => t.id === id)?.name ?? id}
+        saveProblem={myViews.problem}
+        saveBusy={myViews.busy}
       />
 
       <Toolbar

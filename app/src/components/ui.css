@@ -74,6 +74,60 @@
   text-align: center;
 }
 
+/* The row holds the tabs and, at its end, the affordance for keeping the current one.
+   One row, so "which view" and "keep this view" read as the same question. */
+.saved-views-row {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-8);
+  border-bottom: 1px solid var(--layout-border-color);
+  flex-wrap: wrap;
+}
+.saved-views-row .saved-views { border-bottom: 0; flex: 1 1 auto; min-width: 0; }
+.saved-views-row > .saved-view-namer,
+.saved-views-row > button { align-self: center; flex: 0 0 auto; }
+/* The built-ins are everybody's; what follows the rule is this person's. A rule rather
+   than a heading — the row still reads left to right as one question. */
+.saved-views-rule {
+  align-self: center;
+  width: 1px;
+  height: 18px;
+  background: var(--layout-border-color);
+  margin: 0 var(--space-4);
+  flex: 0 0 auto;
+}
+.saved-view.is-mine, .saved-view.is-theirs { gap: var(--space-4); }
+.saved-view.is-theirs > a { text-decoration: none; color: inherit; display: inline-flex; align-items: center; gap: var(--space-4); }
+/* A shared view says so in words, not with a badge: the row is already carrying enough
+   shapes, and "shared"/"share" is the same control saying which way it will go. */
+.saved-view-share {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+  min-height: 24px;
+  padding: 0 var(--space-4);
+  border-radius: var(--border-radius-small);
+}
+.saved-view-share:hover { background: var(--primary-background-hover-color); color: var(--primary-text-color); }
+.saved-view-share:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+.saved-view.is-mine > a { text-decoration: none; color: inherit; display: inline-flex; align-items: center; }
+.saved-view-remove {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: var(--secondary-text-color);
+  font-size: 16px;
+  line-height: 1;
+  /* 24px so the sweep's tap-target check passes and a thumb can hit it. */
+  min-width: 24px;
+  min-height: 24px;
+  border-radius: var(--border-radius-small);
+}
+.saved-view-remove:hover { background: var(--negative-color-selected); color: var(--negative-color); }
+.saved-view-remove:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+
 .toolbar {
   display: flex;
   align-items: center;
@@ -86,7 +140,8 @@
 }
 /* Following the saved-view tabs, which already draw a rule — two 1px lines a row
    apart read as a mistake rather than as structure. */
-.saved-views + .toolbar { border-top: 0; }
+.saved-views + .toolbar,
+.saved-views-row + .toolbar { border-top: 0; }
 .toolbar-field { display: flex; align-items: center; gap: var(--space-8); }
 .toolbar-label {
   font: var(--font-text2-normal);
@@ -393,6 +448,14 @@
 .bar-num { font: var(--font-text3-normal); color: var(--secondary-text-color); font-variant-numeric: tabular-nums; }
 
 /* ---- bulk edit (jobs table) ---------------------------------------------- */
+/* The status cell: the switch that changes it, beside the word for what it is. */
+.status-toggle { display: inline-flex; align-items: center; gap: var(--space-8); }
+
+/* The users bar carries a select and two buttons rather than three selects, and the
+   150px floor meant for dropdowns spaced the buttons out like a form. They size to
+   their words here; the select keeps the floor. */
+.bulk-bar.is-users .bulk-actions > button { min-width: 0; }
+
 .bulk-bar {
   display: flex;
   align-items: center;
@@ -473,7 +536,27 @@
 
 /* The drawer widens the way the create panel does — same widths, same transition, so
    "expand" means one thing in this app rather than two. */
-.drawer { transition: width var(--motion-productive-medium) var(--motion-timing-transition); }
+/* Only the expand toggle animates. A width that eased on every drag frame lagged a
+   handful of pixels behind the pointer, which reads as the panel resisting you. */
+.drawer, .create-panel { transition: none; }
+.drawer.is-expanded, .create-panel.is-expanded { transition: width var(--motion-productive-medium) var(--motion-timing-transition); }
+
+/* The drag edge: 8px, half over the panel's left border, so the hand catches it. */
+.drawer-grip {
+  position: absolute;
+  left: -4px;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 1;
+  /* Invisible until wanted — a permanent stripe down the edge is furniture nobody
+     asked for. The hover and focus states are what say "this is a control". */
+  background: transparent;
+  touch-action: none;
+}
+.drawer-grip:hover, .drawer-grip:focus-visible { background: var(--primary-color); outline: none; }
+.drawer-grip:focus-visible { box-shadow: 0 0 0 2px var(--primary-background-color); }
 /* Expanded: the whole MAIN AREA — everything except the rail and the header, which
    stay usable. "Full screen" meaning the full app hid the nav under the record, and
    the way back out of a full-screen job was gone with it. */
@@ -497,7 +580,9 @@
 .phase-card {
   background: var(--primary-background-color);
   border: 1px solid var(--layout-border-color);
-  border-top: 4px solid var(--primary-color);
+  /* The lifecycle ramp, same as the board's columns — one vocabulary for one set of
+     phases. Falls back to the brand colour if a card is ever rendered without one. */
+  border-top: 4px solid var(--col-accent, var(--primary-color));
   border-radius: var(--border-radius-medium);
   padding: var(--space-16);
 }
@@ -1118,6 +1203,29 @@ code { overflow-wrap: anywhere; }
 /* A field-row whose value side holds a value AND a control beside it — the stage with
    its move picker, the folder link with its input. */
 .field-inline { display: flex; align-items: center; gap: var(--space-8); }
+/* The gate a demo account meets (0049). Centred and alone: a gate that shows the app
+   behind it is an invitation to try the handle. */
+.gate {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-24);
+  background: var(--primary-background-hover-color);
+}
+.gate-card {
+  background: var(--primary-background-color);
+  border: 1px solid var(--layout-border-color);
+  border-top: 4px solid var(--primary-color);
+  border-radius: var(--border-radius-medium);
+  padding: var(--space-32, 32px);
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+.gate-actions { margin-top: var(--space-8); }
+
 /* The catch-all route's panel — an unknown URL says so instead of rendering nothing. */
 .not-found {
   display: flex;

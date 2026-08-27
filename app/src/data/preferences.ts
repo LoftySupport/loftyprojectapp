@@ -3,11 +3,16 @@
  * rendered as inert selects, which is the one thing this app otherwise refuses to
  * ship: a control that does nothing).
  *
- * Stored in localStorage, the same precedent as the theme and the collapsed rail.
- * DEVICE-LOCAL FOR NOW, and the Settings page says so: Amber's Q9 wants defaults that
- * roam with the profile — that is a preferences home on the profile (Phase C, a
- * column or small table), and this module is shaped so that swap changes the
- * read/write pair and nothing else.
+ * **They roam now** (0050, Q9's last layer). `user_preferences` holds one bag per
+ * person, so signing in on the site laptop finds the same app as the office one.
+ *
+ * localStorage stays, and is not a leftover: it is what answers before the profile has
+ * loaded — the landing route is decided on the very first render, and waiting on a
+ * round trip there would flash the dashboard at somebody whose default is Jobs. So the
+ * device's copy is the immediate answer and the profile's is the true one; `syncPrefs`
+ * pulls the profile's down into the device on sign-in, and every write goes to both.
+ * A device that has never synced still opens somewhere sensible, which is the whole
+ * point of keeping it.
  */
 
 export const LANDING_PAGES = ["Dashboard", "Projects", "Jobs", "Reports"] as const;
@@ -39,6 +44,25 @@ export function readPrefs(): Prefs {
   } catch {
     return DEFAULT_PREFS;
   }
+}
+
+/**
+ * Take what the profile holds and make it this device's answer too, so the next first
+ * render is already right. Called once when the signed-in profile arrives.
+ */
+export function adoptPrefs(bag: Record<string, unknown>): Prefs {
+  const next = {
+    landingPage: LANDING_PAGES.includes(bag.landingPage as LandingPage)
+      ? (bag.landingPage as LandingPage) : DEFAULT_PREFS.landingPage,
+    defaultJobsView: JOBS_VIEWS.includes(bag.defaultJobsView as JobsView)
+      ? (bag.defaultJobsView as JobsView) : DEFAULT_PREFS.defaultJobsView
+  };
+  try {
+    localStorage.setItem(KEY, JSON.stringify(next));
+  } catch {
+    // Storage refused — the profile's copy still governs this session.
+  }
+  return next;
 }
 
 export function writePrefs(patch: Partial<Prefs>): Prefs {

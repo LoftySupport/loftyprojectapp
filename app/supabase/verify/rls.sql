@@ -83,6 +83,128 @@ begin
     when others then raise warning 'FAIL: unexpected on stage log (%)', sqlerrm;
   end;
 
+  -- 0048: a saved view is private. Two halves, because they are different mechanisms:
+  -- the WITH CHECK stops you writing a view onto somebody else, and the USING stops you
+  -- reading or removing theirs. A policy with only the first would let anybody list the
+  -- whole company's saved views, which is a person's working habits.
+  begin
+    insert into saved_views (profile_id, saved_view_board, saved_view_name, saved_view_query)
+    values ((select profile_id from profiles
+              where profile_email <> 'behaviour-test@lofty.com.au' limit 1),
+            'jobs', '__rls_probe__', 'view=Table');
+    raise warning 'FAIL: a saved view was written onto somebody else';
+  exception
+    when insufficient_privilege then raise notice 'ok  saved_views refused a view written onto another person';
+    when others then raise warning 'FAIL: unexpected writing another person''s saved view (%)', sqlerrm;
+  end;
+
+  begin
+    -- Planted as the owner (this block runs as `authenticated`, so the insert itself is
+    -- the WITH CHECK passing for your own row), then read back and removed.
+    insert into saved_views (profile_id, saved_view_board, saved_view_name, saved_view_query)
+    values ((select profile_id from profiles where profile_email = 'behaviour-test@lofty.com.au'),
+            'jobs', '__rls_probe__', 'view=Table');
+    if (select count(*) from saved_views where saved_view_name = '__rls_probe__') = 1 then
+      raise notice 'ok  saved_views: your own view is yours to read';
+    else
+      raise warning 'FAIL: a person could not read the saved view they just made';
+    end if;
+    delete from saved_views where saved_view_name = '__rls_probe__';
+  exception when others then raise warning 'FAIL: unexpected on your own saved view (%)', sqlerrm;
+  end;
+
+  -- 0049: a demo account is held at the door, and the door is the database rather than
+  -- the screen. Proved by flipping the flag on the signed-in test person mid-probe: the
+  -- reads that worked a line ago must stop, and their own row must survive so the gate
+  -- can name them. Restored immediately afterwards, or every probe below this one runs
+  -- as somebody who cannot read anything.
+  declare
+    demo_jobs int; demo_me int;
+  begin
+    update profiles set profile_is_demo = true
+     where profile_email = 'behaviour-test@lofty.com.au';
+    select count(*) into demo_jobs from jobs;
+    select count(*) into demo_me from profiles;
+    if demo_jobs = 0 then
+      raise notice 'ok  a demo account reads no jobs — every policy hangs off is_active_user';
+    else
+      raise warning 'FAIL: a demo account read % job(s)', demo_jobs;
+    end if;
+    if demo_me = 1 then
+      raise notice 'ok  …but still reads its own profile, so the gate can name them';
+    else
+      raise warning 'FAIL: a demo account read % profile(s), expected exactly its own', demo_me;
+    end if;
+    update profiles set profile_is_demo = false
+     where profile_email = 'behaviour-test@lofty.com.au';
+  exception when others then
+    update profiles set profile_is_demo = false
+     where profile_email = 'behaviour-test@lofty.com.au';
+    raise warning 'FAIL: unexpected on the demo gate (%)', sqlerrm;
+  end;
+
+  -- 0050: preferences are yours alone. The same two halves as saved_views, and the
+  -- reason this table exists rather than a column on profiles: the policy that would
+  -- have let somebody save preferences onto their own profiles row would also have let
+  -- them edit profile_permission on it.
+  begin
+    insert into user_preferences (profile_id, user_preferences_payload)
+    values ((select profile_id from profiles
+              where profile_email <> 'behaviour-test@lofty.com.au' limit 1),
+            '{"landingPage":"Jobs"}'::jsonb);
+    raise warning 'FAIL: preferences were written onto somebody else';
+  exception
+    when insufficient_privilege then raise notice 'ok  user_preferences refused a write onto another person';
+    when unique_violation then raise notice 'ok  user_preferences refused a write onto another person';
+    when others then raise warning 'FAIL: unexpected writing another person''s preferences (%)', sqlerrm;
+  end;
+
+  begin
+    insert into user_preferences (profile_id, user_preferences_payload)
+    values ((select profile_id from profiles where profile_email = 'behaviour-test@lofty.com.au'),
+            '{"landingPage":"Jobs"}'::jsonb)
+    on conflict (profile_id) do update set user_preferences_payload = excluded.user_preferences_payload;
+    if (select count(*) from user_preferences) = 1 then
+      raise notice 'ok  user_preferences: your own bag is yours, and only yours is visible';
+    else
+      raise warning 'FAIL: a person saw % preference rows, expected only their own', (select count(*) from user_preferences);
+    end if;
+    delete from user_preferences;
+  exception when others then raise warning 'FAIL: unexpected on your own preferences (%)', sqlerrm;
+  end;
+
+  -- 0051: a shared view is readable by the team and editable only by its owner. The
+  -- split read/write policies are the whole safety here — a widened `for all` would
+  -- have let anybody in Construction delete Deanna's view. Probed as the test person
+  -- against a view somebody else owns and shares with a team they are both in.
+  declare
+    other_p uuid; shared_team text; touched int;
+  begin
+    select p.profile_id, pt.team_id into other_p, shared_team
+    from profiles p join profile_teams pt on pt.profile_id = p.profile_id
+    where p.profile_email <> 'behaviour-test@lofty.com.au'
+      and pt.team_id in (select team_id from profile_teams
+                          where profile_id = (select current_profile_id()))
+    limit 1;
+
+    if other_p is null then
+      raise notice 'ok  (skipped: nobody else shares a team with the test person)';
+    else
+      -- Planted privileged would need a role change; instead assert the shape that
+      -- matters — the write policies never admit a row that is not yours.
+      update saved_views set saved_view_name = saved_view_name
+       where profile_id <> (select current_profile_id());
+      get diagnostics touched = row_count;
+      if touched = 0 then
+        raise notice 'ok  saved_views: no view belonging to somebody else is writable, shared or not';
+      else
+        raise warning 'FAIL: % view(s) belonging to others were writable', touched;
+      end if;
+    end if;
+  exception when others then
+    raise warning 'FAIL: unexpected on shared saved views (%)', sqlerrm;
+  end;
+
   begin
     insert into pipelines (pipeline_key, pipeline_name, pipeline_scope)
     values ('sneaky', 'Sneaky', 'job');

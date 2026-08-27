@@ -20,7 +20,9 @@ import type {
   TeamId,
   Team,
   TemplateMilestone,
-  TemplatePhase
+  TemplatePhase,
+  SavedViewBoard,
+  UserSavedView
 } from "./types";
 
 /**
@@ -186,6 +188,35 @@ export interface Repository {
    */
   createTeam(name: string): Promise<Team[]>;
   listTemplatePhases(): Promise<TemplatePhase[]>;
+
+  // ---- saved views ------------------------------------------------------
+  /** The signed-in person's saved views for one board, oldest first. Owner-only by RLS. */
+  listSavedViews(board: SavedViewBoard): Promise<UserSavedView[]>;
+  /**
+   * Save the current board state under a name — the query string verbatim (0048).
+   * Insert, not upsert: a second view with the same name on the same board is refused
+   * by the unique constraint, and the refusal names the clash rather than silently
+   * overwriting a view the person meant to keep. The fresh list comes back as proof.
+   */
+  saveView(board: SavedViewBoard, name: string, query: string): Promise<UserSavedView[]>;
+  /** Remove one of your own saved views. RLS makes anyone else's unreachable. */
+  deleteSavedView(id: string): Promise<UserSavedView[]>;
+  /**
+   * Share one of your views with a team, or `null` to make it private again (0051).
+   * Only the owner may — the update policy never sees the shared clause, so a
+   * teammate's attempt matches no row rather than being refused halfway.
+   */
+  shareSavedView(id: string, team: TeamId | null): Promise<UserSavedView[]>;
+
+  // ---- preferences (0050) -----------------------------------------------
+  /**
+   * The signed-in person's preferences, roaming with the profile (Q9's last layer).
+   * Returns the raw bag; the caller validates it, the same way it validates what comes
+   * out of localStorage — an unrecognised key is inert rather than dangerous.
+   */
+  listMyPreferences(): Promise<Record<string, unknown>>;
+  /** Merge a patch into the bag and return what the database now holds. */
+  saveMyPreferences(patch: Record<string, unknown>): Promise<Record<string, unknown>>;
   /**
    * The SLA per lifecycle stage — expected days in stage and the at-risk lead (0047),
    * keyed by stage name. `null` clears a number; the fresh phase list comes back as
@@ -254,6 +285,12 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "updateTeam",
   "createTeam",
   "listTemplatePhases",
+  "listSavedViews",
+  "saveView",
+  "deleteSavedView",
+  "shareSavedView",
+  "listMyPreferences",
+  "saveMyPreferences",
   "updateStageSla",
   "listTemplateMilestones",
   "listPropertyDefs",
@@ -297,6 +334,12 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   listTeams: "teams",
   updateTeam: "teams",
   createTeam: "teams",
+  listSavedViews: "saved_views",
+  saveView: "saved_views",
+  deleteSavedView: "saved_views",
+  shareSavedView: "saved_views",
+  listMyPreferences: "user_preferences",
+  saveMyPreferences: "user_preferences",
   listTemplatePhases: "pipeline_stages",
   updateStageSla: "pipeline_stages",
   listTemplateMilestones: "pipeline_stage_tasks (not built)",

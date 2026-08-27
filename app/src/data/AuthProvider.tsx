@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import type { Session } from "@supabase/supabase-js";
 import { useRepository } from "./DataProvider";
 import { supabase } from "./supabaseRepository";
+import { adoptPrefs } from "./preferences";
 import type { Profile } from "./types";
 
 /**
@@ -126,6 +127,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         setProfile(p);
         setProfileState(p ? "linked" : "unlinked");
+        // Their preferences follow them here (0050): pull the profile's bag down into
+        // this device so the next first render already lands where they expect. Errors
+        // are swallowed on purpose — a preference that failed to sync must never be a
+        // reason somebody cannot sign in, and this device's copy still governs.
+        if (p) void repo.listMyPreferences().then(adoptPrefs).catch(() => {});
       })
       // A failed lookup is treated as unlinked, not as linked-with-no-data. Failing
       // closed is the only safe direction for the value the gate reads — but it is NOT a

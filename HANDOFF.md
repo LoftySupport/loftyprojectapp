@@ -208,6 +208,81 @@ A twelfth batch:
   and dictionary_overrides joined with key-column entries and purpose descriptions:
   248 properties, 42 tables. The uncovered-tables note is retired.
 
+**`0048` is applied to the live database** — `saved_views`, Q9's third and last layer:
+a person saves the board they are looking at under a name and gets it back anywhere
+they sign in. The row stores the **query string verbatim**, because the URL is already
+the app's serialisation of "what am I looking at" and a second schema for the same fact
+could only disagree with it. Private by RLS (owner-only, all four verbs). The three
+built-in tabs stay in code and render first; a person's own follow after a rule, with
+"Save this view…" at the end of the row — visible exactly when the current board is not
+already saved, which makes its presence the answer to "is this kept?".
+The RLS probe in `verify/rls.sql` was **watched failing**: with the policy swapped for
+a permissive `using (true)` against the live database (rolled back), it reported another
+person's view as readable and let one be written onto them.
+
+**`0051` is applied to the live database** — `saved_view_shared_with_team`, the column
+0048 promised ("a column, not a redesign"). Amber, 27 Aug: *"team views matter, plan for
+them."* Private stays the default; sharing is a deliberate act on one view.
+
+**The read and write policies are now separate, and that split is the whole safety.**
+Read: your own, plus anything shared with a team you are in. Write: your own, always. A
+widened `for all` would have let anybody in Construction delete Deanna's view. Watched
+live, rolled back: a teammate sees the shared view, cannot see the private one, cannot
+edit or delete the shared one, and the owner can still stop sharing.
+
+The unique `(profile, board, name)` deliberately did **not** widen: two people may both
+call a view "Site this week", which is two people using the same words rather than a
+collision. The tab row carries whose it is instead.
+
+**`0050` is applied to the live database** — `user_preferences`, Q9's last layer.
+Landing page and default jobs view now follow the person to any machine they sign in on.
+
+**Why a table and not a column on `profiles`, checked rather than assumed:**
+`authenticated` holds UPDATE on *every* profiles column, `profile_permission` included —
+what stops self-promotion is the RLS policy, which admits only admins. A preferences
+column there would have needed a second policy saying "…or it's my own row", and
+policies are OR'd: that one sentence would have handed everybody write access to their
+own permission level. The separate table needs no such policy and profiles is untouched.
+
+localStorage stays, and is not a leftover: the landing route is decided on the first
+render, and waiting on a round trip there would flash the wrong page at somebody whose
+default is Jobs. The device's copy answers immediately, the profile's is the true one,
+`adoptPrefs` pulls it down on sign-in, and every change writes to both. RLS probe
+watched failing against a permissive policy before passing (it saw 2 rows including
+somebody else's).
+
+**`0049` is applied to the live database** — `profile_is_demo`, the tick that holds an
+account at the door (Amber, 27 Aug). A demo account signs in, reaches a gate screen and
+reads nothing. Her reason, worth keeping because it explains why this is neither
+deactivation nor a permission level: *"I don't want them in the app unless I am there
+with them training them. That way they can't test and trial without me by logging in,
+but I don't have to deactivate them."*
+
+**It is enforced in one place, not on the screen.** Every read policy hangs off
+`is_active_user()`; that function now also requires `not profile_is_demo`, so every
+table refuses at once — including tables nobody has written yet. The one exception is
+deliberate: the `profiles` SELECT policy is widened so a demo account may read **its own
+row**, because the gate has to name them, and without it they would meet "your account is
+not set up" — the exact wording this project already lost an hour to.
+
+Watched live in a rolled-back transaction before any app code: the same account read
+6 projects · 60 jobs · 15 teams · 47 people, then **0 · 0 · 0 and exactly 1 profile**
+with the tick on, then 60 jobs again with it off. `verify/rls.sql` carries the standing
+probe (it flips the flag on the test person mid-run and restores it, including on error).
+
+**Amber's answers, second round (27 Aug)**, each binding:
+- **The house icons swap**: Projects wears the *pair* (a project holds many houses),
+  Jobs wears the *pin* (a job is one site). Shipped; the reasoning is at the icons.
+- **Preferences get their own table, not a column on `profiles`** — and the reason is
+  checked rather than assumed: `authenticated` holds UPDATE on *every* profiles column,
+  including `profile_permission`, with only the RLS policy holding the line. A
+  "…or it's your own row" policy for preferences would be OR'd with the admin one and
+  hand everybody write access to their own permission level. Draft at
+  `scratchpad/0049_preferences_draft.sql`; ships as its own PR once #44 merges.
+- **Team-shared saved views are wanted** — not now, but designed for: a `shared_with_team`
+  column on `saved_views` plus a widened policy, planned in the same draft file. Private
+  stays the default; sharing is a deliberate act.
+
 **Amber's answers to the open questions (27 Aug)**, each now binding:
 - **One colour family, not two** — the board's ramp is Lofty's teal deepening across
   all seven lifecycle positions (`theme/accents.ts` re-cut, contrast re-verified).

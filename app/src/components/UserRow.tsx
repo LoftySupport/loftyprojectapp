@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Text, TextField } from "@vibe/core";
+import { Button, Text, TextField, Toggle } from "@vibe/core";
 import { MultiSelect, Select, toOptions } from "./Select";
 import { useRepository } from "../data/DataProvider";
 import { useTeamLabels, useTeams } from "../data/useLookups";
@@ -44,7 +44,10 @@ export function UserRow({
   onActivity,
   onFullEdit,
   onDeactivate,
-  canEdit
+  onToggleDemo,
+  canEdit,
+  selected,
+  onToggleSelect
 }: {
   profile: Profile;
   editing: boolean;
@@ -53,30 +56,41 @@ export function UserRow({
   onDone: (saved: boolean) => void;
   onActivity: () => void;
   onFullEdit: () => void;
+  /** Asked for a change of status. Deactivating confirms first; restoring is immediate. */
   onDeactivate: () => void;
+  onToggleDemo?: () => void;
   canEdit: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   return editing
-    ? <EditingRow profile={profile} onDone={onDone} onFullEdit={onFullEdit} />
+    ? <EditingRow profile={profile} onDone={onDone} onFullEdit={onFullEdit} selectable={Boolean(onToggleSelect)} />
     : (
       <ReadingRow
         profile={profile}
         onEdit={onEdit}
         onActivity={onActivity}
         onDeactivate={onDeactivate}
+        onToggleDemo={onToggleDemo}
         canEdit={canEdit}
+        selected={selected}
+        onToggleSelect={onToggleSelect}
       />
     );
 }
 
 function ReadingRow({
-  profile: p, onEdit, onActivity, onDeactivate, canEdit
+  profile: p, onEdit, onActivity, onDeactivate, onToggleDemo, canEdit, selected, onToggleSelect
 }: {
   profile: Profile;
   onEdit: () => void;
   onActivity: () => void;
   onDeactivate: () => void;
+  /** Ticked = held at the gate (0049). Same asymmetry: restricting confirms, releasing does not. */
+  onToggleDemo?: () => void;
   canEdit: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   const { labels } = useTeamLabels();
   const st = profileStatus(p);
@@ -86,6 +100,16 @@ function ReadingRow({
 
   return (
     <tr>
+      {onToggleSelect && (
+        <td>
+          <input
+            type="checkbox"
+            checked={Boolean(selected)}
+            onChange={onToggleSelect}
+            aria-label={`Select ${p.fullName}`}
+          />
+        </td>
+      )}
       <td>
         {/* The name is the way in to their history, which is the thing somebody is
             usually after when they look a person up. */}
@@ -99,16 +123,53 @@ function ReadingRow({
           a lookup that has not landed is blank rather than a column of foreign keys. */}
       <td>{!p.teams.length ? "—" : teams ? teams.join(", ") : ""}</td>
       <td>{p.permission}</td>
-      <td><span className={`status-pill is-${st}`}>{st}</span></td>
+      {/* The status IS the control now (Amber, 27 Aug). A pill beside a button that
+          said "Deactivate" made you read two things to learn one fact; the toggle
+          shows the state and changes it in the same place.
+
+          Deactivating still confirms — it is the act that takes somebody's access
+          away, and a mis-click on a row of forty-five people is exactly what the
+          dialog is for. Restoring applies straight away: giving access back is
+          undoable by the same switch. */}
+      <td>
+        <span className="status-toggle">
+          {/* Blank override text: Vibe writes "Off"/"On" either side by default, and
+              the pill next to it already names the state — three words for one fact. */}
+          <Toggle
+            isSelected={p.active}
+            onChange={onDeactivate}
+            disabled={!canEdit}
+            size="small"
+            onOverrideText=""
+            offOverrideText=""
+            aria-label={p.active ? `Deactivate ${p.fullName}` : `Restore ${p.fullName}`}
+          />
+          <span className={`status-pill is-${st}`}>{st}</span>
+        </span>
+      </td>
+      {/* Demo: a separate fact from active, because it answers a different question —
+          not "is this person still here" but "may they walk the app on their own yet".
+          Ticked reads as held, not broken. */}
+      <td>
+        <span className="status-toggle">
+          <Toggle
+            isSelected={p.isDemo}
+            onChange={() => onToggleDemo?.()}
+            disabled={!canEdit || !onToggleDemo}
+            size="small"
+            onOverrideText=""
+            offOverrideText=""
+            aria-label={p.isDemo ? `Let ${p.fullName} into the app` : `Hold ${p.fullName} at the gate`}
+          />
+          {p.isDemo && <span className="status-pill is-pending">held</span>}
+        </span>
+      </td>
       {/* "Never" and "not yet" are different facts: never signed in versus signed in
           before this column existed. Only the first can happen now. */}
       <td className="muted">{p.lastLoginAt ? new Date(p.lastLoginAt).toLocaleDateString() : "Never"}</td>
       <td>
         <span className="row-actions">
           <Button size="xs" kind="tertiary" onClick={onEdit} disabled={!canEdit}>Edit</Button>
-          <Button size="xs" kind="tertiary" onClick={onDeactivate} disabled={!canEdit}>
-            {p.active ? "Deactivate" : "Restore"}
-          </Button>
         </span>
       </td>
     </tr>
@@ -116,11 +177,13 @@ function ReadingRow({
 }
 
 function EditingRow({
-  profile: p, onDone, onFullEdit
+  profile: p, onDone, onFullEdit, selectable
 }: {
   profile: Profile;
   onDone: (saved: boolean) => void;
   onFullEdit: () => void;
+  /** A blank leading cell, so an editing row keeps the columns aligned with its neighbours. */
+  selectable?: boolean;
 }) {
   const repo = useRepository();
   const { teams } = useTeams();
@@ -171,6 +234,7 @@ function EditingRow({
   return (
     <>
       <tr className="is-editing">
+        {selectable && <td />}
         <td>
           <div className="cell-pair">
             <TextField value={firstName} onChange={setFirstName} size="small"
@@ -206,8 +270,10 @@ function EditingRow({
             onChange={v => setPermission(v as PermissionLevel)}
           />
         </td>
-        {/* Derived, not set. Left as it reads so the row keeps its columns. */}
+        {/* Derived, not set. Left as it reads so the row keeps its columns — the
+            status toggle lives on the reading row, not mid-edit. */}
         <td><span className={`status-pill is-${st}`}>{st}</span></td>
+        <td />
         <td className="muted">{p.lastLoginAt ? new Date(p.lastLoginAt).toLocaleDateString() : "Never"}</td>
         <td>
           <span className="row-actions">
@@ -221,7 +287,7 @@ function EditingRow({
         </td>
       </tr>
       <tr className="is-editing">
-        <td colSpan={8}>
+        <td colSpan={selectable ? 10 : 9}>
           {error && <div className="create-problem row-editing-problem" role="alert">{error}</div>}
           <Text type="text3" color="secondary" ellipsis={false}>
             Editing the columns you can see.{" "}

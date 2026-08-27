@@ -483,6 +483,14 @@ export interface Profile {
    * Teams permission levels when that sync lands.
    */
   permission: PermissionLevel;
+  /**
+   * Held at the door (0049, Amber 27 Aug). A demo account signs in, reaches the gate
+   * screen and reads nothing — enforced by `is_active_user()`, not by this flag, which
+   * only decides what the app shows. Deliberately neither deactivation ("this person is
+   * gone" — wrong for somebody starting Monday) nor a permission level (that is how far
+   * you reach once you are in): a real, ready account nobody can wander alone.
+   */
+  isDemo: boolean;
   // + fields
   active: boolean;
   createdAt: IsoDateTime;
@@ -620,6 +628,36 @@ export const teamSlug = (name: string): string =>
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
 
+// ------------------------------------------------------------- saved views
+
+/** The boards that have saved views — the CHECK on `saved_views` names the same two. */
+export const SAVED_VIEW_BOARDS = ["jobs", "projects"] as const;
+export type SavedViewBoard = (typeof SAVED_VIEW_BOARDS)[number];
+
+/**
+ * A user-saved board state (0048, Amber's Q9 third layer): a name over the board's
+ * query string, stored verbatim. The URL is already the app's serialisation of "what
+ * am I looking at", so the row keeps that string and nothing else — unknown keys fall
+ * back harmlessly on read, exactly as a pasted link would.
+ */
+export interface UserSavedView {
+  id: Uuid;
+  board: SavedViewBoard;
+  name: string;
+  /** The query string without the leading '?'. */
+  query: string;
+  /**
+   * The team it is shared with, or null for private — the default (0051). A shared
+   * view is readable by everyone in that team and editable only by whoever made it,
+   * which is why the read and write policies are separate.
+   */
+  sharedWithTeam: TeamId | null;
+  /** Whose it is, resolved — null for your own, since you know. */
+  ownerName: string | null;
+  /** True when it is yours: the only case where the edit controls appear. */
+  isMine: boolean;
+}
+
 export const PROFILE_STATUSES = ["active", "pending", "inactive"] as const;
 export type ProfileStatus = (typeof PROFILE_STATUSES)[number];
 
@@ -635,6 +673,8 @@ export interface NewProfile {
   jobTitle: string | null;
   permission: PermissionLevel;
   teams: TeamId[];
+  /** Created straight into demo, for somebody who starts with a walkthrough. */
+  isDemo?: boolean;
 }
 
 /** One line of history. Two sources, one shape, because a reader wants one list. */

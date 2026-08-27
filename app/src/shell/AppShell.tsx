@@ -22,14 +22,16 @@ import "./AppShell.css";
  *
  * The icon is not decoration here — collapsed, it is the only thing left, so it has to
  * carry the meaning on its own. The three record destinations wear Lofty's own house
- * icons (Amber, 27 Aug): a project is a site on the map, the jobs are the houses on
- * it, the reports are how the houses are doing. SettingsKnobs stays for Setup — the
- * app's own configuration as opposed to the person-shaped Admin beside it.
+ * icons (Amber, 27 Aug): **a project holds many houses, a job is one site**, so
+ * Projects gets the pair and Jobs gets the pin — her call, and the right way round:
+ * the pin marks a single place, which is exactly what a job is. Reports is the house
+ * doing well. SettingsKnobs stays for Setup — the app's own configuration as opposed
+ * to the person-shaped Admin beside it.
  */
 const PAGES = [
   { to: "/", label: "Dashboard", icon: Home, end: true },
-  { to: "/projects", label: "Projects", icon: HousePin },
-  { to: "/jobs", label: "Jobs", icon: Houses },
+  { to: "/projects", label: "Projects", icon: Houses },
+  { to: "/jobs", label: "Jobs", icon: HousePin },
   { to: "/reports", label: "Reports", icon: HouseChart },
   { to: "/templates", label: "Templates", icon: Doc },
   { to: "/admin", label: "Admin", icon: Person },

@@ -173,6 +173,27 @@ export function createStubRepository(): Repository {
     async createTeam(): Promise<never> {
       throw new Error("Adding a team needs Supabase.");
     },
+
+    // Saved views are per-person rows behind RLS; without a backend there is no person
+    // and no rows. Empty on read (the three built-in tabs still render), refuse on write.
+    async listSavedViews(): Promise<never[]> { return []; },
+    async saveView(): Promise<never> {
+      throw new Error("Saving a view needs Supabase.");
+    },
+    async deleteSavedView(): Promise<never> {
+      throw new Error("Removing a saved view needs Supabase.");
+    },
+    async shareSavedView(): Promise<never> {
+      throw new Error("Sharing a view needs Supabase.");
+    },
+
+    // Preferences roam with the profile, and without a backend there is no profile.
+    // Empty on read — the app falls back to this device's localStorage, which is the
+    // honest answer for a run with nothing behind it.
+    async listMyPreferences(): Promise<Record<string, unknown>> { return {}; },
+    async saveMyPreferences(): Promise<never> {
+      throw new Error("Saving preferences needs Supabase.");
+    },
     /**
      * The stages, with nothing attached to them.
      *

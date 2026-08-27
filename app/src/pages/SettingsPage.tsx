@@ -3,9 +3,10 @@ import { ButtonGroup, Heading, Text, Toggle } from "@vibe/core";
 import { useAuth } from "../data/AuthProvider";
 import {
   JOBS_VIEWS, LANDING_PAGES, readNotifMatrix, readPrefs, writeNotifChoice, writePrefs,
-  type JobsView, type LandingPage, type NotifChannel
+  type JobsView, type LandingPage, type NotifChannel, type Prefs
 } from "../data/preferences";
 import { useTeamLabels } from "../data/useLookups";
+import { useRepository } from "../data/DataProvider";
 import { SYSTEM_THEMES, type SystemTheme } from "../theme/loftyTheme";
 import { Select, toOptions } from "../components/Select";
 import { Token } from "../components/Token";
@@ -46,6 +47,14 @@ export function SettingsPage({
 }) {
   const { profile } = useAuth();
   const [prefs, setPrefs] = useState(readPrefs);
+  // Written to both: the device answers the next first render, the profile carries it
+  // to the next machine. The profile write is fire-and-forget on purpose — a failed
+  // sync must not stop the choice applying here, and the next save retries it.
+  const repo = useRepository();
+  const savePref = (patch: Partial<Prefs>) => {
+    setPrefs(writePrefs(patch));
+    void repo.saveMyPreferences(patch as Record<string, unknown>).catch(() => {});
+  };
   // The matrix's saved choices — overrides on the quiet defaults below (G40).
   const [notifs, setNotifs] = useState(readNotifMatrix);
   // Names, not the slugs `profiles.teams` stores — see useTeamLabels. `resolved` is
@@ -97,16 +106,16 @@ export function SettingsPage({
           <div className="panel-head">
             <Text type="text2" weight="bold">Where you land</Text>
           </div>
-          {/* Real since G39 — these rendered as inert selects, the one thing this app
-              otherwise refuses to ship. Saved on this device (the theme's precedent);
-              the hint owns up to that, because Amber's Q9 wants them roaming with the
-              profile, which is a Phase C preferences home. */}
-          <Row label="Landing page" hint="the page you open on — saved on this device; roaming comes with profile preferences">
+          {/* Real since G39, and roaming since 0050 — saved against the profile, so the
+              site laptop opens the same app as the office one. This device keeps a copy
+              too, because the landing route is decided on the first render and waiting
+              on a round trip there would flash the wrong page at somebody. */}
+          <Row label="Landing page" hint="the page you open on — follows you to any machine you sign in on">
             <Select
               aria-label="Landing page"
               options={toOptions([...LANDING_PAGES])}
               value={prefs.landingPage}
-              onChange={v => setPrefs(writePrefs({ landingPage: v as LandingPage }))}
+              onChange={v => savePref({ landingPage: v as LandingPage })}
             />
           </Row>
           <Row label="Default jobs view" hint="what the Jobs page opens as when the link doesn't say">
@@ -114,7 +123,7 @@ export function SettingsPage({
               aria-label="Default jobs view"
               options={toOptions([...JOBS_VIEWS])}
               value={prefs.defaultJobsView}
-              onChange={v => setPrefs(writePrefs({ defaultJobsView: v as JobsView }))}
+              onChange={v => savePref({ defaultJobsView: v as JobsView })}
             />
           </Row>
           <Row label="Theme" hint="Vibe ships light, dark and black">

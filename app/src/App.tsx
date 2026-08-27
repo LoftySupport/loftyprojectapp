@@ -5,6 +5,7 @@ import { loftyTheme, type SystemTheme } from "./theme/loftyTheme";
 import { AuthProvider, useAuth } from "./data/AuthProvider";
 import { LegalPage } from "./pages/LegalPage";
 import { NotSetUpPage } from "./pages/NotSetUpPage";
+import { DemoGatePage } from "./pages/DemoGatePage";
 import { SignInPage } from "./pages/SignInPage";
 import { DataProvider } from "./data/DataProvider";
 import { PermissionProvider } from "./data/PermissionProvider";
@@ -43,7 +44,7 @@ const THEME_KEY = "lofty-theme";
  * is worse than one that stops.
  */
 function RequireAuth() {
-  const { status, profileState } = useAuth();
+  const { status, profileState, profile } = useAuth();
   const location = useLocation();
 
   if (status === "loading") {
@@ -70,6 +71,11 @@ function RequireAuth() {
     );
   }
   if (profileState === "unlinked") return <NotSetUpPage />;
+
+  // Held at the door (0049). The database has already stopped them — every read hangs
+  // off is_active_user(), which a demo account fails — so this is the screen that says
+  // so rather than letting them meet an app full of empty tables and read it as broken.
+  if (profile?.isDemo) return <DemoGatePage />;
 
   return <Outlet />;
 }

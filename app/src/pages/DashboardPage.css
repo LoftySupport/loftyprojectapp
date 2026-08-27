@@ -40,11 +40,16 @@
 
 .pd-col { display: flex; flex-direction: column; gap: var(--space-16); min-width: 0; }
 
-/* Middle column lays its cards out as a wrapping grid, so they keep a sensible
-   width instead of stretching to whatever the column happens to be. */
+/* Middle column lays its cards out as a wrapping grid: two across when there is room,
+   one when there is not.
+
+   The max was 300px, which capped the card below the width of its own column — on a
+   1440px screen the cards sat in a 300px stripe with 230px of dead space beside them,
+   and "Lot 1, 28 Corner Street, Wandi WA 6167" broke across three lines inside a card
+   that had nowhere to grow. `1fr` lets them take the column they are already in. */
 .pd-col.pd-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 300px));
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: var(--space-16);
   align-content: start;
 }

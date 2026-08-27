@@ -7,6 +7,7 @@ import type { TeamId } from "../data/types";
 import { StatusPill } from "./RecordCards";
 import { PropertySlots } from "./PropertySlots";
 import { ExpandButton, usePanelExpand } from "./PanelExpand";
+import { useResizablePanel } from "./useResizablePanel";
 import { JOB_MOVE_NOTE, MoveStageControl } from "./MoveStageDialog";
 import { CommentsPanel } from "./CommentsPanel";
 import { useQuery, useRepository } from "../data/DataProvider";
@@ -42,6 +43,9 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
   // control only on the create side. `open` is always true here: this component is
   // mounted only while the drawer is showing.
   const { expanded, canExpand, toggle } = usePanelExpand(true);
+  // Drag the left edge to widen (Amber, 27 Aug). Disabled while expanded — the panel is
+  // already the whole main area there, and a handle would fight the toggle.
+  const { width, handleProps } = useResizablePanel(!expanded);
   const { openAsk } = useAskDock();
   const { toast } = useToasts();
 
@@ -151,7 +155,12 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
         aria-label={`Job ${job.jobNumber}`}
         tabIndex={-1}
         ref={panel}
+        style={expanded ? undefined : { width: `min(${width}px, calc(100vw - var(--shell-rail-w, 0px)))` }}
       >
+        {/* The grab edge. Its own element rather than a border, because a 1px border is
+            not something a hand can catch — this is 8px wide and sits half over the
+            edge, which is the shape every split pane has settled on. */}
+        {!expanded && <div className="drawer-grip" {...handleProps} />}
         <header className="drawer-head">
           <div>
             {/* Jobs › project › job, not Board › stage › job.

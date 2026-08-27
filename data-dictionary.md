@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-248 properties across 42 tables.
+257 properties across 44 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 199 | In the migration and the types |
+| Created | 208 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -356,6 +356,7 @@ A person, existing before they ever sign in — that is what makes a pre-created
 | `profiles.profile_created_at` | Created on | When the profile row was created. | `timestamptz` | — | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `profiles.profile_updated_at` | Updated on | When the profile row last changed. Worth having when a permission or team change is disputed. | `timestamptz` | — | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `profiles.teams` | Teams (merged) | Merged back into profile_teams rows, reversing 0022. The test 0022 applied was "does the membership carry attributes of its own?" — is_primary was constant, so the array won. The same test now gives the opposite answer, because whether somebody MANAGES a team is an attribute of the membership, and a person can be a member of four teams while managing three. Two parallel arrays could disagree — someone managing a team they are not in — and a table cannot express that. | `enum` | — | Dropped. Was: team[], not null, GIN indexed, normalised by trigger. | Superseded by profile_teams. The 45 memberships were carried across row for row and checked before and after. | Merged | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `profiles.profile_is_demo` | Held at the gate | A demo account: signs in, reaches the gate screen, reads nothing (0049). Neither deactivation (which says the person is gone — wrong for somebody starting Monday) nor a permission level (which is how far you reach once you are in): a real, ready account nobody can wander alone, so somebody can be walked through the app without being able to trial it unattended. | `boolean` | — | Not null, default false. | Enforced by is_active_user() returning false for a demo account, so every policy hanging off it refuses at once — including tables not yet built. The profiles SELECT policy is widened so they may still read their OWN row: the gate has to know whose it is. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `project_address_search`
 
@@ -436,6 +437,19 @@ One row per property per record, sparse by design — an unset field has no row 
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `property_values.value` | Field value | One row per (property, record). Sparse by design — an unset field has no row at all. | `jsonb` | — | Shape enforced against property_defs.format. | Composite primary key (property_def_id, subject_type, subject_id). subject_type CHECK in ('project','job'); the scope check on property_defs is what stops a project field being set on a job. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
+
+## `saved_views`
+
+A person's named board states (Amber's Q9, third layer) — the query string of a board, saved verbatim under a name, private to its owner by RLS. The three built-in tabs stay code; these render after them. Storing the URL rather than a parsed shape keeps one serialisation of "what am I looking at" instead of two that can disagree.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `saved_views.saved_view_id` | Saved view | One board state a person kept under a name — Amber's Q9, third layer. The three built-in tabs (All jobs, Live, Closed) stay code; these render after them, per person. | `uuid` | — | Primary key, default gen_random_uuid(). | Private by RLS: the owner-only policy compares profile_id to current_profile_id(), so nobody sees anybody else's. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `saved_views.profile_id` | Whose view | The person the view belongs to. Cascades on delete: a person's saved views are theirs and go with them. | `uuid` | — | Not null. FK → profiles(profile_id) ON DELETE CASCADE. | Also the column the RLS policy filters on, and the leading column of the unique index that serves it. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `saved_views.saved_view_board` | Board | Which board the view belongs to — jobs or projects, the URL's first path segment, the same key the session-level view memory uses. | `text` | — | Not null. CHECK: jobs \| projects. | CHECKed rather than an FK: these are two routes in the app, not rows in a table. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `saved_views.saved_view_name` | Name | What the person calls it — "My site work". Unique per person per board, so choosing one is never a coin-toss between two of the same name. | `text` | — | Not null. CHECK: not blank after trimming. UNIQUE (profile_id, board, name). | The duplicate is refused rather than overwritten: overwriting a view somebody meant to keep is worse than a message naming the clash. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `saved_views.saved_view_shared_with_team` | Shared with | The team this view is handed to, or null for private — the default (0051, Amber: "team views matter"). A shared view is readable by everyone in that team and editable only by whoever made it. | `text` | — | Nullable. FK → teams(team_id). | The read and write policies are separate for exactly this: a widened for-all policy would have let anybody in the team delete the owner's view. Two people may still both call a view "Site this week" — the tab row carries whose it is rather than the constraint forbidding it. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `saved_views.saved_view_query` | The view itself | The board's query string without the leading ?, stored verbatim — view mode, grouping, filters, saved-view slice, exactly as the address bar holds them. | `text` | — | Not null. | The URL is already the app's serialisation of "what am I looking at"; a second schema for the same fact could only disagree with it. Unknown keys fall back harmlessly on read, exactly as a pasted link does. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `stages`
 
@@ -523,6 +537,15 @@ How long each phase of a process template should take — what a Gantt measures 
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `template_phases.expected_days` | Expected days | How long a phase should take. What the Gantt measures actual time in stage against. | `integer` | — | Nullable. | Keyed by template plus the stage enum; the owning team is a team enum value. Neither is an FK. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
+
+## `user_preferences`
+
+One row per person: how they like the app set up — where they land, what Jobs opens as — roaming with the profile instead of living in one browser. A table rather than a column on profiles for a security reason, not a tidiness one: everyone holds UPDATE on every profiles column, and the policy that would let somebody save preferences there would also let them edit their own permission level.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `user_preferences.profile_id` | Whose preferences | The person these belong to — and the key, so there is exactly one row each and no way to end up with two disagreeing about where somebody lands. | `uuid` | — | Primary key. FK → profiles(profile_id) ON DELETE CASCADE. | Owner-only by RLS. Deliberately its own table rather than a column on profiles: authenticated holds UPDATE on every profiles column including profile_permission, so a self-row policy there would also open the permission ladder. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `user_preferences.user_preferences_payload` | Preferences | The bag: landing page, default jobs view, and whatever joins them. Roams with the profile (Amber's Q9), so the site laptop opens the same app as the office one. | `jsonb` | — | Not null, default {}. CHECK: must be a JSON object. | One bag rather than a column per preference — preferences are open-ended and a column each means a migration each. The app validates on read and falls back to the default for anything it does not recognise, so an unknown key is inert. localStorage keeps a copy for the first render, before the profile has loaded. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `variation_reopened_tasks`
 

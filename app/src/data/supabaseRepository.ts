@@ -24,7 +24,9 @@ import type {
   Team,
   TeamId,
   TemplateMilestone,
-  TemplatePhase
+  TemplatePhase,
+  SavedViewBoard,
+  UserSavedView
 } from "./types";
 
 /**
@@ -61,6 +63,8 @@ const WIRED: RepositoryMethod[] = [
   "listComments", "addComment", "updateProject", "moveProjectStage",
   "setProjectCurrentAddress", "listAddressHistory",
   "listStages", "listTeams", "updateTeam", "createTeam", "listTemplatePhases", "updateStageSla",
+  "listSavedViews", "saveView", "deleteSavedView", "shareSavedView",
+  "listMyPreferences", "saveMyPreferences",
   "listPropertyDefs", "createPropertyDef", "updatePropertyDef", "deletePropertyDef",
   "listDictionaryOverrides", "saveDictionaryOverride"
 ];
@@ -81,7 +85,7 @@ const WIRED: RepositoryMethod[] = [
  * future embed of one needs the same treatment.
  */
 const PROFILE_COLUMNS =
-  "profile_id, profile_auth_user_id, profile_first_name, profile_last_name, profile_full_name, profile_email, profile_login_email, profile_job_title, profile_last_login_at, profile_permission, profile_is_active, profile_created_at, profile_created_by, profile_updated_at, profile_updated_by, profile_teams!profile_teams_profile_id_fkey(team_id, profile_team_role)";
+  "profile_id, profile_auth_user_id, profile_first_name, profile_last_name, profile_full_name, profile_email, profile_login_email, profile_job_title, profile_last_login_at, profile_permission, profile_is_active, profile_is_demo, profile_created_at, profile_created_by, profile_updated_at, profile_updated_by, profile_teams!profile_teams_profile_id_fkey(team_id, profile_team_role)";
 
 /**
  * Named explicitly rather than `select("*")`, and each one a single string literal.
@@ -231,6 +235,7 @@ interface ProfileRow {
   profile_last_login_at: string | null;
   profile_permission: Profile["permission"];
   profile_is_active: boolean;
+  profile_is_demo: boolean;
   /**
    * An embedded join again, not a column — membership went back to being a table when
    * it had to carry whether somebody manages the team. PostgREST returns [] rather than
@@ -310,6 +315,7 @@ const toProfile = (r: ProfileRow): Profile => ({
   lastLoginAt: r.profile_last_login_at,
   permission: r.profile_permission,
   active: r.profile_is_active,
+  isDemo: r.profile_is_demo,
   createdAt: r.profile_created_at,
   createdBy: r.profile_created_by,
   updatedAt: r.profile_updated_at,
@@ -538,7 +544,8 @@ export function createSupabaseRepository(): Repository {
           profile_email: input.email,
           profile_login_email: input.loginEmail,
           profile_job_title: input.jobTitle,
-          profile_permission: input.permission
+          profile_permission: input.permission,
+          profile_is_demo: input.isDemo ?? false
         })
         .select("profile_id")
         .single();
@@ -559,6 +566,9 @@ export function createSupabaseRepository(): Repository {
       if (patch.loginEmail !== undefined) row.profile_login_email = patch.loginEmail;
       if (patch.jobTitle !== undefined) row.profile_job_title = patch.jobTitle;
       if (patch.permission !== undefined) row.profile_permission = patch.permission;
+      // 0049. Ticking this is what holds the account at the door; the database refuses
+      // its reads from that moment, so the screen and the boundary agree.
+      if (patch.isDemo !== undefined) row.profile_is_demo = patch.isDemo;
 
       if (Object.keys(row).length) {
         const { error } = await client.from("profiles").update(row).eq("profile_id", id);
@@ -1261,6 +1271,120 @@ export function createSupabaseRepository(): Repository {
         throw error;
       }
       return await repo.listTeams();
+    },
+
+    // ---- saved views (0048) ----------------------------------------------
+    // No profile_id is ever sent from here: the policy compares the row's profile_id
+    // to current_profile_id(), and the column's default is not set — so the insert
+    // below names it from the signed-in profile the repository already holds. Reads
+    // need no owner filter either; RLS has already narrowed them to yours.
+
+    async listSavedViews(board: SavedViewBoard): Promise<UserSavedView[]> {
+      const { data, error } = await client
+        .from("saved_views")
+        .select(
+          "saved_view_id, saved_view_board, saved_view_name, saved_view_query, saved_view_shared_with_team, profile_id, profiles!saved_views_profile_id_fkey(profile_first_name)"
+        )
+        .eq("saved_view_board", board)
+        .order("saved_view_created_at", { ascending: true });
+      if (error) throw error;
+      const me = await repo.currentProfile();
+      return (data ?? []).map(r => {
+        const mine = r.profile_id === me?.id;
+        const owner = (r as unknown as { profiles?: { profile_first_name?: string } }).profiles;
+        return {
+          id: r.saved_view_id,
+          board: r.saved_view_board as SavedViewBoard,
+          name: r.saved_view_name,
+          query: r.saved_view_query,
+          sharedWithTeam: r.saved_view_shared_with_team ?? null,
+          // Null for your own: you know whose it is, and the name is shorter without it.
+          ownerName: mine ? null : owner?.profile_first_name ?? null,
+          isMine: mine
+        };
+      });
+    },
+
+    async saveView(board: SavedViewBoard, name: string, query: string): Promise<UserSavedView[]> {
+      const label = name.trim();
+      if (!label) throw new Error("A saved view needs a name.");
+      const me = await repo.currentProfile();
+      if (!me) throw new Error("Saving a view needs you to be signed in.");
+
+      const { error } = await client.from("saved_views").insert({
+        profile_id: me.id,
+        saved_view_board: board,
+        saved_view_name: label,
+        saved_view_query: query
+      });
+      if (error) {
+        // Insert, not upsert: overwriting a view somebody meant to keep is worse than
+        // refusing, and the refusal can name the clash.
+        if (error.code === "23505") {
+          throw new Error(`You already have a view called "${label}" on this board.`);
+        }
+        throw error;
+      }
+      return await repo.listSavedViews(board);
+    },
+
+    async deleteSavedView(id: string): Promise<UserSavedView[]> {
+      const { data, error } = await client
+        .from("saved_views")
+        .delete()
+        .eq("saved_view_id", id)
+        .select("saved_view_board");
+      if (error) throw error;
+      // RLS makes another person's view unreachable rather than forbidden, so a delete
+      // that matched nothing is the only signal that it was not yours (or is gone).
+      const board = data?.[0]?.saved_view_board as SavedViewBoard | undefined;
+      if (!board) throw new Error("That view was not removed — it no longer exists.");
+      return await repo.listSavedViews(board);
+    },
+
+    async shareSavedView(id: string, team: TeamId | null): Promise<UserSavedView[]> {
+      const { data, error } = await client
+        .from("saved_views")
+        .update({ saved_view_shared_with_team: team })
+        .eq("saved_view_id", id)
+        .select("saved_view_board");
+      if (error) throw error;
+      // The update policy is owner-only, so a teammate's attempt matches nothing at
+      // all rather than erroring — which is the only signal that it was not theirs.
+      const board = data?.[0]?.saved_view_board as SavedViewBoard | undefined;
+      if (!board) throw new Error("That view was not changed — it is not yours to share.");
+      return await repo.listSavedViews(board);
+    },
+
+    // ---- preferences (0050) ----------------------------------------------
+    // Owner-only by RLS, and the row is keyed by the person — so the read needs no
+    // filter and the write is an upsert on the primary key.
+
+    async listMyPreferences(): Promise<Record<string, unknown>> {
+      const { data, error } = await client
+        .from("user_preferences")
+        .select("user_preferences_payload")
+        .maybeSingle();
+      if (error) throw error;
+      const bag = data?.user_preferences_payload;
+      return bag && typeof bag === "object" && !Array.isArray(bag)
+        ? (bag as Record<string, unknown>)
+        : {};
+    },
+
+    async saveMyPreferences(patch: Record<string, unknown>): Promise<Record<string, unknown>> {
+      const me = await repo.currentProfile();
+      if (!me) throw new Error("Saving preferences needs you to be signed in.");
+      // Merged here rather than with a jsonb || in SQL, because the caller sends a
+      // patch and the row may not exist yet — one upsert covers both, and the merge
+      // is over a bag the app already validates on read.
+      const current = await repo.listMyPreferences();
+      const next = { ...current, ...patch };
+      const { error } = await client
+        .from("user_preferences")
+        .upsert({ profile_id: me.id, user_preferences_payload: next }, { onConflict: "profile_id" });
+      if (error) throw error;
+      return next;
     },
 
     /**

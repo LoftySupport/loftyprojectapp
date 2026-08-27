@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Button, Heading } from "@vibe/core";
 import { ExpandButton, usePanelExpand } from "./PanelExpand";
+import { useResizablePanel } from "./useResizablePanel";
 import "./ui.css";
 
 /**
@@ -46,6 +47,10 @@ export function CreatePanel({
   // The expand control and its rules live in PanelExpand, so the job drawer gets the
   // identical behaviour rather than a second implementation of it.
   const { expanded, canExpand, toggle } = usePanelExpand(open);
+  // The same grab edge the job drawer has, and deliberately the same remembered width:
+  // both are "the panel on the right", and having one at 700 and the other at 460 would
+  // read as two different things rather than one place the app puts side work.
+  const { width, handleProps } = useResizablePanel(!expanded);
 
   /**
    * Focus moves into the panel WHEN IT OPENS, and only then.
@@ -95,7 +100,9 @@ export function CreatePanel({
         aria-label={title}
         tabIndex={-1}
         ref={panel}
+        style={expanded ? undefined : { width: `min(${width}px, calc(100vw - var(--shell-rail-w, 0px)))` }}
       >
+        {!expanded && <div className="drawer-grip" {...handleProps} />}
         <header className="create-panel-head">
           <Heading type="h3" weight="medium">{title}</Heading>
           <div className="create-panel-actions">

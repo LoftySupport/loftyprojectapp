@@ -8,6 +8,7 @@ import {
   LINEAR_STAGES, PROJECT_TYPES, PROJECT_TYPE_LABELS, RECORD_STATUS_LABELS, RECORD_STATUSES
 } from "../data/types";
 import { useStages, useTeams, useTemplatePhases } from "../data/useLookups";
+import { useAuth } from "../data/AuthProvider";
 import { useBoardRecords, type BoardJob } from "../data/boardModel";
 import { jobMatchesQuery, matchedOnPreviousAddress, useSearch } from "../data/SearchProvider";
 import { useBoardParams } from "../data/useBoardParams";
@@ -15,6 +16,7 @@ import { savedViewBySlug, stagesInView } from "../data/savedViews";
 import { activeFilterCount, jobMatchesFilters, statusOptions } from "../data/filtering";
 import { LoadProblem, NoResults, NothingYet, PreviousAddressNote } from "../components/SearchNotices";
 import { SavedViewTabs } from "../components/SavedViewTabs";
+import { useSavedViews } from "../data/useSavedViews";
 import { JobCard, StatusPill } from "../components/RecordCards";
 import { JobDrawer } from "../components/JobDrawer";
 import { JOB_MOVE_NOTE, MoveStageDialog, isForwardMove } from "../components/MoveStageDialog";
@@ -64,6 +66,15 @@ export function JobsPage() {
     // The default view is the preference (G39); a link that names its own view still
     // wins, because the URL is the record of what somebody sent you.
   } = useBoardParams({ view: readPrefs().defaultJobsView, grouping: "Stage" });
+  // The teams this person is in — sharing a view offers their own team, and offers
+  // nothing at all to somebody in none (0051).
+  const { profile: me } = useAuth();
+  const myTeams = useMemo(
+    () => teams.filter(t => t.isActive && (me?.teams ?? []).includes(t.id)),
+    [teams, me]
+  );
+  // This person's own saved views (0048) — the fourth tab onwards.
+  const myViews = useSavedViews("jobs");
   /**
    * Drag a card between columns — but only when the columns ARE the lifecycle, and only
    * for people the database would let finish the move. Grouped by Team the columns are
@@ -274,6 +285,17 @@ export function JobsPage() {
         countFor={slug =>
           all.filter(j => stagesInView(savedViewBySlug(slug), stageNames).includes(j.stage)).length
         }
+        userViews={myViews.views}
+        currentQuery={search}
+        basePath="/jobs"
+        onOpenView={v => navigate(`/jobs${v.query ? `?${v.query}` : ""}`, { replace: true })}
+        onSaveView={name => myViews.save(name, search.replace(/^\?/, ""))}
+        onDeleteView={v => { void myViews.remove(v.id); }}
+        onShareView={(v, team) => { void myViews.share(v.id, team); }}
+        shareTeams={myTeams}
+        teamLabel={id => teams.find(t => t.id === id)?.name ?? id}
+        saveProblem={myViews.problem}
+        saveBusy={myViews.busy}
       />
 
       {/* No "+ New job" on this page. Lofty, 23 August: "a new job can only be created
