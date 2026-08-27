@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Text } from "@vibe/core";
 import type { BoardJob } from "../data/boardModel";
 import { STAGE_ACCENTS, accentStyle } from "../theme/accents";
@@ -62,6 +63,20 @@ export function JobsGantt({ groups, grouping, expectedDaysByStage, onOpen }: {
 
   const x = (t: number) => ((t - min) / DAY) * COL;
 
+  // Open with today in view. The window reaches up to 90 days back, and landing at its
+  // left edge showed rows that LOOKED empty — every current bar sat off-screen right,
+  // with the today line. Today sits at ~70% of the viewport so the recent past reads
+  // and the SLA window ahead still shows.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const line = el.querySelector<HTMLElement>(".gantt-today-line");
+    if (!line) return;
+    const lineX = line.getBoundingClientRect().left - el.getBoundingClientRect().left + el.scrollLeft;
+    el.scrollLeft = Math.max(0, lineX - el.clientWidth * 0.7);
+  }, [min, max]);
+
   const monthOf = (t: number) =>
     new Date(t).toLocaleDateString(undefined, { month: "short", year: "numeric" });
 
@@ -74,7 +89,7 @@ export function JobsGantt({ groups, grouping, expectedDaysByStage, onOpen }: {
           dependencies join when task wiring lands
         </Text>
       </div>
-      <div className="gantt-scroll">
+      <div className="gantt-scroll" ref={scrollRef}>
         <div className="gantt" style={{ width: `calc(var(--gantt-left) + ${days.length * COL}px)` }}>
           {/* day header */}
           <div className="gantt-row gantt-head">
