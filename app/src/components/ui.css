@@ -523,8 +523,8 @@
    "expand" means one thing in this app rather than two. */
 /* Only the expand toggle animates. A width that eased on every drag frame lagged a
    handful of pixels behind the pointer, which reads as the panel resisting you. */
-.drawer { transition: none; }
-.drawer.is-expanded { transition: width var(--motion-productive-medium) var(--motion-timing-transition); }
+.drawer, .create-panel { transition: none; }
+.drawer.is-expanded, .create-panel.is-expanded { transition: width var(--motion-productive-medium) var(--motion-timing-transition); }
 
 /* The drag edge: 8px, half over the panel's left border, so the hand catches it. */
 .drawer-grip {
