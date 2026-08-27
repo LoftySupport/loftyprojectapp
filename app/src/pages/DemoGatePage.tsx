@@ -9,32 +9,33 @@ import "../components/ui.css";
  * them training them. That way they can't test and trial without me, but I don't have
  * to deactivate them."
  *
- * So the copy has one job — say what is true, without implying fault. This person is
- * not locked out, not unrecognised, and nothing has gone wrong: they are early. The
- * difference matters, because the wording next door ("your account is not set up") is
- * the one that reads as a failure, and this project has already lost an hour to it.
+ * The copy is hers, near enough word for word: "they should not see anything past the
+ * account except a message to say you do not have permission to access this page.
+ * Please contact admin for approval." An earlier draft softened it into "you're all
+ * set up, it just opens when somebody walks you through it" — friendlier, and wrong
+ * in the way that costs time: it reads as a delay somebody else is handling, so the
+ * person waits instead of asking, and the one action that opens the door never happens.
  *
  * No menus, no greyed-out screens, no preview of what they cannot have. A gate that
  * shows the app behind it is an invitation to try the handle.
+ *
+ * Nobody is named here. The screen is the same sentence for everybody who meets it, and
+ * a greeting on a refusal reads as sarcasm. The profile is still read (the RLS exception
+ * in 0049 lets a held account see its own row) — `RequireAuth` needs it to know this
+ * person is held at all.
  */
 export function DemoGatePage() {
-  const { profile, signOut } = useAuth();
-  const first = profile?.firstName?.trim();
+  const { signOut } = useAuth();
 
   return (
     <div className="gate">
       <div className="gate-card">
         <Text type="text3" color="secondary" element="div" ellipsis={false}>Lofty</Text>
-        <Heading type="h2" weight="bold">
-          {first ? `You're all set up, ${first}` : "You're all set up"}
+        <Heading type="h2" weight="bold" ellipsis={false}>
+          You do not have permission to access this page
         </Heading>
         <Text type="text2" color="secondary" element="p" ellipsis={false}>
-          Your account is ready and waiting — it just opens when somebody walks you
-          through it. Nothing is wrong, and there is nothing for you to fix.
-        </Text>
-        <Text type="text2" color="secondary" element="p" ellipsis={false}>
-          Ask whoever set you up to turn demo mode off for your account when you are
-          ready to start, and everything below this screen opens up.
+          Please contact admin for approval.
         </Text>
         <div className="gate-actions">
           <Button kind="tertiary" onClick={() => void signOut()}>Sign out</Button>

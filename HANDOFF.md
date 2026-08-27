@@ -253,7 +253,12 @@ somebody else's).
 
 **`0049` is applied to the live database** — `profile_is_demo`, the tick that holds an
 account at the door (Amber, 27 Aug). A demo account signs in, reaches a gate screen and
-reads nothing. Her reason, worth keeping because it explains why this is neither
+reads nothing. The gate says one thing, in her words (27 Aug): **"You do not have
+permission to access this page. Please contact admin for approval."** An earlier draft
+softened it into "you're all set up — it just opens when somebody walks you through it",
+which reads as a delay somebody else is already handling, so the person waits instead of
+asking and the one action that opens the door never happens. Nobody is named on it: a
+greeting on a refusal reads as sarcasm. Her reason, worth keeping because it explains why this is neither
 deactivation nor a permission level: *"I don't want them in the app unless I am there
 with them training them. That way they can't test and trial without me by logging in,
 but I don't have to deactivate them."*
@@ -262,8 +267,9 @@ but I don't have to deactivate them."*
 `is_active_user()`; that function now also requires `not profile_is_demo`, so every
 table refuses at once — including tables nobody has written yet. The one exception is
 deliberate: the `profiles` SELECT policy is widened so a demo account may read **its own
-row**, because the gate has to name them, and without it they would meet "your account is
-not set up" — the exact wording this project already lost an hour to.
+row**, because `RequireAuth` has to read that row to know the account is held at all.
+Without it the app cannot tell "held at the gate" from "not set up" and everybody lands on
+"your account is not set up" — the exact wording this project already lost an hour to.
 
 Watched live in a rolled-back transaction before any app code: the same account read
 6 projects · 60 jobs · 15 teams · 47 people, then **0 · 0 · 0 and exactly 1 profile**
