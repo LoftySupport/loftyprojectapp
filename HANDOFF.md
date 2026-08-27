@@ -1075,8 +1075,26 @@ workaround for exactly this case, and it is a header:
 ```
 
 Claude Code expands `${VAR}` inside `headers`, and an unset variable loads the config with
-a warning rather than failing — so the file is safe to commit before the token exists, and
-safe to keep if it is ever revoked.
+a warning rather than failing. ~~So the file is safe to commit before the token exists.~~
+
+**Corrected 24 August — that last part was wrong, and it cost an interactive session.**
+An unset variable does not mean *no header*; it means the literal text
+`Bearer ${SUPABASE_ACCESS_TOKEN}` is sent. And the hosted server **disables its OAuth
+fallback whenever an Authorization header is present**, so an unset token is worse than no
+header at all: it blocks the browser login that used to work locally. The symptom is a
+connection failure reading `JWT could not be decoded`, which is diagnostic — the endpoint
+answers differently for each shape, and only the unexpanded literal produces that message:
+
+```
+Bearer ${SUPABASE_ACCESS_TOKEN}   → JWT could not be decoded    ← variable never set
+Bearer sbp_0000…                  → Unauthorized                ← a real token, wrong value
+Bearer eyJhbGciOi…                → JWT failed verification     ← a project key, not an
+                                                                  account token
+```
+
+So the header earns its place only once the token exists. If `SUPABASE_ACCESS_TOKEN` is
+not going to be set, take the header back out rather than leaving it — otherwise every
+interactive session loses OAuth for the sake of a remote one that has no token either.
 
 **What it can do, stated plainly.** The URL carries no `read_only=true` — that was added
 on 16 August and reverted a minute later, and the revert stands, so the server hands out
@@ -1436,6 +1454,145 @@ Carried forward and still open. The first two block real screens.
    date is filled in (tempting, but an amendment would jump it forward again — probably
    derive as a default and allow an override), and does each step want a date *and a
    person*? The second is nearly free now and impossible to backfill.
+
+   ### Settled 24 August: the properties table, and processes instead of pipelines
+
+   Two days of argument, resolved. Amber pushed back on the framing first — *"you keep
+   referring to costs… I am more worried about rework than cost"* — and she was right.
+   Re-running the argument on rework rather than cost reverses one of this file's own
+   recommendations, so the reversal is recorded here rather than quietly applied.
+
+   **What was wrong.** The plan said to keep board-visible properties as real columns for
+   performance. That licenses *promotion*: when the board needs to filter on a fact, the
+   fact moves from the property store to a column — a migration, a backfill, four files, a
+   repository change, and two sources of truth for as long as the move takes. Promotion is
+   the rework. The bar for a column is now **enforcement only** — identity, a foreign key,
+   an RLS predicate — and that set is closed. Everything else is a property, permanently.
+
+   **One properties table, and its id is the point.** Filters, forms, reports, exports and
+   the stage wiring all hold `property_id` rather than their own copy of what a field
+   means. Rename the label and every consumer follows.
+
+   - `scope` (project or job) and `format` (date, number, select…) are **two columns, not
+     one**. Both are called "type" in conversation and they are unrelated; one column
+     named `type` eventually holds `date` where it means `job`.
+   - `property_key` is immutable and `property_name` is not — sync holds the key, people
+     read the name, so renaming a label breaks no integration.
+   - **Permissions live on the property row.** Manager and above see everything *unless*
+     the property is marked restricted; a restricted property is visible only to named
+     people, and **manager does not bypass it**. Below manager, the team scope decides.
+     Create, update and delete keep their own rungs, because who may set a signed-off date
+     is a different question from who may change one.
+   - Permission *sets* and *grant rows* are dropped. The per-person exception — the
+     Director who needs margin but is not in Finance — is deliberately deferred: an
+     override table can be added later without touching a property row, which is additive
+     rather than rework.
+
+   **A filter on a hidden property must be refused, not answered.** This is the trap that
+   comes with restricted-and-filterable, and it is worth building the guard before the
+   feature. RLS removes rows, so for someone who cannot read the property the subquery
+   finds nothing and `not exists` is true for every job — the board answers *"all of
+   them"*, with no error and no empty state. Lofty's board is mostly absence filters (not
+   yet received, not yet signed, no permit), so this is the common case rather than an edge
+   one. The picker offers only readable properties **and** the query layer re-checks, and
+   the probe asserts the request is *refused* rather than that the board came back empty —
+   a test that passes on a blank board passes on the broken version too.
+
+   ### Processes replace the nested pipelines
+
+   Amber's proposal, agreed the same day: instead of pipelines nesting inside pipelines, a
+   flat list of **processes**, each pinned to a lifecycle stage, editable in the app by
+   managers and above.
+
+   **Not `activities`** — `activity_audit` and `login_activity` already exist and hold
+   *user* activity, which is the thing Amber explicitly separated from build data. The
+   tables are `processes` and `job_processes`.
+
+   This **deletes** `pipelines`, `pipeline_stages`, `pipeline_parent_stage_id` and
+   `job_pipeline_positions`. It is smaller than what it replaces and strictly more
+   expressive, for the reason already in this file: a pipeline position is one at a time,
+   and nine of the thirty-seven pre-construction rows track several independent things at
+   once. A job holds many processes; it cannot hold many positions. The lifecycle stage
+   stays on the job — five values, genuinely one at a time, the honest answer to *where is
+   this job*.
+
+   The shape is the properties pattern applied twice — definition and instance:
+
+   | Definition | Instance |
+   | --- | --- |
+   | `properties` | `property_values` |
+   | `processes` | `job_processes` |
+
+   with `process_properties` joining them (a process collects **several** properties, and
+   marks which are required to complete it), `process_dependencies` for the graph, and
+   documents, tasks and checklist templates hanging off the process the same way.
+
+   **Processes never store data. Properties do.** A process says when a fact is collected,
+   by whom, and how long it should take — never the value. So the export shape is
+   unchanged at `(job, property, value)`, which is what makes the process layer free of
+   consequences for sync.
+
+   `job_processes` carries an **attempt number**, so an amendment writes a second row
+   rather than overwriting the first. That is what makes *"how many times did this repeat,
+   and how long did each pass take"* answerable at all.
+
+   **Agreed 24 August, all of it:**
+
+   1. **No auto-advance.** *"If all processes complete, move the lifecycle stage"* breaks
+      on amendments — a reopened process drags the job backwards and then forwards again.
+      Derive *ready to advance*, show it, let a person click. Same answer as the position
+      question above: derive as a default, allow an override.
+   2. **`not_applicable` is a status on `job_processes`.** Plenty of jobs have no retaining
+      wall, no build-on-boundary and no SA Water connection. Without it those jobs never
+      finish a lifecycle stage, and it presents as *"the stage is stuck"* rather than as a
+      missing state.
+   3. **Dependencies are the single source of ordering.** `is_blocker` and predecessor
+      links can disagree, so the edges win and blocking is derived from them.
+   4. **`process_dependencies` is its own table, with a cycle check by trigger.** Twenty-one
+      of the fifty-seven steps have two or more predecessors and one has five, so it cannot
+      be a column; and `check` cannot hold a subquery, so the cycle guard is a trigger.
+   5. **Milestones stay, as a boolean — and never become a percentage.** Without the flag,
+      progress gets counted by processes, weighting *order the soil test* the same as
+      *working drawings signed*. With it, *"4 of 7 milestones passed — next: Development
+      Approval"* is true and actionable. *"68% complete"* implies a weighting that does not
+      exist, and this codebase has already shipped one invented number.
+
+   ### Health, finally defined
+
+   The longest-standing open item in this file closes. **Expected days plus a flag-at-risk
+   offset** is a definition that is computable, comes from Lofty's own schedule, and can be
+   checked against what happened — as against the *"45% on track"* the Reports screen once
+   showed from a fixed array.
+
+   ```
+   due_date  = process_started_at + process_expected_days
+   risk_date = due_date − process_flag_at_risk_days
+   ```
+
+   **Anchored on when the process starts** — Amber, 24 August. Both derived, neither
+   stored, so they cannot go stale and re-timing a template re-dates every open job at
+   once.
+
+   **Two consequences that follow from that anchor, and are open:**
+
+   - **A process nobody has started is never late.** That is the most dangerous state in
+     the system — the forgotten step — and this rule makes it invisible. Either
+     unstarted processes need their own overdue rule (predecessors finished N days ago and
+     still not started), or starting is automatic when predecessors complete.
+   - **The Gantt needs projected dates, which this does not give.** *Started + expected*
+     answers *is this at risk now*; it cannot answer *when will this job finish*, because
+     nothing not yet started has a date. A forecast needs the predecessor's projected
+     completion to stand in for a real start.
+
+   Still open beneath all of the above: whether a job is at risk when **any one** process
+   is (inclination: yes, and name it on the card); which of the 37 pre-construction rows
+   become processes and which become the properties inside them — Amber's model makes that
+   easier, since a row is a *process* if it has a duration and an owner and a *property* if
+   it is only a fact that gets recorded; and whether each step wants a date **and a
+   person** or just a date.
+
+   Nothing above is built. `properties`, `property_values`, `processes` and `job_processes`
+   do not exist, which is why all of it was still cheap to decide.
 4. **A project may be known only by its locality — `0037`.** Lofty, 23 August, asked
    whether a project is ever created without an address: *"No — but only the suburb and
    postcode and state will be known for sure. The project name may be something general
