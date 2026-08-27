@@ -434,6 +434,14 @@ green, Closed grey, Cancelled negative ink) — applied per column as CSS custom
 with an ink-on-tint count chip; non-stage groupings cycle the families. Judging the ramp
 against populated columns (the B in the class) still deserves Amber's eye.
 
+**Update (rev 3, 27 Aug): re-cut on Amber's answer.** She looked at the live board and
+chose **one family over the office/site split**: Lofty's teal deepening across all seven
+positions — lightest at Acquisition & Development, deepest at Cancelled — so depth of
+colour *is* progress through the lifecycle. What survives from the first cut: lightness,
+not hue, separates neighbours, so the ramp still holds under colour-vision deficiency;
+every ink/tint pair re-verified ≥ 8.7:1. What the single family gives up: Cancelled no
+longer shouts in red — flagged to Amber as a one-line change in `accents.ts` if it should.
+
 ![Board by stage](docs/comparison-screenshots/board-by-stage.png)
 
 **Prototype.** The settled colour rule: **colour on containers encodes phase; colour on

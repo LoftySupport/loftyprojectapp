@@ -4,13 +4,14 @@
  * encodes health; never both on one element.** Columns get a 4px strip and an
  * ink-on-tint count chip; cards stay uncoloured.
  *
- * Two hue families with lightness carrying progression — teal for the office-side
- * phases, rust for the site-side — so the teal→rust crossing IS the handover to site,
- * and the ramp survives colour-vision deficiency because position, not hue, tells the
- * phases within a family apart. The three ends of the lifecycle read semantically:
- * Completed in the positive green the status pills already use, Closed in archive
- * grey, Cancelled in the negative ink. Every ink/tint pair here clears 4.5:1 (checked
- * with the same math the prototype's ramp was).
+ * One hue family — Lofty's teal — with lightness carrying progression: the further a
+ * record is through its lifecycle, the deeper the colour. First cut used two families
+ * (teal for office phases, rust for site) with semantic ends (green/grey/red); Amber
+ * chose the single family on the live board (27 Aug). The reasoning that survives from
+ * the first cut: position and lightness, not hue, tell the phases apart, so the ramp
+ * holds under colour-vision deficiency. What the single family gives up is Cancelled
+ * shouting in red — if it should, that is a one-line change here. Every ink/tint pair
+ * clears 4.5:1 (checked with the same math the prototype's ramp was).
  */
 import type { CSSProperties } from "react";
 
@@ -24,28 +25,27 @@ export interface ColumnAccent {
 }
 
 export const STAGE_ACCENTS: Record<string, ColumnAccent> = {
-  // Office side — teal, darkening reversed: deepest first so the ramp opens strong.
-  "Acquisition & Development": { strip: "#00343a", ink: "#00343a", tint: "#e6ebeb" },
-  "Pre-construction":          { strip: "#00666f", ink: "#00565e", tint: "#e6f0f1" },
-  // Site side — rust. The hue change is the handover.
-  "Construction":              { strip: "#a04a2e", ink: "#8e3f26", tint: "#f6edea" },
-  "Handover & Maintenance":    { strip: "#7a331f", ink: "#7a331f", tint: "#f2ebe9" },
-  // The ends of the lifecycle carry meaning, not progression.
-  "Completed":                 { strip: "#00854d", ink: "#005c35", tint: "#dcefe4" },
-  "Closed":                    { strip: "#676879", ink: "#50515f", tint: "#eceef2" },
-  "Cancelled":                 { strip: "#a32436", ink: "#a32436", tint: "#f9e7ea" }
+  // The working phases open light and deepen towards handover…
+  "Acquisition & Development": { strip: "#7ec7cd", ink: "#0e4d53", tint: "#eef7f8" },
+  "Pre-construction":          { strip: "#4faab2", ink: "#0b454b", tint: "#e7f3f4" },
+  "Construction":              { strip: "#218b94", ink: "#08434a", tint: "#e1eff0" },
+  "Handover & Maintenance":    { strip: "#00747f", ink: "#00434a", tint: "#dbebec" },
+  // …and the ends of the lifecycle carry the ramp to its deepest.
+  "Completed":                 { strip: "#00565e", ink: "#00343a", tint: "#d5e6e8" },
+  "Closed":                    { strip: "#00434a", ink: "#00272c", tint: "#cfe1e3" },
+  "Cancelled":                 { strip: "#00272c", ink: "#00181c", tint: "#c9dcdf" }
 };
 
 /**
- * Groupings without a fixed order (team, member, project) cycle through the two
- * families alternately, so neighbouring columns never share a colour.
+ * Groupings without a fixed order (team, member, project) cycle light/deep alternately,
+ * so neighbouring columns never sit at the same lightness.
  */
 export const ACCENT_CYCLE: ColumnAccent[] = [
   STAGE_ACCENTS["Acquisition & Development"],
-  STAGE_ACCENTS["Construction"],
-  STAGE_ACCENTS["Pre-construction"],
-  STAGE_ACCENTS["Handover & Maintenance"],
   STAGE_ACCENTS["Completed"],
+  STAGE_ACCENTS["Construction"],
+  STAGE_ACCENTS["Closed"],
+  STAGE_ACCENTS["Pre-construction"],
   STAGE_ACCENTS["Cancelled"]
 ];
 

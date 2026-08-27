@@ -208,6 +208,16 @@ A twelfth batch:
   and dictionary_overrides joined with key-column entries and purpose descriptions:
   248 properties, 42 tables. The uncovered-tables note is retired.
 
+**Amber's answers to the open questions (27 Aug)**, each now binding:
+- **One colour family, not two** — the board's ramp is Lofty's teal deepening across
+  all seven lifecycle positions (`theme/accents.ts` re-cut, contrast re-verified).
+  Trade-off flagged: Cancelled no longer reads red; one-line change if wanted.
+- **The dashboard hero is a count** — "3 need your attention", not "67% on track" —
+  when health lands. Recorded here; nothing computes health yet.
+- **The bell stays visible** as a labelled coming-soon preview.
+- **Creating a team from the app is wanted next** — the closed `TeamId` union opens
+  up, `createTeam` joins the seam, and the seed-agreement check gets revisited.
+
 A thirteenth batch:
 - **The docked drawer head stacks** — four controls beside a full street address left
   the title reading "Lot 1, 28…" in a 460px panel. Docked, the actions get their own
