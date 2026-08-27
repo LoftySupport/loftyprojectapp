@@ -22,12 +22,13 @@ export type Grouping = (typeof GROUPINGS)[number];
 /**
  * Only fields the data actually carries.
  *
- * "Team member", "Type" and "Tag" were on this list and are not any more. Nothing on a
- * job holds them yet, so choosing one narrowed nothing and the board sat there looking
- * broken — a control that lies about what it does is worse than one that is missing.
- * Put each back the moment its column exists.
+ * "Team member", "Type" and "Tag" were dropped when nothing on a job held them —
+ * a control that lies about what it does is worse than one that is missing. Type is
+ * back (G47): the project's type rides every job through job_display, so filtering on
+ * it narrows for real. Tag returns with tag wiring; there is deliberately no separate
+ * Team-member filter — the Team filter matches membership (Amber, 26 Aug).
  */
-export const FILTERABLE = ["Stage", "Team", "Status"] as const;
+export const FILTERABLE = ["Stage", "Team", "Status", "Type"] as const;
 
 /** `field` is the identity — a field appears at most once, so a separate id is a second
  *  way to say the same thing, and the query string keys off the field anyway. */
@@ -98,22 +99,36 @@ export function Toolbar({
         </div>
       )}
 
+      {/* Real since G46 — this select rendered inert (value null, onChange no-op), the
+          one thing this app otherwise refuses to ship. It filters on the one real date
+          every job carries: when it entered its current stage. Values are codes; the
+          labels say the semantics out loud so nobody mistakes it for a due-date filter.
+          It lives in the same filters array as the chips, so it rides the URL and the
+          "Showing N of M" count like any other filter. */}
       <div className="toolbar-field">
         <span className="toolbar-label">Date</span>
         <Select
           className="toolbar-control"
-          aria-label="Date range"
+          aria-label="Filter by when a job entered its stage"
           placeholder="Any date"
           clearable
-          options={toOptions(["Any date", "Last 30 days", "This quarter", "This year", "Custom range…"])}
-          value={null}
-          onChange={() => {}}
+          options={[
+            { value: "7d", label: "Moved stage in last 7 days" },
+            { value: "30d", label: "Moved stage in last 30 days" },
+            { value: "month", label: "Moved stage this month" }
+          ]}
+          value={filters.find(f => f.field === "Date")?.value ?? null}
+          onChange={v => {
+            const rest = filters.filter(f => f.field !== "Date");
+            onFiltersChange(v ? [...rest, { field: "Date", value: v }] : rest);
+          }}
         />
       </div>
 
       <div className="toolbar-field filter-chips">
         <span className="toolbar-label">Filter by</span>
-        {filters.map(f => (
+        {/* Date is rendered by its own labelled select above, not as a chip. */}
+        {filters.filter(f => f.field !== "Date").map(f => (
           <span className="toolbar-field" key={f.field}>
             <Select
               className="toolbar-control"
@@ -149,7 +164,14 @@ export function Toolbar({
       {actions}
 
       <div className="toolbar-spacer" />
-      {count && <Text type="text2" color="secondary">{count}</Text>}
+      {count && (
+        <>
+          <Text type="text2" color="secondary">{count}</Text>
+          {/* G48 — the same sentence, announced. Filtering was silent to a screen
+              reader; role=status makes count changes audible without a focus move. */}
+          <span role="status" aria-live="polite" className="visually-hidden">{count}</span>
+        </>
+      )}
     </div>
   );
 }

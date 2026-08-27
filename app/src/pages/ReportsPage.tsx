@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
-import { Heading, Tab, TabList, Text } from "@vibe/core";
-import { RECORD_STATUS_LABELS } from "../data/types";
+import { useNavigate } from "react-router-dom";
+import { Button, Heading, Tab, TabList, Text } from "@vibe/core";
+import { PROJECT_TYPES, PROJECT_TYPE_LABELS, RECORD_STATUS_LABELS } from "../data/types";
 import { useStages, useTeams } from "../data/useLookups";
 import { useBoardRecords } from "../data/boardModel";
 import { jobMatchesQuery, matchedOnPreviousAddress, useSearch } from "../data/SearchProvider";
@@ -10,6 +11,7 @@ import { Token } from "../components/Token";
 import { Toolbar, type ToolbarFilter } from "../components/Toolbar";
 import { toOptions } from "../components/Select";
 import { jobMatchesFilters } from "../data/filtering";
+import { STAGE_ACCENTS } from "../theme/accents";
 import "../components/ui.css";
 
 /**
@@ -22,6 +24,8 @@ import "../components/ui.css";
 export function ReportsPage() {
   const [tab, setTab] = useState(0);
   const [filters, setFilters] = useState<ToolbarFilter[]>([]);
+  // Report rows open the job (G38) — the one table family that didn't navigate.
+  const navigate = useNavigate();
 
   const { stageNames } = useStages();
   const { teamNames } = useTeams();
@@ -61,7 +65,10 @@ export function ReportsPage() {
     .sort((a, b) => b.daysInStage - a.daysInStage);
 
   const optionsFor = (field: string) =>
-    field === "Stage" ? toOptions(stageNames) : field === "Team" ? toOptions(teamNames) : [];
+    field === "Stage" ? toOptions(stageNames)
+    : field === "Team" ? toOptions(teamNames)
+    : field === "Type" ? PROJECT_TYPES.map(t => ({ value: t, label: PROJECT_TYPE_LABELS[t] }))
+    : [];
 
   return (
     <>
@@ -113,9 +120,15 @@ export function ReportsPage() {
             <Tile n={stalled} label="Stalled" />
             <Tile n={avgDays} label="Avg days in stage" />
           </div>
+          {/* G34 — the two counts the prototype had that these tiles do not: both wait
+              on wiring, and a tile showing 0 would claim they were checked. */}
+          <Text type="text3" color="secondary" ellipsis={false}>
+            Blocked-by-dependency and ownership-conflict counts join these tiles once
+            task dependencies and the conflict flag are wired.
+          </Text>
 
           <div className="stat-row">
-            <BarPanel title="Jobs by stage" rows={byStage} />
+            <BarPanel title="Jobs by stage" rows={byStage} colourFor={k => STAGE_ACCENTS[k]?.strip} />
             <BarPanel title="Jobs by team" rows={byTeam} />
           </div>
 
@@ -135,12 +148,12 @@ export function ReportsPage() {
                 </thead>
                 <tbody>
                   {attention.map(j => (
-                    <tr key={j.jobNumber}>
+                    <tr key={j.jobNumber} onClick={() => navigate(`/jobs/${encodeURIComponent(j.jobNumber)}`)} style={{ cursor: "pointer" }}>
                       <td>{j.jobNumber}</td>
-                      <td><Token>addresses.consolidated_address</Token></td>
+                      <td>{j.currentAddress ?? <Token>addresses.consolidated_address</Token>}</td>
                       <td>{j.stage}</td>
                       <td>{j.team}</td>
-                      <td><Token>profiles.full_name</Token></td>
+                      <td>{j.assigneeName ?? "\u2014"}</td>
                       <td className="num">{j.daysInStage}</td>
                       <td><StatusPill status={j.status} /></td>
                     </tr>
@@ -168,13 +181,35 @@ export function ReportsPage() {
               <Bar key={r.key} label={r.key} n={r.n} max={byTeam[0]?.n ?? 1} />
             ))}
           </section>
+
+          {/* G36 — declared, not faked: the overrun and bottleneck analytics need SLA
+              history to accumulate before there is anything true to draw. */}
+          <section className="panel">
+            <div className="panel-head">
+              <Text type="text2" weight="bold">Overruns &amp; bottlenecks</Text>
+              <Text type="text3" color="secondary">coming soon</Text>
+            </div>
+            <Text type="text2" color="secondary" ellipsis={false}>
+              Once stage SLAs are set (Setup → Automations) and jobs accumulate history
+              against them, this panel shows where time is actually lost: phases running
+              past their expected days, and the team queue everything waits behind.
+              Nothing shows until it is measured — an invented bottleneck sends someone
+              to fix the wrong thing.
+            </Text>
+          </section>
         </div>
       )}
 
       {tab === 2 && !noMatches && !loading && all.length > 0 && (
-        <section className="panel" style={{ marginTop: "var(--space-16)" }}>
+        <section className="panel report-print-root" style={{ marginTop: "var(--space-16)" }}>
           <div className="panel-head">
             <Text type="text2" weight="bold">Every job, every status</Text>
+            {/* G37 — the browser's own print, with print CSS that drops the chrome.
+                What you filtered is what prints; the print-only line says so. */}
+            <Button size="small" kind="secondary" onClick={() => window.print()}>Print</Button>
+          </div>
+          <div className="print-only">
+            Lofty job report · {new Date().toLocaleDateString()} · {jobs.length} job{jobs.length === 1 ? "" : "s"} shown
           </div>
           <div className="data-table-wrap">
             <table className="data-table">
@@ -186,10 +221,10 @@ export function ReportsPage() {
               </thead>
               <tbody>
                 {jobs.map(j => (
-                  <tr key={j.jobNumber}>
+                  <tr key={j.jobNumber} onClick={() => navigate(`/jobs/${encodeURIComponent(j.jobNumber)}`)} style={{ cursor: "pointer" }}>
                     <td>{j.jobNumber}</td>
                     <td>{j.projectNumber}</td>
-                    <td><Token>addresses.consolidated_address</Token></td>
+                    <td>{j.currentAddress ?? <Token>addresses.consolidated_address</Token>}</td>
                     <td>{j.stage}</td>
                     <td>{j.team}</td>
                     <td className="num">{j.daysInStage}</td>
@@ -214,19 +249,27 @@ function Tile({ n, label }: { n: number; label: string }) {
   );
 }
 
-function Bar({ label, n, max }: { label: string; n: number; max: number }) {
+function Bar({ label, n, max, colour }: { label: string; n: number; max: number; colour?: string }) {
   return (
     <div className="bar-row">
       <Text type="text3">{label}</Text>
       <div className="bar-track">
-        <div className="bar-fill" style={{ width: `${max ? (n / max) * 100 : 0}%` }} />
+        <div
+          className="bar-fill"
+          style={{ width: `${max ? (n / max) * 100 : 0}%`, ...(colour ? { background: colour } : {}) }}
+        />
       </div>
       <span className="bar-num">{n}</span>
     </div>
   );
 }
 
-function BarPanel({ title, rows }: { title: string; rows: { key: string; n: number }[] }) {
+function BarPanel({ title, rows, colourFor }: {
+  title: string;
+  rows: { key: string; n: number }[];
+  /** G35 — the stage bars wear their phase colour, the same ramp as the board. */
+  colourFor?: (key: string) => string | undefined;
+}) {
   const max = Math.max(1, ...rows.map(r => r.n));
   return (
     <section className="panel">
@@ -234,7 +277,7 @@ function BarPanel({ title, rows }: { title: string; rows: { key: string; n: numb
         <Text type="text2" weight="bold">{title}</Text>
       </div>
       {rows.map(r => (
-        <Bar key={r.key} label={r.key} n={r.n} max={max} />
+        <Bar key={r.key} label={r.key} n={r.n} max={max} colour={colourFor?.(r.key)} />
       ))}
     </section>
   );

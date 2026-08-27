@@ -97,11 +97,152 @@ A fourth batch, after PR #39 merged (the branch was restarted from `main`):
   expected days; there is no third number. **Applied to the live database.**
   `pipeline_stages` thereby got its first two dictionary entries.
 
-Still open from this session: **four live tables still have no dictionary entries**
-— `pipelines`, `job_pipeline_positions`, `job_stage_events` (0029) and
-`dictionary_overrides` (0044) — and `pipeline_stages` is only covered for its two
-SLA columns. Nothing yet *consumes* the SLA numbers: the at-risk/overdue flags on
-boards wait on the health calculation (see the parked `health_statuses`).
+A fifth batch — the prototype-parity shells (Amber: match the prototype, placeholders
+where the data is not real yet; every placeholder names itself):
+- **Phase accents on the board** (`theme/accents.ts`): the prototype's two-family ramp
+  re-cut for seven positions — teal office pair, rust site pair, Completed green,
+  Closed grey, Cancelled negative — as per-column CSS vars with ink-on-tint count
+  chips. Plus the drag-hint pill, shown only when dragging is actually enabled.
+- **Drawer fullscreen tabs**: Main info · All properties · Activity & comments ·
+  Departments, prototype-style, docked staying one scroll. All-properties and Activity
+  carry the real components plus coming-soon notes; Departments is a labelled
+  placeholder until handoffs write the activity feed.
+- **Ask Lofty dock** (`AskDock.tsx`): FAB + 380px dock with scope line, preview
+  questions and a disabled input, all saying coming soon; "Ask about this job" in the
+  drawer opens it pre-scoped. One assistant, not two.
+- **Notifications bell** (`NotificationsBell.tsx`): header bell, no badge (no real
+  count exists), panel naming the seven signals and what each waits on.
+- **Dashboard**: your actual assigned jobs as cards (it counted every job in the
+  company as yours before), real Assigned count, em dashes for Need you/Overdue, and
+  right-rail panels that say what will fill them. No invented numbers anywhere.
+- Responsive sweep back to 50/50 (the bell had squeezed the avatar button to 16px at
+  320; icons no longer shrink and the right cluster's gap tightened).
+
+A sixth batch — the A-class polish:
+- **Toasts** (`Toasts.tsx`), fired only where success is otherwise invisible: job
+  removed, user saved/added/deactivated. Bottom-centre; note the gotcha — Vibe's Toast
+  is already `position: fixed; top: 0`, so overriding `bottom` without `top: auto`
+  stretches it the full height of the screen (watched happening).
+- **Working preferences** (`data/preferences.ts`, G39): landing page and default jobs
+  view are real, localStorage for now with the hint owning up to it; Amber's Q9
+  roaming/saved-views layers still need their Phase C home.
+- **Report rows open the job** (G38), and the report tables stopped rendering tokens
+  for the address and assignee the board model already resolves.
+- **New-project preview** (G32) states consequences without guessing the number; the
+  header search widens on focus (G4).
+
+A seventh batch:
+- **The jobs table sorts** (G12) — the SortableTable idiom applied within each group,
+  stage by pipeline position, no default sort so the natural order survives.
+  `sortRows` extracted from `useTableSort` for the grouped case.
+- **Teams are manageable** (G44): rename + retire/restore on Admin → Teams through a
+  new `updateTeam` seam method (admin+, the 0026 policy), with the jobs-held guard
+  and retired teams listed dimmed for restoring. **Create-team deferred**: the
+  `TeamId` union is closed over the seeded slugs and `verify/seeds.sh` asserts stub
+  and database agree — opening that is its own change, not a side effect.
+- Tooltip sweep (G3) deferred: this Vibe build doesn't export `Tooltip` in the core
+  type bundle. Native titles stand; revisit on the next Vibe upgrade.
+
+An eighth batch — **the Gantt and the calendar are real** (G13/G14):
+- `JobsGantt.tsx`: a day-grid over real facts only — each bar is the job's stay in its
+  current stage (solid elapsed, tinted SLA window, rust past due), phase-tinted band
+  rows, weekend shading, orange today line, sticky left column. The prototype's
+  invented duration model was NOT ported. Dependencies wait on task wiring.
+- `MonthCalendar.tsx`: Monday-start month grid with today ring, ‹/Today/› nav,
+  "+N more" overflow, click-to-drawer, and the jump-to-nearest-month empty state.
+  Entries are the two dates a job really has — stage entered, and SLA due where set.
+- `BoardJob` gained `stageEnteredAt` so both can place time.
+
+A ninth batch:
+- **The Date filter is real** (G46): "moved stage in last 7/30 days / this month",
+  matched on `job_stage_entered_at`, in the URL as `?date=7d`, riding the same filters
+  array as the chips. The inert select is gone.
+- **The drawer shows both folders** (G24): job subfolder + project folder, honest
+  "no folder linked yet" when unset; `BoardJob` carries both URLs.
+- **The job report prints** (G37): Print button + print CSS dropping the chrome, a
+  print-only date/count line, rows kept whole across pages.
+- **Filtering is audible** (G48): "Showing N of M" mirrored into a hidden
+  `role=status` live region.
+
+A tenth batch:
+- **The Type filter is back** (G47) — the project's type rides every job, so it
+  narrows for real on Jobs, Projects and Reports. The zero-result state also stopped
+  blaming a search nobody typed ("no jobs match the current filters").
+- **Report stage bars wear the board's ramp** (G35); **project cards carry real
+  progress** — jobs completed over jobs total (G26).
+- **Projects gained a Gantt view** (G28): start → target from the two real date
+  columns, month ticks, today line, rust past target; undated projects listed, not
+  estimated.
+- **Esc is a two-step in the fullscreen drawer** (G20); **the notification matrix
+  saves** (G40, device-local, quiet defaults, panel owns up to when delivery starts).
+- **Variations entry points ship** (G30/G25): "Push to jobs…" on the project page and
+  "Request changes" in the drawer, each answering with what is coming rather than
+  doing nothing silently.
+
+An eleventh batch:
+- **Column drill-down as navigation** (G8): a stage column's heading filters to the
+  phase and regroups by team, in one URL. This surfaced and fixed a real
+  `useBoardParams` bug — two writes in one handler were two navigations, the second
+  erasing the first (`setMany` composes them now; `write` also went functional).
+- **In-drawer job search** (G19): find another job, jump without closing.
+- **Reports declare their gaps** (G34/G36): the missing blocked/conflict counts and
+  the overruns-and-bottlenecks panel each say what they wait for.
+
+**Where the parity work now stands**: every one of the 48 comparison-doc gaps is
+shipped, shipped-as-shell with a self-naming placeholder, or explicitly
+parked with its reason recorded in the doc (G10 mirror
+scrollbar until boards are wide · G22 scheduling checklists until the real process ·
+G31 single-add until variations · G45 permissions matrix until permission_grants).
+The artifact carries a shipped/shell badge per gap and six open questions for Amber.
+
+A twelfth batch:
+- **Styled tooltips unparked** (G3): `@vibe/tooltip` ships full types — pinned as a
+  direct dependency at the exact version core already carries — and swept over the
+  icon-only controls (collapsed rail, rail toggle, bell, Ask FAB, expand button).
+  On focus as well as hover.
+- **Session-persistent view state** (Amber's Q9, layer two): board/view/filter choices
+  hold across page switches; a link naming its own state always wins; sessionStorage
+  so a new day starts clean.
+- **The dictionary covers every live table now** — the 0029 pipeline machinery
+  (pipelines, pipeline_stages completed, job_pipeline_positions, job_stage_events)
+  and dictionary_overrides joined with key-column entries and purpose descriptions:
+  248 properties, 42 tables. The uncovered-tables note is retired.
+
+**Amber's answers to the open questions (27 Aug)**, each now binding:
+- **One colour family, not two** — the board's ramp is Lofty's teal deepening across
+  all seven lifecycle positions (`theme/accents.ts` re-cut, contrast re-verified).
+  Trade-off flagged: Cancelled no longer reads red; one-line change if wanted.
+- **The dashboard hero is a count** — "3 need your attention", not "67% on track" —
+  when health lands. Recorded here; nothing computes health yet.
+- **The bell stays visible** as a labelled coming-soon preview.
+- **Creating a team from the app is wanted next** — the closed `TeamId` union opens
+  up, `createTeam` joins the seam, and the seed-agreement check gets revisited.
+
+A fourteenth batch, from those answers:
+- **The board ramp is one family** — `theme/accents.ts` re-cut to teal deepening
+  across the seven positions (verified ≥ 8.7:1 per chip).
+- **Create-team shipped** (G44 closed): `TeamId` opened to `string` — the closed
+  union could only name compile-time teams — with the reasoning kept at the type;
+  `createTeam` on the seam cuts the slug once via `teamSlug()` (shared with the
+  Admin preview) and slots after the last active position, under 0026's existing
+  `admins add teams` policy; Admin → Teams grows name-in/slug-previewed/Add, with
+  the taken-slug case disabled and explained. `verify/seeds.sh` now asserts the
+  seeded slugs are an **ordered subset** of the live table (app-created extras
+  allowed; missing or reordered seeds still fail — watched both ways).
+
+A thirteenth batch:
+- **The docked drawer head stacks** — four controls beside a full street address left
+  the title reading "Lot 1, 28…" in a 460px panel. Docked, the actions get their own
+  line under the title (`ui.css`, keyed off `.drawer:not(.is-expanded)`); expanded,
+  one row fits and stays. Verified both ways with a seeded screenshot.
+
+Still open from Q9, each a schema change for its own PR after this one merges:
+**profile-roaming preferences** (a preferences home on the profile) and
+**user-saved views** (a saved_views table + RLS + the tabs grow a user section).
+
+Still open from this session: nothing yet *consumes* the SLA numbers — the
+at-risk/overdue flags on boards wait on the health calculation (see the parked
+`health_statuses`).
 
 **A session note for PR #37 (25 Aug — stage moves, comments, property_defs, project
 editing, address history) was never written**; `prototype-app-comparison.md` §1.5

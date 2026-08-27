@@ -1,5 +1,10 @@
+import { useState } from "react";
 import { ButtonGroup, Heading, Text, Toggle } from "@vibe/core";
 import { useAuth } from "../data/AuthProvider";
+import {
+  JOBS_VIEWS, LANDING_PAGES, readNotifMatrix, readPrefs, writeNotifChoice, writePrefs,
+  type JobsView, type LandingPage, type NotifChannel
+} from "../data/preferences";
 import { useTeamLabels } from "../data/useLookups";
 import { SYSTEM_THEMES, type SystemTheme } from "../theme/loftyTheme";
 import { Select, toOptions } from "../components/Select";
@@ -40,6 +45,9 @@ export function SettingsPage({
   onThemeChange: (t: SystemTheme) => void;
 }) {
   const { profile } = useAuth();
+  const [prefs, setPrefs] = useState(readPrefs);
+  // The matrix's saved choices — overrides on the quiet defaults below (G40).
+  const [notifs, setNotifs] = useState(readNotifMatrix);
   // Names, not the slugs `profiles.teams` stores — see useTeamLabels. `resolved` is
   // what keeps a foreign key off the screen while the lookup is still in flight.
   const { labels: teamLabels, resolved: teamsResolved } = useTeamLabels();
@@ -89,20 +97,24 @@ export function SettingsPage({
           <div className="panel-head">
             <Text type="text2" weight="bold">Where you land</Text>
           </div>
-          <Row label="Landing page" hint="the page you open on">
+          {/* Real since G39 — these rendered as inert selects, the one thing this app
+              otherwise refuses to ship. Saved on this device (the theme's precedent);
+              the hint owns up to that, because Amber's Q9 wants them roaming with the
+              profile, which is a Phase C preferences home. */}
+          <Row label="Landing page" hint="the page you open on — saved on this device; roaming comes with profile preferences">
             <Select
               aria-label="Landing page"
-              options={toOptions(["Dashboard", "Projects", "Jobs", "Reports"])}
-              value="Dashboard"
-              onChange={() => {}}
+              options={toOptions([...LANDING_PAGES])}
+              value={prefs.landingPage}
+              onChange={v => setPrefs(writePrefs({ landingPage: v as LandingPage }))}
             />
           </Row>
-          <Row label="Default jobs view">
+          <Row label="Default jobs view" hint="what the Jobs page opens as when the link doesn't say">
             <Select
               aria-label="Default jobs view"
-              options={toOptions(["Board", "Table", "Gantt", "Calendar"])}
-              value="Board"
-              onChange={() => {}}
+              options={toOptions([...JOBS_VIEWS])}
+              value={prefs.defaultJobsView}
+              onChange={v => setPrefs(writePrefs({ defaultJobsView: v as JobsView }))}
             />
           </Row>
           <Row label="Theme" hint="Vibe ships light, dark and black">
@@ -121,7 +133,8 @@ export function SettingsPage({
             <Text type="text2" weight="bold">Notifications</Text>
             <Text type="text3" color="secondary">
               Defaults are deliberately quiet — the fastest way to lose people is a
-              notification firehose in week one.
+              notification firehose in week one. Choices save on this device; delivery
+              starts when notifications are built — in-app first, Teams and email later.
             </Text>
           </div>
           <div className="data-table-wrap">
@@ -130,14 +143,19 @@ export function SettingsPage({
                 <tr><th>Event</th><th>In-app</th><th>Email</th><th>Teams</th></tr>
               </thead>
               <tbody>
-                {EVENTS.map(([e, inApp, email, teams]) => (
-                  <tr key={e}>
-                    <td>{e}</td>
-                    <td><Toggle isDefaultSelected={inApp} aria-label={`${e} in-app`} size="small" /></td>
-                    <td><Toggle isDefaultSelected={email} aria-label={`${e} by email`} size="small" /></td>
-                    <td><Toggle isDefaultSelected={teams} aria-label={`${e} in Teams`} size="small" /></td>
-                  </tr>
-                ))}
+                {EVENTS.map(([e, ...defaults]) => {
+                  const row = notifs[e] ?? defaults;
+                  const set = (channel: NotifChannel) => (on: boolean) =>
+                    setNotifs(writeNotifChoice(e, channel, on, defaults));
+                  return (
+                    <tr key={e}>
+                      <td>{e}</td>
+                      <td><Toggle isSelected={row[0]} onChange={set(0)} aria-label={`${e} in-app`} size="small" /></td>
+                      <td><Toggle isSelected={row[1]} onChange={set(1)} aria-label={`${e} by email`} size="small" /></td>
+                      <td><Toggle isSelected={row[2]} onChange={set(2)} aria-label={`${e} in Teams`} size="small" /></td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

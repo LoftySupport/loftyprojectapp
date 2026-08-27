@@ -278,6 +278,11 @@ entries were resolved between revisions):
 
 #### G1 · Notifications — bell, badge, panel, seven derived signals — **C + D**
 
+**Update (rev 3, 26 Aug): the bell and panel exist as a declared placeholder.** A header
+bell (`NotificationsBell.tsx`) opens a panel naming the seven signals and what each waits
+on — no badge, because there is no real count to show. The notification model (table,
+triggers, read state) remains the C-class work.
+
 ![Notifications panel](docs/comparison-screenshots/notifications-panel.png)
 
 **Prototype.** A bell in the header with a red pill counter; clicking opens a 400px panel
@@ -338,6 +343,11 @@ bell and panel.
 
 #### G2 · Toasts on mutations — **A**
 
+**Update (rev 3, 26 Aug): built, with the prototype's restraint.** A `ToastsProvider`
+in the shell; fired only where success is otherwise invisible — job removed (the row is
+gone), user saved/added/deactivated (the panel closes). Bottom-centre; errors stay
+inline and verbatim. The create dialogs already confirm in place, so they don't toast.
+
 **Prototype.** A Vibe-spec toast layer (bottom-centre, auto-dismiss 5s, positive/negative/
 warning variants, optional action button, `vibeToast`, `index.html:10707-10731`). Fired in
 exactly four places — push-comment, push-property ("Manager updated on 4 jobs."), post
@@ -364,6 +374,17 @@ App today: absent. Mutation call sites: app/src/components/CreateDialogs.tsx (cr
 
 #### G3 · Styled tooltips — **A**
 
+**Update (rev 3, later): unparked and built.** `@vibe/tooltip` ships full types even
+though core's bundle doesn't re-export them — pinned as a direct dependency at the exact
+version core already carries. Swept over the icon-only controls: collapsed rail items and
+the rail toggle (position right), the bell, the Ask FAB, the expand button — each showing
+on focus as well as hover, which the native titles never did.
+
+**Update (rev 3, 26 Aug): deferred with a reason.** This Vibe build does not export
+`Tooltip` through the core type bundle, so the sweep would mean untyped imports or a new
+dependency. Native `title`/`aria-label` coverage stands; revisit on the next Vibe
+upgrade.
+
 **Prototype.** One shared tooltip element driven by `data-tooltip` attributes: styled,
 viewport-clamped, flips below when there's no room, shows on **focus as well as hover**,
 hides on Escape/scroll (`initTooltips`, `index.html:10737-10777`). Used on ~15 surfaces:
@@ -386,6 +407,8 @@ App today: native title= only, e.g. app/src/shell/AppShell.tsx:145-149
 
 #### G4 · Header search polish — **A** (minor)
 
+**Update (rev 3, 26 Aug): built** — the search widens on focus (320→420px, 150ms).
+
 **Prototype.** The header search widens 220px → 280px on focus with a 150ms transition and
 lightens its background (`index.html:415-434`).
 
@@ -404,6 +427,20 @@ App today: app/src/shell/AppShell.tsx:266-300 (header), src/data/SearchProvider.
 ---
 
 #### G5 · Phase-accent colour system on board columns — **B**
+
+**Update (rev 3, 26 Aug): built.** The ramp is re-cut for the seven-position lifecycle in
+`app/src/theme/accents.ts` — teal office pair, rust site pair, semantic ends (Completed
+green, Closed grey, Cancelled negative ink) — applied per column as CSS custom properties
+with an ink-on-tint count chip; non-stage groupings cycle the families. Judging the ramp
+against populated columns (the B in the class) still deserves Amber's eye.
+
+**Update (rev 3, 27 Aug): re-cut on Amber's answer.** She looked at the live board and
+chose **one family over the office/site split**: Lofty's teal deepening across all seven
+positions — lightest at Acquisition & Development, deepest at Cancelled — so depth of
+colour *is* progress through the lifecycle. What survives from the first cut: lightness,
+not hue, separates neighbours, so the ramp still holds under colour-vision deficiency;
+every ink/tint pair re-verified ≥ 8.7:1. What the single family gives up: Cancelled no
+longer shouts in red — flagged to Amber as a one-line change in `accents.ts` if it should.
 
 ![Board by stage](docs/comparison-screenshots/board-by-stage.png)
 
@@ -543,6 +580,13 @@ G18's `activity_events` writer covers this); and the lifecycle revision's
 
 #### G8 · Column drill-down pages — **B**
 
+**Update (rev 3, 26 Aug): built as navigation, not a page.** The prototype's
+drill-down asked "who holds what inside this phase"; the board already answers that,
+so a stage column's heading now drills — filter to the phase, regroup by team, in one
+URL (`?group=Team&stage=Pre-construction`), linkable and Back-able like everything
+else. Fixing it surfaced a real bug: two `useBoardParams` writes in one handler were
+two navigations and the second erased the first — `setMany` now composes them.
+
 ![Column drill-down](docs/comparison-screenshots/drilldown-column.png)
 ![Scheduling drill-down](docs/comparison-screenshots/drilldown-scheduling.png)
 
@@ -653,6 +697,12 @@ with Closed/Cancelled appearing only when filtered in.)
 
 #### G12 · Jobs table: columns and sorting — **A** (columns partially **C**)
 
+**Update (rev 3, 26 Aug): sorting built.** The jobs table sorts by any column via the
+same `SortableTable` idiom Admin uses — applied *within each group*, so "Group by" and
+sorting compose; stage sorts by pipeline position, not the alphabet; no default sort, so
+the natural pipeline order stays until a header is clicked. Extra columns still land with
+their data (tags/dependency C, Source at Phase B).
+
 ![Table view](docs/comparison-screenshots/table-view.png)
 
 **Prototype.** 12 columns: Job no · Project · Address · Phase · Build stage · Team ·
@@ -679,6 +729,13 @@ App today: app/src/pages/JobsPage.tsx:219-252 (Table view);
 ---
 
 #### G13 · Real Gantt — **B + C**
+
+**Update (rev 3, 26 Aug): built against real facts.** A day-grid Gantt
+(`JobsGantt.tsx`): sticky left column, weekend shading, phase-tinted band rows, an
+orange today line — and each bar is the job's stay in its CURRENT stage: solid elapsed
+(real), tinted on to entered + expected days where the stage has an SLA, rust when past
+it. The prototype's fabricated duration model was not ported, exactly as this entry
+said; dependency connectors still wait on G6's task wiring.
 
 ![Gantt view](docs/comparison-screenshots/gantt-view.png)
 
@@ -714,6 +771,13 @@ App today: app/src/pages/JobsPage.tsx:254-289 (bar list)
 
 #### G14 · Real calendar — **C**
 
+**Update (rev 3, 26 Aug): built, placing only dates that exist.** The month grid
+(`MonthCalendar.tsx`): Monday-start, weekend/outside shading, ringed today cell, ‹/Today/›
+navigation, 3-per-day with "+N more", click-to-drawer — and the jump-to-nearest-month
+empty state survived the port. Entries are the two real dates a job has: the day it
+entered its stage, and the SLA due day where one is set. Dated step-properties join
+these when they land.
+
 ![Calendar view](docs/comparison-screenshots/calendar-view.png)
 
 **Prototype.** A month grid (`renderCalendar` + shell, `index.html:9517-9634`, CSS
@@ -745,6 +809,15 @@ App today: app/src/pages/JobsPage.tsx:291-317 (token table)
 ---
 
 #### G15 · Drawer: fullscreen toggle and tabs — **A**
+
+**Update (rev 3, 26 Aug): built.** Fullscreen shows the four-tab bar (Main info · All
+properties · Activity &amp; comments · Departments), sticky while the drawer stays open;
+docked remains one scrolled column. All-properties and Activity carry real
+`PropertySlots`/`CommentsPanel` plus declared coming-soon notes; Departments renders the
+handoff shape as a labelled placeholder (G21 still parked for real history). Later the
+same day: the **docked head stacks** — four controls beside a full street address had
+left the title reading "Lot 1, 28…", so docked, the actions now sit on their own line
+under the full address; expanded keeps the single row.
 
 ![Docked drawer](docs/comparison-screenshots/drawer-docked.png)
 ![Fullscreen — Main info](docs/comparison-screenshots/drawer-fullscreen-main.png)
@@ -906,6 +979,10 @@ comment edit/delete UI. The merge rule and mention-chip spec above remain the ta
 
 #### G19 · In-drawer search and jump — **A**
 
+**Update (rev 3, 26 Aug): built.** A find field at the top of the drawer matches the
+other jobs by number or address (top five), and picking one jumps the drawer to it
+without closing — board state rides along in the URL. Resets when the record changes.
+
 ![Drawer search results](docs/comparison-screenshots/drawer-search-results.png)
 
 **Prototype.** A search box in the drawer head ("Search jobs — number, address, team,
@@ -933,6 +1010,11 @@ App today: absent; matcher at app/src/data/SearchProvider.tsx (jobMatchesQuery),
 ---
 
 #### G20 · Drawer polish: project chip, Esc two-step, focus, scroll preservation — **A**
+
+**Update (rev 3, 26 Aug): Esc is a two-step** — in fullscreen the first press shrinks
+back to the docked panel, the second closes. The project chip's job is done by the
+breadcrumb + project link already; scroll preservation joins with the drawer search
+(G19).
 
 **Prototype.** Four behaviours worth keeping:
 - The **project chip** in the head ("Evanston Park build programme · 1209") — "the job
@@ -1031,6 +1113,11 @@ App today: app/src/components/JobDrawer.tsx (empty milestones panel);
 
 #### G23 · "Ask" callout and AI dock — **D**
 
+**Update (rev 3, 26 Aug): the shell exists, saying coming soon.** The FAB and 380px dock
+(`AskDock.tsx`) with the scope line and example questions shown as previews, plus the
+"Ask about this job" callout in the drawer head opening it pre-scoped. Nothing answers —
+the dock says so — and the fact-assembly wiring stays the D→build step.
+
 ![AI dock](docs/comparison-screenshots/ai-dock.png)
 
 **Prototype.** One AI surface: a floating dock (FAB bottom-right rotating into an ×; a
@@ -1067,6 +1154,10 @@ handed.
 
 #### G24 · "Open job file" (SharePoint link) — **C**
 
+**Update (rev 3, 26 Aug): built.** The drawer's Main info gained a Folders panel with
+both links — the job's own subfolder and its project's folder, per Lofty's rule — and an
+honest "no folder linked yet" when unset. `BoardJob` carries both URLs now.
+
 **Prototype.** A primary button on Main info opening the job's SharePoint file — mocked as
 a fake page clearly labelled as such (`openDummySharePoint`, `index.html:9905-9939`; the
 Microsoft-style styling was kept deliberately, it imitates an external system,
@@ -1096,6 +1187,10 @@ project folder, per Lofty's rule that a job shows both), and carrying the fields
 ---
 
 #### G25 · "Request changes" flow — **D**
+
+**Update (rev 3, 26 Aug): the entry point ships** — "Request changes" in the drawer
+head, answering that the flow rides the variations model (Q8: waiting-on is part of the
+variation request).
 
 **Prototype.** A secondary button that flips to a green "Changes requested" state and
 badges the assignee with a count; the "waiting on" text shows on the card, on Main info
@@ -1127,6 +1222,11 @@ UI spec waiting for it.
 ---
 
 #### G26 · Project cards: progress, per-job lines — **B + C**
+
+**Update (rev 3, 26 Aug): progress is real.** The card's bar is jobs-completed over
+jobs-total — the one per-job fact the card already holds ("1 of 3 jobs completed") —
+with the prototype's task-based progress joining when tasks are wired. Per-job lot
+lines landed earlier (PR #39).
 
 ![Project cards](docs/comparison-screenshots/projects-cards.png)
 
@@ -1197,6 +1297,12 @@ progress + the at-risk flag (with G26), and sorting — the projects table is st
 ---
 
 #### G28 · Project Gantt and calendar — **C**
+
+**Update (rev 3, 26 Aug): the Gantt half is built.** Projects gained a Gantt view
+(`ProjectsGantt.tsx`) drawn from the two real dates a project carries — start date to
+target completion, month ticks, today line, rust when past target and not completed —
+and projects missing either date are listed underneath with where to set them, not
+estimated. The calendar half can reuse `MonthCalendar` when project dates deserve one.
 
 ![Project gantt](docs/comparison-screenshots/projects-gantt.png)
 
@@ -1271,6 +1377,10 @@ gains editable assignee team + user.
 ---
 
 #### G30 · Push-to-jobs — **D**
+
+**Update (rev 3, 26 Aug): the entry point ships.** A "Push to jobs…" button sits
+beside Create jobs on the project page and answers with what is coming — the flow
+itself rides the variations design (Q8), per Amber's placeholder rule.
 
 ![Push modal](docs/comparison-screenshots/push-modal.png)
 
@@ -1347,6 +1457,10 @@ patterns rather than resurrecting it as-is.
 
 #### G32 · New-project "what this creates" preview — **A**
 
+**Update (rev 3, 26 Aug): built.** The panel states the consequences — next free
+1000-series number (the value itself is the sequence's to give, so it is not guessed),
+opening team and phase, the -01 job numbering, and the no-jobs-no-health note.
+
 **Prototype.** The new-project modal's right column previews: the project number it will
 take, what its first job would be numbered, jobs 0, and the note "A project with no jobs
 shows 0% progress and no health until its first job is created"
@@ -1369,6 +1483,13 @@ App today: app/src/components/CreateDialogs.tsx (NewProjectDialog), shell Create
 ---
 
 #### G33 · Populated personal dashboard — **C + D**
+
+**Update (rev 3, 26 Aug): the real tiles are real, the rest declare themselves.** The
+middle column renders your actual assigned jobs (the assignee binding), sorted
+most-days-first with days-against-SLA when a stage has one; "N jobs assigned to you" and
+the Assigned count are live. Need-you/Overdue show em dashes (nothing computes health
+yet), the hero says what it waits for, and the three right-rail panels say what will fill
+them. It also stopped counting every job in the company as yours (`jobs.length`).
 
 ![Personal dashboard (as Priya Nair, team member)](docs/comparison-screenshots/dashboard-personal.png)
 
@@ -1414,6 +1535,10 @@ Cancelled records are excluded from every alert here (lifecycle revision).
 
 #### G34 · Report KPIs: blocked, conflicts — **C**
 
+**Update (rev 3, 26 Aug): declared.** A line under the overview tiles says the two
+counts join once task dependencies and the conflict flag are wired — a tile showing 0
+would claim they were checked.
+
 ![Portfolio overview](docs/comparison-screenshots/reports-portfolio.png)
 
 **Prototype.** Seven KPI tiles: the app's five plus **Blocked by dependency** and
@@ -1435,6 +1560,10 @@ App today: app/src/pages/ReportsPage.tsx (Portfolio overview tab)
 
 #### G35 · Phase-coloured report bars — **B**
 
+**Update (rev 3, 26 Aug): built** — the "Jobs by stage" bars wear the same ramp as the
+board's columns (`STAGE_ACCENTS`), so a report and the board it summarises read as one
+system.
+
 **Prototype.** "Jobs by stage" bars are filled in each phase's strip colour, so the report
 and the board speak the same colour language (`index.html:9324-9406` with `PHASE_COLORS`,
 `:9693-9696`).
@@ -1452,6 +1581,10 @@ App today: app/src/pages/ReportsPage.tsx (BarPanel)
 ---
 
 #### G36 · Leadership analytics: overruns, bottlenecks — **D**
+
+**Update (rev 3, 26 Aug): declared.** The Leadership tab carries an
+"Overruns &amp; bottlenecks — coming soon" panel saying exactly what it waits for: SLAs
+set, and history accumulating against them. Nothing draws until it is measured.
 
 ![Leadership summary](docs/comparison-screenshots/reports-leadership.png)
 
@@ -1488,6 +1621,10 @@ renders honestly where none are set. Cancelled records are excluded from overrun
 
 #### G37 · Printable job report — **A**
 
+**Update (rev 3, 26 Aug): built.** A Print button on the Job report tab plus print CSS:
+chrome, toolbar, tabs and the dock drop out; a print-only line states the date and how
+many jobs the filters left in; rows avoid page breaks.
+
 ![Job report](docs/comparison-screenshots/reports-job-report.png)
 
 **Prototype.** The Job report tab is built to print: a report header stating generated
@@ -1513,6 +1650,10 @@ App today: app/src/pages/ReportsPage.tsx (Job report tab, plain table)
 
 #### G38 · Clickable report rows — **A**
 
+**Update (rev 3, 26 Aug): built** — attention and job-report rows open the job. The
+same pass resolved two stale tokens: the report tables now show the real address and
+assignee the board model has carried since PR #37/PR #39.
+
 **Prototype.** Every report row/attention row opens the job's drawer.
 
 **App today.** Reports rows are inert — the one table family in the app that doesn't
@@ -1531,6 +1672,18 @@ App today: app/src/pages/ReportsPage.tsx (all three tabs' tables)
 ---
 
 #### G39 · Working preferences — **A**
+
+**Update (rev 3, later): Q9's second layer is built.** Session-persistent view state —
+change board→table or set a filter, go elsewhere, come back: the choice holds. The URL
+stays the source of truth (a link naming its own state always wins; only a bare arrival
+is refilled), per board, sessionStorage so a new day starts clean. Remaining from Q9:
+profile-roaming defaults and user-saved views — both schema work for their own PRs.
+
+**Update (rev 3, 26 Aug): the A-half is built.** Landing page and default jobs view are
+real (`data/preferences.ts`, localStorage — the theme's precedent), applied at the index
+route and as `useBoardParams`' default; a link naming its own view still wins. The hint
+owns up to device-local storage. The C-half — profile-roaming defaults, session view
+state, user-saved views (Amber's Q9 layers) — still needs its preferences home.
 
 ![Settings](docs/comparison-screenshots/settings.png)
 
@@ -1571,6 +1724,11 @@ Class becomes A (wire the selects to the store) + C (the preferences/saved-views
 ---
 
 #### G40 · Notification matrix persistence — **C + D**
+
+**Update (rev 3, 26 Aug): the matrix saves.** Toggles persist per device
+(`preferences.ts`), defaults staying deliberately quiet, and the panel owns up:
+delivery starts when notifications are built — in-app first (Q4), Teams/email later.
+Recording the choices now means nobody re-answers seven questions at rollout.
 
 **Prototype.** Seven event types × three channels (In-app / Email / Teams) as toggles,
 with deliberately quiet defaults — email only for mentions and change requests, Teams only
@@ -1698,6 +1856,25 @@ adds one rule: SLA clocks don't run on cancelled records.
 
 #### G44 · Team management UI — **A**
 
+**Update (rev 3, 26 Aug): largely built.** Admin → Teams renames (the slug never
+changes, so nothing breaks) and retires/restores — retire is a flag, per the 0026
+no-DELETE policy — with the jobs-held guard disabling retirement until jobs are handed
+on; retired teams stay listed, dimmed, so they can be restored. Members and jobs-held are
+real. **Creating a new team is deferred**: the app's `TeamId` union is closed over the
+seeded slugs (and `verify/seeds.sh` asserts stub and database agree), so create-team
+needs that type opened and the seed-check contract revisited — flagged, not fudged.
+
+**Update (rev 3, 27 Aug): create-team built, on Amber's answer** ("build it next").
+The `TeamId` union opened to `string` (the closure only ever held while teams were fixed
+at compile time); `createTeam` joined the seam — the slug is cut from the name once by
+`teamSlug()` (shared with the UI preview, so what the admin sees is what the database
+keys) and slots after the last active team, under the 0026 `admins add teams` policy that
+was already waiting. Admin → Teams grows the form: name in, permanent slug previewed,
+Add disabled with a reason when the slug is taken. `verify/seeds.sh`'s equality became
+an **ordered subset** — app-created teams are allowed; a missing or reordered seeded
+slug still fails (watched failing both ways). Insert shape proved against the live
+schema in a rolled-back transaction.
+
 ![Admin users (prototype)](docs/comparison-screenshots/admin-users.png)
 
 **Prototype.** Teams tab: members, phases owned, jobs held, not-on-track count, and
@@ -1754,6 +1931,12 @@ App today: app/src/pages/AdminPage.tsx:311-343 (token grid)
 
 #### G46 · Date-range filter — **C**
 
+**Update (rev 3, 26 Aug): real, on the one date every job carries.** The Date select
+filters on when a job entered its current stage — "Moved stage in last 7/30 days / this
+month", labels saying the semantics out loud — riding the same filters array as the
+chips, so it lands in the URL (`?date=7d`) and the Showing count. Latest-activity and
+dated-property ranges can widen it later; the inert select is gone.
+
 ![Date range popover](docs/comparison-screenshots/daterange-popover.png)
 
 **Prototype.** A working date filter: trigger showing "Any date" / "Jul 1 – Jul 17" /
@@ -1785,6 +1968,13 @@ richer source later.
 ---
 
 #### G47 · Additional filter fields — **C**
+
+**Update (rev 3, 26 Aug): Type is back.** The project's type rides every job through
+`job_display`, so the Type filter narrows for real on all three list pages — enum as the
+value, labels free to change. Tag still waits on tag wiring; there is deliberately no
+Team-member filter (the Team filter matches membership). The same pass fixed the empty
+state: filters that empty a view now say "no jobs match the current filters" instead of
+blaming a search nobody typed.
 
 **Prototype.** Seven filters: type, stage, status, team, team member (jobs/reports);
 manager, division (projects) — with per-page validity and silent cleanup of stale keys
@@ -1824,6 +2014,10 @@ shows real names with an honest "Unassigned" column.
 ---
 
 #### G48 · Live-region announcements — **A**
+
+**Update (rev 3, 26 Aug): built** — the toolbar's "Showing N of M" is mirrored into a
+visually-hidden `role=status` region, so filtering is no longer silent to a screen
+reader.
 
 **Prototype.** A visually-hidden `role=status` live region announced "{N} of {M} jobs
 shown. {filter description}" on every render, debounced 120ms — filtering was previously

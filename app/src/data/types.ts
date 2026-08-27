@@ -575,7 +575,15 @@ export const TEAM_IDS = [
   "scheduling", "selections", "estimating", "construction", "construction_admin",
   "finance", "maintenance", "lofty_general", "commercial", "executive", "admin"
 ] as const;
-export type TeamId = (typeof TEAM_IDS)[number];
+/**
+ * A team slug. This was `(typeof TEAM_IDS)[number]` — a closed union — until teams
+ * became creatable from Admin (Amber, 27 Aug: "build it next"). A union can only name
+ * teams that existed at compile time, so the moment the app can add a row, the type had
+ * to open. What held the union's ground moves elsewhere: `TEAM_SEED` stays the
+ * backendless fallback, and `verify/seeds.sh` keeps it honest as an ordered subset of
+ * the live table rather than the whole of it.
+ */
+export type TeamId = string;
 
 /**
  * The team every new record opens with — Acquisition & Development, the team that owns
@@ -590,6 +598,19 @@ export const OPENING_TEAM: TeamId = "acquisition_development";
 /** The label for a slug, falling back to the slug itself rather than to blank. */
 export const teamName = (id: TeamId | string, from: readonly Team[] = TEAM_SEED): string =>
   from.find(t => t.id === id)?.name ?? id;
+
+/**
+ * The slug a team name gets — cut once at creation, then permanent. One function so the
+ * Admin screen's preview and the repository's insert can never disagree about what
+ * "Pre-Construction Admin" becomes. Empty when the name has no letter or digit to keep.
+ */
+export const teamSlug = (name: string): string =>
+  name
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 
 export const PROFILE_STATUSES = ["active", "pending", "inactive"] as const;
 export type ProfileStatus = (typeof PROFILE_STATUSES)[number];

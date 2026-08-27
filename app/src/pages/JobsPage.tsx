@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import {
-  Button, Counter, Heading, Modal, ModalBasicLayout, ModalContent, ModalFooter,
+  Button, Heading, Modal, ModalBasicLayout, ModalContent, ModalFooter,
   ModalHeader, Text
 } from "@vibe/core";
 import {
-  LINEAR_STAGES, PROJECT_TYPE_LABELS, RECORD_STATUS_LABELS, RECORD_STATUSES
+  LINEAR_STAGES, PROJECT_TYPES, PROJECT_TYPE_LABELS, RECORD_STATUS_LABELS, RECORD_STATUSES
 } from "../data/types";
 import { useStages, useTeams, useTemplatePhases } from "../data/useLookups";
 import { useBoardRecords, type BoardJob } from "../data/boardModel";
@@ -18,9 +18,14 @@ import { SavedViewTabs } from "../components/SavedViewTabs";
 import { JobCard, StatusPill } from "../components/RecordCards";
 import { JobDrawer } from "../components/JobDrawer";
 import { JOB_MOVE_NOTE, MoveStageDialog, isForwardMove } from "../components/MoveStageDialog";
+import { SortHeader, sortRows, type SortState } from "../components/SortableTable";
+import { JobsGantt } from "../components/JobsGantt";
+import { MonthCalendar } from "../components/MonthCalendar";
 import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import type { StageName, TeamId } from "../data/types";
+import { accentStyle, columnAccent } from "../theme/accents";
+import { readPrefs } from "../data/preferences";
 import { Token } from "../components/Token";
 import { Toolbar } from "../components/Toolbar";
 import { Problem, Result } from "../components/Form";
@@ -55,8 +60,10 @@ export function JobsPage() {
 
 
   const {
-    view, setView, grouping, setGrouping, filters, setFilters, saved, setSaved, search
-  } = useBoardParams({ view: "Board", grouping: "Stage" });
+    view, setView, grouping, setGrouping, filters, setFilters, setMany, saved, setSaved, search
+    // The default view is the preference (G39); a link that names its own view still
+    // wins, because the URL is the record of what somebody sent you.
+  } = useBoardParams({ view: readPrefs().defaultJobsView, grouping: "Stage" });
   /**
    * Drag a card between columns — but only when the columns ARE the lifecycle, and only
    * for people the database would let finish the move. Grouped by Team the columns are
@@ -120,6 +127,7 @@ export function JobsPage() {
       case "Stage": return toOptions(viewStages);
       case "Team": return toOptions(teamNames);
       case "Status": return statusOptions();
+      case "Type": return PROJECT_TYPES.map(t => ({ value: t, label: PROJECT_TYPE_LABELS[t] }));
       default: return [];
     }
   };
@@ -200,6 +208,45 @@ export function JobsPage() {
   }, [grouping, rows, viewStages, teamNames]);
 
   /**
+   * Table sorting (G12) — the SortableTable idiom the Admin tables already use, applied
+   * within each group so "Group by" and "sort by" compose instead of fighting. No sort
+   * until a header is clicked: the natural order (pipeline order for stages) is itself
+   * meaningful, and a default sort would quietly erase it.
+   */
+  type JobsColumn = "job" | "project" | "address" | "type" | "stage" | "team" | "assignee" | "createdBy" | "days" | "status";
+  const [tableSort, setTableSort] = useState<SortState<JobsColumn> | null>(null);
+  const toggleTableSort = (key: JobsColumn) =>
+    setTableSort(sort =>
+      sort?.key === key
+        ? { key, direction: sort.direction === "asc" ? "desc" : "asc" }
+        : { key, direction: "asc" }
+    );
+  const jobColumns = useMemo<Record<JobsColumn, (j: BoardJob) => string | number | null>>(
+    () => ({
+      job: j => j.jobNumber,
+      project: j => Number(j.projectNumber),
+      address: j => j.currentAddress ?? null,
+      type: j => (j.projectType ? PROJECT_TYPE_LABELS[j.projectType] : null),
+      // Pipeline position, not the alphabet — "Construction" before "Pre-construction"
+      // alphabetically would be the lifecycle backwards.
+      stage: j => {
+        const at = viewStages.indexOf(j.stage);
+        return at === -1 ? null : at;
+      },
+      team: j => j.team,
+      assignee: j => j.assigneeName ?? null,
+      createdBy: j => j.createdBy ?? null,
+      days: j => j.daysInStage,
+      status: j => RECORD_STATUS_LABELS[j.status]
+    }),
+    [viewStages]
+  );
+  const tableGroups = useMemo(
+    () => (tableSort ? groups.map(g => ({ ...g, jobs: sortRows(g.jobs, jobColumns, tableSort) })) : groups),
+    [groups, jobColumns, tableSort]
+  );
+
+  /**
    * A number nobody recognises goes back to the board, so a stale link is a board rather
    * than a dead end. Guarded on `all.length` on purpose: the list is empty both while the
    * lookups load and when the app is bound to real data with no placeholder shape, and
@@ -271,12 +318,21 @@ export function JobsPage() {
 
       {noMatches && <NoResults noun="jobs" />}
 
+      {/* The drag hint, from the prototype's view header — shown only when dragging is
+          actually possible, so it never promises what the rung below manager lacks. */}
+      {view === "Board" && dragEnabled && !loading && all.length > 0 && (
+        <div className="drag-hint">
+          <Text type="text3" color="secondary">Drag cards between columns to move a job</Text>
+        </div>
+      )}
+
       {view === "Board" && !noMatches && !loading && all.length > 0 && (
         <div className="board">
-          {groups.map(g => (
+          {groups.map((g, gi) => (
             <section
               className="board-column"
               key={g.key}
+              style={accentStyle(columnAccent(grouping, g.key, gi))}
               onDragOver={e => {
                 if (dragEnabled && dragged && isForwardMove(dragged.stage, g.key)) {
                   e.preventDefault();
@@ -292,11 +348,34 @@ export function JobsPage() {
               }}
             >
               <div className="board-column-head">
-                <div>
-                  <Text type="text3" color="secondary">{grouping}</Text>
-                  <Text type="text2" weight="medium">{g.key}</Text>
-                </div>
-                <Counter count={g.jobs.length} kind="line" />
+                {/* Drill-down (G8), as navigation rather than a page of its own: the
+                    prototype's drill-down asked "who holds what inside this phase",
+                    and the board already answers that — filtered to the phase,
+                    regrouped by team, in the URL like everything else. */}
+                {grouping === "Stage" ? (
+                  <button
+                    type="button"
+                    className="board-col-drill"
+                    title={`Open ${g.key} grouped by team`}
+                    onClick={() =>
+                      setMany({
+                        grouping: "Team",
+                        filters: [...filters.filter(f => f.field !== "Stage"), { field: "Stage", value: g.key }]
+                      })
+                    }
+                  >
+                    <Text type="text3" color="secondary">{grouping}</Text>
+                    <Text type="text2" weight="medium">{g.key} ›</Text>
+                  </button>
+                ) : (
+                  <div>
+                    <Text type="text3" color="secondary">{grouping}</Text>
+                    <Text type="text2" weight="medium">{g.key}</Text>
+                  </div>
+                )}
+                {/* Ink-on-tint, per the accent rule — the one place the column's colour
+                    repeats, so the chip and the strip read as one system. */}
+                <span className="col-count">{g.jobs.length}</span>
               </div>
 
               {g.jobs.length === 0 ? (
@@ -400,23 +479,28 @@ export function JobsPage() {
                     />
                   </th>
                 )}
-                <th>Job</th>
-                <th>Project</th>
-                <th>Address</th>
-                <th>Type</th>
-                <th>Stage</th>
-                <th>Team</th>
-                <th>Assigned to</th>
-                <th>Created by</th>
-                <th className="num">Days in stage</th>
-                <th>Status</th>
+                {([
+                  ["job", "Job"], ["project", "Project"], ["address", "Address"],
+                  ["type", "Type"], ["stage", "Stage"], ["team", "Team"],
+                  ["assignee", "Assigned to"], ["createdBy", "Created by"],
+                  ["days", "Days in stage"], ["status", "Status"]
+                ] as const).map(([key, label]) => (
+                  <SortHeader
+                    key={key}
+                    column={key}
+                    label={label}
+                    sort={tableSort ?? { key: "" as JobsColumn, direction: "asc" }}
+                    onSort={toggleTableSort}
+                    className={key === "days" ? "num" : undefined}
+                  />
+                ))}
               </tr>
             </thead>
             {/* One tbody per group, so the table answers the same "Group by" the board
                 does. Empty groups are dropped here where the board keeps them: a column
                 with no cards is a place to drag one to, and a heading with no rows under
                 it is just a heading. */}
-            {groups.filter(g => g.jobs.length > 0).map(g => (
+            {tableGroups.filter(g => g.jobs.length > 0).map(g => (
               <tbody key={g.key} className="group">
                 <tr className="group-head">
                   <th scope="colgroup" colSpan={can("user") ? 11 : 10}>
@@ -463,72 +547,22 @@ export function JobsPage() {
       )}
 
       {view === "Gantt" && !noMatches && !loading && all.length > 0 && (
-        <div className="panel">
-          <div className="panel-head">
-            <Text type="text2" weight="bold">Time in stage against the template</Text>
-            <Text type="text3" color="secondary">
-              Expected days come from pipeline_stages
-            </Text>
-          </div>
-          {/* A bar needs something to be a proportion OF. `?? 14` used to supply that,
-              which drew every job against an SLA nobody set — and 14 is not a neutral
-              default, it is a claim. With no expectation the honest bar is no bar. */}
-          {rows.map(j => {
-            const expected = expectedDaysByStage[j.stage];
-            const pct = expected ? Math.min(100, Math.round((j.daysInStage / expected) * 100)) : 0;
-            return (
-              <div className="bar-row" key={j.jobNumber}>
-                <Text type="text3">{j.jobNumber} · {j.stage}</Text>
-                <div className="bar-track">
-                  {expected != null && (
-                    <div className="bar-fill" style={{ width: `${pct}%` }} />
-                  )}
-                </div>
-                <span className="bar-num">
-                  {expected != null ? `${j.daysInStage}/${expected}d` : `${j.daysInStage}d`}
-                </span>
-              </div>
-            );
-          })}
-          {Object.keys(expectedDaysByStage).length === 0 && (
-            <Text type="text3" color="secondary" ellipsis={false}>
-              No stage has an expected duration set, so there is nothing to measure these
-              against — only the days each job has been where it is.
-            </Text>
-          )}
-        </div>
+        <JobsGantt
+          groups={groups}
+          grouping={grouping}
+          expectedDaysByStage={expectedDaysByStage}
+          onOpen={openOne}
+        />
       )}
 
       {view === "Calendar" && !noMatches && !loading && all.length > 0 && (
-        <div className="panel">
-          <div className="panel-head">
-            <Text type="text2" weight="bold">Scheduled dates</Text>
-            <Text type="text3" color="secondary">
-              Every date here is a property definition of format “date”
-            </Text>
-          </div>
-          <div className="data-table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr><th>Job</th><th>Stage</th><th>Date field</th><th>Value</th></tr>
-              </thead>
-              <tbody>
-                {rows.map(j => (
-                  <tr key={j.jobNumber}>
-                    <td>{j.jobNumber}</td>
-                    <td>{j.stage}</td>
-                    <td><Token>property_defs.label</Token></td>
-                    <td><Token>property_values.value</Token></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <MonthCalendar rows={rows} expectedDaysByStage={expectedDaysByStage} onOpen={openOne} />
       )}
 
       {openJob && (
         <JobDrawer
+          siblings={all}
+          onJump={openOne}
           job={openJob}
           onClose={() => navigate(`/jobs${search}`)}
           onMoved={() => setReloadKey(k => k + 1)}

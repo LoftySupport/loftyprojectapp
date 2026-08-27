@@ -167,6 +167,12 @@ export function createStubRepository(): Repository {
     // ---- lookups: the business process ----------------------------------
     async listStages(): Promise<Stage[]> { return SEED_STAGES; },
     async listTeams(): Promise<Team[]> { return SEED_TEAMS; },
+    async updateTeam(): Promise<never> {
+      throw new Error("Editing a team needs Supabase.");
+    },
+    async createTeam(): Promise<never> {
+      throw new Error("Adding a team needs Supabase.");
+    },
     /**
      * The stages, with nothing attached to them.
      *

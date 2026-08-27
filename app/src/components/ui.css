@@ -156,9 +156,30 @@
   flex-shrink: 0;
   background: var(--primary-background-color);
   border: 1px solid var(--layout-border-color);
-  border-top: 4px solid var(--primary-color);
+  /* The phase strip. Containers encode phase, records encode health — the accent vars
+     come from theme/accents.ts per column; the primary green is only the fallback. */
+  border-top: 4px solid var(--col-accent, var(--primary-color));
   border-radius: var(--border-radius-medium);
   padding: var(--space-12);
+}
+/* The count chip repeats the column's colour as ink-on-tint — the one repeat allowed. */
+.col-count {
+  font: var(--font-text3-normal);
+  font-weight: 600;
+  color: var(--col-ink, var(--secondary-text-color));
+  background: var(--col-tint, var(--allgrey-background-color));
+  border-radius: 999px;
+  padding: 1px 8px;
+  min-width: 24px;
+  text-align: center;
+}
+.drag-hint {
+  display: inline-flex;
+  align-items: center;
+  background: var(--allgrey-background-color);
+  border-radius: 999px;
+  padding: 2px var(--space-12);
+  margin-bottom: var(--space-12);
 }
 .board-column-head {
   display: flex;
@@ -433,6 +454,12 @@
   padding: var(--space-16);
   border-bottom: 1px solid var(--layout-border-color);
 }
+/* Docked, the head stacks: four controls beside a full street address left the title
+   reading "Lot 1, 28…" in a 460px panel. The actions get their own line under the
+   title — every control keeps its size, the address keeps its words. Expanded, one
+   row fits and stays. */
+.drawer:not(.is-expanded) .drawer-head { flex-direction: column; align-items: stretch; }
+.drawer:not(.is-expanded) .drawer-actions { justify-content: flex-end; }
 /* `min-width: 0` on the title block, `flex-shrink: 0` on the close button. Without
    the pair the breadcrumb and address claim their intrinsic width and push the ×
    past the edge of the panel — and on a phone, where the drawer covers the whole
@@ -451,7 +478,14 @@
    stay usable. "Full screen" meaning the full app hid the nav under the record, and
    the way back out of a full-screen job was gone with it. */
 .drawer.is-expanded { width: calc(100vw - var(--shell-rail-w, 0px)); }
-.drawer-body { flex: 1; overflow-y: auto; padding: var(--space-16); }
+/* Bottom padding clears the Ask FAB (48px + its 24px inset), which floats fixed over
+   the drawer's corner — scrolled to the end, the last row's value sat under it. */
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-16);
+  padding-bottom: calc(48px + 2 * var(--space-24));
+}
 
 /* ---- template phases ----------------------------------------------------- */
 .phase-grid {
@@ -1084,6 +1118,14 @@ code { overflow-wrap: anywhere; }
 /* A field-row whose value side holds a value AND a control beside it — the stage with
    its move picker, the folder link with its input. */
 .field-inline { display: flex; align-items: center; gap: var(--space-8); }
+/* The add-team form under the Teams table: the input row, then the slug preview line. */
+.team-add {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-16);
+  max-width: 420px;
+}
 
 /* The three project dates. A native date input, dressed to sit in a field-row the way
    Vibe's small TextField does — and empty when no date is set, never a stand-in. */
@@ -1115,3 +1157,391 @@ code { overflow-wrap: anywhere; }
   padding: var(--space-12);
   margin-top: var(--space-8);
 }
+
+/* ---- Ask Lofty dock ------------------------------------------------------
+   The one AI surface. Floating over everything except modals (drawer and scrims sit
+   at 40/41; Vibe's portaled dialogs at 10001), which is what a dock is. */
+.ask-fab {
+  position: fixed;
+  right: var(--space-24);
+  bottom: var(--space-24);
+  z-index: 45;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: var(--primary-color);
+  color: var(--text-color-on-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--box-shadow-medium);
+}
+.ask-fab:hover { background: var(--primary-hover-color); }
+.ask-fab:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+.ask-dock {
+  position: fixed;
+  right: var(--space-24);
+  bottom: calc(48px + 2 * var(--space-24));
+  z-index: 45;
+  width: min(380px, calc(100vw - 2 * var(--space-24)));
+  background: var(--primary-background-color);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-medium);
+  box-shadow: var(--box-shadow-medium);
+  display: flex;
+  flex-direction: column;
+}
+.ask-dock-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: var(--space-12) var(--space-16);
+  border-bottom: 1px solid var(--layout-border-color);
+}
+.ask-dock-body { padding: var(--space-12) var(--space-16); }
+.ask-dock-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  margin-top: var(--space-12);
+}
+.ask-dock-chip {
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+  background: var(--allgrey-background-color);
+  border-radius: 999px;
+  padding: 2px var(--space-12);
+}
+.ask-dock-input { padding: var(--space-12) var(--space-16); border-top: 1px solid var(--layout-border-color); }
+.ask-dock-input input {
+  width: 100%;
+  border: 1px solid var(--ui-border-color);
+  border-radius: var(--border-radius-small);
+  padding: 6px var(--space-8);
+  font: var(--font-text2-normal);
+  background: var(--allgrey-background-color);
+  color: var(--secondary-text-color);
+}
+
+/* ---- notifications bell -------------------------------------------------- */
+.notif-bell-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--border-radius-small);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.notif-bell-trigger:hover { background: var(--primary-selected-color); }
+.notif-panel { width: min(400px, 80vw); padding: var(--space-4); }
+.notif-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-8);
+  margin-bottom: var(--space-4);
+}
+.notif-panel-note { margin: 0 0 var(--space-8); }
+.notif-signal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.notif-signal-list li { padding: var(--space-8) 0; border-top: 1px solid var(--layout-border-color); }
+
+/* ---- drawer fullscreen tabs ---------------------------------------------- */
+.drawer-tabs {
+  padding: 0 var(--space-24);
+  border-bottom: 1px solid var(--layout-border-color);
+}
+
+/* The departments placeholder — the handoff shape with its three states, dimmed
+   because they are the shape, not the facts. */
+.dept-placeholder { display: flex; flex-direction: column; gap: var(--space-8); margin-top: var(--space-12); }
+.dept-block {
+  font: var(--font-text2-normal);
+  color: var(--secondary-text-color);
+  border-left: 3px solid var(--ui-border-color);
+  background: var(--allgrey-background-color);
+  border-radius: 0 var(--border-radius-small) var(--border-radius-small) 0;
+  padding: var(--space-8) var(--space-12);
+}
+.dept-block.is-current { border-left-color: var(--lofty-orange, #d96435); }
+.dept-block.is-done { border-left-color: var(--positive-color, #00854d); }
+
+/* ---- toasts --------------------------------------------------------------
+   Bottom-centre, the prototype's spot. Vibe's own rule is fixed top-centre — it
+   already carries position/left/transform, so this overrides only the edge; setting
+   bottom WITHOUT top:auto stretches the toast the full height of the screen. */
+.app-toast {
+  top: auto;
+  bottom: var(--space-24);
+  z-index: 46;
+}
+
+/* A retired team's row — present so it can be restored, dimmed so it reads as past. */
+.row-retired td { color: var(--secondary-text-color); }
+
+/* ---- the gantt (G13) ------------------------------------------------------
+   A day grid over real facts: solid elapsed stay, tinted SLA window, orange today
+   line. The left column is sticky so the job stays named while the timeline scrolls. */
+.gantt-scroll { overflow-x: auto; }
+.gantt { --gantt-left: 240px; min-width: 100%; }
+.gantt-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--layout-border-color); }
+.gantt-row:last-child { border-bottom: 0; }
+.gantt-left {
+  flex: 0 0 var(--gantt-left);
+  width: var(--gantt-left);
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--primary-background-color);
+  border-right: 1px solid var(--layout-border-color);
+  padding: var(--space-8) var(--space-12);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: left;
+}
+.gantt-job { border: 0; font: inherit; color: inherit; cursor: pointer; }
+.gantt-job:hover { background: var(--primary-background-hover-color); }
+.gantt-job-no { font: var(--font-text2-medium); }
+.gantt-job-sub { font: var(--font-text3-normal); color: var(--secondary-text-color); }
+.gantt-days { position: relative; display: flex; flex: 1 0 auto; }
+.gantt-day {
+  width: 28px;
+  flex: 0 0 28px;
+  text-align: center;
+  padding: var(--space-4) 0;
+  border-left: 1px solid var(--border-color-ui, transparent);
+}
+.gantt-day-num { font: var(--font-text3-normal); color: var(--secondary-text-color); }
+.gantt-day.is-weekend { background: var(--allgrey-background-color); }
+.gantt-day.is-today .gantt-day-num { color: var(--lofty-orange-strong); font-weight: 700; }
+.gantt-band .gantt-left { background: var(--col-tint, var(--allgrey-background-color)); color: var(--col-ink, inherit); }
+.gantt-band-fill { background: var(--col-tint, var(--allgrey-background-color)); opacity: 0.45; }
+.gantt-lane { height: 44px; }
+.gantt-window {
+  position: absolute;
+  top: 12px;
+  height: 20px;
+  border-radius: 4px;
+  background: var(--primary-selected-color);
+}
+.gantt-bar {
+  position: absolute;
+  top: 14px;
+  height: 16px;
+  border-radius: 4px;
+  background: var(--primary-color);
+}
+.gantt-bar.is-cut { border-radius: 0 4px 4px 0; }
+.gantt-bar.is-over { background: var(--lofty-orange-strong, #b8482a); }
+.gantt-today-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--lofty-orange, #f47e63);
+  pointer-events: none;
+}
+.gantt-note { display: block; margin-top: var(--space-12); }
+
+/* ---- the month calendar (G14) -------------------------------------------- */
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-medium);
+  overflow: hidden;
+}
+.cal-dow {
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+  text-align: center;
+  padding: var(--space-4) 0;
+  background: var(--allgrey-background-color);
+  border-bottom: 1px solid var(--layout-border-color);
+}
+.cal-cell {
+  min-height: 96px;
+  padding: var(--space-4) var(--space-8);
+  border-right: 1px solid var(--border-color-ui, var(--layout-border-color));
+  border-bottom: 1px solid var(--border-color-ui, var(--layout-border-color));
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cal-cell:nth-child(7n) { border-right: 0; }
+.cal-cell.is-weekend { background: var(--allgrey-background-color); }
+.cal-cell.is-outside { opacity: 0.45; }
+.cal-cell.is-today { box-shadow: inset 0 0 0 2px var(--lofty-orange, #f47e63); }
+.cal-date { display: flex; align-items: baseline; justify-content: space-between; font: var(--font-text3-normal); color: var(--secondary-text-color); }
+.cal-today-chip {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--lofty-orange-strong);
+  background: var(--lofty-orange-tint);
+  border-radius: 999px;
+  padding: 0 6px;
+}
+.cal-entry {
+  font: var(--font-text3-normal);
+  text-align: left;
+  border: 0;
+  border-left: 3px solid var(--ui-border-color);
+  background: var(--allgrey-background-color);
+  border-radius: 0 var(--border-radius-small) var(--border-radius-small) 0;
+  padding: 1px var(--space-4);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cal-entry:hover { background: var(--primary-selected-color); }
+.cal-entry.is-due { border-left-color: var(--lofty-orange-strong, #b8482a); background: var(--lofty-orange-tint, #fdeee9); }
+.cal-more { font: var(--font-text3-normal); color: var(--secondary-text-color); }
+.cal-empty { display: flex; align-items: center; gap: var(--space-12); margin-top: var(--space-12); }
+
+@media (max-width: 900px) {
+  .gantt { --gantt-left: 160px; }
+  .cal-cell { min-height: 64px; }
+}
+
+/* Screen-reader-only. The classic clip pattern; display:none would silence it. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---- print (G37) ----------------------------------------------------------
+   The browser's own print, with the chrome dropped: what you filtered is what
+   prints, and the print-only line says when and how many. */
+.print-only { display: none; }
+@media print {
+  .app-side, .app-header, .app-foot, .app-side-scrim, .ask-fab, .ask-dock,
+  .toolbar, .saved-views, .drag-hint, .bulk-bar, .app-alert,
+  [role="tablist"], .panel-head button { display: none !important; }
+  .app-main { padding: 0 !important; }
+  .panel { border: 0 !important; box-shadow: none !important; padding: 0 !important; }
+  .data-table-wrap { overflow: visible !important; }
+  tr { break-inside: avoid; }
+  .print-only {
+    display: block;
+    font: var(--font-text3-normal);
+    color: var(--secondary-text-color);
+    margin-bottom: var(--space-8);
+  }
+}
+
+/* Project card progress (G26) — jobs completed over jobs total, a real derivation. */
+.card-progress { display: flex; align-items: center; gap: var(--space-8); }
+.card-progress-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--allgrey-background-color);
+  overflow: hidden;
+}
+.card-progress-fill { height: 100%; background: var(--positive-color, #00854d); }
+
+/* ---- projects timeline (G28) --------------------------------------------- */
+.pgantt { position: relative; }
+.pgantt-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--layout-border-color); }
+.pgantt-row:last-child { border-bottom: 0; }
+.pgantt-head { border-bottom: 1px solid var(--layout-border-color); height: 28px; }
+.pgantt-left {
+  flex: 0 0 200px;
+  width: 200px;
+  padding: var(--space-8) var(--space-12);
+  border-right: 1px solid var(--layout-border-color);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: left;
+  background: var(--primary-background-color);
+}
+.pgantt-project { border: 0; font: inherit; color: inherit; cursor: pointer; }
+.pgantt-project:hover { background: var(--primary-background-hover-color); }
+.pgantt-lane { position: relative; flex: 1; min-height: 44px; }
+.pgantt-tick {
+  position: absolute;
+  top: 4px;
+  transform: translateX(-50%);
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+  white-space: nowrap;
+}
+.pgantt-bar {
+  position: absolute;
+  top: 14px;
+  height: 16px;
+  border-radius: 4px;
+  background: var(--primary-color);
+  min-width: 6px;
+}
+.pgantt-bar.is-over { background: var(--lofty-orange-strong, #b8482a); }
+@media (max-width: 900px) { .pgantt-left { flex-basis: 130px; width: 130px; } }
+
+/* The column head as a drill-down — a button that reads like the heading it is. */
+.board-col-drill {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--border-radius-small);
+}
+.board-col-drill:hover { text-decoration: underline; }
+.board-col-drill:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+
+/* In-drawer job search (G19) — jump without closing. */
+.drawer-find { position: relative; }
+.drawer-find input {
+  width: 100%;
+  border: 1px solid var(--ui-border-color);
+  border-radius: var(--border-radius-small);
+  padding: 6px var(--space-8);
+  font: var(--font-text2-normal);
+  background: var(--primary-background-color);
+  color: inherit;
+}
+.drawer-find input:focus { outline: none; border-color: var(--primary-color); }
+.drawer-find-results {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-small);
+  margin-top: var(--space-4);
+  overflow: hidden;
+}
+.drawer-find-results button {
+  border: 0;
+  background: var(--primary-background-color);
+  text-align: left;
+  padding: var(--space-8) var(--space-12);
+  font: var(--font-text3-normal);
+  color: inherit;
+  cursor: pointer;
+  border-top: 1px solid var(--layout-border-color);
+}
+.drawer-find-results button:first-child { border-top: 0; }
+.drawer-find-results button:hover { background: var(--primary-background-hover-color); }

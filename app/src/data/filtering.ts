@@ -27,6 +27,27 @@ function jobMatchesOne(j: BoardJob, f: ToolbarFilter): boolean {
     // The Status select carries the enum as its value and the label as its text, so this
     // compares against the enum. Comparing labels would break the moment one is reworded.
     case "Status": return j.status === f.value;
+    // The project's type, inherited by the job — the enum as the value, labels free.
+    case "Type": return j.projectType === f.value;
+    // "When did it move" — matched against job_stage_entered_at, the one real date every
+    // job carries. The prototype filtered on a fabricated latest-activity date; this is
+    // the honest nearest fact, and the option labels say exactly what they mean.
+    case "Date": {
+      const entered = Date.parse(j.stageEnteredAt);
+      if (Number.isNaN(entered)) return false;
+      const now = Date.now();
+      const DAY = 86_400_000;
+      switch (f.value) {
+        case "7d": return now - entered <= 7 * DAY;
+        case "30d": return now - entered <= 30 * DAY;
+        case "month": {
+          const d = new Date(entered);
+          const t = new Date(now);
+          return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth();
+        }
+        default: return true;
+      }
+    }
     default: return true;
   }
 }

@@ -1,8 +1,10 @@
-import { Avatar, Text } from "@vibe/core";
+import { Avatar, Button, Text } from "@vibe/core";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "../data/DataProvider";
 import { initialsOf, useAuth } from "../data/AuthProvider";
-import { greetingName } from "../data/types";
-import { useTeamLabels } from "../data/useLookups";
+import { greetingName, teamName } from "../data/types";
+import { useTeamLabels, useTeams, useTemplatePhases } from "../data/useLookups";
+import { daysSince } from "../data/boardModel";
 import { Token } from "../components/Token";
 import { PageShell } from "./Placeholder";
 import "./DashboardPage.css";
@@ -33,6 +35,19 @@ export function DashboardPage() {
   const { data: jobs, loading } = useQuery(r => r.listJobs(), []);
   const { profile } = useAuth();
   const { labels, error: teamsError } = useTeamLabels();
+  const { teams } = useTeams();
+  const { expectedDaysByStage } = useTemplatePhases();
+  const navigate = useNavigate();
+
+  // YOUR jobs, not all jobs — the assignee binding is real now, and this page once
+  // claimed every job in the company was assigned to whoever was looking at it.
+  // Sorted most-days-in-stage first, the prototype's order: the one that has sat
+  // longest is the one to look at.
+  const myJobs = profile
+    ? jobs
+        .filter(j => j.assigneeId === profile.id)
+        .sort((a, b) => daysSince(b.stageEnteredAt) - daysSince(a.stageEnteredAt))
+    : [];
 
   // Joined rather than reduced to one: somebody can sit in several teams, and picking
   // the first would quietly answer a question this page is not asking.
@@ -61,27 +76,6 @@ export function DashboardPage() {
         // louder than the thing it is waiting for. If the lookup actually failed, say so:
         // silence forever reads as "you are in no team", which is a different fact.
         : <span className="pd-unassigned">{teamsError ? "Team names unavailable" : ""}</span>;
-
-  /**
-   * The same answer as the greeting, phrased for a sentence.
-   *
-   * This read `Nothing due to hand over to {{profiles.teams}}.` — a hardcoded token, on
-   * a page where the greeting three inches away had just resolved the same field. A
-   * token means "the app cannot answer this"; `profiles.teams` is answerable, so it was
-   * reporting a gap that had closed. That is the mistake `Locked` on the Settings page
-   * carries a whole comment about.
-   *
-   * Three sentences rather than one sentence with `teamLabel` dropped into it, because
-   * two of the three states are fragments that do not fit the grammar — "Nothing due to
-   * hand over to No team assigned." "your team" in the last case is not a stand-in for
-   * a name; it is the sentence declining to use one.
-   */
-  const handoverNote: React.ReactNode =
-    teamNames?.length
-      ? <>Nothing due to hand over to {teamNames.join(", ")}.</>
-      : profile && !profile.teams.length
-        ? <>Nothing due to hand over — you are not in a team yet.</>
-        : <>Nothing due to hand over to your team.</>;
 
   if (loading) {
     return (
@@ -124,34 +118,78 @@ export function DashboardPage() {
             <span className="pd-team-mark" aria-hidden="true" />
             <div>
               <div className="pd-team-name">{teamLabel}</div>
-              <div className="pd-team-sub">{jobs.length} jobs assigned to you</div>
+              {/* A real count now — this read `jobs.length`, which is every job in the
+                  company, presented as yours. */}
+              <div className="pd-team-sub">
+                {myJobs.length} job{myJobs.length === 1 ? "" : "s"} assigned to you
+              </div>
             </div>
           </div>
 
+          {/* The hero was "0% of your jobs are on track", computed from nothing — the
+              same claim the Reports page was cured of. The rate arrives with the health
+              calculation; until then the tile says what it is waiting for. */}
           <div className="pd-hero">
-            <div className="pd-hero-num">0%</div>
-            <div className="pd-hero-lbl">Of your jobs are on track</div>
+            <div className="pd-hero-num">—</div>
+            <div className="pd-hero-lbl">On-track rate — coming with the health calculation</div>
           </div>
 
           <div className="pd-activity">
             <div className="pd-activity-head">
               <span>Your workload</span>
-              {/* Was tagged "Live". These three figures are hardcoded zeroes, so the tag
-                  was the one part of the panel making a claim, and the claim was false. */}
             </div>
             <div className="pd-activity-stats">
-              <div><div className="pd-stat-num">0</div><div className="pd-stat-lbl">Assigned</div></div>
-              <div><div className="pd-stat-num">0</div><div className="pd-stat-lbl">Need you</div></div>
-              <div><div className="pd-stat-num">0</div><div className="pd-stat-lbl">Overdue</div></div>
+              <div><div className="pd-stat-num">{myJobs.length}</div><div className="pd-stat-lbl">Assigned</div></div>
+              {/* Em dashes, not zeroes: 0 claims the system checked and found nothing,
+                  and nothing checks yet. Both wait on the health calculation reading the
+                  SLAs now settable in Setup → Automations. */}
+              <div><div className="pd-stat-num">—</div><div className="pd-stat-lbl">Need you</div></div>
+              <div><div className="pd-stat-num">—</div><div className="pd-stat-lbl">Overdue</div></div>
             </div>
           </div>
         </div>
 
-        {/* middle — the job cards */}
+        {/* middle — your jobs, as cards. Real records: number, address, phase, team,
+            days in stage against the SLA when one is set. */}
         <div className="pd-col pd-cards">
-          <div className="pd-panel">
-            <Empty>No jobs assigned to you right now.</Empty>
-          </div>
+          {myJobs.length === 0 ? (
+            <div className="pd-panel">
+              <Empty>No jobs assigned to you right now.</Empty>
+            </div>
+          ) : (
+            myJobs.map(j => {
+              const days = daysSince(j.stageEnteredAt);
+              const expected = expectedDaysByStage[j.stage];
+              return (
+                <div className="pd-card" key={j.id} style={{ borderStyle: "solid", minHeight: 0 }}>
+                  <div className="pd-card-top">
+                    <div>
+                      <div className="pd-card-title">{j.currentAddress}</div>
+                      <div className="pd-card-no">{j.id}</div>
+                    </div>
+                    <span className="pd-phase-tag">{j.stage}</span>
+                  </div>
+                  <div className="pd-card-grid">
+                    <div>
+                      <span className="pd-lbl">Team</span>
+                      <span className="pd-val">{teamName(j.owningTeam, teams)}</span>
+                    </div>
+                    <div>
+                      <span className="pd-lbl">In stage</span>
+                      <span className="pd-val">
+                        {expected != null ? `${days} of ${expected} days` : `${days} day${days === 1 ? "" : "s"}`}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="pd-card-foot">
+                    <Button size="small" kind="secondary" onClick={() => navigate(`/jobs/${j.id}`)}>
+                      Open job
+                    </Button>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
 
         {/* right — the three attention panels */}
@@ -161,7 +199,13 @@ export function DashboardPage() {
               <span className="pd-panel-mark" aria-hidden="true" />
               <h3>Needs your attention</h3>
             </div>
-            <Empty>Nothing flagged — all your jobs are on track.</Empty>
+            {/* This said "all your jobs are on track" — a verdict nothing computes yet.
+                Each panel now says what will fill it and what that waits on, which is
+                Amber's Q4: notifications land here and on the bell this phase. */}
+            <Empty>
+              Coming soon — overdue, at-risk and waiting-on flags land here once the
+              health calculation reads the stage SLAs.
+            </Empty>
           </section>
 
           <section className="pd-panel">
@@ -169,7 +213,10 @@ export function DashboardPage() {
               <span className="pd-panel-mark incoming" aria-hidden="true" />
               <h3>Heading to your team</h3>
             </div>
-            <Empty>{handoverNote}</Empty>
+            <Empty>
+              Coming soon — jobs one phase away from {teamNames?.length ? teamNames.join(", ") : "your team"} will
+              show here once handoffs write the activity feed.
+            </Empty>
           </section>
 
           <section className="pd-panel">
@@ -177,7 +224,10 @@ export function DashboardPage() {
               <span className="pd-panel-mark mention" aria-hidden="true" />
               <h3>Mentions</h3>
             </div>
-            <Empty>No one has tagged you in a comment.</Empty>
+            <Empty>
+              Coming soon — comments that @mention you, with the quoted line. The
+              mentions table exists; the feed that reads it is next.
+            </Empty>
           </section>
         </div>
       </div>

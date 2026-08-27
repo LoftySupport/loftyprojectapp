@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { BreadcrumbsBar, BreadcrumbItem, Button, Heading, Text } from "@vibe/core";
+import { BreadcrumbsBar, BreadcrumbItem, Button, Heading, Tab, TabList, Text } from "@vibe/core";
 import { useMilestones, useTemplatePhases, useTeams } from "../data/useLookups";
 import type { BoardJob } from "../data/boardModel";
 import type { TeamId } from "../data/types";
@@ -13,6 +13,8 @@ import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { Select } from "./Select";
 import { Problem } from "./Form";
+import { useAskDock } from "./AskDock";
+import { useToasts } from "./Toasts";
 import { Token } from "./Token";
 import "./ui.css";
 
@@ -23,11 +25,15 @@ import "./ui.css";
  * Escape closes it and focus moves into the panel on open, because a drawer you can
  * only leave with the mouse is a trap for anyone driving from the keyboard.
  */
-export function JobDrawer({ job, onClose, onMoved }: {
+export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
   job: BoardJob;
   onClose: () => void;
   /** Bumps the board's reload after a stage move, so the card is already in its new column when the drawer closes. */
   onMoved: () => void;
+  /** Every job the drawer can jump to (G19) — the board's rows, unfiltered. */
+  siblings?: BoardJob[];
+  /** Jump to another job WITHOUT closing — the whole point of searching in here. */
+  onJump?: (j: BoardJob) => void;
 }) {
   const panel = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -36,6 +42,13 @@ export function JobDrawer({ job, onClose, onMoved }: {
   // control only on the create side. `open` is always true here: this component is
   // mounted only while the drawer is showing.
   const { expanded, canExpand, toggle } = usePanelExpand(true);
+  const { openAsk } = useAskDock();
+  const { toast } = useToasts();
+
+  // The fullscreen tab, sticky while the drawer stays open — editing a field must not
+  // bounce the view back to Main info (the prototype's rule). Docked has no tabs: a
+  // 420-wide column reads better as one scroll than as four hidden ones.
+  const [tab, setTab] = useState(0);
 
   // Once, on mount. Keyed on `onClose` this re-ran whenever the parent re-rendered and
   // pulled focus back to the drawer — the same fault that let the create form accept
@@ -44,11 +57,19 @@ export function JobDrawer({ job, onClose, onMoved }: {
     panel.current?.focus();
   }, []);
 
+  // Esc is a two-step in fullscreen (G20): the first press shrinks back to the docked
+  // panel — the state you came from — and the second closes. Losing the whole drawer to
+  // one keypress from fullscreen threw away your place twice over.
   const close = useRef(onClose);
   close.current = onClose;
+  const esc = useRef<() => void>(() => {});
+  esc.current = () => {
+    if (expanded) toggle();
+    else close.current();
+  };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close.current();
+      if (e.key === "Escape") esc.current();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -78,6 +99,19 @@ export function JobDrawer({ job, onClose, onMoved }: {
       setWhoBusy(false);
     }
   };
+
+  // In-drawer search (G19): find another job and jump to it without losing the drawer.
+  // Reset when the record changes, or the last search haunts the next job.
+  const [find, setFind] = useState("");
+  useEffect(() => { setFind(""); }, [job.jobNumber]);
+  const q = find.trim().toLowerCase();
+  const found = q
+    ? siblings
+        .filter(s =>
+          s.jobNumber !== job.jobNumber &&
+          `${s.jobNumber} ${s.currentAddress ?? ""}`.toLowerCase().includes(q))
+        .slice(0, 5)
+    : [];
 
   // Undefined, not 14: no stage has an expected duration set, and inventing one here
   // put a number under "Days in stage" that read as a target somebody had agreed.
@@ -133,6 +167,20 @@ export function JobDrawer({ job, onClose, onMoved }: {
             </Text>
           </div>
           <div className="drawer-actions">
+            {/* Opens the one AI surface, scoped — "opening from a job is itself the
+                question". The dock says coming soon; the entry point is real. */}
+            {/* G25 — the entry point ships; the flow rides the variations model
+                (Amber's Q8: waiting-on is part of the variation request). */}
+            <Button
+              kind="tertiary"
+              size="small"
+              onClick={() => toast("Request changes comes with variations — it will raise one on this job and flag what it's waiting on.", "normal")}
+            >
+              Request changes
+            </Button>
+            <Button kind="secondary" size="small" onClick={() => openAsk(`job ${job.jobNumber}`)}>
+              Ask about this job
+            </Button>
             {canExpand && <ExpandButton expanded={expanded} onToggle={toggle} />}
             <Button kind="tertiary" size="small" onClick={onClose} aria-label="Close">
               ×
@@ -140,7 +188,45 @@ export function JobDrawer({ job, onClose, onMoved }: {
           </div>
         </header>
 
+        {/* Fullscreen gets the prototype's tab bar; docked stays one scrolled column —
+            in a 460px panel four hidden columns read worse than one scroll. The same
+            sections render either way; the tabs only choose which show. */}
+        {expanded && (
+          <div className="drawer-tabs">
+            <TabList activeTabId={tab} onTabChange={setTab}>
+              <Tab>Main info</Tab>
+              <Tab>All properties</Tab>
+              <Tab>Activity &amp; comments</Tab>
+              <Tab>Departments</Tab>
+            </TabList>
+          </div>
+        )}
+
         <div className="drawer-body stack">
+          {onJump && siblings.length > 1 && (
+            <div className="drawer-find">
+              <input
+                type="search"
+                placeholder="Find another job…"
+                aria-label="Find another job"
+                value={find}
+                onChange={e => setFind(e.target.value)}
+              />
+              {found.length > 0 && (
+                <div className="drawer-find-results">
+                  {found.map(s2 => (
+                    <button type="button" key={s2.jobNumber} onClick={() => onJump(s2)}>
+                      <strong>{s2.jobNumber}</strong> {s2.currentAddress ?? ""} · {s2.stage}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {q && found.length === 0 && (
+                <Text type="text3" color="secondary">No other job matches “{find.trim()}”.</Text>
+              )}
+            </div>
+          )}
+          {(!expanded || tab === 0) && (<>
           <section className="panel">
             <div className="panel-head">
               <Text type="text2" weight="bold">Who it’s with</Text>
@@ -190,6 +276,36 @@ export function JobDrawer({ job, onClose, onMoved }: {
 
           <section className="panel">
             <div className="panel-head">
+              <Text type="text2" weight="bold">Folders</Text>
+              <Text type="text3" color="secondary">the job&apos;s subfolder, inside its project&apos;s</Text>
+            </div>
+            {/* Both links, per Lofty's rule — a job's page shows its own folder and its
+                project's, never its siblings'. An unlinked folder is a real state and
+                says so rather than hiding the row. */}
+            <div className="field-row">
+              <div className="field-label"><Text type="text2">Job folder</Text></div>
+              {job.sharepointUrl ? (
+                <a href={job.sharepointUrl} target="_blank" rel="noreferrer" className="link-button">
+                  Open job folder
+                </a>
+              ) : (
+                <Text type="text3" color="secondary">no folder linked yet</Text>
+              )}
+            </div>
+            <div className="field-row">
+              <div className="field-label"><Text type="text2">Project folder</Text></div>
+              {job.projectSharepointUrl ? (
+                <a href={job.projectSharepointUrl} target="_blank" rel="noreferrer" className="link-button">
+                  Open project folder
+                </a>
+              ) : (
+                <Text type="text3" color="secondary">no folder linked yet — set it on the project</Text>
+              )}
+            </div>
+          </section>
+
+          <section className="panel">
+            <div className="panel-head">
               <Text type="text2" weight="bold">Phase &amp; stage</Text>
             </div>
             <div className="field-row">
@@ -235,7 +351,9 @@ export function JobDrawer({ job, onClose, onMoved }: {
               </div>
             ))}
           </section>
+          </>)}
 
+          {(!expanded || tab === 1) && (<>
           {/* The site's own facts, above the job's — fencing, pegging, the developer, the
               council. One answer for the whole project, shown here rather than copied,
               so twenty jobs on one site cannot quietly disagree about it.
@@ -251,9 +369,59 @@ export function JobDrawer({ job, onClose, onMoved }: {
           {/* Then the job's own — twenty jobs, twenty answers. */}
           <PropertySlots scope="job" title="Job properties" />
 
+          {expanded && (
+            <section className="panel">
+              <div className="panel-head">
+                <Text type="text2" weight="bold">All properties</Text>
+                <Text type="text3" color="secondary">grouped by stage — fills as definitions land</Text>
+              </div>
+              <Text type="text2" color="secondary" ellipsis={false}>
+                Job properties land in here, grouped by the stage that captures them —
+                fencing type, pour date, and whatever else Lofty defines. Add definitions
+                in Setup → Properties and they appear on every job.
+              </Text>
+            </section>
+          )}
+          </>)}
+
+          {(!expanded || tab === 2) && (<>
+          {expanded && (
+            <section className="panel">
+              <div className="panel-head">
+                <Text type="text2" weight="bold">Activity</Text>
+                <Text type="text3" color="secondary">coming soon</Text>
+              </div>
+              <Text type="text2" color="secondary" ellipsis={false}>
+                System entries — stage moves, team handoffs, edits — will interleave with
+                the comments below once the activity feed is wired. The comments are live
+                now.
+              </Text>
+            </section>
+          )}
           {/* The job's own thread — the same shape the project has, because Amber's
               "latest update" is one rule for both kinds of record. */}
           <CommentsPanel jobId={job.jobNumber} title="Updates & comments" />
+          </>)}
+
+          {expanded && tab === 3 && (
+            <section className="panel">
+              <div className="panel-head">
+                <Text type="text2" weight="bold">Departments</Text>
+                <Text type="text3" color="secondary">handoff view — coming soon</Text>
+              </div>
+              <Text type="text2" color="secondary" ellipsis={false}>
+                Where every team stands on this job, in the order it passes through them —
+                who had it, who has it, who is next, with the fields each team works with.
+                It builds from real handoff history once team changes write the activity
+                feed; the states below are the shape, not the facts.
+              </Text>
+              <div className="dept-placeholder" aria-hidden>
+                <div className="dept-block is-done">Handed on — team a</div>
+                <div className="dept-block is-current">Current owner — team b</div>
+                <div className="dept-block">Not started — team c</div>
+              </div>
+            </section>
+          )}
         </div>
       </aside>
     </>

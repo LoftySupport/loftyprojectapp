@@ -14,20 +14,28 @@ import "./ui.css";
 /** Nothing matched. Says what was searched for, and offers the way out. */
 export function NoResults({ noun }: { noun: string }) {
   const { query, setQuery } = useSearch();
+  // Filters can empty a view with no search at all — 'No jobs match ""' blamed a
+  // search nobody had typed. Two different facts, two different sentences, and the
+  // Clear button only offers what actually caused it.
+  const searching = query.trim() !== "";
   return (
     <div className="panel no-results">
       {/* `ellipsis={false}` on both: Vibe's Text clips to a single line by default, which
           turns the explanation into "Every word has to appear somew…" at any width worth
           having. */}
       <Text type="text1" weight="medium" ellipsis={false}>
-        No {noun} match “{query.trim()}”.
+        {searching ? <>No {noun} match “{query.trim()}”.</> : <>No {noun} match the current filters.</>}
       </Text>
       <Text type="text2" color="secondary" ellipsis={false}>
-        Every word has to appear somewhere on the record, so a shorter query matches more.
+        {searching
+          ? "Every word has to appear somewhere on the record, so a shorter query matches more."
+          : "Every active filter has to match at once — clear one and more will show."}
       </Text>
-      <Button kind="secondary" size="small" onClick={() => setQuery("")}>
-        Clear search
-      </Button>
+      {searching && (
+        <Button kind="secondary" size="small" onClick={() => setQuery("")}>
+          Clear search
+        </Button>
+      )}
     </div>
   );
 }

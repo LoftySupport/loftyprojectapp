@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Repository, RepositoryMethod } from "./repository";
 import type { DictionaryOverride } from "./dictionary";
 import { createStubRepository } from "./stubRepository";
-import { MAX_SPLIT, OPENING_TEAM } from "./types";
+import { MAX_SPLIT, OPENING_TEAM, teamSlug } from "./types";
 import type {
   ActivityEntry,
   AddressHistoryEntry,
@@ -60,7 +60,7 @@ const WIRED: RepositoryMethod[] = [
   "createProfile", "updateProfile", "setProfileActive", "listActivity",
   "listComments", "addComment", "updateProject", "moveProjectStage",
   "setProjectCurrentAddress", "listAddressHistory",
-  "listStages", "listTeams", "listTemplatePhases", "updateStageSla",
+  "listStages", "listTeams", "updateTeam", "createTeam", "listTemplatePhases", "updateStageSla",
   "listPropertyDefs", "createPropertyDef", "updatePropertyDef", "deletePropertyDef",
   "listDictionaryOverrides", "saveDictionaryOverride"
 ];
@@ -1190,6 +1190,67 @@ export function createSupabaseRepository(): Repository {
         position: r.team_position,
         isActive: r.team_is_active
       }));
+    },
+
+    /**
+     * Rename or retire a team (G44). Rename is the whole reason the slug is the key —
+     * the label changes, nothing pointing at it does. Retire is a flag, never a delete:
+     * the 0026 policy deliberately grants no DELETE, because a deleted team dangles in
+     * every job_engaged_teams array that named it. Admin+, per that policy. The
+     * jobs-held guard lives in the UI — the database allows retiring a team with jobs
+     * (history must stay resolvable); the screen is where "reassign them first" belongs.
+     */
+    async updateTeam(id: TeamId, patch: { name?: string; isActive?: boolean }): Promise<Team[]> {
+      const row: Record<string, string | boolean> = {};
+      if (patch.name !== undefined) row.team_name = patch.name;
+      if (patch.isActive !== undefined) row.team_is_active = patch.isActive;
+      if (Object.keys(row).length === 0) return await repo.listTeams();
+
+      const { data: updated, error } = await db
+        .from("teams")
+        .update(row)
+        .eq("team_id", id)
+        .select("team_id");
+      if (error) throw error;
+      if (!updated?.length) {
+        throw new Error(`The team was not updated — editing teams needs admin.`);
+      }
+      return await repo.listTeams();
+    },
+
+    /**
+     * Add a team (Amber, 27 Aug). The slug is derived from the name here, once — it is
+     * the permanent key, so it is cut at creation and never regenerated; a later rename
+     * touches only the label. Position slots after the last active team, below the
+     * retired block that 0026 parked at 90+. A duplicate slug is the primary key
+     * refusing, reported as the name being taken rather than as a constraint code.
+     */
+    async createTeam(name: string): Promise<Team[]> {
+      const label = name.trim();
+      if (!label) throw new Error("A team needs a name.");
+      const slug = teamSlug(label);
+      if (!slug) throw new Error("The name needs at least one letter or digit.");
+
+      const teams = await repo.listTeams();
+      const position =
+        Math.max(0, ...teams.filter(t => t.position < 90).map(t => t.position)) + 1;
+
+      const { error } = await db.from("teams").insert({
+        team_id: slug,
+        team_name: label,
+        team_position: position,
+        team_is_active: true
+      });
+      if (error) {
+        if (error.code === "23505") {
+          throw new Error(`A team with the slug '${slug}' already exists.`);
+        }
+        if (error.code === "42501") {
+          throw new Error("Adding a team needs admin.");
+        }
+        throw error;
+      }
+      return await repo.listTeams();
     },
 
     /**

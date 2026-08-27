@@ -120,9 +120,19 @@ check(
     seed_stages == db_stages,
     "seed: " + " | ".join(seed_stages) + "\ndb:   " + " | ".join(db_stages),
 )
+# Teams: an ordered SUBSET, not equality. Equality held until teams became creatable
+# from Admin (Amber, 27 Aug) — the app can now add rows the seed cannot know about, and
+# that is correct, not drift. What still must hold: every seeded slug exists in the
+# database, in the same relative order. A seeded slug the database lacks, or a reorder,
+# is still the bug this check was built to catch.
+def ordered_subset(needles, haystack):
+    it = iter(haystack)
+    return all(n in it for n in needles)
+
 check(
-    f"{len(seed_teams)} seeded team slugs match teams, in position order",
-    seed_teams == db_teams,
+    f"{len(seed_teams)} seeded team slugs all present in teams, in position order "
+    f"({len(db_teams)} in db — app-created extras are allowed)",
+    ordered_subset(seed_teams, db_teams),
     "seed: " + " | ".join(seed_teams) + "\ndb:   " + " | ".join(db_teams),
 )
 

@@ -18,6 +18,7 @@ import { TemplatesPage } from "./pages/TemplatesPage";
 import { AdminPage } from "./pages/AdminPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
+import { LANDING_ROUTES, readPrefs } from "./data/preferences";
 
 const THEME_KEY = "lofty-theme";
 
@@ -80,6 +81,17 @@ function RedirectIfSignedIn() {
   return <SignInPage />;
 }
 
+/**
+ * The index route honours the landing-page preference (G39). "/" stays the app's one
+ * front door — sign-in and the header logo both point here — and this decides what it
+ * opens onto, so the preference needs no second URL scheme to work.
+ */
+function Landing() {
+  const target = LANDING_ROUTES[readPrefs().landingPage];
+  if (target !== "/") return <Navigate to={target} replace />;
+  return <DashboardPage />;
+}
+
 export default function App() {
   const [theme, setTheme] = useState<SystemTheme>(() => {
     const saved = localStorage.getItem(THEME_KEY) as SystemTheme | null;
@@ -114,7 +126,7 @@ export default function App() {
             <Route path="terms" element={<LegalPage kind="terms" />} />
             <Route element={<RequireAuth />}>
             <Route element={<AppShell />}>
-              <Route index element={<DashboardPage />} />
+              <Route index element={<Landing />} />
               {/* A record is a URL. The drawer and the detail view used to be component
                   state, which made an open job unlinkable, unbookmarkable, and lost on
                   refresh — and put Back on the browser's "leave the page" behaviour
