@@ -183,6 +183,14 @@ export function createStubRepository(): Repository {
     async deleteSavedView(): Promise<never> {
       throw new Error("Removing a saved view needs Supabase.");
     },
+
+    // Preferences roam with the profile, and without a backend there is no profile.
+    // Empty on read — the app falls back to this device's localStorage, which is the
+    // honest answer for a run with nothing behind it.
+    async listMyPreferences(): Promise<Record<string, unknown>> { return {}; },
+    async saveMyPreferences(): Promise<never> {
+      throw new Error("Saving preferences needs Supabase.");
+    },
     /**
      * The stages, with nothing attached to them.
      *

@@ -64,6 +64,7 @@ const WIRED: RepositoryMethod[] = [
   "setProjectCurrentAddress", "listAddressHistory",
   "listStages", "listTeams", "updateTeam", "createTeam", "listTemplatePhases", "updateStageSla",
   "listSavedViews", "saveView", "deleteSavedView",
+  "listMyPreferences", "saveMyPreferences",
   "listPropertyDefs", "createPropertyDef", "updatePropertyDef", "deletePropertyDef",
   "listDictionaryOverrides", "saveDictionaryOverride"
 ];
@@ -1328,6 +1329,37 @@ export function createSupabaseRepository(): Repository {
       const board = data?.[0]?.saved_view_board as SavedViewBoard | undefined;
       if (!board) throw new Error("That view was not removed — it no longer exists.");
       return await repo.listSavedViews(board);
+    },
+
+    // ---- preferences (0050) ----------------------------------------------
+    // Owner-only by RLS, and the row is keyed by the person — so the read needs no
+    // filter and the write is an upsert on the primary key.
+
+    async listMyPreferences(): Promise<Record<string, unknown>> {
+      const { data, error } = await client
+        .from("user_preferences")
+        .select("user_preferences_payload")
+        .maybeSingle();
+      if (error) throw error;
+      const bag = data?.user_preferences_payload;
+      return bag && typeof bag === "object" && !Array.isArray(bag)
+        ? (bag as Record<string, unknown>)
+        : {};
+    },
+
+    async saveMyPreferences(patch: Record<string, unknown>): Promise<Record<string, unknown>> {
+      const me = await repo.currentProfile();
+      if (!me) throw new Error("Saving preferences needs you to be signed in.");
+      // Merged here rather than with a jsonb || in SQL, because the caller sends a
+      // patch and the row may not exist yet — one upsert covers both, and the merge
+      // is over a bag the app already validates on read.
+      const current = await repo.listMyPreferences();
+      const next = { ...current, ...patch };
+      const { error } = await client
+        .from("user_preferences")
+        .upsert({ profile_id: me.id, user_preferences_payload: next }, { onConflict: "profile_id" });
+      if (error) throw error;
+      return next;
     },
 
     /**

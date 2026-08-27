@@ -201,6 +201,16 @@ export interface Repository {
   saveView(board: SavedViewBoard, name: string, query: string): Promise<UserSavedView[]>;
   /** Remove one of your own saved views. RLS makes anyone else's unreachable. */
   deleteSavedView(id: string): Promise<UserSavedView[]>;
+
+  // ---- preferences (0050) -----------------------------------------------
+  /**
+   * The signed-in person's preferences, roaming with the profile (Q9's last layer).
+   * Returns the raw bag; the caller validates it, the same way it validates what comes
+   * out of localStorage — an unrecognised key is inert rather than dangerous.
+   */
+  listMyPreferences(): Promise<Record<string, unknown>>;
+  /** Merge a patch into the bag and return what the database now holds. */
+  saveMyPreferences(patch: Record<string, unknown>): Promise<Record<string, unknown>>;
   /**
    * The SLA per lifecycle stage — expected days in stage and the at-risk lead (0047),
    * keyed by stage name. `null` clears a number; the fresh phase list comes back as
@@ -272,6 +282,8 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "listSavedViews",
   "saveView",
   "deleteSavedView",
+  "listMyPreferences",
+  "saveMyPreferences",
   "updateStageSla",
   "listTemplateMilestones",
   "listPropertyDefs",
@@ -318,6 +330,8 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   listSavedViews: "saved_views",
   saveView: "saved_views",
   deleteSavedView: "saved_views",
+  listMyPreferences: "user_preferences",
+  saveMyPreferences: "user_preferences",
   listTemplatePhases: "pipeline_stages",
   updateStageSla: "pipeline_stages",
   listTemplateMilestones: "pipeline_stage_tasks (not built)",

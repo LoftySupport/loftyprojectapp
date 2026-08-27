@@ -220,6 +220,23 @@ The RLS probe in `verify/rls.sql` was **watched failing**: with the policy swapp
 a permissive `using (true)` against the live database (rolled back), it reported another
 person's view as readable and let one be written onto them.
 
+**`0050` is applied to the live database** — `user_preferences`, Q9's last layer.
+Landing page and default jobs view now follow the person to any machine they sign in on.
+
+**Why a table and not a column on `profiles`, checked rather than assumed:**
+`authenticated` holds UPDATE on *every* profiles column, `profile_permission` included —
+what stops self-promotion is the RLS policy, which admits only admins. A preferences
+column there would have needed a second policy saying "…or it's my own row", and
+policies are OR'd: that one sentence would have handed everybody write access to their
+own permission level. The separate table needs no such policy and profiles is untouched.
+
+localStorage stays, and is not a leftover: the landing route is decided on the first
+render, and waiting on a round trip there would flash the wrong page at somebody whose
+default is Jobs. The device's copy answers immediately, the profile's is the true one,
+`adoptPrefs` pulls it down on sign-in, and every change writes to both. RLS probe
+watched failing against a permissive policy before passing (it saw 2 rows including
+somebody else's).
+
 **`0049` is applied to the live database** — `profile_is_demo`, the tick that holds an
 account at the door (Amber, 27 Aug). A demo account signs in, reaches a gate screen and
 reads nothing. Her reason, worth keeping because it explains why this is neither

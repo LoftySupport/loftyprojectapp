@@ -143,6 +143,36 @@ begin
     raise warning 'FAIL: unexpected on the demo gate (%)', sqlerrm;
   end;
 
+  -- 0050: preferences are yours alone. The same two halves as saved_views, and the
+  -- reason this table exists rather than a column on profiles: the policy that would
+  -- have let somebody save preferences onto their own profiles row would also have let
+  -- them edit profile_permission on it.
+  begin
+    insert into user_preferences (profile_id, user_preferences_payload)
+    values ((select profile_id from profiles
+              where profile_email <> 'behaviour-test@lofty.com.au' limit 1),
+            '{"landingPage":"Jobs"}'::jsonb);
+    raise warning 'FAIL: preferences were written onto somebody else';
+  exception
+    when insufficient_privilege then raise notice 'ok  user_preferences refused a write onto another person';
+    when unique_violation then raise notice 'ok  user_preferences refused a write onto another person';
+    when others then raise warning 'FAIL: unexpected writing another person''s preferences (%)', sqlerrm;
+  end;
+
+  begin
+    insert into user_preferences (profile_id, user_preferences_payload)
+    values ((select profile_id from profiles where profile_email = 'behaviour-test@lofty.com.au'),
+            '{"landingPage":"Jobs"}'::jsonb)
+    on conflict (profile_id) do update set user_preferences_payload = excluded.user_preferences_payload;
+    if (select count(*) from user_preferences) = 1 then
+      raise notice 'ok  user_preferences: your own bag is yours, and only yours is visible';
+    else
+      raise warning 'FAIL: a person saw % preference rows, expected only their own', (select count(*) from user_preferences);
+    end if;
+    delete from user_preferences;
+  exception when others then raise warning 'FAIL: unexpected on your own preferences (%)', sqlerrm;
+  end;
+
   begin
     insert into pipelines (pipeline_key, pipeline_name, pipeline_scope)
     values ('sneaky', 'Sneaky', 'job');

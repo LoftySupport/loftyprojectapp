@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-254 properties across 43 tables.
+256 properties across 44 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 205 | In the migration and the types |
+| Created | 207 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -536,6 +536,15 @@ How long each phase of a process template should take — what a Gantt measures 
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `template_phases.expected_days` | Expected days | How long a phase should take. What the Gantt measures actual time in stage against. | `integer` | — | Nullable. | Keyed by template plus the stage enum; the owning team is a team enum value. Neither is an FK. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
+
+## `user_preferences`
+
+One row per person: how they like the app set up — where they land, what Jobs opens as — roaming with the profile instead of living in one browser. A table rather than a column on profiles for a security reason, not a tidiness one: everyone holds UPDATE on every profiles column, and the policy that would let somebody save preferences there would also let them edit their own permission level.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `user_preferences.profile_id` | Whose preferences | The person these belong to — and the key, so there is exactly one row each and no way to end up with two disagreeing about where somebody lands. | `uuid` | — | Primary key. FK → profiles(profile_id) ON DELETE CASCADE. | Owner-only by RLS. Deliberately its own table rather than a column on profiles: authenticated holds UPDATE on every profiles column including profile_permission, so a self-row policy there would also open the permission ladder. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `user_preferences.user_preferences_payload` | Preferences | The bag: landing page, default jobs view, and whatever joins them. Roams with the profile (Amber's Q9), so the site laptop opens the same app as the office one. | `jsonb` | — | Not null, default {}. CHECK: must be a JSON object. | One bag rather than a column per preference — preferences are open-ended and a column each means a migration each. The app validates on read and falls back to the default for anything it does not recognise, so an unknown key is inert. localStorage keeps a copy for the first render, before the profile has loaded. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `variation_reopened_tasks`
 
