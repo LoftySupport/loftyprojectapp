@@ -8,7 +8,7 @@ import { SortHeader, useTableSort } from "../components/SortableTable";
 import { UserRow } from "../components/UserRow";
 import { Problem } from "../components/Form";
 import {
-  PERMISSION_LEVELS, PROFILE_STATUSES, profileStatus, type Profile, type TeamId
+  PERMISSION_LEVELS, PROFILE_STATUSES, profileStatus, teamSlug, type Profile, type TeamId
 } from "../data/types";
 import { useStages, useTeamLabels, useTemplatePhases } from "../data/useLookups";
 import { useBoardRecords } from "../data/boardModel";
@@ -277,6 +277,27 @@ function Teams() {
     }
   };
 
+  // Add state (Amber, 27 Aug). The slug preview uses the same teamSlug the repository
+  // inserts with, so what the admin sees is what the database keys.
+  const [newName, setNewName] = useState("");
+  const newSlug = teamSlug(newName);
+  const slugTaken = allTeams.some(t => t.id === newSlug);
+  const add = async () => {
+    if (busy || !newSlug || slugTaken) return;
+    setBusy(true);
+    setProblem(null);
+    try {
+      await repo.createTeam(newName.trim());
+      toast(`${newName.trim()} added.`);
+      setNewName("");
+      setReloadKey(k => k + 1);
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const rows = useMemo(
     () =>
       allTeams.map(t => ({
@@ -400,6 +421,32 @@ function Teams() {
           </tbody>
         </table>
       </div>
+      {canEdit && (
+        <div className="team-add">
+          <div className="field-inline">
+            <TextField
+              inputAriaLabel="New team name"
+              placeholder="New team name…"
+              value={newName}
+              onChange={setNewName}
+              size="small"
+              onKeyDown={e => { if (e.key === "Enter") void add(); }}
+            />
+            <span title={slugTaken ? `The slug '${newSlug}' is already taken` : undefined}>
+              <Button size="small" disabled={busy || !newSlug || slugTaken} onClick={() => void add()}>
+                Add team
+              </Button>
+            </span>
+          </div>
+          {newSlug && (
+            <Text type="text3" color="secondary">
+              {slugTaken
+                ? `'${newSlug}' already exists — pick another name.`
+                : `Will be keyed '${newSlug}' — the slug is permanent; the name stays renameable.`}
+            </Text>
+          )}
+        </div>
+      )}
       {problem && <Problem>{problem}</Problem>}
     </section>
   );

@@ -179,6 +179,12 @@ export interface Repository {
    * delete; the fresh list comes back as proof. The jobs-held guard is the screen's.
    */
   updateTeam(id: TeamId, patch: { name?: string; isActive?: boolean }): Promise<Team[]>;
+  /**
+   * Add a team (admin+, the same 0026 policy family as updateTeam). The slug is derived
+   * from the name once, at creation, and is then permanent — renames touch only the
+   * label. Slots after the last active team; the fresh list comes back as proof.
+   */
+  createTeam(name: string): Promise<Team[]>;
   listTemplatePhases(): Promise<TemplatePhase[]>;
   /**
    * The SLA per lifecycle stage — expected days in stage and the at-risk lead (0047),
@@ -246,6 +252,7 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "listStages",
   "listTeams",
   "updateTeam",
+  "createTeam",
   "listTemplatePhases",
   "updateStageSla",
   "listTemplateMilestones",
@@ -289,6 +296,7 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   listStages: "pipeline_stages",
   listTeams: "teams",
   updateTeam: "teams",
+  createTeam: "teams",
   listTemplatePhases: "pipeline_stages",
   updateStageSla: "pipeline_stages",
   listTemplateMilestones: "pipeline_stage_tasks (not built)",

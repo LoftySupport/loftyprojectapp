@@ -1118,6 +1118,14 @@ code { overflow-wrap: anywhere; }
 /* A field-row whose value side holds a value AND a control beside it — the stage with
    its move picker, the folder link with its input. */
 .field-inline { display: flex; align-items: center; gap: var(--space-8); }
+/* The add-team form under the Teams table: the input row, then the slug preview line. */
+.team-add {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-16);
+  max-width: 420px;
+}
 
 /* The three project dates. A native date input, dressed to sit in a field-row the way
    Vibe's small TextField does — and empty when no date is set, never a stand-in. */

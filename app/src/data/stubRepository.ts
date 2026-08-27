@@ -170,6 +170,9 @@ export function createStubRepository(): Repository {
     async updateTeam(): Promise<never> {
       throw new Error("Editing a team needs Supabase.");
     },
+    async createTeam(): Promise<never> {
+      throw new Error("Adding a team needs Supabase.");
+    },
     /**
      * The stages, with nothing attached to them.
      *

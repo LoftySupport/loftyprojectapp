@@ -1864,6 +1864,17 @@ real. **Creating a new team is deferred**: the app's `TeamId` union is closed ov
 seeded slugs (and `verify/seeds.sh` asserts stub and database agree), so create-team
 needs that type opened and the seed-check contract revisited — flagged, not fudged.
 
+**Update (rev 3, 27 Aug): create-team built, on Amber's answer** ("build it next").
+The `TeamId` union opened to `string` (the closure only ever held while teams were fixed
+at compile time); `createTeam` joined the seam — the slug is cut from the name once by
+`teamSlug()` (shared with the UI preview, so what the admin sees is what the database
+keys) and slots after the last active team, under the 0026 `admins add teams` policy that
+was already waiting. Admin → Teams grows the form: name in, permanent slug previewed,
+Add disabled with a reason when the slug is taken. `verify/seeds.sh`'s equality became
+an **ordered subset** — app-created teams are allowed; a missing or reordered seeded
+slug still fails (watched failing both ways). Insert shape proved against the live
+schema in a rolled-back transaction.
+
 ![Admin users (prototype)](docs/comparison-screenshots/admin-users.png)
 
 **Prototype.** Teams tab: members, phases owned, jobs held, not-on-track count, and

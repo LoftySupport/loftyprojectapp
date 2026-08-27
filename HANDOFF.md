@@ -218,6 +218,18 @@ A twelfth batch:
 - **Creating a team from the app is wanted next** — the closed `TeamId` union opens
   up, `createTeam` joins the seam, and the seed-agreement check gets revisited.
 
+A fourteenth batch, from those answers:
+- **The board ramp is one family** — `theme/accents.ts` re-cut to teal deepening
+  across the seven positions (verified ≥ 8.7:1 per chip).
+- **Create-team shipped** (G44 closed): `TeamId` opened to `string` — the closed
+  union could only name compile-time teams — with the reasoning kept at the type;
+  `createTeam` on the seam cuts the slug once via `teamSlug()` (shared with the
+  Admin preview) and slots after the last active position, under 0026's existing
+  `admins add teams` policy; Admin → Teams grows name-in/slug-previewed/Add, with
+  the taken-slug case disabled and explained. `verify/seeds.sh` now asserts the
+  seeded slugs are an **ordered subset** of the live table (app-created extras
+  allowed; missing or reordered seeds still fail — watched both ways).
+
 A thirteenth batch:
 - **The docked drawer head stacks** — four controls beside a full street address left
   the title reading "Lot 1, 28…" in a 460px panel. Docked, the actions get their own
