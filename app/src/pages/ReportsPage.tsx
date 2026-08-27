@@ -138,6 +138,14 @@ export function ReportsPage() {
                 Needs attention (at risk or stalled, longest-running first)
               </Text>
             </div>
+            {/* Bare column headers over nothing read as broken; an empty list is good
+                news and says so. */}
+            {attention.length === 0 && (
+              <Text type="text3" color="secondary">
+                Nothing needs attention — no job in view is at risk or stalled.
+              </Text>
+            )}
+            {attention.length > 0 && (
             <div className="data-table-wrap">
               <table className="data-table">
                 <thead>
@@ -161,6 +169,7 @@ export function ReportsPage() {
                 </tbody>
               </table>
             </div>
+            )}
           </section>
         </div>
       )}
