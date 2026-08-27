@@ -400,8 +400,8 @@ function Users() {
           <ModalContent>
             <Text type="text2" element="p" ellipsis={false}>
               They can still sign in, and their account stays exactly as it is — they
-              reach a screen saying it opens when somebody walks them through it, and go
-              no further. Nothing they can see, nothing they can change.
+              reach a screen saying they do not have permission and to contact admin for
+              approval, and go no further. Nothing they can see, nothing they can change.
             </Text>
             <Text type="text3" color="secondary" ellipsis={false}>
               Undone by the same switch, which does not ask.
