@@ -433,6 +433,14 @@
 .bar-num { font: var(--font-text3-normal); color: var(--secondary-text-color); font-variant-numeric: tabular-nums; }
 
 /* ---- bulk edit (jobs table) ---------------------------------------------- */
+/* The status cell: the switch that changes it, beside the word for what it is. */
+.status-toggle { display: inline-flex; align-items: center; gap: var(--space-8); }
+
+/* The users bar carries a select and two buttons rather than three selects, and the
+   150px floor meant for dropdowns spaced the buttons out like a form. They size to
+   their words here; the select keeps the floor. */
+.bulk-bar.is-users .bulk-actions > button { min-width: 0; }
+
 .bulk-bar {
   display: flex;
   align-items: center;

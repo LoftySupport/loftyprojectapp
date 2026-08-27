@@ -1,5 +1,8 @@
 import { useMemo, useState } from "react";
-import { Button, Heading, Search, Tab, TabList, Text, TextField } from "@vibe/core";
+import {
+  Button, Heading, Modal, ModalBasicLayout, ModalContent, ModalFooter, ModalHeader,
+  Search, Tab, TabList, Text, TextField
+} from "@vibe/core";
 import { useQuery } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { ActivityDialog, DeactivateDialog, UserDialog } from "../components/UserDialogs";
@@ -82,9 +85,62 @@ function Users() {
   const [deactivating, setDeactivating] = useState<Profile | null>(null);
   const [activityFor, setActivityFor] = useState<Profile | null>(null);
 
+  // Bulk edit (Amber, 27 Aug: "a checkbox to update the users in bulk"). Selection is
+  // page state, not URL state — the same call the jobs table makes: a half-made
+  // selection is a draft, and a link arriving with people pre-selected is a trap.
+  const repo = useRepository();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkNote, setBulkNote] = useState<{ ok: string | null; err: string | null }>({ ok: null, err: null });
+  const [bulkDeactivating, setBulkDeactivating] = useState(false);
+  const clearSelection = () => { setSelected(new Set()); setBulkNote({ ok: null, err: null }); };
+  const toggleOne = (id: string) =>
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+
   // Only managers and above may write. This hides the controls; the RLS policy on
   // `profiles` is what actually refuses, and one without the other is decoration.
   const canEdit = can("manager");
+
+  /**
+   * The status toggle's two directions are not symmetrical, so they are not handled
+   * the same way. Taking somebody's access away is confirmed; giving it back is not —
+   * it is undone by the same switch, and a dialog in front of it would be ceremony.
+   */
+  const onStatusToggle = async (p: Profile) => {
+    if (p.active) { setDeactivating(p); return; }
+    try {
+      await repo.setProfileActive(p.id, true);
+      refresh();
+    } catch (e) {
+      setBulkNote({ ok: null, err: e instanceof Error ? e.message : String(e) });
+    }
+  };
+
+  /**
+   * One at a time rather than in one statement, so a single refusal (RLS, a guard)
+   * names the person it happened to instead of failing the whole batch silently —
+   * the same shape the jobs table's bulk bar uses.
+   */
+  async function bulkApply(done: string, people: Profile[], apply: (p: Profile) => Promise<unknown>) {
+    if (bulkBusy) return;
+    setBulkBusy(true);
+    setBulkNote({ ok: null, err: null });
+    let applied = 0;
+    const failures: string[] = [];
+    for (const p of people) {
+      try { await apply(p); applied++; }
+      catch (e) { failures.push(`${p.fullName} — ${e instanceof Error ? e.message : String(e)}`); }
+    }
+    setBulkBusy(false);
+    refresh();
+    const summary = `${applied} ${done}`;
+    if (failures.length === 0) setBulkNote({ ok: summary, err: null });
+    else setBulkNote({ ok: null, err: `${summary} · ${failures.length} refused: ${failures[0]}` });
+  }
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -103,6 +159,12 @@ function Users() {
   }, [profiles, query, team, permission, status]);
 
   const filtered = Boolean(query.trim() || team || permission || status);
+
+  // Selection follows what is on screen: "select all" means all the rows you can see,
+  // never the forty-five behind a filter you set to narrow them out.
+  const selectedPeople = useMemo(() => shown.filter(p => selected.has(p.id)), [shown, selected]);
+  const allSelected = shown.length > 0 && selectedPeople.length === shown.length;
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(shown.map(p => p.id)));
 
   // Sorted on what is *displayed*, not on what is stored: the Teams column reads as
   // "Estimating, Finance" and sorting it by `estimating,finance` would put teams in an
@@ -189,10 +251,65 @@ function Users() {
         </Text>
       )}
 
+      {canEdit && selected.size > 0 && (
+        <div className="bulk-bar is-users" role="region" aria-label="Bulk edit users">
+          <Text type="text2" weight="medium">{selected.size} selected</Text>
+          <Button kind="tertiary" size="small" onClick={clearSelection} disabled={bulkBusy}>Clear</Button>
+          <div className="bulk-actions">
+            {/* Permission is the one field worth setting for several people at once —
+                a new intake all land on `user`, a team all step up to `manager`. Teams
+                are deliberately absent: "add to Estimating" and "make Estimating their
+                only team" are different acts and one control cannot mean both. */}
+            <Select
+              aria-label="Set the permission level on the selected people"
+              placeholder="Set permission…"
+              options={toOptions([...PERMISSION_LEVELS])}
+              value={null}
+              onChange={v => {
+                if (v) void bulkApply(`set to ${v}`, selectedPeople,
+                  p => repo.updateProfile(p.id, { permission: v as Profile["permission"] }));
+              }}
+            />
+            <Button
+              size="small"
+              kind="tertiary"
+              disabled={bulkBusy || selectedPeople.every(p => p.active)}
+              onClick={() => void bulkApply("restored", selectedPeople.filter(p => !p.active),
+                p => repo.setProfileActive(p.id, true))}
+            >
+              Restore
+            </Button>
+            {/* No bulk deactivate without the confirmation the single toggle gets —
+                taking access from several people at once is the act most worth being
+                sure about, so it asks first, naming how many. */}
+            <Button
+              size="small"
+              kind="tertiary"
+              disabled={bulkBusy || selectedPeople.every(p => !p.active)}
+              onClick={() => setBulkDeactivating(true)}
+            >
+              Deactivate…
+            </Button>
+          </div>
+          {bulkNote.ok && <Text type="text3" color="secondary">{bulkNote.ok}</Text>}
+          {bulkNote.err && <Problem>{bulkNote.err}</Problem>}
+        </div>
+      )}
+
       <div className="data-table-wrap">
         <table className="data-table">
           <thead>
             <tr>
+              {canEdit && (
+                <th scope="col">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    aria-label={allSelected ? "Clear selection" : "Select every user in view"}
+                  />
+                </th>
+              )}
               {th("name", "Name")}
               {th("jobTitle", "Job title")}
               {th("email", "Email")}
@@ -205,10 +322,10 @@ function Users() {
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={8}><Text type="text3" color="secondary">Loading…</Text></td></tr>
+              <tr><td colSpan={canEdit ? 9 : 8}><Text type="text3" color="secondary">Loading…</Text></td></tr>
             )}
             {!loading && filtered && shown.length === 0 && profiles.length > 0 && (
-              <tr><td colSpan={8}><Text type="text3" color="secondary">No users match these filters.</Text></td></tr>
+              <tr><td colSpan={canEdit ? 9 : 8}><Text type="text3" color="secondary">No users match these filters.</Text></td></tr>
             )}
             {!loading && sorted.map(p => (
               <UserRow
@@ -220,7 +337,9 @@ function Users() {
                 onDone={saved => { setEditingRow(null); if (saved) refresh(); }}
                 onActivity={() => setActivityFor(p)}
                 onFullEdit={() => { setEditingRow(null); setEditing(p); }}
-                onDeactivate={() => setDeactivating(p)}
+                onDeactivate={() => void onStatusToggle(p)}
+                selected={selected.has(p.id)}
+                onToggleSelect={canEdit ? () => toggleOne(p.id) : undefined}
               />
             ))}
           </tbody>
@@ -233,6 +352,37 @@ function Users() {
         onClose={() => setEditing(null)} onSaved={refresh} />
       <DeactivateDialog show={deactivating !== null} profile={deactivating}
         onClose={() => setDeactivating(null)} onSaved={refresh} />
+
+      {/* The bulk version of the same confirmation. It names the number rather than the
+          people: at fifteen rows a list is a wall, and the count is the fact that
+          decides whether you meant it. */}
+      <Modal show={bulkDeactivating} onClose={() => setBulkDeactivating(false)} id="bulk-deactivate">
+        <ModalBasicLayout>
+          <ModalHeader title={`Deactivate ${selectedPeople.filter(p => p.active).length} ${selectedPeople.filter(p => p.active).length === 1 ? "person" : "people"}?`} />
+          <ModalContent>
+            <Text type="text2" element="p" ellipsis={false}>
+              They keep their history and everything with their name on it — deactivating
+              only closes the door. Anyone already inactive in your selection is left
+              alone.
+            </Text>
+            <Text type="text3" color="secondary" ellipsis={false}>
+              Reversible: the same toggle restores them, and that one does not ask.
+            </Text>
+          </ModalContent>
+        </ModalBasicLayout>
+        <ModalFooter
+          primaryButton={{
+            text: bulkBusy ? "Deactivating…" : "Deactivate",
+            disabled: bulkBusy,
+            onClick: async () => {
+              setBulkDeactivating(false);
+              await bulkApply("deactivated", selectedPeople.filter(p => p.active),
+                p => repo.setProfileActive(p.id, false));
+            }
+          }}
+          secondaryButton={{ text: "Cancel", onClick: () => setBulkDeactivating(false) }}
+        />
+      </Modal>
       <ActivityDialog show={activityFor !== null} title={activityFor?.fullName ?? ""}
         profileId={activityFor?.id} onClose={() => setActivityFor(null)} />
     </section>
