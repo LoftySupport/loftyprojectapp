@@ -220,6 +220,19 @@ The RLS probe in `verify/rls.sql` was **watched failing**: with the policy swapp
 a permissive `using (true)` against the live database (rolled back), it reported another
 person's view as readable and let one be written onto them.
 
+**Amber's answers, second round (27 Aug)**, each binding:
+- **The house icons swap**: Projects wears the *pair* (a project holds many houses),
+  Jobs wears the *pin* (a job is one site). Shipped; the reasoning is at the icons.
+- **Preferences get their own table, not a column on `profiles`** — and the reason is
+  checked rather than assumed: `authenticated` holds UPDATE on *every* profiles column,
+  including `profile_permission`, with only the RLS policy holding the line. A
+  "…or it's your own row" policy for preferences would be OR'd with the admin one and
+  hand everybody write access to their own permission level. Draft at
+  `scratchpad/0049_preferences_draft.sql`; ships as its own PR once #44 merges.
+- **Team-shared saved views are wanted** — not now, but designed for: a `shared_with_team`
+  column on `saved_views` plus a widened policy, planned in the same draft file. Private
+  stays the default; sharing is a deliberate act.
+
 **Amber's answers to the open questions (27 Aug)**, each now binding:
 - **One colour family, not two** — the board's ramp is Lofty's teal deepening across
   all seven lifecycle positions (`theme/accents.ts` re-cut, contrast re-verified).

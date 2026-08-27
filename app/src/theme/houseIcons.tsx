@@ -1,8 +1,10 @@
 /**
  * Lofty's own nav icons (Amber, 27 Aug — supplied as images, redrawn as strokes).
  *
- * A builder's app gets builder's icons: the project is a site on a map, the jobs are
- * the houses on it, the reports are the house doing well. Same call contract as
+ * A builder's app gets builder's icons: a project holds many houses, a job is one
+ * site on the map, and the reports are the house doing well. (Amber, 27 Aug, on the
+ * first cut having the first two the other way round: the pin marks a single place,
+ * which is what a job is.) Same call contract as
  * @vibe/icons (`size` prop, currentColor) so the nav treats them identically, and the
  * collapsed rail keeps its meaning.
  */
@@ -22,7 +24,7 @@ const frame = (size: number | string | undefined) => ({
   "aria-hidden": true as const
 });
 
-/** A house inside a map pin, standing on its site — Projects. */
+/** A house inside a map pin, standing on its site — Jobs: one job, one place. */
 export function HousePin({ size }: IconProps) {
   return (
     <svg {...frame(size)}>
@@ -33,7 +35,7 @@ export function HousePin({ size }: IconProps) {
   );
 }
 
-/** Two houses, one behind the other — Jobs, the dwellings a project splits into. */
+/** Two houses, one behind the other — Projects: the dwellings a project holds. */
 export function Houses({ size }: IconProps) {
   return (
     <svg {...frame(size)}>
