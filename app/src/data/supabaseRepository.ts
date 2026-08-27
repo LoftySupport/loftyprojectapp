@@ -84,7 +84,7 @@ const WIRED: RepositoryMethod[] = [
  * future embed of one needs the same treatment.
  */
 const PROFILE_COLUMNS =
-  "profile_id, profile_auth_user_id, profile_first_name, profile_last_name, profile_full_name, profile_email, profile_login_email, profile_job_title, profile_last_login_at, profile_permission, profile_is_active, profile_created_at, profile_created_by, profile_updated_at, profile_updated_by, profile_teams!profile_teams_profile_id_fkey(team_id, profile_team_role)";
+  "profile_id, profile_auth_user_id, profile_first_name, profile_last_name, profile_full_name, profile_email, profile_login_email, profile_job_title, profile_last_login_at, profile_permission, profile_is_active, profile_is_demo, profile_created_at, profile_created_by, profile_updated_at, profile_updated_by, profile_teams!profile_teams_profile_id_fkey(team_id, profile_team_role)";
 
 /**
  * Named explicitly rather than `select("*")`, and each one a single string literal.
@@ -234,6 +234,7 @@ interface ProfileRow {
   profile_last_login_at: string | null;
   profile_permission: Profile["permission"];
   profile_is_active: boolean;
+  profile_is_demo: boolean;
   /**
    * An embedded join again, not a column — membership went back to being a table when
    * it had to carry whether somebody manages the team. PostgREST returns [] rather than
@@ -313,6 +314,7 @@ const toProfile = (r: ProfileRow): Profile => ({
   lastLoginAt: r.profile_last_login_at,
   permission: r.profile_permission,
   active: r.profile_is_active,
+  isDemo: r.profile_is_demo,
   createdAt: r.profile_created_at,
   createdBy: r.profile_created_by,
   updatedAt: r.profile_updated_at,
@@ -541,7 +543,8 @@ export function createSupabaseRepository(): Repository {
           profile_email: input.email,
           profile_login_email: input.loginEmail,
           profile_job_title: input.jobTitle,
-          profile_permission: input.permission
+          profile_permission: input.permission,
+          profile_is_demo: input.isDemo ?? false
         })
         .select("profile_id")
         .single();
@@ -562,6 +565,9 @@ export function createSupabaseRepository(): Repository {
       if (patch.loginEmail !== undefined) row.profile_login_email = patch.loginEmail;
       if (patch.jobTitle !== undefined) row.profile_job_title = patch.jobTitle;
       if (patch.permission !== undefined) row.profile_permission = patch.permission;
+      // 0049. Ticking this is what holds the account at the door; the database refuses
+      // its reads from that moment, so the screen and the boundary agree.
+      if (patch.isDemo !== undefined) row.profile_is_demo = patch.isDemo;
 
       if (Object.keys(row).length) {
         const { error } = await client.from("profiles").update(row).eq("profile_id", id);

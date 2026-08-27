@@ -44,6 +44,7 @@ export function UserRow({
   onActivity,
   onFullEdit,
   onDeactivate,
+  onToggleDemo,
   canEdit,
   selected,
   onToggleSelect
@@ -57,6 +58,7 @@ export function UserRow({
   onFullEdit: () => void;
   /** Asked for a change of status. Deactivating confirms first; restoring is immediate. */
   onDeactivate: () => void;
+  onToggleDemo?: () => void;
   canEdit: boolean;
   selected?: boolean;
   onToggleSelect?: () => void;
@@ -69,6 +71,7 @@ export function UserRow({
         onEdit={onEdit}
         onActivity={onActivity}
         onDeactivate={onDeactivate}
+        onToggleDemo={onToggleDemo}
         canEdit={canEdit}
         selected={selected}
         onToggleSelect={onToggleSelect}
@@ -77,12 +80,14 @@ export function UserRow({
 }
 
 function ReadingRow({
-  profile: p, onEdit, onActivity, onDeactivate, canEdit, selected, onToggleSelect
+  profile: p, onEdit, onActivity, onDeactivate, onToggleDemo, canEdit, selected, onToggleSelect
 }: {
   profile: Profile;
   onEdit: () => void;
   onActivity: () => void;
   onDeactivate: () => void;
+  /** Ticked = held at the gate (0049). Same asymmetry: restricting confirms, releasing does not. */
+  onToggleDemo?: () => void;
   canEdit: boolean;
   selected?: boolean;
   onToggleSelect?: () => void;
@@ -140,6 +145,23 @@ function ReadingRow({
             aria-label={p.active ? `Deactivate ${p.fullName}` : `Restore ${p.fullName}`}
           />
           <span className={`status-pill is-${st}`}>{st}</span>
+        </span>
+      </td>
+      {/* Demo: a separate fact from active, because it answers a different question —
+          not "is this person still here" but "may they walk the app on their own yet".
+          Ticked reads as held, not broken. */}
+      <td>
+        <span className="status-toggle">
+          <Toggle
+            isSelected={p.isDemo}
+            onChange={() => onToggleDemo?.()}
+            disabled={!canEdit || !onToggleDemo}
+            size="small"
+            onOverrideText=""
+            offOverrideText=""
+            aria-label={p.isDemo ? `Let ${p.fullName} into the app` : `Hold ${p.fullName} at the gate`}
+          />
+          {p.isDemo && <span className="status-pill is-pending">held</span>}
         </span>
       </td>
       {/* "Never" and "not yet" are different facts: never signed in versus signed in
@@ -251,6 +273,7 @@ function EditingRow({
         {/* Derived, not set. Left as it reads so the row keeps its columns — the
             status toggle lives on the reading row, not mid-edit. */}
         <td><span className={`status-pill is-${st}`}>{st}</span></td>
+        <td />
         <td className="muted">{p.lastLoginAt ? new Date(p.lastLoginAt).toLocaleDateString() : "Never"}</td>
         <td>
           <span className="row-actions">
@@ -264,7 +287,7 @@ function EditingRow({
         </td>
       </tr>
       <tr className="is-editing">
-        <td colSpan={selectable ? 9 : 8}>
+        <td colSpan={selectable ? 10 : 9}>
           {error && <div className="create-problem row-editing-problem" role="alert">{error}</div>}
           <Text type="text3" color="secondary" ellipsis={false}>
             Editing the columns you can see.{" "}

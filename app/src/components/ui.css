@@ -1188,6 +1188,29 @@ code { overflow-wrap: anywhere; }
 /* A field-row whose value side holds a value AND a control beside it — the stage with
    its move picker, the folder link with its input. */
 .field-inline { display: flex; align-items: center; gap: var(--space-8); }
+/* The gate a demo account meets (0049). Centred and alone: a gate that shows the app
+   behind it is an invitation to try the handle. */
+.gate {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-24);
+  background: var(--primary-background-hover-color);
+}
+.gate-card {
+  background: var(--primary-background-color);
+  border: 1px solid var(--layout-border-color);
+  border-top: 4px solid var(--primary-color);
+  border-radius: var(--border-radius-medium);
+  padding: var(--space-32, 32px);
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+.gate-actions { margin-top: var(--space-8); }
+
 /* The catch-all route's panel — an unknown URL says so instead of rendering nothing. */
 .not-found {
   display: flex;

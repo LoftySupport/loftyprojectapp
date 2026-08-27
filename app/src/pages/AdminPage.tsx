@@ -121,6 +121,24 @@ function Users() {
   };
 
   /**
+   * Demo (0049). The same asymmetry as status, for the same reason: holding somebody at
+   * the gate takes their access away and confirms; letting them in does not, because the
+   * switch beside it undoes that in one click. The confirmation is inline rather than a
+   * dialog — it is one row, and a modal for a toggle is ceremony.
+   */
+  const [demoPending, setDemoPending] = useState<Profile | null>(null);
+  const onDemoToggle = async (p: Profile) => {
+    if (!p.isDemo) { setDemoPending(p); return; }
+    try {
+      await repo.updateProfile(p.id, { isDemo: false });
+      setBulkNote({ ok: `${p.fullName} can use the app now.`, err: null });
+      refresh();
+    } catch (e) {
+      setBulkNote({ ok: null, err: e instanceof Error ? e.message : String(e) });
+    }
+  };
+
+  /**
    * One at a time rather than in one statement, so a single refusal (RLS, a guard)
    * names the person it happened to instead of failing the whole batch silently —
    * the same shape the jobs table's bulk bar uses.
@@ -290,6 +308,25 @@ function Users() {
             >
               Deactivate…
             </Button>
+            {/* An intake of five who all start with the same walkthrough. */}
+            <Button
+              size="small"
+              kind="tertiary"
+              disabled={bulkBusy || selectedPeople.every(p => p.isDemo)}
+              onClick={() => void bulkApply("held at the gate", selectedPeople.filter(p => !p.isDemo),
+                p => repo.updateProfile(p.id, { isDemo: true }))}
+            >
+              Hold at gate
+            </Button>
+            <Button
+              size="small"
+              kind="tertiary"
+              disabled={bulkBusy || selectedPeople.every(p => !p.isDemo)}
+              onClick={() => void bulkApply("let in", selectedPeople.filter(p => p.isDemo),
+                p => repo.updateProfile(p.id, { isDemo: false }))}
+            >
+              Let in
+            </Button>
           </div>
           {bulkNote.ok && <Text type="text3" color="secondary">{bulkNote.ok}</Text>}
           {bulkNote.err && <Problem>{bulkNote.err}</Problem>}
@@ -316,16 +353,17 @@ function Users() {
               {th("teams", "Teams")}
               {th("permission", "Permission")}
               {th("status", "Status")}
+              <th scope="col">Demo</th>
               {th("lastLogin", "Last login")}
               <th scope="col">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={canEdit ? 9 : 8}><Text type="text3" color="secondary">Loading…</Text></td></tr>
+              <tr><td colSpan={canEdit ? 10 : 9}><Text type="text3" color="secondary">Loading…</Text></td></tr>
             )}
             {!loading && filtered && shown.length === 0 && profiles.length > 0 && (
-              <tr><td colSpan={canEdit ? 9 : 8}><Text type="text3" color="secondary">No users match these filters.</Text></td></tr>
+              <tr><td colSpan={canEdit ? 10 : 9}><Text type="text3" color="secondary">No users match these filters.</Text></td></tr>
             )}
             {!loading && sorted.map(p => (
               <UserRow
@@ -338,6 +376,7 @@ function Users() {
                 onActivity={() => setActivityFor(p)}
                 onFullEdit={() => { setEditingRow(null); setEditing(p); }}
                 onDeactivate={() => void onStatusToggle(p)}
+                onToggleDemo={canEdit ? () => void onDemoToggle(p) : undefined}
                 selected={selected.has(p.id)}
                 onToggleSelect={canEdit ? () => toggleOne(p.id) : undefined}
               />
@@ -352,6 +391,36 @@ function Users() {
         onClose={() => setEditing(null)} onSaved={refresh} />
       <DeactivateDialog show={deactivating !== null} profile={deactivating}
         onClose={() => setDeactivating(null)} onSaved={refresh} />
+
+      {/* Holding one person at the gate, confirmed. Named rather than counted, because
+          there is exactly one of them and the name is the thing to check. */}
+      <Modal show={demoPending !== null} onClose={() => setDemoPending(null)} id="hold-at-gate">
+        <ModalBasicLayout>
+          <ModalHeader title={`Hold ${demoPending?.fullName ?? ""} at the gate?`} />
+          <ModalContent>
+            <Text type="text2" element="p" ellipsis={false}>
+              They can still sign in, and their account stays exactly as it is — they
+              reach a screen saying it opens when somebody walks them through it, and go
+              no further. Nothing they can see, nothing they can change.
+            </Text>
+            <Text type="text3" color="secondary" ellipsis={false}>
+              Undone by the same switch, which does not ask.
+            </Text>
+          </ModalContent>
+        </ModalBasicLayout>
+        <ModalFooter
+          primaryButton={{
+            text: "Hold at gate",
+            onClick: async () => {
+              const p = demoPending;
+              setDemoPending(null);
+              if (!p) return;
+              await bulkApply("held at the gate", [p], x => repo.updateProfile(x.id, { isDemo: true }));
+            }
+          }}
+          secondaryButton={{ text: "Cancel", onClick: () => setDemoPending(null) }}
+        />
+      </Modal>
 
       {/* The bulk version of the same confirmation. It names the number rather than the
           people: at fifteen rows a list is a wall, and the count is the fact that

@@ -113,6 +113,36 @@ begin
   exception when others then raise warning 'FAIL: unexpected on your own saved view (%)', sqlerrm;
   end;
 
+  -- 0049: a demo account is held at the door, and the door is the database rather than
+  -- the screen. Proved by flipping the flag on the signed-in test person mid-probe: the
+  -- reads that worked a line ago must stop, and their own row must survive so the gate
+  -- can name them. Restored immediately afterwards, or every probe below this one runs
+  -- as somebody who cannot read anything.
+  declare
+    demo_jobs int; demo_me int;
+  begin
+    update profiles set profile_is_demo = true
+     where profile_email = 'behaviour-test@lofty.com.au';
+    select count(*) into demo_jobs from jobs;
+    select count(*) into demo_me from profiles;
+    if demo_jobs = 0 then
+      raise notice 'ok  a demo account reads no jobs — every policy hangs off is_active_user';
+    else
+      raise warning 'FAIL: a demo account read % job(s)', demo_jobs;
+    end if;
+    if demo_me = 1 then
+      raise notice 'ok  …but still reads its own profile, so the gate can name them';
+    else
+      raise warning 'FAIL: a demo account read % profile(s), expected exactly its own', demo_me;
+    end if;
+    update profiles set profile_is_demo = false
+     where profile_email = 'behaviour-test@lofty.com.au';
+  exception when others then
+    update profiles set profile_is_demo = false
+     where profile_email = 'behaviour-test@lofty.com.au';
+    raise warning 'FAIL: unexpected on the demo gate (%)', sqlerrm;
+  end;
+
   begin
     insert into pipelines (pipeline_key, pipeline_name, pipeline_scope)
     values ('sneaky', 'Sneaky', 'job');

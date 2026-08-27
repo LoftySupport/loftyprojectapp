@@ -483,6 +483,14 @@ export interface Profile {
    * Teams permission levels when that sync lands.
    */
   permission: PermissionLevel;
+  /**
+   * Held at the door (0049, Amber 27 Aug). A demo account signs in, reaches the gate
+   * screen and reads nothing — enforced by `is_active_user()`, not by this flag, which
+   * only decides what the app shows. Deliberately neither deactivation ("this person is
+   * gone" — wrong for somebody starting Monday) nor a permission level (that is how far
+   * you reach once you are in): a real, ready account nobody can wander alone.
+   */
+  isDemo: boolean;
   // + fields
   active: boolean;
   createdAt: IsoDateTime;
@@ -655,6 +663,8 @@ export interface NewProfile {
   jobTitle: string | null;
   permission: PermissionLevel;
   teams: TeamId[];
+  /** Created straight into demo, for somebody who starts with a walkthrough. */
+  isDemo?: boolean;
 }
 
 /** One line of history. Two sources, one shape, because a reader wants one list. */

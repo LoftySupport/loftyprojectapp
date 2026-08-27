@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-253 properties across 43 tables.
+254 properties across 43 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 204 | In the migration and the types |
+| Created | 205 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -356,6 +356,7 @@ A person, existing before they ever sign in — that is what makes a pre-created
 | `profiles.profile_created_at` | Created on | When the profile row was created. | `timestamptz` | — | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `profiles.profile_updated_at` | Updated on | When the profile row last changed. Worth having when a permission or team change is disputed. | `timestamptz` | — | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `profiles.teams` | Teams (merged) | Merged back into profile_teams rows, reversing 0022. The test 0022 applied was "does the membership carry attributes of its own?" — is_primary was constant, so the array won. The same test now gives the opposite answer, because whether somebody MANAGES a team is an attribute of the membership, and a person can be a member of four teams while managing three. Two parallel arrays could disagree — someone managing a team they are not in — and a table cannot express that. | `enum` | — | Dropped. Was: team[], not null, GIN indexed, normalised by trigger. | Superseded by profile_teams. The 45 memberships were carried across row for row and checked before and after. | Merged | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `profiles.profile_is_demo` | Held at the gate | A demo account: signs in, reaches the gate screen, reads nothing (0049). Neither deactivation (which says the person is gone — wrong for somebody starting Monday) nor a permission level (which is how far you reach once you are in): a real, ready account nobody can wander alone, so somebody can be walked through the app without being able to trial it unattended. | `boolean` | — | Not null, default false. | Enforced by is_active_user() returning false for a demo account, so every policy hanging off it refuses at once — including tables not yet built. The profiles SELECT policy is widened so they may still read their OWN row: the gate has to know whose it is. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `project_address_search`
 
