@@ -23,7 +23,12 @@ export type View = (typeof VIEWS)[number];
  * scanning for a single job actually wants — the columns are an answer to "how is the
  * work distributed", not to "where is 1042-03".
  */
-export const GROUPINGS = ["None", "Stage", "Project", "Team", "Team member", "Status"] as const;
+export const GROUPINGS = [
+  "None", "Stage", "Project", "Team", "Team member", "Status",
+  // Projects only — the jobs board never offers it, because a job's type is its
+  // project's and grouping by it would just be grouping by project one level up.
+  "Type"
+] as const;
 export type Grouping = (typeof GROUPINGS)[number];
 
 /**

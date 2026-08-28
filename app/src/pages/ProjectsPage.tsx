@@ -13,11 +13,15 @@ import { SavedViewTabs } from "../components/SavedViewTabs";
 import { useSavedViews } from "../data/useSavedViews";
 import { ProjectCard, StatusPill } from "../components/RecordCards";
 import { PropertySlots } from "../components/PropertySlots";
-import { PROJECT_TYPES, PROJECT_TYPE_LABELS, type StageName, type TeamId } from "../data/types";
+import {
+  PROJECT_TYPES, PROJECT_TYPE_LABELS, RECORD_STATUSES, RECORD_STATUS_LABELS,
+  type StageName, type TeamId
+} from "../data/types";
 import { MoveStageControl, PROJECT_MOVE_NOTE } from "../components/MoveStageDialog";
 import { daysSince } from "../data/boardModel";
 import { Token } from "../components/Token";
 import { Toolbar } from "../components/Toolbar";
+import { accentStyle, columnAccent } from "../theme/accents";
 import { Select, toOptions } from "../components/Select";
 import { NewProjectDialog, SplitProjectDialog } from "../components/CreateDialogs";
 import { InlineNewProjectRow } from "../components/InlineNewProjectRow";
@@ -65,9 +69,11 @@ export function ProjectsPage() {
     { id: number; count: number | null; community: number | null; torrens: number | null; nextLot: number }
     | null>(null);
 
-  // No grouping control on this screen, so the value is inert — it still has to be given,
-  // and "Stage" is the one the toolbar would show if the control were ever turned on.
-  const { view, setView, filters, setFilters, saved, setSaved, search } =
+  // Grouping is live on this screen now (Amber, 28 Aug: "i need to see projects in
+  // lifecycle stages as well"). It was inert for as long as the projects board was a
+  // flat grid of cards — which answered "what sites are there" and not "where is the
+  // portfolio up to", the question the jobs board has always been able to answer.
+  const { view, setView, grouping, setGrouping, filters, setFilters, saved, setSaved, search } =
     useBoardParams({ view: "Board", grouping: "Stage" });
   // The teams this person is in — sharing a view offers their own team, and offers
   // nothing at all to somebody in none (0051).
@@ -88,17 +94,26 @@ export function ProjectsPage() {
 
   /**
    * A saved view names a set of *job* stages, so a project is in view when one of its
-   * jobs is. A project with no jobs yet has no position in any pipeline, so it can only
-   * appear in the unfiltered view — but it must appear there, or a project created before
-   * its lots are added is invisible in the app that just created it.
+   * jobs is — and a project with no jobs is judged by its OWN lifecycle stage.
+   *
+   * That last clause is a fix, found by putting projects on a board. It used to read
+   * `showingEverything`, meaning "only when the view names no stages at all" — and the
+   * built-in All jobs view names five, so it was false there. A project created a minute
+   * ago, before anybody has added its lots, was invisible on the first screen the app
+   * shows: the comment said it "must appear there" and the code did the opposite.
+   *
+   * Its own stage is the right test and was available all along (`projects.project_stage`,
+   * 0039): a jobless project at Acquisition & Development belongs in a view that includes
+   * that phase, and not in Closed.
    */
-  const showingEverything = saved.stages.length === 0;
   const inView = useMemo(
     () =>
       all.filter(p =>
-        p.jobs.length === 0 ? showingEverything : p.jobs.some(j => viewStages.includes(j.stage))
+        p.jobs.length === 0
+          ? viewStages.includes(p.stage)
+          : p.jobs.some(j => viewStages.includes(j.stage))
       ),
-    [all, viewStages, showingEverything]
+    [all, viewStages]
   );
 
   const open = useMemo(
@@ -115,6 +130,34 @@ export function ProjectsPage() {
     () => inView.filter(p => projectMatchesFilters(p, filters) && projectMatchesQuery(p, terms)),
     [inView, filters, terms]
   );
+
+  /**
+   * The board's columns.
+   *
+   * Ordered by the lifecycle rather than by what happens to be present, and empty
+   * columns are kept: "nothing in Construction" is a fact about the portfolio, and a
+   * column that vanishes when it empties makes the pipeline look shorter than it is.
+   *
+   * A project's own stage, not the worst of its jobs — `projects.project_stage` is a
+   * real column that somebody sets (and that 0046 moves with its jobs), so deriving one
+   * here would quietly overrule them.
+   */
+  const projectGroups = useMemo(() => {
+    const keyOf = (p: BoardProject) =>
+      grouping === "None" ? ""
+      : grouping === "Type" ? (p.projectType ? PROJECT_TYPE_LABELS[p.projectType] : "No type set")
+      : grouping === "Status" ? RECORD_STATUS_LABELS[p.status]
+      : p.stage;
+
+    const order: string[] =
+      grouping === "None" ? [""]
+      : grouping === "Stage" ? stageNames
+      : grouping === "Status" ? RECORD_STATUSES.map(st => RECORD_STATUS_LABELS[st])
+      : [...new Set(rows.map(keyOf))];
+
+    return order.map(key => ({ key, projects: rows.filter(p => keyOf(p) === key) }));
+  }, [grouping, rows, stageNames]);
+
   const narrowed = terms.length > 0 || activeFilterCount(filters) > 0;
   const noMatches = narrowed && rows.length === 0;
   const stale = matchedOnPreviousAddress(rows.flatMap(p => [p, ...p.jobs]), terms);
@@ -219,6 +262,9 @@ export function ProjectsPage() {
         views={["Board", "Table", "Gantt"]}
         view={view}
         onViewChange={setView}
+        groupings={["None", "Stage", "Type", "Status"]}
+        grouping={grouping}
+        onGroupingChange={setGrouping}
         filters={filters}
         onFiltersChange={setFilters}
         optionsFor={optionsFor}
@@ -258,20 +304,49 @@ export function ProjectsPage() {
       ) : noMatches ? (
         <NoResults noun="projects" />
       ) : view === "Board" ? (
-        <div className="card-grid">
-          {rows.map(p => (
-            <ProjectCard
-              key={p.projectNumber}
-              projectNumber={p.projectNumber}
-              jobs={p.jobs.map(j => ({ jobNumber: j.jobNumber, address: j.currentAddress ?? null, stage: j.stage }))}
-              address={p.currentAddress}
-              suburb={p.suburb}
-              stage={p.stage}
-              projectType={p.projectType}
-              targetCompletion={p.targetCompletion}
-              status={p.status}
-              onOpen={() => openOne(p)}
-            />
+        // The same board the jobs page renders, with project cards in the columns —
+        // one component's worth of markup rather than a second kind of board, so a
+        // column looks and behaves the same whichever record is in it.
+        <div className="board">
+          {projectGroups.map((g, gi) => (
+            <section
+              className="board-column"
+              key={g.key}
+              style={accentStyle(columnAccent(grouping, g.key, gi))}
+            >
+              <div className="board-column-head">
+                {grouping === "None" ? (
+                  <div><Text type="text3" color="secondary">All projects</Text></div>
+                ) : (
+                  <div>
+                    <Text type="text3" color="secondary">{grouping}</Text>
+                    <Text type="text2" weight="medium">{g.key}</Text>
+                  </div>
+                )}
+                <span className="col-count">{g.projects.length}</span>
+              </div>
+
+              {g.projects.length === 0 ? (
+                <div className="board-column-empty">
+                  <Text type="text3" color="secondary">No projects</Text>
+                </div>
+              ) : (
+                g.projects.map(p => (
+                  <ProjectCard
+                    key={p.projectNumber}
+                    projectNumber={p.projectNumber}
+                    jobs={p.jobs.map(j => ({ jobNumber: j.jobNumber, address: j.currentAddress ?? null, stage: j.stage }))}
+                    address={p.currentAddress}
+                    suburb={p.suburb}
+                    stage={p.stage}
+                    projectType={p.projectType}
+                    targetCompletion={p.targetCompletion}
+                    status={p.status}
+                    onOpen={() => openOne(p)}
+                  />
+                ))
+              )}
+            </section>
           ))}
         </div>
       ) : view === "Gantt" ? (
