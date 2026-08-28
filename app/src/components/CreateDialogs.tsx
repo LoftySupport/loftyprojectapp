@@ -8,7 +8,8 @@ import { useTeams } from "../data/useLookups";
 import { councilForSuburb, isAmbiguousSuburb, postcodeForSuburb } from "../data/saSuburbs";
 import { SuburbField } from "./SuburbField";
 import {
-  AU_STATES, MAX_SPLIT, OPENING_TEAM, PROJECT_TYPE_LABELS, PROJECT_TYPES, SA_COUNCILS,
+  AU_STATES, MAX_SPLIT, OPENING_TEAM, PROJECT_TYPE_LABELS, PROJECT_TYPES,
+  projectNameTail, SA_COUNCILS,
   type NewAddress, type ProjectType, type SaCouncil, type SplitLot, type TeamId
 } from "../data/types";
 import "./ui.css";
@@ -357,7 +358,6 @@ export function NewProjectDialog({
   // was bought under is already out of date. Null while the block is closed; the first
   // address becomes the immutable original and this one the current address.
   const [newAddress, setNewAddress] = useState<NewAddress | null>(null);
-  const [name, setName] = useState("");
   const [projectType, setProjectType] = useState<ProjectType | null>(null);
   const [dwellings, setDwellings] = useState("");
   const [saving, setSaving] = useState(false);
@@ -373,6 +373,15 @@ export function NewProjectDialog({
   const dwellingsValid =
     dwellingCount === null || (Number.isInteger(dwellingCount) && dwellingCount >= 1);
 
+  // The tail of the name, from whichever address the project will actually be at: the
+  // "new address" block, when it is open, is the current one. Empty until there is a
+  // suburb to show, because half a name is not a preview of anything.
+  const named = newAddress ?? address;
+  const nameTail = projectNameTail(
+    named.suburb,
+    [named.streetNumber, named.street1].filter(Boolean).join(" ")
+  );
+
   // projectType is required by the database now, so the button waits for it rather than
   // letting the insert come back with a not-null violation.
   const valid = addressIsValid(address) && projectType !== null && dwellingsValid
@@ -381,7 +390,6 @@ export function NewProjectDialog({
   const reset = () => {
     setAddress(EMPTY_ADDRESS);
     setNewAddress(null);
-    setName("");
     setProjectType(null);
     setDwellings("");
     setError(null);
@@ -396,7 +404,6 @@ export function NewProjectDialog({
       const project = await repo.createProject({
         address,
         newAddress,
-        name,
         projectType: projectType!,
         proposedDwellings: dwellingCount
       });
@@ -451,17 +458,13 @@ export function NewProjectDialog({
           </Result>
         ) : (
           <div className="create-form">
-            {/* First, because it is what people will call it. Optional — most projects are
-                known by their address — and the field that matters when the address is a
-                locality, since "Mount Gambier SA 5290" is not what anybody says out loud. */}
-            <Field label="Project name" hint={'optional — e.g. "Mt Gambier division"'}>
-              <TextField
-                value={name}
-                onChange={setName}
-                id="project-name"
-                inputAriaLabel="Project name"
-              />
-            </Field>
+            {/* The name field has gone (Amber, 28 Aug: "hide in the setup project form
+                the 'project name' field — project name is the Project number - SUBURB,
+                street address"). It was a free-text box producing a different convention
+                every time — "14 Brodie Road, Reynella", "Howard Street Windsor Gardens",
+                "St Clair 2007 St Clair Ave" across six projects — for a value nothing
+                displays. It is composed now, and the preview at the bottom shows what
+                from. */}
             <Field label="Project type" required hint="jobs inherit this — they never set their own">
               <Select
                 aria-label="Project type"
@@ -524,6 +527,15 @@ export function NewProjectDialog({
                   ? ` — you'll be offered its ${dwellingCount} job${dwellingCount === 1 ? "" : "s"} (numbered -01 up) straight after.`
                   : " — its first job will be numbered -01 when you split it."}
                 {" "}A project with no jobs has no progress or health to show.
+              </Text>
+              {/* What it will be called, built from what has been typed so far. The number
+                  is the sequence's to issue, so it is shown as a gap rather than a guess —
+                  promising 1008 and delivering 1009 is worse than not promising. */}
+              <Text type="text3" color="secondary" ellipsis={false}>
+                <strong>Named automatically:</strong>{" "}
+                {nameTail
+                  ? <>&ldquo;<em>number</em> - {nameTail}&rdquo;</>
+                  : "the number, then the suburb and street below."}
               </Text>
             </div>
           </div>

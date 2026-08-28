@@ -3,6 +3,7 @@ import type { Repository, RepositoryMethod } from "./repository";
 import type { DictionaryOverride } from "./dictionary";
 import { createStubRepository } from "./stubRepository";
 import { MAX_SPLIT, OPENING_TEAM, teamSlug } from "./types";
+import { projectDisplayName } from "./types";
 import type {
   ActivityEntry,
   AddressHistoryEntry,
@@ -775,7 +776,9 @@ export function createSupabaseRepository(): Repository {
         .insert({
           project_original_address_id: input.newAddress ? address.address_id : undefined,
           project_current_address_id: currentId,
-          project_name: emptyToNull(input.name),
+          // Left null on the insert: the name is composed below, because it needs the
+          // number the sequence has not issued yet.
+          project_name: null,
           // Amber, 26 Aug: every new record opens with Acquisition & Development. The
           // project form has no team field, so this is written rather than defaulted.
           project_owning_team: OPENING_TEAM,
@@ -788,7 +791,33 @@ export function createSupabaseRepository(): Repository {
         .select("*")
         .single();
       if (error) throw error;
-      return toProject(data);
+
+      /**
+       * The name, now that the number exists (Amber, 28 Aug: "project name is the
+       * Project number - SUBURB, street address").
+       *
+       * A second statement rather than a trigger, deliberately. A trigger would have to
+       * reach into `addresses` to compose it, and would then be the thing that decides
+       * what a project is called — invisible from the app, and re-running on every
+       * address change whether or not anybody wanted the name to follow. The rule lives
+       * in `projectDisplayName`, one implementation, read by both the form's preview and
+       * this write.
+       *
+       * Composed from the CURRENT address: where the project is, not where it was.
+       */
+      const named = input.newAddress ?? input.address;
+      const street = [named.streetNumber, named.street1].filter(Boolean).join(" ");
+      const { data: renamed, error: nameError } = await client
+        .from("projects")
+        .update({ project_name: projectDisplayName(data.project_id, named.suburb, street) })
+        .eq("project_id", data.project_id)
+        .select("*")
+        .single();
+      // A project that exists without its name is still a project. Losing the whole
+      // creation because the label did not stick would be the worse failure, so the
+      // insert's row is what comes back if the second statement is refused.
+      if (nameError) return toProject(data);
+      return toProject(renamed);
     },
 
     async createJob(input: NewJob): Promise<Job> {

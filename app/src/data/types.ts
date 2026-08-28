@@ -1161,6 +1161,37 @@ export interface NewAddress {
   council?: SaCouncil | null;
 }
 
+/**
+ * What a project is called: `1042 - REYNELLA, 14 Brodie Road` (Amber, 28 Aug).
+ *
+ * A rule rather than a field. Typed by hand it produced "14 Brodie Road, Reynella",
+ * "Howard Street Windsor Gardens" and "St Clair 2007 St Clair Ave" on six projects —
+ * three conventions, none of them sortable, and none of them carrying the number that
+ * everything else is filed under.
+ *
+ * Composed here so the create form, the repository and anything that later exports a
+ * folder name all read one implementation. The suburb is upper-cased because that is
+ * how Lofty writes it; a locality-only project has no street, and gets the number and
+ * suburb alone rather than a trailing comma.
+ */
+export const projectNameTail = (
+  suburb: string | null | undefined,
+  street: string | null | undefined
+): string => {
+  const place = (suburb ?? "").trim().toUpperCase();
+  const road = (street ?? "").trim();
+  return [place, road].filter(Boolean).join(", ");
+};
+
+export const projectDisplayName = (
+  projectNumber: number,
+  suburb: string | null | undefined,
+  street: string | null | undefined
+): string => {
+  const tail = projectNameTail(suburb, street);
+  return tail ? `${projectNumber} - ${tail}` : String(projectNumber);
+};
+
 export interface NewProject {
   address: NewAddress;
   /**
@@ -1171,9 +1202,11 @@ export interface NewProject {
    */
   newAddress?: NewAddress | null;
   /**
-   * What people call it — "Mt Gambier division". Optional, because most projects are
-   * known by their address and a name would only repeat it; useful precisely when the
-   * address is a locality and "Mount Gambier SA 5290" is not what anyone says out loud.
+   * NOT ON THE FORM ANY MORE (Amber, 28 Aug: "hide in the setup project form the
+   * 'project name' field — project name is the Project number - SUBURB, street
+   * address"). The name is a convention, not an opinion, so it is composed by the
+   * repository from the number the sequence issues and the address already being
+   * saved. Left on the type for the import, which has names of its own to carry.
    */
   name?: string | null;
   /** Required. A project without a type cannot be reported on, grouped or filtered. */
