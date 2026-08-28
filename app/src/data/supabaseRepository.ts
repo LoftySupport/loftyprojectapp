@@ -26,6 +26,7 @@ import type {
   Project,
   ProjectPatch,
   RecordActivity,
+  LatestUpdate,
   PropertyDef,
   Stage,
   StageName,
@@ -1621,6 +1622,44 @@ export function createSupabaseRepository(): Repository {
         .filter((e): e is RecordActivity => e !== null)
         .sort((a, b) => (a.at < b.at ? 1 : -1))
         .slice(0, limit);
+    },
+
+    /**
+     * The newest comment on each of these jobs (0059).
+     *
+     * `.in()` on a list of job numbers, against a view that has already reduced comments
+     * to one row per job — so the wire carries sixty rows for a sixty-job board, not
+     * every comment ever written on them.
+     *
+     * Chunked at 200 because the job list rides in the URL as a PostgREST filter, and a
+     * whole-portfolio board would otherwise build a request too long to send. Nobody has
+     * hit that yet; the chunking is here so the first person who does gets an answer
+     * rather than a 414.
+     */
+    async listLatestUpdates(jobIds: string[]): Promise<Record<string, LatestUpdate>> {
+      const out: Record<string, LatestUpdate> = {};
+      for (let i = 0; i < jobIds.length; i += 200) {
+        const chunk = jobIds.slice(i, i + 200);
+        if (!chunk.length) continue;
+        const { data, error } = await client
+          .from("job_latest_update")
+          .select("job_id, latest_comment_body, latest_comment_at, latest_comment_edited_at, latest_comment_author")
+          .in("job_id", chunk);
+        if (error) throw error;
+        for (const r of (data ?? []) as unknown as {
+          job_id: string; latest_comment_body: string; latest_comment_at: string;
+          latest_comment_edited_at: string | null; latest_comment_author: string | null;
+        }[]) {
+          out[r.job_id] = {
+            jobId: r.job_id,
+            body: r.latest_comment_body,
+            at: r.latest_comment_at,
+            editedAt: r.latest_comment_edited_at,
+            author: r.latest_comment_author
+          };
+        }
+      }
+      return out;
     },
 
     // ---- bugs and ideas (0052) -------------------------------------------

@@ -25,7 +25,7 @@ import { JobsGantt } from "../components/JobsGantt";
 import { MonthCalendar } from "../components/MonthCalendar";
 import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
-import type { StageName, TeamId } from "../data/types";
+import type { LatestUpdate, StageName, TeamId } from "../data/types";
 import { accentStyle, columnAccent } from "../theme/accents";
 import { readPrefs } from "../data/preferences";
 import { Token } from "../components/Token";
@@ -154,6 +154,21 @@ export function JobsPage() {
    * the batch and says how many actually move. Writes go one at a time so a single
    * refusal (RLS, a guard) names its job instead of failing the lot.
    */
+  /**
+   * The latest update on every job on the board — its newest comment (0059).
+   *
+   * Amber, 28 August: *"the latest update should be the last comment placed on the
+   * job."* Read for `all` rather than for `rows`, so typing in the search box does not
+   * fire a request per keystroke; the map is looked up per card and a job with no
+   * comments is simply missing from it.
+   */
+  const jobKey = useMemo(() => all.map(j => j.jobNumber).join(","), [all]);
+  const { data: latestUpdates } = useQuery<Record<string, LatestUpdate>>(
+    r => (jobKey ? r.listLatestUpdates(jobKey.split(",")) : Promise.resolve({})),
+    {},
+    [jobKey]
+  );
+
   const { data: profiles } = useQuery(r => r.listProfiles(), []);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -430,6 +445,7 @@ export function JobsPage() {
                       projectType={j.projectType}
                       assigneeName={j.assigneeName}
                       status={j.status}
+                      latestUpdate={latestUpdates[j.jobNumber] ?? null}
                       onOpen={() => openOne(j)}
                     />
                   </div>

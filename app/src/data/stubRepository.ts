@@ -191,6 +191,10 @@ export function createStubRepository(): Repository {
     // feed of plausible events is the most convincing kind of fiction this app can tell.
     async listRecordActivity(): Promise<never[]> { return []; },
 
+    // Same reason: no comments behind a stub run, so no job has a latest update. An
+    // empty map, not an entry per job with an invented line in it.
+    async listLatestUpdates(): Promise<Record<string, never>> { return {}; },
+
     // Cloning needs a job to clone and a sequence to issue the new number; a stub run
     // has neither.
     async cloneJob(): Promise<never> {

@@ -769,6 +769,24 @@ export interface RecordActivity {
 }
 
 /**
+ * The newest comment on a job — which is what "latest update" means here.
+ *
+ * Amber, 28 August: *"the latest update should be the last comment placed on the job."*
+ * Not a column on `jobs`: a stored copy of the newest comment disagrees with the thread
+ * the first time somebody edits or deletes one. It is the `job_latest_update` view (0059),
+ * which is the same comment the drawer shows at the top of its thread, by construction.
+ */
+export interface LatestUpdate {
+  jobId: string;
+  /** The comment itself. Never truncated here — the card decides how much it shows. */
+  body: string;
+  at: IsoDateTime;
+  editedAt: IsoDateTime | null;
+  /** Who wrote it. Null when the reader cannot see that person's profile. */
+  author: string | null;
+}
+
+/**
  * What goes after "Hi, ". One place, so the decision is never re-made ad hoc.
  *
  * It was `preferredName ?? firstName` until 0021 dropped that column. Kept as a function

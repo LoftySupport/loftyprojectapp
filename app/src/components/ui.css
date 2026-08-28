@@ -273,6 +273,31 @@
   gap: var(--space-8);
 }
 .card-divider { height: 1px; background: var(--layout-border-color); }
+
+/* The latest update on a card — the job's newest comment (0059).
+   Quiet on purpose: a tinted block with a left rule, not a callout. It sits on every
+   card that has one, so anything louder would make the board a wall of highlights.
+   Clamped to two lines rather than truncated in JavaScript, so the card and the drawer
+   are showing the same string and only differ in how much of it fits. */
+.card-update {
+  background: var(--primary-background-hover-color);
+  border-left: 2px solid var(--layout-border-color);
+  border-radius: 0 var(--border-radius-small) var(--border-radius-small) 0;
+  padding: var(--space-4) var(--space-8);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.card-update-body {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  /* The clamp above is the whole point, so overflow-wrap keeps a pasted URL from
+     pushing the card wider than its column instead of wrapping. */
+  overflow-wrap: anywhere;
+}
 .card-meta {
   display: grid;
   grid-template-columns: auto 1fr;
