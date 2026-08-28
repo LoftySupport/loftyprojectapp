@@ -61,7 +61,9 @@ export function ProjectsPage() {
 
   // Which project the split dialog is for, and what to pre-fill it with. Held here
   // rather than in ProjectDetail so the New project dialog can hand straight to it.
-  const [splitting, setSplitting] = useState<{ id: number; count: number | null; nextLot: number } | null>(null);
+  const [splitting, setSplitting] = useState<
+    { id: number; count: number | null; community: number | null; torrens: number | null; nextLot: number }
+    | null>(null);
 
   // No grouping control on this screen, so the value is inert — it still has to be given,
   // and "Stage" is the one the toolbar would show if the control were ever turned on.
@@ -137,6 +139,8 @@ export function ProjectsPage() {
       onClose={() => setSplitting(null)}
       projectId={splitting?.id ?? null}
       suggestedCount={splitting?.count}
+      suggestedCommunity={splitting?.community}
+      suggestedTorrens={splitting?.torrens}
       nextLot={splitting?.nextLot}
       onCreated={refresh}
     />
@@ -159,6 +163,11 @@ export function ProjectsPage() {
               count: open.proposedDwellings != null
                 ? Math.max(1, open.proposedDwellings - open.jobs.length)
                 : null,
+              // The intended mix, so each row starts as the right kind of lot. Sent
+              // whole rather than reduced by what exists: which of the six are already
+              // created is not knowable from the counts alone.
+              community: open.communityTitleLots,
+              torrens: open.torrensTitleLots,
               // Counted from the jobs already on the project rather than read from their
               // addresses, which are not wired yet. Pre-filled and editable, not stored.
               nextLot: open.jobs.length + 1
@@ -221,7 +230,8 @@ export function ProjectsPage() {
         show={creating}
         onClose={() => setCreating(false)}
         onCreated={refresh}
-        onSplit={(id, count) => setSplitting({ id, count, nextLot: 1 })}
+        onSplit={(id, count, community, torrens) =>
+          setSplitting({ id, count, community, torrens, nextLot: 1 })}
       />
 
       {splitDialog}
@@ -678,6 +688,15 @@ function ProjectDetail({
               {project.proposedDwellings != null && (
                 <Text type="text3" color="secondary">
                   {project.proposedDwellings} proposed
+                  {/* The mix, when the project has one (0053). Said as counts rather
+                      than as a ratio, because "3 community" is what somebody checks
+                      against the plan of division. */}
+                  {(project.communityTitleLots != null || project.torrensTitleLots != null) && (
+                    <>
+                      {" "}({project.communityTitleLots ?? 0} community,{" "}
+                      {project.torrensTitleLots ?? 0} Torrens)
+                    </>
+                  )}
                   {project.jobs.length !== project.proposedDwellings &&
                     ` · ${project.jobs.length} created`}
                 </Text>

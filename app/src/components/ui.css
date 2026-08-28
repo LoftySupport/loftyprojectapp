@@ -530,7 +530,7 @@
    cannot close is a trap, so this is load-bearing, not cosmetic. */
 .drawer-head > :first-child { min-width: 0; }
 .drawer-head > :last-child { flex-shrink: 0; }
-/* Expand and close, on one line. Same shape as `.create-panel-actions`, because the two
+/* Expand and close, on one line. Same shape as `.side-panel-actions`, because the two
    panel heads are the same object with different contents. */
 .drawer-actions { display: flex; align-items: center; gap: var(--space-4); flex-shrink: 0; }
 
@@ -538,8 +538,8 @@
    "expand" means one thing in this app rather than two. */
 /* Only the expand toggle animates. A width that eased on every drag frame lagged a
    handful of pixels behind the pointer, which reads as the panel resisting you. */
-.drawer, .create-panel { transition: none; }
-.drawer.is-expanded, .create-panel.is-expanded { transition: width var(--motion-productive-medium) var(--motion-timing-transition); }
+.drawer, .side-panel { transition: none; }
+.drawer.is-expanded, .side-panel.is-expanded { transition: width var(--motion-productive-medium) var(--motion-timing-transition); }
 
 /* The drag edge: 8px, half over the panel's left border, so the hand catches it. */
 .drawer-grip {
@@ -812,7 +812,7 @@ code { overflow-wrap: anywhere; }
    the middle, so the list you are adding to stays visible. Same geometry as the job
    drawer, which already survives a phone.
    -------------------------------------------------------------------------- */
-.create-panel-scrim {
+.side-panel-scrim {
   position: fixed;
   /* Main area only, same contract as the drawer's overlay: the chrome stays out from
      under the scrim, so nav and header remain visible and clickable. */
@@ -825,7 +825,7 @@ code { overflow-wrap: anywhere; }
      behind stays readable; a scrim dark enough to hide it gives that back. */
   background: rgba(0, 0, 0, 0.22);
 }
-.create-panel {
+.side-panel {
   position: fixed;
   top: var(--shell-header-h, 0px);
   right: 0;
@@ -844,11 +844,11 @@ code { overflow-wrap: anywhere; }
 /* Expanded: the whole MAIN AREA. It was 100vw, which covered the rail and the header
    too — "full screen" is the full working area, not the whole app with its own way
    out hidden (Amber, 26 August). */
-.create-panel.is-expanded {
+.side-panel.is-expanded {
   width: calc(100vw - var(--shell-rail-w, 0px));
 }
 
-.create-panel-head {
+.side-panel-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -859,16 +859,16 @@ code { overflow-wrap: anywhere; }
 }
 /* The same pair as the drawer: the title may be long, the controls must not be pushed
    off the edge. Without it the × leaves the panel and there is no way out on a phone. */
-.create-panel-head > :first-child { min-width: 0; }
-.create-panel-actions { display: flex; align-items: center; gap: var(--space-4); flex-shrink: 0; }
+.side-panel-head > :first-child { min-width: 0; }
+.side-panel-actions { display: flex; align-items: center; gap: var(--space-4); flex-shrink: 0; }
 
-.create-panel-body {
+.side-panel-body {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   padding: var(--space-16);
 }
-.create-panel-foot {
+.side-panel-foot {
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -881,27 +881,27 @@ code { overflow-wrap: anywhere; }
 /* Inside the panel the form scrolls with the panel body, not inside a box of its own —
    the cap that keeps a centred dialog's footer on screen has nothing to do here, and
    leaving it on produces a scrollbar inside a scrollbar. */
-.create-panel .create-form { max-height: none; overflow: visible; flex: none; }
+.side-panel .create-form { max-height: none; overflow: visible; flex: none; }
 
 /* Two columns once there is room for them. Nine fields down a full-width window is a
    very long thin form with the whole right half empty. */
 @media (min-width: 720px) {
-  .create-panel.is-expanded .create-form {
+  .side-panel.is-expanded .create-form {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0 var(--space-24);
     align-items: start;
   }
   /* Anything that is a sentence rather than a field spans both. */
-  .create-panel.is-expanded .create-preview,
-  .create-panel.is-expanded .create-problem { grid-column: 1 / -1; }
+  .side-panel.is-expanded .create-preview,
+  .side-panel.is-expanded .create-problem { grid-column: 1 / -1; }
 }
 
 @media (max-width: 720px) {
   /* Same reasoning as the drawer's close button: on a touch screen this is the control
      everyone reaches for first, so it gets a finger rather than the 24px minimum. */
-  .create-panel-actions .sb-btn,
-  .create-panel-actions button,
+  .side-panel-actions .sb-btn,
+  .side-panel-actions button,
   .drawer-actions .sb-btn,
   .drawer-actions button { min-width: 40px; min-height: 40px; }
 }
@@ -1055,7 +1055,7 @@ code { overflow-wrap: anywhere; }
    Vibe renders a Dropdown's menu through a portal into `<body>`, in a wrapper whose
    whole ancestor chain computes `z-index: auto`. An auto-stacked positioned element
    paints in tree order, *before* anything carrying a positive z-index — so the menu
-   was drawn underneath `.create-panel` (41) and `.drawer` (41), at the right
+   was drawn underneath `.side-panel` (41) and `.drawer` (41), at the right
    coordinates and completely invisible. Measured, not guessed: with "Project type"
    open, the `[role="option"]` elements sat at x 957–1380 with the panel covering
    940–1400.
@@ -1181,7 +1181,9 @@ code { overflow-wrap: anywhere; }
 .split-rows-head { margin-bottom: var(--space-8); }
 .split-row {
   display: grid;
-  grid-template-columns: 1fr 1.4fr;
+  /* Lot, old number, title type. The title column is widest of the three because
+     "Community title" is the longest thing any of them holds. */
+  grid-template-columns: 0.8fr 1.1fr 1.3fr;
   gap: var(--space-8);
   align-items: start;
   padding: var(--space-4) 0;
@@ -1275,65 +1277,26 @@ code { overflow-wrap: anywhere; }
   margin-top: var(--space-8);
 }
 
-/* ---- Ask Lofty dock ------------------------------------------------------
-   The one AI surface. Floating over everything except modals (drawer and scrims sit
-   at 40/41; Vibe's portaled dialogs at 10001), which is what a dock is. */
-.ask-fab {
-  position: fixed;
-  right: var(--space-24);
-  bottom: var(--space-24);
-  z-index: 45;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  border: none;
-  background: var(--primary-color);
-  color: var(--text-color-on-primary);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: var(--box-shadow-medium);
-}
-.ask-fab:hover { background: var(--primary-hover-color); }
-.ask-fab:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
-.ask-dock {
-  position: fixed;
-  right: var(--space-24);
-  bottom: calc(48px + 2 * var(--space-24));
-  z-index: 45;
-  width: min(380px, calc(100vw - 2 * var(--space-24)));
-  background: var(--primary-background-color);
-  border: 1px solid var(--layout-border-color);
-  border-radius: var(--border-radius-medium);
-  box-shadow: var(--box-shadow-medium);
-  display: flex;
-  flex-direction: column;
-}
-.ask-dock-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-8);
-  padding: var(--space-12) var(--space-16);
-  border-bottom: 1px solid var(--layout-border-color);
-}
-.ask-dock-body { padding: var(--space-12) var(--space-16); }
-.ask-dock-chips {
+/* ---- Ask Lofty -----------------------------------------------------------
+   No longer a floating dock: the trigger is a header icon (`.notif-bell-trigger`,
+   shared with the bell so the two read as one cluster) and the body sits in the
+   standard `.side-panel`. What is left here is only what is inside that panel — the
+   dock's own frame, position and z-index went with it, along with the fault that made
+   it float over the drawer's Save button. */
+.ask-body { display: flex; flex-direction: column; gap: var(--space-12); }
+.ask-chips {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-8);
-  margin-top: var(--space-12);
 }
-.ask-dock-chip {
+.ask-chip {
   font: var(--font-text3-normal);
   color: var(--secondary-text-color);
   background: var(--allgrey-background-color);
   border-radius: 999px;
   padding: 2px var(--space-12);
 }
-.ask-dock-input { padding: var(--space-12) var(--space-16); border-top: 1px solid var(--layout-border-color); }
-.ask-dock-input input {
+.ask-input input {
   width: 100%;
   border: 1px solid var(--ui-border-color);
   border-radius: var(--border-radius-small);
@@ -1550,7 +1513,7 @@ code { overflow-wrap: anywhere; }
    prints, and the print-only line says when and how many. */
 .print-only { display: none; }
 @media print {
-  .app-side, .app-header, .app-foot, .app-side-scrim, .ask-fab, .ask-dock,
+  .app-side, .app-header, .app-foot, .app-side-scrim,
   .toolbar, .saved-views, .drag-hint, .bulk-bar, .app-alert,
   [role="tablist"], .panel-head button { display: none !important; }
   .app-main { padding: 0 !important; }

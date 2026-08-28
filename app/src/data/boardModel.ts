@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "./DataProvider";
 import { useTeams } from "./useLookups";
-import { teamName, type ProjectType, type RecordStatus, type TeamId } from "./types";
+import { teamName, type ProjectType, type RecordStatus, type TeamId, type TitleType } from "./types";
 
 /**
  * What the boards render, built from real records.
@@ -38,6 +38,12 @@ export interface BoardJob {
    * in the app, which is a real state, not a gap.
    */
   jobNumberOld: string | null;
+  /**
+   * Community or Torrens title (0054) — which product this job is. Null when nobody has
+   * said, which is every job created before the column and every job in a batch the
+   * project gave no mix for.
+   */
+  titleType: TitleType | null;
   /** '1042' as text, because it is an identifier on screen and in the URL. */
   projectNumber: string;
   stage: string;
@@ -104,6 +110,9 @@ export interface BoardProject {
   jobs: BoardJob[];
   /** What was intended at creation. Null when nobody said. */
   proposedDwellings: number | null;
+  /** How that total splits between the two kinds of lot (0053). Null when unknown. */
+  communityTitleLots: number | null;
+  torrensTitleLots: number | null;
   projectType: ProjectType | null;
   /** The date being worked towards, or null when none is set. */
   targetCompletion: string | null;
@@ -185,6 +194,7 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
     const boardJobs: BoardJob[] = jobs.map(j => ({
       jobNumber: j.id,
       jobNumberOld: j.jobNumberOld,
+      titleType: j.titleType,
       projectNumber: String(j.projectId),
       stage: j.stage,
       team: teamName(j.owningTeam, teams),
@@ -216,6 +226,8 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
       projectId: p.id,
       jobs: byProject.get(String(p.id)) ?? [],
       proposedDwellings: p.proposedDwellings,
+      communityTitleLots: p.communityTitleLots,
+      torrensTitleLots: p.torrensTitleLots,
       projectType: p.projectType,
       targetCompletion: p.targetCompletion,
       // The project's own address, not one borrowed from its first job. Deriving it

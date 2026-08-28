@@ -205,6 +205,51 @@ begin
     raise warning 'FAIL: unexpected on shared saved views (%)', sqlerrm;
   end;
 
+  -- 0052: bugs and ideas. The widest write in the schema next to one of its narrowest
+  -- reads, which is the pair worth probing: this test person is at `user`, so they may
+  -- report and must not be able to read a single report back — their own included.
+  -- A policy that got this wrong would not look broken; it would quietly show everyone
+  -- what everyone else had reported.
+  begin
+    insert into feedback (profile_id, feedback_kind, feedback_title, feedback_page)
+    values ((select current_profile_id()), 'bug', '__rls_probe__', '/jobs');
+    if (select count(*) from feedback) = 0 then
+      raise notice 'ok  feedback: an ordinary person reports, and reads nothing back — not even their own';
+    else
+      raise warning 'FAIL: a non-admin read % feedback row(s)', (select count(*) from feedback);
+    end if;
+  exception when others then raise warning 'FAIL: unexpected reporting a bug (%)', sqlerrm;
+  end;
+
+  -- The other half of the insert policy: the row must be stamped with the sender. Without
+  -- this, a report could be filed under a colleague — and the whole value of the list is
+  -- knowing who to go back to.
+  begin
+    insert into feedback (profile_id, feedback_kind, feedback_title)
+    values ((select profile_id from profiles
+              where profile_email <> 'behaviour-test@lofty.com.au' limit 1),
+            'idea', '__rls_probe__');
+    raise warning 'FAIL: a report was filed under somebody else';
+  exception
+    when insufficient_privilege then raise notice 'ok  feedback refused a report filed under another person';
+    when others then raise warning 'FAIL: unexpected filing under another person (%)', sqlerrm;
+  end;
+
+  -- Triage is admin work. Below it the update matches no row rather than erroring, which
+  -- is the only signal available — so the probe asserts the row count, not an exception.
+  declare
+    triaged int;
+  begin
+    update feedback set feedback_status = 'done';
+    get diagnostics triaged = row_count;
+    if triaged = 0 then
+      raise notice 'ok  feedback: setting a status is admin work, and matches nothing below it';
+    else
+      raise warning 'FAIL: a non-admin triaged % report(s)', triaged;
+    end if;
+  exception when others then raise warning 'FAIL: unexpected triaging feedback (%)', sqlerrm;
+  end;
+
   begin
     insert into pipelines (pipeline_key, pipeline_name, pipeline_scope)
     values ('sneaky', 'Sneaky', 'job');
@@ -429,7 +474,11 @@ begin
 end $$;
 reset role;
 
--- Left as it was found, so the file can be read twice and mean the same thing.
+-- Left as it was found, so the file can be read twice and mean the same thing. The
+-- feedback probe's row has to be swept as the owner: the table has no delete policy at
+-- all by design ('declined' is the answer to a report going nowhere), so the person who
+-- wrote it cannot take it back.
+delete from feedback where feedback_title = '__rls_probe__';
 reset request.jwt.claim.sub;
 update profiles set profile_permission = 'user'
  where profile_email = 'behaviour-test@lofty.com.au';

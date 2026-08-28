@@ -5,7 +5,14 @@ import { useResizablePanel } from "./useResizablePanel";
 import "./ui.css";
 
 /**
- * The shell every create form sits in.
+ * The shell every side panel sits in — create forms, Ask Lofty, reporting a bug.
+ *
+ * It was `CreatePanel`, and only creating used it. Ask Lofty arrived as a floating dock
+ * instead, and the dock sat on top of the drawer's Save button (Amber, 28 Aug: "the ai
+ * button at the bottom of the screen covers the save button"). The fix was not to move
+ * the dock a few pixels: a second kind of panel, with its own size, its own close and no
+ * grab edge, is a second thing to learn. So this became the one shell, and everything
+ * that opens down the right gets the same width, the same drag handle, the same Escape.
  *
  * Lofty, 23 August, on whether creating should be a side panel or a row on the board:
  * *"both. they can add either way."* So the button opens this — a panel down the right —
@@ -29,7 +36,7 @@ import "./ui.css";
  *   also dims and centres, which is the behaviour being moved away from; a class on the
  *   same element gets the width without the scrim coming back.
  */
-export function CreatePanel({
+export function SidePanel({
   open,
   title,
   onClose,
@@ -92,9 +99,9 @@ export function CreatePanel({
       {/* Quieter than the modal's scrim on purpose: the list behind is meant to stay
           readable. It still catches a click, because clicking away from a panel is how
           most people close one. */}
-      <div className="create-panel-scrim" onClick={onClose} />
+      <div className="side-panel-scrim" onClick={onClose} />
       <aside
-        className={`create-panel${expanded ? " is-expanded" : ""}`}
+        className={`side-panel${expanded ? " is-expanded" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}
@@ -103,9 +110,9 @@ export function CreatePanel({
         style={expanded ? undefined : { width: `min(${width}px, calc(100vw - var(--shell-rail-w, 0px)))` }}
       >
         {!expanded && <div className="drawer-grip" {...handleProps} />}
-        <header className="create-panel-head">
+        <header className="side-panel-head">
           <Heading type="h3" weight="medium">{title}</Heading>
-          <div className="create-panel-actions">
+          <div className="side-panel-actions">
             {canExpand && <ExpandButton expanded={expanded} onToggle={toggle} />}
             <Button kind="tertiary" size="small" onClick={onClose} aria-label="Close">
               ×
@@ -113,9 +120,9 @@ export function CreatePanel({
           </div>
         </header>
 
-        <div className="create-panel-body">{children}</div>
+        <div className="side-panel-body">{children}</div>
 
-        {footer && <footer className="create-panel-foot">{footer}</footer>}
+        {footer && <footer className="side-panel-foot">{footer}</footer>}
       </aside>
     </>
   );

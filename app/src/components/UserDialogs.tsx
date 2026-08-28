@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import {
   Button, Modal, ModalBasicLayout, ModalContent, ModalFooter, ModalHeader, Text, TextField
 } from "@vibe/core";
-import { CreatePanel } from "./CreatePanel";
+import { SidePanel } from "./SidePanel";
 import { Field, Problem } from "./Form";
 import { MultiSelect, Select, toOptions } from "./Select";
 import { useRepository } from "../data/DataProvider";
@@ -32,7 +32,7 @@ import "./ui.css";
  *   field. That is the whole explanation for "the edit user one is weird": not a
  *   subtle spacing bug, three class names nothing styles.
  *
- *   It now uses the same two pieces every other form does: `CreatePanel` for the shell
+ *   It now uses the same two pieces every other form does: `SidePanel` for the shell
  *   and `Field` from `Form.tsx` for the rows. There is no second layout left to drift.
  */
 
@@ -99,7 +99,7 @@ export function UserDialog({
   if (!show) return null;
 
   return (
-    <CreatePanel
+    <SidePanel
       open={show}
       title={profile ? `Edit ${profile.fullName}` : "Add user"}
       onClose={onClose}
@@ -159,7 +159,7 @@ export function UserDialog({
           </div>
         )}
       </>
-    </CreatePanel>
+    </SidePanel>
   );
 }
 
@@ -307,7 +307,7 @@ export function ActivityDialog({
   if (!show) return null;
 
   return (
-    <CreatePanel
+    <SidePanel
       open={show}
       title={`Activity — ${title}`}
       onClose={onClose}
@@ -336,6 +336,6 @@ export function ActivityDialog({
           </ul>
         )}
       </>
-    </CreatePanel>
+    </SidePanel>
   );
 }

@@ -284,6 +284,29 @@ html, body, #root { height: 100%; }
   outline-offset: 2px;
   border-radius: 2px;
 }
+/* The two reporting controls (0052). They are buttons, not links — they open a panel
+   rather than going anywhere — but they sit among the footer's links and must not look
+   like a different species, so they take the same underline, the same inherited colour
+   and the same 24px minimum target the links were given for WCAG 2.5.8. */
+.foot-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  border: none;
+  background: none;
+  padding: var(--space-4);
+  min-height: 24px;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.foot-action:hover { text-decoration: none; }
+.foot-action:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
 /* Monospace so a commit ref reads as one, and tabular so it does not jiggle. */
 .app-foot-version { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 
@@ -402,7 +425,19 @@ html, body, #root { height: 100%; }
      the header's height and pushing the avatar out of the bar. The chip has gone with the
      binding banner, so there is one child left and nothing to wrap — kept because the
      next thing added here would reintroduce the fault silently. */
-  .app-header-right { flex-shrink: 1; min-width: 0; flex-wrap: nowrap; }
+  /* `flex-shrink: 0`, not 1, and the difference is the whole bug.
+     
+     The cluster's children are each `flex-shrink: 0` (below), so shrinking the cluster
+     does not shrink anything inside it — it just gives the box less room than its
+     contents and lets them hang out of the right edge. With two icons that was invisible;
+     the moment Ask Lofty made it three, the cluster was squeezed to 80px around 108px of
+     buttons and the avatar sat 12px past the viewport, which the responsive sweep read as
+     every page scrolling sideways by 18px at 320.
+     
+     So the search is the one that gives, which is what the comment above already said it
+     was. `nowrap` stays: the cluster wraps by default, and a wrapped cluster puts a
+     control on its own line above the avatar and doubles the header's height. */
+  .app-header-right { flex-shrink: 0; min-width: 0; flex-wrap: nowrap; }
   /* The two icon triggers hold their size when the row squeezes — the bell's arrival
      was shrinking the avatar button to 16px at 320, failing the 24px tap target. The
      search field is the flexible one; identity and the bell are not. The tighter gap

@@ -242,6 +242,13 @@ export interface Project {
    * counted, never stored. "We planned four lots and got three" needs both.
    */
   proposedDwellings: number | null;
+  /**
+   * How that total splits between the two kinds of lot (0053). Null on both means the
+   * split is not known — true of every project created before the columns existed, and
+   * not the same statement as zero.
+   */
+  communityTitleLots: number | null;
+  torrensTitleLots: number | null;
   projectType: ProjectType | null;
   status: RecordStatus;
   /**
@@ -299,6 +306,12 @@ export interface JobPatch {
    * claiming the same old number is the collision this exists to prevent.
    */
   jobNumberOld?: string | null;
+  /**
+   * Which kind of lot this job is (0054). Editable because the split's seeding is a
+   * guess at which lots take which title, and a wrong one has to be fixable where it
+   * shows — the drawer.
+   */
+  titleType?: TitleType | null;
 }
 
 /** The joined shape the cards read — `project_display`. */
@@ -342,6 +355,12 @@ export interface Job {
    * jobs created in the app simply have none.
    */
   jobNumberOld: string | null;
+  /**
+   * Community or Torrens title (0054). Set at the split from the project's intended
+   * mix, editable per job afterwards, and null when nobody has said — which is every
+   * job that existed before the column.
+   */
+  titleType: TitleType | null;
   /** Same pair as projects, for the same reason. */
   originalAddressId: Uuid | null;
   currentAddressId: Uuid;
@@ -656,6 +675,49 @@ export interface UserSavedView {
   ownerName: string | null;
   /** True when it is yours: the only case where the edit controls appear. */
   isMine: boolean;
+}
+
+// ------------------------------------------------------- bugs and ideas (0052)
+
+/**
+ * The two things somebody can send from the footer. Same row, different word on it:
+ * a bug is something that went wrong, an idea is something that could be better, and
+ * both end up on Amber's list of what to implement.
+ */
+export const FEEDBACK_KINDS = ["bug", "idea"] as const;
+export type FeedbackKind = (typeof FEEDBACK_KINDS)[number];
+
+/**
+ * Where a report has got to. Four values because the point of the feature is tracking —
+ * "this way I can track what needs to be implemented" — and a list with no state has to
+ * be re-read from the top every week.
+ *
+ * `declined` rather than a delete: it keeps the record of having considered something,
+ * which is the difference between an answer and a report that vanished.
+ */
+export const FEEDBACK_STATUSES = ["new", "planned", "done", "declined"] as const;
+export type FeedbackStatus = (typeof FEEDBACK_STATUSES)[number];
+
+/** One report, as Setup lists it. Only admins ever hold one of these. */
+export interface FeedbackItem {
+  id: Uuid;
+  kind: FeedbackKind;
+  title: string;
+  detail: string;
+  /** The app path it was sent from — captured, never typed. Null on older rows. */
+  page: string | null;
+  status: FeedbackStatus;
+  /** Who sent it, resolved for the list. Null when the profile is gone. */
+  fromName: string | null;
+  createdAt: string;
+}
+
+/** What the footer form sends. The sender and the page are added by the repository. */
+export interface NewFeedback {
+  kind: FeedbackKind;
+  title: string;
+  detail: string;
+  page: string;
 }
 
 export const PROFILE_STATUSES = ["active", "pending", "inactive"] as const;
@@ -1118,6 +1180,54 @@ export interface NewAddress {
   council?: SaCouncil | null;
 }
 
+/**
+ * What a project is called: `1042 - REYNELLA, 14 Brodie Road` (Amber, 28 Aug).
+ *
+ * A rule rather than a field. Typed by hand it produced "14 Brodie Road, Reynella",
+ * "Howard Street Windsor Gardens" and "St Clair 2007 St Clair Ave" on six projects —
+ * three conventions, none of them sortable, and none of them carrying the number that
+ * everything else is filed under.
+ *
+ * Composed here so the create form, the repository and anything that later exports a
+ * folder name all read one implementation. The suburb is upper-cased because that is
+ * how Lofty writes it; a locality-only project has no street, and gets the number and
+ * suburb alone rather than a trailing comma.
+ */
+export const projectNameTail = (
+  suburb: string | null | undefined,
+  street: string | null | undefined
+): string => {
+  const place = (suburb ?? "").trim().toUpperCase();
+  const road = (street ?? "").trim();
+  return [place, road].filter(Boolean).join(", ");
+};
+
+export const projectDisplayName = (
+  projectNumber: number,
+  suburb: string | null | undefined,
+  street: string | null | undefined
+): string => {
+  const tail = projectNameTail(suburb, street);
+  return tail ? `${projectNumber} - ${tail}` : String(projectNumber);
+};
+
+/**
+ * The two kinds of lot (0053/0054, Amber 28 Aug: "these are different types and the job
+ * will need to carry this information through to the job").
+ *
+ * Different products, not a label: community title and Torrens title have different
+ * titling processes, documents and timelines. A project of six lots may be three of
+ * each, and until now that split had nowhere to live.
+ */
+export const TITLE_TYPES = ["community", "torrens"] as const;
+export type TitleType = (typeof TITLE_TYPES)[number];
+
+/** Written the way Lofty writes them: community title lowercase, Torrens a surname. */
+export const TITLE_TYPE_LABELS: Record<TitleType, string> = {
+  community: "Community title",
+  torrens: "Torrens title"
+};
+
 export interface NewProject {
   address: NewAddress;
   /**
@@ -1128,22 +1238,25 @@ export interface NewProject {
    */
   newAddress?: NewAddress | null;
   /**
-   * What people call it — "Mt Gambier division". Optional, because most projects are
-   * known by their address and a name would only repeat it; useful precisely when the
-   * address is a locality and "Mount Gambier SA 5290" is not what anyone says out loud.
+   * NOT ON THE FORM ANY MORE (Amber, 28 Aug: "hide in the setup project form the
+   * 'project name' field — project name is the Project number - SUBURB, street
+   * address"). The name is a convention, not an opinion, so it is composed by the
+   * repository from the number the sequence issues and the address already being
+   * saved. Left on the type for the import, which has names of its own to carry.
    */
   name?: string | null;
   /** Required. A project without a type cannot be reported on, grouped or filtered. */
   projectType: ProjectType;
   /**
-   * How many dwellings are intended, captured at creation.
+   * How many lots are intended, by kind (Amber, 28 Aug). The form asks for these two
+   * and the repository writes their sum to `project_proposed_dwellings`, so the total
+   * and the split cannot disagree — the database refuses a row where they do.
    *
-   * Deliberately not the same fact as how many jobs exist, which is counted and never
-   * stored — "we planned four lots and got three" needs both numbers. It is also what
-   * the Create jobs action offers as its default count, which is the only reason the
-   * form asks for it at creation rather than later.
+   * Both blank is a real answer: the count is not settled. It is not zero, and it is
+   * not "no community lots".
    */
-  proposedDwellings?: number | null;
+  communityTitleLots?: number | null;
+  torrensTitleLots?: number | null;
   status?: RecordStatus;
   startDate?: IsoDate | null;
   targetCompletion?: IsoDate | null;
@@ -1192,6 +1305,12 @@ export interface SplitLot {
    * there. Unique across `jobs`, and nullable — jobs created here have none.
    */
   jobNumberOld?: string | null;
+  /**
+   * Community or Torrens (0054). Seeded from the project's intended mix — the first
+   * N rows community, the rest Torrens — and editable per row, because which lots take
+   * which title is a decision, not a formula. Null when nobody has said.
+   */
+  titleType?: TitleType | null;
 }
 
 export interface JobSplit {

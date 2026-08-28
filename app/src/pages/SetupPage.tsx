@@ -12,6 +12,7 @@ import {
   type StageName, type TeamId
 } from "../data/types";
 import { DictionaryPage } from "./DictionaryPage";
+import { FeedbackList } from "./FeedbackList";
 import { PermissionsPage } from "./PermissionsPage";
 import { WiringPage } from "./WiringPage";
 import "../components/ui.css";
@@ -33,21 +34,34 @@ import "../components/ui.css";
  * is a link somebody can send.
  */
 
+/**
+ * `adminOnly` is the tab row's half of a rule the database already enforces: the
+ * feedback SELECT policy admits admin and above, so a manager who types /setup/bugs
+ * gets an empty list either way. Hiding the tab is so nobody is offered a door that
+ * opens onto nothing — it is not what keeps the reports private.
+ */
 const SECTIONS = [
-  { slug: "properties",  label: "Properties" },
-  { slug: "permissions", label: "Permissions" },
-  { slug: "dictionary",  label: "Dictionary" },
-  { slug: "wiring",      label: "Wiring" },
-  { slug: "automations", label: "Automations" }
+  { slug: "properties",  label: "Properties",  adminOnly: false },
+  { slug: "permissions", label: "Permissions", adminOnly: false },
+  { slug: "dictionary",  label: "Dictionary",  adminOnly: false },
+  { slug: "wiring",      label: "Wiring",      adminOnly: false },
+  { slug: "automations", label: "Automations", adminOnly: false },
+  // Last, and in this order: a bug is something to fix, an idea is something to weigh.
+  { slug: "bugs",        label: "Bugs",        adminOnly: true },
+  { slug: "ideas",       label: "Ideas",       adminOnly: true }
 ] as const;
 
 export function SetupPage() {
   const { section } = useParams();
   const navigate = useNavigate();
-  const index = SECTIONS.findIndex(s => s.slug === section);
+  const { can } = usePermission();
+  const sections = SECTIONS.filter(s => !s.adminOnly || can("admin"));
+  const index = sections.findIndex(s => s.slug === section);
 
   // An unknown or missing section is a redirect, not an error page: /setup on its own is
-  // a reasonable thing to type, and it should land somewhere.
+  // a reasonable thing to type, and it should land somewhere. A section this person may
+  // not see takes the same path — landing on Properties beats an error for a tab that,
+  // to them, does not exist.
   if (index === -1) return <Navigate to="/setup/properties" replace />;
 
   return (
@@ -59,8 +73,8 @@ export function SetupPage() {
         </Text>
       </div>
 
-      <TabList activeTabId={index} onTabChange={i => navigate(`/setup/${SECTIONS[i].slug}`)}>
-        {SECTIONS.map(s => <Tab key={s.slug}>{s.label}</Tab>)}
+      <TabList activeTabId={index} onTabChange={i => navigate(`/setup/${sections[i].slug}`)}>
+        {sections.map(s => <Tab key={s.slug}>{s.label}</Tab>)}
       </TabList>
 
       <div style={{ marginTop: "var(--space-16)" }}>
@@ -71,6 +85,8 @@ export function SetupPage() {
         {section === "dictionary"  && <DictionaryPage />}
         {section === "wiring"      && <WiringPage />}
         {section === "automations" && <Automations />}
+        {section === "bugs"        && <FeedbackList kind="bug" />}
+        {section === "ideas"       && <FeedbackList kind="idea" />}
       </div>
     </>
   );

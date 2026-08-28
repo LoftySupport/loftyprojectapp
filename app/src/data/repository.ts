@@ -3,9 +3,13 @@ import type {
   ActivityEntry,
   AddressHistoryEntry,
   CommentEntry,
+  FeedbackItem,
+  FeedbackKind,
+  FeedbackStatus,
   Job,
   JobPatch,
   JobSplit,
+  NewFeedback,
   NewProfile,
   NewJob,
   NewProject,
@@ -208,6 +212,20 @@ export interface Repository {
    */
   shareSavedView(id: string, team: TeamId | null): Promise<UserSavedView[]>;
 
+  // ---- bugs and ideas (0052) --------------------------------------------
+  /**
+   * Send a bug or an idea. Anyone active may — the widest write in the app — and the
+   * repository stamps the sender and the page, so neither can be got wrong or faked.
+   *
+   * Returns nothing on purpose. The select policy is admin-only, so asking for the row
+   * back would make every submission fail for exactly the people the form is for.
+   */
+  submitFeedback(entry: NewFeedback): Promise<void>;
+  /** Every report of one kind, newest first. Admin+ by RLS; nobody else sees a row. */
+  listFeedback(kind: FeedbackKind): Promise<FeedbackItem[]>;
+  /** Triage: the only edit the table takes. Admin+, and the fresh list comes back. */
+  setFeedbackStatus(id: string, status: FeedbackStatus): Promise<FeedbackItem[]>;
+
   // ---- preferences (0050) -----------------------------------------------
   /**
    * The signed-in person's preferences, roaming with the profile (Q9's last layer).
@@ -289,6 +307,9 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "saveView",
   "deleteSavedView",
   "shareSavedView",
+  "submitFeedback",
+  "listFeedback",
+  "setFeedbackStatus",
   "listMyPreferences",
   "saveMyPreferences",
   "updateStageSla",
@@ -338,6 +359,9 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   saveView: "saved_views",
   deleteSavedView: "saved_views",
   shareSavedView: "saved_views",
+  submitFeedback: "feedback",
+  listFeedback: "feedback",
+  setFeedbackStatus: "feedback",
   listMyPreferences: "user_preferences",
   saveMyPreferences: "user_preferences",
   listTemplatePhases: "pipeline_stages",

@@ -3,14 +3,19 @@ import type { Repository, RepositoryMethod } from "./repository";
 import type { DictionaryOverride } from "./dictionary";
 import { createStubRepository } from "./stubRepository";
 import { MAX_SPLIT, OPENING_TEAM, teamSlug } from "./types";
+import { projectDisplayName } from "./types";
 import type {
   ActivityEntry,
   AddressHistoryEntry,
   CommentEntry,
+  FeedbackItem,
+  FeedbackKind,
+  FeedbackStatus,
   Job,
   JobPatch,
   JobSplit,
   NewAddress,
+  NewFeedback,
   NewProfile,
   NewPropertyDef,
   NewJob,
@@ -26,6 +31,7 @@ import type {
   TemplateMilestone,
   TemplatePhase,
   SavedViewBoard,
+  TitleType,
   UserSavedView
 } from "./types";
 
@@ -64,6 +70,7 @@ const WIRED: RepositoryMethod[] = [
   "setProjectCurrentAddress", "listAddressHistory",
   "listStages", "listTeams", "updateTeam", "createTeam", "listTemplatePhases", "updateStageSla",
   "listSavedViews", "saveView", "deleteSavedView", "shareSavedView",
+  "submitFeedback", "listFeedback", "setFeedbackStatus",
   "listMyPreferences", "saveMyPreferences",
   "listPropertyDefs", "createPropertyDef", "updatePropertyDef", "deletePropertyDef",
   "listDictionaryOverrides", "saveDictionaryOverride"
@@ -110,7 +117,7 @@ const PROFILE_COLUMNS =
  * database had.
  */
 const PROJECT_COLUMNS =
-  "project_id, project_name, project_original_address_id, project_current_address_id, project_type, project_status, project_proposed_dwellings, project_owning_team, project_assignee_id, project_start_date, project_target_completion, project_end_date, project_stage, project_stage_entered_at, project_sharepoint_url, project_created_at, project_created_by, project_updated_at, project_updated_by, addresses!projects_project_current_address_id_fkey(address_consolidated, address_suburb, address_council), original:addresses!projects_project_original_address_id_fkey(address_consolidated)";
+  "project_id, project_name, project_original_address_id, project_current_address_id, project_type, project_status, project_proposed_dwellings, project_community_title_lots, project_torrens_title_lots, project_owning_team, project_assignee_id, project_start_date, project_target_completion, project_end_date, project_stage, project_stage_entered_at, project_sharepoint_url, project_created_at, project_created_by, project_updated_at, project_updated_by, addresses!projects_project_current_address_id_fkey(address_consolidated, address_suburb, address_council), original:addresses!projects_project_original_address_id_fkey(address_consolidated)";
 
 // Read from `job_display`, not from `jobs`. The view resolves both of the job's
 // addresses and its project's, which the base table only carries as uuids — so a card
@@ -123,7 +130,7 @@ const PROJECT_COLUMNS =
 //
 // Writes still go to `jobs` — a view is not the place to insert through.
 const JOB_COLUMNS =
-  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_sharepoint_url, job_created_at, job_created_by, job_updated_at, job_updated_by, job_current_address, job_original_address, project_current_address, project_sharepoint_url, project_type";
+  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_sharepoint_url, job_created_at, job_created_by, job_updated_at, job_updated_by, job_current_address, job_original_address, project_current_address, project_sharepoint_url, project_type, job_title_type";
 
 /**
  * `""` and `"   "` are how a browser reports a field somebody did not fill in, and they
@@ -770,12 +777,22 @@ export function createSupabaseRepository(): Repository {
         .insert({
           project_original_address_id: input.newAddress ? address.address_id : undefined,
           project_current_address_id: currentId,
-          project_name: emptyToNull(input.name),
+          // Left null on the insert: the name is composed below, because it needs the
+          // number the sequence has not issued yet.
+          project_name: null,
           // Amber, 26 Aug: every new record opens with Acquisition & Development. The
           // project form has no team field, so this is written rather than defaulted.
           project_owning_team: OPENING_TEAM,
           project_type: input.projectType,
-          project_proposed_dwellings: input.proposedDwellings ?? null,
+          // The total is the sum, written here rather than asked for: the form asks
+          // for the split, and `project_lot_split_adds_up` refuses a row where the two
+          // disagree. Null when neither is given — "not settled", which is not zero.
+          project_proposed_dwellings:
+            input.communityTitleLots == null && input.torrensTitleLots == null
+              ? null
+              : (input.communityTitleLots ?? 0) + (input.torrensTitleLots ?? 0),
+          project_community_title_lots: input.communityTitleLots ?? null,
+          project_torrens_title_lots: input.torrensTitleLots ?? null,
           project_status: input.status ?? "on_track",
           project_start_date: input.startDate ?? null,
           project_target_completion: input.targetCompletion ?? null
@@ -783,7 +800,33 @@ export function createSupabaseRepository(): Repository {
         .select("*")
         .single();
       if (error) throw error;
-      return toProject(data);
+
+      /**
+       * The name, now that the number exists (Amber, 28 Aug: "project name is the
+       * Project number - SUBURB, street address").
+       *
+       * A second statement rather than a trigger, deliberately. A trigger would have to
+       * reach into `addresses` to compose it, and would then be the thing that decides
+       * what a project is called — invisible from the app, and re-running on every
+       * address change whether or not anybody wanted the name to follow. The rule lives
+       * in `projectDisplayName`, one implementation, read by both the form's preview and
+       * this write.
+       *
+       * Composed from the CURRENT address: where the project is, not where it was.
+       */
+      const named = input.newAddress ?? input.address;
+      const street = [named.streetNumber, named.street1].filter(Boolean).join(" ");
+      const { data: renamed, error: nameError } = await client
+        .from("projects")
+        .update({ project_name: projectDisplayName(data.project_id, named.suburb, street) })
+        .eq("project_id", data.project_id)
+        .select("*")
+        .single();
+      // A project that exists without its name is still a project. Losing the whole
+      // creation because the label did not stick would be the worse failure, so the
+      // insert's row is what comes back if the second statement is refused.
+      if (nameError) return toProject(data);
+      return toProject(renamed);
     },
 
     async createJob(input: NewJob): Promise<Job> {
@@ -903,7 +946,7 @@ export function createSupabaseRepository(): Repository {
        * text and why the mapping back from inserted addresses no longer sorts them
        * numerically.
        */
-      const lots: { lotNumber: string; jobNumberOld?: string | null }[] =
+      const lots: { lotNumber: string; jobNumberOld?: string | null; titleType?: TitleType | null }[] =
         input.lots?.length
           ? input.lots
           : Array.from({ length: input.count }, (_, i) => ({ lotNumber: String(firstLot + i) }));
@@ -961,6 +1004,10 @@ export function createSupabaseRepository(): Repository {
             // Null rather than "" — the column is unique, and empty strings collide
             // with each other where nulls do not.
             job_number_old: lot.jobNumberOld?.trim() || null,
+            // Community or Torrens (0054). Seeded per row by the split dialog from the
+            // project's intended mix, and null when nobody has said — a generated batch
+            // (the inline row, the create-then-split flow) carries none.
+            job_title_type: lot.titleType ?? null,
             job_stage: input.stage ?? "Acquisition & Development",
             job_status: input.status ?? "on_track"
           })
@@ -1036,6 +1083,8 @@ export function createSupabaseRepository(): Repository {
       // Trimmed, and blank becomes null: the column is unique-over-non-nulls, so an
       // empty string would collide with the next empty string where null never does.
       if ("jobNumberOld" in patch) row.job_number_old = patch.jobNumberOld?.trim() || null;
+      // Null clears it back to "nobody has said", which is a real answer here.
+      if ("titleType" in patch) row.job_title_type = patch.titleType ?? null;
       if (Object.keys(row).length === 0) {
         const { data, error } = await client
           .from("job_display").select(JOB_COLUMNS).eq("job_id", id).single();
@@ -1356,6 +1405,78 @@ export function createSupabaseRepository(): Repository {
       return await repo.listSavedViews(board);
     },
 
+    // ---- bugs and ideas (0052) -------------------------------------------
+
+    /**
+     * No `.select()` after the insert, and that is not an oversight.
+     *
+     * Supabase returns the inserted row by default, which runs the SELECT policy — and
+     * that policy is admin-only. Asking for the row back would make every submission
+     * fail with "row-level security" for exactly the viewers and users the form exists
+     * for, while working perfectly for the admin testing it. Insert only; the toast is
+     * the confirmation.
+     */
+    async submitFeedback(entry: NewFeedback): Promise<void> {
+      const title = entry.title.trim();
+      if (!title) throw new Error("Give it a one-line summary first.");
+      const me = await repo.currentProfile();
+      if (!me) throw new Error("Sending this needs you to be signed in.");
+
+      const { error } = await client.from("feedback").insert({
+        // Stamped here, not typed: the with-check compares it to current_profile_id(),
+        // so a report can only ever be filed under the person filing it.
+        profile_id: me.id,
+        feedback_kind: entry.kind,
+        feedback_title: title,
+        feedback_detail: entry.detail.trim(),
+        feedback_page: entry.page
+      });
+      if (error) throw error;
+    },
+
+    async listFeedback(kind: FeedbackKind): Promise<FeedbackItem[]> {
+      const { data, error } = await client
+        .from("feedback")
+        .select(
+          "feedback_id, feedback_kind, feedback_title, feedback_detail, feedback_page, feedback_status, feedback_created_at, profiles!feedback_profile_id_fkey(profile_first_name, profile_last_name)"
+        )
+        .eq("feedback_kind", kind)
+        .order("feedback_created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map(r => {
+        const from = (r as unknown as {
+          profiles?: { profile_first_name?: string; profile_last_name?: string };
+        }).profiles;
+        const name = [from?.profile_first_name, from?.profile_last_name].filter(Boolean).join(" ");
+        return {
+          id: r.feedback_id,
+          kind: r.feedback_kind as FeedbackKind,
+          title: r.feedback_title,
+          detail: r.feedback_detail ?? "",
+          page: r.feedback_page ?? null,
+          status: r.feedback_status as FeedbackStatus,
+          // Empty rather than a stand-in when the profile is gone: "Unknown" would be a
+          // claim about who sent it.
+          fromName: name || null,
+          createdAt: r.feedback_created_at
+        };
+      });
+    },
+
+    async setFeedbackStatus(id: string, status: FeedbackStatus): Promise<FeedbackItem[]> {
+      const { data, error } = await client
+        .from("feedback")
+        .update({ feedback_status: status })
+        .eq("feedback_id", id)
+        .select("feedback_kind");
+      if (error) throw error;
+      // Anyone below admin matches no row rather than being refused, so an empty result
+      // is the only signal that the update did not happen.
+      const kind = data?.[0]?.feedback_kind as FeedbackKind | undefined;
+      if (!kind) throw new Error("That was not updated — it needs admin.");
+      return await repo.listFeedback(kind);
+    },
+
     // ---- preferences (0050) ----------------------------------------------
     // Owner-only by RLS, and the row is keyed by the person — so the read needs no
     // filter and the write is an upsert on the primary key.
@@ -1639,6 +1760,8 @@ type ProjectRow = {
   project_original_address_id: string | null; project_current_address_id: string;
   project_type: Project["projectType"]; project_status: Project["status"];
   project_proposed_dwellings: number | null;
+  project_community_title_lots: number | null;
+  project_torrens_title_lots: number | null;
   project_owning_team: TeamId | null; project_assignee_id: string | null;
   project_start_date: string | null; project_target_completion: string | null;
   project_end_date: string | null;
@@ -1671,6 +1794,8 @@ function toProject(r: ProjectRow): Project {
     stageEnteredAt: r.project_stage_entered_at,
     sharepointUrl: r.project_sharepoint_url,
     proposedDwellings: r.project_proposed_dwellings,
+    communityTitleLots: r.project_community_title_lots,
+    torrensTitleLots: r.project_torrens_title_lots,
     owningTeam: r.project_owning_team,
     assigneeId: r.project_assignee_id,
     startDate: r.project_start_date,
@@ -1686,6 +1811,7 @@ function toProject(r: ProjectRow): Project {
 type JobRow = {
   job_id: string; project_id: number;
   job_sequence: string; job_number_old: string | null;
+  job_title_type: Job["titleType"];
   job_original_address_id: string | null; job_current_address_id: string;
   job_status: Job["status"];
   job_stage: StageName; job_stage_entered_at: string;
@@ -1708,6 +1834,7 @@ function toJob(r: JobRow): Job {
     projectId: r.project_id,
     jobSequence: r.job_sequence,
     jobNumberOld: r.job_number_old,
+    titleType: r.job_title_type,
     originalAddressId: r.job_original_address_id,
     currentAddressId: r.job_current_address_id,
     status: r.job_status,
