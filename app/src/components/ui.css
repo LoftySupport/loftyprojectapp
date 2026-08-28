@@ -1336,6 +1336,24 @@ code { overflow-wrap: anywhere; }
   .activity-feed li { grid-template-columns: 1fr; gap: 0; }
 }
 
+/* One changed field per line: "Assigned to changed from Deanna Nguyen to Ketan Patel".
+   A block rather than an inline run, because a save that touched three fields is three
+   facts, and comma-separating them makes every one of them harder to read. */
+.activity-change { display: block; overflow-wrap: anywhere; }
+
+/* The record the line is about, as a link. Underlined on hover only — a feed where
+   every line carries a permanently underlined name reads as a page of links rather
+   than as a history. */
+.activity-subject {
+  /* The app's link colour, not the surrounding text colour: styled as inherited bold
+     text it read as emphasis rather than as somewhere to go, which is the one thing
+     this link exists to say. */
+  font-weight: 600;
+  color: var(--link-color, var(--primary-color));
+  text-decoration: none;
+}
+.activity-subject:hover, .activity-subject:focus-visible { text-decoration: underline; }
+
 /* ---- Ask Lofty -----------------------------------------------------------
    No longer a floating dock: the trigger is a header icon (`.notif-bell-trigger`,
    shared with the bell so the two read as one cluster) and the body sits in the

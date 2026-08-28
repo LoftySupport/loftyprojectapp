@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router";
+import { changeSentence } from "../data/auditNarrative";
 import {
   Button, Modal, ModalBasicLayout, ModalContent, ModalFooter, ModalHeader, Text, TextField
 } from "@vibe/core";
@@ -329,7 +331,25 @@ export function ActivityDialog({
             {entries.map(e => (
               <li key={e.id}>
                 <span className={`activity-kind is-${e.kind}`}>{e.kind === "login" ? "Sign-in" : "Change"}</span>
-                <span className="activity-summary">{e.summary}</span>
+                <span className="activity-summary">
+                  {/* The record itself, linked in place of being named twice — "she
+                      changed Ketan (with link to Ketan's record)" (Amber, 28 August).
+                      The panel closes on the way, because the link leaves this screen. */}
+                  {e.subject && e.verb ? (
+                    <>
+                      {e.verb}{" "}
+                      {e.href
+                        ? <Link to={e.href} className="activity-subject" onClick={onClose}>{e.subject}</Link>
+                        : <strong>{e.subject}</strong>}
+                      {e.actorName && ` — ${e.actorName}`}
+                    </>
+                  ) : e.summary}
+                  {/* And what moved. Without it the line says a person changed a record
+                      and stops, which is the half-answer this list has always given. */}
+                  {(e.changes ?? []).map(c => (
+                    <span className="activity-change" key={c.column}>{changeSentence(c)}</span>
+                  ))}
+                </span>
                 <time dateTime={e.at}>{new Date(e.at).toLocaleString()}</time>
               </li>
             ))}
