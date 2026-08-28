@@ -187,6 +187,10 @@ export function createStubRepository(): Repository {
       throw new Error("Sharing a view needs Supabase.");
     },
 
+    // No audit table behind a stub run, so no history. Empty rather than invented: a
+    // feed of plausible events is the most convincing kind of fiction this app can tell.
+    async listRecordActivity(): Promise<never[]> { return []; },
+
     // Cloning needs a job to clone and a sequence to issue the new number; a stub run
     // has neither.
     async cloneJob(): Promise<never> {

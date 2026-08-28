@@ -19,6 +19,7 @@ import type {
   Profile,
   Project,
   ProjectPatch,
+  RecordActivity,
   PropertyDef,
   Stage,
   StageName,
@@ -225,6 +226,20 @@ export interface Repository {
    */
   cloneJob(id: string, copy: CloneOptions): Promise<Job>;
 
+  /**
+   * One record's history (0058) — the project page's activity panel, and the job
+   * drawer's Activity tab.
+   *
+   * A project asks for its own rows AND its jobs': "1042-03 moved to Construction" is
+   * project 1042's news too, and a feed that showed only the parent row would be nearly
+   * empty on a site where all the work happens in the lots.
+   *
+   * Readable by any active person since 0058 — before that the audit table was
+   * admin-only, and this panel would have rendered empty for almost everybody while
+   * looking right to whoever built it.
+   */
+  listRecordActivity(opts: { projectId?: number; jobId?: string; limit?: number }): Promise<RecordActivity[]>;
+
   // ---- bugs and ideas (0052) --------------------------------------------
   /**
    * Send a bug or an idea. Anyone active may — the widest write in the app — and the
@@ -321,6 +336,7 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "deleteSavedView",
   "shareSavedView",
   "cloneJob",
+  "listRecordActivity",
   "submitFeedback",
   "listFeedback",
   "setFeedbackStatus",
@@ -374,6 +390,7 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   deleteSavedView: "saved_views",
   shareSavedView: "saved_views",
   cloneJob: "jobs + addresses",
+  listRecordActivity: "activity_audit",
   submitFeedback: "feedback",
   listFeedback: "feedback",
   setFeedbackStatus: "feedback",

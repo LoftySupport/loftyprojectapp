@@ -26,6 +26,7 @@ import { Select, toOptions } from "../components/Select";
 import { NewProjectDialog, SplitProjectDialog } from "../components/CreateDialogs";
 import { InlineNewProjectRow } from "../components/InlineNewProjectRow";
 import { ProjectsGantt } from "../components/ProjectsGantt";
+import { ActivityFeed } from "../components/ActivityFeed";
 import { CommentsPanel } from "../components/CommentsPanel";
 import { useToasts } from "../components/Toasts";
 import { AddressFields } from "../components/CreateDialogs";
@@ -752,6 +753,11 @@ function ProjectDetail({
         {/* The newest comment IS the latest update — one mechanism, not a field and a
             feed that could disagree. */}
         <CommentsPanel projectId={project.projectId} />
+
+        {/* The project's history, and its jobs' — "1042-03 moved to Construction" is
+            project 1042's news too, and a feed of only the parent row would be nearly
+            empty on a site where all the work happens in the lots. */}
+        <ActivityFeed projectId={project.projectId} title="Project activity" />
 
         {/* Project-level fields, in the stage that captures each one. */}
         <PropertySlots scope="project" />

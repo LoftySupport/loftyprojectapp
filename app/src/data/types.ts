@@ -750,6 +750,25 @@ export interface ActivityEntry {
 }
 
 /**
+ * One line of a record's history (0058), for the panel on a project or in a job drawer.
+ *
+ * Composed from `activity_audit`, which records whole-row snapshots: this is that,
+ * reduced to the sentence somebody actually wants — what changed, when, and who by.
+ * The changed columns are named with their friendly names from the dictionary, so a
+ * feed says "Owning team" rather than `job_owning_team`.
+ */
+export interface RecordActivity {
+  id: string;
+  at: IsoDateTime;
+  /** '1042' or '1042-03' — what the line is about, since a project feed shows both. */
+  subject: string;
+  /** "opened", "created", "moved to Construction", "Owning team changed". */
+  summary: string;
+  /** Who did it, resolved. Null when the actor is not a profile we can name. */
+  who: string | null;
+}
+
+/**
  * What goes after "Hi, ". One place, so the decision is never re-made ad hoc.
  *
  * It was `preferredName ?? firstName` until 0021 dropped that column. Kept as a function
