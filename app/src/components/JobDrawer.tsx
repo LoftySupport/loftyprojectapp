@@ -9,6 +9,7 @@ import { PropertySlots } from "./PropertySlots";
 import { ExpandButton, usePanelExpand } from "./PanelExpand";
 import { useResizablePanel } from "./useResizablePanel";
 import { JOB_MOVE_NOTE, MoveStageControl } from "./MoveStageDialog";
+import { ActivityFeed } from "./ActivityFeed";
 import { CloneJobDialog } from "./CloneDialog";
 import { CommentsPanel } from "./CommentsPanel";
 import { useQuery, useRepository } from "../data/DataProvider";
@@ -518,19 +519,13 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
           </>)}
 
           {(!expanded || tab === 2) && (<>
-          {expanded && (
-            <section className="panel">
-              <div className="panel-head">
-                <Text type="text2" weight="bold">Activity</Text>
-                <Text type="text3" color="secondary">coming soon</Text>
-              </div>
-              <Text type="text2" color="secondary" ellipsis={false}>
-                System entries — stage moves, team handoffs, edits — will interleave with
-                the comments below once the activity feed is wired. The comments are live
-                now.
-              </Text>
-            </section>
-          )}
+          {/* Real since 0058. This said "coming soon" for as long as `activity_audit`
+              was admin-only — the events were being recorded the whole time, and nobody
+              below admin could read one. Two panels rather than one merged stream:
+              comments are user-authored and editable, activity is append-only, and
+              interleaving them makes a feed where half the entries can be rewritten
+              after the fact. */}
+          {expanded && <ActivityFeed jobId={job.jobNumber} title="Activity" />}
           {/* The job's own thread — the same shape the project has, because Amber's
               "latest update" is one rule for both kinds of record. */}
           <CommentsPanel jobId={job.jobNumber} title="Updates & comments" />

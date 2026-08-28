@@ -16,7 +16,19 @@ import "./ui.css";
 export const VIEWS = ["Board", "Table", "Gantt", "Calendar"] as const;
 export type View = (typeof VIEWS)[number];
 
-export const GROUPINGS = ["Stage", "Project", "Team", "Team member", "Status"] as const;
+/**
+ * "None" first, and it is a real grouping rather than the absence of one (Amber, 28 Aug:
+ * "the filters on the job board need a clear all option so i don\'t have to see it
+ * grouped by anything"). A board grouped by nothing is one list, which is what somebody
+ * scanning for a single job actually wants — the columns are an answer to "how is the
+ * work distributed", not to "where is 1042-03".
+ */
+export const GROUPINGS = [
+  "None", "Stage", "Project", "Team", "Team member", "Status",
+  // Projects only — the jobs board never offers it, because a job's type is its
+  // project's and grouping by it would just be grouping by project one level up.
+  "Type"
+] as const;
 export type Grouping = (typeof GROUPINGS)[number];
 
 /**
@@ -154,9 +166,21 @@ export function Toolbar({
         <Button kind="tertiary" size="small" onClick={addFilter}>
           + Add filter
         </Button>
-        {filters.length > 0 && (
-          <Button kind="tertiary" size="small" onClick={() => onFiltersChange([])}>
-            Clear
+        {/* Clear ALL — the filters and the grouping together. They are one state in
+            somebody's head ("stop narrowing this"), and clearing half of it left a
+            board still split into columns by whatever was chosen ten minutes ago.
+            Shown whenever either is set, so the control appears exactly when it would
+            do something. */}
+        {(filters.length > 0 || (grouping && grouping !== "None")) && (
+          <Button
+            kind="tertiary"
+            size="small"
+            onClick={() => {
+              onFiltersChange([]);
+              onGroupingChange?.("None");
+            }}
+          >
+            Clear all
           </Button>
         )}
       </div>

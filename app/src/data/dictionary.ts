@@ -553,7 +553,7 @@ export const DICTIONARY: DictionaryEntry[] = [
 
   // ------------------------------------------------------------- activity_events
   e("activity_events.activity_event_id", "Activity entry",
-    "One line of the readable feed — \"Deanna moved this to Construction\". Distinct from activity_audit, which is the forensic column-level log: admin-only, whole rows as jsonb, and unreadable in a drawer. Neither can be derived from the other.",
+    "One line of the readable feed — \"Deanna moved this to Construction\". Distinct from activity_audit, which is the forensic column-level log: whole rows as jsonb, no vocabulary of its own, and legible in a drawer only after the app diffs two rows and names the columns that moved. 0058 opened the projects and jobs slice of it to every active user, which is what the History and Project activity panels read until this table is built; it is a summary of what changed, not a sentence somebody wrote. Neither can be derived from the other.",
     "bigint", "Primary key, GENERATED ALWAYS AS IDENTITY.",
     "Append-only: no INSERT, UPDATE or DELETE policy at all. Triggers write it, and triggers do not need one.", "created"),
   e("activity_events.activity_event_kind", "What happened",
@@ -876,10 +876,10 @@ export const DICTIONARY: DictionaryEntry[] = [
   e("activity_audit.id", "Audit entry",
     "One row per change to a tracked table. The trg_activity_audit_row trigger fires after every insert, update and delete on profiles, addresses, projects and jobs — profile_teams was the fifth until 0022 folded it into profiles.teams.",
     "integer", "Primary key, bigint identity. The only index on the table.",
-    "Written by log_activity_audit(). Not written by the app.",
+    "Written by log_activity_audit(); never by the app. Readable since 0058 by any active user, but only where table_name is in ('projects', 'jobs') — the rows this app renders as history. Everything else, profiles history above all, stays unreadable.",
     "created", "Amber Beaumont — outside the migrations"),
   e("activity_audit.table_name", "Table", "Which table changed, alongside schema_name.", "text", "Not null.",
-    "Filtering by this is a sequential scan today — worth an index on (table_name, changed_at) if audit queries become routine.",
+    "Load-bearing since 0058: the read policy is table_name in ('projects', 'jobs'), so this column is what keeps 184 rows of profiles history out of a viewer's reach. Both directions were watched — a viewer reads 230 project and job rows and 0 of anything else; the same policy without the table list handed them the profiles history. Filtering by it is a sequential scan today — worth an index on (table_name, changed_at) now that every drawer open runs two of these queries.",
     "created", "Amber Beaumont — outside the migrations"),
   e("activity_audit.operation", "Operation", "INSERT, UPDATE or DELETE.", "text", "Not null.", "—", "created", "Amber Beaumont — outside the migrations"),
   e("activity_audit.old_row", "Before", "The whole row as it was, as jsonb. Null on insert.", "jsonb", "Nullable.",
@@ -1028,7 +1028,7 @@ export const TABLE_DESCRIPTIONS: Record<string, string> = {
   activity:
     "The concept spec's one-table feed — events and comments together, because the UI interleaves them. The built schema answers the same need with two tables, comments and activity_events, interleaved on read; these entries are kept as the shape that was proposed before that split.",
   activity_audit:
-    "The forensic log. A trigger writes one row for every insert, update and delete on the tracked tables, whole rows as jsonb — which is where stage history lives now that job_stages is gone. Admin reading, never a drawer; built outside the numbered migrations.",
+    "The forensic log. A trigger writes one row for every insert, update and delete on the tracked tables, whole rows as jsonb — which is where stage history lives now that job_stages is gone. Built outside the numbered migrations, and admin-only until 0058 gave every active user the projects and jobs slice of it: the job drawer's Activity panel and a project's Project activity read it directly, diffing old_row against new_row and naming the columns that moved. Updates where nothing but a touch column changed are dropped on the way out, or the feed would be three quarters \"job_updated_at changed\".",
   activity_events:
     "The readable feed — \"moved this to Construction\" as a kind plus its nouns, rendered into a sentence by the app rather than stored as one. Append-only: triggers write it, nobody edits it, and neither it nor activity_audit can be derived from the other.",
   address_history:

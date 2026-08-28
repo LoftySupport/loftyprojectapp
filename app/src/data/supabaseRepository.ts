@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Repository, RepositoryMethod } from "./repository";
 import type { DictionaryOverride } from "./dictionary";
+import { DICTIONARY } from "./dictionary";
 import { createStubRepository } from "./stubRepository";
 import { MAX_SPLIT, OPENING_TEAM, teamSlug } from "./types";
 import { projectDisplayName } from "./types";
@@ -24,6 +25,7 @@ import type {
   Profile,
   Project,
   ProjectPatch,
+  RecordActivity,
   PropertyDef,
   Stage,
   StageName,
@@ -71,7 +73,7 @@ const WIRED: RepositoryMethod[] = [
   "setProjectCurrentAddress", "listAddressHistory",
   "listStages", "listTeams", "updateTeam", "createTeam", "listTemplatePhases", "updateStageSla",
   "listSavedViews", "saveView", "deleteSavedView", "shareSavedView",
-  "submitFeedback", "listFeedback", "setFeedbackStatus", "cloneJob",
+  "submitFeedback", "listFeedback", "setFeedbackStatus", "cloneJob", "listRecordActivity",
   "listMyPreferences", "saveMyPreferences",
   "listPropertyDefs", "createPropertyDef", "updatePropertyDef", "deletePropertyDef",
   "listDictionaryOverrides", "saveDictionaryOverride"
@@ -183,6 +185,64 @@ function toComment(r: CommentRow): CommentEntry {
 
 const ADDRESS_COLUMNS =
   "address_id, address_lot_number, address_street_number, address_street_1, address_street_2, address_suburb, address_state, address_postcode, address_council";
+
+/** One `activity_audit` row, as this file reads it. */
+type AuditRow = {
+  id: number;
+  table_name: "projects" | "jobs";
+  operation: "INSERT" | "UPDATE" | "DELETE";
+  changed_at: string;
+  jwt_sub: string | null;
+  old_row: Record<string, unknown> | null;
+  new_row: Record<string, unknown> | null;
+};
+
+/** Columns every update touches. Naming them in a feed is noise, not news. */
+const AUDIT_NOISE = new Set([
+  "job_updated_at", "job_updated_by", "project_updated_at", "project_updated_by",
+  "job_stage_entered_at", "project_stage_entered_at"
+]);
+
+/**
+ * One audit row as a sentence.
+ *
+ * The stage move is called out by name because it is the event people look for; every
+ * other update names the fields that changed, in the dictionary's words rather than the
+ * column's, so a feed reads "Owning team, Assigned to" and not `job_owning_team`.
+ *
+ * **Returns null for a no-op**, and the caller drops those rows. Three of the first five
+ * real rows on project 1002 were updates where nothing moved but `job_updated_at` — a
+ * touch, not an event. Rendering them as "1002-01 updated" would fill the panel with
+ * lines that carry no information, which is the opposite of the "neat and clean" this
+ * was asked to be. An event nobody can act on is not history; it is a row in a table.
+ */
+function summarise(r: AuditRow): string | null {
+  const isJob = r.table_name === "jobs";
+  const stageCol = isJob ? "job_stage" : "project_stage";
+
+  if (r.operation === "INSERT") return isJob ? "created" : "opened";
+  if (r.operation === "DELETE") return "deleted";
+
+  const before = r.old_row ?? {};
+  const after = r.new_row ?? {};
+  const changed = Object.keys(after).filter(
+    k => !AUDIT_NOISE.has(k) && String(before[k] ?? "") !== String(after[k] ?? "")
+  );
+
+  if (changed.includes(stageCol)) {
+    return `moved to ${String(after[stageCol])}`;
+  }
+  // Nothing but the noise columns moved: not an event.
+  if (changed.length === 0) return null;
+
+  const label = (col: string) =>
+    DICTIONARY.find(d => d.id === `${r.table_name}.${col}`)?.friendlyName ?? col;
+  const named = changed.map(label);
+  // Three is where a list stops being readable and starts being a paragraph.
+  return named.length <= 3
+    ? `${named.join(", ")} changed`
+    : `${named.slice(0, 3).join(", ")} and ${named.length - 3} more changed`;
+}
 
 const STAGE_COLUMNS =
   "pipeline_stage_id, pipeline_stage_name, pipeline_stage_position, pipeline_stage_owning_team, pipeline_stage_expected_days, pipeline_stage_at_risk_lead_days, pipeline_stage_created_at, pipeline_stage_created_by, pipeline_stage_updated_at, pipeline_stage_updated_by";
@@ -1491,6 +1551,76 @@ export function createSupabaseRepository(): Repository {
         throw error;
       }
       return toJob(data);
+    },
+
+    /**
+     * One record's history (0058).
+     *
+     * Two queries, not a join: PostgREST cannot OR across two jsonb paths in one
+     * request, and a project wants its own rows plus its jobs'. Both are narrow — an
+     * index-free scan over a few hundred rows today, and bounded by `limit` — and
+     * merging two sorted lists here is cheaper than the view it would otherwise take.
+     */
+    async listRecordActivity(
+      opts: { projectId?: number; jobId?: string; limit?: number }
+    ): Promise<RecordActivity[]> {
+      const limit = opts.limit ?? 50;
+      const rows: AuditRow[] = [];
+
+      const pull = async (table: "projects" | "jobs", column: string, value: string) => {
+        const { data, error } = await client
+          .from("activity_audit")
+          .select("id, table_name, operation, changed_at, jwt_sub, old_row, new_row")
+          .eq("table_name", table)
+          // The id lives inside the snapshot, so it is a jsonb path rather than a
+          // column. `->>` keeps it text, which is what the filter compares.
+          .eq(`new_row->>${column}`, value)
+          .order("changed_at", { ascending: false })
+          .limit(limit);
+        if (error) throw error;
+        rows.push(...((data ?? []) as unknown as AuditRow[]));
+      };
+
+      if (opts.jobId) {
+        await pull("jobs", "job_id", opts.jobId);
+      } else if (opts.projectId != null) {
+        await pull("projects", "project_id", String(opts.projectId));
+        await pull("jobs", "project_id", String(opts.projectId));
+      } else {
+        return [];
+      }
+
+      // Who. One lookup for the whole feed rather than one per row, and a null when the
+      // actor is not a profile we can name — a row written by the import, or by a
+      // migration, has no person behind it and saying "Unknown" would invent one.
+      const subs = [...new Set(rows.map(r => r.jwt_sub).filter(Boolean))] as string[];
+      const names = new Map<string, string>();
+      if (subs.length) {
+        const { data } = await client
+          .from("profiles")
+          .select("profile_auth_user_id, profile_full_name")
+          .in("profile_auth_user_id", subs);
+        for (const p of data ?? []) {
+          if (p.profile_auth_user_id) names.set(p.profile_auth_user_id, p.profile_full_name);
+        }
+      }
+
+      return rows
+        .map(r => {
+          const summary = summarise(r);
+          // A touch with nothing behind it is dropped rather than shown as "updated".
+          if (!summary) return null;
+          return {
+            id: String(r.id),
+            at: r.changed_at,
+            subject: String(r.new_row?.job_id ?? r.new_row?.project_id ?? ""),
+            summary,
+            who: r.jwt_sub ? names.get(r.jwt_sub) ?? null : null
+          };
+        })
+        .filter((e): e is RecordActivity => e !== null)
+        .sort((a, b) => (a.at < b.at ? 1 : -1))
+        .slice(0, limit);
     },
 
     // ---- bugs and ideas (0052) -------------------------------------------

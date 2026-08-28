@@ -1287,6 +1287,30 @@ code { overflow-wrap: anywhere; }
   margin: var(--space-4) 0 var(--space-8);
 }
 
+/* The activity feed (0058) — the prototype's shape: a rule down the left, one line per
+   event, dates aligned in their own column so the list is scanned rather than read. */
+.activity-feed {
+  list-style: none;
+  margin: var(--space-8) 0 0;
+  padding: 0 0 0 var(--space-12);
+  border-inline-start: 2px solid var(--layout-border-color);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+.activity-feed li {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: var(--space-8);
+  align-items: baseline;
+}
+/* Tabular so the dates line up to the digit rather than drifting by a pixel a row. */
+.activity-when { font-variant-numeric: tabular-nums; }
+@media (max-width: 720px) {
+  /* The date goes above its line rather than squeezing the sentence into half a column. */
+  .activity-feed li { grid-template-columns: 1fr; gap: 0; }
+}
+
 /* ---- Ask Lofty -----------------------------------------------------------
    No longer a floating dock: the trigger is a header icon (`.notif-bell-trigger`,
    shared with the bell so the two read as one cluster) and the body sits in the
