@@ -56,7 +56,7 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
 
   // Once, on mount. Keyed on `onClose` this re-ran whenever the parent re-rendered and
   // pulled focus back to the drawer — the same fault that let the create form accept
-  // only one keystroke at a time. See CreatePanel for the long version.
+  // only one keystroke at a time. See SidePanel for the long version.
   useEffect(() => {
     panel.current?.focus();
   }, []);

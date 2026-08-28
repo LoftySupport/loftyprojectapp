@@ -187,6 +187,17 @@ export function createStubRepository(): Repository {
       throw new Error("Sharing a view needs Supabase.");
     },
 
+    // Bugs and ideas (0052) need somewhere for the row to land, and a stub run has
+    // nowhere. Refused rather than swallowed: a form that says "thanks" and drops the
+    // report is worse than one that says it cannot send.
+    async submitFeedback(): Promise<never> {
+      throw new Error("Sending a bug or an idea needs Supabase.");
+    },
+    async listFeedback(): Promise<never[]> { return []; },
+    async setFeedbackStatus(): Promise<never> {
+      throw new Error("Triaging feedback needs Supabase.");
+    },
+
     // Preferences roam with the profile, and without a backend there is no profile.
     // Empty on read — the app falls back to this device's localStorage, which is the
     // honest answer for a run with nothing behind it.

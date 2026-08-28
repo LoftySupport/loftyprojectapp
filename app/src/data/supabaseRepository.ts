@@ -7,10 +7,14 @@ import type {
   ActivityEntry,
   AddressHistoryEntry,
   CommentEntry,
+  FeedbackItem,
+  FeedbackKind,
+  FeedbackStatus,
   Job,
   JobPatch,
   JobSplit,
   NewAddress,
+  NewFeedback,
   NewProfile,
   NewPropertyDef,
   NewJob,
@@ -64,6 +68,7 @@ const WIRED: RepositoryMethod[] = [
   "setProjectCurrentAddress", "listAddressHistory",
   "listStages", "listTeams", "updateTeam", "createTeam", "listTemplatePhases", "updateStageSla",
   "listSavedViews", "saveView", "deleteSavedView", "shareSavedView",
+  "submitFeedback", "listFeedback", "setFeedbackStatus",
   "listMyPreferences", "saveMyPreferences",
   "listPropertyDefs", "createPropertyDef", "updatePropertyDef", "deletePropertyDef",
   "listDictionaryOverrides", "saveDictionaryOverride"
@@ -1354,6 +1359,78 @@ export function createSupabaseRepository(): Repository {
       const board = data?.[0]?.saved_view_board as SavedViewBoard | undefined;
       if (!board) throw new Error("That view was not changed — it is not yours to share.");
       return await repo.listSavedViews(board);
+    },
+
+    // ---- bugs and ideas (0052) -------------------------------------------
+
+    /**
+     * No `.select()` after the insert, and that is not an oversight.
+     *
+     * Supabase returns the inserted row by default, which runs the SELECT policy — and
+     * that policy is admin-only. Asking for the row back would make every submission
+     * fail with "row-level security" for exactly the viewers and users the form exists
+     * for, while working perfectly for the admin testing it. Insert only; the toast is
+     * the confirmation.
+     */
+    async submitFeedback(entry: NewFeedback): Promise<void> {
+      const title = entry.title.trim();
+      if (!title) throw new Error("Give it a one-line summary first.");
+      const me = await repo.currentProfile();
+      if (!me) throw new Error("Sending this needs you to be signed in.");
+
+      const { error } = await client.from("feedback").insert({
+        // Stamped here, not typed: the with-check compares it to current_profile_id(),
+        // so a report can only ever be filed under the person filing it.
+        profile_id: me.id,
+        feedback_kind: entry.kind,
+        feedback_title: title,
+        feedback_detail: entry.detail.trim(),
+        feedback_page: entry.page
+      });
+      if (error) throw error;
+    },
+
+    async listFeedback(kind: FeedbackKind): Promise<FeedbackItem[]> {
+      const { data, error } = await client
+        .from("feedback")
+        .select(
+          "feedback_id, feedback_kind, feedback_title, feedback_detail, feedback_page, feedback_status, feedback_created_at, profiles!feedback_profile_id_fkey(profile_first_name, profile_last_name)"
+        )
+        .eq("feedback_kind", kind)
+        .order("feedback_created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map(r => {
+        const from = (r as unknown as {
+          profiles?: { profile_first_name?: string; profile_last_name?: string };
+        }).profiles;
+        const name = [from?.profile_first_name, from?.profile_last_name].filter(Boolean).join(" ");
+        return {
+          id: r.feedback_id,
+          kind: r.feedback_kind as FeedbackKind,
+          title: r.feedback_title,
+          detail: r.feedback_detail ?? "",
+          page: r.feedback_page ?? null,
+          status: r.feedback_status as FeedbackStatus,
+          // Empty rather than a stand-in when the profile is gone: "Unknown" would be a
+          // claim about who sent it.
+          fromName: name || null,
+          createdAt: r.feedback_created_at
+        };
+      });
+    },
+
+    async setFeedbackStatus(id: string, status: FeedbackStatus): Promise<FeedbackItem[]> {
+      const { data, error } = await client
+        .from("feedback")
+        .update({ feedback_status: status })
+        .eq("feedback_id", id)
+        .select("feedback_kind");
+      if (error) throw error;
+      // Anyone below admin matches no row rather than being refused, so an empty result
+      // is the only signal that the update did not happen.
+      const kind = data?.[0]?.feedback_kind as FeedbackKind | undefined;
+      if (!kind) throw new Error("That was not updated — it needs admin.");
+      return await repo.listFeedback(kind);
     },
 
     // ---- preferences (0050) ----------------------------------------------

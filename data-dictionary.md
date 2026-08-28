@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-257 properties across 44 tables.
+264 properties across 45 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 208 | In the migration and the types |
+| Created | 215 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -171,6 +171,20 @@ A file, held once however many records point at it. Versions chain through super
 | `documents.document_supersedes_id` | Replaces | The document this one supersedes. Versions as a chain rather than a version number: an integer cannot say WHICH document a revision revises when two people upload at once, and "show me the current drawing and what it replaced" is the question people actually ask. | `uuid` | — | Nullable. CHECK documents_not_its_own_predecessor. | FK → documents(document_id) ON DELETE SET NULL. The documents_current view is everything nothing points at. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `documents.document_size_bytes` | Size | File size. | `integer` | — | bigint. Nullable. CHECK >= 0. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `documents.document_mime_type` | Content type | What kind of file it is, for choosing a preview. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `feedback`
+
+Bugs and ideas, sent from the footer by anyone signed in and read in Setup by admins only (Amber, 28 Aug). The asymmetry is the design: insert is the widest write in the schema, select one of the narrowest, so the policies are split rather than one for-all — and the sender cannot read their own report back, which is why the app inserts without asking for the row.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `feedback.feedback_id` | Report | One bug or idea somebody sent from the footer (Amber, 28 Aug: "this way I can track what needs to be implemented"). | `uuid` | — | Primary key, default gen_random_uuid(). | The widest write in the schema and one of its narrowest reads: anyone active may insert, only admin and above may select. The policies are split for exactly that, rather than one for-all. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `feedback.feedback_kind` | Kind | Bug or idea — something that went wrong, or something that could be better. The Setup tabs are this column filtered. | `text` | — | Not null. CHECK: bug \| idea. | One table rather than two: a bug and an idea are the same row with a different word on it, and two tables would mean two policies and two screens that drift apart. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `feedback.feedback_title` | One line | What the list shows — "Saving a job did nothing". | `text` | — | Not null. CHECK: not blank after trimming. | A report nobody can identify in a list is a report nobody will action, so blank is refused at the door rather than in the form only. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `feedback.feedback_detail` | Detail | Everything else: what was expected, what happened instead. Empty is allowed and means empty. | `text` | — | Not null, default ''. | Somebody with a title and nothing more is still worth having; requiring detail is a reason not to report at all. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `feedback.feedback_page` | Where | The app path they were on when they sent it — captured, never typed. For a bug this is most of the reproduction. | `text` | — | Nullable. | The one field a person reporting in a hurry always leaves out, which is why the form takes it rather than asking. Shown in the form before sending, so it is not collected silently. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `feedback.feedback_status` | Status | Where the report has got to: new, planned, done or declined. | `text` | — | Not null, default new. CHECK: new \| planned \| done \| declined. | The tracking half of the feature — a list with no state has to be re-read from the top every week. Admin+ by the update policy. Declined rather than a delete: it keeps the record of having considered something. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `feedback.profile_id` | From | Who sent it, so a report that needs a conversation has somebody to go back to. | `uuid` | — | Nullable. FK → profiles(profile_id) ON DELETE SET NULL. | Stamped by the repository from the signed-in profile and checked by the insert policy against current_profile_id(), so nobody can file under a colleague's name. SET NULL rather than CASCADE: the report outlives the reporter — it is about the app, not the person who noticed. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `health_statuses`
 

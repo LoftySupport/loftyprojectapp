@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button, Text, TextField } from "@vibe/core";
-import { CreatePanel } from "./CreatePanel";
+import { SidePanel } from "./SidePanel";
 import { Field, Problem, Result } from "./Form";
 import { Select, toOptions } from "./Select";
 import { useRepository } from "../data/DataProvider";
@@ -26,9 +26,9 @@ import "./ui.css";
  *
  * ALL THREE ARE PANELS NOW, NOT ONE PANEL AND TWO DIALOGS
  *
- *   New project moved to `CreatePanel` and the other two did not, which left the app
+ *   New project moved to `SidePanel` and the other two did not, which left the app
  *   with two different answers to "what does creating something look like". They are
- *   the same answer now. The reasoning for the panel is in `CreatePanel` and applies
+ *   the same answer now. The reasoning for the panel is in `SidePanel` and applies
  *   to all three: the list you are adding to stays visible, and splitting a project
  *   into six jobs is precisely the case where you want to see the six appear.
  *
@@ -428,7 +428,7 @@ export function NewProjectDialog({
     : { text: "Cancel", onClick: close };
 
   return (
-    <CreatePanel
+    <SidePanel
       open={show}
       title="New project"
       onClose={close}
@@ -530,7 +530,7 @@ export function NewProjectDialog({
         )}
         {error && <Problem>{error}</Problem>}
       </>
-    </CreatePanel>
+    </SidePanel>
   );
 }
 
@@ -590,7 +590,7 @@ export function NewJobDialog({
   const close = () => { reset(); onClose(); };
 
   return (
-    <CreatePanel
+    <SidePanel
       open={show}
       title="New job"
       onClose={close}
@@ -647,7 +647,7 @@ export function NewJobDialog({
         )}
         {error && <Problem>{error}</Problem>}
       </>
-    </CreatePanel>
+    </SidePanel>
   );
 }
 
@@ -780,7 +780,7 @@ export function SplitProjectDialog({
   if (projectId === null) return null;
 
   return (
-    <CreatePanel
+    <SidePanel
       open={show}
       title={`Create jobs on project ${projectId}`}
       onClose={onClose}
@@ -890,6 +890,6 @@ export function SplitProjectDialog({
         )}
         {error && <Problem>{error}</Problem>}
       </>
-    </CreatePanel>
+    </SidePanel>
   );
 }

@@ -658,6 +658,49 @@ export interface UserSavedView {
   isMine: boolean;
 }
 
+// ------------------------------------------------------- bugs and ideas (0052)
+
+/**
+ * The two things somebody can send from the footer. Same row, different word on it:
+ * a bug is something that went wrong, an idea is something that could be better, and
+ * both end up on Amber's list of what to implement.
+ */
+export const FEEDBACK_KINDS = ["bug", "idea"] as const;
+export type FeedbackKind = (typeof FEEDBACK_KINDS)[number];
+
+/**
+ * Where a report has got to. Four values because the point of the feature is tracking —
+ * "this way I can track what needs to be implemented" — and a list with no state has to
+ * be re-read from the top every week.
+ *
+ * `declined` rather than a delete: it keeps the record of having considered something,
+ * which is the difference between an answer and a report that vanished.
+ */
+export const FEEDBACK_STATUSES = ["new", "planned", "done", "declined"] as const;
+export type FeedbackStatus = (typeof FEEDBACK_STATUSES)[number];
+
+/** One report, as Setup lists it. Only admins ever hold one of these. */
+export interface FeedbackItem {
+  id: Uuid;
+  kind: FeedbackKind;
+  title: string;
+  detail: string;
+  /** The app path it was sent from — captured, never typed. Null on older rows. */
+  page: string | null;
+  status: FeedbackStatus;
+  /** Who sent it, resolved for the list. Null when the profile is gone. */
+  fromName: string | null;
+  createdAt: string;
+}
+
+/** What the footer form sends. The sender and the page are added by the repository. */
+export interface NewFeedback {
+  kind: FeedbackKind;
+  title: string;
+  detail: string;
+  page: string;
+}
+
 export const PROFILE_STATUSES = ["active", "pending", "inactive"] as const;
 export type ProfileStatus = (typeof PROFILE_STATUSES)[number];
 

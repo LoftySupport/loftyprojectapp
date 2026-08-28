@@ -11,7 +11,8 @@ import { HouseChart, HousePin, Houses } from "../theme/houseIcons";
 import { initialsOf, useAuth } from "../data/AuthProvider";
 import { useSearch } from "../data/SearchProvider";
 import { Tooltip } from "@vibe/tooltip";
-import { AskDockProvider } from "../components/AskDock";
+import { AskButton, AskDockProvider } from "../components/AskDock";
+import { FeedbackButtons, FeedbackProvider } from "../components/Feedback";
 import { NotificationsBell } from "../components/NotificationsBell";
 import { ToastsProvider } from "../components/Toasts";
 import { greetingName } from "../data/types";
@@ -263,6 +264,7 @@ export function AppShell() {
   return (
     <ToastsProvider>
     <AskDockProvider>
+    <FeedbackProvider>
     <div className={"app-shell" + (narrow ? " is-narrow" : "")}>
       <a className="skip-link" href="#main">Skip to content</a>
 
@@ -317,6 +319,11 @@ export function AppShell() {
           </span>
 
           <div className="app-header-right">
+            {/* Ask sits before the bell: it is a thing you go and do, where the bell is
+                a thing that happens to you, and reading left to right the active one
+                comes first. Both are the same 32px target, so the pair reads as one
+                cluster rather than two decisions. */}
+            <AskButton />
             <NotificationsBell />
             <UserMenu />
           </div>
@@ -345,7 +352,11 @@ export function AppShell() {
                 v{__BUILD_REF__}
               </span>
             </span>
+            {/* Reporting sits with the footer's other standing links rather than in a
+                menu: the moment somebody wants to report a bug is the moment they hit
+                one, on whatever screen they were on. */}
             <span className="app-foot-links">
+              <FeedbackButtons />
               {/* Privacy and Terms sit OUTSIDE the auth gate deliberately: a policy nobody
                   can read without signing in is not published. Support is Lofty's own
                   portal, hence a full URL and rel="noreferrer". */}
@@ -359,6 +370,7 @@ export function AppShell() {
         </footer>
       </div>
     </div>
+    </FeedbackProvider>
     </AskDockProvider>
     </ToastsProvider>
   );

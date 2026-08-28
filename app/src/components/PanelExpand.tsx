@@ -7,7 +7,7 @@ import "./ui.css";
 /**
  * The expand-to-full-screen control, shared by every side panel.
  *
- * It existed on `CreatePanel` and nowhere else, as a text button reading "Expand" —
+ * It existed on `SidePanel` (then called CreatePanel) and nowhere else, as a text button reading "Expand" —
  * Lofty: *"the expand button should be a default expand icon on all sidebar forms to
  * see fullscreen. it is not showing in jobs."* Both halves of that are addressed here,
  * and it is one module rather than two copies for the reason `Form.tsx` is: a second
