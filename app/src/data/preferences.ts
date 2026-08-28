@@ -21,12 +21,49 @@ export type LandingPage = (typeof LANDING_PAGES)[number];
 export const JOBS_VIEWS = ["Board", "Table", "Gantt", "Calendar"] as const;
 export type JobsView = (typeof JOBS_VIEWS)[number];
 
+/**
+ * One table's column layout (Amber, 28 August: columns that can be reordered, added and
+ * removed). Two lists, and neither implies the other: `order` is where the columns sit,
+ * `hidden` is which of them are off. Names, not indexes — a stored index points at a
+ * different column the day one is inserted.
+ */
+export interface ColumnLayout {
+  order: string[];
+  hidden: string[];
+}
+
 export interface Prefs {
   landingPage: LandingPage;
   defaultJobsView: JobsView;
+  /** Keyed by surface — "jobs", "projects". Empty until somebody moves something. */
+  columns: Record<string, ColumnLayout>;
 }
 
-export const DEFAULT_PREFS: Prefs = { landingPage: "Dashboard", defaultJobsView: "Board" };
+export const DEFAULT_PREFS: Prefs = {
+  landingPage: "Dashboard", defaultJobsView: "Board", columns: {}
+};
+
+/**
+ * Column layouts as they come back from storage, with anything malformed dropped.
+ *
+ * Validated rather than trusted because this bag is shared with a jsonb column that
+ * takes whatever it is given: a `hidden` that arrives as a string would otherwise reach
+ * `new Set(...)` and hide one column per character. Unknown column names are left alone
+ * here — the table filters them against its own definitions, which is the only place
+ * that knows what a column is.
+ */
+function readColumns(raw: unknown): Record<string, ColumnLayout> {
+  if (!raw || typeof raw !== "object") return {};
+  const out: Record<string, ColumnLayout> = {};
+  for (const [surface, value] of Object.entries(raw as Record<string, unknown>)) {
+    const v = value as Partial<ColumnLayout> | null;
+    if (!v || typeof v !== "object") continue;
+    const strings = (a: unknown) =>
+      Array.isArray(a) ? a.filter((x): x is string => typeof x === "string") : [];
+    out[surface] = { order: strings(v.order), hidden: strings(v.hidden) };
+  }
+  return out;
+}
 
 const KEY = "lofty.prefs";
 
@@ -39,7 +76,8 @@ export function readPrefs(): Prefs {
       landingPage: LANDING_PAGES.includes(parsed.landingPage as LandingPage)
         ? (parsed.landingPage as LandingPage) : DEFAULT_PREFS.landingPage,
       defaultJobsView: JOBS_VIEWS.includes(parsed.defaultJobsView as JobsView)
-        ? (parsed.defaultJobsView as JobsView) : DEFAULT_PREFS.defaultJobsView
+        ? (parsed.defaultJobsView as JobsView) : DEFAULT_PREFS.defaultJobsView,
+      columns: readColumns(parsed.columns)
     };
   } catch {
     return DEFAULT_PREFS;
@@ -55,7 +93,8 @@ export function adoptPrefs(bag: Record<string, unknown>): Prefs {
     landingPage: LANDING_PAGES.includes(bag.landingPage as LandingPage)
       ? (bag.landingPage as LandingPage) : DEFAULT_PREFS.landingPage,
     defaultJobsView: JOBS_VIEWS.includes(bag.defaultJobsView as JobsView)
-      ? (bag.defaultJobsView as JobsView) : DEFAULT_PREFS.defaultJobsView
+      ? (bag.defaultJobsView as JobsView) : DEFAULT_PREFS.defaultJobsView,
+    columns: readColumns(bag.columns)
   };
   try {
     localStorage.setItem(KEY, JSON.stringify(next));

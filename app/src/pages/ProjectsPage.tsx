@@ -14,9 +14,13 @@ import { useSavedViews } from "../data/useSavedViews";
 import { ProjectCard, StatusPill } from "../components/RecordCards";
 import { PropertySlots } from "../components/PropertySlots";
 import {
-  PROJECT_TYPES, PROJECT_TYPE_LABELS, RECORD_STATUSES, RECORD_STATUS_LABELS,
+  PROJECT_TYPES, PROJECT_TYPE_LABELS, RECORD_STATUSES, RECORD_STATUS_LABELS, teamName,
   type StageName, type TeamId
 } from "../data/types";
+import { sortRows, type SortState } from "../components/SortableTable";
+import {
+  ColumnHeaders, ColumnPicker, useColumnLayout, type ColumnDef
+} from "../components/TableColumns";
 import { MoveStageControl, PROJECT_MOVE_NOTE } from "../components/MoveStageDialog";
 import { daysSince } from "../data/boardModel";
 import { Token } from "../components/Token";
@@ -131,6 +135,75 @@ export function ProjectsPage() {
     () => inView.filter(p => projectMatchesFilters(p, filters) && projectMatchesQuery(p, terms)),
     [inView, filters, terms]
   );
+
+  /**
+   * The table's columns — what they are, what they sort on, what each cell shows.
+   *
+   * The same list the jobs table keeps, for the same reason (Amber, 28 August: columns
+   * that sort, drag to reorder, and can be added or removed). Four of these are off
+   * until somebody asks for them: the table was eight fixed columns wide and every one
+   * added to it costs the address room to be read.
+   */
+  const projectColumnDefs = useMemo<ColumnDef<BoardProject>[]>(() => [
+    { key: "project", label: "Project", fixed: true, className: "nowrap",
+      sort: p => Number(p.projectNumber), cell: p => p.projectNumber },
+    { key: "address", label: "Address", sort: p => p.currentAddress ?? null,
+      cell: p => p.currentAddress ?? <Token>project_display.current_address</Token> },
+    { key: "suburb", label: "Suburb", sort: p => p.suburb ?? null,
+      cell: p => p.suburb ?? <Token>addresses.suburb</Token> },
+    // Pipeline position, not the alphabet — the same call the jobs table makes.
+    { key: "stage", label: "Stage",
+      sort: p => { const at = viewStages.indexOf(p.stage); return at === -1 ? null : at; },
+      cell: p => p.stage },
+    { key: "type", label: "Type",
+      sort: p => (p.projectType ? PROJECT_TYPE_LABELS[p.projectType] : null),
+      cell: p => (p.projectType
+        ? PROJECT_TYPE_LABELS[p.projectType]
+        : <Token>projects.project_type</Token>) },
+    { key: "team", label: "Owning team", offByDefault: true,
+      sort: p => (p.owningTeam ? teamName(p.owningTeam) : null),
+      cell: p => (p.owningTeam ? teamName(p.owningTeam) : "—") },
+    { key: "start", label: "Start date", offByDefault: true,
+      sort: p => p.startDate ?? null,
+      cell: p => (p.startDate ? new Date(p.startDate).toLocaleDateString() : "—") },
+    { key: "target", label: "Target completion", sort: p => p.targetCompletion ?? null,
+      cell: p => (p.targetCompletion
+        ? new Date(p.targetCompletion).toLocaleDateString()
+        : <Token>projects.target_completion</Token>) },
+    // Intended lots, and the split between the two kinds of title (0053). Null on both
+    // means nobody has said, which is not the same statement as zero — hence the dash
+    // rather than "0 / 0".
+    { key: "lots", label: "Lots", offByDefault: true, className: "num",
+      sort: p => p.proposedDwellings,
+      cell: p => (p.proposedDwellings == null ? "—" : p.proposedDwellings) },
+    { key: "split", label: "Community / Torrens", offByDefault: true, className: "num",
+      sort: p => p.communityTitleLots,
+      cell: p => (p.communityTitleLots == null && p.torrensTitleLots == null
+        ? "—"
+        : `${p.communityTitleLots ?? "—"} / ${p.torrensTitleLots ?? "—"}`) },
+    { key: "jobs", label: "Jobs", className: "num",
+      sort: p => p.jobs.length, cell: p => p.jobs.length },
+    { key: "status", label: "Status", sort: p => RECORD_STATUS_LABELS[p.status],
+      cell: p => <StatusPill status={p.status} /> }
+  ], [viewStages]);
+
+  const projectLayout = useColumnLayout("projects", projectColumnDefs);
+
+  /** No sort until a header is asked for one — see the jobs table for why. */
+  const [projectSort, setProjectSort] = useState<SortState<string> | null>(null);
+  const toggleProjectSort = (key: string) =>
+    setProjectSort(sort =>
+      sort?.key === key
+        ? { key, direction: sort.direction === "asc" ? "desc" : "asc" }
+        : { key, direction: "asc" }
+    );
+  const sortedRows = useMemo(() => {
+    if (!projectSort) return rows;
+    const readers = Object.fromEntries(
+      projectColumnDefs.filter(d => d.sort).map(d => [d.key, d.sort!])
+    ) as Record<string, (p: BoardProject) => string | number | null>;
+    return sortRows(rows, readers, projectSort);
+  }, [rows, projectColumnDefs, projectSort]);
 
   /**
    * The board's columns.
@@ -270,7 +343,23 @@ export function ProjectsPage() {
         onFiltersChange={setFilters}
         optionsFor={optionsFor}
         count={`Showing ${rows.length} of ${inView.length} projects`}
-        actions={<Button size="small" onClick={() => setCreating(true)}>+ New project</Button>}
+        actions={
+          <>
+            {/* Only where there are columns to configure. */}
+            {view === "Table" && (
+              <ColumnPicker
+                title="Columns on the projects table"
+                all={projectLayout.all}
+                hidden={projectLayout.hidden}
+                onToggle={projectLayout.toggle}
+                onMoveBy={projectLayout.moveBy}
+                onReset={projectLayout.reset}
+                isDefault={projectLayout.isDefault}
+              />
+            )}
+            <Button size="small" onClick={() => setCreating(true)}>+ New project</Button>
+          </>
+        }
       />
 
       <NewProjectDialog
@@ -356,37 +445,30 @@ export function ProjectsPage() {
         <div className="panel data-table-wrap">
           <table className="data-table">
             <thead>
-              <tr>
-                <th>Project</th><th>Address</th><th>Suburb</th><th>Stage</th><th>Type</th>
-                <th>Target completion</th><th className="num">Jobs</th><th>Status</th>
-              </tr>
+              <ColumnHeaders
+                columns={projectLayout.columns}
+                sort={projectSort}
+                onSort={toggleProjectSort}
+                onReorder={projectLayout.moveTo}
+              />
             </thead>
             <tbody>
-              {rows.map(p => (
+              {sortedRows.map(p => (
                 <tr key={p.projectNumber} onClick={() => openOne(p)}>
-                  <td>{p.projectNumber}</td>
-                  <td>{p.currentAddress ?? <Token>project_display.current_address</Token>}</td>
-                  <td>{p.suburb ?? <Token>addresses.suburb</Token>}</td>
-                  <td>{p.stage}</td>
-                  <td>
-                    {p.projectType
-                      ? PROJECT_TYPE_LABELS[p.projectType]
-                      : <Token>projects.project_type</Token>}
-                  </td>
-                  <td>
-                    {p.targetCompletion
-                      ? new Date(p.targetCompletion).toLocaleDateString()
-                      : <Token>projects.target_completion</Token>}
-                  </td>
-                  <td className="num">{p.jobs.length}</td>
-                  <td><StatusPill status={p.status} /></td>
+                  {projectLayout.columns.map(c => (
+                    <td key={c.key} className={c.className}>{c.cell(p)}</td>
+                  ))}
                 </tr>
               ))}
               {/* The other way in, per Lofty: "both. they can add either way." The
                   toolbar button opens the panel; this is for when you are already
-                  looking at the list and want three more sites in it. */}
+                  looking at the list and want three more sites in it.
+
+                  Spans whatever is shown — it was 8 while the columns were fixed, and
+                  a new-row form that spans the wrong number of them straddles the edge
+                  of the table. */}
               {can("user") && (
-                <InlineNewProjectRow columns={8} onCreated={refresh} />
+                <InlineNewProjectRow columns={projectLayout.columns.length} onCreated={refresh} />
               )}
             </tbody>
           </table>
