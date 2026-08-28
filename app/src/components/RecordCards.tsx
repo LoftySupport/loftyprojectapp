@@ -43,7 +43,6 @@ export function JobCard({
   team,
   address,
   projectType,
-  createdBy,
   assigneeName,
   status = "on_track",
   onOpen
@@ -63,8 +62,6 @@ export function JobCard({
   address?: string | null;
   /** The project's type, inherited through `job_display`. Null until somebody sets it. */
   projectType?: string | null;
-  /** Who created it. Labelled as that, never as the assignee — they are two facts. */
-  createdBy?: string | null;
   /** Who is assigned, resolved to a name by boardModel. Null = nobody, shown as —. */
   assigneeName?: string | null;
   status?: RecordStatus;
@@ -119,16 +116,17 @@ export function JobCard({
         <div className="card-who">
           {/* The assignee resolves through boardModel now that job_assignee_id is
               read. An em dash means nobody is assigned — a real answer, not an
-              absence — and the creator stays underneath, labelled as a different
-              fact rather than filling the assignee's line. */}
+              absence.
+
+              **No "Created by" line** (Amber, 28 Aug: "I don't need the created by on
+              each card — check the layout on the prototype as it is much better"). It
+              was added to keep two facts apart after Lofty read an empty assignee as
+              "ten jobs assigned to me"; the assignee line now says who holds it, and
+              who typed it in months ago is not what anybody scans a board for. The
+              fact is still on the record — the drawer and the activity feed carry it. */}
           <div>
             <Text type="text3" weight="medium">{team}</Text>
             <Text type="text3" color="secondary">{assigneeName ?? "—"}</Text>
-            {createdBy && (
-              <Text type="text3" color="secondary" ellipsis={false}>
-                Created by {createdBy}
-              </Text>
-            )}
           </div>
         </div>
       </footer>

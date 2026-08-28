@@ -200,8 +200,11 @@ export function JobsPage() {
 
   /** Group keys in a deterministic order — pipeline order for stages, else as listed. */
   const groups = useMemo(() => {
+    // "None" is one group with no name — the header is suppressed below, so the board
+    // renders a single column and the table a single run of rows.
     const keyOf = (j: BoardJob) =>
-      grouping === "Stage" ? j.stage
+      grouping === "None" ? ""
+      : grouping === "Stage" ? j.stage
       : grouping === "Project" ? j.projectNumber
       : grouping === "Team" ? j.team
       : grouping === "Status" ? RECORD_STATUS_LABELS[j.status]
@@ -210,7 +213,8 @@ export function JobsPage() {
       : j.assigneeName ?? "Unassigned";
 
     const order: string[] =
-      grouping === "Stage" ? viewStages
+      grouping === "None" ? [""]
+      : grouping === "Stage" ? viewStages
       : grouping === "Team" ? teamNames
       : grouping === "Status" ? RECORD_STATUSES.map(s => RECORD_STATUS_LABELS[s])
       : [...new Set(rows.map(keyOf))];
@@ -298,29 +302,25 @@ export function JobsPage() {
         saveBusy={myViews.busy}
       />
 
-      {/* No "+ New job" on this page. Lofty, 23 August: "a new job can only be created
-          from the project screen as they must be linked to a project."
+      {/* Nothing creates a job from this page. Lofty, 23 August: "a new job can only be
+          created from the project screen as they must be linked to a project."
 
-          The dialog this button used to open asked which project to put the job on — a
-          question with no good answer from a board showing every project at once, and one
-          somebody can get wrong. From the project screen the answer is already known, so
-          it cannot be. The button navigates rather than disappearing, because "why can I
-          not add a job here" is the obvious next thought and this answers it. */}
+          There was a button here that navigated to Projects — the idea being that "why
+          can I not add a job here" deserves an answer. Amber, 28 Aug: "remove the add a
+          job button on job page." A control whose whole job is to send you somewhere
+          else is a control that takes up the toolbar and does nothing anybody came for;
+          the empty state below still says where jobs come from, which is where that
+          sentence belongs. */}
       <Toolbar
         view={view}
         onViewChange={setView}
-        groupings={["Stage", "Project", "Team", "Team member", "Status"]}
+        groupings={["None", "Stage", "Project", "Team", "Team member", "Status"]}
         grouping={grouping}
         onGroupingChange={setGrouping}
         filters={filters}
         onFiltersChange={setFilters}
         optionsFor={optionsFor}
         count={`Showing ${rows.length} of ${inView.length} jobs`}
-        actions={
-          <Button size="small" kind="secondary" onClick={() => navigate("/projects")}>
-            Add a job on its project
-          </Button>
-        }
       />
 
       {stale && <PreviousAddressNote />}
@@ -389,6 +389,10 @@ export function JobsPage() {
                     <Text type="text3" color="secondary">{grouping}</Text>
                     <Text type="text2" weight="medium">{g.key} ›</Text>
                   </button>
+                ) : grouping === "None" ? (
+                  // Ungrouped: one column, and naming it "None" would be a heading that
+                  // says nothing. The count still shows, because how many is still news.
+                  <div><Text type="text3" color="secondary">All jobs</Text></div>
                 ) : (
                   <div>
                     <Text type="text3" color="secondary">{grouping}</Text>
@@ -424,7 +428,6 @@ export function JobsPage() {
                       team={j.team}
                       address={j.currentAddress}
                       projectType={j.projectType}
-                      createdBy={j.createdBy}
                       assigneeName={j.assigneeName}
                       status={j.status}
                       onOpen={() => openOne(j)}
@@ -524,14 +527,19 @@ export function JobsPage() {
                 it is just a heading. */}
             {tableGroups.filter(g => g.jobs.length > 0).map(g => (
               <tbody key={g.key} className="group">
-                <tr className="group-head">
-                  <th scope="colgroup" colSpan={can("user") ? 11 : 10}>
-                    <span className="group-name">{g.key}</span>
-                    <span className="group-count">
-                      {g.jobs.length} job{g.jobs.length === 1 ? "" : "s"}
-                    </span>
-                  </th>
-                </tr>
+                {/* No heading row when ungrouped — a table split into one group by
+                    nothing is just a table, and a blank colgroup header reads as a
+                    rendering fault. */}
+                {grouping !== "None" && (
+                  <tr className="group-head">
+                    <th scope="colgroup" colSpan={can("user") ? 11 : 10}>
+                      <span className="group-name">{g.key}</span>
+                      <span className="group-count">
+                        {g.jobs.length} job{g.jobs.length === 1 ? "" : "s"}
+                      </span>
+                    </th>
+                  </tr>
+                )}
                 {g.jobs.map(j => (
                   <tr key={j.jobNumber} onClick={() => openOne(j)}>
                     {can("user") && (
