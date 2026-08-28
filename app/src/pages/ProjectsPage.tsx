@@ -4,7 +4,9 @@ import { Button, Heading, Text, TextField } from "@vibe/core";
 import { useStages, useTeams } from "../data/useLookups";
 import { useAuth } from "../data/AuthProvider";
 import { useBoardRecords, type BoardProject } from "../data/boardModel";
-import { matchedOnPreviousAddress, projectMatchesQuery, useSearch } from "../data/SearchProvider";
+import {
+  jobMatchesQuery, matchedOnPreviousAddress, projectMatchesQuery, useSearch
+} from "../data/SearchProvider";
 import { useBoardParams } from "../data/useBoardParams";
 import { savedViewBySlug, stagesInView } from "../data/savedViews";
 import { activeFilterCount, projectMatchesFilters, statusOptions } from "../data/filtering";
@@ -14,9 +16,13 @@ import { useSavedViews } from "../data/useSavedViews";
 import { ProjectCard, StatusPill } from "../components/RecordCards";
 import { PropertySlots } from "../components/PropertySlots";
 import {
-  PROJECT_TYPES, PROJECT_TYPE_LABELS, RECORD_STATUSES, RECORD_STATUS_LABELS,
+  PROJECT_TYPES, PROJECT_TYPE_LABELS, RECORD_STATUSES, RECORD_STATUS_LABELS, teamName,
   type StageName, type TeamId
 } from "../data/types";
+import { sortRows, type SortState } from "../components/SortableTable";
+import {
+  ColumnHeaders, ColumnPicker, useColumnLayout, type ColumnDef
+} from "../components/TableColumns";
 import { MoveStageControl, PROJECT_MOVE_NOTE } from "../components/MoveStageDialog";
 import { daysSince } from "../data/boardModel";
 import { Token } from "../components/Token";
@@ -131,6 +137,75 @@ export function ProjectsPage() {
     () => inView.filter(p => projectMatchesFilters(p, filters) && projectMatchesQuery(p, terms)),
     [inView, filters, terms]
   );
+
+  /**
+   * The table's columns — what they are, what they sort on, what each cell shows.
+   *
+   * The same list the jobs table keeps, for the same reason (Amber, 28 August: columns
+   * that sort, drag to reorder, and can be added or removed). Four of these are off
+   * until somebody asks for them: the table was eight fixed columns wide and every one
+   * added to it costs the address room to be read.
+   */
+  const projectColumnDefs = useMemo<ColumnDef<BoardProject>[]>(() => [
+    { key: "project", label: "Project", fixed: true, className: "nowrap",
+      sort: p => Number(p.projectNumber), cell: p => p.projectNumber },
+    { key: "address", label: "Address", sort: p => p.currentAddress ?? null,
+      cell: p => p.currentAddress ?? <Token>project_display.current_address</Token> },
+    { key: "suburb", label: "Suburb", sort: p => p.suburb ?? null,
+      cell: p => p.suburb ?? <Token>addresses.suburb</Token> },
+    // Pipeline position, not the alphabet — the same call the jobs table makes.
+    { key: "stage", label: "Stage",
+      sort: p => { const at = viewStages.indexOf(p.stage); return at === -1 ? null : at; },
+      cell: p => p.stage },
+    { key: "type", label: "Type",
+      sort: p => (p.projectType ? PROJECT_TYPE_LABELS[p.projectType] : null),
+      cell: p => (p.projectType
+        ? PROJECT_TYPE_LABELS[p.projectType]
+        : <Token>projects.project_type</Token>) },
+    { key: "team", label: "Owning team", offByDefault: true,
+      sort: p => (p.owningTeam ? teamName(p.owningTeam) : null),
+      cell: p => (p.owningTeam ? teamName(p.owningTeam) : "—") },
+    { key: "start", label: "Start date", offByDefault: true,
+      sort: p => p.startDate ?? null,
+      cell: p => (p.startDate ? new Date(p.startDate).toLocaleDateString() : "—") },
+    { key: "target", label: "Target completion", sort: p => p.targetCompletion ?? null,
+      cell: p => (p.targetCompletion
+        ? new Date(p.targetCompletion).toLocaleDateString()
+        : <Token>projects.target_completion</Token>) },
+    // Intended lots, and the split between the two kinds of title (0053). Null on both
+    // means nobody has said, which is not the same statement as zero — hence the dash
+    // rather than "0 / 0".
+    { key: "lots", label: "Lots", offByDefault: true, className: "num",
+      sort: p => p.proposedDwellings,
+      cell: p => (p.proposedDwellings == null ? "—" : p.proposedDwellings) },
+    { key: "split", label: "Community / Torrens", offByDefault: true, className: "num",
+      sort: p => p.communityTitleLots,
+      cell: p => (p.communityTitleLots == null && p.torrensTitleLots == null
+        ? "—"
+        : `${p.communityTitleLots ?? "—"} / ${p.torrensTitleLots ?? "—"}`) },
+    { key: "jobs", label: "Jobs", className: "num",
+      sort: p => p.jobs.length, cell: p => p.jobs.length },
+    { key: "status", label: "Status", sort: p => RECORD_STATUS_LABELS[p.status],
+      cell: p => <StatusPill status={p.status} /> }
+  ], [viewStages]);
+
+  const projectLayout = useColumnLayout("projects", projectColumnDefs);
+
+  /** No sort until a header is asked for one — see the jobs table for why. */
+  const [projectSort, setProjectSort] = useState<SortState<string> | null>(null);
+  const toggleProjectSort = (key: string) =>
+    setProjectSort(sort =>
+      sort?.key === key
+        ? { key, direction: sort.direction === "asc" ? "desc" : "asc" }
+        : { key, direction: "asc" }
+    );
+  const sortedRows = useMemo(() => {
+    if (!projectSort) return rows;
+    const readers = Object.fromEntries(
+      projectColumnDefs.filter(d => d.sort).map(d => [d.key, d.sort!])
+    ) as Record<string, (p: BoardProject) => string | number | null>;
+    return sortRows(rows, readers, projectSort);
+  }, [rows, projectColumnDefs, projectSort]);
 
   /**
    * The board's columns.
@@ -270,7 +345,23 @@ export function ProjectsPage() {
         onFiltersChange={setFilters}
         optionsFor={optionsFor}
         count={`Showing ${rows.length} of ${inView.length} projects`}
-        actions={<Button size="small" onClick={() => setCreating(true)}>+ New project</Button>}
+        actions={
+          <>
+            {/* Only where there are columns to configure. */}
+            {view === "Table" && (
+              <ColumnPicker
+                title="Columns on the projects table"
+                all={projectLayout.all}
+                hidden={projectLayout.hidden}
+                onToggle={projectLayout.toggle}
+                onMoveBy={projectLayout.moveBy}
+                onReset={projectLayout.reset}
+                isDefault={projectLayout.isDefault}
+              />
+            )}
+            <Button size="small" onClick={() => setCreating(true)}>+ New project</Button>
+          </>
+        }
       />
 
       <NewProjectDialog
@@ -356,37 +447,30 @@ export function ProjectsPage() {
         <div className="panel data-table-wrap">
           <table className="data-table">
             <thead>
-              <tr>
-                <th>Project</th><th>Address</th><th>Suburb</th><th>Stage</th><th>Type</th>
-                <th>Target completion</th><th className="num">Jobs</th><th>Status</th>
-              </tr>
+              <ColumnHeaders
+                columns={projectLayout.columns}
+                sort={projectSort}
+                onSort={toggleProjectSort}
+                onReorder={projectLayout.moveTo}
+              />
             </thead>
             <tbody>
-              {rows.map(p => (
+              {sortedRows.map(p => (
                 <tr key={p.projectNumber} onClick={() => openOne(p)}>
-                  <td>{p.projectNumber}</td>
-                  <td>{p.currentAddress ?? <Token>project_display.current_address</Token>}</td>
-                  <td>{p.suburb ?? <Token>addresses.suburb</Token>}</td>
-                  <td>{p.stage}</td>
-                  <td>
-                    {p.projectType
-                      ? PROJECT_TYPE_LABELS[p.projectType]
-                      : <Token>projects.project_type</Token>}
-                  </td>
-                  <td>
-                    {p.targetCompletion
-                      ? new Date(p.targetCompletion).toLocaleDateString()
-                      : <Token>projects.target_completion</Token>}
-                  </td>
-                  <td className="num">{p.jobs.length}</td>
-                  <td><StatusPill status={p.status} /></td>
+                  {projectLayout.columns.map(c => (
+                    <td key={c.key} className={c.className}>{c.cell(p)}</td>
+                  ))}
                 </tr>
               ))}
               {/* The other way in, per Lofty: "both. they can add either way." The
                   toolbar button opens the panel; this is for when you are already
-                  looking at the list and want three more sites in it. */}
+                  looking at the list and want three more sites in it.
+
+                  Spans whatever is shown — it was 8 while the columns were fixed, and
+                  a new-row form that spans the wrong number of them straddles the edge
+                  of the table. */}
               {can("user") && (
-                <InlineNewProjectRow columns={8} onCreated={refresh} />
+                <InlineNewProjectRow columns={projectLayout.columns.length} onCreated={refresh} />
               )}
             </tbody>
           </table>
@@ -480,6 +564,27 @@ function ProjectDetail({
   const { toast } = useToasts();
   const [removing, setRemoving] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
+
+  /**
+   * Searching within one project — its own box, not the header's.
+   *
+   * The header search decides which projects are in the list; this decides which of a
+   * project's jobs you are looking at. They are different questions and sharing one box
+   * would mean answering one of them badly: typing "lot 17" up there takes you off this
+   * page entirely.
+   *
+   * Same matcher as the boards use, so "1042-03", "Wandi", "Construction" and a team
+   * name all find a job here exactly as they do everywhere else.
+   */
+  const [jobQuery, setJobQuery] = useState("");
+  const jobTerms = useMemo(
+    () => jobQuery.trim().toLowerCase().split(/\s+/).filter(Boolean),
+    [jobQuery]
+  );
+  const shownJobs = useMemo(
+    () => project.jobs.filter(j => jobMatchesQuery(j, jobTerms)),
+    [project.jobs, jobTerms]
+  );
   const [saveError, setSaveError] = useState<string | null>(null);
   const [folderUrl, setFolderUrl] = useState(project.sharepointUrl ?? "");
   // The "Add another address" form. Null while closed; a NewAddress being edited while
@@ -807,6 +912,40 @@ function ProjectDetail({
               each with its own lot address.
             </Text>
           )}
+          {/* Search inside one project (Amber, 28 August: *"being able to search at a
+              job level or project level for a job or word is essential"*). The header
+              search narrows the whole portfolio, which is the wrong instrument once you
+              are standing on a thirty-lot project and want lot 17: it would take you off
+              this page and back to a filtered board. This one stays here and narrows
+              only what is in front of you.
+
+              Shown from four jobs up. On a project with two, a search box is furniture. */}
+          {project.jobs.length > 3 && (
+            <div className="panel-search">
+              <TextField
+                size="small"
+                id={`find-job-${project.projectId}`}
+                placeholder="Find a job on this project — number, lot, address, stage, team"
+                inputAriaLabel={`Find a job on project ${project.projectNumber}`}
+                value={jobQuery}
+                onChange={v => setJobQuery(v)}
+              />
+              {jobTerms.length > 0 && (
+                <Text type="text3" color="secondary">
+                  {shownJobs.length} of {project.jobs.length}
+                </Text>
+              )}
+            </div>
+          )}
+
+          {/* A search that matches nothing says so, rather than showing an empty table
+              that reads as "this project has no jobs". */}
+          {jobTerms.length > 0 && shownJobs.length === 0 && (
+            <Text type="text3" color="secondary" ellipsis={false}>
+              No job on this project matches “{jobQuery.trim()}”.
+            </Text>
+          )}
+
           <div className="data-table-wrap">
             <table className="data-table">
               <thead>
@@ -819,7 +958,7 @@ function ProjectDetail({
                 </tr>
               </thead>
               <tbody>
-                {project.jobs.map(j => (
+                {shownJobs.map(j => (
                   // Now that a job has an address of its own, this list is a set of links
                   // rather than a printout — same click as a row on the Jobs table.
                   <tr

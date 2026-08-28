@@ -100,33 +100,45 @@ export function SortHeader<K extends string>({
   label,
   sort,
   onSort,
-  className
+  className,
+  /**
+   * A column that carries no comparable value — nothing to sort on, so it renders as a
+   * plain heading rather than a button that does nothing when pressed.
+   */
+  sortable = true,
+  ...dragProps
 }: {
   column: K;
   label: string;
   sort: SortState<K>;
   onSort: (key: K) => void;
   className?: string;
-}) {
+  sortable?: boolean;
+} & React.HTMLAttributes<HTMLTableCellElement> & { draggable?: boolean }) {
   const active = sort.key === column;
   return (
     <th
-      className={`is-sortable${className ? ` ${className}` : ""}`}
-      aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}
+      className={`${sortable ? "is-sortable" : ""}${className ? ` ${className}` : ""}`.trim() || undefined}
+      aria-sort={
+        !sortable ? undefined : active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"
+      }
       scope="col"
+      {...dragProps}
     >
-      <button
-        type="button"
-        className="sort-header"
-        onClick={() => onSort(column)}
-        aria-pressed={active}
-        title={`Sort by ${label}`}
-      >
-        <span>{label}</span>
-        <span className="sort-arrow" aria-hidden="true">
-          {active ? (sort.direction === "asc" ? "↑" : "↓") : "↑"}
-        </span>
-      </button>
+      {sortable ? (
+        <button
+          type="button"
+          className="sort-header"
+          onClick={() => onSort(column)}
+          aria-pressed={active}
+          title={`Sort by ${label}`}
+        >
+          <span>{label}</span>
+          <span className="sort-arrow" aria-hidden="true">
+            {active ? (sort.direction === "asc" ? "↑" : "↓") : "↑"}
+          </span>
+        </button>
+      ) : label}
     </th>
   );
 }

@@ -273,6 +273,31 @@
   gap: var(--space-8);
 }
 .card-divider { height: 1px; background: var(--layout-border-color); }
+
+/* The latest update on a card — the job's newest comment (0059).
+   Quiet on purpose: a tinted block with a left rule, not a callout. It sits on every
+   card that has one, so anything louder would make the board a wall of highlights.
+   Clamped to two lines rather than truncated in JavaScript, so the card and the drawer
+   are showing the same string and only differ in how much of it fits. */
+.card-update {
+  background: var(--primary-background-hover-color);
+  border-left: 2px solid var(--layout-border-color);
+  border-radius: 0 var(--border-radius-small) var(--border-radius-small) 0;
+  padding: var(--space-4) var(--space-8);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.card-update-body {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  /* The clamp above is the whole point, so overflow-wrap keeps a pasted URL from
+     pushing the card wider than its column instead of wrapping. */
+  overflow-wrap: anywhere;
+}
 .card-meta {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -323,7 +348,15 @@
 
 /* ---- tables -------------------------------------------------------------- */
 .data-table-wrap { overflow-x: auto; }
-.data-table { width: 100%; border-collapse: collapse; }
+/* `width: max-content` with a 100% floor, not a flat 100%: at 100% the table is squeezed
+   into the panel whatever it holds, and the day somebody turns on four more columns
+   (which they now can) the address column is 70px wide and "28 Corner Street, Wandi WA
+   6167" wraps to five lines. Natural widths, a floor so a narrow table still fills the
+   panel, a cap per cell so one long value cannot push the table off the screen on its
+   own, and the wrapper scrolls sideways when the total needs it — which is the same
+   thing it has always done on a phone. */
+.data-table { width: max-content; min-width: 100%; border-collapse: collapse; }
+.data-table td { max-width: 320px; }
 .data-table th {
   height: 40px;
   padding: 0 var(--space-12);
@@ -367,6 +400,151 @@
 .group-name { margin-inline-end: var(--space-8); }
 .group-count { font: var(--font-text3-normal); color: var(--secondary-text-color); }
 .data-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+/* An identifier is one token: "1042-01" breaking into "1042-" / "01" is unreadable as
+   the thing it names, and the thing it names is what the column is for. */
+.data-table .nowrap { white-space: nowrap; }
+
+/* ---- configurable columns ------------------------------------------------
+   Headings drag to reorder (Amber, 28 August). `grab` on the heading rather than a
+   separate handle: the whole heading is the target, and a 12px handle on a header row
+   is a target nobody hits. The drop line is on the heading being displaced, which is
+   where the dragged column is about to land. */
+.data-table thead th[draggable="true"] { cursor: grab; }
+.data-table thead th[draggable="true"]:active { cursor: grabbing; }
+.data-table thead th.is-drop-target {
+  box-shadow: inset 2px 0 0 0 var(--primary-color);
+}
+
+/* The picker's list: a checkbox and a name on the left, the two move buttons on the
+   right, one row each. */
+.column-list {
+  list-style: none;
+  margin: var(--space-12) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.column-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--layout-border-color);
+}
+.column-list label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+  cursor: pointer;
+}
+.column-list label:has(input:disabled) { cursor: default; }
+.column-move { display: inline-flex; gap: var(--space-4); flex-shrink: 0; }
+
+/* Search inside one panel — the jobs on a project, and whatever else grows a list long
+   enough to need one. Sits above the table it narrows, with the count beside it so the
+   box says what it did. */
+.panel-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin-bottom: var(--space-8);
+}
+.panel-search > :first-child { flex: 1 1 320px; min-width: 0; }
+
+/* ---- one job's timeline --------------------------------------------------
+   Three readings of the same recorded facts: the stages a job has been through, when
+   it entered each and how long it stayed. Deliberately plain — the point is the shape
+   of the passage, and a chart with a legend and a grid would bury it. */
+.jt-views { display: inline-flex; gap: var(--space-4); flex-wrap: wrap; }
+.jt-scale { display: flex; justify-content: space-between; margin: var(--space-8) 0 var(--space-4); }
+.jt-gantt {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.jt-gantt li {
+  display: grid;
+  /* The stage name, the bar, the count. The name column is fixed so every bar starts
+     at the same x and the lengths are comparable by eye, which is the whole job of
+     this view. */
+  grid-template-columns: 160px 1fr 44px;
+  gap: var(--space-8);
+  align-items: center;
+}
+.jt-label { font: var(--font-text3-normal); color: var(--secondary-text-color); }
+.jt-track {
+  position: relative;
+  height: 18px;
+  background: var(--allgrey-background-color);
+  border-radius: var(--border-radius-small);
+}
+.jt-bar {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  background: var(--primary-color);
+  border-radius: var(--border-radius-small);
+  opacity: 0.55;
+}
+/* The stage it is in now, at full strength: on a job that has crossed six stages, the
+   one that matters is the one it has not left. */
+.jt-bar.is-current { opacity: 1; }
+.jt-days {
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.data-table tr.is-current td { font-weight: 600; }
+
+.jt-months { display: flex; flex-wrap: wrap; gap: var(--space-16); margin-top: var(--space-8); }
+/* A fixed month rather than a growing one: as a plain flex item each month stretched
+   to the panel's full width and three of them read as three separate calendars. At
+   260px they sit side by side, which is what makes the passage visible. */
+.jt-month { flex: 0 0 260px; max-width: 100%; }
+.jt-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-top: var(--space-4);
+}
+.jt-dow {
+  font: var(--font-text3-medium);
+  color: var(--secondary-text-color);
+  text-align: center;
+}
+.jt-day {
+  min-height: 28px;
+  padding: 2px;
+  border-radius: var(--border-radius-small);
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+  text-align: center;
+}
+.jt-day.is-marked {
+  background: var(--primary-selected-color);
+  color: var(--primary-text-color);
+  font-weight: 600;
+}
+/* The stage names under the grid — the date alone says "something happened", which is
+   the half of it nobody needs, but inside a 36px day cell the name is four lines of
+   syllables. One line each, under the month they belong to. */
+.jt-marks {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+@media (max-width: 720px) {
+  .jt-gantt li { grid-template-columns: 110px 1fr 36px; }
+}
 
 /* ---- property slots ------------------------------------------------------
    The definition-driven fields, grouped by the stage that captures them. */
@@ -1310,6 +1488,24 @@ code { overflow-wrap: anywhere; }
   /* The date goes above its line rather than squeezing the sentence into half a column. */
   .activity-feed li { grid-template-columns: 1fr; gap: 0; }
 }
+
+/* One changed field per line: "Assigned to changed from Deanna Nguyen to Ketan Patel".
+   A block rather than an inline run, because a save that touched three fields is three
+   facts, and comma-separating them makes every one of them harder to read. */
+.activity-change { display: block; overflow-wrap: anywhere; }
+
+/* The record the line is about, as a link. Underlined on hover only — a feed where
+   every line carries a permanently underlined name reads as a page of links rather
+   than as a history. */
+.activity-subject {
+  /* The app's link colour, not the surrounding text colour: styled as inherited bold
+     text it read as emphasis rather than as somewhere to go, which is the one thing
+     this link exists to say. */
+  font-weight: 600;
+  color: var(--link-color, var(--primary-color));
+  text-decoration: none;
+}
+.activity-subject:hover, .activity-subject:focus-visible { text-decoration: underline; }
 
 /* ---- Ask Lofty -----------------------------------------------------------
    No longer a floating dock: the trigger is a header icon (`.notif-bell-trigger`,

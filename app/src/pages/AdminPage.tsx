@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
 import {
   Button, Heading, Modal, ModalBasicLayout, ModalContent, ModalFooter, ModalHeader,
   Search, Tab, TabList, Text, TextField
@@ -84,6 +85,30 @@ function Users() {
   const [editingRow, setEditingRow] = useState<string | null>(null);
   const [deactivating, setDeactivating] = useState<Profile | null>(null);
   const [activityFor, setActivityFor] = useState<Profile | null>(null);
+
+  /**
+   * `/admin?person=<profile id>` opens that person straight away.
+   *
+   * It is what makes an activity line a link (Amber, 28 August: *"she changed Ketan
+   * (with link to Ketan's record)"*) — a feed that names Ketan and then leaves you to
+   * find him among forty-seven rows has told you the least useful half.
+   *
+   * The parameter is consumed once and removed, so closing the dialog does not reopen
+   * it and the back button does not land on a screen that keeps springing open. A
+   * `person` who is not in the list — deactivated, or filtered out — leaves the
+   * parameter alone rather than opening the wrong record.
+   */
+  const [params, setParams] = useSearchParams();
+  const wanted = params.get("person");
+  useEffect(() => {
+    if (!wanted || !profiles.length) return;
+    const person = profiles.find(p => p.id === wanted);
+    if (!person) return;
+    setEditing(person);
+    const next = new URLSearchParams(params);
+    next.delete("person");
+    setParams(next, { replace: true });
+  }, [wanted, profiles, params, setParams]);
 
   // Bulk edit (Amber, 27 Aug: "a checkbox to update the users in bulk"). Selection is
   // page state, not URL state — the same call the jobs table makes: a half-made

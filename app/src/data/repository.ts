@@ -20,6 +20,8 @@ import type {
   Project,
   ProjectPatch,
   RecordActivity,
+  LatestUpdate,
+  StagePeriod,
   PropertyDef,
   Stage,
   StageName,
@@ -240,6 +242,31 @@ export interface Repository {
    */
   listRecordActivity(opts: { projectId?: number; jobId?: string; limit?: number }): Promise<RecordActivity[]>;
 
+  /**
+   * The newest comment on each of these jobs, keyed by job number (0059).
+   *
+   * One read for the whole board rather than one per card: sixty cards asking
+   * individually is sixty round trips, and the naive alternative — read every comment on
+   * all sixty jobs and keep the newest of each — needs a LIMIT to stay sane, and that
+   * LIMIT silently drops the newest comment on a quiet job as soon as a busy one has
+   * more comments than the cap. `job_latest_update` does it in the database, uncapped.
+   *
+   * A job with no comments is simply absent from the map. There is no empty entry to
+   * mistake for an update nobody wrote.
+   */
+  listLatestUpdates(jobIds: string[]): Promise<Record<string, LatestUpdate>>;
+
+  /**
+   * One job's passage through the lifecycle, oldest first (Amber, 28 August: a single
+   * job as a gantt, a calendar or a list).
+   *
+   * Read from `activity_audit`, where every stage change has been recorded since 0001 —
+   * so this is history, not a reconstruction. The stage the job is in now is added from
+   * the job itself, because that period has not ended and there is no transition row
+   * for it yet.
+   */
+  listJobStageHistory(jobId: string): Promise<StagePeriod[]>;
+
   // ---- bugs and ideas (0052) --------------------------------------------
   /**
    * Send a bug or an idea. Anyone active may — the widest write in the app — and the
@@ -337,6 +364,8 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "shareSavedView",
   "cloneJob",
   "listRecordActivity",
+  "listLatestUpdates",
+  "listJobStageHistory",
   "submitFeedback",
   "listFeedback",
   "setFeedbackStatus",
@@ -391,6 +420,8 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   shareSavedView: "saved_views",
   cloneJob: "jobs + addresses",
   listRecordActivity: "activity_audit",
+  listLatestUpdates: "job_latest_update",
+  listJobStageHistory: "activity_audit",
   submitFeedback: "feedback",
   listFeedback: "feedback",
   setFeedbackStatus: "feedback",

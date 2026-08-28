@@ -1,4 +1,6 @@
 import { Text } from "@vibe/core";
+import { Link } from "react-router";
+import { changeSentence } from "../data/auditNarrative";
 import { useQuery } from "../data/DataProvider";
 import { LoadProblem } from "./SearchNotices";
 import "./ui.css";
@@ -65,7 +67,25 @@ export function ActivityFeed({
                 {e.at.slice(0, 10)}
               </Text>
               <Text type="text2" element="span" ellipsis={false}>
-                {e.subject && <strong>{e.subject}</strong>} {e.summary}
+                {/* The subject links to the record it names (Amber, 28 August: "with
+                    link to Ketan's record"). A feed that names a job and cannot take
+                    you to it makes you search for what it just told you. */}
+                {e.subject && (
+                  // Not linked when the line is about the record you are already
+                  // looking at: in a job drawer every line names that job, and forty
+                  // links back to the current page are forty invitations to go nowhere.
+                  e.href && e.subject !== jobId && e.subject !== String(projectId ?? "")
+                    ? <Link to={e.href} className="activity-subject" onClick={ev => ev.stopPropagation()}>{e.subject}</Link>
+                    : <strong>{e.subject}</strong>
+                )}{" "}
+                {/* What moved, and from what to what — one line per field, because two
+                    changes in one save are two facts and running them together makes
+                    both harder to read than either alone. */}
+                {e.changes.length > 0
+                  ? e.changes.map(c => (
+                      <span className="activity-change" key={c.column}>{changeSentence(c)}</span>
+                    ))
+                  : e.summary}
                 {/* Who, quietly. It is the second question, never the first. */}
                 {e.who && (
                   <Text type="text3" color="secondary" element="span"> · {e.who}</Text>

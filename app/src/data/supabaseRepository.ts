@@ -1,7 +1,9 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Repository, RepositoryMethod } from "./repository";
 import type { DictionaryOverride } from "./dictionary";
-import { DICTIONARY } from "./dictionary";
+import {
+  changesBetween, headline, idsIn, recordLink, type NameLookup
+} from "./auditNarrative";
 import { createStubRepository } from "./stubRepository";
 import { MAX_SPLIT, OPENING_TEAM, teamSlug } from "./types";
 import { projectDisplayName } from "./types";
@@ -26,6 +28,8 @@ import type {
   Project,
   ProjectPatch,
   RecordActivity,
+  LatestUpdate,
+  StagePeriod,
   PropertyDef,
   Stage,
   StageName,
@@ -189,26 +193,70 @@ const ADDRESS_COLUMNS =
 /** One `activity_audit` row, as this file reads it. */
 type AuditRow = {
   id: number;
-  table_name: "projects" | "jobs";
-  operation: "INSERT" | "UPDATE" | "DELETE";
+  table_name: string;
+  operation: string;
   changed_at: string;
   jwt_sub: string | null;
   old_row: Record<string, unknown> | null;
   new_row: Record<string, unknown> | null;
 };
 
-/** Columns every update touches. Naming them in a feed is noise, not news. */
-const AUDIT_NOISE = new Set([
-  "job_updated_at", "job_updated_by", "project_updated_at", "project_updated_by",
-  "job_stage_entered_at", "project_stage_entered_at"
-]);
+/**
+ * The people named anywhere in a batch of audit rows, resolved in one pass.
+ *
+ * Two lookups, because the audit table holds two different kinds of person id and they
+ * are not interchangeable: the ACTOR is `jwt_sub`, an auth uid, while every person id
+ * INSIDE a row — an assignee, a created_by — is a `profiles.profile_id`. Resolving one
+ * with the other silently returns nobody, which reads on screen as "we do not know who
+ * that is" for a person sitting three feet away.
+ */
+async function resolvePeople(
+  client: SupabaseClient, rows: AuditRow[]
+): Promise<{ byAuth: Map<string, string>; byProfile: Map<string, string> }> {
+  const subs = [...new Set(rows.map(r => r.jwt_sub).filter(Boolean))] as string[];
+  const ids = [...new Set(rows.flatMap(r => idsIn(r)))];
+  const byAuth = new Map<string, string>();
+  const byProfile = new Map<string, string>();
+
+  const [auth, profs] = await Promise.all([
+    subs.length
+      ? client.from("profiles").select("profile_auth_user_id, profile_full_name").in("profile_auth_user_id", subs)
+      : Promise.resolve({ data: [] as { profile_auth_user_id: string | null; profile_full_name: string }[] }),
+    ids.length
+      ? client.from("profiles").select("profile_id, profile_full_name").in("profile_id", ids)
+      : Promise.resolve({ data: [] as { profile_id: string; profile_full_name: string }[] })
+  ]);
+  for (const p of (auth.data ?? []) as { profile_auth_user_id: string | null; profile_full_name: string }[]) {
+    if (p.profile_auth_user_id) byAuth.set(p.profile_auth_user_id, p.profile_full_name);
+  }
+  for (const p of (profs.data ?? []) as { profile_id: string; profile_full_name: string }[]) {
+    byProfile.set(p.profile_id, p.profile_full_name);
+  }
+  return { byAuth, byProfile };
+}
 
 /**
- * One audit row as a sentence.
+ * Whole days between two instants, floored, never negative.
  *
- * The stage move is called out by name because it is the event people look for; every
- * other update names the fields that changed, in the dictionary's words rather than the
- * column's, so a feed reads "Owning team, Assigned to" and not `job_owning_team`.
+ * Floored rather than rounded: a stage entered yesterday afternoon and left this
+ * morning is "0 days", which is what somebody counting working days would say, and
+ * rounding it to 1 would quietly inflate every short stage in a report.
+ */
+function whole_days(from: string, to: string): number {
+  const a = Date.parse(from);
+  const b = Date.parse(to);
+  if (Number.isNaN(a) || Number.isNaN(b)) return 0;
+  return Math.max(0, Math.floor((b - a) / 86_400_000));
+}
+
+/**
+ * One audit row as a line of history: what record, what changed, from what to what.
+ *
+ * Amber, 28 August, on the first version of this feed: *"it needs to say who changed
+ * what to what… she changed Ketan (with link to Ketan's record) from Demo mode to not
+ * demo mode. Or Deanna changed selections due date from 1/7/26 to 7/7/26."* The wording
+ * and the value rendering live in `auditNarrative` so the Admin list says it the same
+ * way; this function is only the assembly.
  *
  * **Returns null for a no-op**, and the caller drops those rows. Three of the first five
  * real rows on project 1002 were updates where nothing moved but `job_updated_at` — a
@@ -216,32 +264,17 @@ const AUDIT_NOISE = new Set([
  * lines that carry no information, which is the opposite of the "neat and clean" this
  * was asked to be. An event nobody can act on is not history; it is a row in a table.
  */
-function summarise(r: AuditRow): string | null {
-  const isJob = r.table_name === "jobs";
-  const stageCol = isJob ? "job_stage" : "project_stage";
+function narrate(r: AuditRow, lookup: NameLookup): RecordActivity | null {
+  const { subject, href } = recordLink(r.table_name, r.new_row ?? r.old_row);
+  const who = r.jwt_sub ? lookup.actor(r.jwt_sub) : null;
+  const verb = headline(r);
+  const base = { id: String(r.id), at: r.changed_at, subject, href, who };
 
-  if (r.operation === "INSERT") return isJob ? "created" : "opened";
-  if (r.operation === "DELETE") return "deleted";
+  if (verb) return { ...base, summary: verb, changes: [] };
 
-  const before = r.old_row ?? {};
-  const after = r.new_row ?? {};
-  const changed = Object.keys(after).filter(
-    k => !AUDIT_NOISE.has(k) && String(before[k] ?? "") !== String(after[k] ?? "")
-  );
-
-  if (changed.includes(stageCol)) {
-    return `moved to ${String(after[stageCol])}`;
-  }
-  // Nothing but the noise columns moved: not an event.
-  if (changed.length === 0) return null;
-
-  const label = (col: string) =>
-    DICTIONARY.find(d => d.id === `${r.table_name}.${col}`)?.friendlyName ?? col;
-  const named = changed.map(label);
-  // Three is where a list stops being readable and starts being a paragraph.
-  return named.length <= 3
-    ? `${named.join(", ")} changed`
-    : `${named.slice(0, 3).join(", ")} and ${named.length - 3} more changed`;
+  const changes = changesBetween(r, lookup);
+  if (changes.length === 0) return null;
+  return { ...base, summary: "", changes };
 }
 
 const STAGE_COLUMNS =
@@ -725,7 +758,10 @@ export function createSupabaseRepository(): Repository {
 
       const [audit, logins] = await Promise.all([
         client.from("activity_audit")
-          .select("id, table_name, operation, changed_at, jwt_sub")
+          // The snapshots come too, which is what lets a line say WHICH record and WHAT
+          // moved on it (Amber, 28 August). This read is admin-only by policy, so the
+          // whole-row jsonb is going to somebody already entitled to every column in it.
+          .select("id, table_name, operation, changed_at, jwt_sub, old_row, new_row")
           .in("jwt_sub", authIds).order("changed_at", { ascending: false }).limit(limit),
         client.from("login_activity")
           .select("id, user_id, event_type, occurred_at")
@@ -734,16 +770,49 @@ export function createSupabaseRepository(): Repository {
       if (audit.error) throw audit.error;
       if (logins.error) throw logins.error;
 
+      /**
+       * "Updated profiles" was the whole line here, and it names the table rather than
+       * the person — forty identical lines on one admin's list, and finding which of
+       * them touched Ketan meant opening every record in the app. Same reduction as the
+       * record feed now: which record, what moved, from what to what.
+       *
+       * A row where nothing moved but a touch column keeps its line here, unlike the
+       * record feed: this list answers "what has this person been doing", and a save
+       * that changed nothing is still something they did.
+       */
+      const auditRows = (audit.data ?? []) as unknown as AuditRow[];
+      const { byProfile } = await resolvePeople(client, auditRows);
+      const lookup: NameLookup = {
+        person: id => byProfile.get(id) ?? null,
+        actor: sub => byAuthId.get(sub) ?? null
+      };
+
       const entries: ActivityEntry[] = [
-        ...((audit.data ?? []) as unknown as { id: number; table_name: string; operation: string; changed_at: string; jwt_sub: string }[])
-          .map(a => ({
-            id: `audit-${a.id}`,
-            kind: "audit" as const,
-            at: a.changed_at,
-            actorAuthId: a.jwt_sub,
-            summary: `${OPERATION_WORDS[a.operation] ?? a.operation} ${a.table_name}`
-              + (byAuthId.size > 1 ? ` — ${byAuthId.get(a.jwt_sub) ?? "unknown"}` : "")
-          })),
+        ...auditRows
+          .map(a => {
+            const { subject, href } = recordLink(a.table_name, a.new_row ?? a.old_row);
+            const changes = a.operation === "UPDATE" ? changesBetween(a, lookup) : [];
+            const verb = OPERATION_WORDS[a.operation] ?? a.operation;
+            return {
+              id: `audit-${a.id}`,
+              kind: "audit" as const,
+              at: a.changed_at,
+              actorAuthId: a.jwt_sub,
+              subject,
+              href,
+              changes,
+              verb,
+              // Named only when the list spans several people — on one person's own
+              // list, every line is theirs and repeating the name forty times is noise.
+              actorName: byAuthId.size > 1
+                ? (a.jwt_sub ? byAuthId.get(a.jwt_sub) ?? null : null)
+                : null,
+              // The fallback still names the table, for a row on something with no
+              // screen of its own — an address, a membership — where naming the record
+              // would mean printing an id. Only used when there is no subject to link.
+              summary: `${verb} ${subject || a.table_name}`
+            };
+          }),
         ...((logins.data ?? []) as unknown as { id: number; user_id: string; event_type: string; occurred_at: string }[])
           .map(l => ({
             id: `login-${l.id}`,
@@ -1590,37 +1659,115 @@ export function createSupabaseRepository(): Repository {
         return [];
       }
 
-      // Who. One lookup for the whole feed rather than one per row, and a null when the
-      // actor is not a profile we can name — a row written by the import, or by a
-      // migration, has no person behind it and saying "Unknown" would invent one.
-      const subs = [...new Set(rows.map(r => r.jwt_sub).filter(Boolean))] as string[];
-      const names = new Map<string, string>();
-      if (subs.length) {
-        const { data } = await client
-          .from("profiles")
-          .select("profile_auth_user_id, profile_full_name")
-          .in("profile_auth_user_id", subs);
-        for (const p of data ?? []) {
-          if (p.profile_auth_user_id) names.set(p.profile_auth_user_id, p.profile_full_name);
-        }
-      }
+      // Who, and who the values name. Two lookups for the whole feed rather than one
+      // per row, and a null when a person is not one we can name — a row written by the
+      // import or by a migration has nobody behind it, and saying "Unknown" invents one.
+      const { byAuth, byProfile } = await resolvePeople(client, rows);
+      const lookup: NameLookup = {
+        person: id => byProfile.get(id) ?? null,
+        actor: sub => byAuth.get(sub) ?? null
+      };
 
       return rows
-        .map(r => {
-          const summary = summarise(r);
-          // A touch with nothing behind it is dropped rather than shown as "updated".
-          if (!summary) return null;
-          return {
-            id: String(r.id),
-            at: r.changed_at,
-            subject: String(r.new_row?.job_id ?? r.new_row?.project_id ?? ""),
-            summary,
-            who: r.jwt_sub ? names.get(r.jwt_sub) ?? null : null
-          };
-        })
+        // A touch with nothing behind it is dropped rather than shown as "updated".
+        .map(r => narrate(r, lookup))
         .filter((e): e is RecordActivity => e !== null)
         .sort((a, b) => (a.at < b.at ? 1 : -1))
         .slice(0, limit);
+    },
+
+    /**
+     * The newest comment on each of these jobs (0059).
+     *
+     * `.in()` on a list of job numbers, against a view that has already reduced comments
+     * to one row per job — so the wire carries sixty rows for a sixty-job board, not
+     * every comment ever written on them.
+     *
+     * Chunked at 200 because the job list rides in the URL as a PostgREST filter, and a
+     * whole-portfolio board would otherwise build a request too long to send. Nobody has
+     * hit that yet; the chunking is here so the first person who does gets an answer
+     * rather than a 414.
+     */
+    async listLatestUpdates(jobIds: string[]): Promise<Record<string, LatestUpdate>> {
+      const out: Record<string, LatestUpdate> = {};
+      for (let i = 0; i < jobIds.length; i += 200) {
+        const chunk = jobIds.slice(i, i + 200);
+        if (!chunk.length) continue;
+        const { data, error } = await client
+          .from("job_latest_update")
+          .select("job_id, latest_comment_body, latest_comment_at, latest_comment_edited_at, latest_comment_author")
+          .in("job_id", chunk);
+        if (error) throw error;
+        for (const r of (data ?? []) as unknown as {
+          job_id: string; latest_comment_body: string; latest_comment_at: string;
+          latest_comment_edited_at: string | null; latest_comment_author: string | null;
+        }[]) {
+          out[r.job_id] = {
+            jobId: r.job_id,
+            body: r.latest_comment_body,
+            at: r.latest_comment_at,
+            editedAt: r.latest_comment_edited_at,
+            author: r.latest_comment_author
+          };
+        }
+      }
+      return out;
+    },
+
+    /**
+     * One job's stage history, oldest first.
+     *
+     * Every period comes from a single audit row and needs no arithmetic across rows:
+     * a transition's `changed_at` is when the old stage ENDED, and the same row's
+     * `old_row.job_stage_entered_at` is when it BEGAN. Both are recorded facts. Reading
+     * it that way also means a job whose earliest stages happened before anybody was
+     * watching still shows them correctly — the entered-at column was being maintained
+     * the whole time, whether or not there is an INSERT row to find.
+     *
+     * The stage the job is in now comes from the job, because it has not ended and no
+     * transition row exists for it yet. `job_stage_entered_at` is the same column, read
+     * live instead of out of a snapshot.
+     */
+    async listJobStageHistory(jobId: string): Promise<StagePeriod[]> {
+      const { data, error } = await client
+        .from("activity_audit")
+        .select("id, table_name, operation, changed_at, jwt_sub, old_row, new_row")
+        .eq("table_name", "jobs")
+        .eq("new_row->>job_id", jobId)
+        .order("changed_at", { ascending: true });
+      if (error) throw error;
+
+      const rows = (data ?? []) as unknown as AuditRow[];
+      const periods: StagePeriod[] = [];
+      for (const r of rows) {
+        const was = r.old_row?.job_stage;
+        const now = r.new_row?.job_stage;
+        if (r.operation !== "UPDATE" || !was || was === now) continue;
+        const from = (r.old_row?.job_stage_entered_at as string | undefined) ?? null;
+        periods.push({
+          stage: String(was),
+          from,
+          to: r.changed_at,
+          days: from ? whole_days(from, r.changed_at) : null
+        });
+      }
+
+      const { data: live, error: liveError } = await client
+        .from("job_display")
+        .select("job_stage, job_stage_entered_at")
+        .eq("job_id", jobId)
+        .maybeSingle();
+      if (liveError) throw liveError;
+      if (live) {
+        const from = (live as { job_stage_entered_at: string | null }).job_stage_entered_at;
+        periods.push({
+          stage: String((live as { job_stage: string }).job_stage),
+          from,
+          to: null,
+          days: from ? whole_days(from, new Date().toISOString()) : null
+        });
+      }
+      return periods;
     },
 
     // ---- bugs and ideas (0052) -------------------------------------------

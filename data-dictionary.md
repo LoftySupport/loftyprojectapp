@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-267 properties across 45 tables.
+272 properties across 46 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 218 | In the migration and the types |
+| Created | 223 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -212,6 +212,18 @@ The read view behind the boards: jobs joined to their addresses and their projec
 | `job_display.job_is_current` | Is current | Whether the job is still live — not completed, cancelled or archived. Derived from status every time it is read, never stored. | `view` | — | Read-only. is_current(jobs.job_status). | Mirrors the isCurrent() helper in the app. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `job_display.job_id` | Job number | The job number, joined for the board and for search. | `view` | — | Read-only. The job number and the key are the same value. | jobs.job_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `job_display.job_current_address` | Job address (current) | The consolidated current address, joined for the board and for search. | `view` | — | Read-only. | jobs ⋈ addresses on job_current_address_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `job_latest_update`
+
+The newest comment on each job (0059) — which is what "latest update" means here, per Amber on 28 August. distinct on (job_id) over comments, newest first, so the board reads one row per job instead of every comment ever written on it, and there is no stored copy to fall out of step with the thread. security_invoker is on: a reader sees an update only for a job they can already read.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `job_latest_update.job_id` | Job number | Which job the update is on. One row per job at most — the view is distinct on this column. | `view` | — | Read-only. The distinct-on key. | comments where job_id is not null, newest first. A job nobody has commented on has no row here at all, which is what lets a card show nothing rather than an empty update. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `job_latest_update.latest_comment_body` | Latest update | The newest comment on the job, verbatim. The job card clamps it to two lines in CSS rather than cutting the string, so the card and the drawer can never disagree about what was said. | `view` | — | Read-only. | comments.comment_body of the newest comment. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `job_latest_update.latest_comment_at` | Updated on | When that comment was posted. The tiebreak for two comments in the same millisecond is comment_id, so the answer is stable between reads rather than flickering. | `view` | — | Read-only. | comments.comment_created_at, the ordering column. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `job_latest_update.latest_comment_edited_at` | Edited on | Set only when the body has been changed since posting, by the comments trigger. The card says "edited" rather than hiding it: an update that has been rewritten is a different fact from one that has not. | `view` | — | Read-only. Nullable. | comments.comment_edited_at. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `job_latest_update.latest_comment_author` | Written by | Who wrote it. A LEFT join, so a comment by somebody whose profile the reader cannot see still shows its body with no name — the update is the point, the byline is not. | `view` | — | Read-only. Nullable. | profiles.profile_full_name via comments.comment_created_by. security_invoker is on, so the reader's own policies decide both halves. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `job_pipeline_positions`
 

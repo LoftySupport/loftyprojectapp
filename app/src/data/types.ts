@@ -747,6 +747,25 @@ export interface ActivityEntry {
   /** The auth user who did it, as recorded. Null for rows written before auth. */
   actorAuthId: string | null;
   summary: string;
+  /**
+   * The record that was changed — "Ketan Patel", "1042-03" — and where it lives.
+   *
+   * An audit line used to read "Updated profiles", which names the table and not the
+   * person. On a list of one admin's activity that is forty identical lines, and
+   * finding which of them touched Ketan means opening every record in the app.
+   */
+  subject?: string;
+  href?: string | null;
+  /**
+   * "Updated", "Created", "Deleted" — kept apart from the subject so the line can read
+   * "Updated <link>Ketan Patel</link>" rather than repeating the name in a link beside
+   * a sentence that already said it.
+   */
+  verb?: string;
+  /** Named only when the list spans several people, where "who" stops being obvious. */
+  actorName?: string | null;
+  /** What moved on it, both sides rendered. Empty for a sign-in or a plain insert. */
+  changes?: FieldChange[];
 }
 
 /**
@@ -757,15 +776,74 @@ export interface ActivityEntry {
  * The changed columns are named with their friendly names from the dictionary, so a
  * feed says "Owning team" rather than `job_owning_team`.
  */
+// Type-only, so this re-export costs nothing at runtime and cannot make a cycle with
+// auditNarrative (which imports the label maps below).
+import type { FieldChange } from "./auditNarrative";
+export type { FieldChange };
+
 export interface RecordActivity {
   id: string;
   at: IsoDateTime;
   /** '1042' or '1042-03' — what the line is about, since a project feed shows both. */
   subject: string;
-  /** "opened", "created", "moved to Construction", "Owning team changed". */
+  /**
+   * Where that record lives, so the subject is a link and not just a label (Amber, 28
+   * August: *"she changed Ketan (with link to Ketan's record)"*). Null when the record
+   * has no screen of its own — an address row, say.
+   */
+  href: string | null;
+  /** "opened", "created", "deleted" — set only when the row is not a field update. */
   summary: string;
+  /**
+   * What actually moved, each side already rendered: "Assigned to changed from Deanna
+   * Nguyen to Ketan Patel". Empty for an insert or a delete, where `summary` carries it.
+   *
+   * This is the part the feed was missing. "Assigned to changed" cannot answer the
+   * question somebody opens a history to ask, which is always *changed to what*.
+   */
+  changes: FieldChange[];
   /** Who did it, resolved. Null when the actor is not a profile we can name. */
   who: string | null;
+}
+
+/**
+ * The newest comment on a job — which is what "latest update" means here.
+ *
+ * Amber, 28 August: *"the latest update should be the last comment placed on the job."*
+ * Not a column on `jobs`: a stored copy of the newest comment disagrees with the thread
+ * the first time somebody edits or deletes one. It is the `job_latest_update` view (0059),
+ * which is the same comment the drawer shows at the top of its thread, by construction.
+ */
+export interface LatestUpdate {
+  jobId: string;
+  /** The comment itself. Never truncated here — the card decides how much it shows. */
+  body: string;
+  at: IsoDateTime;
+  editedAt: IsoDateTime | null;
+  /** Who wrote it. Null when the reader cannot see that person's profile. */
+  author: string | null;
+}
+
+/**
+ * One stretch a job spent in one stage.
+ *
+ * Amber, 28 August: *"on a single job i need to be able to open it as a gantt chart,
+ * calendar, list."* A job has no tasks yet, so the only thing it has that happens over
+ * time is its passage through the lifecycle — and that is genuinely recorded, in the
+ * audit snapshots, rather than something that has to be invented to draw a chart.
+ *
+ * Built from two facts that are both in the row: a transition's `changed_at` is when a
+ * stage ENDED, and the same row's `job_stage_entered_at` is when it BEGAN. Neither is
+ * derived from the other and neither is guessed.
+ */
+export interface StagePeriod {
+  stage: StageName | string;
+  /** When the job entered this stage. Null when the row predates the column. */
+  from: IsoDateTime | null;
+  /** When it left. Null for the stage it is in now — that one has not ended. */
+  to: IsoDateTime | null;
+  /** Whole days in it, to today when it is still open. Null when `from` is unknown. */
+  days: number | null;
 }
 
 /**

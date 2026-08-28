@@ -20,12 +20,15 @@ import { useSavedViews } from "../data/useSavedViews";
 import { JobCard, StatusPill } from "../components/RecordCards";
 import { JobDrawer } from "../components/JobDrawer";
 import { JOB_MOVE_NOTE, MoveStageDialog, isForwardMove } from "../components/MoveStageDialog";
-import { SortHeader, sortRows, type SortState } from "../components/SortableTable";
+import { sortRows, type SortState } from "../components/SortableTable";
+import {
+  ColumnHeaders, ColumnPicker, useColumnLayout, type ColumnDef
+} from "../components/TableColumns";
 import { JobsGantt } from "../components/JobsGantt";
 import { MonthCalendar } from "../components/MonthCalendar";
 import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
-import type { StageName, TeamId } from "../data/types";
+import type { LatestUpdate, StageName, TeamId } from "../data/types";
 import { accentStyle, columnAccent } from "../theme/accents";
 import { readPrefs } from "../data/preferences";
 import { Token } from "../components/Token";
@@ -154,6 +157,21 @@ export function JobsPage() {
    * the batch and says how many actually move. Writes go one at a time so a single
    * refusal (RLS, a guard) names its job instead of failing the lot.
    */
+  /**
+   * The latest update on every job on the board — its newest comment (0059).
+   *
+   * Amber, 28 August: *"the latest update should be the last comment placed on the
+   * job."* Read for `all` rather than for `rows`, so typing in the search box does not
+   * fire a request per keystroke; the map is looked up per card and a job with no
+   * comments is simply missing from it.
+   */
+  const jobKey = useMemo(() => all.map(j => j.jobNumber).join(","), [all]);
+  const { data: latestUpdates } = useQuery<Record<string, LatestUpdate>>(
+    r => (jobKey ? r.listLatestUpdates(jobKey.split(",")) : Promise.resolve({})),
+    {},
+    [jobKey]
+  );
+
   const { data: profiles } = useQuery(r => r.listProfiles(), []);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -228,33 +246,74 @@ export function JobsPage() {
    * until a header is clicked: the natural order (pipeline order for stages) is itself
    * meaningful, and a default sort would quietly erase it.
    */
-  type JobsColumn = "job" | "project" | "address" | "type" | "stage" | "team" | "assignee" | "createdBy" | "days" | "status";
-  const [tableSort, setTableSort] = useState<SortState<JobsColumn> | null>(null);
-  const toggleTableSort = (key: JobsColumn) =>
+  /**
+   * The table's columns: what they are, what they sort on, and what each cell shows.
+   *
+   * One list, rather than a header array and a cell block that have to be kept in the
+   * same order by hand — which is how a table ends up with "Team" over the assignee's
+   * name. It is also what makes the columns configurable (Amber, 28 August: *"they need
+   * to be sortable and able to be drag and dropped and re ordred, or add and remove
+   * columns"*): reordering is reordering this list, hiding one is dropping it.
+   */
+  const jobColumnDefs = useMemo<ColumnDef<BoardJob>[]>(() => [
+    // The job number cannot be turned off. A table of jobs with no job number in it is
+    // a table nobody can act on; everything else is somebody's call.
+    { key: "job", label: "Job", fixed: true, className: "nowrap",
+      sort: j => j.jobNumber,
+      // "1042-01" breaking into "1042-" / "01" is unreadable as an identifier, and the
+      // identifier is what this column is — hence `nowrap`.
+      cell: j => j.jobNumber },
+    { key: "project", label: "Project", sort: j => Number(j.projectNumber),
+      cell: j => j.projectNumber },
+    { key: "address", label: "Address", sort: j => j.currentAddress ?? null,
+      cell: j => j.currentAddress ?? <Token>addresses.consolidated_address</Token> },
+    { key: "type", label: "Type",
+      sort: j => (j.projectType ? PROJECT_TYPE_LABELS[j.projectType] : null),
+      cell: j => (j.projectType
+        ? PROJECT_TYPE_LABELS[j.projectType]
+        : <Token>job_display.project_type</Token>) },
+    // Pipeline position, not the alphabet — "Construction" before "Pre-construction"
+    // alphabetically would be the lifecycle backwards.
+    { key: "stage", label: "Stage",
+      sort: j => { const at = viewStages.indexOf(j.stage); return at === -1 ? null : at; },
+      cell: j => j.stage },
+    { key: "team", label: "Team", sort: j => j.team, cell: j => j.team },
+    { key: "assignee", label: "Assigned to", sort: j => j.assigneeName ?? null,
+      cell: j => j.assigneeName ?? "—" },
+    // Off by default since 28 August, when it came off the cards for the same reason:
+    // who typed a job in months ago is not what anybody scans a list for. Still here
+    // for the person who does want it, which is what the picker is for.
+    { key: "createdBy", label: "Created by", offByDefault: true, className: "muted",
+      sort: j => j.createdBy ?? null, cell: j => j.createdBy ?? "—" },
+    { key: "days", label: "Days in stage", className: "num",
+      sort: j => j.daysInStage, cell: j => j.daysInStage },
+    { key: "status", label: "Status", sort: j => RECORD_STATUS_LABELS[j.status],
+      cell: j => <StatusPill status={j.status} /> }
+  ], [viewStages]);
+
+  const jobLayout = useColumnLayout("jobs", jobColumnDefs);
+
+  /**
+   * Table sorting (G12) — the SortableTable idiom the Admin tables already use, applied
+   * within each group so "Group by" and "sort by" compose instead of fighting. No sort
+   * until a header is clicked: the natural order (pipeline order for stages) is itself
+   * meaningful, and a default sort would quietly erase it.
+   */
+  const [tableSort, setTableSort] = useState<SortState<string> | null>(null);
+  const toggleTableSort = (key: string) =>
     setTableSort(sort =>
       sort?.key === key
         ? { key, direction: sort.direction === "asc" ? "desc" : "asc" }
         : { key, direction: "asc" }
     );
-  const jobColumns = useMemo<Record<JobsColumn, (j: BoardJob) => string | number | null>>(
-    () => ({
-      job: j => j.jobNumber,
-      project: j => Number(j.projectNumber),
-      address: j => j.currentAddress ?? null,
-      type: j => (j.projectType ? PROJECT_TYPE_LABELS[j.projectType] : null),
-      // Pipeline position, not the alphabet — "Construction" before "Pre-construction"
-      // alphabetically would be the lifecycle backwards.
-      stage: j => {
-        const at = viewStages.indexOf(j.stage);
-        return at === -1 ? null : at;
-      },
-      team: j => j.team,
-      assignee: j => j.assigneeName ?? null,
-      createdBy: j => j.createdBy ?? null,
-      days: j => j.daysInStage,
-      status: j => RECORD_STATUS_LABELS[j.status]
-    }),
-    [viewStages]
+  // Read straight off the definitions, so a column and the thing it sorts on cannot
+  // drift apart. Hidden columns keep their reader: hiding a column you had sorted by
+  // should not silently reshuffle the rows underneath you.
+  const jobColumns = useMemo(
+    () => Object.fromEntries(
+      jobColumnDefs.filter(d => d.sort).map(d => [d.key, d.sort!])
+    ) as Record<string, (j: BoardJob) => string | number | null>,
+    [jobColumnDefs]
   );
   const tableGroups = useMemo(
     () => (tableSort ? groups.map(g => ({ ...g, jobs: sortRows(g.jobs, jobColumns, tableSort) })) : groups),
@@ -321,6 +380,19 @@ export function JobsPage() {
         onFiltersChange={setFilters}
         optionsFor={optionsFor}
         count={`Showing ${rows.length} of ${inView.length} jobs`}
+        /* Only on the view that has columns. On the board it would be a control
+           promising something the screen cannot do. */
+        actions={view === "Table" ? (
+          <ColumnPicker
+            title="Columns on the jobs table"
+            all={jobLayout.all}
+            hidden={jobLayout.hidden}
+            onToggle={jobLayout.toggle}
+            onMoveBy={jobLayout.moveBy}
+            onReset={jobLayout.reset}
+            isDefault={jobLayout.isDefault}
+          />
+        ) : undefined}
       />
 
       {stale && <PreviousAddressNote />}
@@ -430,6 +502,7 @@ export function JobsPage() {
                       projectType={j.projectType}
                       assigneeName={j.assigneeName}
                       status={j.status}
+                      latestUpdate={latestUpdates[j.jobNumber] ?? null}
                       onOpen={() => openOne(j)}
                     />
                   </div>
@@ -493,8 +566,12 @@ export function JobsPage() {
           <div className="panel data-table-wrap">
           <table className="data-table">
             <thead>
-              <tr>
-                {can("user") && (
+              <ColumnHeaders
+                columns={jobLayout.columns}
+                sort={tableSort}
+                onSort={toggleTableSort}
+                onReorder={jobLayout.moveTo}
+                leading={can("user") && (
                   <th className="bulk-col">
                     <input
                       type="checkbox"
@@ -504,22 +581,7 @@ export function JobsPage() {
                     />
                   </th>
                 )}
-                {([
-                  ["job", "Job"], ["project", "Project"], ["address", "Address"],
-                  ["type", "Type"], ["stage", "Stage"], ["team", "Team"],
-                  ["assignee", "Assigned to"], ["createdBy", "Created by"],
-                  ["days", "Days in stage"], ["status", "Status"]
-                ] as const).map(([key, label]) => (
-                  <SortHeader
-                    key={key}
-                    column={key}
-                    label={label}
-                    sort={tableSort ?? { key: "" as JobsColumn, direction: "asc" }}
-                    onSort={toggleTableSort}
-                    className={key === "days" ? "num" : undefined}
-                  />
-                ))}
-              </tr>
+              />
             </thead>
             {/* One tbody per group, so the table answers the same "Group by" the board
                 does. Empty groups are dropped here where the board keeps them: a column
@@ -532,7 +594,10 @@ export function JobsPage() {
                     rendering fault. */}
                 {grouping !== "None" && (
                   <tr className="group-head">
-                    <th scope="colgroup" colSpan={can("user") ? 11 : 10}>
+                    {/* Counted, not hardcoded: the count was 11 and 10 when the columns
+                        were fixed, and a heading that spans the wrong number of columns
+                        is a table that visibly comes apart. */}
+                    <th scope="colgroup" colSpan={jobLayout.columns.length + (can("user") ? 1 : 0)}>
                       <span className="group-name">{g.key}</span>
                       <span className="group-count">
                         {g.jobs.length} job{g.jobs.length === 1 ? "" : "s"}
@@ -553,22 +618,9 @@ export function JobsPage() {
                         />
                       </td>
                     )}
-                    {/* nowrap: "1042-01" breaking into "1042-" / "01" is unreadable
-                        as an identifier, and the identifier is what this column is. */}
-                    <td style={{ whiteSpace: "nowrap" }}>{j.jobNumber}</td>
-                    <td>{j.projectNumber}</td>
-                    <td>{j.currentAddress ?? <Token>addresses.consolidated_address</Token>}</td>
-                    <td>
-                      {j.projectType
-                        ? PROJECT_TYPE_LABELS[j.projectType]
-                        : <Token>job_display.project_type</Token>}
-                    </td>
-                    <td>{j.stage}</td>
-                    <td>{j.team}</td>
-                    <td>{j.assigneeName ?? "—"}</td>
-                    <td className="muted">{j.createdBy ?? "—"}</td>
-                    <td className="num">{j.daysInStage}</td>
-                    <td><StatusPill status={j.status} /></td>
+                    {jobLayout.columns.map(c => (
+                      <td key={c.key} className={c.className}>{c.cell(j)}</td>
+                    ))}
                   </tr>
                 ))}
               </tbody>

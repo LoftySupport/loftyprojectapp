@@ -10,6 +10,7 @@ import { ExpandButton, usePanelExpand } from "./PanelExpand";
 import { useResizablePanel } from "./useResizablePanel";
 import { JOB_MOVE_NOTE, MoveStageControl } from "./MoveStageDialog";
 import { ActivityFeed } from "./ActivityFeed";
+import { JobTimeline } from "./JobTimeline";
 import { CloneJobDialog } from "./CloneDialog";
 import { CommentsPanel } from "./CommentsPanel";
 import { useQuery, useRepository } from "../data/DataProvider";
@@ -525,6 +526,10 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
               comments are user-authored and editable, activity is append-only, and
               interleaving them makes a feed where half the entries can be rewritten
               after the fact. */}
+          {/* The job as a gantt, a calendar or a list (Amber, 28 August). It sits with
+              the activity because it is the same history read a different way — every
+              bar on it is a stage change this feed also carries as a line. */}
+          {expanded && <JobTimeline jobId={job.jobNumber} />}
           {expanded && <ActivityFeed jobId={job.jobNumber} title="Activity" />}
           {/* The job's own thread — the same shape the project has, because Amber's
               "latest update" is one rule for both kinds of record. */}

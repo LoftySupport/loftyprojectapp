@@ -1,6 +1,7 @@
 import { Text } from "@vibe/core";
 import {
-  PROJECT_TYPE_LABELS, RECORD_STATUS_LABELS, type ProjectType, type RecordStatus
+  PROJECT_TYPE_LABELS, RECORD_STATUS_LABELS,
+  type LatestUpdate, type ProjectType, type RecordStatus
 } from "../data/types";
 import { Token } from "./Token";
 import "./ui.css";
@@ -45,6 +46,7 @@ export function JobCard({
   projectType,
   assigneeName,
   status = "on_track",
+  latestUpdate = null,
   onOpen
 }: {
   jobNumber: string;
@@ -65,6 +67,15 @@ export function JobCard({
   /** Who is assigned, resolved to a name by boardModel. Null = nobody, shown as —. */
   assigneeName?: string | null;
   status?: RecordStatus;
+  /**
+   * The newest comment on this job (0059) — what "latest update" means here.
+   *
+   * Amber, 28 August: *"the latest update should be the last comment placed on the
+   * job."* Null when nobody has commented, and then the card shows nothing at all: an
+   * empty tinted block saying "No recent update logged" is a sentence about the app,
+   * not about the job, and it would sit on every card on an unstarted board.
+   */
+  latestUpdate?: LatestUpdate | null;
   onOpen?: () => void;
 }) {
   return (
@@ -93,6 +104,22 @@ export function JobCard({
       <Text type="text3" color="secondary" element="div" ellipsis={false}>
         {address ?? <Token>job_display.job_current_address</Token>}
       </Text>
+
+      {/* The latest update, kept quiet — a tinted block with a left rule, the shape the
+          prototype used for the same line. It is the comment itself, clamped to two
+          lines by CSS rather than cut here, so the drawer and the card can never
+          disagree about what was said. */}
+      {latestUpdate && (
+        <div className="card-update">
+          <Text type="text3" element="div" ellipsis={false} className="card-update-body">
+            {latestUpdate.body}
+          </Text>
+          <Text type="text3" color="secondary" element="div">
+            {latestUpdate.author ?? "—"} · {new Date(latestUpdate.at).toLocaleDateString()}
+            {latestUpdate.editedAt && " · edited"}
+          </Text>
+        </div>
+      )}
 
       <div className="card-divider" />
 

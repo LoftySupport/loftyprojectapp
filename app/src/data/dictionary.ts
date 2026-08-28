@@ -772,6 +772,30 @@ export const DICTIONARY: DictionaryEntry[] = [
   e("jobs.job_updated_at", "Updated on", "When it last changed. Maintained by the touch_updated_at trigger, not by the app.", "timestamptz", "Not null, default now().", "Set by the jobs_touch trigger on every update.", "created"),
   e("jobs.job_updated_by", "Updated by", "Who last changed it.", "uuid", "Nullable.", "FK → profiles(id).", "created"),
 
+  // -------------------------------------------------- job_latest_update (0059)
+  // "The latest update should be the last comment placed on the job" (Amber, 28 August).
+  // A view, not a column: a stored copy of the newest comment disagrees with the thread
+  // the first time somebody edits or deletes one.
+  e("job_latest_update.job_id", "Job number",
+    "Which job the update is on. One row per job at most — the view is distinct on this column.",
+    "view", "Read-only. The distinct-on key.",
+    "comments where job_id is not null, newest first. A job nobody has commented on has no row here at all, which is what lets a card show nothing rather than an empty update.",
+    "created"),
+  e("job_latest_update.latest_comment_body", "Latest update",
+    "The newest comment on the job, verbatim. The job card clamps it to two lines in CSS rather than cutting the string, so the card and the drawer can never disagree about what was said.",
+    "view", "Read-only.", "comments.comment_body of the newest comment.", "created"),
+  e("job_latest_update.latest_comment_at", "Updated on",
+    "When that comment was posted. The tiebreak for two comments in the same millisecond is comment_id, so the answer is stable between reads rather than flickering.",
+    "view", "Read-only.", "comments.comment_created_at, the ordering column.", "created"),
+  e("job_latest_update.latest_comment_edited_at", "Edited on",
+    "Set only when the body has been changed since posting, by the comments trigger. The card says \"edited\" rather than hiding it: an update that has been rewritten is a different fact from one that has not.",
+    "view", "Read-only. Nullable.", "comments.comment_edited_at.", "created"),
+  e("job_latest_update.latest_comment_author", "Written by",
+    "Who wrote it. A LEFT join, so a comment by somebody whose profile the reader cannot see still shows its body with no name — the update is the point, the byline is not.",
+    "view", "Read-only. Nullable.",
+    "profiles.profile_full_name via comments.comment_created_by. security_invoker is on, so the reader's own policies decide both halves.",
+    "created"),
+
   e("job_display.job_id", "Job number",
     "The job number, joined for the board and for search.",
     "view", "Read-only. The job number and the key are the same value.", "jobs.job_id.", "created"),
@@ -1055,6 +1079,8 @@ export const TABLE_DESCRIPTIONS: Record<string, string> = {
     "A search view: one row per job per address role, current and original alike, backed by the trigram index on the consolidated string — so a search on either address finds the job, and the result can say which one it hit.",
   job_display:
     "The read view behind the boards: jobs joined to their addresses and their project, so one query returns the consolidated address, the inherited project type and whether the job is current, without each screen rebuilding the joins.",
+  job_latest_update:
+    "The newest comment on each job (0059) — which is what \"latest update\" means here, per Amber on 28 August. distinct on (job_id) over comments, newest first, so the board reads one row per job instead of every comment ever written on it, and there is no stored copy to fall out of step with the thread. security_invoker is on: a reader sees an update only for a job they can already read.",
   job_stages:
     "Dropped in 0006. One row per job per stage was the wrong shape for the question every board load asks — the current position moved onto the job as stage and stage_entered_at in 0004, and past transitions live in activity_audit.",
   job_types:
