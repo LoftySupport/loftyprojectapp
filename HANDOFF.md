@@ -21,17 +21,28 @@ treat writes accordingly.
   **Completed** (what 0035 called Closed — done, won), **Closed** (the archive —
   reached 12 months after Completed or Cancelled by the `lifecycle_archive()` clock,
   scheduled daily where pg_cron exists; hidden by default, shown by the Closed saved
-  view), and **Cancelled** (stopped without completing; **the one backward move the
-  lifecycle allows** — revival; fires no notifications, automations or health alerts
-  while there). This reverses `schema-plan.md`'s "cancellation is a status, not a
-  phase" — the reversal and its reasoning are logged there, next to the original.
+  view), and **Cancelled** (stopped without completing; fires no notifications,
+  automations or health alerts while there). This reverses `schema-plan.md`'s
+  "cancellation is a status, not a phase" — the reversal and its reasoning are logged
+  there, next to the original.
+
+  > **Superseded on 28 Aug by `0057`.** This entry said Cancelled was "the one backward
+  > move the lifecycle allows — revival". It is not, any more. Amber: *"cancelled will
+  > not be revived — if revived, it will need a new job number as a lot of the initial
+  > info will be outdated."* What restarts is the work, not the record: by the time a
+  > cancelled job comes back its dates, selections and costings are stale, and its
+  > number is on contracts. Cancelled is now terminal like Closed, and coming back is a
+  > **clone** with its own number. Left in place rather than rewritten, because
+  > "cancelled can be revived" is the obvious-looking simplification somebody will
+  > otherwise reintroduce.
 - **The guards carry the carve-outs** (`guard_lifecycle_is_linear`): Closed is
-  terminal for people; anything live may move to Cancelled; anything may leave
-  Cancelled. `project_stage_from_jobs()` excludes cancelled jobs, so a project
-  neither waits for nor follows them.
-- **The drawer's stage control grew the verbs**: Move (forwards, linear run only),
-  **Cancel…** (working phases only — a completed job isn't cancellable), and
-  **Revive to…** on a cancelled record. One confirmation dialog, three sets of copy.
+  terminal for people; anything live may move to Cancelled; and — since `0057` —
+  nothing leaves Cancelled either. `project_stage_from_jobs()` excludes cancelled jobs,
+  so a project neither waits for nor follows them.
+- **The drawer's stage control grew the verbs**: Move (forwards, linear run only) and
+  **Cancel…** (working phases only — a completed job isn't cancellable). It had a third,
+  **Revive to…**, which `0057` removed along with the backward move; at Cancelled the
+  control now says so, the way it always has at Closed.
 - **Assignee is bound** — `job_assignee_id` existed since 0028; `boardModel` now
   resolves it to a name and to the person's teams, so cards, the table, the drawer
   and Team-member grouping show real names, and an em dash when nobody is assigned.

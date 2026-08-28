@@ -703,7 +703,7 @@ export const DICTIONARY: DictionaryEntry[] = [
     "The number the job had in the old system — '12345'. SiteBook and Trello use the same Lofty number, so one column covers all three. Searchable for the life of the system, because old paperwork, SharePoint folders, invoices and emails will carry it for years.",
     "text",
     "Nullable and UNIQUE, which compose correctly in Postgres: nulls do not collide, so jobs created in the app simply have none. Renamed from old_job_number, and the unique constraint replaced 0023's separate partial index — one index for the lookup, not two.",
-    "Identifies an imported record without needing a flag: job_number_old IS NOT NULL is exactly \"came from the old system\".",
+    "Identifies an imported record without needing a flag: job_number_old IS NOT NULL is exactly \"came from the old system\". Since 0057 it carries a second kind of value: a CLONE stores the Lofty number of the job it was copied from (Amber, 28 Aug: \"it will need a new job number… and we can use the old job number field to capture the new information\"), so searching either number finds both records. The column is unique, which is what stops a job being cloned twice into two rows claiming the same origin — and also means a cloned job cannot inherit its source\'s SiteBook number as well; the link back wins.",
     "created"),
   e("jobs.job_title_type", "Title type",
     "Community title or Torrens title — which product this job is (Amber, 28 Aug: \"the job will need to carry this information through to the job\"). The project holds the intended mix; this is what a particular lot actually is.",

@@ -7,6 +7,7 @@ import { projectDisplayName } from "./types";
 import type {
   ActivityEntry,
   AddressHistoryEntry,
+  CloneOptions,
   CommentEntry,
   FeedbackItem,
   FeedbackKind,
@@ -70,7 +71,7 @@ const WIRED: RepositoryMethod[] = [
   "setProjectCurrentAddress", "listAddressHistory",
   "listStages", "listTeams", "updateTeam", "createTeam", "listTemplatePhases", "updateStageSla",
   "listSavedViews", "saveView", "deleteSavedView", "shareSavedView",
-  "submitFeedback", "listFeedback", "setFeedbackStatus",
+  "submitFeedback", "listFeedback", "setFeedbackStatus", "cloneJob",
   "listMyPreferences", "saveMyPreferences",
   "listPropertyDefs", "createPropertyDef", "updatePropertyDef", "deletePropertyDef",
   "listDictionaryOverrides", "saveDictionaryOverride"
@@ -1403,6 +1404,93 @@ export function createSupabaseRepository(): Repository {
       const board = data?.[0]?.saved_view_board as SavedViewBoard | undefined;
       if (!board) throw new Error("That view was not changed — it is not yours to share.");
       return await repo.listSavedViews(board);
+    },
+
+    /**
+     * Clone a job (0057).
+     *
+     * Read the source, copy the parts that were asked for, and let the database supply
+     * everything that must be new. The address is INSERTED as a fresh row rather than
+     * pointed at: two jobs sharing one address row means renaming a lot renames a lot
+     * on a job nobody was looking at, which is the fault `addresses` exists to prevent.
+     *
+     * `job_number_old` carries the source's job number — Amber's instruction, and it
+     * costs no schema. One consequence worth knowing: the column is unique and already
+     * means "the number this had in the old system", so a source that carries a
+     * SiteBook number cannot pass it on. The link back wins, because for a clone of a
+     * cancelled job that is the more useful of the two.
+     */
+    async cloneJob(id: string, copy: CloneOptions): Promise<Job> {
+      const source = await repo.getJob(id);
+      if (!source) throw new Error(`Job ${id} does not exist, or you cannot see it.`);
+
+      let addressId: string;
+      if (copy.address) {
+        const { data: from, error: readError } = await client
+          .from("addresses")
+          .select(ADDRESS_COLUMNS)
+          .eq("address_id", source.currentAddressId)
+          .single();
+        if (readError) throw readError;
+        // address_consolidated is generated; sending it would be overwritten, or worse
+        // accepted and then disagree with its own parts.
+        const { data: made, error: writeError } = await client
+          .from("addresses")
+          .insert({
+            address_lot_number: from.address_lot_number,
+            address_street_number: from.address_street_number,
+            address_street_1: from.address_street_1,
+            address_street_2: from.address_street_2,
+            address_suburb: from.address_suburb,
+            address_state: from.address_state,
+            address_postcode: from.address_postcode,
+            address_council: from.address_council
+          })
+          .select("address_id")
+          .single();
+        if (writeError) throw writeError;
+        addressId = made.address_id;
+      } else {
+        // No address of its own: sit at the project's, the same default a job created
+        // without one takes.
+        const { data: project, error: projectError } = await client
+          .from("projects")
+          .select("project_current_address_id")
+          .eq("project_id", source.projectId)
+          .single();
+        if (projectError) throw projectError;
+        addressId = project.project_current_address_id;
+      }
+
+      const { data, error } = await client
+        .from("jobs")
+        .insert({
+          project_id: source.projectId,
+          job_current_address_id: addressId,
+          // Not copied, ever: the number (the sequence issues it), the stage, the
+          // status, the SharePoint folder. See CloneOptions for why each.
+          job_owning_team: copy.who ? source.owningTeam : OPENING_TEAM,
+          job_assignee_id: copy.who ? source.assigneeId : null,
+          job_title_type: copy.titleType ? source.titleType : null,
+          job_number_old: source.id,
+          job_stage: "Acquisition & Development",
+          job_status: "on_track"
+        })
+        .select("*")
+        .single();
+      if (error) {
+        // The one collision that is not a bug in this code: something already claims
+        // the source's number as its old number — most likely the source has been
+        // cloned once already.
+        if (error.code === "23505") {
+          throw new Error(
+            `${source.id} has already been cloned — the new job would be the second one ` +
+            "claiming it as its old number. Open the existing clone instead."
+          );
+        }
+        throw error;
+      }
+      return toJob(data);
     },
 
     // ---- bugs and ideas (0052) -------------------------------------------

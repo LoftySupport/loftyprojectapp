@@ -2,6 +2,7 @@ import type { DictionaryOverride } from "./dictionary";
 import type {
   ActivityEntry,
   AddressHistoryEntry,
+  CloneOptions,
   CommentEntry,
   FeedbackItem,
   FeedbackKind,
@@ -212,6 +213,18 @@ export interface Repository {
    */
   shareSavedView(id: string, team: TeamId | null): Promise<UserSavedView[]>;
 
+  /**
+   * Clone a job (0057). The new job sits on the same project, takes its own number from
+   * the sequence, opens at Acquisition & Development, and records the job it came from
+   * in `job_number_old` — Amber, 28 Aug: "it will need a new job number… and we can use
+   * the old job number field to capture the new information."
+   *
+   * This is the way back from Cancelled, which is otherwise terminal. It is not only
+   * for that: cloning a live job is the fast path for a second dwelling on the same
+   * plan.
+   */
+  cloneJob(id: string, copy: CloneOptions): Promise<Job>;
+
   // ---- bugs and ideas (0052) --------------------------------------------
   /**
    * Send a bug or an idea. Anyone active may — the widest write in the app — and the
@@ -307,6 +320,7 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "saveView",
   "deleteSavedView",
   "shareSavedView",
+  "cloneJob",
   "submitFeedback",
   "listFeedback",
   "setFeedbackStatus",
@@ -359,6 +373,7 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   saveView: "saved_views",
   deleteSavedView: "saved_views",
   shareSavedView: "saved_views",
+  cloneJob: "jobs + addresses",
   submitFeedback: "feedback",
   listFeedback: "feedback",
   setFeedbackStatus: "feedback",

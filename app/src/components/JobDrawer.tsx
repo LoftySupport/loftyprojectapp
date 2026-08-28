@@ -9,6 +9,7 @@ import { PropertySlots } from "./PropertySlots";
 import { ExpandButton, usePanelExpand } from "./PanelExpand";
 import { useResizablePanel } from "./useResizablePanel";
 import { JOB_MOVE_NOTE, MoveStageControl } from "./MoveStageDialog";
+import { CloneJobDialog } from "./CloneDialog";
 import { CommentsPanel } from "./CommentsPanel";
 import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
@@ -88,6 +89,7 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
   const { can } = usePermission();
   const { teams } = useTeams();
   const { data: profiles } = useQuery(r => r.listProfiles(), []);
+  const [cloning, setCloning] = useState(false);
   const [whoBusy, setWhoBusy] = useState(false);
   const [whoErr, setWhoErr] = useState<string | null>(null);
   const saveWho = async (patch: {
@@ -218,6 +220,15 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
             <Button kind="secondary" size="small" onClick={() => openAsk(`job ${job.jobNumber}`)}>
               Ask about this job
             </Button>
+            {/* Clone (0057). On every job, not only cancelled ones: a second dwelling
+                on the same plan is the other reason to reach for it. Manager+, the same
+                rung that may create a job at all — the database decides, this only
+                hides the button. */}
+            {can("manager") && (
+              <Button kind="tertiary" size="small" onClick={() => setCloning(true)}>
+                Clone…
+              </Button>
+            )}
             {canExpand && <ExpandButton expanded={expanded} onToggle={toggle} />}
             <Button kind="tertiary" size="small" onClick={onClose} aria-label="Close">
               ×
@@ -546,6 +557,16 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
           )}
         </div>
       </aside>
+
+      {/* Outside the drawer's <aside>, so the clone panel is a sibling of it rather
+          than a panel inside a panel — two nested dialogs fight over Escape, and the
+          inner one loses. */}
+      <CloneJobDialog
+        show={cloning}
+        jobNumber={cloning ? job.jobNumber : null}
+        onClose={() => setCloning(false)}
+        onCloned={onMoved}
+      />
     </>
   );
 }

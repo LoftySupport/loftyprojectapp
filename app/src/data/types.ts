@@ -1228,6 +1228,35 @@ export const TITLE_TYPE_LABELS: Record<TitleType, string> = {
   torrens: "Torrens title"
 };
 
+/**
+ * What a clone brings across (0057, Amber 28 Aug: "would be good to have the ability to
+ * clone a job or a project so if we had to revive a project or job we could just copy
+ * it with or without the information").
+ *
+ * Every flag defaults on at the call sites: the common case is "this again", and the
+ * unchecked boxes are for the case where the old facts are exactly what you are trying
+ * to leave behind. What is NEVER copied is not a flag, because it is not a choice:
+ *
+ *   - **The number.** The whole reason a cancelled record is cloned rather than revived
+ *     is that it needs its own — the sequence issues it.
+ *   - **The stage and status.** A clone starts at Acquisition & Development, on track.
+ *     Copying "Construction, at risk" would carry over the exact staleness this exists
+ *     to escape.
+ *   - **The SharePoint folder.** It points at the original's documents. Two records
+ *     sharing one folder is how the wrong drawings get built.
+ *   - **Activity, comments and time in stage.** They happened to the original.
+ */
+export interface CloneOptions {
+  /** The lot address, copied to a new row — so editing one never edits the other. */
+  address: boolean;
+  /** Owning team and assignee. Off means it opens unassigned with the starting team. */
+  who: boolean;
+  /** Community or Torrens title. */
+  titleType: boolean;
+}
+
+export const CLONE_EVERYTHING: CloneOptions = { address: true, who: true, titleType: true };
+
 export interface NewProject {
   address: NewAddress;
   /**
