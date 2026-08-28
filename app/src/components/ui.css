@@ -1277,6 +1277,16 @@ code { overflow-wrap: anywhere; }
   margin-top: var(--space-8);
 }
 
+/* The clone panel's tick list. Checkboxes are not `Field`s — they carry their own
+   label — so they get their own spacing rather than inheriting the form's row rhythm,
+   which is built for a label above a control. */
+.clone-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  margin: var(--space-4) 0 var(--space-8);
+}
+
 /* ---- Ask Lofty -----------------------------------------------------------
    No longer a floating dock: the trigger is a header icon (`.notif-bell-trigger`,
    shared with the bell so the two read as one cluster) and the body sits in the

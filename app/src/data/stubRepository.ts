@@ -187,6 +187,12 @@ export function createStubRepository(): Repository {
       throw new Error("Sharing a view needs Supabase.");
     },
 
+    // Cloning needs a job to clone and a sequence to issue the new number; a stub run
+    // has neither.
+    async cloneJob(): Promise<never> {
+      throw new Error("Cloning a job needs Supabase.");
+    },
+
     // Bugs and ideas (0052) need somewhere for the row to land, and a stub run has
     // nowhere. Refused rather than swallowed: a form that says "thanks" and drops the
     // report is worse than one that says it cannot send.
