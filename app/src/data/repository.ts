@@ -21,6 +21,7 @@ import type {
   ProjectPatch,
   RecordActivity,
   LatestUpdate,
+  StagePeriod,
   PropertyDef,
   Stage,
   StageName,
@@ -255,6 +256,17 @@ export interface Repository {
    */
   listLatestUpdates(jobIds: string[]): Promise<Record<string, LatestUpdate>>;
 
+  /**
+   * One job's passage through the lifecycle, oldest first (Amber, 28 August: a single
+   * job as a gantt, a calendar or a list).
+   *
+   * Read from `activity_audit`, where every stage change has been recorded since 0001 —
+   * so this is history, not a reconstruction. The stage the job is in now is added from
+   * the job itself, because that period has not ended and there is no transition row
+   * for it yet.
+   */
+  listJobStageHistory(jobId: string): Promise<StagePeriod[]>;
+
   // ---- bugs and ideas (0052) --------------------------------------------
   /**
    * Send a bug or an idea. Anyone active may — the widest write in the app — and the
@@ -353,6 +365,7 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "cloneJob",
   "listRecordActivity",
   "listLatestUpdates",
+  "listJobStageHistory",
   "submitFeedback",
   "listFeedback",
   "setFeedbackStatus",
@@ -408,6 +421,7 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   cloneJob: "jobs + addresses",
   listRecordActivity: "activity_audit",
   listLatestUpdates: "job_latest_update",
+  listJobStageHistory: "activity_audit",
   submitFeedback: "feedback",
   listFeedback: "feedback",
   setFeedbackStatus: "feedback",

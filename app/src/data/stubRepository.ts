@@ -195,6 +195,11 @@ export function createStubRepository(): Repository {
     // empty map, not an entry per job with an invented line in it.
     async listLatestUpdates(): Promise<Record<string, never>> { return {}; },
 
+    // No audit rows behind a stub run, so no stage history — and a job's timeline is
+    // the one thing that must not be sketched in: an invented set of dates is a chart
+    // that looks like evidence.
+    async listJobStageHistory(): Promise<never[]> { return []; },
+
     // Cloning needs a job to clone and a sequence to issue the new number; a stub run
     // has neither.
     async cloneJob(): Promise<never> {

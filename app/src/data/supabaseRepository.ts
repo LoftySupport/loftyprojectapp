@@ -29,6 +29,7 @@ import type {
   ProjectPatch,
   RecordActivity,
   LatestUpdate,
+  StagePeriod,
   PropertyDef,
   Stage,
   StageName,
@@ -232,6 +233,20 @@ async function resolvePeople(
     byProfile.set(p.profile_id, p.profile_full_name);
   }
   return { byAuth, byProfile };
+}
+
+/**
+ * Whole days between two instants, floored, never negative.
+ *
+ * Floored rather than rounded: a stage entered yesterday afternoon and left this
+ * morning is "0 days", which is what somebody counting working days would say, and
+ * rounding it to 1 would quietly inflate every short stage in a report.
+ */
+function whole_days(from: string, to: string): number {
+  const a = Date.parse(from);
+  const b = Date.parse(to);
+  if (Number.isNaN(a) || Number.isNaN(b)) return 0;
+  return Math.max(0, Math.floor((b - a) / 86_400_000));
 }
 
 /**
@@ -1697,6 +1712,62 @@ export function createSupabaseRepository(): Repository {
         }
       }
       return out;
+    },
+
+    /**
+     * One job's stage history, oldest first.
+     *
+     * Every period comes from a single audit row and needs no arithmetic across rows:
+     * a transition's `changed_at` is when the old stage ENDED, and the same row's
+     * `old_row.job_stage_entered_at` is when it BEGAN. Both are recorded facts. Reading
+     * it that way also means a job whose earliest stages happened before anybody was
+     * watching still shows them correctly — the entered-at column was being maintained
+     * the whole time, whether or not there is an INSERT row to find.
+     *
+     * The stage the job is in now comes from the job, because it has not ended and no
+     * transition row exists for it yet. `job_stage_entered_at` is the same column, read
+     * live instead of out of a snapshot.
+     */
+    async listJobStageHistory(jobId: string): Promise<StagePeriod[]> {
+      const { data, error } = await client
+        .from("activity_audit")
+        .select("id, table_name, operation, changed_at, jwt_sub, old_row, new_row")
+        .eq("table_name", "jobs")
+        .eq("new_row->>job_id", jobId)
+        .order("changed_at", { ascending: true });
+      if (error) throw error;
+
+      const rows = (data ?? []) as unknown as AuditRow[];
+      const periods: StagePeriod[] = [];
+      for (const r of rows) {
+        const was = r.old_row?.job_stage;
+        const now = r.new_row?.job_stage;
+        if (r.operation !== "UPDATE" || !was || was === now) continue;
+        const from = (r.old_row?.job_stage_entered_at as string | undefined) ?? null;
+        periods.push({
+          stage: String(was),
+          from,
+          to: r.changed_at,
+          days: from ? whole_days(from, r.changed_at) : null
+        });
+      }
+
+      const { data: live, error: liveError } = await client
+        .from("job_display")
+        .select("job_stage, job_stage_entered_at")
+        .eq("job_id", jobId)
+        .maybeSingle();
+      if (liveError) throw liveError;
+      if (live) {
+        const from = (live as { job_stage_entered_at: string | null }).job_stage_entered_at;
+        periods.push({
+          stage: String((live as { job_stage: string }).job_stage),
+          from,
+          to: null,
+          days: from ? whole_days(from, new Date().toISOString()) : null
+        });
+      }
+      return periods;
     },
 
     // ---- bugs and ideas (0052) -------------------------------------------

@@ -442,6 +442,110 @@
 .column-list label:has(input:disabled) { cursor: default; }
 .column-move { display: inline-flex; gap: var(--space-4); flex-shrink: 0; }
 
+/* Search inside one panel — the jobs on a project, and whatever else grows a list long
+   enough to need one. Sits above the table it narrows, with the count beside it so the
+   box says what it did. */
+.panel-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin-bottom: var(--space-8);
+}
+.panel-search > :first-child { flex: 1 1 320px; min-width: 0; }
+
+/* ---- one job's timeline --------------------------------------------------
+   Three readings of the same recorded facts: the stages a job has been through, when
+   it entered each and how long it stayed. Deliberately plain — the point is the shape
+   of the passage, and a chart with a legend and a grid would bury it. */
+.jt-views { display: inline-flex; gap: var(--space-4); flex-wrap: wrap; }
+.jt-scale { display: flex; justify-content: space-between; margin: var(--space-8) 0 var(--space-4); }
+.jt-gantt {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.jt-gantt li {
+  display: grid;
+  /* The stage name, the bar, the count. The name column is fixed so every bar starts
+     at the same x and the lengths are comparable by eye, which is the whole job of
+     this view. */
+  grid-template-columns: 160px 1fr 44px;
+  gap: var(--space-8);
+  align-items: center;
+}
+.jt-label { font: var(--font-text3-normal); color: var(--secondary-text-color); }
+.jt-track {
+  position: relative;
+  height: 18px;
+  background: var(--allgrey-background-color);
+  border-radius: var(--border-radius-small);
+}
+.jt-bar {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  background: var(--primary-color);
+  border-radius: var(--border-radius-small);
+  opacity: 0.55;
+}
+/* The stage it is in now, at full strength: on a job that has crossed six stages, the
+   one that matters is the one it has not left. */
+.jt-bar.is-current { opacity: 1; }
+.jt-days {
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.data-table tr.is-current td { font-weight: 600; }
+
+.jt-months { display: flex; flex-wrap: wrap; gap: var(--space-16); margin-top: var(--space-8); }
+/* A fixed month rather than a growing one: as a plain flex item each month stretched
+   to the panel's full width and three of them read as three separate calendars. At
+   260px they sit side by side, which is what makes the passage visible. */
+.jt-month { flex: 0 0 260px; max-width: 100%; }
+.jt-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-top: var(--space-4);
+}
+.jt-dow {
+  font: var(--font-text3-medium);
+  color: var(--secondary-text-color);
+  text-align: center;
+}
+.jt-day {
+  min-height: 28px;
+  padding: 2px;
+  border-radius: var(--border-radius-small);
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+  text-align: center;
+}
+.jt-day.is-marked {
+  background: var(--primary-selected-color);
+  color: var(--primary-text-color);
+  font-weight: 600;
+}
+/* The stage names under the grid — the date alone says "something happened", which is
+   the half of it nobody needs, but inside a 36px day cell the name is four lines of
+   syllables. One line each, under the month they belong to. */
+.jt-marks {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+@media (max-width: 720px) {
+  .jt-gantt li { grid-template-columns: 110px 1fr 36px; }
+}
+
 /* ---- property slots ------------------------------------------------------
    The definition-driven fields, grouped by the stage that captures them. */
 .slot-stage + .slot-stage { margin-top: var(--space-16); }

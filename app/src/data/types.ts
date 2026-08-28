@@ -825,6 +825,28 @@ export interface LatestUpdate {
 }
 
 /**
+ * One stretch a job spent in one stage.
+ *
+ * Amber, 28 August: *"on a single job i need to be able to open it as a gantt chart,
+ * calendar, list."* A job has no tasks yet, so the only thing it has that happens over
+ * time is its passage through the lifecycle — and that is genuinely recorded, in the
+ * audit snapshots, rather than something that has to be invented to draw a chart.
+ *
+ * Built from two facts that are both in the row: a transition's `changed_at` is when a
+ * stage ENDED, and the same row's `job_stage_entered_at` is when it BEGAN. Neither is
+ * derived from the other and neither is guessed.
+ */
+export interface StagePeriod {
+  stage: StageName | string;
+  /** When the job entered this stage. Null when the row predates the column. */
+  from: IsoDateTime | null;
+  /** When it left. Null for the stage it is in now — that one has not ended. */
+  to: IsoDateTime | null;
+  /** Whole days in it, to today when it is still open. Null when `from` is unknown. */
+  days: number | null;
+}
+
+/**
  * What goes after "Hi, ". One place, so the decision is never re-made ad hoc.
  *
  * It was `preferredName ?? firstName` until 0021 dropped that column. Kept as a function

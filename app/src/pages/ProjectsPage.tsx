@@ -4,7 +4,9 @@ import { Button, Heading, Text, TextField } from "@vibe/core";
 import { useStages, useTeams } from "../data/useLookups";
 import { useAuth } from "../data/AuthProvider";
 import { useBoardRecords, type BoardProject } from "../data/boardModel";
-import { matchedOnPreviousAddress, projectMatchesQuery, useSearch } from "../data/SearchProvider";
+import {
+  jobMatchesQuery, matchedOnPreviousAddress, projectMatchesQuery, useSearch
+} from "../data/SearchProvider";
 import { useBoardParams } from "../data/useBoardParams";
 import { savedViewBySlug, stagesInView } from "../data/savedViews";
 import { activeFilterCount, projectMatchesFilters, statusOptions } from "../data/filtering";
@@ -562,6 +564,27 @@ function ProjectDetail({
   const { toast } = useToasts();
   const [removing, setRemoving] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
+
+  /**
+   * Searching within one project — its own box, not the header's.
+   *
+   * The header search decides which projects are in the list; this decides which of a
+   * project's jobs you are looking at. They are different questions and sharing one box
+   * would mean answering one of them badly: typing "lot 17" up there takes you off this
+   * page entirely.
+   *
+   * Same matcher as the boards use, so "1042-03", "Wandi", "Construction" and a team
+   * name all find a job here exactly as they do everywhere else.
+   */
+  const [jobQuery, setJobQuery] = useState("");
+  const jobTerms = useMemo(
+    () => jobQuery.trim().toLowerCase().split(/\s+/).filter(Boolean),
+    [jobQuery]
+  );
+  const shownJobs = useMemo(
+    () => project.jobs.filter(j => jobMatchesQuery(j, jobTerms)),
+    [project.jobs, jobTerms]
+  );
   const [saveError, setSaveError] = useState<string | null>(null);
   const [folderUrl, setFolderUrl] = useState(project.sharepointUrl ?? "");
   // The "Add another address" form. Null while closed; a NewAddress being edited while
@@ -889,6 +912,40 @@ function ProjectDetail({
               each with its own lot address.
             </Text>
           )}
+          {/* Search inside one project (Amber, 28 August: *"being able to search at a
+              job level or project level for a job or word is essential"*). The header
+              search narrows the whole portfolio, which is the wrong instrument once you
+              are standing on a thirty-lot project and want lot 17: it would take you off
+              this page and back to a filtered board. This one stays here and narrows
+              only what is in front of you.
+
+              Shown from four jobs up. On a project with two, a search box is furniture. */}
+          {project.jobs.length > 3 && (
+            <div className="panel-search">
+              <TextField
+                size="small"
+                id={`find-job-${project.projectId}`}
+                placeholder="Find a job on this project — number, lot, address, stage, team"
+                inputAriaLabel={`Find a job on project ${project.projectNumber}`}
+                value={jobQuery}
+                onChange={v => setJobQuery(v)}
+              />
+              {jobTerms.length > 0 && (
+                <Text type="text3" color="secondary">
+                  {shownJobs.length} of {project.jobs.length}
+                </Text>
+              )}
+            </div>
+          )}
+
+          {/* A search that matches nothing says so, rather than showing an empty table
+              that reads as "this project has no jobs". */}
+          {jobTerms.length > 0 && shownJobs.length === 0 && (
+            <Text type="text3" color="secondary" ellipsis={false}>
+              No job on this project matches “{jobQuery.trim()}”.
+            </Text>
+          )}
+
           <div className="data-table-wrap">
             <table className="data-table">
               <thead>
@@ -901,7 +958,7 @@ function ProjectDetail({
                 </tr>
               </thead>
               <tbody>
-                {project.jobs.map(j => (
+                {shownJobs.map(j => (
                   // Now that a job has an address of its own, this list is a set of links
                   // rather than a printout — same click as a row on the Jobs table.
                   <tr
