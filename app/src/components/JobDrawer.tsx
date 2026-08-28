@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { BreadcrumbsBar, BreadcrumbItem, Button, Heading, Tab, TabList, Text, TextField } from "@vibe/core";
 import { useMilestones, useTemplatePhases, useTeams } from "../data/useLookups";
 import type { BoardJob } from "../data/boardModel";
-import type { TeamId } from "../data/types";
+import { TITLE_TYPE_LABELS, TITLE_TYPES, type TeamId, type TitleType } from "../data/types";
 import { StatusPill } from "./RecordCards";
 import { PropertySlots } from "./PropertySlots";
 import { ExpandButton, usePanelExpand } from "./PanelExpand";
@@ -90,7 +90,11 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
   const { data: profiles } = useQuery(r => r.listProfiles(), []);
   const [whoBusy, setWhoBusy] = useState(false);
   const [whoErr, setWhoErr] = useState<string | null>(null);
-  const saveWho = async (patch: { owningTeam?: TeamId; assigneeId?: string | null }) => {
+  const saveWho = async (patch: {
+    owningTeam?: TeamId;
+    assigneeId?: string | null;
+    titleType?: TitleType | null;
+  }) => {
     if (whoBusy) return;
     setWhoBusy(true);
     setWhoErr(null);
@@ -297,6 +301,36 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
               )}
             </div>
             {oldNoErr && <Problem>{oldNoErr}</Problem>}
+            {/* Community or Torrens (0054, Amber 28 Aug: "the job will need to carry
+                this information through to the job"). Set at the split from the
+                project's mix and corrected here, because which lots take which title is
+                a decision and the seeding is only a guess at it. Clearable: "nobody has
+                said" is the honest state for every job created before today, and a job
+                labelled with the wrong title type is worse than one labelled with
+                none. */}
+            <div className="field-row">
+              <div className="field-label">
+                <Text type="text2">Title type</Text>
+                <div className="field-hint">community or Torrens — the product this lot is</div>
+              </div>
+              {can("user") ? (
+                <Select
+                  aria-label="Title type"
+                  options={TITLE_TYPES.map(t => ({ value: t, label: TITLE_TYPE_LABELS[t] }))}
+                  value={job.titleType}
+                  clearable
+                  placeholder="—"
+                  onChange={v => {
+                    const next = (v as TitleType | null) ?? null;
+                    if (next !== job.titleType) saveWho({ titleType: next });
+                  }}
+                />
+              ) : (
+                <Text type="text2" weight="medium">
+                  {job.titleType ? TITLE_TYPE_LABELS[job.titleType] : "—"}
+                </Text>
+              )}
+            </div>
             <div className="field-row">
               <div className="field-label"><Text type="text2">Current address</Text></div>
               <Text type="text2" weight="medium">

@@ -31,6 +31,7 @@ import type {
   TemplateMilestone,
   TemplatePhase,
   SavedViewBoard,
+  TitleType,
   UserSavedView
 } from "./types";
 
@@ -116,7 +117,7 @@ const PROFILE_COLUMNS =
  * database had.
  */
 const PROJECT_COLUMNS =
-  "project_id, project_name, project_original_address_id, project_current_address_id, project_type, project_status, project_proposed_dwellings, project_owning_team, project_assignee_id, project_start_date, project_target_completion, project_end_date, project_stage, project_stage_entered_at, project_sharepoint_url, project_created_at, project_created_by, project_updated_at, project_updated_by, addresses!projects_project_current_address_id_fkey(address_consolidated, address_suburb, address_council), original:addresses!projects_project_original_address_id_fkey(address_consolidated)";
+  "project_id, project_name, project_original_address_id, project_current_address_id, project_type, project_status, project_proposed_dwellings, project_community_title_lots, project_torrens_title_lots, project_owning_team, project_assignee_id, project_start_date, project_target_completion, project_end_date, project_stage, project_stage_entered_at, project_sharepoint_url, project_created_at, project_created_by, project_updated_at, project_updated_by, addresses!projects_project_current_address_id_fkey(address_consolidated, address_suburb, address_council), original:addresses!projects_project_original_address_id_fkey(address_consolidated)";
 
 // Read from `job_display`, not from `jobs`. The view resolves both of the job's
 // addresses and its project's, which the base table only carries as uuids — so a card
@@ -129,7 +130,7 @@ const PROJECT_COLUMNS =
 //
 // Writes still go to `jobs` — a view is not the place to insert through.
 const JOB_COLUMNS =
-  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_sharepoint_url, job_created_at, job_created_by, job_updated_at, job_updated_by, job_current_address, job_original_address, project_current_address, project_sharepoint_url, project_type";
+  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_sharepoint_url, job_created_at, job_created_by, job_updated_at, job_updated_by, job_current_address, job_original_address, project_current_address, project_sharepoint_url, project_type, job_title_type";
 
 /**
  * `""` and `"   "` are how a browser reports a field somebody did not fill in, and they
@@ -783,7 +784,15 @@ export function createSupabaseRepository(): Repository {
           // project form has no team field, so this is written rather than defaulted.
           project_owning_team: OPENING_TEAM,
           project_type: input.projectType,
-          project_proposed_dwellings: input.proposedDwellings ?? null,
+          // The total is the sum, written here rather than asked for: the form asks
+          // for the split, and `project_lot_split_adds_up` refuses a row where the two
+          // disagree. Null when neither is given — "not settled", which is not zero.
+          project_proposed_dwellings:
+            input.communityTitleLots == null && input.torrensTitleLots == null
+              ? null
+              : (input.communityTitleLots ?? 0) + (input.torrensTitleLots ?? 0),
+          project_community_title_lots: input.communityTitleLots ?? null,
+          project_torrens_title_lots: input.torrensTitleLots ?? null,
           project_status: input.status ?? "on_track",
           project_start_date: input.startDate ?? null,
           project_target_completion: input.targetCompletion ?? null
@@ -937,7 +946,7 @@ export function createSupabaseRepository(): Repository {
        * text and why the mapping back from inserted addresses no longer sorts them
        * numerically.
        */
-      const lots: { lotNumber: string; jobNumberOld?: string | null }[] =
+      const lots: { lotNumber: string; jobNumberOld?: string | null; titleType?: TitleType | null }[] =
         input.lots?.length
           ? input.lots
           : Array.from({ length: input.count }, (_, i) => ({ lotNumber: String(firstLot + i) }));
@@ -995,6 +1004,10 @@ export function createSupabaseRepository(): Repository {
             // Null rather than "" — the column is unique, and empty strings collide
             // with each other where nulls do not.
             job_number_old: lot.jobNumberOld?.trim() || null,
+            // Community or Torrens (0054). Seeded per row by the split dialog from the
+            // project's intended mix, and null when nobody has said — a generated batch
+            // (the inline row, the create-then-split flow) carries none.
+            job_title_type: lot.titleType ?? null,
             job_stage: input.stage ?? "Acquisition & Development",
             job_status: input.status ?? "on_track"
           })
@@ -1070,6 +1083,8 @@ export function createSupabaseRepository(): Repository {
       // Trimmed, and blank becomes null: the column is unique-over-non-nulls, so an
       // empty string would collide with the next empty string where null never does.
       if ("jobNumberOld" in patch) row.job_number_old = patch.jobNumberOld?.trim() || null;
+      // Null clears it back to "nobody has said", which is a real answer here.
+      if ("titleType" in patch) row.job_title_type = patch.titleType ?? null;
       if (Object.keys(row).length === 0) {
         const { data, error } = await client
           .from("job_display").select(JOB_COLUMNS).eq("job_id", id).single();
@@ -1745,6 +1760,8 @@ type ProjectRow = {
   project_original_address_id: string | null; project_current_address_id: string;
   project_type: Project["projectType"]; project_status: Project["status"];
   project_proposed_dwellings: number | null;
+  project_community_title_lots: number | null;
+  project_torrens_title_lots: number | null;
   project_owning_team: TeamId | null; project_assignee_id: string | null;
   project_start_date: string | null; project_target_completion: string | null;
   project_end_date: string | null;
@@ -1777,6 +1794,8 @@ function toProject(r: ProjectRow): Project {
     stageEnteredAt: r.project_stage_entered_at,
     sharepointUrl: r.project_sharepoint_url,
     proposedDwellings: r.project_proposed_dwellings,
+    communityTitleLots: r.project_community_title_lots,
+    torrensTitleLots: r.project_torrens_title_lots,
     owningTeam: r.project_owning_team,
     assigneeId: r.project_assignee_id,
     startDate: r.project_start_date,
@@ -1792,6 +1811,7 @@ function toProject(r: ProjectRow): Project {
 type JobRow = {
   job_id: string; project_id: number;
   job_sequence: string; job_number_old: string | null;
+  job_title_type: Job["titleType"];
   job_original_address_id: string | null; job_current_address_id: string;
   job_status: Job["status"];
   job_stage: StageName; job_stage_entered_at: string;
@@ -1814,6 +1834,7 @@ function toJob(r: JobRow): Job {
     projectId: r.project_id,
     jobSequence: r.job_sequence,
     jobNumberOld: r.job_number_old,
+    titleType: r.job_title_type,
     originalAddressId: r.job_original_address_id,
     currentAddressId: r.job_current_address_id,
     status: r.job_status,

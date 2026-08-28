@@ -9,8 +9,9 @@ import { councilForSuburb, isAmbiguousSuburb, postcodeForSuburb } from "../data/
 import { SuburbField } from "./SuburbField";
 import {
   AU_STATES, MAX_SPLIT, OPENING_TEAM, PROJECT_TYPE_LABELS, PROJECT_TYPES,
-  projectNameTail, SA_COUNCILS,
-  type NewAddress, type ProjectType, type SaCouncil, type SplitLot, type TeamId
+  projectNameTail, SA_COUNCILS, TITLE_TYPE_LABELS, TITLE_TYPES,
+  type NewAddress, type ProjectType, type SaCouncil, type SplitLot, type TeamId,
+  type TitleType
 } from "../data/types";
 import "./ui.css";
 
@@ -349,8 +350,17 @@ export function NewProjectDialog({
   show: boolean;
   onClose: () => void;
   onCreated?: () => void;
-  /** Called with the new project and its dwelling count, to open the split dialog. */
-  onSplit?: (projectId: number, dwellings: number) => void;
+  /**
+   * Called with the new project, its total, and the mix it was given — so the split
+   * dialog can seed each row's title type without re-reading the project it was just
+   * handed.
+   */
+  onSplit?: (
+    projectId: number,
+    dwellings: number,
+    community: number | null,
+    torrens: number | null
+  ) => void;
 }) {
   const repo = useRepository();
   const [address, setAddress] = useState<NewAddress>(EMPTY_ADDRESS);
@@ -359,19 +369,33 @@ export function NewProjectDialog({
   // address becomes the immutable original and this one the current address.
   const [newAddress, setNewAddress] = useState<NewAddress | null>(null);
   const [projectType, setProjectType] = useState<ProjectType | null>(null);
-  const [dwellings, setDwellings] = useState("");
+  // Two counts now, not one (Amber, 28 Aug). Both blank means "the count is not
+  // settled"; the total below is their sum, and the database refuses a row where a
+  // total and a split disagree.
+  const [community, setCommunity] = useState("");
+  const [torrens, setTorrens] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<number | null>(null);
 
   // Blank is a real answer — "we do not know yet" — and is not the same as zero. Parsed
   // once here so the button, the insert and the follow-on split all read one value.
-  const dwellingCount =
-    dwellings.trim() === "" ? null
-    : /^[0-9]+$/.test(dwellings.trim()) ? Number(dwellings.trim())
+  // Zero IS allowed on each kind, unlike the old single count: "six lots, none of them
+  // community" is a sentence somebody means.
+  const lotCount = (raw: string): number | null | typeof NaN =>
+    raw.trim() === "" ? null
+    : /^[0-9]+$/.test(raw.trim()) ? Number(raw.trim())
     : NaN;
-  const dwellingsValid =
-    dwellingCount === null || (Number.isInteger(dwellingCount) && dwellingCount >= 1);
+  const communityCount = lotCount(community);
+  const torrensCount = lotCount(torrens);
+  const countOk = (n: number | null) => n === null || (Number.isInteger(n) && n >= 0);
+  const dwellingsValid = countOk(communityCount as number | null) && countOk(torrensCount as number | null);
+  // The total the split dialog will be offered, and the number written to
+  // project_proposed_dwellings. Null only when neither kind was given at all.
+  const dwellingCount =
+    communityCount === null && torrensCount === null
+      ? null
+      : ((communityCount as number | null) ?? 0) + ((torrensCount as number | null) ?? 0);
 
   // The tail of the name, from whichever address the project will actually be at: the
   // "new address" block, when it is open, is the current one. Empty until there is a
@@ -391,7 +415,8 @@ export function NewProjectDialog({
     setAddress(EMPTY_ADDRESS);
     setNewAddress(null);
     setProjectType(null);
-    setDwellings("");
+    setCommunity("");
+    setTorrens("");
     setError(null);
     setCreated(null);
     setSaving(false);
@@ -405,7 +430,8 @@ export function NewProjectDialog({
         address,
         newAddress,
         projectType: projectType!,
-        proposedDwellings: dwellingCount
+        communityTitleLots: communityCount as number | null,
+        torrensTitleLots: torrensCount as number | null
       });
       // The project number is the thing the person came for — it is what they will
       // quote on the phone — and it does not exist until the sequence issues it.
@@ -425,7 +451,13 @@ export function NewProjectDialog({
   const primary = created
     ? dwellingCount
       ? { text: `Create ${dwellingCount} job${dwellingCount === 1 ? "" : "s"}`,
-          onClick: () => { const id = created; reset(); onClose(); onSplit?.(id, dwellingCount); },
+          onClick: () => {
+            const id = created;
+            const mix = [communityCount as number | null, torrensCount as number | null] as const;
+            reset();
+            onClose();
+            onSplit?.(id, dwellingCount, mix[0], mix[1]);
+          },
           disabled: false }
       : { text: "Done", onClick: close, disabled: false }
     : { text: saving ? "Creating…" : "Create project", onClick: save, disabled: !valid || saving };
@@ -474,17 +506,45 @@ export function NewProjectDialog({
                 placeholder="Select a type"
               />
             </Field>
+            {/* Two counts, because they are two products (Amber, 28 Aug): "these are
+                different types and the job will need to carry this information through
+                to the job. so now where you set 6 lots, 3 may be community title, and 3
+                may be torrens title and we need to know that split." The single
+                "Proposed dwellings" box could not hold that, and the total it did hold
+                is now the sum of these two. */}
             <Field
-              label="Proposed dwellings"
-              hint="how many lots are intended — leave blank if the count is not settled"
+              label="Community title lots"
+              hint="leave blank if the count is not settled"
             >
               <TextField
-                value={dwellings}
-                onChange={setDwellings}
-                id="project-dwellings"
-                inputAriaLabel="Proposed dwellings"
+                value={community}
+                onChange={setCommunity}
+                id="project-community-lots"
+                inputAriaLabel="Community title lots"
                 validation={
-                  dwellingsValid ? undefined : { status: "error", text: "A whole number, 1 or more." }
+                  countOk(communityCount as number | null)
+                    ? undefined
+                    : { status: "error", text: "A whole number, 0 or more." }
+                }
+              />
+            </Field>
+            <Field
+              label="Torrens title lots"
+              hint={
+                dwellingCount != null
+                  ? `${dwellingCount} lot${dwellingCount === 1 ? "" : "s"} in total`
+                  : "leave blank if the count is not settled"
+              }
+            >
+              <TextField
+                value={torrens}
+                onChange={setTorrens}
+                id="project-torrens-lots"
+                inputAriaLabel="Torrens title lots"
+                validation={
+                  countOk(torrensCount as number | null)
+                    ? undefined
+                    : { status: "error", text: "A whole number, 0 or more." }
                 }
               />
             </Field>
@@ -681,6 +741,8 @@ export function SplitProjectDialog({
   onClose,
   projectId,
   suggestedCount,
+  suggestedCommunity,
+  suggestedTorrens,
   nextLot,
   onCreated
 }: {
@@ -690,6 +752,13 @@ export function SplitProjectDialog({
   projectId: number | null;
   /** Proposed dwellings, when the project has one. */
   suggestedCount?: number | null;
+  /**
+   * The project's intended mix (0053). Used to seed each row's title type — the first
+   * N community, the rest Torrens — so the common case is already right and the odd one
+   * is one dropdown away. Null means the project never said, and the rows start blank.
+   */
+  suggestedCommunity?: number | null;
+  suggestedTorrens?: number | null;
   /** One past the highest lot number already used. */
   nextLot?: number;
   onCreated?: () => void;
@@ -742,10 +811,32 @@ export function SplitProjectDialog({
    * Kept derived rather than written into state on every keystroke, so changing the
    * count still reflows the list and does not fight what has been typed into it.
    */
+  /**
+   * Which title type a generated row starts as: the project's community lots first,
+   * then its Torrens ones, then blank once both are used up.
+   *
+   * A seed, not a rule — nothing says lot 1 is community, and the dropdown on each row
+   * is there because that decision belongs to whoever is doing the split. Blank when
+   * the project never gave a mix, because "community" would be a guess and this project
+   * has been bitten by those.
+   */
+  const seedTitle = (i: number): TitleType | null => {
+    const c = suggestedCommunity ?? 0;
+    const t = suggestedTorrens ?? 0;
+    if (c === 0 && t === 0) return null;
+    if (i < c) return "community";
+    if (i < c + t) return "torrens";
+    return null;
+  };
+
   const rows: SplitLot[] = lots.length
     ? lots
     : countValid && lotValid
-      ? Array.from({ length: n }, (_, i) => ({ lotNumber: String(first + i), jobNumberOld: "" }))
+      ? Array.from({ length: n }, (_, i) => ({
+          lotNumber: String(first + i),
+          jobNumberOld: "",
+          titleType: seedTitle(i)
+        }))
       : [];
 
   /**
@@ -865,11 +956,13 @@ export function SplitProjectDialog({
                     A lot number can be anything on the plan — 2B as readily as 2. The old
                     job number is the one this job has in SiteBook or Trello; leave it
                     blank for a job that is new here. Job numbers themselves are issued by
-                    the database, continuing from any that already exist.
+                    the database, continuing from any that already exist. Title type is
+                    seeded from the project's mix — check it per lot, since nothing says
+                    which lots take which title.
                   </Text>
                 </div>
                 <div className="split-row split-row-head" aria-hidden="true">
-                  <span>Lot</span><span>Old job number</span>
+                  <span>Lot</span><span>Old job number</span><span>Title</span>
                 </div>
                 {rows.map((row, i) => (
                   <div className="split-row" key={i}>
@@ -893,6 +986,17 @@ export function SplitProjectDialog({
                       size="small"
                       id={`split-old-${i}`}
                       inputAriaLabel={`Old job number for job ${i + 1}`}
+                    />
+                    {/* Clearable: "not decided yet" is a real state, and a job that
+                        carries the wrong title type is worse than one that carries
+                        none. */}
+                    <Select
+                      options={TITLE_TYPES.map(t => ({ value: t, label: TITLE_TYPE_LABELS[t] }))}
+                      value={row.titleType ?? null}
+                      clearable
+                      onChange={v => editRow(i, { titleType: (v as TitleType | null) ?? null })}
+                      aria-label={`Title type for job ${i + 1}`}
+                      placeholder="—"
                     />
                   </div>
                 ))}

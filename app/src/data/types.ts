@@ -242,6 +242,13 @@ export interface Project {
    * counted, never stored. "We planned four lots and got three" needs both.
    */
   proposedDwellings: number | null;
+  /**
+   * How that total splits between the two kinds of lot (0053). Null on both means the
+   * split is not known — true of every project created before the columns existed, and
+   * not the same statement as zero.
+   */
+  communityTitleLots: number | null;
+  torrensTitleLots: number | null;
   projectType: ProjectType | null;
   status: RecordStatus;
   /**
@@ -299,6 +306,12 @@ export interface JobPatch {
    * claiming the same old number is the collision this exists to prevent.
    */
   jobNumberOld?: string | null;
+  /**
+   * Which kind of lot this job is (0054). Editable because the split's seeding is a
+   * guess at which lots take which title, and a wrong one has to be fixable where it
+   * shows — the drawer.
+   */
+  titleType?: TitleType | null;
 }
 
 /** The joined shape the cards read — `project_display`. */
@@ -342,6 +355,12 @@ export interface Job {
    * jobs created in the app simply have none.
    */
   jobNumberOld: string | null;
+  /**
+   * Community or Torrens title (0054). Set at the split from the project's intended
+   * mix, editable per job afterwards, and null when nobody has said — which is every
+   * job that existed before the column.
+   */
+  titleType: TitleType | null;
   /** Same pair as projects, for the same reason. */
   originalAddressId: Uuid | null;
   currentAddressId: Uuid;
@@ -1192,6 +1211,23 @@ export const projectDisplayName = (
   return tail ? `${projectNumber} - ${tail}` : String(projectNumber);
 };
 
+/**
+ * The two kinds of lot (0053/0054, Amber 28 Aug: "these are different types and the job
+ * will need to carry this information through to the job").
+ *
+ * Different products, not a label: community title and Torrens title have different
+ * titling processes, documents and timelines. A project of six lots may be three of
+ * each, and until now that split had nowhere to live.
+ */
+export const TITLE_TYPES = ["community", "torrens"] as const;
+export type TitleType = (typeof TITLE_TYPES)[number];
+
+/** Written the way Lofty writes them: community title lowercase, Torrens a surname. */
+export const TITLE_TYPE_LABELS: Record<TitleType, string> = {
+  community: "Community title",
+  torrens: "Torrens title"
+};
+
 export interface NewProject {
   address: NewAddress;
   /**
@@ -1212,14 +1248,15 @@ export interface NewProject {
   /** Required. A project without a type cannot be reported on, grouped or filtered. */
   projectType: ProjectType;
   /**
-   * How many dwellings are intended, captured at creation.
+   * How many lots are intended, by kind (Amber, 28 Aug). The form asks for these two
+   * and the repository writes their sum to `project_proposed_dwellings`, so the total
+   * and the split cannot disagree — the database refuses a row where they do.
    *
-   * Deliberately not the same fact as how many jobs exist, which is counted and never
-   * stored — "we planned four lots and got three" needs both numbers. It is also what
-   * the Create jobs action offers as its default count, which is the only reason the
-   * form asks for it at creation rather than later.
+   * Both blank is a real answer: the count is not settled. It is not zero, and it is
+   * not "no community lots".
    */
-  proposedDwellings?: number | null;
+  communityTitleLots?: number | null;
+  torrensTitleLots?: number | null;
   status?: RecordStatus;
   startDate?: IsoDate | null;
   targetCompletion?: IsoDate | null;
@@ -1268,6 +1305,12 @@ export interface SplitLot {
    * there. Unique across `jobs`, and nullable — jobs created here have none.
    */
   jobNumberOld?: string | null;
+  /**
+   * Community or Torrens (0054). Seeded from the project's intended mix — the first
+   * N rows community, the rest Torrens — and editable per row, because which lots take
+   * which title is a decision, not a formula. Null when nobody has said.
+   */
+  titleType?: TitleType | null;
 }
 
 export interface JobSplit {
