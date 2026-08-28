@@ -41,7 +41,7 @@ export function isForwardMove(from: string, to: string): boolean {
   return isLinear(from) && isLinear(to) && stagePosition(to) > stagePosition(from);
 }
 
-type MoveVerb = "Move" | "Cancel" | "Revive";
+type MoveVerb = "Move" | "Cancel";
 
 /**
  * The confirmation for a lifecycle change. Lofty, 25 August: "any manager, admin or
@@ -55,10 +55,16 @@ type MoveVerb = "Move" | "Cancel" | "Revive";
  *
  *   - **Move** is irreversible by design. The lifecycle only goes forwards, so there
  *     is no "move it back" to reach for afterwards, and the dialog says that.
- *   - **Cancel** is the opposite: explicitly revivable (Amber's one backward
- *     exception), and while cancelled nothing fires — no notifications, automations
- *     or health alerts. Twelve months on, the clock archives it to Closed.
- *   - **Revive** is that backward exception being used.
+ *   - **Cancel** ends it. Nothing fires while cancelled — no notifications,
+ *     automations or health alerts — and twelve months on the clock archives it to
+ *     Closed.
+ *
+ * **There is no Revive, as of 0057.** There was: 0045 made Cancelled the one stage a
+ * record could leave backwards. Amber, 28 Aug: "cancelled will not be revived — if
+ * revived, it will need a new job number as a lot of the initial info will be
+ * outdated." What comes back is the work, not the record; the row's dates, selections
+ * and costings are stale by then, and its number is on contracts. So coming back is a
+ * clone, and this dialog lost a verb.
  *
  * The team pipelines (`job_pipeline_positions`) are a different object and get no
  * modal; this component is only ever mounted for a lifecycle change.
@@ -110,7 +116,6 @@ export function MoveStageDialog({
 
   const title =
     verb === "Cancel" ? `Cancel ${subject}`
-    : verb === "Revive" ? `Revive ${subject} to ${toStage ?? ""}`
     : `Move ${subject} to ${toStage ?? ""}`;
 
   return (
@@ -133,12 +138,10 @@ export function MoveStageDialog({
         )}
         <Text type="text3" color="secondary" ellipsis={false}>
           {verb === "Cancel"
-            ? "While cancelled it keeps its data but fires nothing — no notifications, " +
-              "automations or health alerts. It can be revived later; if it stays " +
-              "cancelled, twelve months from now it archives to Closed."
-            : verb === "Revive"
-            ? "Revival is the one backward move the lifecycle allows. Back on the " +
-              "board, it counts and alerts like any other record."
+            ? "This is an ending, not a pause. It keeps its data but fires nothing — no " +
+              "notifications, automations or health alerts — and twelve months from now " +
+              "it archives to Closed. It cannot be revived: if the work restarts, clone " +
+              "it, and the new record starts with its own number."
             : "The lifecycle only moves forwards, so this cannot be undone by moving " +
               "it back."}
           {" "}{note}
@@ -151,7 +154,6 @@ export function MoveStageDialog({
           text: saving
             ? "Saving…"
             : verb === "Cancel" ? `Cancel ${subject}`
-            : verb === "Revive" ? "Revive"
             : "Move",
           onClick: go,
           disabled: saving || !toStage
@@ -177,9 +179,8 @@ export function MoveStageDialog({
  *     phase only — a "Cancel…" action. Completed is done, so cancelling it stopped
  *     making sense the moment it finished ("a job can be cancelled but it isn't
  *     complete" — the two are different endings, not a sequence).
- *   - At Cancelled: "Revive to…" over the working phases — the one backward move.
- *   - At Closed: a sentence. The archive is terminal, and the control says so instead
- *     of rendering an empty menu.
+ *   - At Cancelled or Closed: a sentence. Both are terminal (0057 made Cancelled so),
+ *     and the control says which rather than rendering a menu of refusals.
  */
 export function MoveStageControl({
   subject, stage, move, note, onMoved
@@ -222,16 +223,9 @@ export function MoveStageControl({
 
   if (stage === "Cancelled") {
     return (
-      <>
-        <Select
-          aria-label={`Revive ${subject} to a working phase`}
-          placeholder="Revive to…"
-          options={WORKING_STAGES.map(s => ({ value: s, label: s }))}
-          value={null}
-          onChange={v => open("Revive", v as StageName)}
-        />
-        {dialog}
-      </>
+      <Text type="text3" color="secondary">
+        Cancelled is an ending — clone it if the work restarts.
+      </Text>
     );
   }
 

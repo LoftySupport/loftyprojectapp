@@ -36,7 +36,8 @@ export const SAVED_VIEWS: SavedView[] = [
     // Everything except the archive. Amber, 25 August: Closed is "not visible by
     // default but visible by filter" — and in this app the Closed view below IS that
     // filter. Cancelled stays visible here on purpose: a cancelled job is a fact
-    // people need to see (and maybe revive), not an archived one.
+    // people need to see — and, since 0057, the record they clone from when the work
+    // restarts — rather than an archived one.
     slug: "all",
     label: "All jobs",
     stages: [
