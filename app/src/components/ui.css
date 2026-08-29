@@ -453,6 +453,67 @@
 }
 .panel-search > :first-child { flex: 1 1 320px; min-width: 0; }
 
+/* ---- mentions ------------------------------------------------------------
+   The one notification with a model behind it. The picker sits under the composer as a
+   list rather than over it as a dropdown — it is six names at most, and a dropdown
+   would cover the sentence being written. */
+.mention-picker {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-small);
+  overflow: hidden;
+  margin-bottom: var(--space-8);
+}
+.mention-picker button {
+  text-align: left;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--layout-border-color);
+  padding: var(--space-4) var(--space-8);
+  min-height: 28px;
+  font: var(--font-text2-normal);
+  color: inherit;
+  cursor: pointer;
+}
+.mention-picker button:last-child { border-bottom: 0; }
+.mention-picker button:hover, .mention-picker button:focus-visible {
+  background: var(--primary-background-hover-color);
+}
+
+.notif-mentions { list-style: none; margin: var(--space-8) 0; padding: 0; }
+.notif-mentions li {
+  padding: var(--space-8);
+  border-bottom: 1px solid var(--layout-border-color);
+}
+.notif-mentions li:last-child { border-bottom: 0; }
+/* Unread carries a rule down its edge rather than a bold row: forty bold rows is not
+   emphasis, and the rule survives the row being read without the layout shifting. */
+.notif-mentions li.is-unread {
+  border-inline-start: 3px solid var(--primary-color);
+  background: var(--primary-background-hover-color);
+}
+.notif-mention-head { display: flex; justify-content: space-between; gap: var(--space-8); }
+.notif-mention-body { margin: 2px 0 var(--space-4); overflow-wrap: anywhere; }
+
+/* The count on the bell. Never rendered at zero — see the component. */
+.notif-bell-trigger { position: relative; }
+.notif-badge {
+  position: absolute;
+  top: 2px;
+  inset-inline-end: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--negative-color);
+  color: #fff;
+  font: var(--font-text3-medium);
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+}
+
 /* ---- tasks ---------------------------------------------------------------
    A checklist, worked from rather than read: the tick box leads, the name carries the
    line, and everything that decides it — due, who, which team — sits under the name in
@@ -1588,6 +1649,11 @@ code { overflow-wrap: anywhere; }
   text-decoration: none;
 }
 .activity-subject:hover, .activity-subject:focus-visible { text-decoration: underline; }
+/* A record link is a tap target wherever it appears — in a mention row it is the whole
+   way in. Padding rather than min-height, because these also sit mid-sentence in the
+   activity feed and a flex/min-height treatment there shifts the line. Watched failing
+   at 17px on five sizes the moment the dashboard had a mention to show. */
+.activity-subject { display: inline-block; padding-block: 4px; }
 
 /* ---- Ask Lofty -----------------------------------------------------------
    No longer a floating dock: the trigger is a header icon (`.notif-bell-trigger`,

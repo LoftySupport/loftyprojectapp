@@ -720,6 +720,30 @@ export interface NewFeedback {
   page: string;
 }
 
+/**
+ * One @mention of you, as the bell reads it.
+ *
+ * `comment_mentions` has been built and empty since Phase A: a row per person named in
+ * a comment, with a read time only that person can set. It is the one notification the
+ * app can honestly deliver today — it needs no health calculation, no SLA and no
+ * derivation, because a mention is a fact somebody wrote on purpose.
+ *
+ * The comment's body comes with it, so the panel can show what was said rather than
+ * "you were mentioned" and a link.
+ */
+export interface MentionEntry {
+  commentId: Uuid;
+  body: string;
+  /** Who wrote the comment. Null when their profile is not readable. */
+  authorName: string | null;
+  at: IsoDateTime;
+  /** Null while unread — which is the whole point of the table. */
+  readAt: IsoDateTime | null;
+  /** Which record it was on. Exactly one, as the comments CHECK enforces. */
+  jobId: string | null;
+  projectId: number | null;
+}
+
 export const PROFILE_STATUSES = ["active", "pending", "inactive"] as const;
 export type ProfileStatus = (typeof PROFILE_STATUSES)[number];
 
