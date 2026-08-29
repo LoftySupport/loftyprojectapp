@@ -203,6 +203,12 @@ export function createStubRepository(): Repository {
     // The tasks table is real and empty. A stub run has no rows to read and nothing to
     // write them to — and a seeded checklist is exactly the kind of fiction that gets
     // quoted back as though somebody at Lofty wrote it.
+    // No comments behind a stub run, so nobody has been mentioned.
+    async listMyMentions(): Promise<never[]> { return []; },
+    async markMentionRead(): Promise<void> {
+      throw new Error("Marking a mention read needs Supabase.");
+    },
+
     async listTasks(): Promise<never[]> { return []; },
     async createTask(): Promise<never> {
       throw new Error("Adding a task needs Supabase.");

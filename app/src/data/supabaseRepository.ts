@@ -30,6 +30,7 @@ import type {
   RecordActivity,
   LatestUpdate,
   StagePeriod,
+  MentionEntry,
   TaskEntry,
   TaskStatus,
   NewTask,
@@ -891,7 +892,9 @@ export function createSupabaseRepository(): Repository {
       return (data as unknown as CommentRow[]).map(toComment);
     },
 
-    async addComment(ref: { projectId?: number; jobId?: string }, body: string): Promise<CommentEntry> {
+    async addComment(
+      ref: { projectId?: number; jobId?: string }, body: string, mentions: string[] = []
+    ): Promise<CommentEntry> {
       if (ref.projectId == null && ref.jobId == null) {
         throw new Error("addComment needs a projectId or a jobId.");
       }
@@ -902,12 +905,83 @@ export function createSupabaseRepository(): Repository {
         .insert({
           project_id: ref.projectId ?? null,
           job_id: ref.jobId ?? null,
-          comment_body: body.trim()
+          comment_body: body
         })
         .select(COMMENT_COLUMNS)
         .single();
       if (error) throw error;
-      return toComment(data as unknown as CommentRow);
+      const comment = toComment(data as unknown as CommentRow);
+
+      // The mentions, after the comment exists — they carry its id. A failure here is
+      // not allowed to lose the comment somebody just wrote: the text is posted and
+      // visible, and the worst case is a notification that did not fire, which is
+      // recoverable by saying their name again. Losing the comment is not.
+      const named = [...new Set(mentions)];
+      if (named.length > 0) {
+        const { error: mentionError } = await client
+          .from("comment_mentions")
+          .insert(named.map(profile_id => ({ comment_id: comment.id, profile_id })));
+        if (mentionError) {
+          // Said out loud rather than swallowed, so "I tagged her and she never saw it"
+          // has an answer.
+          throw new Error(
+            `Your comment was posted, but the mention did not send: ${mentionError.message}`
+          );
+        }
+      }
+      return comment;
+    },
+
+    async listMyMentions(limit = 30): Promise<MentionEntry[]> {
+      // RLS does the filtering — `read own mentions` compares profile_id to
+      // current_profile_id() — so this asks for "mine" without saying whose, and there
+      // is no client-side check to forget.
+      const { data, error } = await client
+        .from("comment_mentions")
+        .select(
+          "comment_id, comment_mention_read_at, comment_mention_created_at, " +
+          "comment:comments!comment_mentions_comment_id_fkey(comment_body, comment_created_at, job_id, project_id, author:profiles!comments_comment_created_by_fkey(profile_full_name))"
+        )
+        .order("comment_mention_created_at", { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+
+      type Row = {
+        comment_id: string;
+        comment_mention_read_at: string | null;
+        comment_mention_created_at: string;
+        comment: {
+          comment_body: string; comment_created_at: string;
+          job_id: string | null; project_id: number | null;
+          author: { profile_full_name: string | null } | null;
+        } | null;
+      };
+      return ((data ?? []) as unknown as Row[])
+        // A mention whose comment is not readable is dropped rather than shown as an
+        // empty row: the notification would be a claim about something the reader
+        // cannot open.
+        .filter(r => r.comment != null)
+        .map(r => ({
+          commentId: r.comment_id,
+          body: r.comment!.comment_body,
+          authorName: r.comment!.author?.profile_full_name ?? null,
+          at: r.comment!.comment_created_at ?? r.comment_mention_created_at,
+          readAt: r.comment_mention_read_at,
+          jobId: r.comment!.job_id,
+          projectId: r.comment!.project_id
+        }));
+    },
+
+    async markMentionRead(commentId: string): Promise<void> {
+      // No profile_id in the filter, and that is not an oversight: the UPDATE policy
+      // restricts the row to the reader's own, so naming it here would add a second
+      // place for the same rule to be got wrong.
+      const { error } = await client
+        .from("comment_mentions")
+        .update({ comment_mention_read_at: new Date().toISOString() })
+        .eq("comment_id", commentId)
+        .is("comment_mention_read_at", null);
+      if (error) throw error;
     },
 
     // ---- creating -------------------------------------------------------

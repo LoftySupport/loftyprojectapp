@@ -42,13 +42,44 @@ export function CommentsPanel({
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
 
+  /**
+   * @mentions.
+   *
+   * The ids are collected as people are picked, not parsed back out of the text when
+   * the comment is sent. Parsing prose finds the wrong Sarah eventually, and two people
+   * here share a surname — but a name typed by hand that happens to match is not a
+   * mention either, because nobody chose it.
+   *
+   * What IS re-checked at send time is whether each picked name is still in the text:
+   * type a name, change your mind, delete it, and nobody is notified about a sentence
+   * that no longer says their name.
+   */
+  const { data: people } = useQuery(r => r.listProfiles(), []);
+  const [picked, setPicked] = useState<{ id: string; name: string }[]>([]);
+
+  /** The "@…" being typed at the caret, if any. Null when the box is not in a mention. */
+  const typing = /(?:^|\s)@([\p{L}' -]*)$/u.exec(draft)?.[1] ?? null;
+  const matches = typing === null
+    ? []
+    : people
+        .filter(p => p.active && p.fullName.toLowerCase().includes(typing.trim().toLowerCase()))
+        .slice(0, 6);
+
+  const insertMention = (id: string, name: string) => {
+    setDraft(d => d.replace(/(?:^|\s)@([\p{L}' -]*)$/u, m => (m.startsWith(" ") ? " " : "") + `@${name} `));
+    setPicked(prev => (prev.some(p => p.id === id) ? prev : [...prev, { id, name }]));
+  };
+
   async function post() {
     if (!draft.trim()) return;
     setPosting(true);
     setPostError(null);
     try {
-      await repo.addComment({ projectId, jobId }, draft);
+      // Only the people whose names survived the edit.
+      const mentions = picked.filter(p => draft.includes(`@${p.name}`)).map(p => p.id);
+      await repo.addComment({ projectId, jobId }, draft, mentions);
       setDraft("");
+      setPicked([]);
       setReload(k => k + 1);
     } catch (e) {
       setPostError(e instanceof Error ? e.message : String(e));
@@ -87,6 +118,28 @@ export function CommentsPanel({
             {posting ? "Posting…" : "Post"}
           </Button>
         </div>
+      )}
+
+      {/* The picker, under the box, while an "@" is being typed. A list rather than a
+          dropdown: it is six names at most, and a dropdown would cover the comment
+          being written. */}
+      {can("user") && matches.length > 0 && (
+        <div className="mention-picker" role="listbox" aria-label="Mention somebody">
+          {matches.map(p => (
+            <button type="button" key={p.id} role="option" aria-selected={false}
+              onClick={() => insertMention(p.id, p.fullName)}>
+              {p.fullName}
+              {p.jobTitle && (
+                <Text type="text3" color="secondary" element="span"> · {p.jobTitle}</Text>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+      {can("user") && picked.filter(p => draft.includes(`@${p.name}`)).length > 0 && (
+        <Text type="text3" color="secondary" element="p" ellipsis={false}>
+          Will notify {picked.filter(p => draft.includes(`@${p.name}`)).map(p => p.name).join(", ")}.
+        </Text>
       )}
       {postError && <Problem>{postError}</Problem>}
 

@@ -22,6 +22,7 @@ import type {
   RecordActivity,
   LatestUpdate,
   StagePeriod,
+  MentionEntry,
   TaskEntry,
   NewTask,
   TaskPatch,
@@ -95,7 +96,31 @@ export interface Repository {
    * from here would let the client claim to be somebody. Blank bodies are refused by the
    * CHECK before this ever matters.
    */
-  addComment(ref: { projectId?: number; jobId?: string }, body: string): Promise<CommentEntry>;
+  /**
+   * Post a comment, and record who it names.
+   *
+   * `mentions` are profile ids the composer collected as the writer picked people, not
+   * names parsed back out of the text — a name parsed out of prose matches the wrong
+   * Sarah eventually, and there are two people here who share a surname. The rows land
+   * in `comment_mentions`, which is what the bell reads.
+   */
+  addComment(
+    ref: { projectId?: number; jobId?: string },
+    body: string,
+    mentions?: string[]
+  ): Promise<CommentEntry>;
+
+  /**
+   * Every @mention of the person signed in, newest first, unread included.
+   *
+   * The one notification this app can deliver honestly today: it needs no health
+   * calculation and no SLA, because a mention is a fact somebody wrote on purpose.
+   * RLS shows you only your own (admins may audit); marking read is owner-only.
+   */
+  listMyMentions(limit?: number): Promise<MentionEntry[]>;
+
+  /** Mark one read. Only the person mentioned may, which the policy enforces. */
+  markMentionRead(commentId: string): Promise<void>;
 
   // ---- creating ---------------------------------------------------------
   // Return the created record rather than void: the caller needs the number the
@@ -372,6 +397,8 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "listActivity",
   "listComments",
   "addComment",
+  "listMyMentions",
+  "markMentionRead",
   "createProject",
   "createJob",
   "createJobsFromSplit",
@@ -456,6 +483,8 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   listRecordActivity: "activity_audit",
   listLatestUpdates: "job_latest_update",
   listJobStageHistory: "activity_audit",
+  listMyMentions: "comment_mentions",
+  markMentionRead: "comment_mentions",
   listTasks: "tasks",
   createTask: "tasks",
   updateTask: "tasks",

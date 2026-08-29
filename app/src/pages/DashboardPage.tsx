@@ -1,8 +1,9 @@
 import { Avatar, Button, Text } from "@vibe/core";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "../data/DataProvider";
 import { initialsOf, useAuth } from "../data/AuthProvider";
 import { greetingName, teamName } from "../data/types";
+import type { MentionEntry } from "../data/types";
 import { useTeamLabels, useTeams, useTemplatePhases } from "../data/useLookups";
 import { daysSince } from "../data/boardModel";
 import { Token } from "../components/Token";
@@ -33,6 +34,8 @@ function Empty({ children }: { children: React.ReactNode }) {
 
 export function DashboardPage() {
   const { data: jobs, loading } = useQuery(r => r.listJobs(), []);
+  /** The same read the bell makes — one source, so the two can never disagree. */
+  const { data: mentions } = useQuery<MentionEntry[]>(r => r.listMyMentions(), []);
   const { profile } = useAuth();
   const { labels, error: teamsError } = useTeamLabels();
   const { teams } = useTeams();
@@ -224,10 +227,41 @@ export function DashboardPage() {
               <span className="pd-panel-mark mention" aria-hidden="true" />
               <h3>Mentions</h3>
             </div>
-            <Empty>
-              Coming soon — comments that @mention you, with the quoted line. The
-              mentions table exists; the feed that reads it is next.
-            </Empty>
+            {/* Real now — the same list the bell reads, because two places showing
+                "your mentions" from two sources is two places to disagree. */}
+            {mentions.length === 0 ? (
+              <Empty>
+                Nobody has mentioned you yet. Type @ in any comment to name somebody.
+              </Empty>
+            ) : (
+              <ul className="notif-mentions">
+                {mentions.slice(0, 5).map(m => (
+                  <li key={m.commentId} className={m.readAt === null ? "is-unread" : undefined}>
+                    <div className="notif-mention-head">
+                      <Text type="text3" weight="medium" element="span">
+                        {m.authorName ?? "Somebody"}
+                      </Text>
+                      <Text type="text3" color="secondary" element="span">
+                        {new Date(m.at).toLocaleDateString()}
+                      </Text>
+                    </div>
+                    <Text type="text3" element="div" ellipsis={false} className="notif-mention-body">
+                      {m.body}
+                    </Text>
+                    {m.jobId && (
+                      <Link to={`/jobs/${encodeURIComponent(m.jobId)}`} className="activity-subject">
+                        {m.jobId}
+                      </Link>
+                    )}
+                    {m.projectId != null && (
+                      <Link to={`/projects/${m.projectId}`} className="activity-subject">
+                        Project {m.projectId}
+                      </Link>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
         </div>
       </div>
