@@ -30,6 +30,10 @@ import type {
   RecordActivity,
   LatestUpdate,
   StagePeriod,
+  TaskEntry,
+  TaskStatus,
+  NewTask,
+  TaskPatch,
   PropertyDef,
   Stage,
   StageName,
@@ -168,6 +172,51 @@ type CommentRow = {
   comment_updated_at: string; comment_updated_by: string | null;
   author: { profile_full_name: string | null } | null;
 };
+
+const TASK_COLUMNS =
+  "task_id, job_id, project_id, task_name, task_description, parent_task_id, task_position, task_owning_team, task_assignee_id, task_status, task_due_date, task_completed_at, task_completed_by, task_is_external, task_created_at, task_created_by, task_updated_at, task_updated_by, assignee:profiles!tasks_task_assignee_id_fkey(profile_full_name), finisher:profiles!tasks_task_completed_by_fkey(profile_full_name)";
+
+type TaskRow = {
+  task_id: string; job_id: string | null; project_id: number | null;
+  task_name: string; task_description: string | null;
+  parent_task_id: string | null; task_position: number;
+  task_owning_team: string | null; task_assignee_id: string | null;
+  task_status: string; task_due_date: string | null;
+  task_completed_at: string | null; task_completed_by: string | null;
+  task_is_external: boolean;
+  task_created_at: string; task_created_by: string | null;
+  task_updated_at: string; task_updated_by: string | null;
+  // Both embeds name their foreign key, and have to: `tasks` has four keys pointing at
+  // `profiles` (assignee, completed_by, created_by, updated_by) and PostgREST refuses
+  // to guess between them — the unqualified embed returns PGRST201 for every read.
+  assignee: { profile_full_name: string | null } | null;
+  finisher: { profile_full_name: string | null } | null;
+};
+
+function toTask(r: TaskRow): TaskEntry {
+  return {
+    id: r.task_id,
+    jobId: r.job_id,
+    projectId: r.project_id,
+    name: r.task_name,
+    description: r.task_description,
+    parentTaskId: r.parent_task_id,
+    position: r.task_position,
+    owningTeam: (r.task_owning_team as TeamId | null) ?? null,
+    assigneeId: r.task_assignee_id,
+    assigneeName: r.assignee?.profile_full_name ?? null,
+    status: r.task_status as TaskStatus,
+    dueDate: r.task_due_date,
+    completedAt: r.task_completed_at,
+    completedBy: r.task_completed_by,
+    completedByName: r.finisher?.profile_full_name ?? null,
+    isExternal: r.task_is_external,
+    createdAt: r.task_created_at,
+    createdBy: r.task_created_by,
+    updatedAt: r.task_updated_at,
+    updatedBy: r.task_updated_by
+  };
+}
 
 function toComment(r: CommentRow): CommentEntry {
   return {
@@ -1768,6 +1817,80 @@ export function createSupabaseRepository(): Repository {
         });
       }
       return periods;
+    },
+
+    // ---- tasks -----------------------------------------------------------
+
+    async listTasks(opts: { jobId?: string; projectId?: number }): Promise<TaskEntry[]> {
+      let q = client.from("tasks").select(TASK_COLUMNS);
+      // Exactly one parent, the same rule the CHECK enforces. Asking with neither would
+      // quietly return every task in the company.
+      if (opts.jobId != null) q = q.eq("job_id", opts.jobId);
+      else if (opts.projectId != null) q = q.eq("project_id", opts.projectId);
+      else throw new Error("listTasks needs a jobId or a projectId.");
+
+      const { data, error } = await q
+        // Position first because somebody chose it; created_at breaks the tie, so two
+        // tasks added at position 0 stay in the order they were typed rather than
+        // swapping places between reads.
+        .order("task_position", { ascending: true })
+        .order("task_created_at", { ascending: true });
+      if (error) throw error;
+      return (data as unknown as TaskRow[]).map(toTask);
+    },
+
+    async createTask(task: NewTask): Promise<TaskEntry> {
+      const name = task.name.trim();
+      if (!name) throw new Error("Give the task a name first.");
+      if ((task.jobId == null) === (task.projectId == null)) {
+        throw new Error("A task belongs to exactly one job or one project.");
+      }
+      const { data, error } = await client
+        .from("tasks")
+        .insert({
+          job_id: task.jobId ?? null,
+          project_id: task.projectId ?? null,
+          task_name: name,
+          task_description: task.description?.trim() || null,
+          task_owning_team: task.owningTeam ?? null,
+          task_assignee_id: task.assigneeId ?? null,
+          task_due_date: task.dueDate ?? null,
+          task_is_external: task.isExternal ?? false,
+          parent_task_id: task.parentTaskId ?? null
+          // No task_created_by: stamp_created_by fills it from the session, which is the
+          // only version of "who added this" a client cannot forge.
+        })
+        .select(TASK_COLUMNS)
+        .single();
+      if (error) throw error;
+      return toTask(data as unknown as TaskRow);
+    },
+
+    async updateTask(id: string, patch: TaskPatch): Promise<TaskEntry> {
+      const row: Record<string, unknown> = {};
+      if (patch.name !== undefined) row.task_name = patch.name.trim();
+      if (patch.description !== undefined) row.task_description = patch.description?.trim() || null;
+      if (patch.status !== undefined) row.task_status = patch.status;
+      if (patch.owningTeam !== undefined) row.task_owning_team = patch.owningTeam;
+      if (patch.assigneeId !== undefined) row.task_assignee_id = patch.assigneeId;
+      if (patch.dueDate !== undefined) row.task_due_date = patch.dueDate;
+      if (patch.isExternal !== undefined) row.task_is_external = patch.isExternal;
+      if (patch.position !== undefined) row.task_position = patch.position;
+      if (Object.keys(row).length === 0) throw new Error("Nothing to change.");
+
+      // `task_completed_at` is deliberately not settable here. stamp_task_completion
+      // sets it when the status becomes done and clears it when it stops being done,
+      // and tasks_done_has_a_time refuses any row where the two disagree — so the app
+      // sends the status and the database keeps the pair honest.
+      const { data, error } = await client
+        .from("tasks").update(row).eq("task_id", id).select(TASK_COLUMNS).single();
+      if (error) throw error;
+      return toTask(data as unknown as TaskRow);
+    },
+
+    async deleteTask(id: string): Promise<void> {
+      const { error } = await client.from("tasks").delete().eq("task_id", id);
+      if (error) throw error;
     },
 
     // ---- bugs and ideas (0052) -------------------------------------------

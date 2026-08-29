@@ -453,6 +453,83 @@
 }
 .panel-search > :first-child { flex: 1 1 320px; min-width: 0; }
 
+/* ---- tasks ---------------------------------------------------------------
+   A checklist, worked from rather than read: the tick box leads, the name carries the
+   line, and everything that decides it — due, who, which team — sits under the name in
+   one quiet row rather than in columns that would make forty tasks a spreadsheet. */
+.task-composer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin: var(--space-8) 0;
+  flex-wrap: wrap;
+}
+.task-composer > :first-child { flex: 1 1 240px; min-width: 0; }
+
+.task-list {
+  list-style: none;
+  margin: var(--space-8) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.task-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-8);
+  padding: var(--space-8) 0;
+  border-bottom: 1px solid var(--layout-border-color);
+  flex-wrap: wrap;
+}
+.task-list li:last-child { border-bottom: 0; }
+.task-list input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; }
+.task-body { flex: 1 1 220px; min-width: 0; }
+.task-name { overflow-wrap: anywhere; }
+/* Struck through AND faded: strike-through alone survives a screenshot but reads as an
+   edit, and fading alone reads as disabled. Together they read as finished. */
+.task-list li.is-done .task-name {
+  text-decoration: line-through;
+  color: var(--secondary-text-color);
+}
+.task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4) var(--space-8);
+  margin-top: 2px;
+}
+/* Overdue says so in words as well as colour — see the component. */
+.task-overdue { color: var(--negative-color); font-weight: 600; }
+.task-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex: 0 0 auto;
+}
+/* Fixed, not fluid: a Vibe dropdown fills whatever it is given, and given the rest of
+   the row it filled six hundred pixels and turned three tasks into a page. */
+.task-control { width: 150px; flex: 0 0 150px; }
+.task-controls .date-input { width: 140px; }
+/* The second row, for the one task being edited. Full width under it. */
+.task-more {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8) 0 0 28px;
+}
+/* Vibe puts the className you give a Dropdown on an INNER element and wraps it in a
+   block-level div of its own — so sizing `.task-control` there did nothing to the
+   wrapper, which stretched to the full row and stacked the two selects one per line.
+   Watched, then sized on the wrapper itself. Only the selects render as divs here. */
+.task-more > div { flex: 0 0 180px; }
+.task-external { display: inline-flex; align-items: center; gap: var(--space-4); cursor: pointer; }
+@media (max-width: 720px) {
+  /* The controls drop under the task rather than squeezing it to nothing. */
+  .task-controls { width: 100%; flex-wrap: wrap; }
+  .task-control { flex: 1 1 45%; width: auto; }
+}
+
 /* ---- one job's timeline --------------------------------------------------
    Three readings of the same recorded facts: the stages a job has been through, when
    it entered each and how long it stayed. Deliberately plain — the point is the shape
@@ -1164,6 +1241,11 @@ code { overflow-wrap: anywhere; }
   text-align: left;
 }
 .link-button:hover { text-decoration: none; }
+/* 24px minimum, because a name in a table is a tap target like any other and this one
+   was 20px high. Found the moment the responsive sweep had a person to render: the
+   Admin table had always been empty under the stub, so five sizes were checking an
+   empty table and reporting green. */
+.link-button { min-height: 24px; }
 
 /* One line, and let the table scroll if that makes it wider — the same call this file
    already makes for the inline add row. Wrapped, "Edit" and "Deactivate" stack into a

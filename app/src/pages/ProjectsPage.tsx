@@ -34,6 +34,7 @@ import { InlineNewProjectRow } from "../components/InlineNewProjectRow";
 import { ProjectsGantt } from "../components/ProjectsGantt";
 import { ActivityFeed } from "../components/ActivityFeed";
 import { CommentsPanel } from "../components/CommentsPanel";
+import { TasksPanel } from "../components/TasksPanel";
 import { useToasts } from "../components/Toasts";
 import { AddressFields } from "../components/CreateDialogs";
 import { useQuery } from "../data/DataProvider";
@@ -854,6 +855,10 @@ function ProjectDetail({
             </div>
           )}
         </section>
+
+        {/* Site-wide work — the things that belong to the project rather than to any one
+            lot. A task hangs off exactly one of the two, which the CHECK enforces. */}
+        <TasksPanel projectId={project.projectId} title="Tasks on this project" />
 
         {/* The newest comment IS the latest update — one mechanism, not a field and a
             feed that could disagree. */}

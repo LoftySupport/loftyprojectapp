@@ -905,6 +905,69 @@ export const TASK_STATUSES = ["open", "in_progress", "blocked", "done", "cancell
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
 /**
+ * What each status is called on screen.
+ *
+ * "To do" rather than "Open", because open is what the database calls it and nobody
+ * says it out loud about a checklist. Five states, not a tick box: "blocked" and
+ * "cancelled" are the ones that explain why a job has stopped, and a list that only
+ * knows done from not-done cannot tell "nobody has started this" from "the council has
+ * had it for three weeks".
+ */
+export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  open: "To do",
+  in_progress: "In progress",
+  blocked: "Blocked",
+  done: "Done",
+  cancelled: "Cancelled"
+};
+
+/** Not done and not abandoned — what a checklist counts and what an overdue read means. */
+export const isTaskLive = (s: TaskStatus): boolean => s !== "done" && s !== "cancelled";
+
+/**
+ * A task as a screen reads it: the row, plus the names its ids point at.
+ *
+ * Same shape as `CommentEntry` over `Comment`, for the same reason — resolving the
+ * assignee once on the read beats every list joining profiles for itself.
+ */
+export interface TaskEntry extends Task {
+  assigneeName: string | null;
+  completedByName: string | null;
+}
+
+/**
+ * What the composer sends. The name is the only thing required, because a checklist
+ * people have to fill in six fields to add to is a checklist nobody adds to.
+ *
+ * `completedAt`, `completedBy` and `createdBy` are absent on purpose: the database
+ * stamps all three. A client that can write "completed by" can write somebody else's
+ * name into it.
+ */
+export interface NewTask {
+  jobId?: string;
+  projectId?: number;
+  name: string;
+  description?: string | null;
+  owningTeam?: TeamId | null;
+  assigneeId?: Uuid | null;
+  dueDate?: IsoDate | null;
+  isExternal?: boolean;
+  parentTaskId?: Uuid | null;
+}
+
+/** What an edit may move. Completion rides `status` and nothing else. */
+export interface TaskPatch {
+  name?: string;
+  description?: string | null;
+  status?: TaskStatus;
+  owningTeam?: TeamId | null;
+  assigneeId?: Uuid | null;
+  dueDate?: IsoDate | null;
+  isExternal?: boolean;
+  position?: number;
+}
+
+/**
  * What has to happen before what.
  *
  * A relationship rather than a column, because 21 of the 57 preconstruction steps have
