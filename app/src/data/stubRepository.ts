@@ -200,6 +200,20 @@ export function createStubRepository(): Repository {
     // that looks like evidence.
     async listJobStageHistory(): Promise<never[]> { return []; },
 
+    // The tasks table is real and empty. A stub run has no rows to read and nothing to
+    // write them to — and a seeded checklist is exactly the kind of fiction that gets
+    // quoted back as though somebody at Lofty wrote it.
+    async listTasks(): Promise<never[]> { return []; },
+    async createTask(): Promise<never> {
+      throw new Error("Adding a task needs Supabase.");
+    },
+    async updateTask(): Promise<never> {
+      throw new Error("Changing a task needs Supabase.");
+    },
+    async deleteTask(): Promise<void> {
+      throw new Error("Removing a task needs Supabase.");
+    },
+
     // Cloning needs a job to clone and a sequence to issue the new number; a stub run
     // has neither.
     async cloneJob(): Promise<never> {

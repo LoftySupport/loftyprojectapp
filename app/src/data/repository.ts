@@ -22,6 +22,9 @@ import type {
   RecordActivity,
   LatestUpdate,
   StagePeriod,
+  TaskEntry,
+  NewTask,
+  TaskPatch,
   PropertyDef,
   Stage,
   StageName,
@@ -267,6 +270,33 @@ export interface Repository {
    */
   listJobStageHistory(jobId: string): Promise<StagePeriod[]>;
 
+  // ---- tasks (built in Phase A, wired now) -------------------------------
+  /**
+   * What has to be done on one job or one project, in order.
+   *
+   * The `tasks` table has existed since the first migration and no screen has ever read
+   * it — name, description, owning team, assignee, status, due date, sub-tasks, and a
+   * completion the database stamps. Empty until somebody adds one, which is a different
+   * statement from "not built" and is what the empty state says.
+   */
+  listTasks(opts: { jobId?: string; projectId?: number }): Promise<TaskEntry[]>;
+
+  /**
+   * Add one. Only the name is required — a checklist that demands six fields per line
+   * is a checklist nobody adds to.
+   */
+  createTask(task: NewTask): Promise<TaskEntry>;
+
+  /**
+   * Change one. Ticking it off is `status: "done"` and nothing else: `completed_at` and
+   * `completed_by` are stamped by a trigger, and the CHECK refuses a done task with no
+   * time on it, so the two can never disagree.
+   */
+  updateTask(id: string, patch: TaskPatch): Promise<TaskEntry>;
+
+  /** Remove one. Admin-only by policy; sub-tasks go with it (ON DELETE CASCADE). */
+  deleteTask(id: string): Promise<void>;
+
   // ---- bugs and ideas (0052) --------------------------------------------
   /**
    * Send a bug or an idea. Anyone active may — the widest write in the app — and the
@@ -366,6 +396,10 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "listRecordActivity",
   "listLatestUpdates",
   "listJobStageHistory",
+  "listTasks",
+  "createTask",
+  "updateTask",
+  "deleteTask",
   "submitFeedback",
   "listFeedback",
   "setFeedbackStatus",
@@ -422,6 +456,10 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   listRecordActivity: "activity_audit",
   listLatestUpdates: "job_latest_update",
   listJobStageHistory: "activity_audit",
+  listTasks: "tasks",
+  createTask: "tasks",
+  updateTask: "tasks",
+  deleteTask: "tasks",
   submitFeedback: "feedback",
   listFeedback: "feedback",
   setFeedbackStatus: "feedback",
