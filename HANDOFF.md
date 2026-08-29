@@ -1716,6 +1716,137 @@ Carried forward and still open. The first two block real screens.
 
    Nothing above is built. `properties`, `property_values`, `processes` and `job_processes`
    do not exist, which is why all of it was still cheap to decide.
+
+   ### Record types — the correction that makes the rest work, 28 August
+
+   Amber, on adding construction: *"a plan alone might have 100 measurements, and then if
+   that is x 7 plans for one job, it blows out."* Her instinct was right and the cause was
+   a missing entity, not a missing table.
+
+   **A plan is not a property of a job. It is a thing a job has several of.** Flattening a
+   one-to-many into fields is what blows out: seven plans of a hundred measurements needs
+   `plan1_kitchen_width` … `plan7_kitchen_width`, seven hundred definitions, and an eighth
+   plan needs a hundred more. As records it is a hundred definitions forever, and the
+   eighth plan is one insert.
+
+   Built and measured, not argued — jobs → plans → rooms at full construction scale:
+
+   ```
+   3,000 jobs · 21,000 plans · 252,000 rooms
+   property VALUES  4,716,000
+   property DEFS          308      ← not 2,000
+   ```
+
+   So the catalogue collapses to about three hundred definitions, and the *values* carry
+   the repetition, which is where repetition belongs. It also answers the null question
+   Amber was reaching for: a job with one plan has one plan record and a job with no
+   retaining wall has no retaining records. Nothing is null because nothing is there.
+
+   And it removes the risk this file called the most likely killer — the two-thousand-field
+   drawer. A job's own fields are about two hundred; plans are a list you open.
+
+   **`property_scope` therefore stops being `project | job` and becomes a record type**, and
+   `property_values` needs one nullable parent column per record type with a
+   `num_nonnulls(...) = 1` check. This is the one part of the design that is not additive,
+   so it is built that way from the start: adding a nullable column to a multi-million-row
+   table in Postgres 16 is catalogue-only, and the check can go on `not valid` and be
+   validated afterwards, so a new record type costs minutes of maintenance rather than a
+   redesign.
+
+   **Only `project` and `job` are defined now.** Plans, rooms and invoices are named here as
+   the shape they will take, not seeded — Amber, asked to pin the depth: *"I don't have exact
+   answer, it is just looking at future cases."* Adding a record type later moves no
+   property that already exists, which is exactly why it does not need answering now.
+
+   ### What the benchmark settled, 28 August
+
+   Everything below was measured on a scratch PostgreSQL 16.13 — the same version as
+   production — deliberately weaker than it: 256 MB shared buffers, no pooler, parallelism
+   off. Both instances have since been destroyed.
+
+   | Question | Answer |
+   | --- | --- |
+   | Can 2,000 fields be columns? | **No.** `ERROR: tables can have at most 1600 columns`, watched failing at 1,601. The property store is forced by the platform, not preferred |
+   | 50 concurrent users? | **4,547 drawer opens/sec, 11 ms average.** Lofty's real load is about 1.7/sec — roughly 2,700× headroom |
+   | Does RLS over EAV scale? | Drawer 0.23 ms. One plan 0.57 ms. Three-level traversal across 252,000 rooms, 54 ms |
+   | Is `(select fn())` wrapping worth it? | 2.3× on a full scan (687 ms vs 1,608 ms) and **nothing at all** on indexed reads. Worth doing, but it is not the scaling risk this file claimed twice |
+
+   **Two findings worth keeping, because both are invisible in the SQL.**
+
+   *Absence filters lie.* Asked *"which jobs have not had this recorded"* for a restricted
+   property, a person not on the allow-list is told **all 3,000 jobs** are missing it, with
+   no error and no empty state; someone on the list gets 1,780, which matches ground truth
+   exactly. Lofty's board is mostly absence filters — not yet received, not yet signed, no
+   permit — so this is the common case. **A filter on a property somebody cannot view must
+   be refused, not answered**, and the probe asserts a refusal rather than an empty board,
+   because an empty board passes on the broken version too.
+
+   *`OR` across record types defeats every index.* "Everything for job 1042-01" written as
+   `where job_id = … or plan_id in (…) or room_id in (…)` takes **439 ms** — a sequential
+   scan of 4.7M rows. The same 1,572 rows as `union all` take **2.1 ms**. The repository
+   must build that read as a union.
+
+   ### Permissions, settled 28 August
+
+   - **Manager and above see everything unless the property is marked restricted.**
+     Restricted is granted to a **team** — Amber: *"information that is restricted may be
+     100 - mainly finance"* — with named people as the exception on top, and managers do
+     **not** bypass it. A hundred restricted properties naming one team is one grant
+     repeated, not a hundred lists.
+   - **No integration ever authenticates with the service key.** In Supabase that key
+     bypasses RLS entirely, so one integration wired the standard way voids every decision
+     above, silently, with a shared account in the audit trail. Each connected system gets
+     a profile row, a permission level and team memberships, exactly like a person.
+   - **A stale report is one over an hour old** (Amber). Materialised views refreshed hourly
+     are comfortably inside that at these volumes, so a separate dimensional store is a
+     later problem triggered by a slow report rather than by a plan.
+
+   ### Team managers, derived and confirmed 28 August
+
+   `profile_team_role` existed, defaulted to `member`, and **all 52 memberships said
+   `member`** — the app reads the column and discards it, and `writeTeams()` only ever
+   inserts `team_id`. So the attribute that justified `profile_teams` being a table had
+   never been populated.
+
+   Amber: *"the user table shows who is manager by their title and the permission is manager
+   of that team."* Nearly — title alone promotes three people who sit at `user`
+   (Development Manager, Marketing Manager, Project Manager). The working rule is
+   **`profile_permission = 'manager'` plus the team the title names**, with the multi-team
+   cases confirmed by hand:
+
+   | Person | Manages |
+   | --- | --- |
+   | Atelio Storti | construction |
+   | Carlos Figueroa | design |
+   | Jarrod Hicks | estimating, scheduling |
+   | Mitch Gurnett | acquisition_development |
+   | Paul Ferka | pre_construction_admin |
+   | Deanna Sidiropoulos | selections, maintenance |
+
+   Deanna is **not currently a member of maintenance**, so recording her as its manager adds
+   that membership rather than only setting a flag.
+
+   **Four teams still have no manager: `finance`, `lofty_general`, `sales_admin`,
+   `construction_admin`.** Three are small enough that none may be the honest answer.
+   `finance` is not: it owns the ~100 restricted properties, so with no team manager every
+   restricted finance field can only be granted by the two admins and four superadmins —
+   the exception mechanism meant to keep finance data inside finance would route all of it
+   through IT.
+
+   Nothing was written to the database: the team-aware policy does not exist, so stamping
+   the column now would change no behaviour. `private.my_teams()` does not exist either —
+   `current_permission()` and `is_active_user()` are the only helpers present.
+
+   ### The collection instrument
+
+   Amber is filling in a workbook — record types, properties, processes, dependencies,
+   teams — as the starting point for the seed. It carries the real team list read from
+   production (an earlier draft guessed `accounts` and `marketing`; the real names are
+   `finance` and `pre_construction_admin`, and there is no marketing team), the live
+   headcounts, and the derived managers.
+
+   The rule that decides which sheet a row belongs on: **a row is a process if it has a
+   duration and an owner, and a property if it is only a fact that gets recorded.**
 4. **A project may be known only by its locality — `0037`.** Lofty, 23 August, asked
    whether a project is ever created without an address: *"No — but only the suburb and
    postcode and state will be known for sure. The project name may be something general
