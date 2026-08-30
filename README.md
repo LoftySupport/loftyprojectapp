@@ -2,10 +2,11 @@
 
 The V0 build of Lofty's job pipeline board: React, Vibe and Supabase.
 
-**Connected, and mostly empty.** 15 of the 18 repository methods read Supabase — projects,
-jobs, profiles, teams and the pipeline stages are live queries. There are **no projects and
-no jobs yet**; the import is Phase B, so those boards show a designed empty state rather
-than data.
+**Connected, and mostly empty.** 57 of the 67 repository methods read Supabase — projects,
+jobs, profiles, teams, the pipeline stages and the tracker are live queries. There are
+**no projects and no jobs yet**; the import is Phase B, so those boards show a designed
+empty state rather than data. (Setup → Wiring counts this rather than repeating it: the
+numbers here are a snapshot and that screen is generated.)
 
 Values whose table is not built yet still render as a `{{table.column}}` token, so an
 unbound field is visible rather than silently blank. Two things are genuinely not built —
@@ -15,13 +16,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 8 changes since then —
+Unreleased: 9 changes since then —
+- Changed: The handoff and the README say what the tracker changed, and what is still open
 - Added: One form for reporting a bug or requesting a feature, with a radio instead of two footer buttons
 - Added: Screenshots, the page, the error and the browser sent with a report — captured, never typed
 - Added: A tracker everybody can see, with the stages requested, in review, planned and in development
 - Added: One thumbs up per person per request, and the vote count the next phase is planned from
-- Added: A roadmap of phases and dates, and what is planned into each
-- …and 3 more.
+- …and 4 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

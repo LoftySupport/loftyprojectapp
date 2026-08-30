@@ -23,5 +23,6 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- The handoff and the README say what the tracker changed, and what is still open
 - Bugs and requests are readable by everyone, not just admins — a queue nobody can see cannot stop a duplicate request
 - Only superadmin moves a request between stages
