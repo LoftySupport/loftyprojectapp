@@ -6,7 +6,12 @@ import type {
   CommentEntry,
   FeedbackItem,
   FeedbackKind,
-  FeedbackStatus,
+  FeedbackStage,
+  NewRelease,
+  NewRoadmapPhase,
+  Release,
+  RoadmapPhase,
+  RoadmapPhasePatch,
   Job,
   JobPatch,
   JobSplit,
@@ -322,19 +327,77 @@ export interface Repository {
   /** Remove one. Admin-only by policy; sub-tasks go with it (ON DELETE CASCADE). */
   deleteTask(id: string): Promise<void>;
 
-  // ---- bugs and ideas (0052) --------------------------------------------
+  // ---- the tracker: bugs, requests, votes (0052, 0060–0063) ----------------
   /**
-   * Send a bug or an idea. Anyone active may — the widest write in the app — and the
-   * repository stamps the sender and the page, so neither can be got wrong or faked.
+   * Send a bug or a feature request. Anyone active may — the widest write in the app —
+   * and the repository stamps the sender, the page and the browser, so none of the three
+   * can be got wrong or faked.
    *
-   * Returns nothing on purpose. The select policy is admin-only, so asking for the row
-   * back would make every submission fail for exactly the people the form is for.
+   * Returns the new id. 0052's version returned void on purpose, because the SELECT
+   * policy was admin-only and asking for the row back would have failed for exactly the
+   * people the form is for. 0060 opened the tracker to everybody, so the row can be read
+   * back — and it has to be, because the screenshots are attached to the id.
    */
-  submitFeedback(entry: NewFeedback): Promise<void>;
-  /** Every report of one kind, newest first. Admin+ by RLS; nobody else sees a row. */
-  listFeedback(kind: FeedbackKind): Promise<FeedbackItem[]>;
-  /** Triage: the only edit the table takes. Admin+, and the fresh list comes back. */
-  setFeedbackStatus(id: string, status: FeedbackStatus): Promise<FeedbackItem[]>;
+  submitFeedback(entry: NewFeedback): Promise<string>;
+
+  /**
+   * The tracker. One kind, or both when no kind is given — the board shows both together
+   * and the Setup tabs show one at a time, and those are two callers of one query rather
+   * than two queries.
+   */
+  listFeedback(kind?: FeedbackKind): Promise<FeedbackItem[]>;
+
+  /**
+   * Move a request along the queue. **Superadmin**, and that is the database's answer:
+   * `guard_feedback_stage_change()` raises 42501 for anybody lower, admins included. The
+   * app hides the control at the same rung, which is politeness rather than security.
+   */
+  setFeedbackStage(id: string, stage: FeedbackStage): Promise<FeedbackItem[]>;
+
+  /** Plan a request into a roadmap phase, or take it out of one. Admin+, by policy. */
+  setFeedbackPhase(id: string, phaseId: string | null): Promise<FeedbackItem[]>;
+
+  /**
+   * Thumbs up, or take it back. One per person per request, and the primary key on
+   * `feedback_votes` is what enforces it — this method cannot double-vote even if it
+   * tries. Returns the request as it now stands, so the count on screen is the count in
+   * the database rather than one the button incremented locally.
+   */
+  setFeedbackVote(id: string, voted: boolean): Promise<FeedbackItem>;
+
+  /**
+   * A signed URL for one screenshot. The bucket is private, so there is no permanent
+   * link to hold; this is asked for when a card is opened and expires shortly after.
+   * Null when storage refuses, which the card renders as a missing attachment rather
+   * than a broken image.
+   */
+  attachmentUrl(path: string): Promise<string | null>;
+
+  // ---- the roadmap (0063) -------------------------------------------------
+  /** The phases, in their stored order. Everybody reads; superadmin writes. */
+  listRoadmapPhases(): Promise<RoadmapPhase[]>;
+  /** Add a phase at the end of the run. The fresh list comes back. */
+  createRoadmapPhase(input: NewRoadmapPhase): Promise<RoadmapPhase[]>;
+  /** Change one — name, dates, summary, status. Only what is sent is written. */
+  updateRoadmapPhase(id: string, patch: RoadmapPhasePatch): Promise<RoadmapPhase[]>;
+  /**
+   * Remove one. The requests planned into it stay, with their phase cleared — ON DELETE
+   * SET NULL, because deleting a phase must never delete what people asked for.
+   */
+  deleteRoadmapPhase(id: string): Promise<RoadmapPhase[]>;
+  /** Move a phase up or down the run, renumbering the whole run so no two share a slot. */
+  moveRoadmapPhase(id: string, direction: "up" | "down"): Promise<RoadmapPhase[]>;
+
+  // ---- the changelog (0063) -----------------------------------------------
+  /** Releases newest first, each with its lines. Everybody reads; superadmin writes. */
+  listReleases(): Promise<Release[]>;
+  /**
+   * Publish one, with its lines in the same call. A release with no lines is a version
+   * number nobody can read anything into, so the two are written together or not at all.
+   */
+  createRelease(input: NewRelease): Promise<Release[]>;
+  /** Unpublish one. Its lines go with it (CASCADE); the requests they name do not. */
+  deleteRelease(id: string): Promise<Release[]>;
 
   // ---- preferences (0050) -----------------------------------------------
   /**
@@ -429,7 +492,18 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "deleteTask",
   "submitFeedback",
   "listFeedback",
-  "setFeedbackStatus",
+  "setFeedbackStage",
+  "setFeedbackPhase",
+  "setFeedbackVote",
+  "attachmentUrl",
+  "listRoadmapPhases",
+  "createRoadmapPhase",
+  "updateRoadmapPhase",
+  "deleteRoadmapPhase",
+  "moveRoadmapPhase",
+  "listReleases",
+  "createRelease",
+  "deleteRelease",
   "listMyPreferences",
   "saveMyPreferences",
   "updateStageSla",
@@ -489,9 +563,20 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   createTask: "tasks",
   updateTask: "tasks",
   deleteTask: "tasks",
-  submitFeedback: "feedback",
-  listFeedback: "feedback",
-  setFeedbackStatus: "feedback",
+  submitFeedback: "feedback + feedback_attachments",
+  listFeedback: "feedback_display",
+  setFeedbackStage: "feedback",
+  setFeedbackPhase: "feedback",
+  setFeedbackVote: "feedback_votes",
+  attachmentUrl: "storage: feedback-screenshots",
+  listRoadmapPhases: "roadmap_phases",
+  createRoadmapPhase: "roadmap_phases",
+  updateRoadmapPhase: "roadmap_phases",
+  deleteRoadmapPhase: "roadmap_phases",
+  moveRoadmapPhase: "roadmap_phases",
+  listReleases: "releases + release_entries",
+  createRelease: "releases + release_entries",
+  deleteRelease: "releases",
   listMyPreferences: "user_preferences",
   saveMyPreferences: "user_preferences",
   listTemplatePhases: "pipeline_stages",

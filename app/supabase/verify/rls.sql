@@ -205,20 +205,104 @@ begin
     raise warning 'FAIL: unexpected on shared saved views (%)', sqlerrm;
   end;
 
-  -- 0052: bugs and ideas. The widest write in the schema next to one of its narrowest
-  -- reads, which is the pair worth probing: this test person is at `user`, so they may
-  -- report and must not be able to read a single report back — their own included.
-  -- A policy that got this wrong would not look broken; it would quietly show everyone
-  -- what everyone else had reported.
+  -- 0052, REVERSED BY 0060: bugs and requests. The read used to be admin-only and this
+  -- probe asserted a non-admin saw NOTHING. It now asserts the opposite, and the flip is
+  -- deliberate: Amber's reason for the tracker was "this will help stop people saying I
+  -- want this to happen when it is already planned", which a queue nobody can see cannot
+  -- do. What did not change is the write — see the next two blocks.
   begin
     insert into feedback (profile_id, feedback_kind, feedback_title, feedback_page)
     values ((select current_profile_id()), 'bug', '__rls_probe__', '/jobs');
-    if (select count(*) from feedback) = 0 then
-      raise notice 'ok  feedback: an ordinary person reports, and reads nothing back — not even their own';
+    if (select count(*) from feedback where feedback_title = '__rls_probe__') = 1 then
+      raise notice 'ok  feedback: an ordinary person reports, and can read the tracker back (0060)';
     else
-      raise warning 'FAIL: a non-admin read % feedback row(s)', (select count(*) from feedback);
+      raise warning 'FAIL: an ordinary person could not read the tracker they just wrote to';
     end if;
   exception when others then raise warning 'FAIL: unexpected reporting a bug (%)', sqlerrm;
+  end;
+
+  -- 0060: the stage is superadmin's. At `user` the UPDATE policy matches no row, so the
+  -- refusal is a row count of zero — the trigger never even runs. The admin case, where
+  -- the policy passes and the trigger is the only thing standing in the way, is probed
+  -- separately below, because they are two mechanisms wearing one sentence.
+  declare
+    moved_stage int;
+  begin
+    update feedback set feedback_stage = 'planned' where feedback_title = '__rls_probe__';
+    get diagnostics moved_stage = row_count;
+    if moved_stage = 0 then
+      raise notice 'ok  feedback: a user cannot move a request — the policy matches nothing';
+    else
+      raise warning 'FAIL: a user moved % request(s) along the queue', moved_stage;
+    end if;
+  exception
+    when insufficient_privilege then
+      raise notice 'ok  feedback: a user cannot move a request (refused outright)';
+    when others then raise warning 'FAIL: unexpected moving a request at user (%)', sqlerrm;
+  end;
+
+  -- 0061: one thumbs up each, and the primary key is what says so. Three things, in the
+  -- order they can go wrong: a vote works, a second one from the same person is refused
+  -- by the key rather than by the app, and a vote stamped onto a colleague is refused by
+  -- the with-check. The middle one is the rule Amber actually stated.
+  declare
+    probe_id uuid;
+  begin
+    select feedback_id into probe_id from feedback where feedback_title = '__rls_probe__' limit 1;
+
+    insert into feedback_votes (feedback_id, profile_id)
+    values (probe_id, (select current_profile_id()));
+    if (select count(*) from feedback_votes where feedback_id = probe_id) = 1 then
+      raise notice 'ok  feedback_votes: an ordinary person can vote';
+    else
+      raise warning 'FAIL: a vote was cast and not readable';
+    end if;
+
+    begin
+      insert into feedback_votes (feedback_id, profile_id)
+      values (probe_id, (select current_profile_id()));
+      raise warning 'FAIL: the same person voted twice';
+    exception
+      when unique_violation then
+        raise notice 'ok  feedback_votes: a second vote from the same person is refused by the key';
+    end;
+
+    begin
+      insert into feedback_votes (feedback_id, profile_id)
+      values (probe_id, (select profile_id from profiles
+                          where profile_email <> 'behaviour-test@lofty.com.au' limit 1));
+      raise warning 'FAIL: a vote was cast under somebody else';
+    exception
+      when insufficient_privilege then
+        raise notice 'ok  feedback_votes: refused a vote cast under another person';
+    end;
+
+    -- And taking it back, which is the whole reason there is no counter column.
+    delete from feedback_votes where feedback_id = probe_id;
+    if (select count(*) from feedback_votes where feedback_id = probe_id) = 0 then
+      raise notice 'ok  feedback_votes: your own vote is yours to withdraw';
+    else
+      raise warning 'FAIL: a vote could not be withdrawn';
+    end if;
+  exception when others then raise warning 'FAIL: unexpected voting (%)', sqlerrm;
+  end;
+
+  -- 0063: the roadmap and the changelog are read by everybody and written by superadmin.
+  -- The read half here; the write half is probed at manager and again at admin below.
+  begin
+    perform 1 from roadmap_phases limit 1;
+    perform 1 from releases limit 1;
+    raise notice 'ok  the roadmap and the changelog are readable by an ordinary person';
+  exception when others then raise warning 'FAIL: an ordinary person could not read the roadmap (%)', sqlerrm;
+  end;
+
+  begin
+    insert into roadmap_phases (roadmap_phase_name, roadmap_phase_position)
+    values ('__rls_probe__', 999);
+    raise warning 'FAIL: a user added a roadmap phase';
+  exception
+    when insufficient_privilege then raise notice 'ok  roadmap_phases refused a phase below superadmin';
+    when others then raise warning 'FAIL: unexpected adding a phase (%)', sqlerrm;
   end;
 
   -- The other half of the insert policy: the row must be stamped with the sender. Without
@@ -235,19 +319,20 @@ begin
     when others then raise warning 'FAIL: unexpected filing under another person (%)', sqlerrm;
   end;
 
-  -- Triage is admin work. Below it the update matches no row rather than erroring, which
-  -- is the only signal available — so the probe asserts the row count, not an exception.
+  -- Editing somebody's report — the title, or which phase it is planned into — is admin
+  -- work. Below it the update matches no row rather than erroring, which is the only
+  -- signal available, so the probe asserts the row count and not an exception.
   declare
     triaged int;
   begin
-    update feedback set feedback_status = 'done';
+    update feedback set roadmap_phase_id = null where feedback_title = '__rls_probe__';
     get diagnostics triaged = row_count;
     if triaged = 0 then
-      raise notice 'ok  feedback: setting a status is admin work, and matches nothing below it';
+      raise notice 'ok  feedback: editing a report is admin work, and matches nothing below it';
     else
-      raise warning 'FAIL: a non-admin triaged % report(s)', triaged;
+      raise warning 'FAIL: a non-admin edited % report(s)', triaged;
     end if;
-  exception when others then raise warning 'FAIL: unexpected triaging feedback (%)', sqlerrm;
+  exception when others then raise warning 'FAIL: unexpected editing feedback (%)', sqlerrm;
   end;
 
   begin
@@ -470,6 +555,158 @@ begin
   exception
     when insufficient_privilege then raise notice 'ok  expected days is editable, but not below superadmin';
     when others then raise warning 'FAIL: unexpected setting expected days (%)', sqlerrm;
+  end;
+end $$;
+reset role;
+
+-- =============================================================================
+-- AN ADMIN, THEN A SUPERADMIN — the one rule that needs both (0060)
+--
+-- "Only super admin can move the requests between stages" (Amber, 30 Aug) is enforced by
+-- a TRIGGER, not a policy, and the difference only shows at admin: an admin passes the
+-- UPDATE policy on `feedback` — they must, or they could not fix a title — and is then
+-- refused by guard_feedback_stage_change() with 42501. At `user` the policy already
+-- matched nothing, so that probe (above) would pass even with the trigger dropped. This
+-- is the block that would catch that.
+-- =============================================================================
+reset request.jwt.claim.sub;
+update profiles set profile_permission = 'admin'
+ where profile_email = 'behaviour-test@lofty.com.au';
+
+\echo '=== an ADMIN ==='
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+select 'permission: ' || current_permission()::text;
+
+\echo '--- probes (each must print ok) ---'
+do $$
+declare
+  edited int;
+begin
+  -- The half an admin DOES have: the words. Probed first, because if this fails the next
+  -- probe's refusal would prove nothing — a refusal is only interesting when the policy
+  -- it sits behind is passing.
+  begin
+    update feedback set feedback_detail = 'edited by the probe'
+     where feedback_title = '__rls_probe__';
+    get diagnostics edited = row_count;
+    if edited = 1 then
+      raise notice 'ok  an admin can edit a report';
+    else
+      raise warning 'FAIL: an admin could not edit a report (% rows)', edited;
+    end if;
+  exception when others then raise warning 'FAIL: unexpected admin editing a report (%)', sqlerrm;
+  end;
+
+  -- …and the half they do not: the stage.
+  begin
+    update feedback set feedback_stage = 'planned' where feedback_title = '__rls_probe__';
+    raise warning 'FAIL: an ADMIN moved a request between stages — the trigger did not bite';
+  exception
+    when insufficient_privilege then
+      raise notice 'ok  an admin passes the policy and is refused by the stage trigger';
+    when others then raise warning 'FAIL: unexpected admin moving a request (%)', sqlerrm;
+  end;
+
+  -- The roadmap and the changelog are superadmin's too, and admin is the rung that would
+  -- most plausibly have been given them by mistake.
+  begin
+    insert into roadmap_phases (roadmap_phase_name, roadmap_phase_position)
+    values ('__rls_probe__', 999);
+    raise warning 'FAIL: an admin added a roadmap phase';
+  exception
+    when insufficient_privilege then raise notice 'ok  the roadmap is superadmin''s, not admin''s';
+    when others then raise warning 'FAIL: unexpected admin adding a phase (%)', sqlerrm;
+  end;
+
+  begin
+    insert into releases (release_version) values ('__rls_probe__');
+    raise warning 'FAIL: an admin published a release';
+  exception
+    when insufficient_privilege then raise notice 'ok  the changelog is superadmin''s, not admin''s';
+    when others then raise warning 'FAIL: unexpected admin publishing a release (%)', sqlerrm;
+  end;
+end $$;
+reset role;
+
+reset request.jwt.claim.sub;
+update profiles set profile_permission = 'superadmin'
+ where profile_email = 'behaviour-test@lofty.com.au';
+
+\echo '=== a SUPERADMIN ==='
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+
+\echo '--- probes (each must print ok) ---'
+do $$
+declare
+  before_stamp timestamptz;
+  after_stamp timestamptz;
+  phase uuid;
+  orphans int;
+begin
+  -- The move goes through, AND it restamps. Both, because a move that does not stamp
+  -- leaves "in this stage since" reading as the day the request was filed — which looks
+  -- like a date rather than like a bug.
+  begin
+    -- Parked in the past for the same reason the no-op probe below parks it: now() is
+    -- transaction time, so "the stamp moved" is only observable against a date that is
+    -- definitely older than this transaction.
+    update feedback set feedback_stage_entered_at = timestamptz '2020-01-01'
+     where feedback_title = '__rls_probe__';
+    select feedback_stage_entered_at into before_stamp
+      from feedback where feedback_title = '__rls_probe__';
+    update feedback set feedback_stage = 'planned' where feedback_title = '__rls_probe__';
+    select feedback_stage_entered_at into after_stamp
+      from feedback where feedback_title = '__rls_probe__';
+    if after_stamp > before_stamp then
+      raise notice 'ok  a superadmin moves a request, and the stage stamp moves with it';
+    else
+      raise warning 'FAIL: the stage moved and feedback_stage_entered_at did not';
+    end if;
+  exception when others then raise warning 'FAIL: unexpected superadmin moving a request (%)', sqlerrm;
+  end;
+
+  -- Setting the stage to the stage it already holds is not a move, and must not restamp.
+  -- Without the `is distinct from` in the trigger this passes silently and every "stuck
+  -- since" date quietly resets whenever anything else on the row is saved.
+  --
+  -- The anchor date is not decoration. now() is transaction time, so a trigger stamping
+  -- unconditionally writes the SAME value the row already had and a straight before/after
+  -- comparison cannot see it — watched happening: with the guard removed from the stamp,
+  -- this probe passed. Parking the stamp in 2020 first (an update that does not mention
+  -- feedback_stage, so the trigger does not fire) makes any restamp visible.
+  begin
+    update feedback set feedback_stage_entered_at = timestamptz '2020-01-01'
+     where feedback_title = '__rls_probe__';
+    select feedback_stage_entered_at into before_stamp
+      from feedback where feedback_title = '__rls_probe__';
+    update feedback set feedback_stage = 'planned' where feedback_title = '__rls_probe__';
+    select feedback_stage_entered_at into after_stamp
+      from feedback where feedback_title = '__rls_probe__';
+    if after_stamp = before_stamp then
+      raise notice 'ok  setting a stage to the one it already holds does not restamp';
+    else
+      raise warning 'FAIL: a no-op stage write restamped feedback_stage_entered_at';
+    end if;
+  exception when others then raise warning 'FAIL: unexpected no-op stage write (%)', sqlerrm;
+  end;
+
+  -- 0063, the destructive one: removing a phase must never remove what people asked for.
+  -- ON DELETE SET NULL is one word away from CASCADE, and the difference is forty
+  -- people's requests.
+  begin
+    insert into roadmap_phases (roadmap_phase_name, roadmap_phase_position)
+    values ('__rls_probe__', 999) returning roadmap_phase_id into phase;
+    update feedback set roadmap_phase_id = phase where feedback_title = '__rls_probe__';
+    delete from roadmap_phases where roadmap_phase_id = phase;
+    select count(*) into orphans from feedback where feedback_title = '__rls_probe__';
+    if orphans = 1 then
+      raise notice 'ok  deleting a phase clears the link and leaves the request standing';
+    else
+      raise warning 'FAIL: deleting a roadmap phase took its requests with it';
+    end if;
+  exception when others then raise warning 'FAIL: unexpected removing a phase (%)', sqlerrm;
   end;
 end $$;
 reset role;

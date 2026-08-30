@@ -335,4 +335,68 @@ BEGIN
     RAISE WARNING 'FAIL: a property with format "paragraph" was accepted — not a known format';
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  property_defs_format_is_known rejected "paragraph"';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  property_defs_format)', SQLERRM; END;
+
+  -- ------------------------------------------------- the tracker (0060-0063)
+  BEGIN
+    INSERT INTO feedback (feedback_kind, feedback_title, feedback_stage)
+    VALUES ('bug', 'A stage that does not exist', 'triaged');
+    RAISE WARNING 'FAIL: an unknown feedback stage was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  feedback_stage_is_known rejected "triaged"';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  feedback_stage_is_known)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO roadmap_phases (roadmap_phase_name, roadmap_phase_position,
+                                roadmap_phase_starts_on, roadmap_phase_ends_on)
+    VALUES ('Backwards', 901, DATE '2026-10-01', DATE '2026-09-01');
+    RAISE WARNING 'FAIL: a phase ending before it starts was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  roadmap_phase_dates_in_order rejected an end before a start';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  roadmap_phase_dates_in_order)', SQLERRM; END;
+
+  -- A phase with no dates at all must be ACCEPTED — the check is written to allow it, and
+  -- an unscheduled phase is the normal state of anything past the next one. Probed here
+  -- rather than assumed, because "dates in order" is one careless rewrite away from
+  -- "dates required", which would force somebody to invent a date to save a phase.
+  BEGIN
+    INSERT INTO roadmap_phases (roadmap_phase_name, roadmap_phase_position)
+    VALUES ('__constraint_probe_undated__', 902);
+    RAISE NOTICE 'ok  an undated phase is allowed — unscheduled is a real state';
+    DELETE FROM roadmap_phases WHERE roadmap_phase_name = '__constraint_probe_undated__';
+  EXCEPTION WHEN OTHERS THEN RAISE WARNING 'FAIL: an undated roadmap phase was refused (%)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO roadmap_phases (roadmap_phase_name, roadmap_phase_position)
+    VALUES ('__constraint_probe_a__', 903);
+    INSERT INTO roadmap_phases (roadmap_phase_name, roadmap_phase_position)
+    VALUES ('__constraint_probe_b__', 903);
+    RAISE WARNING 'FAIL: two phases claimed position 903';
+  EXCEPTION WHEN unique_violation THEN RAISE NOTICE 'ok  roadmap_phases_position_idx refused a second phase in one slot';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  roadmap_phases_position_idx)', SQLERRM; END;
+  DELETE FROM roadmap_phases WHERE roadmap_phase_name LIKE '__constraint_probe%';
+
+  BEGIN
+    INSERT INTO releases (release_version) VALUES ('   ');
+    RAISE WARNING 'FAIL: a release with a blank version was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  release_version_not_blank rejected whitespace';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  release_version_not_blank)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO releases (release_version) VALUES ('__constraint_probe__');
+    INSERT INTO release_entries (release_id, release_entry_kind, release_entry_summary)
+    SELECT release_id, 'improved', 'Not one of the four verbs'
+      FROM releases WHERE release_version = '__constraint_probe__';
+    RAISE WARNING 'FAIL: a changelog line of kind "improved" was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  release_entry_kind_is_known rejected "improved"';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  release_entry_kind_is_known)', SQLERRM; END;
+  DELETE FROM releases WHERE release_version = '__constraint_probe__';
+
+  BEGIN
+    INSERT INTO feedback (feedback_kind, feedback_title) VALUES ('bug', '__constraint_probe__');
+    INSERT INTO feedback_attachments (feedback_id, feedback_attachment_path)
+    SELECT feedback_id, '/same/object.png' FROM feedback WHERE feedback_title = '__constraint_probe__';
+    INSERT INTO feedback_attachments (feedback_id, feedback_attachment_path)
+    SELECT feedback_id, '/same/object.png' FROM feedback WHERE feedback_title = '__constraint_probe__';
+    RAISE WARNING 'FAIL: two attachment rows pointed at one stored object';
+  EXCEPTION WHEN unique_violation THEN RAISE NOTICE 'ok  feedback_attachment_path is unique — one row per object';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  feedback_attachment_path unique)', SQLERRM; END;
+  DELETE FROM feedback WHERE feedback_title = '__constraint_probe__';
 END $$;

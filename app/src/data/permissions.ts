@@ -26,8 +26,16 @@ import { PERMISSION_LEVELS, type PermissionLevel } from "./types";
 
 export const PERMISSION_LADDER: readonly PermissionLevel[] = PERMISSION_LEVELS;
 
-/** Read at migration 0038. Shown on the page so a stale transcription is visible. */
-export const PERMISSIONS_READ_AT = "0038";
+/**
+ * Shown on the page so a stale transcription is visible.
+ *
+ * Honest about what this number covers: the rules above the tracker block were read out
+ * of `pg_policy` at 0038 and have not been re-read since; the tracker rules were read at
+ * 0063. The higher number is shown because it is the one a reader would use to decide
+ * whether this file predates a change they are looking at — but "read at 0063" does not
+ * mean every row was re-derived then, and `verify/rls.sql` remains what proves any of it.
+ */
+export const PERMISSIONS_READ_AT = "0063";
 
 export interface PermissionRule {
   /** What a person would call the thing. */
@@ -79,7 +87,35 @@ export const PERMISSION_RULES: readonly PermissionRule[] = [
     note: "Your own at any rung; anybody else's needs admin." },
 
   { object: "Documents", action: "Upload and edit", needs: "user", enforcedBy: "documents INSERT/UPDATE ≥ user" },
-  { object: "Documents", action: "Delete", needs: "admin", enforcedBy: "documents DELETE ≥ admin" }
+  { object: "Documents", action: "Delete", needs: "admin", enforcedBy: "documents DELETE ≥ admin" },
+
+  // The tracker (0052, 0060–0063). Read at migration 0063.
+  { object: "Bugs and requests", action: "Send one", needs: "viewer",
+    enforcedBy: "feedback INSERT: is_active_user() and stamped as you",
+    note: "The widest write in the app. The row can only ever be filed under the person filing it." },
+  { object: "Bugs and requests", action: "Read the tracker", needs: "viewer",
+    enforcedBy: "feedback SELECT: is_active_user(), 0060",
+    note: "Reversed 0052's admin-only read. A queue nobody can see cannot stop the duplicate request it exists to prevent." },
+  { object: "Bugs and requests", action: "Vote — once", needs: "viewer",
+    enforcedBy: "feedback_votes INSERT/DELETE: your own row only",
+    note: "Once is the primary key (feedback_id, profile_id), not a check the app makes." },
+  { object: "Bugs and requests", action: "Move between stages", needs: "superadmin",
+    enforcedBy: "guard_feedback_stage_change() trigger, 0060",
+    note: "Amber, 30 August. A column rule, so a trigger rather than a policy — and it bites at admin, which the UPDATE policy lets through." },
+  { object: "Bugs and requests", action: "Plan into a roadmap phase", needs: "admin",
+    enforcedBy: "feedback UPDATE ≥ admin" },
+  { object: "Bugs and requests", action: "Delete one", needs: null,
+    enforcedBy: "no DELETE policy on feedback",
+    note: "Nobody, by design. 'Declined' is the answer to a request that is not going ahead, and it keeps the record of having considered it." },
+
+  { object: "The roadmap", action: "Read it", needs: "viewer", enforcedBy: "roadmap_phases SELECT: is_active_user()" },
+  { object: "The roadmap", action: "Add, change or remove a phase", needs: "superadmin",
+    enforcedBy: "roadmap_phases ALL ≥ superadmin",
+    note: "Removing a phase leaves its requests standing — ON DELETE SET NULL, deliberately." },
+
+  { object: "The changelog", action: "Read it", needs: "viewer", enforcedBy: "releases SELECT: is_active_user()" },
+  { object: "The changelog", action: "Publish a release", needs: "superadmin",
+    enforcedBy: "releases / release_entries ALL ≥ superadmin" }
 ];
 
 /** `viewer` is on the ladder but not in use — parked 23 August, and the page says so. */

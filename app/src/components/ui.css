@@ -2003,3 +2003,25 @@ code { overflow-wrap: anywhere; }
 }
 .drawer-find-results button:first-child { border-top: 0; }
 .drawer-find-results button:hover { background: var(--primary-background-hover-color); }
+
+/* --------------------------------------------------------------- the send form */
+.feedback-kinds { display: grid; gap: var(--space-8); }
+.feedback-kind {
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-small);
+  padding: var(--space-8);
+}
+.feedback-kind.is-on { border-color: var(--primary-color); background: var(--primary-background-hover-color); }
+.feedback-kind > span { display: block; margin-left: var(--space-24); }
+
+.feedback-file { font: var(--font-text3-normal); color: var(--primary-text-color); }
+.feedback-files { list-style: none; margin: var(--space-8) 0 0 0; padding: 0; }
+.feedback-files li { display: flex; align-items: center; gap: var(--space-8); min-height: 24px; }
+
+.feedback-captured {
+  background: var(--primary-background-hover-color);
+  border-radius: var(--border-radius-small);
+  padding: var(--space-8);
+  display: grid;
+  gap: var(--space-4);
+}

@@ -19,6 +19,7 @@ import { TemplatesPage } from "./pages/TemplatesPage";
 import { AdminPage } from "./pages/AdminPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
+import { UpdatesPage } from "./pages/UpdatesPage";
 import { LANDING_ROUTES, readPrefs } from "./data/preferences";
 
 const THEME_KEY = "lofty-theme";
@@ -175,6 +176,11 @@ export default function App() {
               />
               {/* Setup owns Properties, Dictionary, Wiring and Automations. The
                   section is in the path so a tab can be linked to. */}
+              {/* The tracker everybody can see: what has been asked for, what is
+                  planned, and what shipped. The section is in the path so a link to
+                  the roadmap is a link somebody can send. */}
+              <Route path="updates" element={<UpdatesPage />} />
+              <Route path="updates/:section" element={<UpdatesPage />} />
               <Route path="setup" element={<SetupPage />} />
               <Route path="setup/:section" element={<SetupPage />} />
               {/* The old top-level routes still resolve — they were in the nav for

@@ -1,42 +1,52 @@
 import { useState } from "react";
 import { Text } from "@vibe/core";
 import { useQuery, useRepository } from "../data/DataProvider";
+import { usePermission } from "../data/PermissionProvider";
 import { Select } from "../components/Select";
 import { Problem } from "../components/Form";
 import { LoadProblem } from "../components/SearchNotices";
-import { FEEDBACK_STATUSES, type FeedbackKind, type FeedbackStatus } from "../data/types";
+import {
+  FEEDBACK_STAGES, FEEDBACK_STAGE_LABELS,
+  type FeedbackItem, type FeedbackKind, type FeedbackStage
+} from "../data/types";
 import "../components/ui.css";
 
 /**
- * What people have reported — one tab per kind (0052).
+ * Triage — what people have reported, read the way somebody fixing it needs it (0052,
+ * reshaped by 0060).
  *
- * Admin and above only, and that is the database's answer rather than this screen's:
- * the SELECT policy admits `current_permission() >= 'admin'`, so a manager who typed
- * the URL gets an empty list from Supabase, not a list this component chose to hide.
- * The tab is not offered below admin either, but that part is only tidiness.
+ * This screen and Updates read the same table and are not duplicates. Updates is the
+ * queue everybody can see: titles, stages, votes. This is the working list — the page it
+ * was sent from, the error the app was showing, the browser, the screenshots, all in one
+ * table you can scan down. The read policy no longer separates them (0060 opened it to
+ * everybody); the two audiences do.
  *
- * The status control is the point of the screen. Amber's reason for the whole feature
- * was *"this way I can track what needs to be implemented"* — a list you cannot mark up
- * has to be re-read from the top every week to work out what is left.
+ * WHAT THE STAGE CONTROL DOES BELOW SUPERADMIN: nothing, and it is not offered. Amber's
+ * instruction was *"only super admin can move the requests between stages"*, and the
+ * database is what enforces it — `guard_feedback_stage_change()` raises 42501 at admin,
+ * which is a rung that passes the UPDATE policy. So an admin sees the stage as text. That
+ * is the one place in this app where hiding a control matters for more than tidiness:
+ * offering a select that always errors would read as a broken screen rather than a rule.
  *
- * There is no delete. `declined` says a report was read and is not being actioned,
- * which is a different and more useful fact than the report never existing.
+ * There is still no delete. `declined` says a report was read and is not being actioned,
+ * which is a different and more useful fact than the report never having existed.
  */
-
-const STATUS_OPTIONS = FEEDBACK_STATUSES.map(s => ({ value: s, label: s }));
 
 export function FeedbackList({ kind }: { kind: FeedbackKind }) {
   const repo = useRepository();
+  const { can } = usePermission();
   const [reloadKey, setReloadKey] = useState(0);
   const { data: items, loading, error } = useQuery(r => r.listFeedback(kind), [], [kind, reloadKey]);
+  const { data: phases } = useQuery(r => r.listRoadmapPhases(), [], [reloadKey]);
   const [saving, setSaving] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const canMove = can("superadmin");
 
-  const setStatus = async (id: string, status: FeedbackStatus) => {
+  const run = async (id: string, work: () => Promise<unknown>) => {
     setSaving(id);
     setProblem(null);
     try {
-      await repo.setFeedbackStatus(id, status);
+      await work();
       setReloadKey(k => k + 1);
     } catch (e) {
       setProblem(e instanceof Error ? e.message : String(e));
@@ -48,15 +58,15 @@ export function FeedbackList({ kind }: { kind: FeedbackKind }) {
   return (
     <section className="panel">
       <div className="panel-head">
-        <Text type="text2" weight="bold">{kind === "bug" ? "Bugs" : "Ideas"}</Text>
+        <Text type="text2" weight="bold">{kind === "bug" ? "Bugs" : "Ideas and requests"}</Text>
         <Text type="text3" color="secondary">
           {items.length} {items.length === 1 ? "report" : "reports"}
         </Text>
       </div>
       <Text type="text2" color="secondary" ellipsis={false}>
-        Sent from the footer by anyone signed in. Only admins see this list — the sender
-        cannot read their own report back, so if something needs a conversation, the
-        name beside it is who to go to.
+        Sent from the footer by anyone signed in. Everyone can see the queue on Updates;
+        this is the same list with what a fix needs — the page, the error, the browser and
+        the screenshots.{canMove ? "" : " Moving a request between stages needs superadmin."}
       </Text>
 
       {error && <LoadProblem error={error} />}
@@ -78,41 +88,89 @@ export function FeedbackList({ kind }: { kind: FeedbackKind }) {
                 <th scope="col">What</th>
                 <th scope="col">From</th>
                 <th scope="col">Where</th>
+                <th scope="col">Votes</th>
                 <th scope="col">Sent</th>
-                <th scope="col">Status</th>
+                <th scope="col">Stage</th>
+                <th scope="col">Phase</th>
               </tr>
             </thead>
             <tbody>
               {items.map(f => (
-                <tr key={f.id}>
-                  <td>
-                    <Text type="text2" weight="medium" element="div" ellipsis={false}>{f.title}</Text>
-                    {f.detail && (
-                      <Text type="text3" color="secondary" element="div" ellipsis={false}>
-                        {f.detail}
-                      </Text>
-                    )}
-                  </td>
-                  {/* An em dash, not "Unknown": the profile is gone, and naming somebody
-                      would be a claim about who sent it. */}
-                  <td><Text type="text2">{f.fromName ?? "—"}</Text></td>
-                  <td><span className="dict-type">{f.page ?? "—"}</span></td>
-                  <td><Text type="text2">{new Date(f.createdAt).toLocaleDateString()}</Text></td>
-                  <td>
-                    <Select
-                      options={STATUS_OPTIONS}
-                      value={f.status}
-                      onChange={v => void setStatus(f.id, v as FeedbackStatus)}
-                      aria-label={`Status for "${f.title}"`}
-                      className={saving === f.id ? "is-busy" : undefined}
-                    />
-                  </td>
-                </tr>
+                <Row
+                  key={f.id}
+                  item={f}
+                  phases={phases}
+                  canMove={canMove}
+                  busy={saving === f.id}
+                  onStage={stage => void run(f.id, () => repo.setFeedbackStage(f.id, stage))}
+                  onPhase={phaseId => void run(f.id, () => repo.setFeedbackPhase(f.id, phaseId))}
+                />
               ))}
             </tbody>
           </table>
         </div>
       )}
     </section>
+  );
+}
+
+function Row({
+  item, phases, canMove, busy, onStage, onPhase
+}: {
+  item: FeedbackItem;
+  phases: { id: string; name: string }[];
+  canMove: boolean;
+  busy: boolean;
+  onStage: (stage: FeedbackStage) => void;
+  onPhase: (phaseId: string | null) => void;
+}) {
+  return (
+    <tr>
+      <td>
+        <Text type="text2" weight="medium" element="div" ellipsis={false}>{item.title}</Text>
+        {item.detail && (
+          <Text type="text3" color="secondary" element="div" ellipsis={false}>{item.detail}</Text>
+        )}
+        {item.errorText && (
+          <div><span className="dict-type">{item.errorText}</span></div>
+        )}
+        {item.attachments.length > 0 && (
+          <Text type="text3" color="secondary" element="div">
+            {item.attachments.length}{" "}
+            {item.attachments.length === 1 ? "screenshot" : "screenshots"} — open it on Updates
+          </Text>
+        )}
+      </td>
+      {/* An em dash, not "Unknown": the profile is gone, and naming somebody would be a
+          claim about who sent it. */}
+      <td><Text type="text2">{item.fromName ?? "—"}</Text></td>
+      <td><span className="dict-type">{item.page ?? "—"}</span></td>
+      <td><Text type="text2">{item.voteCount}</Text></td>
+      <td><Text type="text2">{new Date(item.createdAt).toLocaleDateString()}</Text></td>
+      <td>
+        {canMove ? (
+          <Select
+            options={FEEDBACK_STAGES.map(s => ({ value: s, label: FEEDBACK_STAGE_LABELS[s] }))}
+            value={item.stage}
+            onChange={v => onStage(v as FeedbackStage)}
+            aria-label={`Stage for "${item.title}"`}
+            className={busy ? "is-busy" : undefined}
+          />
+        ) : (
+          <Text type="text2">{FEEDBACK_STAGE_LABELS[item.stage]}</Text>
+        )}
+      </td>
+      <td>
+        <Select
+          options={phases.map(p => ({ value: p.id, label: p.name }))}
+          value={item.roadmapPhaseId}
+          clearable
+          placeholder={phases.length === 0 ? "No phases yet" : "Not planned"}
+          onChange={v => onPhase(v)}
+          aria-label={`Roadmap phase for "${item.title}"`}
+          className={busy ? "is-busy" : undefined}
+        />
+      </td>
+    </tr>
   );
 }

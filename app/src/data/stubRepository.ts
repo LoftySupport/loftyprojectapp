@@ -229,12 +229,45 @@ export function createStubRepository(): Repository {
     // Bugs and ideas (0052) need somewhere for the row to land, and a stub run has
     // nowhere. Refused rather than swallowed: a form that says "thanks" and drops the
     // report is worse than one that says it cannot send.
+    // The tracker (0052, 0060–0063). Reads are empty and writes say why, which is the
+    // rule everywhere in this file: an empty list is a true answer about a database with
+    // nothing in it, and a write that silently succeeded here would be a report nobody
+    // ever receives.
     async submitFeedback(): Promise<never> {
       throw new Error("Sending a bug or an idea needs Supabase.");
     },
     async listFeedback(): Promise<never[]> { return []; },
-    async setFeedbackStatus(): Promise<never> {
-      throw new Error("Triaging feedback needs Supabase.");
+    async setFeedbackStage(): Promise<never> {
+      throw new Error("Moving a request between stages needs Supabase.");
+    },
+    async setFeedbackPhase(): Promise<never> {
+      throw new Error("Planning a request into a phase needs Supabase.");
+    },
+    async setFeedbackVote(): Promise<never> {
+      throw new Error("Voting needs Supabase.");
+    },
+    async attachmentUrl(): Promise<null> { return null; },
+
+    async listRoadmapPhases(): Promise<never[]> { return []; },
+    async createRoadmapPhase(): Promise<never> {
+      throw new Error("Adding a roadmap phase needs Supabase.");
+    },
+    async updateRoadmapPhase(): Promise<never> {
+      throw new Error("Changing a roadmap phase needs Supabase.");
+    },
+    async deleteRoadmapPhase(): Promise<never> {
+      throw new Error("Removing a roadmap phase needs Supabase.");
+    },
+    async moveRoadmapPhase(): Promise<never> {
+      throw new Error("Reordering the roadmap needs Supabase.");
+    },
+
+    async listReleases(): Promise<never[]> { return []; },
+    async createRelease(): Promise<never> {
+      throw new Error("Publishing a release needs Supabase.");
+    },
+    async deleteRelease(): Promise<never> {
+      throw new Error("Removing a release needs Supabase.");
     },
 
     // Preferences roam with the profile, and without a backend there is no profile.
