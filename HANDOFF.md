@@ -2,6 +2,20 @@
 
 Everything a new session needs to pick this up. Read this first, then `schema-plan.md`.
 
+<!-- generated:shipped -->
+**No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
+
+Unreleased: 8 changes since then —
+- Added: One form for reporting a bug or requesting a feature, with a radio instead of two footer buttons
+- Added: Screenshots, the page, the error and the browser sent with a report — captured, never typed
+- Added: A tracker everybody can see, with the stages requested, in review, planned and in development
+- Added: One thumbs up per person per request, and the vote count the next phase is planned from
+- Added: A roadmap of phases and dates, and what is planned into each
+- …and 3 more.
+
+<sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
+<!-- /generated:shipped -->
+
 **Phase A is done and applied. Next job: [Phase B, the import](#next-phase-b-the-import)** —
 and before it, the spine review described there, because that is the only category of
 change that gets expensive once 200 jobs are in.
