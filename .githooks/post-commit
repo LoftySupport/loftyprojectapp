@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+#
+# After every commit: bring CHANGELOG.md, ROADMAP.md, README.md and HANDOFF.md into line
+# with what the commit messages say (Amber, 30 Aug — "commits and updates to repo should
+# also update the changelog and roadmap and tick off any changes completed as well as
+# readme file and handoff").
+#
+# It REWRITES THE FILES AND STOPS THERE. It does not stage, amend or push, and that is
+# deliberate: a hook that amends silently rewrites a commit somebody may already have
+# pushed, and one that stages puts files into the next commit that nobody chose to put
+# there. The changes sit in the working tree with a line saying so.
+#
+# `--no-verify` skips this like any other hook. Nothing here can fail a commit: the
+# commit has already happened by the time post-commit runs, so the exit code is ignored
+# by git and set to 0 here to make that explicit.
+set -u
+root="$(git rev-parse --show-toplevel)"
+command -v node >/dev/null 2>&1 || exit 0
+
+out="$(node "$root/scripts/changelog.mjs" 2>&1)"
+status=$?
+[ -n "$out" ] && printf '%s\n' "$out"
+if [ $status -ne 0 ]; then
+  echo "changelog: a trailer could not be read — the change above is NOT in the changelog."
+fi
+if ! git diff --quiet -- CHANGELOG.md ROADMAP.md README.md HANDOFF.md 2>/dev/null; then
+  echo "changelog: the docs moved. Review them, then:  git add -u && git commit --amend --no-edit"
+fi
+exit 0

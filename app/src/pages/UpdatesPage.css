@@ -1,0 +1,330 @@
+/* Updates — the request board, the roadmap and the changelog.
+
+   Vibe's tokens throughout, so all three follow the theme without a single hard-coded
+   colour: the app has three themes (light, dark, black) and a literal hex here would be
+   the one element that does not turn with them. */
+
+/* -------------------------------------------------------------------- the bar */
+.updates-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex-wrap: wrap;
+  margin: var(--space-16) 0 var(--space-8) 0;
+}
+.updates-bar-spacer { flex: 1 1 auto; }
+/* Vibe's Dropdown fills its container, so in a flex row both filters stretch to half the
+   page each. Given a basis they sit at a readable width and still shrink on a phone,
+   where the row wraps. */
+.updates-bar > .select-wrap,
+.roadmap-actions > .select-wrap { flex: 0 1 220px; min-width: 160px; }
+
+/* ------------------------------------------------------------------- the board
+   Four columns that become two and then one. `minmax(0, 1fr)` rather than `1fr`:
+   without the zero minimum a long request title sets the column's intrinsic width and
+   the page scrolls sideways — the same fault the dashboard hit with the name token. */
+.updates-board {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-12);
+  margin-top: var(--space-16);
+  align-items: start;
+}
+@media (max-width: 1100px) { .updates-board { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 620px)  { .updates-board { grid-template-columns: minmax(0, 1fr); } }
+
+.updates-col {
+  background: var(--primary-background-hover-color);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-medium);
+  padding: var(--space-12);
+  min-width: 0;
+}
+/* One family deepening across the four positions, the same decision the lifecycle board
+   settled on (Amber, 27 Aug: one colour family, not two). The stages are a sequence, and
+   four unrelated hues would read as four unrelated things. */
+.updates-col-requested      { border-top: 3px solid var(--positive-color-selected); }
+.updates-col-in_review      { border-top: 3px solid var(--primary-color); }
+.updates-col-planned        { border-top: 3px solid var(--primary-hover-color); }
+.updates-col-in_development { border-top: 3px solid var(--primary-selected-color); }
+
+.updates-col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+.updates-col-meaning { margin-top: var(--space-4); min-height: 32px; }
+
+.updates-count {
+  font: var(--font-text3-normal);
+  color: var(--primary-text-color);
+  background: var(--primary-background-color);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-small);
+  padding: 0 var(--space-6);
+}
+
+.updates-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  margin-top: var(--space-12);
+}
+
+/* ------------------------------------------------------------------- one card */
+.updates-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-8);
+  background: var(--primary-background-color);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-small);
+  padding: var(--space-8);
+  min-width: 0;
+}
+/* The whole card is the button, so the hit area is the card and not a link inside it.
+   `text-align: left` because a button centres its text by default and this one is a
+   paragraph. */
+.updates-card-open {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+.updates-card-open:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+  border-radius: var(--border-radius-small);
+}
+
+.updates-kind {
+  align-self: flex-start;
+  font: var(--font-text3-normal);
+  border-radius: var(--border-radius-small);
+  padding: 0 var(--space-6);
+  border: 1px solid var(--layout-border-color);
+}
+.updates-kind-bug  { color: var(--negative-color); border-color: var(--negative-color); }
+.updates-kind-idea { color: var(--primary-color); border-color: var(--primary-color); }
+
+.updates-phase-chip,
+.updates-stage-chip {
+  align-self: flex-start;
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+  background: var(--primary-background-hover-color);
+  border-radius: var(--border-radius-small);
+  padding: 0 var(--space-6);
+}
+
+/* ---------------------------------------------------------------------- voting
+   44px wide and 32 tall so it clears the tap-target check on a phone — the same
+   threshold the responsive sweep applies everywhere else. */
+.updates-vote {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 44px;
+  min-height: 40px;
+  padding: var(--space-4);
+  background: var(--primary-background-color);
+  border: 1px solid var(--ui-border-color);
+  border-radius: var(--border-radius-small);
+  color: var(--secondary-text-color);
+  font: var(--font-text3-normal);
+  cursor: pointer;
+}
+.updates-vote:hover { background: var(--primary-background-hover-color); }
+.updates-vote:disabled { opacity: 0.6; cursor: default; }
+/* Not colour alone: the border thickens and the count goes bold, so the pressed state
+   survives a greyscale screen as well as `aria-pressed` survives a screen reader. */
+.updates-vote.is-on {
+  color: var(--primary-color);
+  border-color: var(--primary-color);
+  font: var(--font-text3-bold);
+}
+.updates-vote:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+
+/* ------------------------------------------------------- shipped and declined */
+.updates-ended {
+  margin-top: var(--space-16);
+  border-top: 1px solid var(--layout-border-color);
+  padding-top: var(--space-12);
+}
+.updates-ended summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  cursor: pointer;
+  min-height: 24px;
+}
+.updates-ended-list { margin: var(--space-8) 0 0 0; padding-left: var(--space-16); }
+.updates-ended-list li { margin-bottom: var(--space-4); }
+
+/* ------------------------------------------------------------ the open request */
+.updates-panel-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex-wrap: wrap;
+}
+.updates-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-4) var(--space-12);
+  margin: 0;
+}
+.updates-facts dt { font: var(--font-text3-bold); color: var(--secondary-text-color); }
+.updates-facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+
+.updates-shots { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-8); }
+.updates-shots img {
+  max-width: 100%;
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-small);
+}
+
+/* -------------------------------------------------------------------- roadmap */
+.roadmap { list-style: none; margin: var(--space-16) 0 0 0; padding: 0; display: grid; gap: var(--space-12); }
+
+.roadmap-phase {
+  background: var(--primary-background-color);
+  border: 1px solid var(--layout-border-color);
+  border-left: 4px solid var(--layout-border-color);
+  border-radius: var(--border-radius-medium);
+  padding: var(--space-12) var(--space-16);
+}
+.roadmap-phase.is-in_progress { border-left-color: var(--primary-color); }
+.roadmap-phase.is-delivered   { border-left-color: var(--positive-color); }
+
+.roadmap-phase-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+.roadmap-status {
+  font: var(--font-text3-normal);
+  border-radius: var(--border-radius-small);
+  padding: 0 var(--space-6);
+  border: 1px solid var(--layout-border-color);
+  color: var(--secondary-text-color);
+  white-space: nowrap;
+}
+.roadmap-status-in_progress { color: var(--primary-color); border-color: var(--primary-color); }
+.roadmap-status-delivered   { color: var(--positive-color); border-color: var(--positive-color); }
+
+.roadmap-items { list-style: none; margin: var(--space-8) 0 0 0; padding: 0; }
+.roadmap-items li { display: flex; gap: var(--space-8); align-items: baseline; margin-bottom: var(--space-4); }
+.roadmap-tick { color: var(--secondary-text-color); width: 1em; }
+
+.roadmap-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex-wrap: wrap;
+  margin-top: var(--space-12);
+}
+.roadmap-edit { margin-top: var(--space-12); }
+
+/* A native date input, styled only enough to sit beside Vibe's fields. Native rather
+   than a picker component: it is the one control every browser and phone already knows,
+   including the keyboard-only path, and Vibe's build here ships no date field. */
+.date-input {
+  font: var(--font-text2-normal);
+  color: var(--primary-text-color);
+  background: var(--primary-background-color);
+  border: 1px solid var(--ui-border-color);
+  border-radius: var(--border-radius-small);
+  padding: var(--space-6) var(--space-8);
+  min-height: 32px;
+}
+.date-input:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+
+/* ------------------------------------------------------------------ changelog */
+.release {
+  background: var(--primary-background-color);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-medium);
+  padding: var(--space-12) var(--space-16);
+  margin-top: var(--space-12);
+}
+.release-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+.release-group { margin-top: var(--space-8); }
+.release-group ul { margin: var(--space-4) 0 0 0; padding-left: var(--space-16); }
+.release-group li { margin-bottom: var(--space-4); }
+
+.release-lines { display: grid; gap: var(--space-8); }
+/* The line editor collapses to a stack on a narrow panel rather than squeezing four
+   controls onto one row — the panel is 460px docked, and four across is unusable. */
+.release-line {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) 160px max-content;
+  gap: var(--space-8);
+  align-items: center;
+}
+@media (max-width: 760px) { .release-line { grid-template-columns: minmax(0, 1fr); } }
+
+
+/* ------------------------------------------------- discussion, duplicates, follows
+   The Canny round (0064–0068). */
+
+.updates-card-chips { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+.updates-chip {
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+  background: var(--primary-background-hover-color);
+  border-radius: var(--border-radius-small);
+  padding: 0 var(--space-6);
+}
+/* "Moved" is only ever rendered for the person following it, so it can afford to be the
+   one loud chip on the card. */
+.updates-chip.is-new {
+  color: var(--text-color-on-primary);
+  background: var(--primary-color);
+}
+
+.updates-merged-notice {
+  background: var(--primary-background-hover-color);
+  border-left: 3px solid var(--primary-color);
+  border-radius: var(--border-radius-small);
+  padding: var(--space-8);
+}
+
+.updates-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  flex-wrap: wrap;
+}
+.updates-follow {
+  min-height: 32px;
+  padding: var(--space-4) var(--space-8);
+  background: var(--primary-background-color);
+  border: 1px solid var(--ui-border-color);
+  border-radius: var(--border-radius-small);
+  color: var(--secondary-text-color);
+  font: var(--font-text3-normal);
+  cursor: pointer;
+}
+.updates-follow:hover { background: var(--primary-background-hover-color); }
+.updates-follow.is-on { color: var(--primary-color); border-color: var(--primary-color); }
+.updates-follow:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+
+.updates-voters { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-4); }
+.updates-voters li { min-width: 0; }

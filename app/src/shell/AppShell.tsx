@@ -4,7 +4,7 @@ import {
   Avatar, Dialog, DialogContentContainer, Text, TextField
 } from "@vibe/core";
 import {
-  Doc, Home, Menu, NavigationChevronLeft, NavigationChevronRight,
+  Announcement, Doc, Home, Menu, NavigationChevronLeft, NavigationChevronRight,
   Person, SettingsKnobs
 } from "@vibe/icons";
 import { HouseChart, HousePin, Houses } from "../theme/houseIcons";
@@ -35,6 +35,9 @@ const PAGES = [
   { to: "/jobs", label: "Jobs", icon: HousePin },
   { to: "/reports", label: "Reports", icon: HouseChart },
   { to: "/templates", label: "Templates", icon: Doc },
+  // The tracker (0060–0063). In the main nav rather than in Setup, because it is for
+  // everybody: Setup is configuration and this is "what is happening with the app".
+  { to: "/updates", label: "Updates", icon: Announcement },
   { to: "/admin", label: "Admin", icon: Person },
   // Setup replaced Dictionary and Wiring as separate destinations: configuration was
   // sitting at the same rank as the work.

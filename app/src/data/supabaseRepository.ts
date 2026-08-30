@@ -12,9 +12,20 @@ import type {
   AddressHistoryEntry,
   CloneOptions,
   CommentEntry,
+  FeedbackAttachment,
   FeedbackItem,
   FeedbackKind,
-  FeedbackStatus,
+  FeedbackStage,
+  FeedbackVoter,
+  MovedRequest,
+  NewRelease,
+  NewRoadmapPhase,
+  Release,
+  ReleaseEntry,
+  ReleaseEntryKind,
+  RoadmapPhase,
+  RoadmapPhasePatch,
+  RoadmapPhaseStatus,
   Job,
   JobPatch,
   JobSplit,
@@ -82,7 +93,11 @@ const WIRED: RepositoryMethod[] = [
   "setProjectCurrentAddress", "listAddressHistory",
   "listStages", "listTeams", "updateTeam", "createTeam", "listTemplatePhases", "updateStageSla",
   "listSavedViews", "saveView", "deleteSavedView", "shareSavedView",
-  "submitFeedback", "listFeedback", "setFeedbackStatus", "cloneJob", "listRecordActivity",
+  "submitFeedback", "listFeedback", "setFeedbackStage", "setFeedbackPhase",
+  "setFeedbackVote", "attachmentUrl",
+  "listRoadmapPhases", "createRoadmapPhase", "updateRoadmapPhase", "deleteRoadmapPhase",
+  "moveRoadmapPhase", "listReleases", "createRelease", "deleteRelease",
+  "cloneJob", "listRecordActivity",
   "listMyPreferences", "saveMyPreferences",
   "listPropertyDefs", "createPropertyDef", "updatePropertyDef", "deletePropertyDef",
   "listDictionaryOverrides", "saveDictionaryOverride"
@@ -157,16 +172,72 @@ const emptyToNull = (v: string | null | undefined): string | null => {
 const TEAM_COLUMNS = "team_id, team_name, team_position, team_is_active";
 
 /**
+ * The private bucket screenshots go into (0062). Private, so every read is a signed URL
+ * asked for at the moment a card is opened — there is no permanent link to hold.
+ */
+const SCREENSHOT_BUCKET = "feedback-screenshots";
+
+/**
+ * What the tracker reads off `feedback_display` (0061, widened by 0068).
+ *
+ * One string literal, like every other column list here: postgrest-js parses these at
+ * the type level to shape the result, and `"a" + "b"` widens to `string`, which it
+ * cannot read.
+ */
+const FEEDBACK_DISPLAY_COLUMNS =
+  "feedback_id, feedback_kind, feedback_title, feedback_detail, feedback_page, feedback_error_text, feedback_stage, feedback_stage_entered_at, feedback_created_at, feedback_from_name, feedback_vote_count, feedback_voted_by_me, roadmap_phase_id, feedback_merged_into_id, feedback_merged_into_title, feedback_duplicate_count, feedback_comment_count, feedback_followed_by_me, feedback_move_unseen";
+
+/**
+ * One row of that view, as a request.
+ *
+ * Extracted because there were two copies of this mapping and 0068 added six columns to
+ * it: two copies of a mapper is how a board and a vote click end up disagreeing about
+ * what a request is. Attachments are passed in rather than read here — they are a second
+ * query, and the vote path deliberately does not make it.
+ */
+const toFeedbackItem = (
+  r: Record<string, any>,
+  attachments: FeedbackAttachment[] = []
+): FeedbackItem => ({
+  id: r.feedback_id,
+  kind: r.feedback_kind as FeedbackKind,
+  title: r.feedback_title,
+  detail: r.feedback_detail ?? "",
+  page: r.feedback_page ?? null,
+  errorText: r.feedback_error_text ?? null,
+  stage: r.feedback_stage as FeedbackStage,
+  stageEnteredAt: r.feedback_stage_entered_at,
+  // Empty rather than a stand-in when the profile is gone: "Unknown" would be a claim
+  // about who sent it.
+  fromName: r.feedback_from_name || null,
+  createdAt: r.feedback_created_at,
+  voteCount: Number(r.feedback_vote_count ?? 0),
+  votedByMe: Boolean(r.feedback_voted_by_me),
+  roadmapPhaseId: r.roadmap_phase_id ?? null,
+  mergedIntoId: r.feedback_merged_into_id ?? null,
+  mergedIntoTitle: r.feedback_merged_into_title ?? null,
+  duplicateCount: Number(r.feedback_duplicate_count ?? 0),
+  commentCount: Number(r.feedback_comment_count ?? 0),
+  followedByMe: Boolean(r.feedback_followed_by_me),
+  moveUnseen: Boolean(r.feedback_move_unseen),
+  attachments
+});
+
+/**
  * `comments` points at `profiles` twice (created_by, updated_by), so the author embed
  * names its constraint — the PGRST201 rule, same as everywhere else.
  */
 const COMMENT_COLUMNS =
-  "comment_id, project_id, job_id, task_id, variation_id, comment_body, parent_comment_id, comment_edited_at, comment_created_at, comment_created_by, comment_updated_at, comment_updated_by, author:profiles!comments_comment_created_by_fkey(profile_full_name)";
+  "comment_id, project_id, job_id, task_id, variation_id, feedback_id, comment_body, comment_is_pinned, comment_is_internal, comment_feedback_stage, parent_comment_id, comment_edited_at, comment_created_at, comment_created_by, comment_updated_at, comment_updated_by, author:profiles!comments_comment_created_by_fkey(profile_full_name)";
 
 type CommentRow = {
   comment_id: string;
   project_id: number | null; job_id: string | null;
   task_id: string | null; variation_id: string | null;
+  feedback_id?: string | null;
+  comment_is_pinned?: boolean | null;
+  comment_is_internal?: boolean | null;
+  comment_feedback_stage?: string | null;
   comment_body: string; parent_comment_id: string | null;
   comment_edited_at: string | null;
   comment_created_at: string; comment_created_by: string | null;
@@ -233,7 +304,11 @@ function toComment(r: CommentRow): CommentEntry {
     createdBy: r.comment_created_by,
     updatedAt: r.comment_updated_at,
     updatedBy: r.comment_updated_by,
-    authorName: r.author?.profile_full_name ?? null
+    authorName: r.author?.profile_full_name ?? null,
+    feedbackId: r.feedback_id ?? null,
+    isPinned: Boolean(r.comment_is_pinned),
+    isInternal: Boolean(r.comment_is_internal),
+    stageAnnounced: (r.comment_feedback_stage as FeedbackStage | null) ?? null
   };
 }
 
@@ -505,6 +580,39 @@ export function createSupabaseRepository(): Repository {
   // Pinned to the narrowed type: the build's tsc does not carry `if (!client)` into a
   // nested function the way the editor's does, and `db` makes the narrowing explicit.
   const db: SupabaseClient = client;
+
+  /**
+   * Upload the screenshots for one report and record them.
+   *
+   * The object path starts with the uploader's profile id, and it has to: the storage
+   * policy in 0062 compares `(storage.foldername(name))[1]` to `current_profile_id()`,
+   * because storage.objects has no column saying which report a file belongs to. The
+   * link between file and report is the `feedback_attachments` row and nothing else.
+   *
+   * The name is sanitised rather than trusted. A filename arrives from a person's
+   * machine, and `../` in an object path is the oldest trick there is; anything that is
+   * not a letter, number, dot or dash becomes a dash, and the uuid in front keeps two
+   * files called "Screenshot.png" apart.
+   */
+  const attachScreenshots = async (feedbackId: string, profileId: string, files: File[]) => {
+    for (const file of files) {
+      const safe = file.name.replace(/[^a-zA-Z0-9.-]/g, "-").slice(-80) || "screenshot";
+      const path = `${profileId}/${crypto.randomUUID()}-${safe}`;
+      const { error: uploadError } = await db.storage
+        .from(SCREENSHOT_BUCKET)
+        .upload(path, file, { contentType: file.type || undefined, upsert: false });
+      if (uploadError) throw uploadError;
+
+      const { error } = await db.from("feedback_attachments").insert({
+        feedback_id: feedbackId,
+        feedback_attachment_path: path,
+        feedback_attachment_name: file.name,
+        feedback_attachment_mime: file.type ?? "",
+        feedback_attachment_bytes: file.size ?? 0
+      });
+      if (error) throw error;
+    }
+  };
 
   /**
    * Insert one address row and return its id. The same normalisation everywhere: blank
@@ -877,26 +985,38 @@ export function createSupabaseRepository(): Repository {
       return entries.sort((a, b) => b.at.localeCompare(a.at)).slice(0, limit);
     },
 
-    async listComments(ref: { projectId?: number; jobId?: string }, limit = 50): Promise<CommentEntry[]> {
+    async listComments(
+      ref: { projectId?: number; jobId?: string; feedbackId?: string }, limit = 50
+    ): Promise<CommentEntry[]> {
       let q = client.from("comments").select(COMMENT_COLUMNS);
       // Exactly one ref, the same rule the CHECK enforces — asking with neither would
       // quietly return every comment in the company.
       if (ref.projectId != null) q = q.eq("project_id", ref.projectId);
       else if (ref.jobId != null) q = q.eq("job_id", ref.jobId);
-      else throw new Error("listComments needs a projectId or a jobId.");
+      else if (ref.feedbackId != null) q = q.eq("feedback_id", ref.feedbackId);
+      else throw new Error("listComments needs a projectId, a jobId or a feedbackId.");
 
       const { data, error } = await q
+        // Pinned first — the official answer sits above the discussion (0064). Then
+        // newest, which is the order every other thread in the app uses.
+        .order("comment_is_pinned", { ascending: false })
         .order("comment_created_at", { ascending: false })
         .limit(limit);
       if (error) throw error;
+      // Internal comments are filtered by the READ POLICY, not here. A client-side
+      // filter would mean the rows had already crossed the wire to somebody who may not
+      // read them, and the count on the board would have to guess at the same rule.
       return (data as unknown as CommentRow[]).map(toComment);
     },
 
     async addComment(
-      ref: { projectId?: number; jobId?: string }, body: string, mentions: string[] = []
+      ref: { projectId?: number; jobId?: string; feedbackId?: string },
+      body: string,
+      mentions: string[] = [],
+      standing: { internal?: boolean; stage?: FeedbackStage } = {}
     ): Promise<CommentEntry> {
-      if (ref.projectId == null && ref.jobId == null) {
-        throw new Error("addComment needs a projectId or a jobId.");
+      if (ref.projectId == null && ref.jobId == null && ref.feedbackId == null) {
+        throw new Error("addComment needs a projectId, a jobId or a feedbackId.");
       }
       // The author is NOT sent: comments_stamp_created_by fills it from the session,
       // which is the only version of "who wrote this" a client cannot forge.
@@ -905,7 +1025,13 @@ export function createSupabaseRepository(): Repository {
         .insert({
           project_id: ref.projectId ?? null,
           job_id: ref.jobId ?? null,
-          comment_body: body
+          feedback_id: ref.feedbackId ?? null,
+          comment_body: body,
+          // Both refused below admin by guard_comment_standing_on_insert(), so a
+          // non-admin sending them gets 42501 rather than a comment that quietly is
+          // not what they asked for.
+          comment_is_internal: standing.internal ?? false,
+          comment_feedback_stage: standing.stage ?? null
         })
         .select(COMMENT_COLUMNS)
         .single();
@@ -1978,65 +2104,568 @@ export function createSupabaseRepository(): Repository {
      * for, while working perfectly for the admin testing it. Insert only; the toast is
      * the confirmation.
      */
-    async submitFeedback(entry: NewFeedback): Promise<void> {
+    async submitFeedback(entry: NewFeedback): Promise<string> {
       const title = entry.title.trim();
       if (!title) throw new Error("Give it a one-line summary first.");
       const me = await repo.currentProfile();
       if (!me) throw new Error("Sending this needs you to be signed in.");
 
-      const { error } = await client.from("feedback").insert({
-        // Stamped here, not typed: the with-check compares it to current_profile_id(),
-        // so a report can only ever be filed under the person filing it.
-        profile_id: me.id,
-        feedback_kind: entry.kind,
-        feedback_title: title,
-        feedback_detail: entry.detail.trim(),
-        feedback_page: entry.page
-      });
-      if (error) throw error;
-    },
-
-    async listFeedback(kind: FeedbackKind): Promise<FeedbackItem[]> {
       const { data, error } = await client
         .from("feedback")
+        .insert({
+          // Stamped here, not typed: the with-check compares it to current_profile_id(),
+          // so a report can only ever be filed under the person filing it.
+          profile_id: me.id,
+          feedback_kind: entry.kind,
+          feedback_title: title,
+          feedback_detail: entry.detail.trim(),
+          feedback_page: entry.page,
+          feedback_error_text: entry.errorText?.trim() || null,
+          // Captured, never asked for: nobody knows their own browser version, and it is
+          // the first thing anybody asks when a bug reproduces for one person only.
+          feedback_user_agent: typeof navigator === "undefined" ? null : navigator.userAgent
+        })
+        // Readable since 0060, and needed: the screenshots hang off this id.
+        .select("feedback_id")
+        .single();
+      if (error) throw error;
+      const id = data.feedback_id as string;
+
+      // Uploaded AFTER the row exists, and deliberately not in a transaction with it —
+      // there is no such transaction to be had across Postgres and object storage. If an
+      // upload fails, the report still stands with the words in it, which is the half
+      // worth keeping. The failure is reported rather than swallowed.
+      if (entry.screenshots?.length) {
+        await attachScreenshots(id, me.id, entry.screenshots);
+      }
+      return id;
+    },
+
+    /**
+     * The tracker, read through `feedback_display` (0061) so a board is one query rather
+     * than a vote count per card.
+     *
+     * The attachments come in a second query rather than an embed: `feedback_display` is
+     * a view, and PostgREST can only embed through a foreign key — a view has none. Two
+     * round trips for a whole board, not two per card.
+     */
+    async listFeedback(kind?: FeedbackKind): Promise<FeedbackItem[]> {
+      let q = client
+        .from("feedback_display")
         .select(
-          "feedback_id, feedback_kind, feedback_title, feedback_detail, feedback_page, feedback_status, feedback_created_at, profiles!feedback_profile_id_fkey(profile_first_name, profile_last_name)"
+          FEEDBACK_DISPLAY_COLUMNS
         )
-        .eq("feedback_kind", kind)
         .order("feedback_created_at", { ascending: false });
+      if (kind) q = q.eq("feedback_kind", kind);
+      const { data, error } = await q;
+      if (error) throw error;
+      const rows = data ?? [];
+      if (rows.length === 0) return [];
+
+      const { data: files, error: filesError } = await client
+        .from("feedback_attachments")
+        .select(
+          "feedback_attachment_id, feedback_id, feedback_attachment_path, feedback_attachment_name, feedback_attachment_mime, feedback_attachment_bytes"
+        )
+        .in("feedback_id", rows.map(r => r.feedback_id))
+        .order("feedback_attachment_created_at", { ascending: true });
+      if (filesError) throw filesError;
+
+      const byReport = new Map<string, FeedbackAttachment[]>();
+      for (const f of files ?? []) {
+        const list = byReport.get(f.feedback_id) ?? [];
+        list.push({
+          id: f.feedback_attachment_id,
+          path: f.feedback_attachment_path,
+          name: f.feedback_attachment_name || f.feedback_attachment_path,
+          mime: f.feedback_attachment_mime ?? "",
+          bytes: f.feedback_attachment_bytes ?? 0
+        });
+        byReport.set(f.feedback_id, list);
+      }
+
+      return rows.map(r => toFeedbackItem(r, byReport.get(r.feedback_id) ?? []));
+    },
+
+    /**
+     * Moving a request along the queue — superadmin, enforced by the trigger.
+     *
+     * The two refusals look different and both have to be handled. Below admin the UPDATE
+     * policy matches no row, so the result is empty and nothing was written. At admin the
+     * policy passes and `guard_feedback_stage_change()` raises 42501, which arrives here
+     * as a thrown error carrying its own message — the one the person should read.
+     */
+    async setFeedbackStage(id: string, stage: FeedbackStage, note?: string): Promise<FeedbackItem[]> {
+      const { data, error } = await client
+        .from("feedback")
+        .update({ feedback_stage: stage })
+        .eq("feedback_id", id)
+        .select("feedback_id");
+      if (error) throw error;
+      if (!data?.[0]) throw new Error("That did not move — moving a request needs superadmin.");
+
+      // Canny's status update: the move, and the sentence that came with it. Posted
+      // after the move and not in place of it — if this fails the request has still
+      // moved, which is the half that matters, and the failure is reported.
+      if (note?.trim()) {
+        await repo.addComment({ feedbackId: id }, note.trim(), [], { stage });
+      }
+      return await repo.listFeedback();
+    },
+
+    async setFeedbackPhase(id: string, phaseId: string | null): Promise<FeedbackItem[]> {
+      const { data, error } = await client
+        .from("feedback")
+        .update({ roadmap_phase_id: phaseId })
+        .eq("feedback_id", id)
+        .select("feedback_id");
+      if (error) throw error;
+      if (!data?.[0]) throw new Error("That was not changed — planning a request needs admin.");
+      return await repo.listFeedback();
+    },
+
+    /**
+     * A vote, and taking one back.
+     *
+     * The insert cannot double up — `(feedback_id, profile_id)` is the primary key — so a
+     * double click is a duplicate-key error rather than a second vote, and it is treated
+     * as "already voted" rather than raised: the person wanted the thumb filled, and it
+     * is. 23505 is unique_violation.
+     */
+    async setFeedbackVote(id: string, voted: boolean): Promise<FeedbackItem> {
+      const me = await repo.currentProfile();
+      if (!me) throw new Error("Voting needs you to be signed in.");
+
+      if (voted) {
+        const { error } = await client
+          .from("feedback_votes")
+          .insert({ feedback_id: id, profile_id: me.id });
+        if (error && error.code !== "23505") throw error;
+      } else {
+        // Only ever your own row: the DELETE policy says so, and naming the profile here
+        // means a mistake matches nothing rather than removing somebody else's vote.
+        const { error } = await client
+          .from("feedback_votes")
+          .delete()
+          .eq("feedback_id", id)
+          .eq("profile_id", me.id);
+        if (error) throw error;
+      }
+
+      const { data, error } = await client
+        .from("feedback_display")
+        .select(
+          FEEDBACK_DISPLAY_COLUMNS
+        )
+        .eq("feedback_id", id)
+        .single();
+      if (error) throw error;
+      // Attachments deliberately not re-read: the vote did not change them, and a second
+      // query per click to return the same list is a round trip nobody asked for.
+      return toFeedbackItem(data);
+    },
+
+    /**
+     * The duplicate search behind the report form.
+     *
+     * `ilike` on title and detail, capped. Not full-text search: `to_tsvector` would
+     * need an index and a configuration decision, and it stems — "councils" would find
+     * "council", which is good, but "filter" would not find "filtering" without more
+     * setup than a typeahead over a few hundred rows can justify. When the tracker is
+     * big enough for that to hurt, this is the one method that changes.
+     *
+     * Merged duplicates are excluded: showing somebody the request that was already
+     * folded into another one sends them to the dead end rather than to the live thread.
+     */
+    async searchFeedback(query: string, limit = 6): Promise<FeedbackItem[]> {
+      const q = query.trim();
+      if (q.length < 3) return [];
+      // Escaped, because % and _ are wildcards in LIKE and a person typing "50%" should
+      // search for "50%" rather than for everything.
+      const safe = q.replace(/[\\%_]/g, m => "\\" + m);
+      const { data, error } = await client
+        .from("feedback_display")
+        .select(FEEDBACK_DISPLAY_COLUMNS)
+        .is("feedback_merged_into_id", null)
+        .or(`feedback_title.ilike.%${safe}%,feedback_detail.ilike.%${safe}%`)
+        .order("feedback_vote_count", { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return (data ?? []).map(r => toFeedbackItem(r));
+    },
+
+    async listFeedbackVoters(id: string): Promise<FeedbackVoter[]> {
+      const { data, error } = await client
+        .from("feedback_votes")
+        .select(
+          "profile_id, feedback_vote_at, voter:profiles!feedback_votes_profile_id_fkey(profile_full_name), addedBy:profiles!feedback_votes_feedback_vote_added_by_fkey(profile_full_name)"
+        )
+        .eq("feedback_id", id)
+        .order("feedback_vote_at", { ascending: true });
       if (error) throw error;
       return (data ?? []).map(r => {
-        const from = (r as unknown as {
-          profiles?: { profile_first_name?: string; profile_last_name?: string };
-        }).profiles;
-        const name = [from?.profile_first_name, from?.profile_last_name].filter(Boolean).join(" ");
+        const row = r as unknown as {
+          profile_id: string;
+          feedback_vote_at: string;
+          voter?: { profile_full_name?: string };
+          addedBy?: { profile_full_name?: string };
+        };
         return {
-          id: r.feedback_id,
-          kind: r.feedback_kind as FeedbackKind,
-          title: r.feedback_title,
-          detail: r.feedback_detail ?? "",
-          page: r.feedback_page ?? null,
-          status: r.feedback_status as FeedbackStatus,
-          // Empty rather than a stand-in when the profile is gone: "Unknown" would be a
-          // claim about who sent it.
-          fromName: name || null,
-          createdAt: r.feedback_created_at
+          profileId: row.profile_id,
+          name: row.voter?.profile_full_name ?? null,
+          // Null means they voted for themselves. Rendered as nothing rather than as
+          // "added by nobody", which would read as a gap in the record.
+          addedByName: row.addedBy?.profile_full_name ?? null,
+          at: row.feedback_vote_at
         };
       });
     },
 
-    async setFeedbackStatus(id: string, status: FeedbackStatus): Promise<FeedbackItem[]> {
+    async addVoteFor(id: string, profileId: string): Promise<FeedbackItem> {
+      const me = await repo.currentProfile();
+      if (!me) throw new Error("Adding a vote needs you to be signed in.");
+      if (me.id === profileId) {
+        // The on-behalf policy refuses this outright (added_by must differ from the
+        // voter), so it is caught here to say why rather than as a 403.
+        throw new Error("That is your own vote — use the thumb.");
+      }
+      const { error } = await client.from("feedback_votes").insert({
+        feedback_id: id,
+        profile_id: profileId,
+        feedback_vote_added_by: me.id
+      });
+      // Already voted is not a failure: the person's position is recorded, which is what
+      // was wanted. 23505 is unique_violation.
+      if (error && error.code !== "23505") throw error;
+
+      const { data, error: readError } = await client
+        .from("feedback_display")
+        .select(FEEDBACK_DISPLAY_COLUMNS)
+        .eq("feedback_id", id)
+        .single();
+      if (readError) throw readError;
+      return toFeedbackItem(data);
+    },
+
+    async setFeedbackFollow(id: string, following: boolean): Promise<void> {
+      const me = await repo.currentProfile();
+      if (!me) throw new Error("Following needs you to be signed in.");
+      if (following) {
+        const { error } = await client.from("feedback_follows").insert({
+          feedback_id: id,
+          profile_id: me.id,
+          // Seen now: you are looking at it, so following must not immediately light the
+          // bell for a move that happened before you arrived.
+          feedback_follow_seen_stage_at: new Date().toISOString()
+        });
+        if (error && error.code !== "23505") throw error;
+      } else {
+        const { error } = await client
+          .from("feedback_follows")
+          .delete()
+          .eq("feedback_id", id)
+          .eq("profile_id", me.id);
+        if (error) throw error;
+      }
+    },
+
+    /**
+     * The bell's seventh signal.
+     *
+     * RLS does the "mine" filtering — the select policy on `feedback_follows` compares
+     * profile_id to current_profile_id() — so this asks for follows without saying
+     * whose, the same way listMyMentions does. Unseen is computed here from two dates
+     * rather than read from a notifications table, because there isn't one: 0065 stores
+     * a seen stamp and derives the rest.
+     */
+    async listMyMovedRequests(): Promise<MovedRequest[]> {
+      const { data, error } = await client
+        .from("feedback_follows")
+        .select(
+          "feedback_id, feedback_follow_seen_stage_at, request:feedback!feedback_follows_feedback_id_fkey(feedback_title, feedback_stage, feedback_stage_entered_at)"
+        );
+      if (error) throw error;
+
+      const rows = (data ?? []) as unknown as {
+        feedback_id: string;
+        feedback_follow_seen_stage_at: string | null;
+        request?: { feedback_title: string; feedback_stage: string; feedback_stage_entered_at: string };
+      }[];
+
+      const moved = rows.filter(r =>
+        r.request &&
+        (r.feedback_follow_seen_stage_at === null ||
+         Date.parse(r.request.feedback_stage_entered_at) > Date.parse(r.feedback_follow_seen_stage_at))
+      );
+      if (moved.length === 0) return [];
+
+      // The note that came with each move, when there was one — read in one query for
+      // the whole list rather than one per row.
+      const { data: notes } = await client
+        .from("comments")
+        .select("feedback_id, comment_body, comment_feedback_stage, comment_created_at")
+        .in("feedback_id", moved.map(m => m.feedback_id))
+        .not("comment_feedback_stage", "is", null)
+        .order("comment_created_at", { ascending: false });
+
+      const noteFor = new Map<string, string>();
+      for (const n of notes ?? []) {
+        // Newest first, so the first one seen per request is the current one.
+        if (!noteFor.has(n.feedback_id)) noteFor.set(n.feedback_id, n.comment_body);
+      }
+
+      return moved
+        .map(r => ({
+          id: r.feedback_id,
+          title: r.request!.feedback_title,
+          stage: r.request!.feedback_stage as FeedbackStage,
+          movedAt: r.request!.feedback_stage_entered_at,
+          note: noteFor.get(r.feedback_id) ?? null
+        }))
+        .sort((a, b) => Date.parse(b.movedAt) - Date.parse(a.movedAt));
+    },
+
+    async markMoveSeen(id: string): Promise<void> {
+      // No profile filter, and that is not an oversight: the UPDATE policy restricts the
+      // row to the reader's own, so naming it here would add a second place for the same
+      // rule to be got wrong. The same reasoning as markMentionRead.
+      const { error } = await client
+        .from("feedback_follows")
+        .update({ feedback_follow_seen_stage_at: new Date().toISOString() })
+        .eq("feedback_id", id);
+      if (error) throw error;
+    },
+
+    async mergeFeedback(id: string, intoId: string | null): Promise<FeedbackItem[]> {
       const { data, error } = await client
         .from("feedback")
-        .update({ feedback_status: status })
+        .update({ feedback_merged_into_id: intoId })
         .eq("feedback_id", id)
-        .select("feedback_kind");
+        .select("feedback_id");
+      // The trigger raises for a chain (23514) and for a non-admin (42501); both arrive
+      // here carrying the message the person should read, so neither is rewritten.
       if (error) throw error;
-      // Anyone below admin matches no row rather than being refused, so an empty result
-      // is the only signal that the update did not happen.
-      const kind = data?.[0]?.feedback_kind as FeedbackKind | undefined;
-      if (!kind) throw new Error("That was not updated — it needs admin.");
-      return await repo.listFeedback(kind);
+      if (!data?.[0]) throw new Error("That was not merged — merging needs admin.");
+      return await repo.listFeedback();
+    },
+
+    async setCommentStanding(
+      commentId: string, standing: { pinned?: boolean; internal?: boolean }
+    ): Promise<void> {
+      const row: Record<string, unknown> = {};
+      if (standing.pinned !== undefined) row.comment_is_pinned = standing.pinned;
+      if (standing.internal !== undefined) row.comment_is_internal = standing.internal;
+      if (Object.keys(row).length === 0) return;
+      const { error } = await client.from("comments").update(row).eq("comment_id", commentId);
+      // guard_comment_standing() raises 42501 below admin — the author's own edit policy
+      // would otherwise have let them pin their own comment.
+      if (error) throw error;
+    },
+
+    async attachmentUrl(path: string): Promise<string | null> {
+      const { data, error } = await client.storage
+        .from(SCREENSHOT_BUCKET)
+        // Long enough to open a card and look at the picture, short enough that a copied
+        // URL is not a permanent public link to it.
+        .createSignedUrl(path, 300);
+      if (error) return null;
+      return data?.signedUrl ?? null;
+    },
+
+    // ---- the roadmap (0063) ----------------------------------------------
+
+    async listRoadmapPhases(): Promise<RoadmapPhase[]> {
+      const { data, error } = await client
+        .from("roadmap_phases")
+        .select(
+          "roadmap_phase_id, roadmap_phase_name, roadmap_phase_summary, roadmap_phase_starts_on, roadmap_phase_ends_on, roadmap_phase_position, roadmap_phase_status"
+        )
+        .order("roadmap_phase_position", { ascending: true });
+      if (error) throw error;
+      return (data ?? []).map(r => ({
+        id: r.roadmap_phase_id,
+        name: r.roadmap_phase_name,
+        summary: r.roadmap_phase_summary ?? "",
+        startsOn: r.roadmap_phase_starts_on ?? null,
+        endsOn: r.roadmap_phase_ends_on ?? null,
+        position: r.roadmap_phase_position,
+        status: r.roadmap_phase_status as RoadmapPhaseStatus
+      }));
+    },
+
+    async createRoadmapPhase(input: NewRoadmapPhase): Promise<RoadmapPhase[]> {
+      const name = input.name.trim();
+      if (!name) throw new Error("A phase needs a name.");
+      const existing = await repo.listRoadmapPhases();
+      // Appended after the last one. The position index is unique, so this is also the
+      // one place a race would show up — as a refusal, which is the right answer.
+      const position = existing.reduce((n, p) => Math.max(n, p.position), 0) + 1;
+      const { error } = await client.from("roadmap_phases").insert({
+        roadmap_phase_name: name,
+        roadmap_phase_summary: input.summary?.trim() ?? "",
+        roadmap_phase_starts_on: input.startsOn || null,
+        roadmap_phase_ends_on: input.endsOn || null,
+        roadmap_phase_position: position,
+        roadmap_phase_status: input.status ?? "planned"
+      });
+      if (error) throw error;
+      return await repo.listRoadmapPhases();
+    },
+
+    async updateRoadmapPhase(id: string, patch: RoadmapPhasePatch): Promise<RoadmapPhase[]> {
+      // Only what is being changed is sent, so editing a name cannot blank the dates.
+      const row: Record<string, unknown> = {};
+      if (patch.name !== undefined) row.roadmap_phase_name = patch.name.trim();
+      if (patch.summary !== undefined) row.roadmap_phase_summary = patch.summary;
+      if (patch.startsOn !== undefined) row.roadmap_phase_starts_on = patch.startsOn || null;
+      if (patch.endsOn !== undefined) row.roadmap_phase_ends_on = patch.endsOn || null;
+      if (patch.status !== undefined) row.roadmap_phase_status = patch.status;
+      if (Object.keys(row).length === 0) return await repo.listRoadmapPhases();
+
+      const { data, error } = await client
+        .from("roadmap_phases")
+        .update(row)
+        .eq("roadmap_phase_id", id)
+        .select("roadmap_phase_id");
+      if (error) throw error;
+      if (!data?.[0]) throw new Error("That was not saved — changing the roadmap needs superadmin.");
+      return await repo.listRoadmapPhases();
+    },
+
+    async deleteRoadmapPhase(id: string): Promise<RoadmapPhase[]> {
+      const { data, error } = await client
+        .from("roadmap_phases")
+        .delete()
+        .eq("roadmap_phase_id", id)
+        .select("roadmap_phase_id");
+      if (error) throw error;
+      if (!data?.[0]) throw new Error("That was not removed — changing the roadmap needs superadmin.");
+      return await repo.listRoadmapPhases();
+    },
+
+    /**
+     * Moving a phase up or down.
+     *
+     * The two rows swap positions, and they cannot both be written at once — the position
+     * index is unique and immediate, so a straight swap collides halfway through. The
+     * park-and-place below is what that constraint forces, and it is the honest cost of
+     * having the database refuse two phases in one slot: one of the three writes failing
+     * leaves a phase parked at a negative position, which is visible and fixable, rather
+     * than two phases silently sharing slot 3.
+     */
+    async moveRoadmapPhase(id: string, direction: "up" | "down"): Promise<RoadmapPhase[]> {
+      const phases = await repo.listRoadmapPhases();
+      const i = phases.findIndex(p => p.id === id);
+      const j = direction === "up" ? i - 1 : i + 1;
+      if (i === -1 || j < 0 || j >= phases.length) return phases;
+      const a = phases[i], b = phases[j];
+
+      const park = -Math.abs(a.position) - 1;
+      const write = async (phaseId: string, position: number) => {
+        const { data, error } = await client
+          .from("roadmap_phases")
+          .update({ roadmap_phase_position: position })
+          .eq("roadmap_phase_id", phaseId)
+          .select("roadmap_phase_id");
+        if (error) throw error;
+        if (!data?.[0]) throw new Error("That was not moved — changing the roadmap needs superadmin.");
+      };
+      await write(a.id, park);
+      await write(b.id, a.position);
+      await write(a.id, b.position);
+      return await repo.listRoadmapPhases();
+    },
+
+    // ---- the changelog (0063) --------------------------------------------
+
+    async listReleases(): Promise<Release[]> {
+      const { data, error } = await client
+        .from("releases")
+        .select("release_id, release_version, release_name, release_summary, release_shipped_on")
+        .order("release_shipped_on", { ascending: false });
+      if (error) throw error;
+      const rows = data ?? [];
+      if (rows.length === 0) return [];
+
+      // The embed names its constraint. `release_entries` has one foreign key to
+      // `feedback` today; naming it costs nothing and is what stops the PGRST201 the day
+      // a second one is added — the shape that took sign-in down in August.
+      const { data: entries, error: entriesError } = await client
+        .from("release_entries")
+        .select(
+          "release_entry_id, release_id, release_entry_kind, release_entry_summary, feedback_id, release_entry_position, feedback!release_entries_feedback_id_fkey(feedback_title)"
+        )
+        .in("release_id", rows.map(r => r.release_id))
+        .order("release_entry_position", { ascending: true });
+      if (entriesError) throw entriesError;
+
+      const byRelease = new Map<string, ReleaseEntry[]>();
+      for (const e of entries ?? []) {
+        const linked = (e as unknown as { feedback?: { feedback_title?: string } }).feedback;
+        const list = byRelease.get(e.release_id) ?? [];
+        list.push({
+          id: e.release_entry_id,
+          kind: e.release_entry_kind as ReleaseEntryKind,
+          summary: e.release_entry_summary,
+          feedbackId: e.feedback_id ?? null,
+          feedbackTitle: linked?.feedback_title ?? null
+        });
+        byRelease.set(e.release_id, list);
+      }
+
+      return rows.map(r => ({
+        id: r.release_id,
+        version: r.release_version,
+        name: r.release_name ?? "",
+        summary: r.release_summary ?? "",
+        shippedOn: r.release_shipped_on,
+        entries: byRelease.get(r.release_id) ?? []
+      }));
+    },
+
+    async createRelease(input: NewRelease): Promise<Release[]> {
+      const version = input.version.trim();
+      if (!version) throw new Error("A release needs a version.");
+      const lines = input.entries.filter(e => e.summary.trim());
+      if (lines.length === 0) throw new Error("A release needs at least one line — otherwise it says nothing.");
+
+      const { data, error } = await client
+        .from("releases")
+        .insert({
+          release_version: version,
+          release_name: input.name?.trim() ?? "",
+          release_summary: input.summary?.trim() ?? "",
+          release_shipped_on: input.shippedOn
+        })
+        .select("release_id")
+        .single();
+      if (error) throw error;
+
+      const { error: entriesError } = await client.from("release_entries").insert(
+        lines.map((e, i) => ({
+          release_id: data.release_id,
+          release_entry_kind: e.kind,
+          release_entry_summary: e.summary.trim(),
+          feedback_id: e.feedbackId ?? null,
+          release_entry_position: i
+        }))
+      );
+      // The release row is already in. Left standing rather than rolled back by hand: a
+      // release with no lines is visible and fixable, and a "cleanup" delete here would
+      // be a second write that can fail too.
+      if (entriesError) throw entriesError;
+      return await repo.listReleases();
+    },
+
+    async deleteRelease(id: string): Promise<Release[]> {
+      const { data, error } = await client
+        .from("releases")
+        .delete()
+        .eq("release_id", id)
+        .select("release_id");
+      if (error) throw error;
+      if (!data?.[0]) throw new Error("That was not removed — the changelog needs superadmin.");
+      return await repo.listReleases();
     },
 
     // ---- preferences (0050) ----------------------------------------------

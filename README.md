@@ -2,15 +2,36 @@
 
 The V0 build of Lofty's job pipeline board: React, Vibe and Supabase.
 
-**Connected, and mostly empty.** 15 of the 18 repository methods read Supabase — projects,
-jobs, profiles, teams and the pipeline stages are live queries. There are **no projects and
-no jobs yet**; the import is Phase B, so those boards show a designed empty state rather
-than data.
+**Connected, and mostly empty.** 57 of the 67 repository methods read Supabase — projects,
+jobs, profiles, teams, the pipeline stages and the tracker are live queries. There are
+**no projects and no jobs yet**; the import is Phase B, so those boards show a designed
+empty state rather than data. (Setup → Wiring counts this rather than repeating it: the
+numbers here are a snapshot and that screen is generated.)
 
 Values whose table is not built yet still render as a `{{table.column}}` token, so an
 unbound field is visible rather than silently blank. Two things are genuinely not built —
 `property_defs` and `pipeline_stage_tasks` — and the screens that would show them say so
 instead of showing a plausible guess.
+
+<!-- generated:shipped -->
+**No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
+
+Unreleased: 16 changes since then —
+- Added: A discussion under every request, with a pinned answer and an internal lane for triage
+- Added: "Someone may have asked this already" — the report form searches while you type, and offers to vote instead
+- Added: Duplicates can be merged, and the votes and followers move with them
+- Added: The bell tells you when a request you follow moves, with the note whoever moved it left
+- Added: A vote can be added for somebody whose request arrived on a call, recorded against whoever entered it
+- …and 11 more.
+
+<sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
+<!-- /generated:shipped -->
+
+Everything anyone has asked for, where it has got to and what has shipped is in the app
+under **Updates** — the queue, the roadmap and the changelog, readable by everybody
+signed in. In this repository the same three live in [ROADMAP.md](ROADMAP.md) and
+[CHANGELOG.md](CHANGELOG.md), both kept current from commit trailers by
+`node scripts/changelog.mjs`.
 
 The stakeholder prototype this grew out of lives in a separate repo,
 [`loftyprojectboard`](https://github.com/amberbeaumont/loftyprojectboard), and is

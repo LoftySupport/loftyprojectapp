@@ -688,17 +688,74 @@ export const FEEDBACK_KINDS = ["bug", "idea"] as const;
 export type FeedbackKind = (typeof FEEDBACK_KINDS)[number];
 
 /**
- * Where a report has got to. Four values because the point of the feature is tracking —
- * "this way I can track what needs to be implemented" — and a list with no state has to
- * be re-read from the top every week.
+ * Where a request has got to — the queue everybody can see (0060).
  *
- * `declined` rather than a delete: it keeps the record of having considered something,
- * which is the difference between an answer and a report that vanished.
+ * Amber, 30 Aug, named the first four: *"new ideas or requests populate a stage called
+ * requested, then stages are in review, planned, in development."* `shipped` and
+ * `declined` are the two endings, and both have to exist for the board to be honest —
+ * without `shipped` a delivered request sits in "in development" forever, and without
+ * `declined` the only way to answer "no" is to delete the request, which is how somebody
+ * comes back and asks for the same thing in March.
+ *
+ * The order of this array IS the order of the board columns. Nothing else decides it.
  */
-export const FEEDBACK_STATUSES = ["new", "planned", "done", "declined"] as const;
-export type FeedbackStatus = (typeof FEEDBACK_STATUSES)[number];
+export const FEEDBACK_STAGES = [
+  "requested",
+  "in_review",
+  "planned",
+  "in_development",
+  "shipped",
+  "declined"
+] as const;
+export type FeedbackStage = (typeof FEEDBACK_STAGES)[number];
 
-/** One report, as Setup lists it. Only admins ever hold one of these. */
+/** The words on screen. The database stores the snake_case value; nobody reads that. */
+export const FEEDBACK_STAGE_LABELS: Record<FeedbackStage, string> = {
+  requested: "Requested",
+  in_review: "In review",
+  planned: "Planned",
+  in_development: "In development",
+  shipped: "Shipped",
+  declined: "Declined"
+};
+
+/**
+ * What each stage promises, in the words a person checking on their own request needs.
+ *
+ * These are captions on a board, not decoration: the difference between "in review" and
+ * "planned" is the difference between "we are thinking about it" and "it is going to
+ * happen", and a board that shows only the two labels leaves everybody to guess which.
+ */
+export const FEEDBACK_STAGE_MEANING: Record<FeedbackStage, string> = {
+  requested: "Sent in, and not looked at yet.",
+  in_review: "Being weighed up — whether, and how big.",
+  planned: "It is happening. A roadmap phase says roughly when.",
+  in_development: "Being built right now.",
+  shipped: "It went out. The changelog says in which release.",
+  declined: "Considered, and not going ahead."
+};
+
+/**
+ * The four stages a request moves through before it ends, in order — what the board shows
+ * as columns by default. `shipped` and `declined` are endings rather than queue positions
+ * and get their own treatment, the same way the lifecycle board separates Completed and
+ * Cancelled from the working phases.
+ */
+export const FEEDBACK_OPEN_STAGES: readonly FeedbackStage[] = [
+  "requested", "in_review", "planned", "in_development"
+];
+
+/** One screenshot on a report (0062). The bytes are in storage; this is the row. */
+export interface FeedbackAttachment {
+  id: Uuid;
+  /** The object path inside the bucket — what a signed URL is asked for. */
+  path: string;
+  name: string;
+  mime: string;
+  bytes: number;
+}
+
+/** One request, as the tracker board and the Setup list both read it. */
 export interface FeedbackItem {
   id: Uuid;
   kind: FeedbackKind;
@@ -706,18 +763,178 @@ export interface FeedbackItem {
   detail: string;
   /** The app path it was sent from — captured, never typed. Null on older rows. */
   page: string | null;
-  status: FeedbackStatus;
+  /** The error the app was showing when it was sent. Null when there was none. */
+  errorText: string | null;
+  stage: FeedbackStage;
+  /** When it reached that stage — so "stuck since June" is answerable. */
+  stageEnteredAt: IsoDateTime;
   /** Who sent it, resolved for the list. Null when the profile is gone. */
   fromName: string | null;
   createdAt: string;
+  /** Thumbs up, from `feedback_votes` (0061). */
+  voteCount: number;
+  /** Whether the signed-in person is one of them — the filled thumb. */
+  votedByMe: boolean;
+  /** The roadmap phase it is planned into, when it is planned at all. */
+  roadmapPhaseId: Uuid | null;
+  /** Screenshots. Empty rather than absent when a report has none. */
+  attachments: FeedbackAttachment[];
+
+  // ------------------------------------------------- duplicates, talk, follows (0064-0068)
+
+  /**
+   * Set when this request is a duplicate of another (0066). The row is kept rather than
+   * deleted — the person who filed it must still be able to find it and see where the
+   * conversation went — and its votes and followers have moved to the target.
+   */
+  mergedIntoId: Uuid | null;
+  /** The survivor's title, resolved: "merged into 9f3c…" is not an answer to anybody. */
+  mergedIntoTitle: string | null;
+  /** How many duplicates point at THIS one, so a large vote count can explain itself. */
+  duplicateCount: number;
+  /** Comments you can actually open — the count excludes internal ones you cannot read. */
+  commentCount: number;
+  /** Whether you are following it. Voting and reporting both follow you automatically. */
+  followedByMe: boolean;
+  /** Following, and it has moved since you last looked. What the bell counts. */
+  moveUnseen: boolean;
 }
 
-/** What the footer form sends. The sender and the page are added by the repository. */
+/**
+ * One person's vote, as the voters list shows it.
+ *
+ * `addedByName` is the whole reason this list exists on screen: an on-behalf vote (0067)
+ * is only trustworthy if the people it is counted against can see who entered it.
+ */
+export interface FeedbackVoter {
+  profileId: Uuid;
+  name: string | null;
+  /** Null when they voted themselves — the ordinary case. */
+  addedByName: string | null;
+  at: IsoDateTime;
+}
+
+/**
+ * A request you follow that has moved since you last looked — one row in the bell.
+ *
+ * Derived rather than stored (0065): the request's stage stamp against your seen stamp.
+ * So there is no notification that can outlive, duplicate or contradict the move it
+ * describes, and nothing to clean up when a request is deleted or merged away.
+ */
+export interface MovedRequest {
+  id: Uuid;
+  title: string;
+  stage: FeedbackStage;
+  movedAt: IsoDateTime;
+  /** The note whoever moved it left, when they left one (0064). */
+  note: string | null;
+}
+
+/**
+ * What the report form sends.
+ *
+ * The sender, the page and the browser are added by the repository rather than asked
+ * for — 0052's rule, and the reason the form is two fields and a radio rather than six.
+ */
 export interface NewFeedback {
   kind: FeedbackKind;
   title: string;
   detail: string;
   page: string;
+  /** Captured from the app's own error state, when there is one. */
+  errorText?: string | null;
+  /** Screenshots to upload and attach. Empty is the normal case. */
+  screenshots?: File[];
+}
+
+// -------------------------------------------------- the roadmap and the changelog (0063)
+
+/**
+ * Where a phase has got to. Asserted rather than derived from its dates: a phase whose
+ * end date has passed is not thereby delivered, and a derived status would tell the whole
+ * company something shipped on the strength of a date somebody set in June.
+ */
+export const ROADMAP_PHASE_STATUSES = ["planned", "in_progress", "delivered"] as const;
+export type RoadmapPhaseStatus = (typeof ROADMAP_PHASE_STATUSES)[number];
+
+export const ROADMAP_PHASE_STATUS_LABELS: Record<RoadmapPhaseStatus, string> = {
+  planned: "Planned",
+  in_progress: "In progress",
+  delivered: "Delivered"
+};
+
+/** One phase of the build, as the roadmap draws it. */
+export interface RoadmapPhase {
+  id: Uuid;
+  name: string;
+  summary: string;
+  /** Both nullable: an unscheduled phase is real, and is drawn as undated. */
+  startsOn: string | null;
+  endsOn: string | null;
+  position: number;
+  status: RoadmapPhaseStatus;
+}
+
+/** What the phase editor sends. Superadmin only, by policy. */
+export interface NewRoadmapPhase {
+  name: string;
+  summary?: string;
+  startsOn?: string | null;
+  endsOn?: string | null;
+  status?: RoadmapPhaseStatus;
+}
+
+/** Keep a Changelog's four verbs, and the vocabulary scripts/changelog.mjs parses. */
+export const RELEASE_ENTRY_KINDS = ["added", "fixed", "changed", "removed"] as const;
+export type ReleaseEntryKind = (typeof RELEASE_ENTRY_KINDS)[number];
+
+export const RELEASE_ENTRY_KIND_LABELS: Record<ReleaseEntryKind, string> = {
+  added: "Added",
+  fixed: "Fixed",
+  changed: "Changed",
+  removed: "Removed"
+};
+
+/** One line under a release. */
+export interface ReleaseEntry {
+  id: Uuid;
+  kind: ReleaseEntryKind;
+  summary: string;
+  /** The request this shipped, when there was one — how the loop closes. */
+  feedbackId: Uuid | null;
+  /** Its title, resolved, so the changelog reads as a sentence rather than a UUID. */
+  feedbackTitle: string | null;
+}
+
+/** Changing a phase. Only the fields sent are written, so a rename cannot blank a date. */
+export interface RoadmapPhasePatch {
+  name?: string;
+  summary?: string;
+  startsOn?: string | null;
+  endsOn?: string | null;
+  status?: RoadmapPhaseStatus;
+}
+
+/**
+ * Publishing a release: the version, the words, and the lines under it in one call.
+ * A release with no lines is a version number nobody can read anything into.
+ */
+export interface NewRelease {
+  version: string;
+  name?: string;
+  summary?: string;
+  shippedOn: string;
+  entries: { kind: ReleaseEntryKind; summary: string; feedbackId?: string | null }[];
+}
+
+/** One release, newest first, with its lines. */
+export interface Release {
+  id: Uuid;
+  version: string;
+  name: string;
+  summary: string;
+  shippedOn: string;
+  entries: ReleaseEntry[];
 }
 
 /**
@@ -1152,6 +1369,20 @@ export interface Comment extends RecordRef {
 /** A comment with its author's name resolved on the read — what a thread renders. */
 export interface CommentEntry extends Comment {
   authorName: string | null;
+  /** The tracker request it is on, when it is on one (0064's fifth parent). */
+  feedbackId?: Uuid | null;
+  /** The official answer, held at the top of the thread. Admin sets it. */
+  isPinned?: boolean;
+  /**
+   * The team's own lane: admin and above only, enforced by the read policy rather than
+   * by this flag. A viewer never receives one of these at all.
+   */
+  isInternal?: boolean;
+  /**
+   * Set when this comment was the note on a stage change — the stage it announced. One
+   * per move rather than one per request, so what was said at each step survives.
+   */
+  stageAnnounced?: FeedbackStage | null;
 }
 
 /**

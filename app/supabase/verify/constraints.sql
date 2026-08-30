@@ -335,4 +335,126 @@ BEGIN
     RAISE WARNING 'FAIL: a property with format "paragraph" was accepted — not a known format';
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  property_defs_format_is_known rejected "paragraph"';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  property_defs_format)', SQLERRM; END;
+
+  -- ------------------------------------------------- the tracker (0060-0063)
+  BEGIN
+    INSERT INTO feedback (feedback_kind, feedback_title, feedback_stage)
+    VALUES ('bug', 'A stage that does not exist', 'triaged');
+    RAISE WARNING 'FAIL: an unknown feedback stage was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  feedback_stage_is_known rejected "triaged"';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  feedback_stage_is_known)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO roadmap_phases (roadmap_phase_name, roadmap_phase_position,
+                                roadmap_phase_starts_on, roadmap_phase_ends_on)
+    VALUES ('Backwards', 901, DATE '2026-10-01', DATE '2026-09-01');
+    RAISE WARNING 'FAIL: a phase ending before it starts was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  roadmap_phase_dates_in_order rejected an end before a start';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  roadmap_phase_dates_in_order)', SQLERRM; END;
+
+  -- A phase with no dates at all must be ACCEPTED — the check is written to allow it, and
+  -- an unscheduled phase is the normal state of anything past the next one. Probed here
+  -- rather than assumed, because "dates in order" is one careless rewrite away from
+  -- "dates required", which would force somebody to invent a date to save a phase.
+  BEGIN
+    INSERT INTO roadmap_phases (roadmap_phase_name, roadmap_phase_position)
+    VALUES ('__constraint_probe_undated__', 902);
+    RAISE NOTICE 'ok  an undated phase is allowed — unscheduled is a real state';
+    DELETE FROM roadmap_phases WHERE roadmap_phase_name = '__constraint_probe_undated__';
+  EXCEPTION WHEN OTHERS THEN RAISE WARNING 'FAIL: an undated roadmap phase was refused (%)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO roadmap_phases (roadmap_phase_name, roadmap_phase_position)
+    VALUES ('__constraint_probe_a__', 903);
+    INSERT INTO roadmap_phases (roadmap_phase_name, roadmap_phase_position)
+    VALUES ('__constraint_probe_b__', 903);
+    RAISE WARNING 'FAIL: two phases claimed position 903';
+  EXCEPTION WHEN unique_violation THEN RAISE NOTICE 'ok  roadmap_phases_position_idx refused a second phase in one slot';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  roadmap_phases_position_idx)', SQLERRM; END;
+  DELETE FROM roadmap_phases WHERE roadmap_phase_name LIKE '__constraint_probe%';
+
+  BEGIN
+    INSERT INTO releases (release_version) VALUES ('   ');
+    RAISE WARNING 'FAIL: a release with a blank version was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  release_version_not_blank rejected whitespace';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  release_version_not_blank)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO releases (release_version) VALUES ('__constraint_probe__');
+    INSERT INTO release_entries (release_id, release_entry_kind, release_entry_summary)
+    SELECT release_id, 'improved', 'Not one of the four verbs'
+      FROM releases WHERE release_version = '__constraint_probe__';
+    RAISE WARNING 'FAIL: a changelog line of kind "improved" was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  release_entry_kind_is_known rejected "improved"';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  release_entry_kind_is_known)', SQLERRM; END;
+  DELETE FROM releases WHERE release_version = '__constraint_probe__';
+
+  BEGIN
+    INSERT INTO feedback (feedback_kind, feedback_title) VALUES ('bug', '__constraint_probe__');
+    INSERT INTO feedback_attachments (feedback_id, feedback_attachment_path)
+    SELECT feedback_id, '/same/object.png' FROM feedback WHERE feedback_title = '__constraint_probe__';
+    INSERT INTO feedback_attachments (feedback_id, feedback_attachment_path)
+    SELECT feedback_id, '/same/object.png' FROM feedback WHERE feedback_title = '__constraint_probe__';
+    RAISE WARNING 'FAIL: two attachment rows pointed at one stored object';
+  EXCEPTION WHEN unique_violation THEN RAISE NOTICE 'ok  feedback_attachment_path is unique — one row per object';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  feedback_attachment_path unique)', SQLERRM; END;
+  DELETE FROM feedback WHERE feedback_title = '__constraint_probe__';
+
+  -- --------------------------------------------------- the Canny round (0064-0067)
+  -- comments_one_parent had to be REWRITTEN to add the fifth parent, and a rewritten
+  -- constraint is one that can quietly come back weaker. So: a comment claiming two
+  -- parents must still be refused.
+  -- The row these four probes act on, planted in a block of its own.
+  --
+  -- Not inside the first one, and this is a plpgsql fact worth knowing: BEGIN…EXCEPTION
+  -- opens a subtransaction, so when the probe below is REFUSED — which is the pass — the
+  -- rollback takes the parent row with it, and every probe after it silently acts on
+  -- nothing. Watched happening: the self-merge probe reported "a request was merged into
+  -- itself" because the UPDATE matched no rows at all.
+  BEGIN
+    INSERT INTO feedback (feedback_kind, feedback_title) VALUES ('bug', '__constraint_probe__');
+    -- Reports "note:" rather than staying silent, because check.sh counts BEGIN blocks
+    -- against reported lines to catch a run that aborted early. A block that says nothing
+    -- makes that count wrong and the harness announce a failure it does not have.
+    RAISE NOTICE 'note: planted the row the four probes below act on';
+  EXCEPTION WHEN OTHERS THEN RAISE WARNING 'FAIL: could not plant the constraint probe row (%)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO comments (feedback_id, job_id, comment_body)
+    SELECT (SELECT feedback_id FROM feedback WHERE feedback_title = '__constraint_probe__'),
+           job_id, 'two parents' FROM jobs LIMIT 1;
+    RAISE WARNING 'FAIL: a comment on BOTH a job and a request was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  comments_one_parent still refuses two parents after 0064 widened it';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  comments_one_parent)', SQLERRM; END;
+
+  -- A stage note is a note ON a request. On a job it would be a value with nothing to
+  -- mean — the stage it names belongs to a vocabulary jobs do not use.
+  BEGIN
+    INSERT INTO comments (job_id, comment_body, comment_feedback_stage)
+    SELECT job_id, 'stage note on a job', 'planned' FROM jobs LIMIT 1;
+    RAISE WARNING 'FAIL: a stage note was accepted on a job';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  comments_stage_note_is_on_a_request rejected a note on a job';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  stage note parent)', SQLERRM; END;
+
+  -- 0066: a request cannot be its own duplicate. The trigger refuses chains; this is the
+  -- one case a CHECK can see on its own, and it holds even for a write that bypasses the
+  -- trigger.
+  BEGIN
+    UPDATE feedback SET feedback_merged_into_id = feedback_id
+     WHERE feedback_title = '__constraint_probe__';
+    RAISE WARNING 'FAIL: a request was merged into itself';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  feedback_not_merged_into_itself rejected a self-merge';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  self-merge)', SQLERRM; END;
+
+  -- 0067: and a vote cannot be added on your own behalf — the CHECK that replaced a
+  -- policy clause the OR'd policies were quietly ignoring.
+  BEGIN
+    INSERT INTO feedback_votes (feedback_id, profile_id, feedback_vote_added_by)
+    SELECT (SELECT feedback_id FROM feedback WHERE feedback_title = '__constraint_probe__'),
+           profile_id, profile_id FROM profiles LIMIT 1;
+    RAISE WARNING 'FAIL: a vote was added on the voter''s own behalf';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  feedback_vote_added_by_is_not_the_voter rejected a self-added vote';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  self-added vote)', SQLERRM; END;
+
+  DELETE FROM feedback WHERE feedback_title = '__constraint_probe__';
 END $$;

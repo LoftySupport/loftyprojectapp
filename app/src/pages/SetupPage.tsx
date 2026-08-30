@@ -35,10 +35,16 @@ import "../components/ui.css";
  */
 
 /**
- * `adminOnly` is the tab row's half of a rule the database already enforces: the
- * feedback SELECT policy admits admin and above, so a manager who types /setup/bugs
- * gets an empty list either way. Hiding the tab is so nobody is offered a door that
- * opens onto nothing — it is not what keeps the reports private.
+ * `adminOnly` NO LONGER MIRRORS A DATABASE RULE, and that is worth saying out loud
+ * because it used to. Until 0060 the feedback SELECT policy admitted admin and above, so
+ * a manager who typed /setup/bugs got an empty list either way and the hidden tab was
+ * only tidiness. 0060 opened the tracker to everybody — the whole point of the feature is
+ * that people can see the queue — so a manager reaching this URL would now see rows.
+ *
+ * The tabs stay admin-only anyway, as a routing choice rather than a security one: this
+ * is the triage view, and the queue everybody is meant to read lives on **Updates**. If
+ * that flag is ever removed, nothing leaks; a manager simply gets a second, uglier way to
+ * read what /updates already shows them.
  */
 const SECTIONS = [
   { slug: "properties",  label: "Properties",  adminOnly: false },

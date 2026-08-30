@@ -2,11 +2,232 @@
 
 Everything a new session needs to pick this up. Read this first, then `schema-plan.md`.
 
+<!-- generated:shipped -->
+**No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
+
+Unreleased: 16 changes since then —
+- Added: A discussion under every request, with a pinned answer and an internal lane for triage
+- Added: "Someone may have asked this already" — the report form searches while you type, and offers to vote instead
+- Added: Duplicates can be merged, and the votes and followers move with them
+- Added: The bell tells you when a request you follow moves, with the note whoever moved it left
+- Added: A vote can be added for somebody whose request arrived on a call, recorded against whoever entered it
+- …and 11 more.
+
+<sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
+<!-- /generated:shipped -->
+
 **Phase A is done and applied. Next job: [Phase B, the import](#next-phase-b-the-import)** —
 and before it, the spine review described there, because that is the only category of
 change that gets expensive once 200 jobs are in.
 
 Last updated: 2026-08-26.
+
+---
+
+## Session of 2026-08-30, second half — the Canny round
+
+Amber, pointing at Canny: *"Like https://canny.io"*. What their portal does that the
+tracker did not, read off their own feature pages rather than remembered: a discussion
+under every post with a **pinned** answer and an **internal** lane, **status updates that
+close the loop** with the people who voted, **merging duplicates**, and **voting on
+behalf** of somebody whose request never reached the portal.
+
+**`0064`–`0068` are written and replay cleanly. They are NOT applied to the live
+database** — same reason as the first half: the Supabase connector needs a browser
+sign-in. Apply `0060`–`0068` in order, then run `verify/check.sh`.
+
+| | |
+| --- | --- |
+| `0064` | The discussion. A **fifth parent on `comments`** rather than a `feedback_comments` table — the reuse is the whole argument: @mentions (`comment_mentions` has a FK to `comments`), the edited-at trigger, the author stamp and CommentsPanel all already exist, and a new table re-grows every one of them. Plus `comment_is_pinned`, `comment_is_internal` (admin-only by the read policy) and `comment_feedback_stage`, the note that comes with a move |
+| `0065` | `feedback_follows`. Voting and reporting follow you **by trigger**, not by the app — the same rows are written by an import, a merge and an on-behalf vote, and a follow created in the repository would exist for one of those and silently not for the others. Unread is **derived** (`feedback_stage_entered_at` vs a seen stamp), so no notification can outlive or contradict the move it describes |
+| `0066` | Merging. `feedback_merged_into_id`, and a **SECURITY DEFINER** trigger moves the votes and followers: they belong to other people, and 0061 rightly refuses the app the right to write them. No chains — a duplicate always points at a live request |
+| `0067` | Vote on behalf. `feedback_vote_added_by`, admin-only, **attributed and shown on screen** |
+| `0068` | `feedback_display` rebuilt with the duplicate link, the comment count, and the two follow facts. `drop` + `create`, not `create or replace`, because that drops `security_invoker` — 0020's fault, and this is a view rewrite |
+
+### The bell has a second real signal
+
+A request you follow has moved. It passes the same test @mentions passed: no health model,
+no SLA, nothing derived from a definition nobody has written. Voting subscribes you, so most
+people get it without pressing anything — which is the behaviour that closes Canny's loop,
+in-app rather than by email (Amber's Q4 order: in-app this phase, Teams and email later).
+
+### Three probes that were lying, and what each taught
+
+This round found more in the probes than in the code, which is the point of writing them.
+
+1. **A policy clause that was OR'd away.** 0067's insert policy said `added_by` must differ
+   from the voter. It did nothing: 0061's own-vote policy already admits a row whose
+   `profile_id` is yours, so an admin could add their own vote stamped as their own adder
+   and never meet the new policy at all. The probe reported
+   `FAIL: an admin added their OWN vote through the on-behalf path`. Fixed with a **CHECK**,
+   which is not OR'd with anything. **The general shape: a narrow policy beside a broad one
+   does not narrow anything.**
+2. **Two probes passing for the wrong reason.** "Voting follows you" asserted a follow on
+   the prober's *own* report — which `follow_on_report()` had already created — so it passed
+   with the vote trigger dropped. And "reporting follows you" was checked *after* a vote
+   probe had run on the same request, so it passed with the report trigger dropped. Both now
+   act on a request nobody has voted on, and the ordering is commented at the assertion.
+3. **A plpgsql subtransaction eating the setup.** In `constraints.sql`, `BEGIN…EXCEPTION`
+   opens a subtransaction: when a probe is refused — which is the *pass* — the rollback took
+   the fixture row inserted in the same block with it, and every probe after it acted on
+   nothing. The planted row now lives in a block of its own.
+
+### `verify/check.sh` is green for the first time
+
+The two demo-account probes that have been red on `main` are fixed, and the cause is the
+same class as the above: **the probe's own setup was silently refused.** It ran
+`update profiles set profile_is_demo = true` as `authenticated`, which cannot write
+`profiles` — so the flag was never set, the reads that followed were ordinary reads, and the
+failure it reported was true about the probe and false about the gate. 0049 was never wrong;
+it was proved against the live database when it landed.
+
+The flag is now flipped as the owner, outside the role, and **the probe asserts its own
+setup** before testing anything. It was watched failing with 0049's clause removed from
+`is_active_user()`. Note the second bite: leaving the session as `authenticated` afterwards
+broke the manager probes further down, because setting a permission level is an admin write.
+
+### In the app
+
+- **"Someone may have asked this already"** — the report form searches the tracker from
+  three characters, debounced, and offers `+1` on each hit. Voting there adds you to the
+  count *and* follows you, instead of adding a second request to the queue. This is the
+  feature Amber's brief actually asks for; merging is the tidy-up for when it does not work.
+- The request panel grew: follow, who voted (with "added by" beside anybody entered on
+  their behalf), add-a-voter, duplicate-of, a note beside the stage control, and the
+  discussion.
+- The board hides merged duplicates, and cards carry a comment count, a "+N merged" chip
+  where a vote count grew by absorbing others, and a "Moved" chip only the follower sees.
+
+### Still open, and now sharper
+
+- **Labels / product areas.** Canny has tags and categories, and filtering by them is how a
+  long list stays usable. Deliberately not built: the categories would have to be invented,
+  and an invented taxonomy on a shared board is the house rule's worst case. Amber's list,
+  when there is one.
+- **Email or Teams delivery.** The loop closes in-app only. Canny emails; that stays behind
+  Q4's ordering.
+- **Prioritisation scoring** (Canny ranks by impact and by revenue). Nothing here computes a
+  priority, and it should not until somebody says what it would be made of.
+
+---
+
+## Session of 2026-08-30 — the tracker: a queue people can see
+
+**`0060`–`0063` are written and replay cleanly. They are NOT applied to the live
+database** — the Supabase MCP connector needs a browser OAuth this session could not run.
+Applying them is the first job next session, in file order, and `verify/check.sh` is what
+proves it landed.
+
+Amber, 30 Aug, and the sentence the whole design turns on: *"to have a feature request and
+bug tracker so users can see where their requests are in the queue… **This will help stop
+people saying I want this to happen when it is already planned.** Also when managers help
+plan next phase it is clear and ordered."*
+
+### The reversal, and why it is the feature
+
+`0052` made the feedback SELECT policy **admin-only**, argued it at length, and the app was
+built around it: `submitFeedback` returned void precisely because asking for the row back
+would have failed for exactly the people the form is for.
+
+`0060` reverses it. Every active person reads the whole tracker, bugs included. The
+reasoning is in the migration and worth keeping here too, because "the sender cannot read
+their own report back" reads like a security decision and was not: it was right for a
+private triage list for one person, and it is wrong for the thing Amber asked for two days
+later. A queue nobody can see cannot answer *"that is already planned"*.
+
+**What it costs, stated plainly:** everyone signed in can now read every report anyone has
+filed, with the reporter's name on it. That is the intended change — 47 people, an internal
+app, and a report is about the app rather than about a record. If a report ever needs to be
+private that is a `feedback_is_private` column and a narrowed predicate, not a reason to
+darken the whole queue.
+
+What did **not** widen: writing. Anyone reports; **only superadmin moves a request between
+stages**; admin edits the words and plans a request into a phase.
+
+### The four tables
+
+| | |
+| --- | --- |
+| `0060` | `feedback` becomes the tracker. `feedback_status` → `feedback_stage`, with Amber's four (requested, in review, planned, in development) plus **shipped** and **declined**. Adds `feedback_stage_entered_at`, `feedback_error_text`, `feedback_user_agent`. The stage rule is a **trigger**, `guard_feedback_stage_change()`, because RLS decides rows and never columns — and it bites at *admin*, a rung the UPDATE policy has to keep letting through |
+| `0061` | `feedback_votes`, whose **primary key is the rule**: `(feedback_id, profile_id)` cannot hold a second vote, whatever the app sends. No `vote_count` column — a counter can be told to go up but cannot know who voted, and un-voting comes free with rows. Plus `feedback_display`, `security_invoker`, carrying the count and whether *you* voted |
+| `0062` | `feedback_attachments` and a **private** `feedback-screenshots` bucket. The object path starts with the uploader's profile id, because that is the only thing a storage policy can compare — `storage.objects` has no column saying which report a file belongs to, and giving it one would be a second link that can disagree with the table |
+| `0063` | `roadmap_phases` (dates **nullable** — an unscheduled phase is real, and a guessed date gets quoted back as a commitment) and `releases` + `release_entries`. Deliberately **not** one table with a flag: a plan that slips must never rewrite what the changelog said happened |
+
+`0062` guards its bucket insert on `to_regclass('storage.buckets')`, because the verify
+harness replays into a plain Postgres with no storage schema. On a replayed database the
+bucket does not exist and the upload fails visibly rather than writing nowhere.
+
+### What was watched failing before it was trusted
+
+Every new assertion, against the replay database, by breaking the thing it guards:
+
+| Broken | Reported |
+| --- | --- |
+| read policy put back to admin-only | "an ordinary person could not read the tracker they just wrote to" |
+| `feedback_votes` primary key dropped | "the same person voted twice" |
+| stage trigger dropped | "an ADMIN moved a request between stages — the trigger did not bite" |
+| trigger stamping unconditionally | "a no-op stage write restamped feedback_stage_entered_at" |
+| phase FK switched to CASCADE | "deleting a roadmap phase took its requests with it" |
+| six constraints dropped one by one | each named its own refusal |
+
+**One of those needed a second attempt, and the reason is worth carrying forward.** The
+no-op probe first compared the stamp before and after — and *passed* against a trigger that
+stamped unconditionally, because `now()` is transaction time, so the "new" value was the
+value already there. It parks the stamp in 2020 first now. A before/after comparison inside
+one transaction cannot see a rewrite to the same instant.
+
+### Not from this branch, and still red
+
+`verify/rls.sql`'s two demo-account probes — *"a demo account read 2 job(s)"* and *"read 48
+profile(s)"* — **fail on `main` in this harness too** (checked on a clean worktree). The
+0049 gate was proved against the live database; something about the replay database's
+`auth.uid()` path means the flag does not take there. It is not this branch's, and it is
+worth an hour: a probe that has been red for a while is a probe nobody reads.
+
+### In the app
+
+- **One report form, not two footer buttons** (`components/Feedback.tsx`). Amber: *"it
+  should just be one as bugs and Wishlist but have a radio select."* The split asked the
+  wrong question at the wrong moment — whether something is a defect or a missing feature
+  is a triage judgement, and the person who just hit it is the worst placed to make it.
+- **The error is captured, not typed**: `error` and `unhandledrejection` listeners hold the
+  last one for fifteen minutes. Older than that it is dropped — an error from an hour ago
+  attached to an unrelated report sends whoever reads it somewhere wrong, confidently.
+- **`/updates`, in the main nav**: Requests (the board, four columns and the two endings
+  underneath), Roadmap (phases, dates, what is planned into each, ticks that are facts and
+  never a percentage) and Changelog.
+- **Setup → Bugs / Ideas stays** as the triage table it always was — the page, the error,
+  the browser, the screenshots. Note that its `adminOnly` flag no longer mirrors a database
+  rule; it is a routing choice now, and the file says so.
+
+### The repository half
+
+`scripts/changelog.mjs` reads `Changelog:`, `Roadmap:` and `Release:` trailers out of
+`git log` and rewrites `CHANGELOG.md`, ticks `ROADMAP.md`, and refreshes a generated block
+in this file and the README. `.githooks/post-commit` runs it; `scripts/install-hooks.sh`
+points git at it (once per clone).
+
+It **never stages, amends or pushes**. A hook that amends rewrites a commit somebody may
+already have pushed.
+
+`ROADMAP.md` owns the phase **names and order**; `roadmap_phases` owns the **dates and
+status**, because a date is Amber's decision. `--seed` prints idempotent SQL so the
+database follows the file instead of drifting from it.
+
+### What needs Amber
+
+1. **Voting on bugs.** She said *"all users can vote on ideas"*, so the thumb is offered on
+   everything the board shows — the database permits a vote on either kind. If a "me too"
+   on a bug is not wanted, it is a filter on one component.
+2. **Who may decline.** Declining is a stage, so it is superadmin's, like every other move.
+   If admins should be able to say no without being able to promise yes, that is a second
+   clause in the trigger.
+3. **Whether the tracker should notify.** Nothing tells a person their request reached
+   Planned. `comment_mentions` is the only notification the app can honestly deliver today;
+   a stage change is the obvious second one and it needs the delivery question answered.
+4. **The first roadmap phases.** None are seeded, on purpose — an invented "Phase 2 —
+   costings, October" would be read as the plan. `ROADMAP.md` carries the repo's own A/B/C
+   with no dates on them; the app's roadmap is empty until she writes it.
 
 ---
 

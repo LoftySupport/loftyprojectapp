@@ -2003,3 +2003,84 @@ code { overflow-wrap: anywhere; }
 }
 .drawer-find-results button:first-child { border-top: 0; }
 .drawer-find-results button:hover { background: var(--primary-background-hover-color); }
+
+/* --------------------------------------------------------------- the send form */
+.feedback-kinds { display: grid; gap: var(--space-8); }
+.feedback-kind {
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-small);
+  padding: var(--space-8);
+}
+.feedback-kind.is-on { border-color: var(--primary-color); background: var(--primary-background-hover-color); }
+.feedback-kind > span { display: block; margin-left: var(--space-24); }
+
+.feedback-file { font: var(--font-text3-normal); color: var(--primary-text-color); }
+.feedback-files { list-style: none; margin: var(--space-8) 0 0 0; padding: 0; }
+.feedback-files li { display: flex; align-items: center; gap: var(--space-8); min-height: 24px; }
+
+.feedback-captured {
+  background: var(--primary-background-hover-color);
+  border-radius: var(--border-radius-small);
+  padding: var(--space-8);
+  display: grid;
+  gap: var(--space-4);
+}
+
+/* ---------------------------------------- the tracker's thread and its report form
+   (0064 comment standing, and the duplicate search in the report panel.) */
+
+.comment-badge {
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+  background: var(--primary-background-hover-color);
+  border-radius: var(--border-radius-small);
+  padding: 0 var(--space-6);
+}
+/* Internal is the one badge that must never be missed: the cost of misreading it is
+   writing something in front of the person it was not meant for. Border as well as
+   colour, so it survives a greyscale screen. */
+.comment-badge.is-internal {
+  color: var(--negative-color);
+  border: 1px solid var(--negative-color);
+  background: none;
+}
+.comment-badge.is-pinned {
+  color: var(--primary-color);
+  border: 1px solid var(--primary-color);
+  background: none;
+}
+
+.comment-internal {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-8);
+  min-height: 24px;
+  margin-top: var(--space-4);
+}
+
+.feedback-similar {
+  background: var(--primary-background-hover-color);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-small);
+  padding: var(--space-8);
+  display: grid;
+  gap: var(--space-4);
+}
+.feedback-similar ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-4); }
+.feedback-similar li { display: flex; align-items: flex-start; gap: var(--space-8); min-width: 0; }
+/* Fixed width so the titles beside them line up: a ragged left edge on a list somebody
+   is scanning for "is mine already here" costs more than the pixels save. */
+.feedback-similar-vote {
+  flex: 0 0 auto;
+  min-width: 64px;
+  min-height: 24px;
+  padding: 0 var(--space-6);
+  background: var(--primary-background-color);
+  border: 1px solid var(--primary-color);
+  border-radius: var(--border-radius-small);
+  color: var(--primary-color);
+  font: var(--font-text3-normal);
+  cursor: pointer;
+}
+.feedback-similar-vote:disabled { opacity: 0.7; cursor: default; }
+.feedback-similar-vote:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
