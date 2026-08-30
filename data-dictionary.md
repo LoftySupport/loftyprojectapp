@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-303 properties across 51 tables.
+313 properties across 52 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 254 | In the migration and the types |
+| Created | 264 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -121,6 +121,10 @@ What people write on a record. Threaded one level deep in practice, marked edite
 | `comments.comment_body` | Comment | The text. | `text` | — | Not null, not blank. | Rendered by job_timeline alongside activity events. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `comments.parent_comment_id` | In reply to | Threading. One level deep in practice, unbounded in shape. | `uuid` | — | Nullable. CHECK comments_not_its_own_parent. | FK → comments(comment_id) ON DELETE CASCADE. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `comments.comment_edited_at` | Edited on | Set when the BODY changes, not on any update — moving a comment or backfilling a column is not an edit, and a comment falsely marked edited is as misleading as one silently changed. A comment that changed with no sign it changed is how a record of a conversation stops being one. | `timestamptz` | — | Nullable. Maintained by the comments_touch_edited trigger, which fires `before update OF comment_body`. | Surfaced as job_timeline.entry_was_edited. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `comments.feedback_id` | On which request | The tracker request this comment is on — the fifth parent a comment may have. | `uuid` | — | Nullable. FK → feedback(feedback_id) ON DELETE CASCADE. Part of comments_one_parent: exactly one of project, job, task, variation or request. | A fifth parent rather than a feedback_comments table, so tracker discussions get @mentions, the edited marker, the author stamp and the bell without any of them being built a second time. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `comments.comment_is_pinned` | Pinned | The official answer, held at the top of a thread. | `boolean` | — | Not null, default false. | Admin+, enforced by guard_comment_standing() rather than by a policy: pinning is a COLUMN rule, and the author's own edit policy would otherwise let anybody pin themselves to the top. A boolean here rather than a pinned_comment_id on the parent — pinning is a property of the comment. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `comments.comment_is_internal` | Internal | The team's own lane: triage talk the person who asked cannot read. | `boolean` | — | Not null, default false. | Enforced by the read policy, so an internal comment never reaches a non-admin at all — including the count on the board, which is why that count is computed in the view rather than in the app. Default false: nothing already written became hidden. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `comments.comment_feedback_stage` | Stage announced | Set when this comment was the note that came with a stage change — the stage it announced. | `text` | — | Nullable. CHECK: only on a comment that has a feedback_id. | One note per MOVE rather than one per request: a column on feedback would mean the note explaining 'planned' was overwritten by the note explaining 'in development', and what was said at each step would be gone. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `council_regions`
 
@@ -188,6 +192,7 @@ The bug and feature-request tracker. Sent from the footer by anyone signed in (0
 | `feedback.feedback_error_text` | Error | The error the app was showing when it was sent — captured from the app's own error state, never typed. | `text` | — | Nullable. | Nobody retypes an error message accurately in a hurry. Held for fifteen minutes and shown in the form before sending, so it is neither stale nor collected silently. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `feedback.feedback_user_agent` | Browser | The browser and version it was sent from. | `text` | — | Nullable. | Captured because nobody knows their own browser version, and it is the first thing asked when a bug reproduces for one person only. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `feedback.roadmap_phase_id` | Planned into | Which roadmap phase this request is scheduled in, when it is scheduled at all. Null is the normal state. | `uuid` | — | Nullable. FK → roadmap_phases(roadmap_phase_id) ON DELETE SET NULL. | SET NULL and never CASCADE: deleting a phase must not delete the requests planned into it, which is the most destructive plausible mistake on that screen. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `feedback.feedback_merged_into_id` | Duplicate of | The request this one turned out to be a duplicate of. Null for everything that stands on its own. | `uuid` | — | Nullable. FK → feedback(feedback_id) ON DELETE SET NULL. CHECK: never itself. | Merging moves the votes and the followers to the target, by a SECURITY DEFINER trigger — the app cannot, because a vote belongs to the person who cast it. Chains are refused, so a duplicate always points at a live request. The row is kept rather than deleted: the person who filed it must still be able to find it and see where the conversation went. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `feedback.profile_id` | From | Who sent it, so a report that needs a conversation has somebody to go back to. | `uuid` | — | Nullable. FK → profiles(profile_id) ON DELETE SET NULL. | Stamped by the repository from the signed-in profile and checked by the insert policy against current_profile_id(), so nobody can file under a colleague's name. SET NULL rather than CASCADE: the report outlives the reporter — it is about the app, not the person who noticed. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `feedback_attachments`
@@ -203,6 +208,17 @@ Screenshots on a report. The bytes go to the private feedback-screenshots bucket
 | `feedback_attachments.feedback_attachment_mime` | Type | image/png, application/pdf and so on. | `text` | — | Not null, default ''. | Recorded rather than sniffed at render: asking the browser to guess is how a PDF gets drawn as a broken image. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `feedback_attachments.feedback_attachment_bytes` | Size | How big the file is. | `integer` | — | Not null, default 0. CHECK: not negative. | The bucket refuses anything over 10MB, so integer is enough. Recorded so "why is this report slow to open" is answerable from a number rather than from a folder. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
+## `feedback_follows`
+
+Who hears about a request moving. Voting and reporting follow you automatically, by trigger, which is what closes the loop Canny closes with email — the person who asked is told, without having to remember to look. Unread is a comparison between two dates rather than a table of notifications, so nothing can be left over saying a request reached a stage it has since left.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `feedback_follows.feedback_id` | Request followed | Which request somebody hears about. | `uuid` | — | Part of the primary key. FK → feedback(feedback_id) ON DELETE CASCADE. | Voting and reporting both create one, by trigger — not by the app, because the same rows are written by an import, a merge and an on-behalf vote, and a follow created in the repository would exist for one of those and silently not for the others. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `feedback_follows.profile_id` | Who follows it | The person who hears about it. | `uuid` | — | Part of the primary key. FK → profiles(profile_id) ON DELETE CASCADE. | Private, unlike a vote: your own follows are the only ones you can read. A vote is a position on a question everybody can see; following is closer to a bookmark. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `feedback_follows.feedback_follow_seen_stage_at` | Seen at | When this person last looked at where the request had got to. Null means never. | `timestamptz` | — | Nullable. | Unread is DERIVED from this against feedback_stage_entered_at rather than stored as notification rows — so a notice cannot outlive, duplicate or contradict the move it describes, and there is nothing to clean up when a request is merged away. Null counts as unseen, so following something already in flight tells you where it is. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `feedback_follows.feedback_follow_at` | Followed | When they started following. | `timestamptz` | — | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
 ## `feedback_votes`
 
 One thumbs up per person per request. The primary key (feedback_id, profile_id) IS the rule — a second vote from the same person cannot be stored, whatever the app sends — which is also why there is no vote_count column: a counter can be told to go up but cannot know who voted, and a derived count cannot drift.
@@ -212,6 +228,7 @@ One thumbs up per person per request. The primary key (feedback_id, profile_id) 
 | `feedback_votes.feedback_id` | Request voted on | Which request the thumbs up is on. | `uuid` | — | Part of the primary key. FK → feedback(feedback_id) ON DELETE CASCADE. | Half of the primary key that IS the rule: (feedback_id, profile_id) cannot hold a second vote from the same person, whatever the app sends. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `feedback_votes.profile_id` | Who voted | The person whose vote it is. | `uuid` | — | Part of the primary key. FK → profiles(profile_id) ON DELETE CASCADE. | NOT NULL and CASCADE, unlike feedback.profile_id: a report outlives its reporter because it is about the app, but a vote IS the person. Insert and delete policies both compare it to current_profile_id(), so nobody votes on anyone else's behalf or takes their vote away. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `feedback_votes.feedback_vote_at` | Voted | When the vote was cast. | `timestamptz` | — | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `feedback_votes.feedback_vote_added_by` | Added by | Who entered this vote, when it was not the voter — the request that arrived on a call or on site. | `uuid` | — | Nullable. FK → profiles(profile_id) ON DELETE SET NULL. CHECK: never equal to the voter. | Admin+ by a second, narrower insert policy. The CHECK is not decoration: policies are OR'd, so the policy's own 'not your own vote' clause was silently ignored by the older own-vote policy — found by a probe asserting the refusal, not by reading the policy. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `health_statuses`
 

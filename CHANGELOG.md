@@ -14,6 +14,11 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- A discussion under every request, with a pinned answer and an internal lane for triage
+- "Someone may have asked this already" — the report form searches while you type, and offers to vote instead
+- Duplicates can be merged, and the votes and followers move with them
+- The bell tells you when a request you follow moves, with the note whoever moved it left
+- A vote can be added for somebody whose request arrived on a call, recorded against whoever entered it
 - The responsive sweep covers the three Updates tabs
 - One form for reporting a bug or requesting a feature, with a radio instead of two footer buttons
 - Screenshots, the page, the error and the browser sent with a report — captured, never typed
@@ -21,6 +26,10 @@ says shipped and what the app shows people cannot use different words for it.
 - One thumbs up per person per request, and the vote count the next phase is planned from
 - A roadmap of phases and dates, and what is planned into each
 - A changelog, in the app and in this repository
+
+### Fixed
+
+- The demo-account checks in verify/ were reporting a failure they did not have — their own setup was being refused
 
 ### Changed
 

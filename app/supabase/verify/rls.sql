@@ -41,6 +41,16 @@ grant usage on schema public to authenticated, anon;
 grant select, insert, update, delete on all tables in schema public to authenticated;
 grant select on all tables in schema public to anon;
 
+-- Planted as the owner, before any role is assumed: 0064's internal lane can only be
+-- written by an admin, and the probe that matters is whether an ordinary person can READ
+-- one. auth.uid() is null here, so the insert guard passes through — the same carve-out
+-- every guard in this schema makes for migrations and seeds.
+insert into feedback (feedback_kind, feedback_title)
+values ('idea', '__rls_probe_parent__');
+insert into comments (feedback_id, comment_body, comment_is_internal)
+select feedback_id, '__rls_probe_internal__', true
+  from feedback where feedback_title = '__rls_probe_parent__';
+
 \echo '=== an ANONYMOUS visitor sees nothing ==='
 set role anon;
 select 'jobs: '     || count(*) from jobs;
@@ -113,35 +123,9 @@ begin
   exception when others then raise warning 'FAIL: unexpected on your own saved view (%)', sqlerrm;
   end;
 
-  -- 0049: a demo account is held at the door, and the door is the database rather than
-  -- the screen. Proved by flipping the flag on the signed-in test person mid-probe: the
-  -- reads that worked a line ago must stop, and their own row must survive so the gate
-  -- can name them. Restored immediately afterwards, or every probe below this one runs
-  -- as somebody who cannot read anything.
-  declare
-    demo_jobs int; demo_me int;
-  begin
-    update profiles set profile_is_demo = true
-     where profile_email = 'behaviour-test@lofty.com.au';
-    select count(*) into demo_jobs from jobs;
-    select count(*) into demo_me from profiles;
-    if demo_jobs = 0 then
-      raise notice 'ok  a demo account reads no jobs — every policy hangs off is_active_user';
-    else
-      raise warning 'FAIL: a demo account read % job(s)', demo_jobs;
-    end if;
-    if demo_me = 1 then
-      raise notice 'ok  …but still reads its own profile, so the gate can name them';
-    else
-      raise warning 'FAIL: a demo account read % profile(s), expected exactly its own', demo_me;
-    end if;
-    update profiles set profile_is_demo = false
-     where profile_email = 'behaviour-test@lofty.com.au';
-  exception when others then
-    update profiles set profile_is_demo = false
-     where profile_email = 'behaviour-test@lofty.com.au';
-    raise warning 'FAIL: unexpected on the demo gate (%)', sqlerrm;
-  end;
+  -- 0049's demo gate is probed AFTER this block — see the note below. It cannot live in
+  -- here, and finding out why fixed a check that had been reporting a failure it did not
+  -- have.
 
   -- 0050: preferences are yours alone. The same two halves as saved_views, and the
   -- reason this table exists rather than a column on profiles: the policy that would
@@ -218,6 +202,18 @@ begin
     else
       raise warning 'FAIL: an ordinary person could not read the tracker they just wrote to';
     end if;
+
+    -- 0065: reporting follows you. Asserted HERE, before anything has voted, and that
+    -- placement is the whole probe: further down the file a vote has already been cast on
+    -- this request, and follow_on_vote() would have created the same row — so the check
+    -- passed with follow_on_report() dropped. Watched doing exactly that.
+    if (select count(*) from feedback_follows fl
+          join feedback f on f.feedback_id = fl.feedback_id
+         where f.feedback_title = '__rls_probe__') = 1 then
+      raise notice 'ok  feedback_follows: reporting follows you, by trigger';
+    else
+      raise warning 'FAIL: reporting did not follow the person who reported it';
+    end if;
   exception when others then raise warning 'FAIL: unexpected reporting a bug (%)', sqlerrm;
   end;
 
@@ -285,6 +281,138 @@ begin
       raise warning 'FAIL: a vote could not be withdrawn';
     end if;
   exception when others then raise warning 'FAIL: unexpected voting (%)', sqlerrm;
+  end;
+
+  -- 0064: the discussion under a request. An ordinary person writes one and reads it
+  -- back; the team's internal lane is invisible to them. The internal comment is planted
+  -- as the owner further up this file (no JWT), because an admin has not run yet.
+  declare
+    probe_id uuid;
+    mine int;
+    internal_seen int;
+  begin
+    select feedback_id into probe_id from feedback where feedback_title = '__rls_probe__' limit 1;
+
+    insert into comments (feedback_id, comment_body) values (probe_id, '__rls_probe_comment__');
+    select count(*) into mine from comments where comment_body = '__rls_probe_comment__';
+    if mine = 1 then
+      raise notice 'ok  comments: an ordinary person can talk on a request';
+    else
+      raise warning 'FAIL: a comment on a request was not readable by its author';
+    end if;
+
+    select count(*) into internal_seen from comments
+      where comment_body = '__rls_probe_internal__';
+    if internal_seen = 0 then
+      raise notice 'ok  comments: the internal lane is invisible below admin';
+    else
+      raise warning 'FAIL: a non-admin read % internal comment(s)', internal_seen;
+    end if;
+  exception when others then raise warning 'FAIL: unexpected commenting on a request (%)', sqlerrm;
+  end;
+
+  -- The standing of a comment is admin's, and it is a COLUMN rule — so the author's own
+  -- edit policy would happily let them pin themselves to the top without the trigger.
+  begin
+    update comments set comment_is_pinned = true where comment_body = '__rls_probe_comment__';
+    raise warning 'FAIL: an ordinary person pinned their own comment';
+  exception
+    when insufficient_privilege then raise notice 'ok  comments: pinning is admin work, refused by the trigger';
+    when others then raise warning 'FAIL: unexpected pinning a comment (%)', sqlerrm;
+  end;
+
+  begin
+    insert into comments (feedback_id, comment_body, comment_is_internal)
+    select feedback_id, '__rls_probe_sneaky__', true from feedback
+     where feedback_title = '__rls_probe__' limit 1;
+    raise warning 'FAIL: an ordinary person posted an internal comment';
+  exception
+    when insufficient_privilege then raise notice 'ok  comments: posting an internal comment is refused below admin';
+    when others then raise warning 'FAIL: unexpected posting internal (%)', sqlerrm;
+  end;
+
+  -- 0065: voting follows you, and un-voting does not unfollow. Both halves, because the
+  -- second is a deliberate asymmetry somebody will "tidy up" otherwise.
+  --
+  -- IT ASKS ABOUT A REQUEST THIS PERSON DID NOT FILE, and that is not incidental. The
+  -- first version of this probe used their own report — which follow_on_report() has
+  -- ALREADY followed them to — so the count was 1 whether or not voting followed them at
+  -- all. It passed with the vote trigger dropped. Watched doing exactly that, which is
+  -- why the planted '__rls_probe_parent__' row (filed by nobody) is what it votes on.
+  declare
+    probe_id uuid;
+    follows_after_vote int;
+    follows_after_unvote int;
+  begin
+    select feedback_id into probe_id from feedback
+     where feedback_title = '__rls_probe_parent__' limit 1;
+
+    insert into feedback_votes (feedback_id, profile_id)
+    values (probe_id, (select current_profile_id()))
+    on conflict do nothing;
+    select count(*) into follows_after_vote from feedback_follows where feedback_id = probe_id;
+    if follows_after_vote = 1 then
+      raise notice 'ok  feedback_follows: voting follows you, by trigger';
+    else
+      raise warning 'FAIL: voting created % follow(s)', follows_after_vote;
+    end if;
+
+    delete from feedback_votes where feedback_id = probe_id
+      and profile_id = (select current_profile_id());
+    select count(*) into follows_after_unvote from feedback_follows where feedback_id = probe_id;
+    if follows_after_unvote = 1 then
+      raise notice 'ok  feedback_follows: un-voting does NOT unfollow';
+    else
+      raise warning 'FAIL: un-voting removed the follow';
+    end if;
+  exception when others then raise warning 'FAIL: unexpected following (%)', sqlerrm;
+  end;
+
+  -- A follow is private, unlike a vote. Nobody needs to know what somebody is watching.
+  begin
+    insert into feedback_follows (feedback_id, profile_id)
+    select feedback_id, (select profile_id from profiles
+                          where profile_email <> 'behaviour-test@lofty.com.au' limit 1)
+      from feedback where feedback_title = '__rls_probe__' limit 1;
+    raise warning 'FAIL: a follow was created for somebody else';
+  exception
+    when insufficient_privilege then raise notice 'ok  feedback_follows: refused a follow created for another person';
+    when others then raise warning 'FAIL: unexpected following for another (%)', sqlerrm;
+  end;
+
+  -- 0066: merging is admin work. Below it the policy matches nothing, so the trigger
+  -- never runs — the same two-mechanism shape as the stage move.
+  declare
+    merged int;
+  begin
+    update feedback set feedback_merged_into_id = feedback_id
+      where false;  -- shape only; the real attempt is next
+    update feedback f set feedback_merged_into_id = (
+      select f2.feedback_id from feedback f2 where f2.feedback_id <> f.feedback_id limit 1
+    ) where f.feedback_title = '__rls_probe__';
+    get diagnostics merged = row_count;
+    if merged = 0 then
+      raise notice 'ok  feedback: merging is refused below admin';
+    else
+      raise warning 'FAIL: a user merged % request(s)', merged;
+    end if;
+  exception
+    when insufficient_privilege then raise notice 'ok  feedback: merging is refused below admin';
+    when others then raise warning 'FAIL: unexpected merging at user (%)', sqlerrm;
+  end;
+
+  -- 0067: adding somebody else's vote is admin's. This is the clause that answers 0061's
+  -- objection, so it has to be seen refusing at this rung.
+  begin
+    insert into feedback_votes (feedback_id, profile_id, feedback_vote_added_by)
+    select feedback_id,
+           (select profile_id from profiles where profile_email <> 'behaviour-test@lofty.com.au' limit 1),
+           (select current_profile_id())
+      from feedback where feedback_title = '__rls_probe__' limit 1;
+    raise warning 'FAIL: a user added a vote on somebody else''s behalf';
+  exception
+    when insufficient_privilege then raise notice 'ok  feedback_votes: adding a vote for somebody is refused below admin';
+    when others then raise warning 'FAIL: unexpected on-behalf vote at user (%)', sqlerrm;
   end;
 
   -- 0063: the roadmap and the changelog are read by everybody and written by superadmin.
@@ -434,6 +562,77 @@ begin
   end;
 end $$;
 reset role;
+
+-- =============================================================================
+-- 0049 — THE DEMO GATE, AND A PROBE THAT WAS FAILING FOR A REASON OF ITS OWN
+--
+--   This ran inside the block above, as `authenticated`, and it began by setting
+--   profile_is_demo on the test person. THAT UPDATE MATCHED NO ROW: writing profiles
+--   needs admin, and the test person is at `user` there. So the flag was never set, the
+--   reads that followed were ordinary reads, and the probe reported
+--
+--       FAIL: a demo account read 2 job(s)
+--       FAIL: a demo account read 48 profile(s), expected exactly its own
+--
+--   …which is a true statement about a probe that had not managed to make anybody a demo
+--   account, and a false statement about the gate. It has been red on `main` for a while
+--   and read as a fault in 0049, which is exactly what a silently-failing SETUP does: the
+--   assertion is fine, the arrangement never happened, and the report is confident.
+--
+--   The gate itself was proved against the LIVE database when 0049 landed (6 projects ·
+--   60 jobs → 0 · 0 with the tick on), so nothing was ever wrong with it here.
+--
+--   The fix is to flip the flag as the OWNER — outside the role, where a migration or an
+--   admin would do it — and only then read as the signed-in person. And the probe now
+--   asserts its own setup: if the flag is not on, it says so instead of testing nothing.
+-- =============================================================================
+reset request.jwt.claim.sub;
+update profiles set profile_is_demo = true
+ where profile_email = 'behaviour-test@lofty.com.au';
+
+\echo '=== the same person, held at the demo gate ==='
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+
+do $$
+declare
+  is_demo boolean;
+  demo_jobs int;
+  demo_me int;
+begin
+  select p.profile_is_demo into is_demo from profiles p
+   where p.profile_email = 'behaviour-test@lofty.com.au';
+  -- The setup, asserted. Without this the two probes below can only ever report on
+  -- whatever state the row happened to be in.
+  if is_demo is not true then
+    raise warning 'FAIL: the demo flag is not set — the probe below would prove nothing';
+  end if;
+
+  select count(*) into demo_jobs from jobs;
+  select count(*) into demo_me from profiles;
+
+  if demo_jobs = 0 then
+    raise notice 'ok  a demo account reads no jobs — every policy hangs off is_active_user';
+  else
+    raise warning 'FAIL: a demo account read % job(s)', demo_jobs;
+  end if;
+  if demo_me = 1 then
+    raise notice 'ok  …but still reads its own profile, so the gate can name them';
+  else
+    raise warning 'FAIL: a demo account read % profile(s), expected exactly its own', demo_me;
+  end if;
+end $$;
+reset role;
+
+-- Cleared immediately, or every probe after this one runs as somebody who reads nothing.
+-- The session is left as the OWNER, exactly as the `reset role` above this block left it:
+-- the manager section that follows sets a permission level, which is an admin write, and
+-- it would be refused if this block handed it back an `authenticated` session. Watched
+-- happening — the manager probes reported three failures that were really this line.
+reset request.jwt.claim.sub;
+update profiles set profile_is_demo = false
+ where profile_email = 'behaviour-test@lofty.com.au';
+
 
 -- ---------------------------------------------------------------------------
 -- A MANAGER MOVES JOBS. Lofty's answer, 23 August: "a manager can move jobs between
@@ -608,6 +807,97 @@ begin
     when others then raise warning 'FAIL: unexpected admin moving a request (%)', sqlerrm;
   end;
 
+  -- 0064: what an admin CAN do with a comment's standing, and reading the internal lane.
+  declare
+    seen int;
+  begin
+    select count(*) into seen from comments where comment_body = '__rls_probe_internal__';
+    if seen = 1 then
+      raise notice 'ok  comments: an admin reads the internal lane';
+    else
+      raise warning 'FAIL: an admin read % internal comment(s), expected 1', seen;
+    end if;
+
+    update comments set comment_is_pinned = true where comment_body = '__rls_probe_comment__';
+    if found then
+      raise notice 'ok  comments: an admin can pin the official answer';
+    else
+      raise warning 'FAIL: an admin could not pin a comment';
+    end if;
+  exception when others then raise warning 'FAIL: unexpected admin comment standing (%)', sqlerrm;
+  end;
+
+  -- 0066 and 0067, the two things an admin is meant to be able to do, and the two shapes
+  -- of refusal around them. The votes being moved is the part that cannot work without
+  -- SECURITY DEFINER, so it is the one worth watching most closely.
+  declare
+    source_id uuid;
+    target_id uuid;
+    other_person uuid;
+    moved_votes int;
+  begin
+    select feedback_id into source_id from feedback where feedback_title = '__rls_probe__' limit 1;
+    select feedback_id into target_id from feedback where feedback_title = '__rls_probe_parent__' limit 1;
+    select profile_id into other_person from profiles
+     where profile_email <> 'behaviour-test@lofty.com.au' and profile_is_active limit 1;
+
+    -- An on-behalf vote on the source, which the merge then has to carry across. Two
+    -- probes in one: this is 0067's happy path.
+    insert into feedback_votes (feedback_id, profile_id, feedback_vote_added_by)
+    values (source_id, other_person, (select current_profile_id()));
+    raise notice 'ok  feedback_votes: an admin adds a vote on somebody''s behalf';
+
+    -- …but not one that lies about who added it.
+    begin
+      insert into feedback_votes (feedback_id, profile_id, feedback_vote_added_by)
+      values (target_id, other_person, other_person);
+      raise warning 'FAIL: an on-behalf vote was stamped with somebody else as the adder';
+    exception
+      when insufficient_privilege then
+        raise notice 'ok  feedback_votes: an on-behalf vote cannot lie about who added it';
+    end;
+
+    -- …and not their own, which belongs on the ordinary path where added_by is null.
+    --
+    -- This one is refused by a CHECK and not by the policy, and the difference is the
+    -- point: the policy clause alone did nothing, because 0061's own-vote policy is OR'd
+    -- with it and admits the row first. This probe is what found that — it reported
+    -- "FAIL: an admin added their OWN vote through the on-behalf path" — and 0067 carries
+    -- the reasoning.
+    begin
+      insert into feedback_votes (feedback_id, profile_id, feedback_vote_added_by)
+      values (target_id, (select current_profile_id()), (select current_profile_id()));
+      raise warning 'FAIL: an admin added their OWN vote through the on-behalf path';
+    exception
+      when check_violation then
+        raise notice 'ok  feedback_votes: a vote cannot be added on your own behalf (CHECK, not policy)';
+      when insufficient_privilege then
+        raise warning 'FAIL: refused by a policy — that clause is OR''d away; it needs the CHECK';
+    end;
+
+    -- The merge itself.
+    update feedback set feedback_merged_into_id = target_id where feedback_id = source_id;
+    select count(*) into moved_votes from feedback_votes
+     where feedback_id = target_id and profile_id = other_person;
+    if moved_votes = 1 then
+      raise notice 'ok  feedback: merging carried another person''s vote across';
+    else
+      raise warning 'FAIL: merging moved % vote(s), expected 1', moved_votes;
+    end if;
+
+    -- No chains: the target of a merge must be a live request.
+    begin
+      update feedback set feedback_merged_into_id = source_id where feedback_id = target_id;
+      raise warning 'FAIL: a merge chain was allowed';
+    exception
+      when check_violation then raise notice 'ok  feedback: merging into a duplicate is refused — no chains';
+    end;
+
+    -- Left as it was found.
+    update feedback set feedback_merged_into_id = null where feedback_id = source_id;
+  exception when others then raise warning 'FAIL: unexpected merging or on-behalf voting (%)', sqlerrm;
+  end;
+
   -- The roadmap and the changelog are superadmin's too, and admin is the rung that would
   -- most plausibly have been given them by mistake.
   begin
@@ -692,6 +982,23 @@ begin
   exception when others then raise warning 'FAIL: unexpected no-op stage write (%)', sqlerrm;
   end;
 
+  -- 0064: a move can carry a sentence, and the sentence is a comment on the request
+  -- rather than a column that the next move would overwrite.
+  declare
+    notes int;
+  begin
+    insert into comments (feedback_id, comment_body, comment_feedback_stage)
+    select feedback_id, 'doing this in the import phase', 'planned'
+      from feedback where feedback_title = '__rls_probe__' limit 1;
+    select count(*) into notes from comments where comment_feedback_stage is not null;
+    if notes >= 1 then
+      raise notice 'ok  comments: a stage change can carry a note';
+    else
+      raise warning 'FAIL: a stage note was not written';
+    end if;
+  exception when others then raise warning 'FAIL: unexpected stage note (%)', sqlerrm;
+  end;
+
   -- 0063, the destructive one: removing a phase must never remove what people asked for.
   -- ON DELETE SET NULL is one word away from CASCADE, and the difference is forty
   -- people's requests.
@@ -715,7 +1022,9 @@ reset role;
 -- feedback probe's row has to be swept as the owner: the table has no delete policy at
 -- all by design ('declined' is the answer to a report going nowhere), so the person who
 -- wrote it cannot take it back.
-delete from feedback where feedback_title = '__rls_probe__';
+delete from comments where comment_body in
+  ('__rls_probe_comment__', '__rls_probe_internal__', 'doing this in the import phase');
+delete from feedback where feedback_title in ('__rls_probe__', '__rls_probe_parent__');
 reset request.jwt.claim.sub;
 update profiles set profile_permission = 'user'
  where profile_email = 'behaviour-test@lofty.com.au';

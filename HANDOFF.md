@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 10 changes since then —
-- Added: The responsive sweep covers the three Updates tabs
-- Changed: The handoff and the README say what the tracker changed, and what is still open
-- Added: One form for reporting a bug or requesting a feature, with a radio instead of two footer buttons
-- Added: Screenshots, the page, the error and the browser sent with a report — captured, never typed
-- Added: A tracker everybody can see, with the stages requested, in review, planned and in development
-- …and 5 more.
+Unreleased: 16 changes since then —
+- Added: A discussion under every request, with a pinned answer and an internal lane for triage
+- Added: "Someone may have asked this already" — the report form searches while you type, and offers to vote instead
+- Added: Duplicates can be merged, and the votes and followers move with them
+- Added: The bell tells you when a request you follow moves, with the note whoever moved it left
+- Added: A vote can be added for somebody whose request arrived on a call, recorded against whoever entered it
+- …and 11 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -21,6 +21,93 @@ and before it, the spine review described there, because that is the only catego
 change that gets expensive once 200 jobs are in.
 
 Last updated: 2026-08-26.
+
+---
+
+## Session of 2026-08-30, second half — the Canny round
+
+Amber, pointing at Canny: *"Like https://canny.io"*. What their portal does that the
+tracker did not, read off their own feature pages rather than remembered: a discussion
+under every post with a **pinned** answer and an **internal** lane, **status updates that
+close the loop** with the people who voted, **merging duplicates**, and **voting on
+behalf** of somebody whose request never reached the portal.
+
+**`0064`–`0068` are written and replay cleanly. They are NOT applied to the live
+database** — same reason as the first half: the Supabase connector needs a browser
+sign-in. Apply `0060`–`0068` in order, then run `verify/check.sh`.
+
+| | |
+| --- | --- |
+| `0064` | The discussion. A **fifth parent on `comments`** rather than a `feedback_comments` table — the reuse is the whole argument: @mentions (`comment_mentions` has a FK to `comments`), the edited-at trigger, the author stamp and CommentsPanel all already exist, and a new table re-grows every one of them. Plus `comment_is_pinned`, `comment_is_internal` (admin-only by the read policy) and `comment_feedback_stage`, the note that comes with a move |
+| `0065` | `feedback_follows`. Voting and reporting follow you **by trigger**, not by the app — the same rows are written by an import, a merge and an on-behalf vote, and a follow created in the repository would exist for one of those and silently not for the others. Unread is **derived** (`feedback_stage_entered_at` vs a seen stamp), so no notification can outlive or contradict the move it describes |
+| `0066` | Merging. `feedback_merged_into_id`, and a **SECURITY DEFINER** trigger moves the votes and followers: they belong to other people, and 0061 rightly refuses the app the right to write them. No chains — a duplicate always points at a live request |
+| `0067` | Vote on behalf. `feedback_vote_added_by`, admin-only, **attributed and shown on screen** |
+| `0068` | `feedback_display` rebuilt with the duplicate link, the comment count, and the two follow facts. `drop` + `create`, not `create or replace`, because that drops `security_invoker` — 0020's fault, and this is a view rewrite |
+
+### The bell has a second real signal
+
+A request you follow has moved. It passes the same test @mentions passed: no health model,
+no SLA, nothing derived from a definition nobody has written. Voting subscribes you, so most
+people get it without pressing anything — which is the behaviour that closes Canny's loop,
+in-app rather than by email (Amber's Q4 order: in-app this phase, Teams and email later).
+
+### Three probes that were lying, and what each taught
+
+This round found more in the probes than in the code, which is the point of writing them.
+
+1. **A policy clause that was OR'd away.** 0067's insert policy said `added_by` must differ
+   from the voter. It did nothing: 0061's own-vote policy already admits a row whose
+   `profile_id` is yours, so an admin could add their own vote stamped as their own adder
+   and never meet the new policy at all. The probe reported
+   `FAIL: an admin added their OWN vote through the on-behalf path`. Fixed with a **CHECK**,
+   which is not OR'd with anything. **The general shape: a narrow policy beside a broad one
+   does not narrow anything.**
+2. **Two probes passing for the wrong reason.** "Voting follows you" asserted a follow on
+   the prober's *own* report — which `follow_on_report()` had already created — so it passed
+   with the vote trigger dropped. And "reporting follows you" was checked *after* a vote
+   probe had run on the same request, so it passed with the report trigger dropped. Both now
+   act on a request nobody has voted on, and the ordering is commented at the assertion.
+3. **A plpgsql subtransaction eating the setup.** In `constraints.sql`, `BEGIN…EXCEPTION`
+   opens a subtransaction: when a probe is refused — which is the *pass* — the rollback took
+   the fixture row inserted in the same block with it, and every probe after it acted on
+   nothing. The planted row now lives in a block of its own.
+
+### `verify/check.sh` is green for the first time
+
+The two demo-account probes that have been red on `main` are fixed, and the cause is the
+same class as the above: **the probe's own setup was silently refused.** It ran
+`update profiles set profile_is_demo = true` as `authenticated`, which cannot write
+`profiles` — so the flag was never set, the reads that followed were ordinary reads, and the
+failure it reported was true about the probe and false about the gate. 0049 was never wrong;
+it was proved against the live database when it landed.
+
+The flag is now flipped as the owner, outside the role, and **the probe asserts its own
+setup** before testing anything. It was watched failing with 0049's clause removed from
+`is_active_user()`. Note the second bite: leaving the session as `authenticated` afterwards
+broke the manager probes further down, because setting a permission level is an admin write.
+
+### In the app
+
+- **"Someone may have asked this already"** — the report form searches the tracker from
+  three characters, debounced, and offers `+1` on each hit. Voting there adds you to the
+  count *and* follows you, instead of adding a second request to the queue. This is the
+  feature Amber's brief actually asks for; merging is the tidy-up for when it does not work.
+- The request panel grew: follow, who voted (with "added by" beside anybody entered on
+  their behalf), add-a-voter, duplicate-of, a note beside the stage control, and the
+  discussion.
+- The board hides merged duplicates, and cards carry a comment count, a "+N merged" chip
+  where a vote count grew by absorbing others, and a "Moved" chip only the follower sees.
+
+### Still open, and now sharper
+
+- **Labels / product areas.** Canny has tags and categories, and filtering by them is how a
+  long list stays usable. Deliberately not built: the categories would have to be invented,
+  and an invented taxonomy on a shared board is the house rule's worst case. Amber's list,
+  when there is one.
+- **Email or Teams delivery.** The loop closes in-app only. Canny emails; that stays behind
+  Q4's ordering.
+- **Prioritisation scoring** (Canny ranks by impact and by revenue). Nothing here computes a
+  priority, and it should not until somebody says what it would be made of.
 
 ---
 

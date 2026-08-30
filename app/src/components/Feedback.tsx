@@ -6,7 +6,7 @@ import { useRepository } from "../data/DataProvider";
 import { useToasts } from "./Toasts";
 import { Field, Problem } from "./Form";
 import { SidePanel } from "./SidePanel";
-import type { FeedbackKind } from "../data/types";
+import { FEEDBACK_STAGE_LABELS, type FeedbackItem, type FeedbackKind } from "../data/types";
 import "./ui.css";
 
 /**
@@ -136,6 +136,42 @@ function useLastError(): { text: string | null; clear: () => void } {
   return { text: fresh, clear: () => setEntry(null) };
 }
 
+/**
+ * "Somebody may have asked this already" — searched while the title is still being typed.
+ *
+ * This is the feature Amber's whole brief turns on: *"stop people saying I want this to
+ * happen when it is already planned"*. Merging duplicates afterwards (0066) tidies up;
+ * this is what stops the duplicate being written, and it is the thing Canny's portal does
+ * that a plain form does not.
+ *
+ * Debounced at 300ms and only from three characters. Not because the query is expensive —
+ * it is an indexed ilike over a few hundred rows — but because a list that rearranges
+ * itself on every keystroke is unreadable, and a suggestion nobody can finish reading is
+ * a suggestion nobody acts on.
+ */
+function useSimilar(title: string, open: boolean) {
+  const repo = useRepository();
+  const [similar, setSimilar] = useState<FeedbackItem[]>([]);
+
+  useEffect(() => {
+    if (!open || title.trim().length < 3) {
+      setSimilar([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      repo.searchFeedback(title)
+        .then(rows => { if (!cancelled) setSimilar(rows); })
+        // Silent: a search that fails must not stop somebody reporting. The form still
+        // works, and the worst case is a duplicate that gets merged later.
+        .catch(() => { if (!cancelled) setSimilar([]); });
+    }, 300);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [repo, title, open]);
+
+  return similar;
+}
+
 export function FeedbackProvider({ children }: { children: ReactNode }) {
   const repo = useRepository();
   const { toast } = useToasts();
@@ -152,7 +188,9 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [voted, setVoted] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const similar = useSimilar(title, open);
 
   const report = useCallback((k?: FeedbackKind) => {
     if (k) setKind(k);
@@ -275,6 +313,47 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
               inputAriaLabel="One-line summary"
             />
           </Field>
+
+          {similar.length > 0 && (
+            <div className="feedback-similar">
+              <Text type="text3" weight="medium" element="div" ellipsis={false}>
+                {/* Not "duplicate detected". Nobody is being told off — they are being
+                    offered a shortcut to the thing they wanted. */}
+                Someone may have asked this already
+              </Text>
+              <ul>
+                {similar.map(f => (
+                  <li key={f.id}>
+                    <button
+                      type="button"
+                      className="feedback-similar-vote"
+                      disabled={voted === f.id}
+                      onClick={() => {
+                        void repo.setFeedbackVote(f.id, true)
+                          .then(() => setVoted(f.id))
+                          .catch(e => setProblem(e instanceof Error ? e.message : String(e)));
+                      }}
+                    >
+                      {/* Voting for it IS the useful action here: it adds this person to
+                          the count instead of adding a second request to the queue, and
+                          it follows them, so they hear when it moves. */}
+                      {voted === f.id ? "Voted ✓" : `+1 (${f.voteCount})`}
+                    </button>
+                    <span>
+                      <Text type="text3" element="span" ellipsis={false}>{f.title}</Text>
+                      <Text type="text3" color="secondary" element="span">
+                        {" "}· {FEEDBACK_STAGE_LABELS[f.stage]}
+                      </Text>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <Text type="text3" color="secondary" element="div" ellipsis={false}>
+                Voting for one of these tells you when it moves. Send yours anyway if none
+                of them is what you mean.
+              </Text>
+            </div>
+          )}
 
           <Field label={copy.label} hint={copy.hint}>
             <TextArea

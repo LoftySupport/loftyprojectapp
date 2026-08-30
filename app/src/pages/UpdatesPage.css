@@ -280,3 +280,51 @@
 }
 @media (max-width: 760px) { .release-line { grid-template-columns: minmax(0, 1fr); } }
 
+
+/* ------------------------------------------------- discussion, duplicates, follows
+   The Canny round (0064–0068). */
+
+.updates-card-chips { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+.updates-chip {
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+  background: var(--primary-background-hover-color);
+  border-radius: var(--border-radius-small);
+  padding: 0 var(--space-6);
+}
+/* "Moved" is only ever rendered for the person following it, so it can afford to be the
+   one loud chip on the card. */
+.updates-chip.is-new {
+  color: var(--text-color-on-primary);
+  background: var(--primary-color);
+}
+
+.updates-merged-notice {
+  background: var(--primary-background-hover-color);
+  border-left: 3px solid var(--primary-color);
+  border-radius: var(--border-radius-small);
+  padding: var(--space-8);
+}
+
+.updates-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  flex-wrap: wrap;
+}
+.updates-follow {
+  min-height: 32px;
+  padding: var(--space-4) var(--space-8);
+  background: var(--primary-background-color);
+  border: 1px solid var(--ui-border-color);
+  border-radius: var(--border-radius-small);
+  color: var(--secondary-text-color);
+  font: var(--font-text3-normal);
+  cursor: pointer;
+}
+.updates-follow:hover { background: var(--primary-background-hover-color); }
+.updates-follow.is-on { color: var(--primary-color); border-color: var(--primary-color); }
+.updates-follow:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+
+.updates-voters { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-4); }
+.updates-voters li { min-width: 0; }

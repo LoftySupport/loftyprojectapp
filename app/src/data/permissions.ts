@@ -31,11 +31,11 @@ export const PERMISSION_LADDER: readonly PermissionLevel[] = PERMISSION_LEVELS;
  *
  * Honest about what this number covers: the rules above the tracker block were read out
  * of `pg_policy` at 0038 and have not been re-read since; the tracker rules were read at
- * 0063. The higher number is shown because it is the one a reader would use to decide
+ * 0063, and the discussion, follow, merge and on-behalf rules at 0068. The higher number is shown because it is the one a reader would use to decide
  * whether this file predates a change they are looking at — but "read at 0063" does not
  * mean every row was re-derived then, and `verify/rls.sql` remains what proves any of it.
  */
-export const PERMISSIONS_READ_AT = "0063";
+export const PERMISSIONS_READ_AT = "0068";
 
 export interface PermissionRule {
   /** What a person would call the thing. */
@@ -115,7 +115,29 @@ export const PERMISSION_RULES: readonly PermissionRule[] = [
 
   { object: "The changelog", action: "Read it", needs: "viewer", enforcedBy: "releases SELECT: is_active_user()" },
   { object: "The changelog", action: "Publish a release", needs: "superadmin",
-    enforcedBy: "releases / release_entries ALL ≥ superadmin" }
+    enforcedBy: "releases / release_entries ALL ≥ superadmin" },
+
+  // The Canny round (0064–0068). Read at migration 0068.
+  { object: "Bugs and requests", action: "Discuss one", needs: "user",
+    enforcedBy: "comments INSERT ≥ user, on the feedback_id parent",
+    note: "The same table and the same policies as a comment on a job — which is why @mentions work here without being built twice." },
+  { object: "Bugs and requests", action: "Read the team's internal comments", needs: "admin",
+    enforcedBy: "comments SELECT: not internal, or ≥ admin",
+    note: "Filtered by the policy, so an internal comment never crosses the wire — including out of the count the board shows." },
+  { object: "Bugs and requests", action: "Pin an answer, or mark a comment internal", needs: "admin",
+    enforcedBy: "guard_comment_standing() on update, and on insert" },
+  { object: "Bugs and requests", action: "Follow one, and be told when it moves", needs: "viewer",
+    enforcedBy: "feedback_follows: your own rows only",
+    note: "Voting and reporting follow you by trigger. Private, unlike a vote: nobody sees what you are watching." },
+  { object: "Bugs and requests", action: "Merge a duplicate into another", needs: "admin",
+    enforcedBy: "feedback UPDATE ≥ admin, plus merge_feedback_votes()",
+    note: "The votes move by a SECURITY DEFINER trigger: they belong to other people, and the app is rightly not allowed to write them." },
+  { object: "Bugs and requests", action: "Add a vote on somebody's behalf", needs: "admin",
+    enforcedBy: "a second feedback_votes INSERT policy, plus a CHECK",
+    note: "Stamped with who added it, and shown on screen. The CHECK is what actually holds — the policy clause alone is OR'd away by the own-vote policy." },
+  { object: "Bugs and requests", action: "Withdraw a vote added for you", needs: "viewer",
+    enforcedBy: "feedback_votes DELETE: your own row only",
+    note: "Only the voter, never the admin who entered it — a vote somebody else can withdraw is not a record of what you said." }
 ];
 
 /** `viewer` is on the ladder but not in use — parked 23 August, and the page says so. */

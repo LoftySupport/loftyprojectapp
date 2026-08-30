@@ -16,13 +16,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 10 changes since then —
-- Added: The responsive sweep covers the three Updates tabs
-- Changed: The handoff and the README say what the tracker changed, and what is still open
-- Added: One form for reporting a bug or requesting a feature, with a radio instead of two footer buttons
-- Added: Screenshots, the page, the error and the browser sent with a report — captured, never typed
-- Added: A tracker everybody can see, with the stages requested, in review, planned and in development
-- …and 5 more.
+Unreleased: 16 changes since then —
+- Added: A discussion under every request, with a pinned answer and an internal lane for triage
+- Added: "Someone may have asked this already" — the report form searches while you type, and offers to vote instead
+- Added: Duplicates can be merged, and the votes and followers move with them
+- Added: The bell tells you when a request you follow moves, with the note whoever moved it left
+- Added: A vote can be added for somebody whose request arrived on a call, recorded against whoever entered it
+- …and 11 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

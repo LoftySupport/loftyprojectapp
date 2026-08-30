@@ -76,6 +76,11 @@ the feature this file is part of.
 - [x] A roadmap of phases and dates, and what is planned into each
 - [x] A changelog, in the app and in this repository
 - [x] Commits that update the changelog, the roadmap, the README and the handoff
+- [x] A discussion under every request, with a pinned answer and an internal lane
+- [x] "Someone may have asked this already", searched while the title is being typed
+- [x] Merging duplicates, with the votes and followers moving across
+- [x] Being told when a request you follow moves
+- [x] Adding a vote for somebody whose request arrived on a call
 
 ## Not scheduled
 

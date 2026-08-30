@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { Button, Heading, Tab, TabList, Text, TextArea, TextField } from "@vibe/core";
 import { ThumbsUp } from "@vibe/icons";
+import { CommentsPanel } from "../components/CommentsPanel";
 import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { useFeedback } from "../components/Feedback";
@@ -13,8 +14,8 @@ import {
   FEEDBACK_OPEN_STAGES, FEEDBACK_STAGES, FEEDBACK_STAGE_LABELS, FEEDBACK_STAGE_MEANING,
   RELEASE_ENTRY_KINDS, RELEASE_ENTRY_KIND_LABELS, ROADMAP_PHASE_STATUSES,
   ROADMAP_PHASE_STATUS_LABELS,
-  type FeedbackItem, type FeedbackKind, type FeedbackStage, type Release,
-  type ReleaseEntryKind, type RoadmapPhase, type RoadmapPhaseStatus
+  type FeedbackItem, type FeedbackKind, type FeedbackStage, type FeedbackVoter,
+  type Release, type ReleaseEntryKind, type RoadmapPhase, type RoadmapPhaseStatus
 } from "../data/types";
 import "../components/ui.css";
 import "./UpdatesPage.css";
@@ -124,7 +125,14 @@ function Requests() {
   };
 
   const shown = useMemo(() => {
-    const list = items.filter(f => kind === "all" || f.kind === kind).map(withVotes);
+    const list = items
+      .filter(f => kind === "all" || f.kind === kind)
+      // A merged duplicate is off the board (0066): its votes and followers are on the
+      // survivor, so leaving it here would show the same request twice with the count
+      // split across them — the exact fault merging exists to fix. It is still reachable:
+      // the person who filed it finds it by searching, and it says where it went.
+      .filter(f => f.mergedIntoId === null)
+      .map(withVotes);
     return list.sort((a, b) =>
       sort === "votes"
         ? b.voteCount - a.voteCount || Date.parse(b.createdAt) - Date.parse(a.createdAt)
@@ -245,6 +253,7 @@ function Requests() {
 
       <RequestPanel
         item={open}
+        all={items}
         phases={phases}
         canMove={can("superadmin")}
         canPlan={can("admin")}
@@ -278,7 +287,20 @@ function RequestCard({
               a claim about who sent it. */}
           {item.fromName ?? "—"} · {new Date(item.createdAt).toLocaleDateString()}
         </Text>
-        {phase && <span className="updates-phase-chip">{phase.name}</span>}
+        <span className="updates-card-chips">
+          {phase && <span className="updates-phase-chip">{phase.name}</span>}
+          {item.commentCount > 0 && (
+            <span className="updates-chip">{item.commentCount} 💬</span>
+          )}
+          {/* Why this count is large: it absorbed other requests. Without this the number
+              looks either inflated or lucky. */}
+          {item.duplicateCount > 0 && (
+            <span className="updates-chip">+{item.duplicateCount} merged</span>
+          )}
+          {/* Only ever shown to the person following it — feedback_move_unseen is
+              computed against the signed-in profile. */}
+          {item.moveUnseen && <span className="updates-chip is-new">Moved</span>}
+        </span>
       </button>
       <VoteButton item={item} busy={busy} onVote={onVote} />
     </article>
@@ -355,9 +377,11 @@ function Ended({
  * everybody.
  */
 function RequestPanel({
-  item, phases, canMove, canPlan, onClose, onChanged, onVote, busyVote
+  item, all, phases, canMove, canPlan, onClose, onChanged, onVote, busyVote
 }: {
   item: FeedbackItem | null;
+  /** Every request, for the merge picker — a duplicate is merged into one of these. */
+  all: FeedbackItem[];
   phases: RoadmapPhase[];
   canMove: boolean;
   canPlan: boolean;
@@ -370,6 +394,27 @@ function RequestPanel({
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [shots, setShots] = useState<Record<string, string>>({});
+  const [note, setNote] = useState("");
+  const [showVoters, setShowVoters] = useState(false);
+  const { data: people } = useQuery(r => r.listProfiles(), [], []);
+  /**
+   * Opening it IS having seen it — the same rule the bell uses for a mention.
+   *
+   * Only when there is something to mark: an unconditional write on every open would
+   * touch the row for people who do not follow it at all (matching nothing, by policy)
+   * and would cost a request per card opened.
+   */
+  useEffect(() => {
+    if (item?.moveUnseen) {
+      void repo.markMoveSeen(item.id).then(onChanged).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item?.id, item?.moveUnseen]);
+
+  const { data: voters } = useQuery<FeedbackVoter[]>(
+    r => (item && showVoters ? r.listFeedbackVoters(item.id) : Promise.resolve([])),
+    [], [item?.id, showVoters]
+  );
 
   const run = async (work: () => Promise<unknown>) => {
     setBusy(true);
@@ -411,6 +456,17 @@ function RequestPanel({
             {new Date(item.stageEnteredAt).toLocaleDateString()}
           </Text>
 
+          {/* Where it went, for the person who filed the duplicate. The whole reason a
+              merged request is kept rather than deleted. */}
+          {item.mergedIntoId && (
+            <div className="updates-merged-notice">
+              <Text type="text2" element="span" ellipsis={false}>
+                Merged into “{item.mergedIntoTitle ?? "another request"}” — the votes and
+                the conversation moved there.
+              </Text>
+            </div>
+          )}
+
           {item.detail
             ? <Text type="text2" element="p" ellipsis={false}>{item.detail}</Text>
             : <Text type="text2" color="secondary" element="p" ellipsis={false}>
@@ -443,14 +499,88 @@ function RequestPanel({
             </Field>
           )}
 
+          <div className="updates-panel-actions">
+            {/* Voting already follows you (0065), so this is for the case Canny's bell
+                exists for: you did not vote, but you want to know what happens. */}
+            <button
+              type="button"
+              className={"updates-follow" + (item.followedByMe ? " is-on" : "")}
+              aria-pressed={item.followedByMe}
+              onClick={() => void run(() => repo.setFeedbackFollow(item.id, !item.followedByMe))}
+            >
+              {item.followedByMe ? "Following — you'll hear when it moves" : "Follow this"}
+            </button>
+            <button type="button" className="link-button" onClick={() => setShowVoters(v => !v)}>
+              {showVoters ? "Hide who voted" : `Who voted (${item.voteCount})`}
+            </button>
+          </div>
+
+          {showVoters && (
+            <ul className="updates-voters">
+              {voters.length === 0 && (
+                <li><Text type="text3" color="secondary">Nobody yet.</Text></li>
+              )}
+              {voters.map(v => (
+                <li key={v.profileId}>
+                  <Text type="text3" element="span">{v.name ?? "—"}</Text>
+                  {/* The audit that makes vote-on-behalf trustworthy (0067): the count
+                      can be checked by the people it is counted against. */}
+                  {v.addedByName && (
+                    <Text type="text3" color="secondary" element="span">
+                      {" "}· added by {v.addedByName}
+                    </Text>
+                  )}
+                </li>
+              ))}
+              {canPlan && (
+                <li>
+                  <div className="select-wrap">
+                    <Select
+                      options={people
+                        .filter(p => p.active && !voters.some(v => v.profileId === p.id))
+                        .map(p => ({ value: p.id, label: p.fullName }))}
+                      value={null}
+                      clearable
+                      placeholder="Add somebody who asked for this…"
+                      onChange={v => v && void run(() => repo.addVoteFor(item.id, v))}
+                      aria-label="Add a voter"
+                      size="small"
+                    />
+                  </div>
+                  <Text type="text3" color="secondary" element="div" ellipsis={false}>
+                    For a request that arrived on a call or on site. Your name is recorded
+                    beside it, and only they can take it back.
+                  </Text>
+                </li>
+              )}
+            </ul>
+          )}
+
           {canMove && (
-            <Field label="Stage" hint="Only superadmin can move a request along the queue.">
+            <Field
+              label="Stage"
+              hint="Only superadmin can move a request along the queue. Whoever follows it hears about the move."
+            >
               <Select
                 options={FEEDBACK_STAGES.map(s => ({ value: s, label: FEEDBACK_STAGE_LABELS[s] }))}
                 value={item.stage}
-                onChange={v => void run(() => repo.setFeedbackStage(item.id, v as FeedbackStage))}
+                onChange={v => void run(async () => {
+                  const result = await repo.setFeedbackStage(item.id, v as FeedbackStage, note);
+                  setNote("");
+                  return result;
+                })}
                 aria-label="Stage"
                 className={busy ? "is-busy" : undefined}
+              />
+              {/* Canny's status update: the move arrives with a sentence rather than as a
+                  silent change. Typed BEFORE the move, because the select is what commits
+                  it — a note box that appeared afterwards would be a second step people
+                  skip. */}
+              <TextField
+                value={note}
+                onChange={setNote}
+                placeholder="Optional: why, or what happens next"
+                inputAriaLabel="Note to send with the move"
               />
             </Field>
           )}
@@ -474,7 +604,32 @@ function RequestPanel({
             </Field>
           )}
 
+          {canPlan && (
+            <Field
+              label="Duplicate of"
+              hint="Merging moves the votes and the followers to the other request. Nothing is deleted."
+            >
+              <div className="select-wrap">
+                <Select
+                  options={all
+                    .filter(f => f.id !== item.id && f.mergedIntoId === null)
+                    .map(f => ({ value: f.id, label: `${f.title} (${f.voteCount})` }))}
+                  value={item.mergedIntoId}
+                  clearable
+                  placeholder="Not a duplicate"
+                  onChange={v => void run(() => repo.mergeFeedback(item.id, v))}
+                  aria-label="Merge into"
+                  className={busy ? "is-busy" : undefined}
+                />
+              </div>
+            </Field>
+          )}
+
           {problem && <Problem>{problem}</Problem>}
+
+          {/* The thread. Same component as a job's, so @mentions, the picker and the
+              bell all work here without a second implementation of any of them. */}
+          <CommentsPanel feedbackId={item.id} title="Discussion" />
         </div>
       )}
     </SidePanel>

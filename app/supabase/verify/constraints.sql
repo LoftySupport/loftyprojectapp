@@ -399,4 +399,62 @@ BEGIN
   EXCEPTION WHEN unique_violation THEN RAISE NOTICE 'ok  feedback_attachment_path is unique — one row per object';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  feedback_attachment_path unique)', SQLERRM; END;
   DELETE FROM feedback WHERE feedback_title = '__constraint_probe__';
+
+  -- --------------------------------------------------- the Canny round (0064-0067)
+  -- comments_one_parent had to be REWRITTEN to add the fifth parent, and a rewritten
+  -- constraint is one that can quietly come back weaker. So: a comment claiming two
+  -- parents must still be refused.
+  -- The row these four probes act on, planted in a block of its own.
+  --
+  -- Not inside the first one, and this is a plpgsql fact worth knowing: BEGIN…EXCEPTION
+  -- opens a subtransaction, so when the probe below is REFUSED — which is the pass — the
+  -- rollback takes the parent row with it, and every probe after it silently acts on
+  -- nothing. Watched happening: the self-merge probe reported "a request was merged into
+  -- itself" because the UPDATE matched no rows at all.
+  BEGIN
+    INSERT INTO feedback (feedback_kind, feedback_title) VALUES ('bug', '__constraint_probe__');
+    -- Reports "note:" rather than staying silent, because check.sh counts BEGIN blocks
+    -- against reported lines to catch a run that aborted early. A block that says nothing
+    -- makes that count wrong and the harness announce a failure it does not have.
+    RAISE NOTICE 'note: planted the row the four probes below act on';
+  EXCEPTION WHEN OTHERS THEN RAISE WARNING 'FAIL: could not plant the constraint probe row (%)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO comments (feedback_id, job_id, comment_body)
+    SELECT (SELECT feedback_id FROM feedback WHERE feedback_title = '__constraint_probe__'),
+           job_id, 'two parents' FROM jobs LIMIT 1;
+    RAISE WARNING 'FAIL: a comment on BOTH a job and a request was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  comments_one_parent still refuses two parents after 0064 widened it';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  comments_one_parent)', SQLERRM; END;
+
+  -- A stage note is a note ON a request. On a job it would be a value with nothing to
+  -- mean — the stage it names belongs to a vocabulary jobs do not use.
+  BEGIN
+    INSERT INTO comments (job_id, comment_body, comment_feedback_stage)
+    SELECT job_id, 'stage note on a job', 'planned' FROM jobs LIMIT 1;
+    RAISE WARNING 'FAIL: a stage note was accepted on a job';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  comments_stage_note_is_on_a_request rejected a note on a job';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  stage note parent)', SQLERRM; END;
+
+  -- 0066: a request cannot be its own duplicate. The trigger refuses chains; this is the
+  -- one case a CHECK can see on its own, and it holds even for a write that bypasses the
+  -- trigger.
+  BEGIN
+    UPDATE feedback SET feedback_merged_into_id = feedback_id
+     WHERE feedback_title = '__constraint_probe__';
+    RAISE WARNING 'FAIL: a request was merged into itself';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  feedback_not_merged_into_itself rejected a self-merge';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  self-merge)', SQLERRM; END;
+
+  -- 0067: and a vote cannot be added on your own behalf — the CHECK that replaced a
+  -- policy clause the OR'd policies were quietly ignoring.
+  BEGIN
+    INSERT INTO feedback_votes (feedback_id, profile_id, feedback_vote_added_by)
+    SELECT (SELECT feedback_id FROM feedback WHERE feedback_title = '__constraint_probe__'),
+           profile_id, profile_id FROM profiles LIMIT 1;
+    RAISE WARNING 'FAIL: a vote was added on the voter''s own behalf';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  feedback_vote_added_by_is_not_the_voter rejected a self-added vote';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  self-added vote)', SQLERRM; END;
+
+  DELETE FROM feedback WHERE feedback_title = '__constraint_probe__';
 END $$;

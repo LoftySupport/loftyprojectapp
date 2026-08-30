@@ -779,6 +779,55 @@ export interface FeedbackItem {
   roadmapPhaseId: Uuid | null;
   /** Screenshots. Empty rather than absent when a report has none. */
   attachments: FeedbackAttachment[];
+
+  // ------------------------------------------------- duplicates, talk, follows (0064-0068)
+
+  /**
+   * Set when this request is a duplicate of another (0066). The row is kept rather than
+   * deleted — the person who filed it must still be able to find it and see where the
+   * conversation went — and its votes and followers have moved to the target.
+   */
+  mergedIntoId: Uuid | null;
+  /** The survivor's title, resolved: "merged into 9f3c…" is not an answer to anybody. */
+  mergedIntoTitle: string | null;
+  /** How many duplicates point at THIS one, so a large vote count can explain itself. */
+  duplicateCount: number;
+  /** Comments you can actually open — the count excludes internal ones you cannot read. */
+  commentCount: number;
+  /** Whether you are following it. Voting and reporting both follow you automatically. */
+  followedByMe: boolean;
+  /** Following, and it has moved since you last looked. What the bell counts. */
+  moveUnseen: boolean;
+}
+
+/**
+ * One person's vote, as the voters list shows it.
+ *
+ * `addedByName` is the whole reason this list exists on screen: an on-behalf vote (0067)
+ * is only trustworthy if the people it is counted against can see who entered it.
+ */
+export interface FeedbackVoter {
+  profileId: Uuid;
+  name: string | null;
+  /** Null when they voted themselves — the ordinary case. */
+  addedByName: string | null;
+  at: IsoDateTime;
+}
+
+/**
+ * A request you follow that has moved since you last looked — one row in the bell.
+ *
+ * Derived rather than stored (0065): the request's stage stamp against your seen stamp.
+ * So there is no notification that can outlive, duplicate or contradict the move it
+ * describes, and nothing to clean up when a request is deleted or merged away.
+ */
+export interface MovedRequest {
+  id: Uuid;
+  title: string;
+  stage: FeedbackStage;
+  movedAt: IsoDateTime;
+  /** The note whoever moved it left, when they left one (0064). */
+  note: string | null;
 }
 
 /**
@@ -1320,6 +1369,20 @@ export interface Comment extends RecordRef {
 /** A comment with its author's name resolved on the read — what a thread renders. */
 export interface CommentEntry extends Comment {
   authorName: string | null;
+  /** The tracker request it is on, when it is on one (0064's fifth parent). */
+  feedbackId?: Uuid | null;
+  /** The official answer, held at the top of the thread. Admin sets it. */
+  isPinned?: boolean;
+  /**
+   * The team's own lane: admin and above only, enforced by the read policy rather than
+   * by this flag. A viewer never receives one of these at all.
+   */
+  isInternal?: boolean;
+  /**
+   * Set when this comment was the note on a stage change — the stage it announced. One
+   * per move rather than one per request, so what was said at each step survives.
+   */
+  stageAnnounced?: FeedbackStage | null;
 }
 
 /**

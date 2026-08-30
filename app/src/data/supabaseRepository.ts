@@ -16,6 +16,8 @@ import type {
   FeedbackItem,
   FeedbackKind,
   FeedbackStage,
+  FeedbackVoter,
+  MovedRequest,
   NewRelease,
   NewRoadmapPhase,
   Release,
@@ -176,16 +178,66 @@ const TEAM_COLUMNS = "team_id, team_name, team_position, team_is_active";
 const SCREENSHOT_BUCKET = "feedback-screenshots";
 
 /**
+ * What the tracker reads off `feedback_display` (0061, widened by 0068).
+ *
+ * One string literal, like every other column list here: postgrest-js parses these at
+ * the type level to shape the result, and `"a" + "b"` widens to `string`, which it
+ * cannot read.
+ */
+const FEEDBACK_DISPLAY_COLUMNS =
+  "feedback_id, feedback_kind, feedback_title, feedback_detail, feedback_page, feedback_error_text, feedback_stage, feedback_stage_entered_at, feedback_created_at, feedback_from_name, feedback_vote_count, feedback_voted_by_me, roadmap_phase_id, feedback_merged_into_id, feedback_merged_into_title, feedback_duplicate_count, feedback_comment_count, feedback_followed_by_me, feedback_move_unseen";
+
+/**
+ * One row of that view, as a request.
+ *
+ * Extracted because there were two copies of this mapping and 0068 added six columns to
+ * it: two copies of a mapper is how a board and a vote click end up disagreeing about
+ * what a request is. Attachments are passed in rather than read here — they are a second
+ * query, and the vote path deliberately does not make it.
+ */
+const toFeedbackItem = (
+  r: Record<string, any>,
+  attachments: FeedbackAttachment[] = []
+): FeedbackItem => ({
+  id: r.feedback_id,
+  kind: r.feedback_kind as FeedbackKind,
+  title: r.feedback_title,
+  detail: r.feedback_detail ?? "",
+  page: r.feedback_page ?? null,
+  errorText: r.feedback_error_text ?? null,
+  stage: r.feedback_stage as FeedbackStage,
+  stageEnteredAt: r.feedback_stage_entered_at,
+  // Empty rather than a stand-in when the profile is gone: "Unknown" would be a claim
+  // about who sent it.
+  fromName: r.feedback_from_name || null,
+  createdAt: r.feedback_created_at,
+  voteCount: Number(r.feedback_vote_count ?? 0),
+  votedByMe: Boolean(r.feedback_voted_by_me),
+  roadmapPhaseId: r.roadmap_phase_id ?? null,
+  mergedIntoId: r.feedback_merged_into_id ?? null,
+  mergedIntoTitle: r.feedback_merged_into_title ?? null,
+  duplicateCount: Number(r.feedback_duplicate_count ?? 0),
+  commentCount: Number(r.feedback_comment_count ?? 0),
+  followedByMe: Boolean(r.feedback_followed_by_me),
+  moveUnseen: Boolean(r.feedback_move_unseen),
+  attachments
+});
+
+/**
  * `comments` points at `profiles` twice (created_by, updated_by), so the author embed
  * names its constraint — the PGRST201 rule, same as everywhere else.
  */
 const COMMENT_COLUMNS =
-  "comment_id, project_id, job_id, task_id, variation_id, comment_body, parent_comment_id, comment_edited_at, comment_created_at, comment_created_by, comment_updated_at, comment_updated_by, author:profiles!comments_comment_created_by_fkey(profile_full_name)";
+  "comment_id, project_id, job_id, task_id, variation_id, feedback_id, comment_body, comment_is_pinned, comment_is_internal, comment_feedback_stage, parent_comment_id, comment_edited_at, comment_created_at, comment_created_by, comment_updated_at, comment_updated_by, author:profiles!comments_comment_created_by_fkey(profile_full_name)";
 
 type CommentRow = {
   comment_id: string;
   project_id: number | null; job_id: string | null;
   task_id: string | null; variation_id: string | null;
+  feedback_id?: string | null;
+  comment_is_pinned?: boolean | null;
+  comment_is_internal?: boolean | null;
+  comment_feedback_stage?: string | null;
   comment_body: string; parent_comment_id: string | null;
   comment_edited_at: string | null;
   comment_created_at: string; comment_created_by: string | null;
@@ -252,7 +304,11 @@ function toComment(r: CommentRow): CommentEntry {
     createdBy: r.comment_created_by,
     updatedAt: r.comment_updated_at,
     updatedBy: r.comment_updated_by,
-    authorName: r.author?.profile_full_name ?? null
+    authorName: r.author?.profile_full_name ?? null,
+    feedbackId: r.feedback_id ?? null,
+    isPinned: Boolean(r.comment_is_pinned),
+    isInternal: Boolean(r.comment_is_internal),
+    stageAnnounced: (r.comment_feedback_stage as FeedbackStage | null) ?? null
   };
 }
 
@@ -929,26 +985,38 @@ export function createSupabaseRepository(): Repository {
       return entries.sort((a, b) => b.at.localeCompare(a.at)).slice(0, limit);
     },
 
-    async listComments(ref: { projectId?: number; jobId?: string }, limit = 50): Promise<CommentEntry[]> {
+    async listComments(
+      ref: { projectId?: number; jobId?: string; feedbackId?: string }, limit = 50
+    ): Promise<CommentEntry[]> {
       let q = client.from("comments").select(COMMENT_COLUMNS);
       // Exactly one ref, the same rule the CHECK enforces — asking with neither would
       // quietly return every comment in the company.
       if (ref.projectId != null) q = q.eq("project_id", ref.projectId);
       else if (ref.jobId != null) q = q.eq("job_id", ref.jobId);
-      else throw new Error("listComments needs a projectId or a jobId.");
+      else if (ref.feedbackId != null) q = q.eq("feedback_id", ref.feedbackId);
+      else throw new Error("listComments needs a projectId, a jobId or a feedbackId.");
 
       const { data, error } = await q
+        // Pinned first — the official answer sits above the discussion (0064). Then
+        // newest, which is the order every other thread in the app uses.
+        .order("comment_is_pinned", { ascending: false })
         .order("comment_created_at", { ascending: false })
         .limit(limit);
       if (error) throw error;
+      // Internal comments are filtered by the READ POLICY, not here. A client-side
+      // filter would mean the rows had already crossed the wire to somebody who may not
+      // read them, and the count on the board would have to guess at the same rule.
       return (data as unknown as CommentRow[]).map(toComment);
     },
 
     async addComment(
-      ref: { projectId?: number; jobId?: string }, body: string, mentions: string[] = []
+      ref: { projectId?: number; jobId?: string; feedbackId?: string },
+      body: string,
+      mentions: string[] = [],
+      standing: { internal?: boolean; stage?: FeedbackStage } = {}
     ): Promise<CommentEntry> {
-      if (ref.projectId == null && ref.jobId == null) {
-        throw new Error("addComment needs a projectId or a jobId.");
+      if (ref.projectId == null && ref.jobId == null && ref.feedbackId == null) {
+        throw new Error("addComment needs a projectId, a jobId or a feedbackId.");
       }
       // The author is NOT sent: comments_stamp_created_by fills it from the session,
       // which is the only version of "who wrote this" a client cannot forge.
@@ -957,7 +1025,13 @@ export function createSupabaseRepository(): Repository {
         .insert({
           project_id: ref.projectId ?? null,
           job_id: ref.jobId ?? null,
-          comment_body: body
+          feedback_id: ref.feedbackId ?? null,
+          comment_body: body,
+          // Both refused below admin by guard_comment_standing_on_insert(), so a
+          // non-admin sending them gets 42501 rather than a comment that quietly is
+          // not what they asked for.
+          comment_is_internal: standing.internal ?? false,
+          comment_feedback_stage: standing.stage ?? null
         })
         .select(COMMENT_COLUMNS)
         .single();
@@ -2079,7 +2153,7 @@ export function createSupabaseRepository(): Repository {
       let q = client
         .from("feedback_display")
         .select(
-          "feedback_id, feedback_kind, feedback_title, feedback_detail, feedback_page, feedback_error_text, feedback_stage, feedback_stage_entered_at, feedback_created_at, feedback_from_name, feedback_vote_count, feedback_voted_by_me, roadmap_phase_id"
+          FEEDBACK_DISPLAY_COLUMNS
         )
         .order("feedback_created_at", { ascending: false });
       if (kind) q = q.eq("feedback_kind", kind);
@@ -2110,24 +2184,7 @@ export function createSupabaseRepository(): Repository {
         byReport.set(f.feedback_id, list);
       }
 
-      return rows.map(r => ({
-        id: r.feedback_id,
-        kind: r.feedback_kind as FeedbackKind,
-        title: r.feedback_title,
-        detail: r.feedback_detail ?? "",
-        page: r.feedback_page ?? null,
-        errorText: r.feedback_error_text ?? null,
-        stage: r.feedback_stage as FeedbackStage,
-        stageEnteredAt: r.feedback_stage_entered_at,
-        // Empty rather than a stand-in when the profile is gone: "Unknown" would be a
-        // claim about who sent it.
-        fromName: r.feedback_from_name || null,
-        createdAt: r.feedback_created_at,
-        voteCount: Number(r.feedback_vote_count ?? 0),
-        votedByMe: Boolean(r.feedback_voted_by_me),
-        roadmapPhaseId: r.roadmap_phase_id ?? null,
-        attachments: byReport.get(r.feedback_id) ?? []
-      }));
+      return rows.map(r => toFeedbackItem(r, byReport.get(r.feedback_id) ?? []));
     },
 
     /**
@@ -2138,7 +2195,7 @@ export function createSupabaseRepository(): Repository {
      * policy passes and `guard_feedback_stage_change()` raises 42501, which arrives here
      * as a thrown error carrying its own message — the one the person should read.
      */
-    async setFeedbackStage(id: string, stage: FeedbackStage): Promise<FeedbackItem[]> {
+    async setFeedbackStage(id: string, stage: FeedbackStage, note?: string): Promise<FeedbackItem[]> {
       const { data, error } = await client
         .from("feedback")
         .update({ feedback_stage: stage })
@@ -2146,6 +2203,13 @@ export function createSupabaseRepository(): Repository {
         .select("feedback_id");
       if (error) throw error;
       if (!data?.[0]) throw new Error("That did not move — moving a request needs superadmin.");
+
+      // Canny's status update: the move, and the sentence that came with it. Posted
+      // after the move and not in place of it — if this fails the request has still
+      // moved, which is the half that matters, and the failure is reported.
+      if (note?.trim()) {
+        await repo.addComment({ feedbackId: id }, note.trim(), [], { stage });
+      }
       return await repo.listFeedback();
     },
 
@@ -2191,29 +2255,211 @@ export function createSupabaseRepository(): Repository {
       const { data, error } = await client
         .from("feedback_display")
         .select(
-          "feedback_id, feedback_kind, feedback_title, feedback_detail, feedback_page, feedback_error_text, feedback_stage, feedback_stage_entered_at, feedback_created_at, feedback_from_name, feedback_vote_count, feedback_voted_by_me, roadmap_phase_id"
+          FEEDBACK_DISPLAY_COLUMNS
         )
         .eq("feedback_id", id)
         .single();
       if (error) throw error;
-      return {
-        id: data.feedback_id,
-        kind: data.feedback_kind as FeedbackKind,
-        title: data.feedback_title,
-        detail: data.feedback_detail ?? "",
-        page: data.feedback_page ?? null,
-        errorText: data.feedback_error_text ?? null,
-        stage: data.feedback_stage as FeedbackStage,
-        stageEnteredAt: data.feedback_stage_entered_at,
-        fromName: data.feedback_from_name || null,
-        createdAt: data.feedback_created_at,
-        voteCount: Number(data.feedback_vote_count ?? 0),
-        votedByMe: Boolean(data.feedback_voted_by_me),
-        roadmapPhaseId: data.roadmap_phase_id ?? null,
-        // Not re-read: the vote did not change them, and a second query per click to
-        // return the same list is a round trip nobody asked for.
-        attachments: []
-      };
+      // Attachments deliberately not re-read: the vote did not change them, and a second
+      // query per click to return the same list is a round trip nobody asked for.
+      return toFeedbackItem(data);
+    },
+
+    /**
+     * The duplicate search behind the report form.
+     *
+     * `ilike` on title and detail, capped. Not full-text search: `to_tsvector` would
+     * need an index and a configuration decision, and it stems — "councils" would find
+     * "council", which is good, but "filter" would not find "filtering" without more
+     * setup than a typeahead over a few hundred rows can justify. When the tracker is
+     * big enough for that to hurt, this is the one method that changes.
+     *
+     * Merged duplicates are excluded: showing somebody the request that was already
+     * folded into another one sends them to the dead end rather than to the live thread.
+     */
+    async searchFeedback(query: string, limit = 6): Promise<FeedbackItem[]> {
+      const q = query.trim();
+      if (q.length < 3) return [];
+      // Escaped, because % and _ are wildcards in LIKE and a person typing "50%" should
+      // search for "50%" rather than for everything.
+      const safe = q.replace(/[\\%_]/g, m => "\\" + m);
+      const { data, error } = await client
+        .from("feedback_display")
+        .select(FEEDBACK_DISPLAY_COLUMNS)
+        .is("feedback_merged_into_id", null)
+        .or(`feedback_title.ilike.%${safe}%,feedback_detail.ilike.%${safe}%`)
+        .order("feedback_vote_count", { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return (data ?? []).map(r => toFeedbackItem(r));
+    },
+
+    async listFeedbackVoters(id: string): Promise<FeedbackVoter[]> {
+      const { data, error } = await client
+        .from("feedback_votes")
+        .select(
+          "profile_id, feedback_vote_at, voter:profiles!feedback_votes_profile_id_fkey(profile_full_name), addedBy:profiles!feedback_votes_feedback_vote_added_by_fkey(profile_full_name)"
+        )
+        .eq("feedback_id", id)
+        .order("feedback_vote_at", { ascending: true });
+      if (error) throw error;
+      return (data ?? []).map(r => {
+        const row = r as unknown as {
+          profile_id: string;
+          feedback_vote_at: string;
+          voter?: { profile_full_name?: string };
+          addedBy?: { profile_full_name?: string };
+        };
+        return {
+          profileId: row.profile_id,
+          name: row.voter?.profile_full_name ?? null,
+          // Null means they voted for themselves. Rendered as nothing rather than as
+          // "added by nobody", which would read as a gap in the record.
+          addedByName: row.addedBy?.profile_full_name ?? null,
+          at: row.feedback_vote_at
+        };
+      });
+    },
+
+    async addVoteFor(id: string, profileId: string): Promise<FeedbackItem> {
+      const me = await repo.currentProfile();
+      if (!me) throw new Error("Adding a vote needs you to be signed in.");
+      if (me.id === profileId) {
+        // The on-behalf policy refuses this outright (added_by must differ from the
+        // voter), so it is caught here to say why rather than as a 403.
+        throw new Error("That is your own vote — use the thumb.");
+      }
+      const { error } = await client.from("feedback_votes").insert({
+        feedback_id: id,
+        profile_id: profileId,
+        feedback_vote_added_by: me.id
+      });
+      // Already voted is not a failure: the person's position is recorded, which is what
+      // was wanted. 23505 is unique_violation.
+      if (error && error.code !== "23505") throw error;
+
+      const { data, error: readError } = await client
+        .from("feedback_display")
+        .select(FEEDBACK_DISPLAY_COLUMNS)
+        .eq("feedback_id", id)
+        .single();
+      if (readError) throw readError;
+      return toFeedbackItem(data);
+    },
+
+    async setFeedbackFollow(id: string, following: boolean): Promise<void> {
+      const me = await repo.currentProfile();
+      if (!me) throw new Error("Following needs you to be signed in.");
+      if (following) {
+        const { error } = await client.from("feedback_follows").insert({
+          feedback_id: id,
+          profile_id: me.id,
+          // Seen now: you are looking at it, so following must not immediately light the
+          // bell for a move that happened before you arrived.
+          feedback_follow_seen_stage_at: new Date().toISOString()
+        });
+        if (error && error.code !== "23505") throw error;
+      } else {
+        const { error } = await client
+          .from("feedback_follows")
+          .delete()
+          .eq("feedback_id", id)
+          .eq("profile_id", me.id);
+        if (error) throw error;
+      }
+    },
+
+    /**
+     * The bell's seventh signal.
+     *
+     * RLS does the "mine" filtering — the select policy on `feedback_follows` compares
+     * profile_id to current_profile_id() — so this asks for follows without saying
+     * whose, the same way listMyMentions does. Unseen is computed here from two dates
+     * rather than read from a notifications table, because there isn't one: 0065 stores
+     * a seen stamp and derives the rest.
+     */
+    async listMyMovedRequests(): Promise<MovedRequest[]> {
+      const { data, error } = await client
+        .from("feedback_follows")
+        .select(
+          "feedback_id, feedback_follow_seen_stage_at, request:feedback!feedback_follows_feedback_id_fkey(feedback_title, feedback_stage, feedback_stage_entered_at)"
+        );
+      if (error) throw error;
+
+      const rows = (data ?? []) as unknown as {
+        feedback_id: string;
+        feedback_follow_seen_stage_at: string | null;
+        request?: { feedback_title: string; feedback_stage: string; feedback_stage_entered_at: string };
+      }[];
+
+      const moved = rows.filter(r =>
+        r.request &&
+        (r.feedback_follow_seen_stage_at === null ||
+         Date.parse(r.request.feedback_stage_entered_at) > Date.parse(r.feedback_follow_seen_stage_at))
+      );
+      if (moved.length === 0) return [];
+
+      // The note that came with each move, when there was one — read in one query for
+      // the whole list rather than one per row.
+      const { data: notes } = await client
+        .from("comments")
+        .select("feedback_id, comment_body, comment_feedback_stage, comment_created_at")
+        .in("feedback_id", moved.map(m => m.feedback_id))
+        .not("comment_feedback_stage", "is", null)
+        .order("comment_created_at", { ascending: false });
+
+      const noteFor = new Map<string, string>();
+      for (const n of notes ?? []) {
+        // Newest first, so the first one seen per request is the current one.
+        if (!noteFor.has(n.feedback_id)) noteFor.set(n.feedback_id, n.comment_body);
+      }
+
+      return moved
+        .map(r => ({
+          id: r.feedback_id,
+          title: r.request!.feedback_title,
+          stage: r.request!.feedback_stage as FeedbackStage,
+          movedAt: r.request!.feedback_stage_entered_at,
+          note: noteFor.get(r.feedback_id) ?? null
+        }))
+        .sort((a, b) => Date.parse(b.movedAt) - Date.parse(a.movedAt));
+    },
+
+    async markMoveSeen(id: string): Promise<void> {
+      // No profile filter, and that is not an oversight: the UPDATE policy restricts the
+      // row to the reader's own, so naming it here would add a second place for the same
+      // rule to be got wrong. The same reasoning as markMentionRead.
+      const { error } = await client
+        .from("feedback_follows")
+        .update({ feedback_follow_seen_stage_at: new Date().toISOString() })
+        .eq("feedback_id", id);
+      if (error) throw error;
+    },
+
+    async mergeFeedback(id: string, intoId: string | null): Promise<FeedbackItem[]> {
+      const { data, error } = await client
+        .from("feedback")
+        .update({ feedback_merged_into_id: intoId })
+        .eq("feedback_id", id)
+        .select("feedback_id");
+      // The trigger raises for a chain (23514) and for a non-admin (42501); both arrive
+      // here carrying the message the person should read, so neither is rewritten.
+      if (error) throw error;
+      if (!data?.[0]) throw new Error("That was not merged — merging needs admin.");
+      return await repo.listFeedback();
+    },
+
+    async setCommentStanding(
+      commentId: string, standing: { pinned?: boolean; internal?: boolean }
+    ): Promise<void> {
+      const row: Record<string, unknown> = {};
+      if (standing.pinned !== undefined) row.comment_is_pinned = standing.pinned;
+      if (standing.internal !== undefined) row.comment_is_internal = standing.internal;
+      if (Object.keys(row).length === 0) return;
+      const { error } = await client.from("comments").update(row).eq("comment_id", commentId);
+      // guard_comment_standing() raises 42501 below admin — the author's own edit policy
+      // would otherwise have let them pin their own comment.
+      if (error) throw error;
     },
 
     async attachmentUrl(path: string): Promise<string | null> {

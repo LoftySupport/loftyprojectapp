@@ -7,6 +7,8 @@ import type {
   FeedbackItem,
   FeedbackKind,
   FeedbackStage,
+  FeedbackVoter,
+  MovedRequest,
   NewRelease,
   NewRoadmapPhase,
   Release,
@@ -94,7 +96,10 @@ export interface Repository {
    * The comment thread on one record, newest first — the newest one IS the project's
    * "latest update". Exactly one of the two refs, matching the CHECK on `comments`.
    */
-  listComments(ref: { projectId?: number; jobId?: string }, limit?: number): Promise<CommentEntry[]>;
+  listComments(
+    ref: { projectId?: number; jobId?: string; feedbackId?: string },
+    limit?: number
+  ): Promise<CommentEntry[]>;
 
   /**
    * Post an update. The author is stamped by the database from the session — sending it
@@ -110,10 +115,25 @@ export interface Repository {
    * in `comment_mentions`, which is what the bell reads.
    */
   addComment(
-    ref: { projectId?: number; jobId?: string },
+    ref: { projectId?: number; jobId?: string; feedbackId?: string },
     body: string,
-    mentions?: string[]
+    mentions?: string[],
+    /**
+     * The comment's standing (0064) — admin only, and refused by a trigger rather than
+     * by this method. `internal` keeps it to admins; `stage` marks it as the note that
+     * came with a stage change.
+     */
+    standing?: { internal?: boolean; stage?: FeedbackStage }
   ): Promise<CommentEntry>;
+
+  /**
+   * Pin a comment to the top of a thread, or mark it internal. Admin+, enforced by
+   * `guard_comment_standing()` — a column rule, so a trigger and not a policy.
+   */
+  setCommentStanding(
+    commentId: string,
+    standing: { pinned?: boolean; internal?: boolean }
+  ): Promise<void>;
 
   /**
    * Every @mention of the person signed in, newest first, unread included.
@@ -352,7 +372,7 @@ export interface Repository {
    * `guard_feedback_stage_change()` raises 42501 for anybody lower, admins included. The
    * app hides the control at the same rung, which is politeness rather than security.
    */
-  setFeedbackStage(id: string, stage: FeedbackStage): Promise<FeedbackItem[]>;
+  setFeedbackStage(id: string, stage: FeedbackStage, note?: string): Promise<FeedbackItem[]>;
 
   /** Plan a request into a roadmap phase, or take it out of one. Admin+, by policy. */
   setFeedbackPhase(id: string, phaseId: string | null): Promise<FeedbackItem[]>;
@@ -364,6 +384,43 @@ export interface Repository {
    * the database rather than one the button incremented locally.
    */
   setFeedbackVote(id: string, voted: boolean): Promise<FeedbackItem>;
+
+  /**
+   * Requests whose title or detail matches — what the report form searches while
+   * somebody is still typing, so a duplicate is caught before it is filed rather than
+   * merged afterwards. Capped: this answers "has anyone asked this", not "list
+   * everything".
+   */
+  searchFeedback(query: string, limit?: number): Promise<FeedbackItem[]>;
+
+  /** Who voted, and who entered each vote — the audit an on-behalf vote needs (0067). */
+  listFeedbackVoters(id: string): Promise<FeedbackVoter[]>;
+
+  /**
+   * Add somebody else's vote (Canny's vote-on-behalf): the request that arrived on a
+   * call or on site. Admin+, stamped with who added it, and never anonymous — that
+   * attribution is the whole answer to 0061's objection.
+   */
+  addVoteFor(id: string, profileId: string): Promise<FeedbackItem>;
+
+  /** Follow or unfollow. Voting and reporting already follow you, by trigger (0065). */
+  setFeedbackFollow(id: string, following: boolean): Promise<void>;
+
+  /**
+   * Requests you follow that have moved since you last looked — the bell's seventh
+   * signal, and the first one after @mentions that is real.
+   */
+  listMyMovedRequests(): Promise<MovedRequest[]>;
+
+  /** "I have seen where this got to." Writes the seen stamp on your own follow. */
+  markMoveSeen(id: string): Promise<void>;
+
+  /**
+   * Mark a request a duplicate of another, or clear it (`null`). Admin+, and the
+   * database moves the votes and followers — the app cannot, because 0061 rightly
+   * refuses it the right to write somebody else's vote.
+   */
+  mergeFeedback(id: string, intoId: string | null): Promise<FeedbackItem[]>;
 
   /**
    * A signed URL for one screenshot. The bucket is private, so there is no permanent
@@ -495,6 +552,14 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "setFeedbackStage",
   "setFeedbackPhase",
   "setFeedbackVote",
+  "setCommentStanding",
+  "mergeFeedback",
+  "markMoveSeen",
+  "listMyMovedRequests",
+  "setFeedbackFollow",
+  "addVoteFor",
+  "listFeedbackVoters",
+  "searchFeedback",
   "attachmentUrl",
   "listRoadmapPhases",
   "createRoadmapPhase",
@@ -568,6 +633,14 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   setFeedbackStage: "feedback",
   setFeedbackPhase: "feedback",
   setFeedbackVote: "feedback_votes",
+  setCommentStanding: "comments",
+  mergeFeedback: "feedback",
+  markMoveSeen: "feedback_follows",
+  listMyMovedRequests: "feedback_follows",
+  setFeedbackFollow: "feedback_follows",
+  addVoteFor: "feedback_votes",
+  listFeedbackVoters: "feedback_votes",
+  searchFeedback: "feedback_display",
   attachmentUrl: "storage: feedback-screenshots",
   listRoadmapPhases: "roadmap_phases",
   createRoadmapPhase: "roadmap_phases",

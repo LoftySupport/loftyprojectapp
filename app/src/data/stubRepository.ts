@@ -248,6 +248,24 @@ export function createStubRepository(): Repository {
     },
     async attachmentUrl(): Promise<null> { return null; },
 
+    // The Canny round (0064–0068). Reads answer empty, writes say what they need.
+    async searchFeedback(): Promise<never[]> { return []; },
+    async listFeedbackVoters(): Promise<never[]> { return []; },
+    async addVoteFor(): Promise<never> {
+      throw new Error("Adding a vote for somebody needs Supabase.");
+    },
+    async setFeedbackFollow(): Promise<never> {
+      throw new Error("Following a request needs Supabase.");
+    },
+    async listMyMovedRequests(): Promise<never[]> { return []; },
+    async markMoveSeen(): Promise<void> { /* nothing to mark seen with no backend */ },
+    async mergeFeedback(): Promise<never> {
+      throw new Error("Merging a duplicate needs Supabase.");
+    },
+    async setCommentStanding(): Promise<never> {
+      throw new Error("Pinning a comment needs Supabase.");
+    },
+
     async listRoadmapPhases(): Promise<never[]> { return []; },
     async createRoadmapPhase(): Promise<never> {
       throw new Error("Adding a roadmap phase needs Supabase.");
