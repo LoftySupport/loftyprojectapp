@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- The responsive sweep covers the three Updates tabs
 - One form for reporting a bug or requesting a feature, with a radio instead of two footer buttons
 - Screenshots, the page, the error and the browser sent with a report — captured, never typed
 - A tracker everybody can see, with the stages requested, in review, planned and in development

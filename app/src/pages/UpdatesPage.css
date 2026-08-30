@@ -13,6 +13,11 @@
   margin: var(--space-16) 0 var(--space-8) 0;
 }
 .updates-bar-spacer { flex: 1 1 auto; }
+/* Vibe's Dropdown fills its container, so in a flex row both filters stretch to half the
+   page each. Given a basis they sit at a readable width and still shrink on a phone,
+   where the row wraps. */
+.updates-bar > .select-wrap,
+.roadmap-actions > .select-wrap { flex: 0 1 220px; min-width: 160px; }
 
 /* ------------------------------------------------------------------- the board
    Four columns that become two and then one. `minmax(0, 1fr)` rather than `1fr`:

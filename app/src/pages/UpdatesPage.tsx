@@ -165,10 +165,14 @@ function Requests() {
       </Text>
 
       <div className="updates-bar">
-        <Select options={KIND_FILTERS} value={kind} onChange={v => setKind(v as "all" | FeedbackKind)}
-                aria-label="Show" size="small" />
-        <Select options={SORTS} value={sort} onChange={v => setSort(v as "votes" | "newest")}
-                aria-label="Sort by" size="small" />
+        <div className="select-wrap">
+          <Select options={KIND_FILTERS} value={kind} onChange={v => setKind(v as "all" | FeedbackKind)}
+                  aria-label="Show" size="small" />
+        </div>
+        <div className="select-wrap">
+          <Select options={SORTS} value={sort} onChange={v => setSort(v as "votes" | "newest")}
+                  aria-label="Sort by" size="small" />
+        </div>
         <span className="updates-bar-spacer" />
         <Button size="small" onClick={() => report()}>Report something</Button>
       </div>
@@ -633,13 +637,15 @@ function PhaseCard({
 
       {canEdit && !editing && (
         <div className="roadmap-actions">
-          <Select
-            options={ROADMAP_PHASE_STATUSES.map(s => ({ value: s, label: ROADMAP_PHASE_STATUS_LABELS[s] }))}
-            value={phase.status}
-            onChange={v => onSave({ status: v as RoadmapPhaseStatus })}
-            aria-label={`Status for ${phase.name}`}
-            size="small"
-          />
+          <div className="select-wrap">
+            <Select
+              options={ROADMAP_PHASE_STATUSES.map(s => ({ value: s, label: ROADMAP_PHASE_STATUS_LABELS[s] }))}
+              value={phase.status}
+              onChange={v => onSave({ status: v as RoadmapPhaseStatus })}
+              aria-label={`Status for ${phase.name}`}
+              size="small"
+            />
+          </div>
           <Button size="small" kind="tertiary" onClick={() => setEditing(true)}>Edit</Button>
           <Button size="small" kind="tertiary" disabled={first || busy}
                   onClick={() => onMove("up")}>Move up</Button>

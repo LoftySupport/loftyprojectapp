@@ -23,7 +23,11 @@
 const BASE = process.env.RESPONSIVE_BASE ?? "http://127.0.0.1:5200";
 
 const ROUTES = ["/", "/projects", "/jobs", "/reports", "/templates",
-                "/admin", "/settings", "/setup", "/setup/dictionary", "/setup/wiring"];
+                "/admin", "/settings", "/setup", "/setup/dictionary", "/setup/wiring",
+                // The tracker. All three tabs, because they are three different layouts
+                // sharing one route — a four-column board, a list of dated phases, and a
+                // changelog — and only the board has ever been measured by proxy.
+                "/updates/requests", "/updates/roadmap", "/updates/changelog"];
 
 // Real devices, not round numbers. 320 is the narrowest still in use; 390 is the
 // iPhone most people have; the landscape row is the same phone turned sideways, which
@@ -38,7 +42,13 @@ const SIZES = [
 
 const { chromium } = await import("playwright");
 
-const browser = await chromium.launch();
+// LOFTY_CHROMIUM lets a container point at a browser build the pinned Playwright does not
+// know about. Without it this fails with "Executable doesn't exist" and the instruction to
+// run `npx playwright install`, which in a sandbox with no network is a dead end — the
+// browser is already on disk under a different version number.
+const browser = await chromium.launch(
+  process.env.LOFTY_CHROMIUM ? { executablePath: process.env.LOFTY_CHROMIUM } : {}
+);
 let failed = 0, checks = 0;
 
 for (const [name, width, height] of SIZES) {

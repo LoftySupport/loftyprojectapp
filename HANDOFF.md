@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 9 changes since then —
+Unreleased: 10 changes since then —
+- Added: The responsive sweep covers the three Updates tabs
 - Changed: The handoff and the README say what the tracker changed, and what is still open
 - Added: One form for reporting a bug or requesting a feature, with a radio instead of two footer buttons
 - Added: Screenshots, the page, the error and the browser sent with a report — captured, never typed
 - Added: A tracker everybody can see, with the stages requested, in review, planned and in development
-- Added: One thumbs up per person per request, and the vote count the next phase is planned from
-- …and 4 more.
+- …and 5 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
