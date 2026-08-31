@@ -1,0 +1,56 @@
+-- 0069 — the view that lost its invoker
+--
+-- =============================================================================
+-- `job_display` HAS BEEN EXECUTING AS ITS OWNER SINCE 28 AUGUST, AND THAT IS A HOLE
+--
+--   `0055_job_display_carries_the_title_type` rewrote the view with
+--
+--       create or replace view job_display as …
+--
+--   and no `with (security_invoker = true)`. Every earlier rewrite carried it — 0028,
+--   0035, 0036 and 0040 all name it in the create statement — and 0055 is the one that
+--   did not. `create or replace view` DOES NOT PRESERVE reloptions: it drops them
+--   silently, which is precisely the fault `0020` found on `profile_display` and wrote
+--   a warning about in `0001`.
+--
+--   The consequence is not theoretical, and it was measured against the live database
+--   rather than reasoned about. Asking as a real account that is held at the demo gate
+--   (0049), in a rolled-back transaction:
+--
+--       jobs            through RLS   ->   0     the gate holds
+--       job_display     the view      ->  60     every job in the company
+--       projects        through RLS   ->   0
+--       project_display the view      ->   0     because that view kept its invoker
+--
+--   Forty-two of the forty-seven profiles carry `profile_is_demo` today, so this is the
+--   common case rather than the edge one: an account Amber is deliberately holding at
+--   the door reads the whole jobs board through PostgREST. The app's gate screen does
+--   not close it — `RequireAuth` hides the UI, and the house rule is that hiding a
+--   control is not security. RLS is the boundary, and for this one view there was none.
+--
+--   `job_display` is also the view the boards read, so this is not a dusty corner.
+-- =============================================================================
+--
+-- ------------------------------------------------------------------ ALTER, not rewrite
+-- `alter view … set` changes exactly the option and cannot get the SELECT wrong. A
+-- `create or replace` here would mean re-typing the body 0055 settled on — the same
+-- statement shape that caused this — to fix a fault that is not in the body at all.
+alter view job_display set (security_invoker = true);
+
+comment on view job_display is
+  'The job board''s read. security_invoker = true, restored in 0069 after 0055''s create-or-replace dropped it: without it the view executes as its owner and hands every reader rows the policies on jobs would refuse, including an account held at the demo gate. Asserted in verify/behaviour.sql for every view, not just this one.';
+
+-- ---------------------------------------------------------------------------- proof
+-- Watched, in this order, before this file was trusted:
+--   * the live probe above, as a demo account: 0 jobs through the table and 60 through
+--     the view — the hole, seen rather than inferred;
+--   * `select reloptions from pg_class where relname = 'job_display'` reading `(none)`
+--     on both the live database and a fresh replay, so the repo reproduced the fault
+--     rather than only production carrying it;
+--   * the same probe after this migration: 0 and 0.
+--
+-- THE REAL FIX IS THE CHECK, NOT THIS LINE. The rule "any migration touching a view must
+-- re-apply security_invoker and assert on pg_class.reloptions" has been written down
+-- since 0020 and was never mechanised, so `check.sh` stayed green through 0055 and
+-- thirteen migrations after it. `verify/behaviour.sql` now asserts it for EVERY view in
+-- `public`, which is the version of this rule that cannot be forgotten.

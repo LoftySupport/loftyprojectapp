@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-313 properties across 52 tables.
+314 properties across 52 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 264 | In the migration and the types |
+| Created | 265 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -194,6 +194,7 @@ The bug and feature-request tracker. Sent from the footer by anyone signed in (0
 | `feedback.roadmap_phase_id` | Planned into | Which roadmap phase this request is scheduled in, when it is scheduled at all. Null is the normal state. | `uuid` | — | Nullable. FK → roadmap_phases(roadmap_phase_id) ON DELETE SET NULL. | SET NULL and never CASCADE: deleting a phase must not delete the requests planned into it, which is the most destructive plausible mistake on that screen. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `feedback.feedback_merged_into_id` | Duplicate of | The request this one turned out to be a duplicate of. Null for everything that stands on its own. | `uuid` | — | Nullable. FK → feedback(feedback_id) ON DELETE SET NULL. CHECK: never itself. | Merging moves the votes and the followers to the target, by a SECURITY DEFINER trigger — the app cannot, because a vote belongs to the person who cast it. Chains are refused, so a duplicate always points at a live request. The row is kept rather than deleted: the person who filed it must still be able to find it and see where the conversation went. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `feedback.profile_id` | From | Who sent it, so a report that needs a conversation has somebody to go back to. | `uuid` | — | Nullable. FK → profiles(profile_id) ON DELETE SET NULL. | Stamped by the repository from the signed-in profile and checked by the insert policy against current_profile_id(), so nobody can file under a colleague's name. SET NULL rather than CASCADE: the report outlives the reporter — it is about the app, not the person who noticed. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `feedback.feedback_added_by` | Entered by | Who typed this request, when it was not the person it is from — the one that arrived on a call or on site. | `uuid` | — | Nullable. FK → profiles(profile_id) ON DELETE SET NULL. CHECK: never equal to profile_id. | Admin+ by a second, narrower insert policy (0070). profile_id stays the person it is FROM, so "Deanna asked for this" and "Amber says Deanna asked for this" are different rows rather than the same one. The CHECK is not decoration: 0067 watched the identical policy clause be silently ignored on feedback_votes, because policies are OR'd and the older own-row policy admitted the row first. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `feedback_attachments`
 

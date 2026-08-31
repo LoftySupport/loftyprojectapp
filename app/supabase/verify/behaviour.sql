@@ -514,3 +514,38 @@ select case
   else 'FAIL: history periods do not tile'
 end;
 rollback;
+
+-- ============================================================================
+-- EVERY VIEW IN public CARRIES security_invoker
+--
+-- The rule has existed since 0020 — *"any migration touching a view must re-apply
+-- security_invoker and assert on pg_class.reloptions afterwards"* — and until now it
+-- existed only as a sentence in a migration header and in the handoff. Nothing checked
+-- it, so `0055` rewrote `job_display` with a bare `create or replace view`, the option
+-- was dropped silently, and check.sh stayed green through that migration and the
+-- thirteen after it. On the live database that view returned all 60 jobs to an account
+-- held at the demo gate, which reads 0 through the table.
+--
+-- A view without it executes as its OWNER, which is how a view becomes a way around
+-- every policy underneath it. There is no view in this schema that wants that: each one
+-- exists to shape rows the caller is already entitled to.
+--
+-- Written as one assertion over pg_class rather than a probe per view, so a view added
+-- next month is covered without anybody remembering to extend this.
+-- ============================================================================
+select case
+  when not exists (
+    select 1 from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relkind = 'v'
+      and coalesce(array_to_string(c.reloptions, ','), '') not like '%security_invoker=%'
+  )
+  then 'ok  every view in public sets security_invoker'
+  else 'FAIL: view(s) executing as owner, past every policy underneath: ' || (
+    select string_agg(c.relname, ', ' order by c.relname)
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relkind = 'v'
+      and coalesce(array_to_string(c.reloptions, ','), '') not like '%security_invoker=%'
+  )
+end;
