@@ -57,7 +57,9 @@ export interface BoardParams {
   search: string;
 }
 
-export function useBoardParams(defaults: { view: View; grouping: Grouping }): BoardParams {
+export function useBoardParams(
+  defaults: { view: View; grouping: Grouping; views: SavedView[] }
+): BoardParams {
   const [params, setParams] = useSearchParams();
   const location = useLocation();
 
@@ -101,7 +103,10 @@ export function useBoardParams(defaults: { view: View; grouping: Grouping }): Bo
     ? (params.get("group") as Grouping)
     : defaults.grouping;
 
-  const saved = savedViewBySlug(params.get("saved"));
+  // Resolved against THIS board's list, so /projects?saved=live — a Jobs slug, or an old
+  // bookmark from when the two lists were one — lands on the first projects view rather
+  // than on a set of stages nothing on the page names.
+  const saved = savedViewBySlug(params.get("saved"), defaults.views);
 
   /**
    * A chip with no value is written as a bare `?stage=`. It reads oddly, and it is

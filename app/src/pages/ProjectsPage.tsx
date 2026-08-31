@@ -8,7 +8,7 @@ import {
   jobMatchesQuery, matchedOnPreviousAddress, projectMatchesQuery, useSearch
 } from "../data/SearchProvider";
 import { useBoardParams } from "../data/useBoardParams";
-import { savedViewBySlug, stagesInView } from "../data/savedViews";
+import { PROJECT_VIEWS, savedViewBySlug, stagesInView, type SavedView } from "../data/savedViews";
 import { activeFilterCount, projectMatchesFilters, statusOptions } from "../data/filtering";
 import { LoadProblem, NoResults, NothingYet, PreviousAddressNote } from "../components/SearchNotices";
 import { SavedViewTabs } from "../components/SavedViewTabs";
@@ -59,6 +59,37 @@ import "../components/ui.css";
  * least one job in that slice — "Construction" on this screen means the projects with
  * something on site, which is the question somebody filtering to it is asking.
  */
+
+/**
+ * Whether a project belongs in a view — the one place the rule lives.
+ *
+ * It was written twice: once for the list and once, differently, for the number on the
+ * tab above it. The tab required `p.jobs.length > 0`, so a project nobody had split was
+ * counted out of every view and then shown in all of them; the tab read 3 and opened a
+ * list of 4. Two copies of a predicate is how that happens, so there is one.
+ *
+ * THE TWO CLAUSES
+ *
+ *   A view names *job* stages, so a project is in it when one of its jobs is. A project
+ *   with no jobs is judged by its OWN lifecycle phase (`projects.project_stage`, 0039) —
+ *   found by putting projects on a board, where a project created a minute ago was
+ *   invisible on the first screen the app shows.
+ *
+ *   `requires: "no-jobs"` is New Projects (Amber, 31 Aug), and it is the reverse cut: a
+ *   project nobody has split yet, at whatever phase. Its stage list is the whole
+ *   lifecycle, so the phase test passes and this clause is the whole of the filter.
+ */
+function projectInView(
+  p: { stage: string; jobs: { stage: string }[] },
+  view: SavedView,
+  viewStages: string[]
+): boolean {
+  if (view.requires === "no-jobs" && p.jobs.length > 0) return false;
+  return p.jobs.length === 0
+    ? viewStages.includes(p.stage)
+    : p.jobs.some(j => viewStages.includes(j.stage));
+}
+
 export function ProjectsPage() {
   const { stageNames } = useStages();
   const { teams, teamNames } = useTeams();
@@ -83,7 +114,7 @@ export function ProjectsPage() {
   // flat grid of cards — which answered "what sites are there" and not "where is the
   // portfolio up to", the question the jobs board has always been able to answer.
   const { view, setView, grouping, setGrouping, filters, setFilters, saved, setSaved, search } =
-    useBoardParams({ view: "Board", grouping: "Stage" });
+    useBoardParams({ view: "Board", grouping: "Stage", views: PROJECT_VIEWS });
   // The teams this person is in — sharing a view offers their own team, and offers
   // nothing at all to somebody in none (0051).
   const { profile: me } = useAuth();
@@ -101,28 +132,9 @@ export function ProjectsPage() {
 
   const viewStages = useMemo(() => stagesInView(saved, stageNames), [saved, stageNames]);
 
-  /**
-   * A saved view names a set of *job* stages, so a project is in view when one of its
-   * jobs is — and a project with no jobs is judged by its OWN lifecycle stage.
-   *
-   * That last clause is a fix, found by putting projects on a board. It used to read
-   * `showingEverything`, meaning "only when the view names no stages at all" — and the
-   * built-in All jobs view names five, so it was false there. A project created a minute
-   * ago, before anybody has added its lots, was invisible on the first screen the app
-   * shows: the comment said it "must appear there" and the code did the opposite.
-   *
-   * Its own stage is the right test and was available all along (`projects.project_stage`,
-   * 0039): a jobless project at Acquisition & Development belongs in a view that includes
-   * that phase, and not in Closed.
-   */
   const inView = useMemo(
-    () =>
-      all.filter(p =>
-        p.jobs.length === 0
-          ? viewStages.includes(p.stage)
-          : p.jobs.some(j => viewStages.includes(j.stage))
-      ),
-    [all, viewStages]
+    () => all.filter(p => projectInView(p, saved, viewStages)),
+    [all, saved, viewStages]
   );
 
   const open = useMemo(
@@ -308,20 +320,34 @@ export function ProjectsPage() {
         <Text type="text2" color="secondary">
           {loading
             ? "Loading…"
-            : saved.stages.length === 0
+            // On All Projects the two totals ARE the answer; on any other view the
+            // interesting number is how much of the whole it is. The test used to be
+            // `saved.stages.length === 0` — "the view names no stages" — which no
+            // built-in view has ever satisfied, so the portfolio line never once
+            // rendered on the first screen the app shows.
+            : saved.slug === "all"
               ? `${all.length} projects · ${jobCount} jobs`
-              : `${inView.length} of ${all.length} projects with work in ${saved.label}`}
+              // The view's name is not repeated here: the tab carrying it is the next
+              // thing down the page, bold and with its own count, and "projects with
+              // work in All Projects" is what embedding it produced.
+              : `${inView.length} of ${all.length} projects`}
         </Text>
       </div>
 
       <SavedViewTabs
+        views={PROJECT_VIEWS}
         activeSlug={saved.slug}
         onSelect={setSaved}
         hrefFor={slug => (slug === "all" ? "/projects" : `/projects?saved=${slug}`)}
         countFor={slug => {
-          if (slug === "all") return all.length;
-          const s = stagesInView(savedViewBySlug(slug), stageNames);
-          return all.filter(p => p.jobs.length > 0 && p.jobs.some(j => s.includes(j.stage))).length;
+          // The same test `inView` applies, through the same function. It used to be a
+          // near-copy — `p.jobs.length > 0 && p.jobs.some(…)` — which counted a project
+          // with no jobs out of every view while the list below let it in on its own
+          // stage. The tab said 3 and opened a list of 4, and the number under a tab is
+          // the one thing on this row somebody checks their work against.
+          const v = savedViewBySlug(slug, PROJECT_VIEWS);
+          const s = stagesInView(v, stageNames);
+          return all.filter(p => projectInView(p, v, s)).length;
         }}
         userViews={myViews.views}
         currentQuery={search}

@@ -146,6 +146,41 @@ check(
 #     drift. When `property_defs` becomes a real table the same rule returns as a foreign
 #     key, enforced by Postgres rather than by a script.
 
+# 2b — every stage a saved view names is a stage that exists.
+#
+#     savedViews.ts said, in its own header comment, that seeds.sh fails when its stage
+#     names and pipeline_stages disagree. It did not: nothing here had ever opened that
+#     file. The claim was written when the check felt obvious enough to be true, which is
+#     the same way five property definitions came to name "Sales & acquisition".
+#
+#     It matters more since 31 August, when the boards stopped sharing one list of views
+#     and gained six hand-written stage names between them. `stagesInView` intersects
+#     against the live list, so a typo does not throw — the view quietly matches nothing
+#     and reads as an empty pipeline. That is precisely the failure this file exists for.
+views_src = open(os.path.join(src, "savedViews.ts")).read()
+# Comments first, or the reasoning gets read as data: the very first run of this check
+# reported that a saved view names "show me everything in Construction", which is a
+# sentence from the note explaining why the Live view exists.
+views_code = re.sub(r'/\*.*?\*/', '', views_src, flags=re.S)
+views_code = re.sub(r'//[^\n]*', '', views_code)
+
+# Every `stages:` list on a view, and the two array literals the lists are composed of.
+# CURRENT is `LIFECYCLE.slice(...)` and holds no names of its own.
+view_stage_names = set()
+for lst in re.findall(r'stages:\s*(\[[^\]]*\])', views_code):
+    view_stage_names.update(re.findall(r'"([^"]+)"', lst))
+for const in ("LIFECYCLE", "ENDED"):
+    m = re.search(r'const %s(?:[^=]*)=\s*(\[[^\]]*\])' % const, views_code)
+    if m:
+        view_stage_names.update(re.findall(r'"([^"]+)"', m.group(1)))
+
+unknown = sorted(n for n in view_stage_names if n not in db_stages)
+check(
+    f"all {len(view_stage_names)} stage names in savedViews.ts exist in pipeline_stages",
+    not unknown,
+    "\n".join(f'a saved view names "{n}", which is not a stage' for n in unknown),
+)
+
 # 3 — every column the repository asks PostgREST for is a column that exists.
 #
 #     `listProjects` carried a commented-out query for months naming `id`, `project_no`,
