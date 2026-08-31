@@ -89,14 +89,30 @@ function RedirectIfSignedIn() {
 }
 
 /**
- * The index route honours the landing-page preference (G39). "/" stays the app's one
- * front door — sign-in and the header logo both point here — and this decides what it
- * opens onto, so the preference needs no second URL scheme to work.
+ * The index route honours the landing-page preference (G39). "/" is the app's one front
+ * door — sign-in and the header logo both point here — and this decides what it opens
+ * onto, so the preference needs no second URL scheme to work.
+ *
+ * ============================================================================
+ * THE DASHBOARD HAS ITS OWN URL, AND IT HAS TO
+ *
+ *   This used to render `<DashboardPage />` here when the preference was Dashboard, and
+ *   redirect otherwise. That made "/" mean two different things, and it cost the
+ *   dashboard its only way in: the nav's Dashboard link pointed at "/", so for anybody
+ *   whose landing page was Projects, clicking Dashboard went to "/" and was immediately
+ *   sent to /projects. **The page was unreachable, and it looked like the link was
+ *   broken rather than like a setting doing its job.**
+ *
+ *   Reported by Amber, 31 Aug: "dashboard isn't working — it changes to project screen."
+ *
+ *   So the dashboard is `/dashboard`, like every other page, and "/" only ever forwards.
+ *   The rule the app already follows everywhere else — a screen is a URL — turns out to
+ *   apply to the front door too: a route that is sometimes a page and sometimes a
+ *   redirect cannot be linked to when it is in the wrong mood.
+ * ============================================================================
  */
 function Landing() {
-  const target = LANDING_ROUTES[readPrefs().landingPage];
-  if (target !== "/") return <Navigate to={target} replace />;
-  return <DashboardPage />;
+  return <Navigate to={LANDING_ROUTES[readPrefs().landingPage]} replace />;
 }
 
 /**
@@ -155,6 +171,7 @@ export default function App() {
             <Route element={<RequireAuth />}>
             <Route element={<AppShell />}>
               <Route index element={<Landing />} />
+              <Route path="dashboard" element={<DashboardPage />} />
               {/* A record is a URL. The drawer and the detail view used to be component
                   state, which made an open job unlinkable, unbookmarkable, and lost on
                   refresh — and put Back on the browser's "leave the page" behaviour

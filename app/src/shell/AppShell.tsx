@@ -30,7 +30,10 @@ import "./AppShell.css";
  * to the person-shaped Admin beside it.
  */
 const PAGES = [
-  { to: "/", label: "Dashboard", icon: Home, end: true },
+  // "/dashboard", not "/": "/" is the front door and forwards to whatever the
+  // landing preference names, so a nav link pointing there could never reach the
+  // dashboard for anybody who had chosen a different landing page.
+  { to: "/dashboard", label: "Dashboard", icon: Home, end: true },
   { to: "/projects", label: "Projects", icon: Houses },
   { to: "/jobs", label: "Jobs", icon: HousePin },
   { to: "/reports", label: "Reports", icon: HouseChart },
