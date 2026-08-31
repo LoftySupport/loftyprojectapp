@@ -20,7 +20,78 @@ Unreleased: 16 changes since then —
 and before it, the spine review described there, because that is the only category of
 change that gets expensive once 200 jobs are in.
 
-Last updated: 2026-08-26.
+Last updated: 2026-08-31.
+
+---
+
+## Session of 2026-08-31 — the tracker is live, and a view that had no policy
+
+**`0060`–`0068` are applied to the live database.** PR #54 merged with them written and
+unapplied, which meant `main` was deployed and reading `feedback_display` for columns
+production did not have — `/updates` was broken in production, so this was repair rather
+than a next step. Applied in order, then verified against the live database rather than
+against the success messages: six new tables all with RLS on, six new `feedback` columns,
+four new `comments` columns, the private `feedback-screenshots` bucket with its three
+object policies, and `feedback_display` carrying `security_invoker=on`.
+
+The `feedback` table was empty, so 0060's rename and backfill moved no rows.
+
+Full `check.sh` is green on a clean replay of all sixty-nine migrations: 51 constraint
+checks biting, RLS holding, embeds resolving, seeds agreeing.
+
+### `job_display` had been executing as its owner since 28 August
+
+**The security advisor reported one ERROR, and it was real.** `0055` rewrote the view as
+
+```sql
+create or replace view job_display as …
+```
+
+with no `with (security_invoker = true)`. Every earlier rewrite of that view carried it —
+`0028`, `0035`, `0036`, `0040` — and `create or replace view` does not preserve
+`reloptions`. It is the identical fault `0020` found on `profile_display` and that `0001`
+warns about in its own comment.
+
+**Measured on the live database, as a real account held at the demo gate, in a rolled-back
+transaction** — not inferred from the advisor:
+
+| | before `0069` | after |
+| --- | --- | --- |
+| `jobs` through RLS | 0 | 0 |
+| `job_display` | **60** | 0 |
+| `projects` / `project_display` | 0 / 0 | 0 / 0 |
+
+`project_display` held because it kept its invoker. **Forty-two of the forty-seven
+profiles carry `profile_is_demo` today**, so this was the common case, not the edge one:
+an account Amber is deliberately holding at the door read the whole jobs board through
+PostgREST. The gate screen does not close it — `RequireAuth` hides the UI, and hiding a
+control is not security. An ordinary active account still reads 60 through both the table
+and the view, checked after the fix so the repair is not a new outage.
+
+`0069` is `alter view … set (security_invoker = true)` rather than another rewrite: it
+changes exactly the option and cannot get the body wrong.
+
+### The real fix is the check, not the line
+
+The rule — *any migration touching a view must re-apply `security_invoker` and assert on
+`pg_class.reloptions`* — has been written down since `0020` **and was never mechanised**.
+Nothing in `verify/` mentioned `reloptions` at all, which is how `check.sh` stayed green
+through `0055` and the thirteen migrations after it.
+
+`behaviour.sql` now asserts it over **every** view in `public` in one statement, so a view
+added next month is covered without anybody remembering. Watched failing first, against
+the pre-`0069` replay: `FAIL: view(s) executing as owner, past every policy underneath:
+job_display`. Then passing.
+
+**The general shape, worth carrying: a rule that lives only in prose is not a rule.** This
+one was stated clearly, in two places, by the session that had been bitten by it — and the
+next rewrite of a view broke it anyway.
+
+Security advisors are back to **0 errors**.
+
+Still open: the five product questions PR #54 put to Amber (votable bugs, who may decline,
+notification channels beyond the bell, product-area tags, the first roadmap phases and
+their dates). Nothing is seeded on `roadmap_phases` or `releases`, on purpose.
 
 ---
 
