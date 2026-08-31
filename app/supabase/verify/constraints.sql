@@ -7,14 +7,10 @@ DECLARE
   -- Row counts, so a probe whose target fixture disappears says so instead of
   -- reporting that the constraint it guards has stopped biting.
   touched integer;
+  -- The address the job-number probe below aims at, held so its absence can be reported
+  -- as itself rather than as a NULL update.
+  no_number uuid;
 BEGIN
-  BEGIN
-    INSERT INTO addresses (address_street_1,address_suburb,address_postcode,address_council)
-    VALUES ('No Number St','Golden Grove','5125','City of Tea Tree Gully');
-    RAISE WARNING 'FAIL: address with neither lot nor street number was accepted';
-  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  addresses_has_a_number rejected it';
-    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  addresses_has_a_number rejected it)', SQLERRM; END;
-
   BEGIN
     INSERT INTO addresses (address_lot_number,address_street_1,address_suburb,address_postcode,address_council)
     VALUES ('1','X St','Golden Grove','512','City of Tea Tree Gully');
@@ -22,12 +18,15 @@ BEGIN
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  addresses_postcode_shape rejected 512';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  addresses_postcode_shape rejected 512)', SQLERRM; END;
 
+  -- What an SA address may still not carry: a council is optional since 0069, but the
+  -- enum is SA-only, so an interstate one has no valid value to give.
   BEGIN
-    INSERT INTO addresses (address_lot_number,address_street_1,address_suburb,address_postcode)
-    VALUES ('1','X St','Golden Grove','5125');
-    RAISE WARNING 'FAIL: SA address with no council was accepted';
-  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  addresses_council_required_in_sa rejected it';
-    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  addresses_council_required_in_sa rejected it)', SQLERRM; END;
+    INSERT INTO addresses (address_lot_number,address_street_1,address_suburb,address_state,
+                           address_postcode,address_council)
+    VALUES ('1','X St','Ballarat','VIC','3350','City of Tea Tree Gully');
+    RAISE WARNING 'FAIL: a council outside SA was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  addresses_council_is_sa rejected a VIC address with a council';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  addresses_council_is_sa rejected it)', SQLERRM; END;
 
   BEGIN
     INSERT INTO projects (project_id,project_original_address_id,project_current_address_id,project_type,project_created_by)
@@ -278,15 +277,45 @@ BEGIN
 
   -- 0037 moved "an address needs a street and a number" off `addresses` and onto jobs,
   -- because Lofty buys land before it has a frontage and a project may sit at nothing
-  -- more than a suburb. The guarantee is only worth relaxing if the half that still
-  -- matters is enforced somewhere, so this is that half: a job is a dwelling, and
-  -- "somewhere in Mount Gambier" is not a place anybody pours a slab.
+  -- more than a suburb. 0069 moved the rest of it the same way — a council, a street
+  -- and the numbers are all optional now (Amber: "the only thing required is suburb,
+  -- state, postcode and project type"). The guarantee is only worth relaxing if the
+  -- half that still matters is enforced somewhere, so the four probes below are that
+  -- half: three shapes a project may legitimately take, and then a job, which is a
+  -- dwelling, refused at every one of them.
   BEGIN
     INSERT INTO addresses (address_suburb, address_state, address_postcode, address_council)
     VALUES ('Mount Gambier', 'SA', '5290', 'City of Mount Gambier');
     RAISE NOTICE 'ok  a project-shaped address needs no street';
   EXCEPTION WHEN OTHERS THEN
     RAISE WARNING 'FAIL: a locality address was refused (%)', SQLERRM; END;
+
+  -- 0069, first half: an SA address with no council at all. The form fills the council
+  -- in from the suburb and cannot for the four suburbs that span two, and a guess on a
+  -- lodged application is worse than a blank.
+  BEGIN
+    INSERT INTO addresses (address_suburb, address_state, address_postcode)
+    VALUES ('Mount Gambier', 'SA', '5290');
+    RAISE NOTICE 'ok  an SA address may be created with no council';
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'FAIL: an SA address with no council was refused (%)', SQLERRM; END;
+
+  -- 0069, second half: the two shapes 0037 called half an address. A street with no
+  -- number is "the Mt Gambier division, Penola Road"; a lot number with no street is
+  -- how every plan of division reads before the roads are named.
+  BEGIN
+    INSERT INTO addresses (address_street_1, address_suburb, address_state, address_postcode)
+    VALUES ('Penola Road', 'Mount Gambier', 'SA', '5290');
+    RAISE NOTICE 'ok  a street with no number is accepted';
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'FAIL: a street with no number was refused (%)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO addresses (address_lot_number, address_suburb, address_state, address_postcode)
+    VALUES ('7', 'Mount Gambier', 'SA', '5290');
+    RAISE NOTICE 'ok  a lot number with no street is accepted';
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'FAIL: a lot number with no street was refused (%)', SQLERRM; END;
 
   BEGIN
     UPDATE jobs SET job_current_address_id =
@@ -302,6 +331,30 @@ BEGIN
     -- The trigger raises a bare exception, so this catches by class rather than by code.
     WHEN raise_exception THEN RAISE NOTICE 'ok  a job cannot sit at a locality — it needs a street';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on the job address guard (%)', SQLERRM; END;
+
+  -- The half 0069 handed to the trigger. `addresses_street_needs_a_number` used to make
+  -- this unwritable; with it gone, `address_precision` alone would have called Penola
+  -- Road a street address and let a job be built at a road with no number on it.
+  BEGIN
+    SELECT address_id INTO no_number FROM addresses
+      WHERE address_street_1 = 'Penola Road'
+        AND address_street_number IS NULL AND address_lot_number IS NULL LIMIT 1;
+    IF no_number IS NULL THEN
+      -- Said out loud rather than left to the UPDATE: setting the column to NULL is a
+      -- different refusal, and it would read as this probe passing.
+      RAISE WARNING 'FAIL: the no-number address the probe needs was never created';
+    ELSE
+      UPDATE jobs SET job_current_address_id = no_number WHERE job_id = '1106-02';
+      GET DIAGNOSTICS touched = ROW_COUNT;
+      IF touched = 0 THEN
+        RAISE WARNING 'FAIL: the no-number probe matched no job — the fixture it targets is gone';
+      ELSE
+        RAISE WARNING 'FAIL: a job was moved to a street with no number on it';
+      END IF;
+    END IF;
+  EXCEPTION
+    WHEN raise_exception THEN RAISE NOTICE 'ok  a job cannot sit at a street with no number either';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on the job number guard (%)', SQLERRM; END;
 
   -- 0043: a property definition's three vocabularies are all CHECKed.
   BEGIN

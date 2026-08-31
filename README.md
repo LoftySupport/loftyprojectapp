@@ -16,13 +16,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 16 changes since then —
+Unreleased: 19 changes since then —
+- Changed: The new project form asks only for suburb, state, postcode and a project type — the street, its numbers and the council are all optional
+- Added: Total lots on the new project form, following the community and Torrens split or typed in on its own
+- Fixed: Zero community and zero Torrens lots no longer reached the database as a constraint error
 - Added: A discussion under every request, with a pinned answer and an internal lane for triage
 - Added: "Someone may have asked this already" — the report form searches while you type, and offers to vote instead
-- Added: Duplicates can be merged, and the votes and followers move with them
-- Added: The bell tells you when a request you follow moves, with the note whoever moved it left
-- Added: A vote can be added for somebody whose request arrived on a call, recorded against whoever entered it
-- …and 11 more.
+- …and 14 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

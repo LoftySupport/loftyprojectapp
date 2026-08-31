@@ -53,13 +53,26 @@ import "./ui.css";
  *   IS the label.
  */
 
-/** Shared between both dialogs, because a job may sit at its own address. */
+/**
+ * Shared between both dialogs, because a job may sit at its own address.
+ *
+ * `needs` is what the two callers disagree about, and it is the whole of the disagreement.
+ * A project may be created at a suburb, at a suburb and a road, or at a lot number on a
+ * plan of division with no road named yet — `0069` made all three legal, because they are
+ * what Lofty knows at the time. A job is a dwelling somebody pours a slab for, so it still
+ * needs a street and a number, and `guard_job_address_is_a_street` refuses one that has
+ * neither. The asterisks and hints below follow that, so the form asks for exactly what
+ * the database will accept from it.
+ */
 export function AddressFields({
   value,
-  onChange
+  onChange,
+  needs = "locality"
 }: {
   value: NewAddress;
   onChange: (next: NewAddress) => void;
+  /** `street` for a job — a street and a number, both marked required. */
+  needs?: "locality" | "street";
 }) {
   const set = <K extends keyof NewAddress>(key: K, v: NewAddress[K]) =>
     onChange({ ...value, [key]: v });
@@ -119,13 +132,14 @@ export function AddressFields({
   // picker disappears rather than offering values that would be rejected on save.
   const councilAvailable = (value.state ?? "SA") === "SA";
 
-  // Which of 0037's two address shapes this currently is. Drives the hints, so the form
+  // A job needs one of the two numbers, and either will do. Drives the hints, so the form
   // explains the rule as it is being met rather than only when it is broken.
-  const shape = addressShape(value);
+  const buildable = needs === "street";
+  const hasNumber = filled(value.lotNumber) || filled(value.streetNumber);
 
   return (
     <>
-      <Field label="Lot number" hint="as it appears on the plan of division — 12A is a lot number">
+      <Field label="Lot number" hint="as it appears on the plan of division">
         <TextField
           value={value.lotNumber ?? ""}
           onChange={v => set("lotNumber", v || null)}
@@ -146,7 +160,7 @@ export function AddressFields({
       </Field>
       <Field
         label="Street number"
-        hint={shape === "locality" ? "once there is a street to number" : undefined}
+        hint={buildable && !hasNumber ? "a lot number or this one — a job needs one of the two" : undefined}
       >
         <TextField
           value={value.streetNumber ?? ""}
@@ -155,15 +169,16 @@ export function AddressFields({
           inputAriaLabel="Street number"
         />
       </Field>
-      {/* Not required since 0037. Leaving it blank is what makes this a locality, which
-          is the only kind of address Lofty has when the land is bought — so the hint says
+      {/* Not required for a project since 0037, and since 0069 not required alongside a
+          number either. Blank is what Lofty has when the land is bought — so the hint says
           what blank means rather than treating it as a field somebody forgot. */}
       <Field
         label="Street"
+        required={buildable}
         hint={
-          shape === "locality"
-            ? "leave blank if only the suburb is settled — the project can be created without it"
-            : "with a lot or street number above"
+          buildable
+            ? "a job is a dwelling — it needs a street somebody can find it on"
+            : "leave blank if only the suburb is settled — the project can be created without it"
         }
       >
         <TextField
@@ -186,7 +201,7 @@ export function AddressFields({
       >
         <SuburbField value={value.suburb} onType={onSuburb} onPick={onSuburbPicked} />
       </Field>
-      <Field label="State">
+      <Field label="State" required>
         <Select
           aria-label="State"
           options={toOptions([...AU_STATES])}
@@ -213,8 +228,8 @@ export function AddressFields({
           label="Council region"
           hint={
             ambiguous
-              ? "this suburb spans two councils — the list cannot choose for you"
-              : "filled in from the suburb where the list is unambiguous · all 68, A–Z"
+              ? "optional — and this suburb spans two councils, so the list cannot choose for you"
+              : "optional · filled in from the suburb where the list is unambiguous · all 68, A–Z"
           }
         >
           <Select
@@ -314,32 +329,24 @@ const councilSortKey = (name: string) => name.replace(COUNCIL_PREFIX, "");
  * this form: what the person still has to fill in. The database remains the one that
  * decides — this only saves them a round trip.
  *
- * Rewritten for `0037`, which is where the interesting part is. The street used to be
- * required; it is now the thing that decides which of two shapes this address is.
+ * Amber, 31 Aug: *"the only thing required is suburb, state, postcode and project type.
+ * the rest are optional."* Which is now three lines rather than fifteen, because `0069`
+ * dropped the three constraints the rest of them mirrored — the council in SA, and the
+ * two halves of "a street and a number arrive together". State is not tested: it is a
+ * picker that defaults to SA and cannot be emptied.
  */
 const addressIsValid = (a: NewAddress): boolean =>
-  // Always: suburb, a four-digit postcode (text, because 0800 is Darwin), and a council
-  // in SA. addresses_council_required_in_sa is conditional because an interstate address
-  // cannot carry one at all.
-  filled(a.suburb) &&
-  /^[0-9]{4}$/.test(a.postcode.trim()) &&
-  ((a.state ?? "SA") !== "SA" || a.council !== null) &&
-  // And then one of two shapes, which is exactly the pair of constraints 0037 installed:
-  //
-  //   locality — no street, and therefore no numbers either. Enough for a project,
-  //              because Lofty buys land before it has a frontage.
-  //   street   — a street and at least one of lot or street number. A subdivided site is
-  //              "Lot 3" long before it is "28", so either will do, but not neither.
-  //
-  // The halfway states are what the constraints refuse: a number with no street is a
-  // fragment, and a street with no number is somewhere nobody can find.
-  (filled(a.street1)
-    ? filled(a.lotNumber) || filled(a.streetNumber)
-    : !filled(a.lotNumber) && !filled(a.streetNumber));
+  filled(a.suburb) && /^[0-9]{4}$/.test(a.postcode.trim());
 
-/** Which of the two shapes the form is currently describing, for the hint under it. */
-const addressShape = (a: NewAddress): "locality" | "street" =>
-  filled(a.street1) ? "street" : "locality";
+/**
+ * What a JOB needs on top of that: somewhere a slab can be poured.
+ *
+ * The rule 0037 moved off `addresses` and onto jobs, and 0069 finished moving — it lives
+ * in `guard_job_address_is_a_street` now, which refuses a job at a locality and, since
+ * 0069, at a road with no number on it either. A project may be at any of those.
+ */
+const jobAddressIsValid = (a: NewAddress): boolean =>
+  addressIsValid(a) && filled(a.street1) && (filled(a.lotNumber) || filled(a.streetNumber));
 
 export function NewProjectDialog({
   show,
@@ -374,6 +381,19 @@ export function NewProjectDialog({
   // total and a split disagree.
   const [community, setCommunity] = useState("");
   const [torrens, setTorrens] = useState("");
+  /**
+   * Total lots (Amber, 31 Aug: *"add in total lots which is the number of community title
+   * plus torrens title lots but can also be manually entered"*).
+   *
+   * Two states in one field. Untouched, it shows the sum of the two above and follows
+   * them — which is what the repository has been writing to `project_proposed_dwellings`
+   * all along, now visible instead of implied. Typed into, it is the person's own number,
+   * for the case the column exists to hold: a total from the old system with no split
+   * recorded against it. Emptying it hands the field back to the sum, so "blank" never
+   * means "a known split with no total".
+   */
+  const [total, setTotal] = useState("");
+  const [totalIsTyped, setTotalIsTyped] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<number | null>(null);
@@ -389,13 +409,34 @@ export function NewProjectDialog({
   const communityCount = lotCount(community);
   const torrensCount = lotCount(torrens);
   const countOk = (n: number | null) => n === null || (Number.isInteger(n) && n >= 0);
-  const dwellingsValid = countOk(communityCount as number | null) && countOk(torrensCount as number | null);
-  // The total the split dialog will be offered, and the number written to
-  // project_proposed_dwellings. Null only when neither kind was given at all.
-  const dwellingCount =
-    communityCount === null && torrensCount === null
+  const splitValid = countOk(communityCount as number | null) && countOk(torrensCount as number | null);
+
+  // What the split adds up to, when it is legible. Null when neither kind was given at
+  // all — "not settled", which is not zero.
+  const splitTotal =
+    !splitValid || (communityCount === null && torrensCount === null)
       ? null
       : ((communityCount as number | null) ?? 0) + ((torrensCount as number | null) ?? 0);
+
+  const totalShown = totalIsTyped ? total : splitTotal === null ? "" : String(splitTotal);
+  const totalCount = lotCount(totalShown);
+  // `project_proposed_dwellings` has carried a CHECK (> 0) since 0028: a project of no
+  // lots is not a project. Mirrored here, because 0 + 0 in the two boxes above used to
+  // reach the database and come back as a constraint name.
+  const totalTooSmall = totalCount !== null && !Number.isNaN(totalCount as number)
+    && (totalCount as number) < 1;
+  const totalOk = countOk(totalCount as number | null) && !totalTooSmall;
+  // `project_lot_split_adds_up` (0053) refuses a row where a total and a known split
+  // disagree — 6 dwellings made of 2 + 3. Only bites when all three are present, and so
+  // does this.
+  const addsUp =
+    totalCount === null || splitTotal === null
+    || communityCount === null || torrensCount === null
+    || totalCount === splitTotal;
+
+  // The number written to project_proposed_dwellings, and the one the split dialog is
+  // offered afterwards.
+  const dwellingCount = totalOk && addsUp ? (totalCount as number | null) : null;
 
   // The tail of the name, from whichever address the project will actually be at: the
   // "new address" block, when it is open, is the current one. Empty until there is a
@@ -408,7 +449,8 @@ export function NewProjectDialog({
 
   // projectType is required by the database now, so the button waits for it rather than
   // letting the insert come back with a not-null violation.
-  const valid = addressIsValid(address) && projectType !== null && dwellingsValid
+  const valid = addressIsValid(address) && projectType !== null
+    && splitValid && totalOk && addsUp
     && (newAddress === null || addressIsValid(newAddress));
 
   const reset = () => {
@@ -417,6 +459,8 @@ export function NewProjectDialog({
     setProjectType(null);
     setCommunity("");
     setTorrens("");
+    setTotal("");
+    setTotalIsTyped(false);
     setError(null);
     setCreated(null);
     setSaving(false);
@@ -431,7 +475,11 @@ export function NewProjectDialog({
         newAddress,
         projectType: projectType!,
         communityTitleLots: communityCount as number | null,
-        torrensTitleLots: torrensCount as number | null
+        torrensTitleLots: torrensCount as number | null,
+        // Sent explicitly now that the form has a box for it. It is the sum in every
+        // case but one — a total typed over a split nobody knows — and that case is the
+        // reason the column outlived 0053.
+        proposedDwellings: dwellingCount
       });
       // The project number is the thing the person came for — it is what they will
       // quote on the phone — and it does not exist until the sequence issues it.
@@ -511,7 +559,7 @@ export function NewProjectDialog({
                 to the job. so now where you set 6 lots, 3 may be community title, and 3
                 may be torrens title and we need to know that split." The single
                 "Proposed dwellings" box could not hold that, and the total it did hold
-                is now the sum of these two. */}
+                is the box below these two. */}
             <Field
               label="Community title lots"
               hint="leave blank if the count is not settled"
@@ -530,11 +578,7 @@ export function NewProjectDialog({
             </Field>
             <Field
               label="Torrens title lots"
-              hint={
-                dwellingCount != null
-                  ? `${dwellingCount} lot${dwellingCount === 1 ? "" : "s"} in total`
-                  : "leave blank if the count is not settled"
-              }
+              hint="leave blank if the count is not settled"
             >
               <TextField
                 value={torrens}
@@ -545,6 +589,39 @@ export function NewProjectDialog({
                   countOk(torrensCount as number | null)
                     ? undefined
                     : { status: "error", text: "A whole number, 0 or more." }
+                }
+              />
+            </Field>
+            {/* The total was already being written — the repository summed the two above
+                and sent it — but nowhere on screen said so, and there was no way to give
+                a total on its own. Amber, 31 Aug: "add in total lots which is the number
+                of community title plus torrens title lots but can also be manually
+                entered." So it follows the sum until somebody types over it, and clearing
+                it puts it back to following. */}
+            <Field
+              label="Total lots"
+              hint={
+                totalIsTyped
+                  ? "typed in — clear it to go back to the two above added together"
+                  : "the two above added together — type over it if the split is not known"
+              }
+            >
+              <TextField
+                value={totalShown}
+                onChange={v => { setTotal(v); setTotalIsTyped(v.trim() !== ""); }}
+                id="project-total-lots"
+                inputAriaLabel="Total lots"
+                validation={
+                  !countOk(totalCount as number | null)
+                    ? { status: "error", text: "A whole number." }
+                    : totalTooSmall
+                      ? { status: "error", text: "At least one lot, or blank if not settled." }
+                      : !addsUp
+                        // Short on purpose: Vibe renders validation text on one line and
+                        // clips it at the panel's width, so the sentence that explains
+                        // `project_lot_split_adds_up` is in the hint's job, not here.
+                        ? { status: "error", text: `The split above adds up to ${splitTotal}.` }
+                        : undefined
                 }
               />
             </Field>
@@ -628,7 +705,7 @@ export function NewJobDialog({
   const [created, setCreated] = useState<string | null>(null);
 
   const valid = projectId !== null && owningTeam !== null
-    && (!ownAddress || addressIsValid(address));
+    && (!ownAddress || jobAddressIsValid(address));
 
   const reset = () => {
     setProjectId(null);
@@ -714,7 +791,7 @@ export function NewJobDialog({
               </Button>
             </Field>
 
-            {ownAddress && <AddressFields value={address} onChange={setAddress} />}
+            {ownAddress && <AddressFields value={address} onChange={setAddress} needs="street" />}
           </div>
         )}
         {error && <Problem>{error}</Problem>}

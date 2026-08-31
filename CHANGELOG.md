@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Total lots on the new project form, following the community and Torrens split or typed in on its own
 - A discussion under every request, with a pinned answer and an internal lane for triage
 - "Someone may have asked this already" — the report form searches while you type, and offers to vote instead
 - Duplicates can be merged, and the votes and followers move with them
@@ -29,10 +30,12 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- Zero community and zero Torrens lots no longer reached the database as a constraint error
 - The demo-account checks in verify/ were reporting a failure they did not have — their own setup was being refused
 
 ### Changed
 
+- The new project form asks only for suburb, state, postcode and a project type — the street, its numbers and the council are all optional
 - The handoff and the README say what the tracker changed, and what is still open
 - Bugs and requests are readable by everyone, not just admins — a queue nobody can see cannot stop a duplicate request
 - Only superadmin moves a request between stages

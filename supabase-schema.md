@@ -13,7 +13,7 @@
 > | A `teams` table with `parent_team_id` for a hierarchy to walk | No hierarchy. Every seeded team had a null parent, so it was never real, and the scopes settled as none / own / team / all — none of which walks a tree |
 > | Companies, contacts and parties | Out of scope — this is project and process management, not a CRM |
 > | One `activity` table merging comments and system events | Split, because one is user-authored and mutable and the other must be append-only |
-> | `addresses` with a `council_id` FK, no postcode, everything nullable | Council is an enum value on the row; postcode is required; a lot or street number is required; and `address_history` keeps every name a site has had |
+> | `addresses` with a `council_id` FK, no postcode, everything nullable | Council is an enum value on the row; postcode is required; suburb, state and postcode are the whole of what an address must have (0037, then 0069 — a street, its numbers and the council are all optional, because that is what Lofty knows when the land is bought); and `address_history` keeps every name a site has had |
 >
 > **See `schema-plan.md` for the current design.** This file is kept, not deleted: its
 > reasoning on addresses as records, status versus health, and what was removed and why is

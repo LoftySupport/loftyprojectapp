@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 16 changes since then —
+Unreleased: 19 changes since then —
+- Changed: The new project form asks only for suburb, state, postcode and a project type — the street, its numbers and the council are all optional
+- Added: Total lots on the new project form, following the community and Torrens split or typed in on its own
+- Fixed: Zero community and zero Torrens lots no longer reached the database as a constraint error
 - Added: A discussion under every request, with a pinned answer and an internal lane for triage
 - Added: "Someone may have asked this already" — the report form searches while you type, and offers to vote instead
-- Added: Duplicates can be merged, and the votes and followers move with them
-- Added: The bell tells you when a request you follow moves, with the note whoever moved it left
-- Added: A vote can be added for somebody whose request arrived on a call, recorded against whoever entered it
-- …and 11 more.
+- …and 14 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -21,6 +21,42 @@ and before it, the spine review described there, because that is the only catego
 change that gets expensive once 200 jobs are in.
 
 Last updated: 2026-08-26.
+
+---
+
+## Session of 2026-08-31 — the new project form asks for four things
+
+Amber, on the create-project form: the lot number hint reads *"as it appears on the plan of
+division"* and nothing else; there is a **Total lots** box, *"which is the number of
+community title plus torrens title lots but can also be manually entered"*; and *"the only
+thing required is suburb, state, postcode and project type. the rest are optional."*
+
+**`0069` is written and replays cleanly. It is NOT applied to the live database** — the
+Supabase connector still needs a browser sign-in this session could not run. The queue is
+now `0060`–`0069`, in file order, then `verify/check.sh`. Nothing in the app breaks before
+it is applied: the form has stopped asking for a council, a street and a number, so until
+the constraints are actually dropped a project created without them comes back as a
+Postgres error rather than a greyed-out button. **Apply it before anyone uses the form.**
+
+| | |
+| --- | --- |
+| `0069` | Drops `addresses_council_required_in_sa` (0025) and both halves of 0037's shape rule — `addresses_street_needs_a_number`, `addresses_numbers_need_a_street`. On a plan of division "Lot 7" **is** the address; the lots are numbered before the roads are named. `guard_job_address_is_a_street` takes over the whole of the old guarantee — a street **and** a number — because `address_precision` only looks at the street, so dropping the check alone would have halved it silently |
+
+**Total lots** is `project_proposed_dwellings`, which the repository has been writing as the
+sum since 0053 with nothing on screen admitting to it. The box follows the split until
+somebody types over it, and clearing it hands it back — so "blank" can never mean "a known
+split with no total". Two constraints are mirrored on the field rather than met as an error
+after the insert: `project_lot_split_adds_up`, and the `> 0` on the column that 0 + 0 in
+the two title boxes used to walk straight into.
+
+### Still open
+
+- **The inline "+ New project" row has a Project name box that goes nowhere.** `createProject`
+  ignores `input.name` — it composes the name from the number and the address, which is what
+  Amber asked for on 28 Aug — so whatever is typed there is silently dropped. Left alone
+  because removing a visible field is a product decision, not a tidy-up. It should go.
+- **`addresses.address_precision` has no data dictionary entry.** Added by 0037, never
+  entered in `dictionary.ts`, so it is missing from `data-dictionary.md`.
 
 ---
 

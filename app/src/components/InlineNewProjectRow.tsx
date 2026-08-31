@@ -49,12 +49,15 @@ export function InlineNewProjectRow({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // The same rules the panel checks, minus the street half — this row never sets one,
-  // so it is always the locality shape and the number constraints cannot apply.
+  // The same rules the panel checks, which since `0069` are all of them: suburb, a
+  // four-digit postcode, and a type. Amber, 31 Aug: "the only thing required is suburb,
+  // state, postcode and project type. the rest are optional." The state is SA here
+  // rather than asked for, and the council came off the list when the constraint that
+  // required it did — the picker stays, because it is filled in nine times in ten and
+  // the tenth is a suburb that spans two councils.
   const valid =
     suburb.trim() !== "" &&
     /^[0-9]{4}$/.test(postcode.trim()) &&
-    council !== null &&
     projectType !== null;
 
   const reset = () => {
