@@ -24,6 +24,98 @@ Last updated: 2026-08-31.
 
 ---
 
+## Session of 2026-08-31, second half — four views, drag and drop, and a CHECK that was wrong
+
+Amber, 31 Aug, in a run of asks: drag ideas between phases · see it in table, gantt and
+calendar · *"roadmap should be in these 4 default views as well"* · *"change log should
+pull in latest Pull requests as well as when a request has been complete"* · *"requested
+by if an admin or super admin is logged in as they may enter it on behalf of someone
+else"* · *"the roadmap phase should default to the highest phase"* · *"change shipped to
+Live in the app and have it as last column"*.
+
+### The two decisions she made, and why they were asked
+
+- **The phase default is "the phase we are in now"** — the one marked In progress, else the
+  earliest not delivered. Asked rather than guessed because "highest" could equally have
+  meant the last phase in the list, and a request landing in the wrong phase is a guess
+  that gets quoted back as agreed.
+- **The PR feed is `@changelog` in the description**, everything after it on that row being
+  the entry. Her wording, and a good rule: the line reads as a sentence in the pull request
+  as well as in the changelog, so nobody writes markup for a machine.
+
+### Dates decide what a gantt and a calendar can honestly draw
+
+A request carries no duration. What exists is `feedback_created_at`,
+`feedback_stage_entered_at`, and the phase's nullable `starts_on`/`ends_on`. So:
+
+| | |
+| --- | --- |
+| Requests gantt | each bar is its **phase's** window, borrowed and labelled as borrowed |
+| No phase | **no bar** — listed by name underneath as unscheduled, never estimated |
+| Requests calendar | the two real dates: reported, and moved |
+| Roadmap gantt | the phase's own window — the one chart whose dates belong to what it draws |
+| One date only | a **marker**, not a bar: a phase starting in March with no agreed end has no length to draw |
+
+Month-scaled, not day-scaled like `JobsGantt` — a day grid over six months is four hundred
+columns. That gantt is a different instrument for a different question and was left alone.
+
+### Drag and drop, at two different rungs — because the database has two
+
+- **Between stage columns** → superadmin, because 0060's trigger raises 42501 for anybody
+  below it, admins included.
+- **Between roadmap phases** → admin, because `roadmap_phase_id` rides the ordinary
+  `admins triage feedback` UPDATE policy.
+
+The attribute is only set when the rung is held, so the board never offers a gesture that
+ends in a refusal. A **Not planned yet** bucket exists so the drag has somewhere to go
+back to — a one-way gesture is one people are afraid to try.
+
+**"Live in the app" is now the last column** (`shipped` stays the stored value: it is a
+CHECK value and the changelog generator's vocabulary, so renaming it would be a migration
+to fix a word on a screen). It left the pair under the board because it is the destination
+everybody is trying to reach, and a queue whose end is printed below the queue does not
+read as a queue. Declined stays underneath — nobody is moving towards it.
+
+### `0072` — the CHECK that was right on one table and wrong on the next
+
+`0070` copied `0067`'s predicate, `feedback_added_by is distinct from profile_id`. That is
+exactly right on `feedback_votes`, where `profile_id` is NOT NULL. **`feedback.profile_id`
+is nullable** — 0052 made it `ON DELETE SET NULL` so a report outlives its reporter — and
+`is distinct from` answers *false* for two nulls. So the line said: *a report with no
+reporter and no typist is refused.*
+
+The consequence was worse than a rejected insert. `ON DELETE SET NULL` performs an UPDATE,
+the CHECK is re-evaluated, and it fails — so **deleting a profile would have failed for
+anybody who had ever filed a request**, with an error naming a column nobody touched.
+Watched on the live database before the fix, and again after.
+
+**`check.sh` found it, not review.** The constraint probes plant a fixture request with no
+reporter; that insert began failing the moment 0070 applied, and four later probes act on
+that fixture — so one cause reported as five failures. The harness extended in 0069 earned
+its keep the same day.
+
+The general shape: **a predicate is only as portable as the nullability of the columns it
+names.** Copying a proven line to a neighbouring table is exactly when to re-check that.
+
+### Also worth knowing
+
+- **`0071` closed a hole nobody had cause to notice.** The insert policy on `feedback`
+  checks the reporter and `is_active_user()`, and **RLS cannot restrict which columns a row
+  carries** — the lesson 0018 paid for on `profiles.permission`. So any signed-in person
+  could have filed a request already planned into whichever phase they liked. Below admin
+  the phase is now decided by the trigger and whatever the client sent is discarded.
+- **The PR feed needs no token because the repo is public**, which is the constraint that
+  decided the design rather than a happy accident. The price is GitHub's 60/hour per IP, so
+  it is cached for ten minutes in sessionStorage and a rate-limit answer **says so** rather
+  than rendering an empty changelog — an error drawn as an ordinary empty state is the
+  "your account is not set up" fault again.
+- **Nothing in the repo declares `@changelog` yet** (checked: 55 merged PRs, zero). The
+  empty state says how to join the list rather than looking broken.
+- Amber has created four real roadmap phases; Phase 1 is In progress. Probes that touched
+  them ran in rolled-back transactions and the statuses were re-read afterwards to prove it.
+
+---
+
 ## Session of 2026-08-31 — the tracker is live, and a view that had no policy
 
 **`0060`–`0068` are applied to the live database.** PR #54 merged with them written and

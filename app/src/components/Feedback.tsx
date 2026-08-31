@@ -2,9 +2,11 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button, RadioButton, Text, TextArea, TextField } from "@vibe/core";
 import { Bug, Idea } from "@vibe/icons";
-import { useRepository } from "../data/DataProvider";
+import { useQuery, useRepository } from "../data/DataProvider";
+import { usePermission } from "../data/PermissionProvider";
 import { useToasts } from "./Toasts";
 import { Field, Problem } from "./Form";
+import { Select } from "./Select";
 import { SidePanel } from "./SidePanel";
 import { FEEDBACK_STAGE_LABELS, type FeedbackItem, type FeedbackKind } from "../data/types";
 import "./ui.css";
@@ -192,6 +194,23 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const similar = useSimilar(title, open);
 
+  /**
+   * "Requested by" — an admin filing something somebody told them about (Amber, 31 Aug;
+   * 0070). Empty means "me", which is the ordinary case and the default.
+   *
+   * The list is only fetched for the people who can use it. Below admin the second insert
+   * policy matches nothing, so a control here would be one that always fails on save —
+   * and the house rule is that a control which cannot work should not be drawn.
+   */
+  const { can } = usePermission();
+  const canFileForOthers = can("admin");
+  const { data: people } = useQuery(
+    r => (canFileForOthers ? r.listProfiles() : Promise.resolve([])),
+    [],
+    [canFileForOthers]
+  );
+  const [onBehalfOf, setOnBehalfOf] = useState("");
+
   const report = useCallback((k?: FeedbackKind) => {
     if (k) setKind(k);
     setProblem(null);
@@ -232,7 +251,11 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
         // Only on a bug. An error caught fifteen minutes ago, stapled to a feature
         // request, is noise that reads like evidence.
         errorText: kind === "bug" ? lastError.text : null,
-        screenshots: files
+        screenshots: files,
+        // Empty string means "me" — sent as undefined rather than as the signed-in id,
+        // because a report on behalf of yourself is refused by the CHECK and is anyway
+        // just a report.
+        onBehalfOf: onBehalfOf || undefined
       });
       toast(
         kind === "bug"
@@ -244,6 +267,10 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
       setTitle("");
       setDetail("");
       setFiles([]);
+      // Cleared with the rest. A "requested by" left standing would silently file the
+      // NEXT report under the last person named, which is the one mistake on this form
+      // nobody would notice they had made.
+      setOnBehalfOf("");
       lastError.clear();
       setOpen(false);
     } catch (e) {
@@ -303,6 +330,30 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
               </div>
             </div>
           </Field>
+
+          {canFileForOthers && people.length > 0 && (
+            <Field
+              label="Requested by"
+              hint={
+                onBehalfOf
+                  ? "It goes into the tracker under their name, with yours beside it as who entered it."
+                  : "Leave as yourself unless somebody told you about this — on site, on a call, in a meeting."
+              }
+            >
+              <Select
+                options={[
+                  { value: "", label: "Me" },
+                  ...people
+                    .filter(p => p.fullName)
+                    .map(p => ({ value: p.id, label: p.fullName }))
+                ]}
+                value={onBehalfOf}
+                onChange={v => setOnBehalfOf(v as string)}
+                aria-label="Requested by"
+                size="small"
+              />
+            </Field>
+          )}
 
           <Field label="One line" required hint="What the tracker will show.">
             <TextField

@@ -185,7 +185,7 @@ const SCREENSHOT_BUCKET = "feedback-screenshots";
  * cannot read.
  */
 const FEEDBACK_DISPLAY_COLUMNS =
-  "feedback_id, feedback_kind, feedback_title, feedback_detail, feedback_page, feedback_error_text, feedback_stage, feedback_stage_entered_at, feedback_created_at, feedback_from_name, feedback_vote_count, feedback_voted_by_me, roadmap_phase_id, feedback_merged_into_id, feedback_merged_into_title, feedback_duplicate_count, feedback_comment_count, feedback_followed_by_me, feedback_move_unseen";
+  "feedback_id, feedback_kind, feedback_title, feedback_detail, feedback_page, feedback_error_text, feedback_stage, feedback_stage_entered_at, feedback_created_at, feedback_from_name, feedback_added_by_name, feedback_vote_count, feedback_voted_by_me, roadmap_phase_id, feedback_merged_into_id, feedback_merged_into_title, feedback_duplicate_count, feedback_comment_count, feedback_followed_by_me, feedback_move_unseen";
 
 /**
  * One row of that view, as a request.
@@ -210,6 +210,9 @@ const toFeedbackItem = (
   // Empty rather than a stand-in when the profile is gone: "Unknown" would be a claim
   // about who sent it.
   fromName: r.feedback_from_name || null,
+  // Null on an ordinary report, which is almost all of them — and the card only draws
+  // "added by" when it is present, so the common case gains nothing to read past.
+  addedByName: r.feedback_added_by_name || null,
   createdAt: r.feedback_created_at,
   voteCount: Number(r.feedback_vote_count ?? 0),
   votedByMe: Boolean(r.feedback_voted_by_me),
@@ -2110,12 +2113,23 @@ export function createSupabaseRepository(): Repository {
       const me = await repo.currentProfile();
       if (!me) throw new Error("Sending this needs you to be signed in.");
 
+      // On behalf of somebody else (0070). `profile_id` becomes the person it is FROM and
+      // `feedback_added_by` records who typed it — the split that keeps "Deanna asked for
+      // this" and "Amber says Deanna asked for this" from being the same row.
+      //
+      // The self-case is dropped rather than sent: filing on behalf of yourself is just a
+      // report, and the CHECK refuses a row whose adder is its own reporter. Sending it
+      // anyway would turn a no-op choice in a dropdown into a failed save.
+      const onBehalf = entry.onBehalfOf && entry.onBehalfOf !== me.id ? entry.onBehalfOf : null;
+
       const { data, error } = await client
         .from("feedback")
         .insert({
-          // Stamped here, not typed: the with-check compares it to current_profile_id(),
-          // so a report can only ever be filed under the person filing it.
-          profile_id: me.id,
+          // Ordinarily stamped here, not typed: the with-check compares it to
+          // current_profile_id(), so a report is filed under the person filing it. The
+          // on-behalf path goes through the second, admin-only policy instead.
+          profile_id: onBehalf ?? me.id,
+          feedback_added_by: onBehalf ? me.id : null,
           feedback_kind: entry.kind,
           feedback_title: title,
           feedback_detail: entry.detail.trim(),

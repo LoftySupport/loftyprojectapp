@@ -709,13 +709,25 @@ export const FEEDBACK_STAGES = [
 ] as const;
 export type FeedbackStage = (typeof FEEDBACK_STAGES)[number];
 
-/** The words on screen. The database stores the snake_case value; nobody reads that. */
+/**
+ * The words on screen. The database stores the snake_case value; nobody reads that.
+ *
+ * `shipped` reads as **"Live in the app"** (Amber, 31 Aug). The stored value stays
+ * `shipped` deliberately — it is a CHECK value on `feedback_stage`, and it is also the
+ * vocabulary `scripts/changelog.mjs` parses out of commit trailers, so renaming it would
+ * be a migration plus a rewrite of the generator to fix a word on a screen. The label is
+ * the only place the word is read, so the label is the only place it changes.
+ *
+ * The reason the word had to change is worth keeping: "shipped" is what a developer calls
+ * it, and it answers a question nobody asked. The person who filed the request wants to
+ * know whether they can go and use the thing — which is what "Live in the app" says.
+ */
 export const FEEDBACK_STAGE_LABELS: Record<FeedbackStage, string> = {
   requested: "Requested",
   in_review: "In review",
   planned: "Planned",
   in_development: "In development",
-  shipped: "Shipped",
+  shipped: "Live in the app",
   declined: "Declined"
 };
 
@@ -731,18 +743,26 @@ export const FEEDBACK_STAGE_MEANING: Record<FeedbackStage, string> = {
   in_review: "Being weighed up — whether, and how big.",
   planned: "It is happening. A roadmap phase says roughly when.",
   in_development: "Being built right now.",
-  shipped: "It went out. The changelog says in which release.",
+  shipped: "It is in the app now — go and use it.",
   declined: "Considered, and not going ahead."
 };
 
 /**
- * The four stages a request moves through before it ends, in order — what the board shows
- * as columns by default. `shipped` and `declined` are endings rather than queue positions
- * and get their own treatment, the same way the lifecycle board separates Completed and
- * Cancelled from the working phases.
+ * The stages the board shows as columns, in order (Amber, 31 Aug: *"change shipped to
+ * Live in the app and have it as last column"*).
+ *
+ * `shipped` used to sit underneath with `declined`, on the argument that both are endings
+ * rather than queue positions. That was right about `declined` and wrong about this one:
+ * **"Live in the app" is the column everybody is trying to get to**, and a queue whose
+ * destination is printed below the queue does not read as a queue. Putting it last makes
+ * the board answer "did my thing actually land" by being looked at, which is the reason
+ * the tracker exists.
+ *
+ * `declined` stays underneath. It is an ending nobody is moving towards, and a column of
+ * refusals sitting at the end of the run would read as the place requests end up.
  */
 export const FEEDBACK_OPEN_STAGES: readonly FeedbackStage[] = [
-  "requested", "in_review", "planned", "in_development"
+  "requested", "in_review", "planned", "in_development", "shipped"
 ];
 
 /** One screenshot on a report (0062). The bytes are in storage; this is the row. */
@@ -770,6 +790,14 @@ export interface FeedbackItem {
   stageEnteredAt: IsoDateTime;
   /** Who sent it, resolved for the list. Null when the profile is gone. */
   fromName: string | null;
+  /**
+   * Who TYPED it, when that was not the person it is from (0070). Null on an ordinary
+   * report, which is almost all of them.
+   *
+   * Shown beside the reporter for the reason 0067 gives about votes: an on-behalf record
+   * that does not say it is on behalf is indistinguishable from one somebody made up.
+   */
+  addedByName: string | null;
   createdAt: string;
   /** Thumbs up, from `feedback_votes` (0061). */
   voteCount: number;
@@ -845,6 +873,17 @@ export interface NewFeedback {
   errorText?: string | null;
   /** Screenshots to upload and attach. Empty is the normal case. */
   screenshots?: File[];
+  /**
+   * Who the request is FROM, when that is not the person typing it (0070; Amber, 31 Aug:
+   * *"they may enter it on behalf of someone else"*). Admin and above only — the second
+   * insert policy refuses anybody else, and a CHECK refuses it even for them when it
+   * names the typist.
+   *
+   * Undefined is the ordinary case and means "me". It is deliberately not defaulted to
+   * the signed-in person: an explicit self-value would be stored as an on-behalf report
+   * somebody filed for themselves, which the database is right to refuse.
+   */
+  onBehalfOf?: Uuid;
 }
 
 // -------------------------------------------------- the roadmap and the changelog (0063)
@@ -882,6 +921,34 @@ export interface NewRoadmapPhase {
   startsOn?: string | null;
   endsOn?: string | null;
   status?: RoadmapPhaseStatus;
+}
+
+/**
+ * The phase we are in NOW — what a new request defaults into (Amber, 31 Aug: *"the
+ * roadmap phase should default to the highest phase (e.g. now is phase 1)"*).
+ *
+ * "Now" is asserted, never inferred from today's date, and that is the whole point: 0063
+ * made `roadmap_phase_status` an asserted column precisely so a phase whose end date has
+ * passed does not silently become delivered. Reading the calendar here would reintroduce
+ * exactly the derivation that column exists to prevent.
+ *
+ * So, in order:
+ *   1. the phase somebody has marked **In progress** — the direct answer;
+ *   2. failing that, the earliest phase **not yet delivered** — what "now" means when
+ *      nobody has marked one, which is the state the roadmap starts in;
+ *   3. failing that, null — every phase is delivered, or there are none, and a request
+ *      lands unplanned rather than in a phase that is already finished.
+ *
+ * Position, never name: "Phase 10" sorts before "Phase 2" as text, and the order is a
+ * column somebody set rather than something to re-derive from a label.
+ */
+export function currentRoadmapPhase(phases: RoadmapPhase[]): RoadmapPhase | null {
+  const byPosition = [...phases].sort((a, b) => a.position - b.position);
+  return (
+    byPosition.find(p => p.status === "in_progress") ??
+    byPosition.find(p => p.status !== "delivered") ??
+    null
+  );
 }
 
 /** Keep a Changelog's four verbs, and the vocabulary scripts/changelog.mjs parses. */

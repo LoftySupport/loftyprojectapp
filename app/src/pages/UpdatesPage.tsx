@@ -11,6 +11,12 @@ import { Select } from "../components/Select";
 import { SidePanel } from "../components/SidePanel";
 import { LoadProblem } from "../components/SearchNotices";
 import {
+  MonthEntries, Timeline, ViewSwitcher,
+  type DatedEntry, type TimelineBar, type UpdatesView
+} from "../components/UpdatesViews";
+import { SortHeader, useTableSort } from "../components/SortableTable";
+import { useChangelogPulls } from "../data/github";
+import {
   FEEDBACK_OPEN_STAGES, FEEDBACK_STAGES, FEEDBACK_STAGE_LABELS, FEEDBACK_STAGE_MEANING,
   RELEASE_ENTRY_KINDS, RELEASE_ENTRY_KIND_LABELS, ROADMAP_PHASE_STATUSES,
   ROADMAP_PHASE_STATUS_LABELS,
@@ -112,6 +118,7 @@ function Requests() {
   const { data: phases } = useQuery(r => r.listRoadmapPhases(), [], [reloadKey]);
   const [kind, setKind] = useState<"all" | FeedbackKind>("all");
   const [sort, setSort] = useState<"votes" | "newest">("votes");
+  const [view, setView] = useState<UpdatesView>("board");
   const [openId, setOpenId] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [busyVote, setBusyVote] = useState<string | null>(null);
@@ -142,6 +149,29 @@ function Requests() {
   }, [items, kind, sort, voted]);
 
   const byStage = (stage: FeedbackStage) => shown.filter(f => f.stage === stage);
+
+  /**
+   * Dragging a card to another column moves the request (Amber, 31 Aug).
+   *
+   * Gated on `superadmin` because that is what the database enforces — 0060's
+   * `guard_feedback_stage_change()` raises 42501 for anybody below it, admins included.
+   * The attribute is only set when the rung is held, so the board never offers a gesture
+   * that ends in a refusal: the same rule the jobs board follows for its own drag.
+   */
+  const canMoveStage = can("superadmin");
+  const [dragged, setDragged] = useState<FeedbackItem | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+
+  const moveTo = async (f: FeedbackItem, stage: FeedbackStage) => {
+    if (f.stage === stage) return;
+    setProblem(null);
+    try {
+      await repo.setFeedbackStage(f.id, stage);
+      setReloadKey(k => k + 1);
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   const vote = async (f: FeedbackItem) => {
     setBusyVote(f.id);
@@ -182,6 +212,7 @@ function Requests() {
                   aria-label="Sort by" size="small" />
         </div>
         <span className="updates-bar-spacer" />
+        <ViewSwitcher value={view} onChange={setView} />
         <Button size="small" onClick={() => report()}>Report something</Button>
       </div>
 
@@ -197,13 +228,39 @@ function Requests() {
         </Text>
       )}
 
-      {items.length > 0 && (
+      {items.length > 0 && view === "board" && (
         <>
+          {canMoveStage && (
+            <div className="updates-drag-hint">
+              <Text type="text3" color="secondary">
+                Drag a card between columns to move a request.
+              </Text>
+            </div>
+          )}
           <div className="updates-board">
             {FEEDBACK_OPEN_STAGES.map(stage => {
               const column = byStage(stage);
+              const isTarget = dropTarget === stage && dragged !== null && dragged.stage !== stage;
               return (
-                <div key={stage} className={`updates-col updates-col-${stage}`}>
+                <div
+                  key={stage}
+                  className={`updates-col updates-col-${stage}${isTarget ? " is-drop-target" : ""}`}
+                  onDragOver={e => {
+                    if (!canMoveStage || !dragged || dragged.stage === stage) return;
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                    setDropTarget(stage);
+                  }}
+                  onDragLeave={() => setDropTarget(t => (t === stage ? null : t))}
+                  onDrop={e => {
+                    if (canMoveStage && dragged && dragged.stage !== stage) {
+                      e.preventDefault();
+                      void moveTo(dragged, stage);
+                    }
+                    setDragged(null);
+                    setDropTarget(null);
+                  }}
+                >
                   <div className="updates-col-head">
                     <Text type="text2" weight="bold" element="div">
                       {FEEDBACK_STAGE_LABELS[stage]}
@@ -216,14 +273,26 @@ function Requests() {
                   </Text>
                   <div className="updates-cards">
                     {column.map(f => (
-                      <RequestCard
+                      <div
                         key={f.id}
-                        item={f}
-                        phase={phases.find(p => p.id === f.roadmapPhaseId) ?? null}
-                        busy={busyVote === f.id}
-                        onVote={() => void vote(f)}
-                        onOpen={() => setOpenId(f.id)}
-                      />
+                        className={canMoveStage ? "updates-card-draggable" : undefined}
+                        draggable={canMoveStage}
+                        onDragStart={e => {
+                          setDragged(f);
+                          e.dataTransfer.effectAllowed = "move";
+                          // Some browsers refuse to begin a drag carrying no data at all.
+                          e.dataTransfer.setData("text/plain", f.id);
+                        }}
+                        onDragEnd={() => { setDragged(null); setDropTarget(null); }}
+                      >
+                        <RequestCard
+                          item={f}
+                          phase={phases.find(p => p.id === f.roadmapPhaseId) ?? null}
+                          busy={busyVote === f.id}
+                          onVote={() => void vote(f)}
+                          onOpen={() => setOpenId(f.id)}
+                        />
+                      </div>
                     ))}
                     {column.length === 0 && (
                       <Text type="text3" color="secondary" element="div" ellipsis={false}>
@@ -236,12 +305,10 @@ function Requests() {
             })}
           </div>
 
-          <Ended
-            title="Shipped"
-            note="Out and in use. The changelog says which release."
-            items={byStage("shipped")}
-            onOpen={setOpenId}
-          />
+          {/* Declined stays underneath. It is the one ending nobody is moving towards,
+              and a column of refusals at the end of the run would read as where requests
+              end up. "Live in the app" left this pair on 31 Aug and became the last
+              column, because it is the destination rather than a sibling of this. */}
           <Ended
             title="Declined"
             note="Read, considered, and not going ahead — kept so the answer does not get lost."
@@ -249,6 +316,28 @@ function Requests() {
             onOpen={setOpenId}
           />
         </>
+      )}
+
+      {items.length > 0 && view === "table" && (
+        <RequestsTable rows={shown} phases={phases} onOpen={setOpenId} />
+      )}
+
+      {items.length > 0 && view === "gantt" && (
+        <Timeline
+          bars={requestBars(shown, phases, setOpenId)}
+          nothingNote="Nothing to place yet."
+          unscheduledNote={
+            "Not on the chart — these have no roadmap phase, so there is no window to draw " +
+            "them in. Plan one into a phase and it appears above."
+          }
+        />
+      )}
+
+      {items.length > 0 && view === "calendar" && (
+        <MonthEntries
+          entries={requestEntries(shown, setOpenId)}
+          nothingNote="Nothing to place yet."
+        />
       )}
 
       <RequestPanel
@@ -263,6 +352,130 @@ function Requests() {
         busyVote={busyVote}
       />
     </section>
+  );
+}
+
+/* ================================================ the three non-board views ======= */
+
+const shortDate = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : null;
+
+/**
+ * A request's bar is its PHASE's window, borrowed and said to be borrowed.
+ *
+ * A request carries no duration of its own — see the note at the top of UpdatesViews —
+ * so anything not planned into a phase gets no bar and is listed underneath by name.
+ * Estimating one from votes, age or stage would be inventing a delivery date, which is
+ * the single worst thing this screen could do: everybody reads a roadmap as a promise.
+ */
+function requestBars(
+  rows: FeedbackItem[],
+  phases: RoadmapPhase[],
+  onOpen: (id: string) => void
+): TimelineBar[] {
+  return rows.map(f => {
+    const phase = phases.find(p => p.id === f.roadmapPhaseId) ?? null;
+    return {
+      id: f.id,
+      label: f.title,
+      sublabel: phase ? `${phase.name} · ${FEEDBACK_STAGE_LABELS[f.stage]}` : FEEDBACK_STAGE_LABELS[f.stage],
+      startsOn: phase?.startsOn ?? null,
+      endsOn: phase?.endsOn ?? null,
+      tone: phase?.status ?? "planned",
+      onOpen: () => onOpen(f.id)
+    };
+  });
+}
+
+/**
+ * The two dates a request really has: the day it was sent in, and the day it last moved.
+ *
+ * Both are columns, neither is derived. A request that has never moved would otherwise
+ * show the same day twice, so the move is only emitted when it differs from the report —
+ * a calendar that draws two entries for one event reads as two events.
+ */
+function requestEntries(rows: FeedbackItem[], onOpen: (id: string) => void): DatedEntry[] {
+  const out: DatedEntry[] = [];
+  for (const f of rows) {
+    out.push({
+      id: `${f.id}-reported`, when: f.createdAt, label: f.title,
+      kind: "reported", onOpen: () => onOpen(f.id)
+    });
+    if (new Date(f.stageEnteredAt).toDateString() !== new Date(f.createdAt).toDateString()) {
+      out.push({
+        id: `${f.id}-moved`, when: f.stageEnteredAt, label: f.title,
+        kind: `moved to ${FEEDBACK_STAGE_LABELS[f.stage].toLowerCase()}`,
+        tone: "moved", onOpen: () => onOpen(f.id)
+      });
+    }
+  }
+  return out;
+}
+
+type ReqCol = "title" | "kind" | "stage" | "phase" | "votes" | "from" | "moved";
+
+function RequestsTable({ rows, phases, onOpen }: {
+  rows: FeedbackItem[];
+  phases: RoadmapPhase[];
+  onOpen: (id: string) => void;
+}) {
+  const phaseName = (id: string | null) => phases.find(p => p.id === id)?.name ?? null;
+
+  // Every column reads a value the row actually holds; blanks sort last in both
+  // directions, which is `sortRows`' own rule and why "no phase" never leads the table.
+  const columns = useMemo(() => ({
+    title: (f: FeedbackItem) => f.title,
+    kind: (f: FeedbackItem) => f.kind,
+    stage: (f: FeedbackItem) => FEEDBACK_STAGES.indexOf(f.stage),
+    phase: (f: FeedbackItem) => phaseName(f.roadmapPhaseId),
+    votes: (f: FeedbackItem) => f.voteCount,
+    from: (f: FeedbackItem) => f.fromName,
+    moved: (f: FeedbackItem) => Date.parse(f.stageEnteredAt)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [phases]);
+
+  const { sorted, sort, toggle } = useTableSort<FeedbackItem, ReqCol>(
+    rows, columns, { key: "votes", direction: "desc" }
+  );
+
+  return (
+    <div className="updates-table-wrap">
+      <table className="updates-table">
+        <thead>
+          <tr>
+            <SortHeader column="title" label="Request" sort={sort} onSort={toggle} />
+            <SortHeader column="kind" label="Kind" sort={sort} onSort={toggle} />
+            <SortHeader column="stage" label="Stage" sort={sort} onSort={toggle} />
+            <SortHeader column="phase" label="Phase" sort={sort} onSort={toggle} />
+            <SortHeader column="votes" label="Votes" sort={sort} onSort={toggle} />
+            <SortHeader column="from" label="From" sort={sort} onSort={toggle} />
+            <SortHeader column="moved" label="In stage since" sort={sort} onSort={toggle} />
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map(f => (
+            <tr key={f.id}>
+              <td>
+                <button type="button" className="updates-table-open" onClick={() => onOpen(f.id)}>
+                  {f.title}
+                </button>
+              </td>
+              <td>
+                <span className={`updates-kind updates-kind-${f.kind}`}>
+                  {f.kind === "bug" ? "Bug" : "Idea"}
+                </span>
+              </td>
+              <td>{FEEDBACK_STAGE_LABELS[f.stage]}</td>
+              {/* An em dash, not a guess: no phase is a real answer and the commonest one. */}
+              <td>{phaseName(f.roadmapPhaseId) ?? "—"}</td>
+              <td>{f.voteCount}</td>
+              <td>{f.fromName ?? "—"}</td>
+              <td>{shortDate(f.stageEnteredAt) ?? "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -285,7 +498,12 @@ function RequestCard({
         <Text type="text3" color="secondary" element="span" ellipsis={false}>
           {/* An em dash, not "Unknown": the profile is gone, and naming somebody would be
               a claim about who sent it. */}
-          {item.fromName ?? "—"} · {new Date(item.createdAt).toLocaleDateString()}
+          {item.fromName ?? "—"}
+          {/* Said out loud where it applies. 0067's argument about votes holds here: an
+              on-behalf record that does not say so is indistinguishable from one somebody
+              invented, and the person it names is the one entitled to see the difference. */}
+          {item.addedByName && ` (entered by ${item.addedByName})`}
+          {" · "}{new Date(item.createdAt).toLocaleDateString()}
         </Text>
         <span className="updates-card-chips">
           {phase && <span className="updates-phase-chip">{phase.name}</span>}
@@ -451,7 +669,9 @@ function RequestPanel({
           </div>
 
           <Text type="text3" color="secondary" element="div" ellipsis={false}>
-            From {item.fromName ?? "—"} on {new Date(item.createdAt).toLocaleDateString()}
+            From {item.fromName ?? "—"}
+            {item.addedByName && `, entered by ${item.addedByName},`}
+            {" on "}{new Date(item.createdAt).toLocaleDateString()}
             {" · "}in {FEEDBACK_STAGE_LABELS[item.stage].toLowerCase()} since{" "}
             {new Date(item.stageEnteredAt).toLocaleDateString()}
           </Text>
@@ -655,7 +875,36 @@ function Roadmap() {
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [view, setView] = useState<UpdatesView>("board");
+  const [openId, setOpenId] = useState<string | null>(null);
   const canEdit = can("superadmin");
+
+  /**
+   * Planning a request into a phase is ADMIN, not superadmin.
+   *
+   * Two different acts, and the database already draws the line between them: 0060's
+   * trigger keeps `feedback_stage` for superadmin because moving a request along the
+   * queue is a promise about whether it happens, while `roadmap_phase_id` rides the
+   * ordinary `admins triage feedback` UPDATE policy because saying "this belongs in
+   * phase 2" is triage. Shaping the phases themselves stays superadmin (0063).
+   */
+  const canPlan = can("admin");
+  const [dragged, setDragged] = useState<FeedbackItem | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+
+  /** `null` is the unplanned bucket — dragging out of a phase is as real as dragging in. */
+  const planInto = async (f: FeedbackItem, phaseId: string | null) => {
+    if (f.roadmapPhaseId === phaseId) return;
+    setProblem(null);
+    try {
+      await repo.setFeedbackPhase(f.id, phaseId);
+      setReloadKey(k => k + 1);
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const unplanned = items.filter(f => f.roadmapPhaseId === null && f.mergedIntoId === null);
 
   const run = async (work: () => Promise<unknown>) => {
     setBusy(true);
@@ -674,14 +923,25 @@ function Roadmap() {
     <section className="panel">
       <div className="panel-head">
         <Text type="text2" weight="bold">Roadmap</Text>
-        {canEdit && (
-          <Button size="small" onClick={() => setAdding(true)}>Add a phase</Button>
-        )}
+        <div className="updates-bar" style={{ margin: 0 }}>
+          <ViewSwitcher value={view} onChange={setView} />
+          {canEdit && (
+            <Button size="small" onClick={() => setAdding(true)}>Add a phase</Button>
+          )}
+        </div>
       </div>
       <Text type="text2" color="secondary" ellipsis={false}>
         The phases the build is planned in, and what is going into each. Dates are the
         intention, not a promise — a phase with no dates set has not been scheduled yet.
       </Text>
+      {view === "board" && canPlan && phases.length > 0 && (
+        <div className="updates-drag-hint">
+          <Text type="text3" color="secondary">
+            Drag a request between phases to plan it — or onto Not planned yet to take it
+            back out.
+          </Text>
+        </div>
+      )}
 
       {error && <LoadProblem error={error} />}
       {problem && <Problem>{problem}</Problem>}
@@ -694,22 +954,134 @@ function Roadmap() {
         </Text>
       )}
 
-      <ol className="roadmap">
-        {phases.map((p, i) => (
-          <PhaseCard
-            key={p.id}
-            phase={p}
-            planned={items.filter(f => f.roadmapPhaseId === p.id)}
-            canEdit={canEdit}
-            busy={busy}
-            first={i === 0}
-            last={i === phases.length - 1}
-            onSave={patch => run(() => repo.updateRoadmapPhase(p.id, patch))}
-            onMove={d => run(() => repo.moveRoadmapPhase(p.id, d))}
-            onDelete={() => run(() => repo.deleteRoadmapPhase(p.id))}
-          />
-        ))}
-      </ol>
+      {view === "board" && (
+        <>
+          <ol className="roadmap">
+            {phases.map((p, i) => (
+              <PhaseCard
+                key={p.id}
+                phase={p}
+                planned={items.filter(f => f.roadmapPhaseId === p.id)}
+                canEdit={canEdit}
+                canPlan={canPlan}
+                busy={busy}
+                first={i === 0}
+                last={i === phases.length - 1}
+                dragged={dragged}
+                isTarget={dropTarget === p.id}
+                onDragItem={setDragged}
+                onDropHere={f => void planInto(f, p.id)}
+                onHover={over => setDropTarget(over ? p.id : null)}
+                onOpenItem={setOpenId}
+                onSave={patch => run(() => repo.updateRoadmapPhase(p.id, patch))}
+                onMove={d => run(() => repo.moveRoadmapPhase(p.id, d))}
+                onDelete={() => run(() => repo.deleteRoadmapPhase(p.id))}
+              />
+            ))}
+          </ol>
+
+          {/* The unplanned bucket. It exists so the drag has somewhere to go BACK to —
+              without it a request could be planned by dragging and only unplanned through
+              the dropdown inside it, which is the kind of one-way gesture that makes
+              people afraid to try the other one. It also answers "what have we not
+              decided about", which is the roadmap's other real question. */}
+          {(unplanned.length > 0 || dragged !== null) && (
+            <div
+              className={`updates-col roadmap-unplanned${dropTarget === "none" ? " is-drop-target" : ""}`}
+              onDragOver={e => {
+                if (!canPlan || !dragged || dragged.roadmapPhaseId === null) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                setDropTarget("none");
+              }}
+              onDragLeave={() => setDropTarget(t => (t === "none" ? null : t))}
+              onDrop={e => {
+                if (canPlan && dragged && dragged.roadmapPhaseId !== null) {
+                  e.preventDefault();
+                  void planInto(dragged, null);
+                }
+                setDragged(null);
+                setDropTarget(null);
+              }}
+            >
+              <div className="updates-col-head">
+                <Text type="text2" weight="bold" element="div">Not planned yet</Text>
+                <span className="updates-count">{unplanned.length}</span>
+              </div>
+              <Text type="text3" color="secondary" element="div" ellipsis={false}
+                    className="updates-col-meaning">
+                Sent in, and not put into a phase. Nothing here is promised.
+              </Text>
+              <ul className="roadmap-items">
+                {unplanned.map(f => (
+                  <li
+                    key={f.id}
+                    className={canPlan ? "updates-card-draggable" : undefined}
+                    draggable={canPlan}
+                    onDragStart={e => {
+                      setDragged(f);
+                      e.dataTransfer.effectAllowed = "move";
+                      e.dataTransfer.setData("text/plain", f.id);
+                    }}
+                    onDragEnd={() => { setDragged(null); setDropTarget(null); }}
+                  >
+                    <button type="button" className="updates-table-open"
+                            onClick={() => setOpenId(f.id)}>{f.title}</button>
+                    <Text type="text3" color="secondary" element="span">
+                      {" "}· {FEEDBACK_STAGE_LABELS[f.stage]}
+                    </Text>
+                  </li>
+                ))}
+                {unplanned.length === 0 && (
+                  <Text type="text3" color="secondary" element="li" ellipsis={false}>
+                    Everything has a phase.
+                  </Text>
+                )}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+
+      {view === "table" && <PhasesTable phases={phases} items={items} />}
+
+      {view === "gantt" && (
+        <Timeline
+          bars={phases.map(p => ({
+            id: p.id,
+            label: p.name,
+            sublabel: `${ROADMAP_PHASE_STATUS_LABELS[p.status]} · ${
+              items.filter(f => f.roadmapPhaseId === p.id).length} planned`,
+            startsOn: p.startsOn,
+            endsOn: p.endsOn,
+            tone: p.status
+          }))}
+          nothingNote="No phases yet, so there is nothing to place on a timeline."
+          unscheduledNote={
+            "Not on the chart — these phases have no dates set yet. A phase with no dates " +
+            "is a real phase; drawing a guessed bar for it would be a date nobody agreed."
+          }
+        />
+      )}
+
+      {view === "calendar" && (
+        <MonthEntries
+          entries={phaseEntries(phases)}
+          nothingNote="No phase has a date set yet, so there is nothing to put on a calendar."
+        />
+      )}
+
+      <RequestPanel
+        item={items.find(f => f.id === openId) ?? null}
+        all={items}
+        phases={phases}
+        canMove={can("superadmin")}
+        canPlan={canPlan}
+        onClose={() => setOpenId(null)}
+        onChanged={() => setReloadKey(k => k + 1)}
+        onVote={async () => {}}
+        busyVote={null}
+      />
 
       <NewPhasePanel
         open={adding}
@@ -733,15 +1105,191 @@ function phaseDates(phase: RoadmapPhase): string {
   return "No dates set";
 }
 
+/**
+ * A phase's own dates, which are the only dates on this screen that belong to the thing
+ * being drawn. Both are nullable and emitted independently: a phase with a start and no
+ * agreed end puts one entry on the calendar, not two.
+ */
+function phaseEntries(phases: RoadmapPhase[]): DatedEntry[] {
+  const out: DatedEntry[] = [];
+  for (const p of phases) {
+    if (p.startsOn) {
+      out.push({ id: `${p.id}-start`, when: p.startsOn, label: p.name, kind: "phase starts", tone: p.status });
+    }
+    if (p.endsOn) {
+      out.push({ id: `${p.id}-end`, when: p.endsOn, label: p.name, kind: "phase ends", tone: p.status });
+    }
+  }
+  return out;
+}
+
+type PhaseCol = "phase" | "status" | "starts" | "ends" | "planned" | "live";
+
+function PhasesTable({ phases, items }: { phases: RoadmapPhase[]; items: FeedbackItem[] }) {
+  const inPhase = (id: string) => items.filter(f => f.roadmapPhaseId === id);
+
+  const columns = useMemo(() => ({
+    // Position, not name: the roadmap has an order somebody chose, and sorting Phase 10
+    // between Phase 1 and Phase 2 is what sorting the label alphabetically does.
+    phase: (p: RoadmapPhase) => p.position,
+    status: (p: RoadmapPhase) => ROADMAP_PHASE_STATUSES.indexOf(p.status),
+    starts: (p: RoadmapPhase) => (p.startsOn ? Date.parse(p.startsOn) : null),
+    ends: (p: RoadmapPhase) => (p.endsOn ? Date.parse(p.endsOn) : null),
+    planned: (p: RoadmapPhase) => inPhase(p.id).length,
+    live: (p: RoadmapPhase) => inPhase(p.id).filter(f => f.stage === "shipped").length
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [items]);
+
+  const { sorted, sort, toggle } = useTableSort<RoadmapPhase, PhaseCol>(
+    phases, columns, { key: "phase", direction: "asc" }
+  );
+
+  if (phases.length === 0) {
+    return (
+      <Text type="text2" color="secondary" element="p" ellipsis={false}
+            style={{ marginTop: "var(--space-12)" }}>
+        No phases yet.
+      </Text>
+    );
+  }
+
+  return (
+    <div className="updates-table-wrap">
+      <table className="updates-table">
+        <thead>
+          <tr>
+            <SortHeader column="phase" label="Phase" sort={sort} onSort={toggle} />
+            <SortHeader column="status" label="Status" sort={sort} onSort={toggle} />
+            <SortHeader column="starts" label="Starts" sort={sort} onSort={toggle} />
+            <SortHeader column="ends" label="Ends" sort={sort} onSort={toggle} />
+            <SortHeader column="planned" label="Planned" sort={sort} onSort={toggle} />
+            <SortHeader column="live" label="Live in the app" sort={sort} onSort={toggle} />
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map(p => (
+            <tr key={p.id}>
+              <td>
+                <Text type="text2" weight="medium" element="div" ellipsis={false}>{p.name}</Text>
+                {p.summary && (
+                  <Text type="text3" color="secondary" element="div" ellipsis={false}>{p.summary}</Text>
+                )}
+              </td>
+              <td>
+                <span className={`roadmap-status roadmap-status-${p.status}`}>
+                  {ROADMAP_PHASE_STATUS_LABELS[p.status]}
+                </span>
+              </td>
+              {/* "Not set" rather than a blank cell: an unscheduled phase is a decision
+                  nobody has made yet, and an empty cell reads as data that failed to load. */}
+              <td>{shortDate(p.startsOn) ?? "Not set"}</td>
+              <td>{shortDate(p.endsOn) ?? "Not set"}</td>
+              <td>{inPhase(p.id).length}</td>
+              <td>{inPhase(p.id).filter(f => f.stage === "shipped").length}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
+ * What has been merged, straight from GitHub (Amber, 31 Aug).
+ *
+ * Only pull requests carrying a `@changelog` line in their description, which is the
+ * filter she chose and the right one: the repository has had fifty-odd pull requests and
+ * most are refactors, typo fixes and work in progress. A feed of all of them would be a
+ * git log on a page people came to for "what changed for me".
+ *
+ * Deliberately BELOW the published releases and separately headed. A merged pull request
+ * is a developer saying what they did; a release is Amber saying what Lofty shipped. They
+ * are different claims and the page should not blur them into one list.
+ */
+function MergedPullRequests() {
+  const pulls = useChangelogPulls();
+
+  if (pulls.state === "loading") {
+    return (
+      <section className="updates-ended">
+        <Text type="text3" color="secondary" element="div">Reading what has been merged…</Text>
+      </section>
+    );
+  }
+
+  if (pulls.state === "error") {
+    // Said out loud. An empty list here would read as "nothing has been merged", which is
+    // false, and it is the exact shape of the "your account is not set up" fault: an
+    // error rendered as an ordinary empty state.
+    return (
+      <section className="updates-ended">
+        <Text type="text2" weight="bold" element="div">Merged from the build</Text>
+        <Text type="text3" color="secondary" element="div" ellipsis={false}>
+          Could not read this from GitHub just now. {pulls.reason}
+        </Text>
+      </section>
+    );
+  }
+
+  if (pulls.pulls.length === 0) {
+    return (
+      <section className="updates-ended">
+        <Text type="text2" weight="bold" element="div">Merged from the build</Text>
+        <Text type="text3" color="secondary" element="div" ellipsis={false}>
+          Nothing merged recently declared a changelog line. A pull request joins this list
+          by putting <code>@changelog</code> at the start of a row in its description — the
+          rest of that row is what appears here.
+        </Text>
+      </section>
+    );
+  }
+
+  return (
+    <section className="updates-ended">
+      <Text type="text2" weight="bold" element="div">Merged from the build</Text>
+      <Text type="text3" color="secondary" element="div" ellipsis={false}>
+        Pull requests that declared a <code>@changelog</code> line, newest first. Read live
+        from GitHub — this is the work itself, not a release Amber has published.
+      </Text>
+      <ul className="updates-ended-list">
+        {pulls.pulls.map(p => (
+          <li key={p.number}>
+            {p.notes.map((n, i) => (
+              <div key={i}>
+                <Text type="text2" element="span" ellipsis={false}>{n}</Text>
+              </div>
+            ))}
+            <Text type="text3" color="secondary" element="span">
+              <a href={p.url} target="_blank" rel="noreferrer">#{p.number}</a>
+              {" "}· merged {shortDate(p.mergedAt)}
+              {p.author ? ` · ${p.author}` : ""}
+            </Text>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function PhaseCard({
-  phase, planned, canEdit, busy, first, last, onSave, onMove, onDelete
+  phase, planned, canEdit, canPlan, busy, first, last,
+  dragged, isTarget, onDragItem, onDropHere, onHover, onOpenItem,
+  onSave, onMove, onDelete
 }: {
   phase: RoadmapPhase;
   planned: FeedbackItem[];
   canEdit: boolean;
+  /** Admin+, per the 0060/0063 split: planning is triage, shaping the phase is not. */
+  canPlan: boolean;
   busy: boolean;
   first: boolean;
   last: boolean;
+  dragged: FeedbackItem | null;
+  isTarget: boolean;
+  onDragItem: (f: FeedbackItem | null) => void;
+  onDropHere: (f: FeedbackItem) => void;
+  onHover: (over: boolean) => void;
+  onOpenItem: (id: string) => void;
   onSave: (patch: { name?: string; summary?: string; startsOn?: string | null; endsOn?: string | null; status?: RoadmapPhaseStatus }) => void;
   onMove: (direction: "up" | "down") => void;
   onDelete: () => void;
@@ -752,8 +1300,27 @@ function PhaseCard({
   const [startsOn, setStartsOn] = useState(phase.startsOn ?? "");
   const [endsOn, setEndsOn] = useState(phase.endsOn ?? "");
 
+  const canDropHere = canPlan && dragged !== null && dragged.roadmapPhaseId !== phase.id;
+
   return (
-    <li className={`roadmap-phase is-${phase.status}`}>
+    <li
+      className={`roadmap-phase is-${phase.status}${isTarget && canDropHere ? " is-drop-target" : ""}`}
+      onDragOver={e => {
+        if (!canDropHere) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        onHover(true);
+      }}
+      onDragLeave={() => onHover(false)}
+      onDrop={e => {
+        if (canDropHere && dragged) {
+          e.preventDefault();
+          onDropHere(dragged);
+        }
+        onDragItem(null);
+        onHover(false);
+      }}
+    >
       <div className="roadmap-phase-head">
         <div>
           <Text type="text1" weight="bold" element="div" ellipsis={false}>{phase.name}</Text>
@@ -773,11 +1340,23 @@ function PhaseCard({
       {planned.length > 0 ? (
         <ul className="roadmap-items">
           {planned.map(f => (
-            <li key={f.id}>
+            <li
+              key={f.id}
+              className={canPlan ? "updates-card-draggable" : undefined}
+              draggable={canPlan}
+              onDragStart={e => {
+                onDragItem(f);
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData("text/plain", f.id);
+              }}
+              onDragEnd={() => onDragItem(null)}
+            >
               {/* Ticked when it shipped. A tick is a fact here — the stage says shipped —
                   and never a percentage: "68% of phase 2" implies a weighting nobody set. */}
               <span className="roadmap-tick" aria-hidden>{f.stage === "shipped" ? "✓" : "○"}</span>
-              <Text type="text2" element="span" ellipsis={false}>{f.title}</Text>
+              <button type="button" className="updates-table-open" onClick={() => onOpenItem(f.id)}>
+                {f.title}
+              </button>
               <Text type="text3" color="secondary" element="span">
                 {" "}· {FEEDBACK_STAGE_LABELS[f.stage]}
               </Text>
@@ -938,6 +1517,34 @@ function Changelog() {
           Nothing published yet.
         </Text>
       )}
+
+      {/* Requests that reached "Live in the app" — Amber's other half of the ask. Read
+          from `feedback` rather than waiting to be written into a release, because a
+          request is live the moment somebody moves it there, and a changelog that only
+          knows what was formally published is a changelog that is always behind. A line
+          here that later appears under a release is the same fact told twice on purpose:
+          one is "your request landed", the other is "which version it landed in". */}
+      {shipped.length > 0 && (
+        <section className="updates-ended">
+          <Text type="text2" weight="bold" element="div">Requests now live in the app</Text>
+          <Text type="text3" color="secondary" element="div" ellipsis={false}>
+            Moved to Live in the app on the tracker. The person who asked was told when it
+            happened.
+          </Text>
+          <ul className="updates-ended-list">
+            {shipped.map(f => (
+              <li key={f.id}>
+                <Text type="text2" element="span" ellipsis={false}>{f.title}</Text>
+                <Text type="text3" color="secondary" element="span">
+                  {" "}· asked for by {f.fromName ?? "somebody who has since left"}
+                </Text>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <MergedPullRequests />
 
       {releases.map(r => <ReleaseCard key={r.id} release={r} canPublish={canPublish}
                                       onDelete={async () => {

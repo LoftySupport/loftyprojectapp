@@ -25,13 +25,22 @@
    the page scrolls sideways — the same fault the dashboard hit with the name token. */
 .updates-board {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* Five since 31 Aug: "Live in the app" joined the run as the last column. */
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--space-12);
   margin-top: var(--space-16);
   align-items: start;
 }
+@media (max-width: 1400px) { .updates-board { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 1100px) { .updates-board { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 620px)  { .updates-board { grid-template-columns: minmax(0, 1fr); } }
+
+/* The roadmap board: one column per phase, so the count of columns is data rather than a
+   constant. auto-fit would collapse a single phase to full width; a fixed min keeps a
+   one-phase roadmap looking like a column. */
+.updates-board.is-phases {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
 
 .updates-col {
   background: var(--primary-background-hover-color);
@@ -47,6 +56,10 @@
 .updates-col-in_review      { border-top: 3px solid var(--primary-color); }
 .updates-col-planned        { border-top: 3px solid var(--primary-hover-color); }
 .updates-col-in_development { border-top: 3px solid var(--primary-selected-color); }
+/* The end of the run, and the only column that is an arrival rather than a waiting
+   room — so it gets the positive green the lifecycle board gives Completed, not the
+   next step down the teal ramp. */
+.updates-col-shipped        { border-top: 3px solid var(--positive-color); }
 
 .updates-col-head {
   display: flex;
@@ -328,3 +341,104 @@
 
 .updates-voters { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-4); }
 .updates-voters li { min-width: 0; }
+
+/* ---- the four views (Amber, 31 Aug) --------------------------------------
+   A segmented control rather than a Select: four options that are all worth seeing at
+   once, and the current one has to be legible without opening anything. */
+.updates-views { display: inline-flex; border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-small); overflow: hidden; }
+.updates-view-btn {
+  appearance: none; border: 0; background: transparent; cursor: pointer;
+  font: var(--font-text3-normal); color: var(--secondary-text-color);
+  padding: var(--space-4) var(--space-12); min-height: 28px;
+  border-right: 1px solid var(--layout-border-color);
+}
+.updates-view-btn:last-child { border-right: 0; }
+.updates-view-btn:hover { background: var(--primary-background-hover-color); }
+.updates-view-btn.is-on {
+  background: var(--primary-selected-color); color: var(--primary-text-color); font-weight: 600;
+}
+.updates-view-btn:focus-visible { outline: 2px solid var(--primary-color); outline-offset: -2px; }
+
+/* ---- drag and drop ------------------------------------------------------
+   Only ever applied when the move is actually permitted — the rung is checked before the
+   attribute is set, so nothing offers a gesture the database will refuse. */
+.updates-drag-hint { margin-top: var(--space-8); }
+.updates-card-draggable { cursor: grab; }
+.updates-card-draggable:active { cursor: grabbing; }
+.updates-col.is-drop-target {
+  outline: 2px dashed var(--primary-color); outline-offset: -2px;
+  background: var(--primary-background-hover-color);
+}
+.updates-col.is-drop-blocked { opacity: 0.55; }
+
+/* ---- the timeline -------------------------------------------------------- */
+.tl-wrap { margin-top: var(--space-16); }
+.tl-scroll { overflow-x: auto; }
+.tl { --tl-left: 220px; }
+.tl-head, .tl-row { display: flex; align-items: stretch; }
+.tl-head { border-bottom: 1px solid var(--layout-border-color); padding-bottom: var(--space-4); }
+.tl-row { border-bottom: 1px solid var(--layout-border-color); min-height: 40px; }
+.tl-row:last-child { border-bottom: 0; }
+.tl-left { flex: 0 0 var(--tl-left); width: var(--tl-left); padding: var(--space-6) var(--space-8) var(--space-6) 0; min-width: 0; }
+.tl-months { display: flex; flex: 1 1 auto; }
+.tl-month { text-align: center; }
+.tl-open { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0;
+  font: inherit; color: inherit; cursor: pointer; }
+.tl-open:hover .tl-label { text-decoration: underline; }
+.tl-label { display: block; font: var(--font-text2-normal); color: var(--primary-text-color);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-sub { display: block; font: var(--font-text3-normal); color: var(--secondary-text-color); }
+.tl-track { position: relative; flex: 1 1 auto; }
+.tl-gridline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--layout-border-color); opacity: 0.6; }
+.tl-today { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--lofty-orange-strong); }
+.tl-bar { position: absolute; top: 50%; transform: translateY(-50%); height: 16px;
+  border-radius: 8px; background: var(--primary-color); }
+.tl-point { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 12px; height: 12px;
+  border-radius: 50%; background: var(--primary-color); border: 2px solid var(--primary-background-color); }
+.tl-tone-in_progress { background: var(--lofty-orange-strong); }
+.tl-tone-delivered   { background: var(--positive-color); }
+.tl-undated { margin-top: var(--space-12); padding-top: var(--space-8);
+  border-top: 1px dashed var(--layout-border-color); }
+.tl-undated-list { margin: var(--space-4) 0 0 0; padding-left: var(--space-16);
+  font: var(--font-text3-normal); color: var(--secondary-text-color); }
+.tl-undated-open { background: none; border: 0; padding: 0; font: inherit; color: var(--primary-color); cursor: pointer; }
+.tl-undated-open:hover { text-decoration: underline; }
+
+/* ---- the calendar -------------------------------------------------------- */
+.cal { margin-top: var(--space-16); }
+.cal-bar { display: flex; align-items: center; gap: var(--space-8); margin-bottom: var(--space-8); }
+.cal-jump { margin-bottom: var(--space-8); }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
+  border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); overflow: hidden; }
+.cal-dow { padding: var(--space-4); text-align: center; background: var(--primary-background-hover-color);
+  border-bottom: 1px solid var(--layout-border-color); }
+.cal-cell { min-height: 88px; padding: var(--space-4); border-right: 1px solid var(--layout-border-color);
+  border-bottom: 1px solid var(--layout-border-color); min-width: 0; }
+.cal-cell:nth-child(7n + 7) { border-right: 0; }
+.cal-cell.is-outside { background: var(--allgrey-background-color); }
+.cal-cell.is-today .cal-daynum { color: var(--lofty-orange-strong); font-weight: 700; }
+.cal-daynum { margin-bottom: var(--space-4); }
+.cal-entry { display: block; width: 100%; text-align: left; margin-bottom: 2px; padding: 2px var(--space-4);
+  border: 0; border-left: 3px solid var(--primary-color); border-radius: 2px;
+  background: var(--primary-background-hover-color); cursor: pointer; min-width: 0; }
+.cal-entry:disabled { cursor: default; }
+.cal-entry:hover:not(:disabled) { background: var(--primary-selected-color); }
+.cal-entry-kind { display: block; font: var(--font-text3-normal); color: var(--secondary-text-color); }
+.cal-entry-label { display: block; font: var(--font-text3-normal); color: var(--primary-text-color);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-tone-in_progress { border-left-color: var(--lofty-orange-strong); }
+.cal-tone-delivered   { border-left-color: var(--positive-color); }
+.cal-tone-moved       { border-left-color: var(--primary-hover-color); }
+
+/* ---- the tracker table --------------------------------------------------- */
+.updates-table-wrap { overflow-x: auto; margin-top: var(--space-16); }
+.updates-table { width: 100%; border-collapse: collapse; }
+.updates-table th, .updates-table td {
+  text-align: left; padding: var(--space-6) var(--space-8);
+  border-bottom: 1px solid var(--layout-border-color); vertical-align: top;
+}
+.updates-table tbody tr:hover { background: var(--primary-background-hover-color); }
+.updates-table-open { background: none; border: 0; padding: 0; font: inherit;
+  color: var(--primary-color); cursor: pointer; text-align: left; }
+.updates-table-open:hover { text-decoration: underline; }
