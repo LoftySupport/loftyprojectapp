@@ -12,7 +12,7 @@ import { useAuth } from "../data/AuthProvider";
 import { useBoardRecords, type BoardJob } from "../data/boardModel";
 import { jobMatchesQuery, matchedOnPreviousAddress, useSearch } from "../data/SearchProvider";
 import { useBoardParams } from "../data/useBoardParams";
-import { savedViewBySlug, stagesInView } from "../data/savedViews";
+import { JOB_VIEWS, savedViewBySlug, stagesInView } from "../data/savedViews";
 import { activeFilterCount, jobMatchesFilters, statusOptions } from "../data/filtering";
 import { LoadProblem, NoResults, NothingYet, PreviousAddressNote } from "../components/SearchNotices";
 import { SavedViewTabs } from "../components/SavedViewTabs";
@@ -69,7 +69,7 @@ export function JobsPage() {
     view, setView, grouping, setGrouping, filters, setFilters, setMany, saved, setSaved, search
     // The default view is the preference (G39); a link that names its own view still
     // wins, because the URL is the record of what somebody sent you.
-  } = useBoardParams({ view: readPrefs().defaultJobsView, grouping: "Stage" });
+  } = useBoardParams({ view: readPrefs().defaultJobsView, grouping: "Stage", views: JOB_VIEWS });
   // The teams this person is in — sharing a view offers their own team, and offers
   // nothing at all to somebody in none (0051).
   const { profile: me } = useAuth();
@@ -343,11 +343,12 @@ export function JobsPage() {
       </div>
 
       <SavedViewTabs
+        views={JOB_VIEWS}
         activeSlug={saved.slug}
         onSelect={setSaved}
         hrefFor={slug => (slug === "all" ? "/jobs" : `/jobs?saved=${slug}`)}
         countFor={slug =>
-          all.filter(j => stagesInView(savedViewBySlug(slug), stageNames).includes(j.stage)).length
+          all.filter(j => stagesInView(savedViewBySlug(slug, JOB_VIEWS), stageNames).includes(j.stage)).length
         }
         userViews={myViews.views}
         currentQuery={search}

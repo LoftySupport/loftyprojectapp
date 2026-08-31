@@ -1701,6 +1701,20 @@ export interface NewProject {
    */
   communityTitleLots?: number | null;
   torrensTitleLots?: number | null;
+  /**
+   * The total (Amber, 31 Aug: "add in total lots which is the number of community title
+   * plus torrens title lots but can also be manually entered").
+   *
+   * `project_proposed_dwellings`, which the repository used to compute rather than be
+   * given. Passed explicitly now because the form has a box for it, and because the one
+   * case that box exists for cannot be computed: a total from the old system with no
+   * split recorded against it. Omitted — not null, omitted — the repository falls back
+   * to the sum, which is what the import wants.
+   *
+   * `project_lot_split_adds_up` refuses a total that disagrees with a KNOWN split, so
+   * the two can only differ where one of them is missing.
+   */
+  proposedDwellings?: number | null;
   status?: RecordStatus;
   startDate?: IsoDate | null;
   targetCompletion?: IsoDate | null;

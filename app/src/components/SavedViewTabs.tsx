@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button, Text, TextField } from "@vibe/core";
-import { SAVED_VIEWS } from "../data/savedViews";
+import type { SavedView } from "../data/savedViews";
 import { sameQuery } from "../data/useSavedViews";
 import type { UserSavedView } from "../data/types";
 import { Problem } from "./Form";
@@ -18,12 +18,13 @@ import "./ui.css";
  * gets middle-click, open-in-new-tab and copy-link-address for nothing — and a saved view
  * you cannot copy the address of is not much of a saved view.
  *
- * **Two kinds of tab, one row (0048).** The three built-ins are slices of the lifecycle
+ * **Two kinds of tab, one row (0048).** The board's built-ins are slices of the lifecycle
  * everybody needs; after them come the ones this person saved. They are separated by a
  * rule rather than by a heading — the row still reads left to right as "which view", and
  * a heading would make a private habit look like a section of the app.
  */
 export function SavedViewTabs({
+  views,
   activeSlug,
   onSelect,
   hrefFor,
@@ -40,6 +41,12 @@ export function SavedViewTabs({
   saveProblem,
   saveBusy
 }: {
+  /**
+   * This board's built-in views. Passed rather than imported: /jobs and /projects have
+   * had different ones since 31 August, and a component that reached for a global list
+   * would have to be told which board it was on anyway.
+   */
+  views: SavedView[];
   activeSlug: string;
   onSelect: (slug: string) => void;
   hrefFor: (slug: string) => string;
@@ -96,7 +103,7 @@ export function SavedViewTabs({
   return (
     <div className="saved-views-row">
       <nav className="saved-views" aria-label="Saved views">
-        {SAVED_VIEWS.map(v => {
+        {views.map(v => {
           // A user view is showing → none of the built-ins is what you are looking at,
           // even when its slug is still in the query.
           const active = !activeUserView && v.slug === activeSlug;

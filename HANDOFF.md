@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 16 changes since then —
-- Added: A discussion under every request, with a pinned answer and an internal lane for triage
-- Added: "Someone may have asked this already" — the report form searches while you type, and offers to vote instead
-- Added: Duplicates can be merged, and the votes and followers move with them
-- Added: The bell tells you when a request you follow moves, with the note whoever moved it left
-- Added: A vote can be added for somebody whose request arrived on a call, recorded against whoever entered it
-- …and 11 more.
+Unreleased: 21 changes since then —
+- Changed: The projects board has its own views — All Projects, Current Projects, Archived, and New Projects for the ones nobody has split yet
+- Fixed: The count on a projects view tab disagreed with the list it opened, for projects with no jobs
+- Changed: The new project form asks only for suburb, state, postcode and a project type — the street, its numbers and the council are all optional
+- Added: Total lots on the new project form, following the community and Torrens split or typed in on its own
+- Fixed: Zero community and zero Torrens lots no longer reached the database as a constraint error
+- …and 16 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -21,6 +21,56 @@ and before it, the spine review described there, because that is the only catego
 change that gets expensive once 200 jobs are in.
 
 Last updated: 2026-08-26.
+
+---
+
+## Session of 2026-08-31 — the new project form asks for four things
+
+Amber, on the create-project form: the lot number hint reads *"as it appears on the plan of
+division"* and nothing else; there is a **Total lots** box, *"which is the number of
+community title plus torrens title lots but can also be manually entered"*; and *"the only
+thing required is suburb, state, postcode and project type. the rest are optional."*
+
+**`0069` is applied to the live database.** It was not, for the first part of this
+session — the Supabase connector was down, and `0060`–`0068` were reported unapplied on
+the same evidence when in fact they had landed. The gap was found the way these are:
+Amber created a project with a street and no street number and got
+`400` on `POST /rest/v1/addresses`, which is `addresses_street_needs_a_number` refusing
+the shape the form had just stopped asking for. **A form relaxed ahead of its migration
+does not degrade, it breaks** — the Create button greys out on the app's copy of the
+rules, so when the two disagree the person meets a Postgres error instead.
+
+Verified on production straight after, in a deliberately-aborted transaction: a street
+with no number, a suburb with no council and a lot number with no street are all accepted;
+a council outside SA and a three-digit postcode are still refused; a job still cannot take
+a street with no number on it; and the migration's own proof block left nothing behind.
+
+**The live database carries four migrations that are in no branch here** —
+`the_view_that_lost_its_invoker`, `the_request_somebody_else_typed`,
+`a_new_request_lands_in_the_phase_we_are_in`, `two_nulls_are_not_the_same_person`, all
+applied 31 Aug. Another session applied them without merging. Nothing is broken by it,
+but the repo cannot rebuild that database from its own migrations until they land, and
+`replay.sh` is proving a schema production no longer has.
+
+| | |
+| --- | --- |
+| `0069` | Drops `addresses_council_required_in_sa` (0025) and both halves of 0037's shape rule — `addresses_street_needs_a_number`, `addresses_numbers_need_a_street`. On a plan of division "Lot 7" **is** the address; the lots are numbered before the roads are named. `guard_job_address_is_a_street` takes over the whole of the old guarantee — a street **and** a number — because `address_precision` only looks at the street, so dropping the check alone would have halved it silently |
+
+**Total lots** is `project_proposed_dwellings`, which the repository has been writing as the
+sum since 0053 with nothing on screen admitting to it. The box follows the split until
+somebody types over it, and clearing it hands it back — so "blank" can never mean "a known
+split with no total". Two constraints are mirrored on the field rather than met as an error
+after the insert: `project_lot_split_adds_up`, and the `> 0` on the column that 0 + 0 in
+the two title boxes used to walk straight into.
+
+### Still open
+
+- **The inline "+ New project" row has a Project name box that goes nowhere.** `createProject`
+  ignores `input.name` — it composes the name from the number and the address, which is what
+  Amber asked for on 28 Aug — so whatever is typed there is silently dropped. Left alone
+  because removing a visible field is a product decision, not a tidy-up. It should go.
+- **`addresses.address_precision` has no data dictionary entry.** Added by 0037, never
+  entered in `dictionary.ts`, so it is missing from `data-dictionary.md`.
 
 ---
 

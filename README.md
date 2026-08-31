@@ -16,13 +16,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 16 changes since then —
-- Added: A discussion under every request, with a pinned answer and an internal lane for triage
-- Added: "Someone may have asked this already" — the report form searches while you type, and offers to vote instead
-- Added: Duplicates can be merged, and the votes and followers move with them
-- Added: The bell tells you when a request you follow moves, with the note whoever moved it left
-- Added: A vote can be added for somebody whose request arrived on a call, recorded against whoever entered it
-- …and 11 more.
+Unreleased: 21 changes since then —
+- Changed: The projects board has its own views — All Projects, Current Projects, Archived, and New Projects for the ones nobody has split yet
+- Fixed: The count on a projects view tab disagreed with the list it opened, for projects with no jobs
+- Changed: The new project form asks only for suburb, state, postcode and a project type — the street, its numbers and the council are all optional
+- Added: Total lots on the new project form, following the community and Torrens split or typed in on its own
+- Fixed: Zero community and zero Torrens lots no longer reached the database as a constraint error
+- …and 16 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

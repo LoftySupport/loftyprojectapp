@@ -1163,13 +1163,18 @@ export function createSupabaseRepository(): Repository {
           // project form has no team field, so this is written rather than defaulted.
           project_owning_team: OPENING_TEAM,
           project_type: input.projectType,
-          // The total is the sum, written here rather than asked for: the form asks
-          // for the split, and `project_lot_split_adds_up` refuses a row where the two
-          // disagree. Null when neither is given — "not settled", which is not zero.
+          // The total. Given by the form since Amber asked for a box for it, and summed
+          // here when the caller does not say — which is the import, where the split is
+          // often all there is. `project_lot_split_adds_up` refuses a row where a total
+          // and a known split disagree, so the form checks that before it gets here.
+          // Null when neither kind is given and no total is passed: "not settled", which
+          // is not zero.
           project_proposed_dwellings:
-            input.communityTitleLots == null && input.torrensTitleLots == null
-              ? null
-              : (input.communityTitleLots ?? 0) + (input.torrensTitleLots ?? 0),
+            input.proposedDwellings !== undefined
+              ? input.proposedDwellings
+              : input.communityTitleLots == null && input.torrensTitleLots == null
+                ? null
+                : (input.communityTitleLots ?? 0) + (input.torrensTitleLots ?? 0),
           project_community_title_lots: input.communityTitleLots ?? null,
           project_torrens_title_lots: input.torrensTitleLots ?? null,
           project_status: input.status ?? "on_track",

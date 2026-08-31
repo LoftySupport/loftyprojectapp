@@ -574,11 +574,32 @@ is admin-only, so nobody else could see the tooltip; the old value sits inside a
 so "which project was ever at 20 Corner Street" is an unindexed scan; and it is a forensic
 log, not a queryable relationship. Three different reasons, any one of them decisive.
 
+> **Revised twice since — see `0037` and `0069`.** The required set is now **suburb, state,
+> postcode, country** and nothing else. `0037` made the street optional, because Lofty buys
+> land before it has a frontage and a project may be "the Mt Gambier division". `0069`
+> dropped the rest: the pair of checks that made a street and a number arrive together, and
+> the council. Amber, 31 August, on the create form: *"the only thing required is suburb,
+> state, postcode and project type. the rest are optional."* The paragraph below is kept
+> because the reasoning for the lot number — that the street number is often unknown or
+> later changed — is the reasoning that eventually removed the constraint rather than
+> loosened it: on a plan of division, "Lot 7" is not half an address, it is the address.
+> The guarantee that survives belongs to jobs, and lives in
+> `guard_job_address_is_a_street`: a dwelling needs a street **and** a number.
+
 Required on every address, never null: **street, suburb, state, postcode, country**.
 `address_postcode` **does not exist today and must be added.** Lot number is required in
 practice — when land is subdivided the street number is often unknown or later changed — so
 the constraint is that **at least one of lot number or street number is present**, not that
 both are.
+
+> **Also revised by `0069`: council is optional.** The conditional check below was right
+> about the shape of the rule and wrong about who pays for it. The form fills the council
+> in from the suburb off the LGA list and gets it right everywhere the list is
+> unambiguous; for the four suburbs that sit in two councils it clears the field and says
+> so, on the reasoning that a council on a lodged application is not worth being
+> confidently wrong about — and then the constraint made a guess the price of creating the
+> project at all. `addresses_council_is_sa` stays: the enum is SA-only, so an interstate
+> address still may not carry one.
 
 **Council is required, conditionally.** Lofty builds only in South Australia at present, and
 `address_council` is an enum of the 68 SA councils with an existing check that it must be
