@@ -116,7 +116,7 @@ export function writePrefs(patch: Partial<Prefs>): Prefs {
 
 /** Where a landing-page choice actually points. */
 export const LANDING_ROUTES: Record<LandingPage, string> = {
-  Dashboard: "/",
+  Dashboard: "/dashboard",
   Projects: "/projects",
   Jobs: "/jobs",
   Reports: "/reports"

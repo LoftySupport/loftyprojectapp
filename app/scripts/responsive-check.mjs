@@ -22,7 +22,11 @@
  */
 const BASE = process.env.RESPONSIVE_BASE ?? "http://127.0.0.1:5200";
 
-const ROUTES = ["/", "/projects", "/jobs", "/reports", "/templates",
+// "/dashboard" as well as "/": "/" is the front door and forwards to whatever the landing
+// preference names, so on its own it never measures the dashboard for anybody who has
+// chosen a different landing page — which is how the dashboard became unreachable
+// entirely without a single check noticing.
+const ROUTES = ["/", "/dashboard", "/projects", "/jobs", "/reports", "/templates",
                 "/admin", "/settings", "/setup", "/setup/dictionary", "/setup/wiring",
                 // The tracker. All three tabs, because they are three different layouts
                 // sharing one route — a five-column board, a list of dated phases, and a
