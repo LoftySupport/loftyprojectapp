@@ -554,12 +554,46 @@ export function NewProjectDialog({
                 placeholder="Select a type"
               />
             </Field>
+            <AddressFields value={address} onChange={setAddress} />
+
+            {/* Amber, 25 August: "on project creation the option to add another address
+                adds in a secondary lot of address information which is labelled 'new
+                address' which is the new current address." The first block above then
+                becomes the immutable original — which is the whole point for a legacy
+                import, where the purchase address is already out of date. */}
+            {newAddress === null ? (
+              <Button kind="tertiary" size="small" onClick={() => setNewAddress(EMPTY_ADDRESS)}>
+                + Add another address
+              </Button>
+            ) : (
+              <div className="new-address-block">
+                <div className="panel-head">
+                  <Text type="text2" weight="bold">New address</Text>
+                  <Button kind="tertiary" size="small" onClick={() => setNewAddress(null)}>
+                    Remove
+                  </Button>
+                </div>
+                <Text type="text3" color="secondary" element="p" ellipsis={false}>
+                  This becomes the current address. The one above is kept as the original
+                  and cannot be changed later.
+                </Text>
+                <AddressFields value={newAddress} onChange={setNewAddress} />
+              </div>
+            )}
+
             {/* Two counts, because they are two products (Amber, 28 Aug): "these are
                 different types and the job will need to carry this information through
                 to the job. so now where you set 6 lots, 3 may be community title, and 3
                 may be torrens title and we need to know that split." The single
                 "Proposed dwellings" box could not hold that, and the total it did hold
-                is the box below these two. */}
+                is the box below these two.
+
+                BELOW THE ADDRESS, NOT ABOVE IT (Amber, 31 Aug: "this appear after the
+                address"). The address is what somebody has in front of them when they
+                start — a contract, an email, a plan of division — and it is the part the
+                project cannot be created without. How the lots divide is the answer to a
+                different question, often settled later, so it stops standing between the
+                type and the address it qualifies. */}
             <Field
               label="Community title lots"
               hint="leave blank if the count is not settled"
@@ -625,32 +659,6 @@ export function NewProjectDialog({
                 }
               />
             </Field>
-            <AddressFields value={address} onChange={setAddress} />
-
-            {/* Amber, 25 August: "on project creation the option to add another address
-                adds in a secondary lot of address information which is labelled 'new
-                address' which is the new current address." The first block above then
-                becomes the immutable original — which is the whole point for a legacy
-                import, where the purchase address is already out of date. */}
-            {newAddress === null ? (
-              <Button kind="tertiary" size="small" onClick={() => setNewAddress(EMPTY_ADDRESS)}>
-                + Add another address
-              </Button>
-            ) : (
-              <div className="new-address-block">
-                <div className="panel-head">
-                  <Text type="text2" weight="bold">New address</Text>
-                  <Button kind="tertiary" size="small" onClick={() => setNewAddress(null)}>
-                    Remove
-                  </Button>
-                </div>
-                <Text type="text3" color="secondary" element="p" ellipsis={false}>
-                  This becomes the current address. The one above is kept as the original
-                  and cannot be changed later.
-                </Text>
-                <AddressFields value={newAddress} onChange={setNewAddress} />
-              </div>
-            )}
 
             {/* What this creates (G32). The number itself is the sequence's to give —
                 previewing a guess would promise a number somebody else can take first —
