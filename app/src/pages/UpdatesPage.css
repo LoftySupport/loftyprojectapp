@@ -442,3 +442,29 @@
 .updates-table-open { background: none; border: 0; padding: 0; font: inherit;
   color: var(--primary-color); cursor: pointer; text-align: left; }
 .updates-table-open:hover { text-decoration: underline; }
+
+/* ---- tap targets, found by the populated sweep ---------------------------
+   All three of these passed while the fixtures were empty, because an element that is
+   never drawn is never measured. They are the WCAG 2.2 AA floor (2.5.8, 24x24), and the
+   sweep reported 21 failures across five devices the moment the tracker had content.
+
+   Kept as three separate rules rather than one blanket `button { min-height: 24px }`:
+   the blanket version would also inflate every inline Text-sized control the app already
+   sizes deliberately, and a floor applied where it was not needed is how a layout gets
+   quietly loosened everywhere to fix two buttons. */
+
+/* The month stepper. Vibe's small tertiary Button is 21px wide for a single glyph — tall
+   enough at 32, too narrow. A min-width is enough; the height already clears. */
+.cal-bar button { min-width: 32px; }
+
+/* The request titles in a roadmap phase, in the unplanned bucket, and in the table.
+   inline-flex so the min-height actually applies to a button wrapping one line of text. */
+.updates-table-open { display: inline-flex; align-items: center; min-height: 24px; }
+
+/* The gantt's left-hand label, which opens the request it names. */
+.tl-open { min-height: 24px; display: flex; flex-direction: column; justify-content: center; }
+
+/* And the unscheduled list beneath the gantt, which is a different button from the bar
+   label above — the fixtures put half the requests in no phase precisely so both paths
+   get drawn, and only this one was still 16px tall. */
+.tl-undated-open { display: inline-flex; align-items: center; min-height: 24px; }

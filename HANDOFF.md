@@ -97,6 +97,39 @@ its keep the same day.
 The general shape: **a predicate is only as portable as the nullability of the columns it
 names.** Copying a proven line to a neighbouring table is exactly when to re-check that.
 
+### The sweep was passing by not looking
+
+Two faults, found in that order, and the second only because the first was fixed.
+
+**The view was component state, so the sweep could not reach it.** `responsive-check.mjs`
+visits routes; three of the four views were behind a `useState`, so six new URLs would all
+have rendered the board. The view now lives in the query string (`?view=gantt`) — which is
+also the convention the jobs board already set, and the reason `saved_views` stores a query
+string verbatim: **the URL is the app's serialisation of "what am I looking at"**, so a
+gantt somebody is looking at can be linked to and saved.
+
+**Then it was still passing, because `stubRepository` answers empty by design.** The six
+routes each drew one line of "nothing to place yet" and reported green without ever laying
+out a wide table, a multi-month timeline or a full month grid. `scripts/tracker-fixtures.ts`
+now populates those three reads for the responsive build only, aliased the same way
+`AuthProvider` already is. The fixtures are shaped to stress the layout rather than to look
+real: a title longer than any column, phases spanning eight months, one phase with a start
+and no end, one with no dates, several requests sharing a day, and half of them in no phase.
+
+**It failed immediately: 21 of 95 combinations, three separate tap targets under the 24px
+WCAG floor** — the calendar's month stepper at 21px wide, the request titles in a phase at
+18px tall, and the gantt's labels at 16px. All three were mine, and all three had been
+"green" ten minutes earlier. A fourth surfaced after the first fix: the *unscheduled* list
+under the gantt is a different button from the bar label, and only the fixtures' deliberate
+split between planned and unplanned requests drew both. Now 95 of 95.
+
+**The lesson is the one this repo keeps relearning**: a check that cannot reach the thing it
+names is worse than no check, because it reports confidence. Note the alias gotcha if this
+is ever extended — `tracker-fixtures.ts` imports the real stub to wrap it, so the alias is
+anchored on the exact specifier `./stubRepository` and not the `.*` shape used for
+`AuthProvider`, which would rewrite that import to the fixtures file itself and produce an
+import cycle rather than an error.
+
 ### Also worth knowing
 
 - **`0071` closed a hole nobody had cause to notice.** The insert policy on `feedback`

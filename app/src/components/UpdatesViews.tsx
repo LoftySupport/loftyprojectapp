@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Button, Text } from "@vibe/core";
 import "./ui.css";
 import "../pages/UpdatesPage.css";
@@ -37,6 +38,40 @@ export const UPDATES_VIEWS: { slug: UpdatesView; label: string }[] = [
   { slug: "gantt", label: "Gantt" },
   { slug: "calendar", label: "Calendar" }
 ];
+
+/**
+ * The view, in the query string — `?view=gantt`.
+ *
+ * Local state would have been fewer lines and was the first version. It is wrong here for
+ * the reason the jobs board already settled: **the URL is the app's serialisation of
+ * "what am I looking at"**, which is why `saved_views` stores a query string verbatim
+ * rather than inventing a second schema for the same fact. A view held in a component
+ * cannot be linked to, cannot be saved, and disappears on reload.
+ *
+ * It also cannot be MEASURED. `responsive-check.mjs` visits routes; with the view in
+ * state it saw the board four times and the gantt, table and calendar never — so the
+ * sweep reported green on three layouts it had not looked at. That is the shape of check
+ * this repo distrusts most: one that passes by not testing.
+ *
+ * The default is omitted from the URL rather than written as `?view=board`, matching the
+ * board's rule that a default is absence.
+ */
+export function useUpdatesView(): [UpdatesView, (v: UpdatesView) => void] {
+  const [params, setParams] = useSearchParams();
+  const raw = params.get("view");
+  const view = UPDATES_VIEWS.some(v => v.slug === raw) ? (raw as UpdatesView) : "board";
+
+  const set = (v: UpdatesView) => {
+    const next = new URLSearchParams(params);
+    if (v === "board") next.delete("view");
+    else next.set("view", v);
+    // Replace, not push: flicking between views is looking at one thing four ways, and
+    // pushing would make Back walk through every glance instead of leaving the page.
+    setParams(next, { replace: true });
+  };
+
+  return [view, set];
+}
 
 export function ViewSwitcher({ value, onChange }: {
   value: UpdatesView;

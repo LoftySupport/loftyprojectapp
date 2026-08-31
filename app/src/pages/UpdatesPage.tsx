@@ -11,8 +11,8 @@ import { Select } from "../components/Select";
 import { SidePanel } from "../components/SidePanel";
 import { LoadProblem } from "../components/SearchNotices";
 import {
-  MonthEntries, Timeline, ViewSwitcher,
-  type DatedEntry, type TimelineBar, type UpdatesView
+  MonthEntries, Timeline, ViewSwitcher, useUpdatesView,
+  type DatedEntry, type TimelineBar
 } from "../components/UpdatesViews";
 import { SortHeader, useTableSort } from "../components/SortableTable";
 import { useChangelogPulls } from "../data/github";
@@ -118,7 +118,7 @@ function Requests() {
   const { data: phases } = useQuery(r => r.listRoadmapPhases(), [], [reloadKey]);
   const [kind, setKind] = useState<"all" | FeedbackKind>("all");
   const [sort, setSort] = useState<"votes" | "newest">("votes");
-  const [view, setView] = useState<UpdatesView>("board");
+  const [view, setView] = useUpdatesView();
   const [openId, setOpenId] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [busyVote, setBusyVote] = useState<string | null>(null);
@@ -875,7 +875,7 @@ function Roadmap() {
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [view, setView] = useState<UpdatesView>("board");
+  const [view, setView] = useUpdatesView();
   const [openId, setOpenId] = useState<string | null>(null);
   const canEdit = can("superadmin");
 
