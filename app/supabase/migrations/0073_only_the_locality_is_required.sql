@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0069 — only the locality is required
+-- 0073 — only the locality is required
 -- =============================================================================
 -- Amber, 31 August, on the new-project form:
 --
@@ -62,13 +62,13 @@ alter table addresses drop constraint if exists addresses_street_needs_a_number;
 alter table addresses drop constraint if exists addresses_numbers_need_a_street;
 
 comment on column addresses.address_council is
-  'The local government area the address sits in. Filled in from the suburb off the LGA list where that list is unambiguous, and left blank where it is not — optional since 0069, because the four suburbs that span two councils would otherwise be a guess somebody had to make to save the form. Still SA-only: addresses_council_is_sa refuses one on an interstate address, where the enum has no valid value to give.';
+  'The local government area the address sits in. Filled in from the suburb off the LGA list where that list is unambiguous, and left blank where it is not — optional since 0073, because the four suburbs that span two councils would otherwise be a guess somebody had to make to save the form. Still SA-only: addresses_council_is_sa refuses one on an interstate address, where the enum has no valid value to give.';
 
 comment on column addresses.address_lot_number is
-  'The lot as it appears on the plan of division. Text, not a number — "12A", "5-7" and "Lot 3" are as common as 12. Optional and independent of the street since 0069: on a plan of division the lot number is often the whole address, because the lots are numbered before the roads are named.';
+  'The lot as it appears on the plan of division. Text, not a number — "12A", "5-7" and "Lot 3" are as common as 12. Optional and independent of the street since 0073: on a plan of division the lot number is often the whole address, because the lots are numbered before the roads are named.';
 
 comment on column addresses.address_precision is
-  'How exact this address is. `locality` — no street named, which is all Lofty knows when a development is bought and is enough for a project. `street` — a street is named. Generated, so it can never disagree with the column it describes. NOTE since 0069: `street` no longer implies a number, because addresses_street_needs_a_number is gone; what a job needs is both, and guard_job_address_is_a_street is what enforces that.';
+  'How exact this address is. `locality` — no street named, which is all Lofty knows when a development is bought and is enough for a project. `street` — a street is named. Generated, so it can never disagree with the column it describes. NOTE since 0073: `street` no longer implies a number, because addresses_street_needs_a_number is gone; what a job needs is both, and guard_job_address_is_a_street is what enforces that.';
 
 -- ------------------------------------------------- a job needs somewhere to build
 -- Same trigger, same message shape, one word more of rule: a street AND a number. It
@@ -105,7 +105,7 @@ begin
 end $$;
 
 comment on function guard_job_address_is_a_street() is
-  'A job must sit at an address somebody can build on: a street and a lot or street number. 0037 relaxed `addresses` so a project could be created knowing only its suburb, and 0069 relaxed the rest of the shape for the same reason — which leaves this trigger holding the whole of the old guarantee rather than half of it. It was never true of addresses in general, only of the ones you build on.';
+  'A job must sit at an address somebody can build on: a street and a lot or street number. 0037 relaxed `addresses` so a project could be created knowing only its suburb, and 0073 relaxed the rest of the shape for the same reason — which leaves this trigger holding the whole of the old guarantee rather than half of it. It was never true of addresses in general, only of the ones you build on.';
 
 -- ---------------------------------------------------------------------- proof
 -- One block, because the fixtures have to outlive the probes that use them: a

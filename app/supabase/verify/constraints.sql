@@ -18,7 +18,7 @@ BEGIN
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  addresses_postcode_shape rejected 512';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  addresses_postcode_shape rejected 512)', SQLERRM; END;
 
-  -- What an SA address may still not carry: a council is optional since 0069, but the
+  -- What an SA address may still not carry: a council is optional since 0073, but the
   -- enum is SA-only, so an interstate one has no valid value to give.
   BEGIN
     INSERT INTO addresses (address_lot_number,address_street_1,address_suburb,address_state,
@@ -277,7 +277,7 @@ BEGIN
 
   -- 0037 moved "an address needs a street and a number" off `addresses` and onto jobs,
   -- because Lofty buys land before it has a frontage and a project may sit at nothing
-  -- more than a suburb. 0069 moved the rest of it the same way — a council, a street
+  -- more than a suburb. 0073 moved the rest of it the same way — a council, a street
   -- and the numbers are all optional now (Amber: "the only thing required is suburb,
   -- state, postcode and project type"). The guarantee is only worth relaxing if the
   -- half that still matters is enforced somewhere, so the four probes below are that
@@ -290,7 +290,7 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN
     RAISE WARNING 'FAIL: a locality address was refused (%)', SQLERRM; END;
 
-  -- 0069, first half: an SA address with no council at all. The form fills the council
+  -- 0073, first half: an SA address with no council at all. The form fills the council
   -- in from the suburb and cannot for the four suburbs that span two, and a guess on a
   -- lodged application is worse than a blank.
   BEGIN
@@ -300,7 +300,7 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN
     RAISE WARNING 'FAIL: an SA address with no council was refused (%)', SQLERRM; END;
 
-  -- 0069, second half: the two shapes 0037 called half an address. A street with no
+  -- 0073, second half: the two shapes 0037 called half an address. A street with no
   -- number is "the Mt Gambier division, Penola Road"; a lot number with no street is
   -- how every plan of division reads before the roads are named.
   BEGIN
@@ -332,7 +332,7 @@ BEGIN
     WHEN raise_exception THEN RAISE NOTICE 'ok  a job cannot sit at a locality — it needs a street';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on the job address guard (%)', SQLERRM; END;
 
-  -- The half 0069 handed to the trigger. `addresses_street_needs_a_number` used to make
+  -- The half 0073 handed to the trigger. `addresses_street_needs_a_number` used to make
   -- this unwritable; with it gone, `address_precision` alone would have called Penola
   -- Road a street address and let a job be built at a road with no number on it.
   BEGIN
