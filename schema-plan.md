@@ -574,9 +574,9 @@ is admin-only, so nobody else could see the tooltip; the old value sits inside a
 so "which project was ever at 20 Corner Street" is an unindexed scan; and it is a forensic
 log, not a queryable relationship. Three different reasons, any one of them decisive.
 
-> **Revised twice since — see `0037` and `0069`.** The required set is now **suburb, state,
+> **Revised twice since — see `0037` and `0073`.** The required set is now **suburb, state,
 > postcode, country** and nothing else. `0037` made the street optional, because Lofty buys
-> land before it has a frontage and a project may be "the Mt Gambier division". `0069`
+> land before it has a frontage and a project may be "the Mt Gambier division". `0073`
 > dropped the rest: the pair of checks that made a street and a number arrive together, and
 > the council. Amber, 31 August, on the create form: *"the only thing required is suburb,
 > state, postcode and project type. the rest are optional."* The paragraph below is kept
@@ -592,7 +592,7 @@ practice — when land is subdivided the street number is often unknown or later
 the constraint is that **at least one of lot number or street number is present**, not that
 both are.
 
-> **Also revised by `0069`: council is optional.** The conditional check below was right
+> **Also revised by `0073`: council is optional.** The conditional check below was right
 > about the shape of the rule and wrong about who pays for it. The form fills the council
 > in from the suburb off the LGA list and gets it right everywhere the list is
 > unambiguous; for the four suburbs that sit in two councils it clears the field and says
