@@ -31,12 +31,26 @@ division"* and nothing else; there is a **Total lots** box, *"which is the numbe
 community title plus torrens title lots but can also be manually entered"*; and *"the only
 thing required is suburb, state, postcode and project type. the rest are optional."*
 
-**`0069` is written and replays cleanly. It is NOT applied to the live database** — the
-Supabase connector still needs a browser sign-in this session could not run. The queue is
-now `0060`–`0069`, in file order, then `verify/check.sh`. Nothing in the app breaks before
-it is applied: the form has stopped asking for a council, a street and a number, so until
-the constraints are actually dropped a project created without them comes back as a
-Postgres error rather than a greyed-out button. **Apply it before anyone uses the form.**
+**`0069` is applied to the live database.** It was not, for the first part of this
+session — the Supabase connector was down, and `0060`–`0068` were reported unapplied on
+the same evidence when in fact they had landed. The gap was found the way these are:
+Amber created a project with a street and no street number and got
+`400` on `POST /rest/v1/addresses`, which is `addresses_street_needs_a_number` refusing
+the shape the form had just stopped asking for. **A form relaxed ahead of its migration
+does not degrade, it breaks** — the Create button greys out on the app's copy of the
+rules, so when the two disagree the person meets a Postgres error instead.
+
+Verified on production straight after, in a deliberately-aborted transaction: a street
+with no number, a suburb with no council and a lot number with no street are all accepted;
+a council outside SA and a three-digit postcode are still refused; a job still cannot take
+a street with no number on it; and the migration's own proof block left nothing behind.
+
+**The live database carries four migrations that are in no branch here** —
+`the_view_that_lost_its_invoker`, `the_request_somebody_else_typed`,
+`a_new_request_lands_in_the_phase_we_are_in`, `two_nulls_are_not_the_same_person`, all
+applied 31 Aug. Another session applied them without merging. Nothing is broken by it,
+but the repo cannot rebuild that database from its own migrations until they land, and
+`replay.sh` is proving a schema production no longer has.
 
 | | |
 | --- | --- |
