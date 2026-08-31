@@ -24,6 +24,7 @@ import { sortRows, type SortState } from "../components/SortableTable";
 import {
   ColumnHeaders, ColumnPicker, useColumnLayout, type ColumnDef
 } from "../components/TableColumns";
+import { Board } from "../components/Board";
 import { JobsGantt } from "../components/JobsGantt";
 import { MonthCalendar } from "../components/MonthCalendar";
 import { useQuery, useRepository } from "../data/DataProvider";
@@ -421,7 +422,7 @@ export function JobsPage() {
       )}
 
       {view === "Board" && !noMatches && !loading && all.length > 0 && (
-        <div className="board">
+        <Board>
           {groups.map((g, gi) => (
             <section
               className="board-column"
@@ -510,7 +511,7 @@ export function JobsPage() {
               )}
             </section>
           ))}
-        </div>
+        </Board>
       )}
 
       {view === "Table" && !noMatches && !loading && all.length > 0 && (

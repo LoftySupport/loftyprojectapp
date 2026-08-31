@@ -247,6 +247,75 @@
 }
 .board-column-empty { padding: var(--space-16) 0; text-align: center; }
 
+/* The board's scrollbar, moved to the bottom of the screen.
+   ---------------------------------------------------------------------------
+   `.board` scrolls sideways, and always has. The trouble was where its scrollbar
+   ends up: at the bottom of the BOARD, which with seven stage columns and a
+   dozen jobs in one of them is well below the fold — and on macOS it is an overlay bar
+   that is not painted at all until something is already moving. The columns past
+   the right-hand edge were reachable by trackpad swipe and by nothing else.
+
+   `.board-rail` is a second scroll container holding one strip as wide as the
+   board's content, stuck to the bottom of the viewport by the page's own scroll.
+   Board.tsx keeps the two scroll positions equal, so it is the same scrollbar in
+   a place the hand can find. */
+.board-scroll { position: relative; }
+
+/* Only when the rail is actually there. Without the class, a board with no rail
+   (nothing to scroll, or the component not in use) keeps the native bar it has
+   always had rather than silently losing it. */
+.board-railed { scrollbar-width: none; }
+.board-railed::-webkit-scrollbar { display: none; }
+
+.board-rail {
+  position: sticky;
+  bottom: 0;
+  /* Above the cards it overlaps at the bottom of a tall board, below the drawers,
+     dialogs and the sticky header, which all start at 30. */
+  z-index: 5;
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* The rail is the end of the board, not a doorway out of it: without this, flicking
+     it at either end scrolls the page behind instead of stopping. */
+  overscroll-behavior-x: contain;
+  /* It sits over the last row of cards while the board is taller than the screen, so
+     it needs the page's own background under it and an edge to say where it starts. */
+  background: var(--allgrey-background-color);
+  border-top: 1px solid var(--layout-border-color);
+  padding-top: var(--space-4);
+}
+
+/* Painted rather than left to the platform. A styled `::-webkit-scrollbar` is what
+   turns Safari and Chrome's overlay bar — invisible until you are already scrolling,
+   which is the whole problem — into one that is on screen waiting to be grabbed. */
+.board-rail::-webkit-scrollbar { height: 12px; }
+.board-rail::-webkit-scrollbar-track {
+  background: var(--allgrey-background-color);
+  border-radius: 999px;
+}
+.board-rail::-webkit-scrollbar-thumb {
+  background: var(--ui-border-color);
+  border: 3px solid var(--allgrey-background-color);
+  border-radius: 999px;
+}
+.board-rail::-webkit-scrollbar-thumb:hover { background: var(--secondary-text-color); }
+
+/* Firefox, which has no `::-webkit-scrollbar`, gets the same bar from the standard
+   properties. Guarded rather than set outright, and the guard is the whole point:
+   Chromium ignores EVERY `::-webkit-scrollbar` rule on an element that also carries
+   `scrollbar-width` or `scrollbar-color`. Setting both "for coverage" silently reverted
+   Chrome to its 15px default bar — measured, at 16px of chrome instead of 13. */
+@supports not selector(::-webkit-scrollbar) {
+  .board-rail {
+    scrollbar-width: auto;
+    scrollbar-color: var(--ui-border-color) var(--allgrey-background-color);
+  }
+}
+
+/* One pixel tall: the strip exists to give the rail something to overflow, and its
+   width — set from the board's own scrollWidth — is the only part that matters. */
+.board-rail-track { height: 1px; }
+
 /* ---- record cards -------------------------------------------------------- */
 .card {
   display: flex;
