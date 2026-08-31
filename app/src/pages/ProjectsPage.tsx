@@ -13,6 +13,7 @@ import { activeFilterCount, projectMatchesFilters, statusOptions } from "../data
 import { LoadProblem, NoResults, NothingYet, PreviousAddressNote } from "../components/SearchNotices";
 import { SavedViewTabs } from "../components/SavedViewTabs";
 import { useSavedViews } from "../data/useSavedViews";
+import { Board } from "../components/Board";
 import { ProjectCard, StatusPill } from "../components/RecordCards";
 import { PropertySlots } from "../components/PropertySlots";
 import {
@@ -400,7 +401,7 @@ export function ProjectsPage() {
         // The same board the jobs page renders, with project cards in the columns —
         // one component's worth of markup rather than a second kind of board, so a
         // column looks and behaves the same whichever record is in it.
-        <div className="board">
+        <Board>
           {projectGroups.map((g, gi) => (
             <section
               className="board-column"
@@ -441,7 +442,7 @@ export function ProjectsPage() {
               )}
             </section>
           ))}
-        </div>
+        </Board>
       ) : view === "Gantt" ? (
         <ProjectsGantt rows={rows} onOpen={openOne} />
       ) : (
