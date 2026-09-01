@@ -14,6 +14,9 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- A standalone /report page that works for accounts held at the demo gate
+- One date range picker across the app — today, yesterday, last 7, last 30, next 30, custom
+- Search, a phase filter and a date range on the tracker
 - Drag requests between stages and roadmap phases, at the rung each move really needs
 - Table, gantt and calendar views on both the tracker and the roadmap
 - An admin can file a request on behalf of somebody who told them about it
@@ -33,9 +36,11 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- The changelog on Updates reads this repository's merged pull requests, not the old repository's
 - The hundredth job on a project was refused with a duplicate-key error
 - A project can now pass 99 jobs — the hundredth was refused with a duplicate-key error
 - The projects board lays its stage columns out from the saved view it is in, like the jobs board
+- Two migrations were both numbered 0069; the one that ran last is now 0073
 - Clicking Dashboard opened Projects for anyone whose landing page was not Dashboard
 - The tracker's month stepper, request titles and gantt labels were under the 24px tap-target floor
 - The count on a projects view tab disagreed with the list it opened, for projects with no jobs
@@ -46,6 +51,7 @@ says shipped and what the app shows people cannot use different words for it.
 ### Changed
 
 - Job numbers are three digits from 001 — existing jobs renumbered, and a project can now run past 99 lots
+- The request board and detail view restyled, and the table now matches the rest of the app
 - The tracker view rides the URL, so a gantt or calendar can be linked to and saved
 - The projects board has its own views — All Projects, Current Projects, Archived, and New Projects for the ones nobody has split yet
 - "Shipped" is now "Live in the app", and it is the last column on the board
@@ -53,3 +59,7 @@ says shipped and what the app shows people cannot use different words for it.
 - The handoff and the README say what the tracker changed, and what is still open
 - Bugs and requests are readable by everyone, not just admins — a queue nobody can see cannot stop a duplicate request
 - Only superadmin moves a request between stages
+
+### Removed
+
+- The tracker's gantt and calendar

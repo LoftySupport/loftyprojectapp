@@ -1,3 +1,23 @@
+> ## Superseded
+>
+> This is the **first** handoff, written the day the app moved out of the prototype repo.
+> The root [`HANDOFF.md`](../HANDOFF.md) is the current one — `CLAUDE.md` sends people
+> there and this file is what they find instead if they open the nearest one. It is wrong
+> on almost everything a reader would act on:
+>
+> | This document says | What is true now |
+> |---|---|
+> | The repo is `amberbeaumont/loftyprojectapp` | `LoftyGroup/loftyprojectapp`. It moved under the Lofty organisation on 1 September |
+> | The Netlify site serves a hand-uploaded build, not linked to a repo | It builds from git — but still from `amberbeaumont/loftyprojectapp`. Relinking it to this repo is one of the two open items in the root handoff |
+> | Link Netlify with **base directory `app`** | Base directory is the **repo root**. The app moved out of `/app/` and `app/netlify.toml` was deleted; the root `netlify.toml` is the only one Netlify reads |
+> | Close PR #11 on the prototype repo | Already done — closed unmerged as superseded |
+> | Supabase is not created yet | Created, migrated past `0069`, seeded, and the app reads it. Auth is live |
+> | Four starter tables in `0001_core.sql` | Thirty-odd migrations. `app/supabase/migrations/` is the authority |
+>
+> Kept, not deleted, for the part that is still true and still load-bearing: the design
+> decisions under *Design decisions not to re-litigate* are the ones from
+> `design-system-evaluation.md` and they still bind.
+
 # Handoff — picking this up in a new session
 
 Everything needed to continue the V0 build. Written when the work moved from the

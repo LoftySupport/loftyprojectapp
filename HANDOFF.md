@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 33 changes since then —
+Unreleased: 40 changes since then —
+- Fixed: The changelog on Updates reads this repository's merged pull requests, not the old repository's
 - Changed: Job numbers are three digits from 001 — existing jobs renumbered, and a project can now run past 99 lots
 - Fixed: The hundredth job on a project was refused with a duplicate-key error
-- Fixed: A project can now pass 99 jobs — the hundredth was refused with a duplicate-key error
-- Fixed: The projects board lays its stage columns out from the saved view it is in, like the jobs board
-- Fixed: Clicking Dashboard opened Projects for anyone whose landing page was not Dashboard
-- …and 28 more.
+- Added: A standalone /report page that works for accounts held at the demo gate
+- Added: One date range picker across the app — today, yesterday, last 7, last 30, next 30, custom
+- …and 35 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -1234,8 +1234,31 @@ with nothing in them. Every remaining token on screen is one of those two cases.
 
 ## What this is
 
-`amberbeaumont/loftyprojectapp` — the V0 build of Lofty's job pipeline board. React,
+`LoftyGroup/loftyprojectapp` — the V0 build of Lofty's job pipeline board. React,
 Vibe (monday.com's design system) and Supabase.
+
+### This is the repository now — and two things have not caught up
+
+The work started in `amberbeaumont/loftyprojectapp`, a personal account, and moved under
+the Lofty organisation on 1 September. `LoftyGroup/loftyprojectapp` is where commits,
+branches and pull requests go from here; the git remote in this checkout already points
+at it.
+
+The old repository still exists, is still **public**, and still carries every commit up to
+the move. That is worth writing down rather than forgetting, because it is the dangerous
+kind of stale: it answers, and its answer looks current. Anything still reading it gets
+history that stopped on 1 September with no sign that it stopped.
+
+Two things still point at it, and **neither can be fixed from inside this repository**:
+
+| | What is wrong | Who fixes it, and where |
+| --- | --- | --- |
+| **The Netlify build source** | `loftyprojectapp.netlify.app` still builds from `amberbeaumont/loftyprojectapp` on `main`. Pushes to *this* repository do not deploy, and do not raise deploy previews. The last production deploy, `2c48791`, came from there | Netlify → `loftyprojectapp` → Project configuration → Build & deploy → **Link to a different repository** → `LoftyGroup/loftyprojectapp`, branch `main`, base directory **blank** (the site's base is the repo root — see *Where it is deployed*). The Netlify GitHub App needs org-owner approval for `LoftyGroup` |
+| **Repository visibility** | This repository is **private**; the old one is public. The Updates changelog reads merged pull requests from the browser with no token — see `app/src/data/github.ts` for why a token cannot go there — and GitHub answers an unauthenticated read of a private repository with 404 | A decision, not a fix. Make `LoftyGroup/loftyprojectapp` public and the feed works exactly as before. Keep it private and the feed has to be generated at build time instead, which is a different piece of work and has not been done |
+
+Until the first row is done, the deployed site is not this repository's build. Until the
+second is decided, Updates → *Merged from the build* renders its error state saying the
+repository is private, which is the honest answer and deliberately not an empty list.
 
 The schema is being designed one table at a time and the app is built ahead of it, so
 every value that will come from a table renders as a `{{table.column}}` token — an
@@ -1299,6 +1322,11 @@ Two gotchas worth knowing before touching that screen:
 **The prototype it grew from is a different repo** — `amberbeaumont/loftyprojectboard`,
 frozen, still deployed at `loftyprojectboard.netlify.app` for showing people. Nothing in
 this work touches it. Its PR #11 was closed unmerged as superseded.
+
+That one is **correctly** still under `amberbeaumont` and should stay there: it is a
+frozen artefact, not the live build, and moving it would break the links in
+`prototype-app-comparison.md` that cite it by line number. It is the app repository that
+moved, not the prototype.
 
 ## Sign-in: what was built, and the one thing still open
 
