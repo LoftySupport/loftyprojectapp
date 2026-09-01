@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { Button, Heading, Text } from "@vibe/core";
 import { useAuth } from "../data/AuthProvider";
 import "../components/ui.css";
@@ -27,6 +28,8 @@ import "../components/ui.css";
 export function DemoGatePage() {
   const { signOut } = useAuth();
 
+  const navigate = useNavigate();
+
   return (
     <div className="gate">
       <div className="gate-card">
@@ -37,7 +40,15 @@ export function DemoGatePage() {
         <Text type="text2" color="secondary" element="p" ellipsis={false}>
           Please contact admin for approval.
         </Text>
+        {/* The one thing they CAN do (0075, 1 Sep). Without this the gate is a dead end:
+            somebody being walked through the app has opinions worth having, and no way
+            to leave them. The wording stays out of the refusal above it — a message that
+            says "no, but…" softens a refusal that Amber deliberately made plain. */}
+        <Text type="text2" color="secondary" element="p" ellipsis={false}>
+          You can still send an idea or report a bug.
+        </Text>
         <div className="gate-actions">
+          <Button onClick={() => navigate("/report")}>Send an idea</Button>
           <Button kind="tertiary" onClick={() => void signOut()}>Sign out</Button>
         </div>
       </div>

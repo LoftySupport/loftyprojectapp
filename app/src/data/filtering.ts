@@ -1,3 +1,4 @@
+import { matchesRange, parseRange } from "../components/DateRange";
 import type { ToolbarFilter } from "../components/Toolbar";
 import { RECORD_STATUS_LABELS } from "./types";
 import type { BoardJob, BoardProject } from "./boardModel";
@@ -33,20 +34,26 @@ function jobMatchesOne(j: BoardJob, f: ToolbarFilter): boolean {
     // job carries. The prototype filtered on a fabricated latest-activity date; this is
     // the honest nearest fact, and the option labels say exactly what they mean.
     case "Date": {
-      const entered = Date.parse(j.stageEnteredAt);
-      if (Number.isNaN(entered)) return false;
-      const now = Date.now();
-      const DAY = 86_400_000;
-      switch (f.value) {
-        case "7d": return now - entered <= 7 * DAY;
-        case "30d": return now - entered <= 30 * DAY;
-        case "month": {
-          const d = new Date(entered);
-          const t = new Date(now);
-          return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth();
-        }
-        default: return true;
+      /**
+       * The app's standard date range since 1 September (`components/DateRange.tsx`) —
+       * Amber: *"this is the default way for every date picker in the app"*. The three
+       * hand-rolled cases that used to live here became six presets plus a custom range,
+       * and the arithmetic moved to one place so the tracker and the board cannot drift
+       * apart about what "last 7 days" means.
+       *
+       * `month` is still parsed, and that is not tidiness. `saved_views` stores a query
+       * string VERBATIM (0048), so somebody's saved board may carry `?date=month` — and
+       * a value that stops parsing does not error, it silently stops filtering, which
+       * is the worst way for a saved view to break.
+       */
+      if (f.value === "month") {
+        const entered = Date.parse(j.stageEnteredAt);
+        if (Number.isNaN(entered)) return false;
+        const d = new Date(entered);
+        const t = new Date();
+        return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth();
       }
+      return matchesRange(j.stageEnteredAt, parseRange(f.value));
     }
     default: return true;
   }

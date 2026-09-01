@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from "./data/AuthProvider";
 import { LegalPage } from "./pages/LegalPage";
 import { NotSetUpPage } from "./pages/NotSetUpPage";
 import { DemoGatePage } from "./pages/DemoGatePage";
+import { ReportPage } from "./pages/ReportPage";
 import { SignInPage } from "./pages/SignInPage";
 import { DataProvider } from "./data/DataProvider";
 import { PermissionProvider } from "./data/PermissionProvider";
@@ -77,6 +78,39 @@ function RequireAuth() {
   // off is_active_user(), which a demo account fails — so this is the screen that says
   // so rather than letting them meet an app full of empty tables and read it as broken.
   if (profile?.isDemo) return <DemoGatePage />;
+
+  return <Outlet />;
+}
+
+/**
+ * Signed in with a profile, whether or not they are held at the demo gate.
+ *
+ * `RequireAuth` minus its last line, and that line is the difference: it exists for
+ * `/report` (Amber, 1 Sep), so a person who cannot use the app can still tell Lofty what
+ * they need. `0075` is the half of that which matters — the database lets a held account
+ * write one table — and this is only the routing that lets them reach the form.
+ *
+ * Everything else stays behind `RequireAuth`. A guard that admits held accounts must
+ * never be the app's general one: the gate is the product decision, and this is a
+ * deliberate hole of exactly one page.
+ */
+function RequireSignedIn() {
+  const { status, profileState } = useAuth();
+  const location = useLocation();
+
+  if (status === "loading" || profileState === "loading") {
+    return (
+      <div className="app-wait" role="status" aria-live="polite">
+        <Loader size="medium" />
+      </div>
+    );
+  }
+  if (status !== "signed-in") {
+    return <Navigate to="/signin" replace state={{ from: location.pathname }} />;
+  }
+  // Still refused without a profile row: that is not "held", it is "not on the staff
+  // list", and no policy would accept their insert either.
+  if (profileState === "unlinked") return <NotSetUpPage />;
 
   return <Outlet />;
 }
@@ -168,6 +202,11 @@ export default function App() {
                 without an account has not been published. */}
             <Route path="privacy" element={<LegalPage kind="privacy" />} />
             <Route path="terms" element={<LegalPage kind="terms" />} />
+            {/* Outside RequireAuth on purpose — see RequireSignedIn. This is the one
+                page a held account may open. */}
+            <Route element={<RequireSignedIn />}>
+              <Route path="report" element={<ReportPage />} />
+            </Route>
             <Route element={<RequireAuth />}>
             <Route element={<AppShell />}>
               <Route index element={<Landing />} />
