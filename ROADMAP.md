@@ -59,9 +59,9 @@ Decided in full and not built. `NEXT-SESSION.md` carries the decisions and the f
 questions; the migrations are the next job after the import.
 
 - [ ] Record types, and the properties catalogue
-- [ ] `property_values`, with one nullable parent column per record type
-- [ ] Restricted properties, their viewers, and `private.my_teams()`
-- [ ] Processes and their dependencies, replacing nested pipelines
+- [x] `property_values`, with one nullable parent column per record type
+- [x] Restricted properties, their viewers, and `private.my_teams()`
+- [x] Processes and their dependencies, replacing nested pipelines
 
 ## The tracker
 
@@ -89,5 +89,5 @@ that is the whole reason the tracker exists.
 
 - [ ] Health: at-risk and overdue flags on the boards, from the SLA numbers that already exist
 - [ ] Notifications that actually deliver, beyond @mentions
-- [ ] The 57 pre-construction steps, once it is settled which are processes and which are properties
+- [x] The 57 pre-construction steps, once it is settled which are processes and which are properties
 - [ ] Variations: pushing a change from a project down to its jobs
