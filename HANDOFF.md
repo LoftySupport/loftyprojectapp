@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 31 changes since then —
+Unreleased: 33 changes since then —
+- Changed: Job numbers are three digits from 001 — existing jobs renumbered, and a project can now run past 99 lots
+- Fixed: The hundredth job on a project was refused with a duplicate-key error
 - Fixed: A project can now pass 99 jobs — the hundredth was refused with a duplicate-key error
 - Fixed: The projects board lays its stage columns out from the saved view it is in, like the jobs board
 - Fixed: Clicking Dashboard opened Projects for anyone whose landing page was not Dashboard
-- Fixed: The tracker's month stepper, request titles and gantt labels were under the 24px tap-target floor
-- Changed: The tracker view rides the URL, so a gantt or calendar can be linked to and saved
-- …and 26 more.
+- …and 28 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

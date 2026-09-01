@@ -33,6 +33,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- The hundredth job on a project was refused with a duplicate-key error
 - A project can now pass 99 jobs — the hundredth was refused with a duplicate-key error
 - The projects board lays its stage columns out from the saved view it is in, like the jobs board
 - Clicking Dashboard opened Projects for anyone whose landing page was not Dashboard
@@ -44,6 +45,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- Job numbers are three digits from 001 — existing jobs renumbered, and a project can now run past 99 lots
 - The tracker view rides the URL, so a gantt or calendar can be linked to and saved
 - The projects board has its own views — All Projects, Current Projects, Archived, and New Projects for the ones nobody has split yet
 - "Shipped" is now "Live in the app", and it is the last column on the board

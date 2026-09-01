@@ -669,8 +669,8 @@ export function NewProjectDialog({
                 (1000-series), owned by Acquisition &amp; Development, opening in
                 Acquisition &amp; Development phase with 0 jobs
                 {dwellingCount
-                  ? ` — you'll be offered its ${dwellingCount} job${dwellingCount === 1 ? "" : "s"} (numbered -01 up) straight after.`
-                  : " — its first job will be numbered -01 when you split it."}
+                  ? ` — you'll be offered its ${dwellingCount} job${dwellingCount === 1 ? "" : "s"} (numbered -001 up) straight after.`
+                  : " — its first job will be numbered -001 when you split it."}
                 {" "}A project with no jobs has no progress or health to show.
               </Text>
               {/* What it will be called, built from what has been typed so far. The number

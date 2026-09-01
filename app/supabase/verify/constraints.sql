@@ -50,7 +50,7 @@ BEGIN
   BEGIN
     INSERT INTO address_history (address_history_project_id,address_history_job_id,
       address_history_address_id,address_history_role,address_history_valid_from,address_history_valid_to)
-    SELECT 1106,'1106-02',address_id,'current',now(),now() FROM addresses LIMIT 1;
+    SELECT 1106,'1106-002',address_id,'current',now(),now() FROM addresses LIMIT 1;
     RAISE WARNING 'FAIL: address_history row with TWO parents accepted';
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  address_history_one_parent rejected two parents';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  address_history_one_parent rejected two parents)', SQLERRM; END;
@@ -62,12 +62,35 @@ BEGIN
   EXCEPTION WHEN foreign_key_violation THEN RAISE NOTICE 'ok  profile_teams FK rejected not_a_team';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  profile_teams FK rejected not_a_team)', SQLERRM; END;
 
+  -- '002', not '02'. 0073 widened every job number to three digits, and this probe went
+  -- on inserting the old shape: '02' stopped colliding with anything, the insert was
+  -- accepted, and the probe reported that the unique constraint had stopped biting. It
+  -- was right — that is what sent jobs_sequence_is_padded into 0073, so that the two
+  -- spellings of job 2 can no longer both exist.
   BEGIN
     INSERT INTO jobs (project_id,job_sequence,job_original_address_id,job_current_address_id,job_owning_team,job_created_by)
-    SELECT 1106,'02',address_id,address_id,'design',(SELECT profile_id FROM profiles LIMIT 1) FROM addresses LIMIT 1;
+    SELECT 1106,'002',address_id,address_id,'design',(SELECT profile_id FROM profiles LIMIT 1) FROM addresses LIMIT 1;
     RAISE WARNING 'FAIL: duplicate job_sequence within a project accepted';
   EXCEPTION WHEN unique_violation THEN RAISE NOTICE 'ok  unique(project_id,job_sequence) rejected a duplicate';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  unique(project_id,job_sequence) rejected a duplicate)', SQLERRM; END;
+
+  -- 0073: three digits is the shape, not merely what the trigger happens to emit. The
+  -- app never sets job_sequence — the trigger does — but the import writes rows directly, and
+  -- an unpadded '2' beside an existing '002' is two jobs a person reads as one.
+  BEGIN
+    INSERT INTO jobs (project_id,job_sequence,job_original_address_id,job_current_address_id,job_owning_team,job_created_by)
+    SELECT 1106,'7',address_id,address_id,'design',(SELECT profile_id FROM profiles LIMIT 1) FROM addresses LIMIT 1;
+    RAISE WARNING 'FAIL: an unpadded job_sequence was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  jobs_sequence_is_padded rejected ''7''';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  jobs_sequence_is_padded rejected 7)', SQLERRM; END;
+
+  -- The other side: a four-digit number past 999 is legal, and a zero-padded one is not.
+  BEGIN
+    INSERT INTO jobs (project_id,job_sequence,job_original_address_id,job_current_address_id,job_owning_team,job_created_by)
+    SELECT 1106,'0100',address_id,address_id,'design',(SELECT profile_id FROM profiles LIMIT 1) FROM addresses LIMIT 1;
+    RAISE WARNING 'FAIL: a four-digit job_sequence with a leading zero was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  jobs_sequence_is_padded rejected ''0100''';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  jobs_sequence_is_padded rejected 0100)', SQLERRM; END;
 
   BEGIN
     -- The composite FK: a job parked in a stage belonging to a DIFFERENT pipeline.
@@ -92,7 +115,7 @@ BEGIN
 
   BEGIN
     UPDATE job_pipeline_positions SET job_pipeline_position_state='waiting',
-           job_pipeline_position_waiting_on=NULL WHERE job_id='1106-02';
+           job_pipeline_position_waiting_on=NULL WHERE job_id='1106-002';
     RAISE WARNING 'FAIL: waiting on nobody was accepted';
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  waiting must name a team';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  waiting must name a team)', SQLERRM; END;
@@ -108,7 +131,7 @@ BEGIN
 
   BEGIN
     INSERT INTO job_stage_events (job_id, pipeline_id, job_stage_event_to_stage_id)
-    SELECT '1106-02', (SELECT pipeline_id FROM pipelines WHERE pipeline_key='build_lifecycle'),
+    SELECT '1106-002', (SELECT pipeline_id FROM pipelines WHERE pipeline_key='build_lifecycle'),
            (SELECT ps.pipeline_stage_id FROM pipeline_stages ps JOIN pipelines p USING (pipeline_id)
              WHERE p.pipeline_key='build_lifecycle' LIMIT 1);
     RAISE NOTICE 'note: job_stage_events accepts a direct insert as the table owner — RLS has no INSERT policy, so `authenticated` cannot. Checked separately.';
@@ -145,7 +168,7 @@ BEGIN
   BEGIN
     INSERT INTO task_dependencies (task_id, depends_on_task_id)
     SELECT d.task_id, t.task_id FROM tasks t, tasks d
-     WHERE t.job_id='1106-02' AND d.job_id='1106-02'
+     WHERE t.job_id='1106-002' AND d.job_id='1106-002'
        AND t.task_name='Released to Construction' AND d.task_name='Contract Deposit Paid';
     RAISE WARNING 'FAIL: a dependency cycle was accepted';
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  guard_task_dependency_cycle rejected a cycle';
@@ -153,7 +176,7 @@ BEGIN
 
   BEGIN
     INSERT INTO tasks (job_id, project_id, task_name)
-    VALUES ('1106-02', 1106, 'Two parents');
+    VALUES ('1106-002', 1106, 'Two parents');
     RAISE WARNING 'FAIL: a task with two parents was accepted';
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  tasks_one_parent rejected two parents';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on task parents (%)', SQLERRM; END;
@@ -172,7 +195,7 @@ BEGIN
     -- job, and being refused is the correct answer rather than being silently repaired:
     -- "done, and we no longer know when" is not a state worth accepting.
     UPDATE tasks SET task_completed_at = NULL
-     WHERE job_id='1106-02' AND task_status='done';
+     WHERE job_id='1106-002' AND task_status='done';
     RAISE WARNING 'FAIL: a done task was left with no completion time';
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a done task cannot lose its completion time';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on completion (%)', SQLERRM; END;
@@ -180,7 +203,7 @@ BEGIN
   BEGIN
     INSERT INTO task_dependencies (task_id, depends_on_task_id)
     SELECT a.task_id, b.task_id FROM tasks a, tasks b
-     WHERE a.job_id='1106-02' AND a.task_name='Working Drawings'
+     WHERE a.job_id='1106-002' AND a.task_name='Working Drawings'
        AND b.task_name='A task on another job' LIMIT 1;
     RAISE WARNING 'FAIL: a dependency crossed two different jobs';
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a task cannot depend on another record''s task';
@@ -188,14 +211,14 @@ BEGIN
 
   BEGIN
     UPDATE variations SET variation_status='cancelled', variation_cancelled_reason=NULL
-     WHERE job_id='1106-02' AND variation_sequence=2;
+     WHERE job_id='1106-002' AND variation_sequence=2;
     RAISE WARNING 'FAIL: a variation was cancelled with no reason';
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a cancelled variation must say why';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on cancel reason (%)', SQLERRM; END;
 
   BEGIN
     UPDATE variations SET variation_number='9999-99-V9'
-     WHERE job_id='1106-02' AND variation_sequence=2;
+     WHERE job_id='1106-002' AND variation_sequence=2;
     RAISE WARNING 'FAIL: a variation number was rewritten away from its parts';
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a variation number cannot be rewritten';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on variation number (%)', SQLERRM; END;
@@ -205,7 +228,7 @@ BEGIN
     -- on purpose, for history imported from a system that did not record who.
     UPDATE variations SET variation_approved_by = (SELECT profile_id FROM profiles LIMIT 1),
            variation_approved_at = NULL
-     WHERE job_id='1106-02' AND variation_sequence=2;
+     WHERE job_id='1106-002' AND variation_sequence=2;
     RAISE WARNING 'FAIL: an approver with no approval date was accepted';
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  an approver must carry an approval date';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on approval (%)', SQLERRM; END;
@@ -213,21 +236,21 @@ BEGIN
   BEGIN
     INSERT INTO variation_reopened_tasks (variation_id, task_id)
     SELECT v.variation_id, t.task_id FROM variations v, tasks t
-     WHERE v.job_id='1106-02' AND v.variation_sequence=2
+     WHERE v.job_id='1106-002' AND v.variation_sequence=2
        AND t.task_name='A task on another job' LIMIT 1;
     RAISE WARNING 'FAIL: a variation reopened a task on a different job';
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a variation cannot reopen another job''s task';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on cross-job rework (%)', SQLERRM; END;
 
   BEGIN
-    INSERT INTO taggings (tag_id, job_id) VALUES ('urgent','1106-02');
+    INSERT INTO taggings (tag_id, job_id) VALUES ('urgent','1106-002');
     RAISE WARNING 'FAIL: the same tag was applied to the same job twice';
   EXCEPTION WHEN unique_violation THEN RAISE NOTICE 'ok  a tag applies to a record once';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on duplicate tag (%)', SQLERRM; END;
 
   BEGIN
     INSERT INTO document_links (document_id, project_id, job_id)
-    SELECT document_id, 1106, '1106-02' FROM documents LIMIT 1;
+    SELECT document_id, 1106, '1106-002' FROM documents LIMIT 1;
     RAISE WARNING 'FAIL: a document link with two parents was accepted';
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a document link has exactly one parent';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on document link parents (%)', SQLERRM; END;
@@ -254,7 +277,7 @@ BEGIN
   -- reported that the constraint had failed to bite. That is the third zero-row statement
   -- this harness has mistaken for a result, so this one says so out loud instead.
   BEGIN
-    UPDATE jobs SET job_stage = 'Working Drawings & Contracts' WHERE job_id = '1106-02';
+    UPDATE jobs SET job_stage = 'Working Drawings & Contracts' WHERE job_id = '1106-002';
     GET DIAGNOSTICS touched = ROW_COUNT;
     IF touched = 0 THEN
       RAISE WARNING 'FAIL: the stage probe matched no job — the fixture it targets is gone';
@@ -265,7 +288,7 @@ BEGIN
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on retired stage name (%)', SQLERRM; END;
 
   BEGIN
-    UPDATE jobs SET job_stage = 'Handover & Maintenance' WHERE job_id = '1106-02';
+    UPDATE jobs SET job_stage = 'Handover & Maintenance' WHERE job_id = '1106-002';
     GET DIAGNOSTICS touched = ROW_COUNT;
     IF touched = 0 THEN
       RAISE WARNING 'FAIL: the stage probe matched no job — the fixture it targets is gone';
@@ -320,7 +343,7 @@ BEGIN
   BEGIN
     UPDATE jobs SET job_current_address_id =
       (SELECT address_id FROM addresses WHERE address_precision = 'locality' LIMIT 1)
-     WHERE job_id = '1106-02';
+     WHERE job_id = '1106-002';
     GET DIAGNOSTICS touched = ROW_COUNT;
     IF touched = 0 THEN
       RAISE WARNING 'FAIL: the address probe matched no job — the fixture it targets is gone';
@@ -344,7 +367,7 @@ BEGIN
       -- different refusal, and it would read as this probe passing.
       RAISE WARNING 'FAIL: the no-number address the probe needs was never created';
     ELSE
-      UPDATE jobs SET job_current_address_id = no_number WHERE job_id = '1106-02';
+      UPDATE jobs SET job_current_address_id = no_number WHERE job_id = '1106-002';
       GET DIAGNOSTICS touched = ROW_COUNT;
       IF touched = 0 THEN
         RAISE WARNING 'FAIL: the no-number probe matched no job — the fixture it targets is gone';
