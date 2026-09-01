@@ -54,7 +54,7 @@ export function JobCard({
   team: string;
   /**
    * The job's own current address, resolved by `job_display`. Lofty, 23 August: a card
-   * shows the job number and the address, because `1001-01` identifies the job only to
+   * shows the job number and the address, because `1001-001` identifies the job only to
    * somebody who knows the numbering and the address is what everyone says out loud.
    *
    * Null while the job has none — which after 0036 means the row is genuinely unreadable
@@ -94,7 +94,7 @@ export function JobCard({
     >
       <header className="card-top">
         {/* The number leads. It is the thing on the contract, and it carries the project
-            in its first half — 1001-01 is job 01 of project 1001. */}
+            in its first half — 1001-001 is job 001 of project 1001. */}
         <Text type="text2" weight="medium">{jobNumber}</Text>
         {SHOW_STATUS_ON_CARDS && <StatusPill status={status} />}
       </header>
