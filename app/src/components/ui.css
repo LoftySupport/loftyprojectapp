@@ -2153,3 +2153,67 @@ code { overflow-wrap: anywhere; }
 }
 .feedback-similar-vote:disabled { opacity: 0.7; cursor: default; }
 .feedback-similar-vote:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+
+/* ---- the standard date range picker (DateRange.tsx) -----------------------
+   Amber, 1 Sep: this is the app's default date control everywhere.
+
+   The popover is z-indexed above Vibe's Modal (10000) for the reason the 24 August
+   session paid for: a layer that opens over the page has to clear whatever opened it,
+   and "above our own panels" is not enough — the create panel sits at 41 and the modal
+   at 10000, and a popover under either reads as a control that does not work. The check
+   is to open it inside a panel, not to read the CSS. */
+.dr-wrap { position: relative; }
+.dr-trigger {
+  min-height: 32px; padding: var(--space-4) var(--space-8);
+  background: var(--primary-background-color);
+  border: 1px solid var(--ui-border-color); border-radius: var(--border-radius-small);
+  font: var(--font-text2-normal); color: var(--secondary-text-color); cursor: pointer;
+  text-align: left; white-space: nowrap;
+}
+.dr-trigger:hover { background: var(--primary-background-hover-color); }
+.dr-trigger.is-set { color: var(--primary-text-color); border-color: var(--primary-color); }
+.dr-trigger:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+
+.dr-pop {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 10001;
+  min-width: 320px; padding: var(--space-12);
+  background: var(--primary-background-color);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-medium);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+/* On a phone the popover would otherwise hang off the right edge of the screen. */
+@media (max-width: 620px) {
+  .dr-pop { left: auto; right: 0; min-width: min(320px, calc(100vw - var(--space-32))); }
+}
+
+.dr-chips { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+.dr-chip {
+  min-height: 26px; padding: var(--space-4) var(--space-8);
+  background: var(--primary-background-hover-color); border: 1px solid transparent;
+  border-radius: var(--border-radius-small);
+  font: var(--font-text3-normal); color: var(--primary-text-color); cursor: pointer;
+}
+.dr-chip:hover { background: var(--primary-selected-color); }
+.dr-chip.is-on { background: var(--primary-selected-color); border-color: var(--primary-color); font-weight: 600; }
+.dr-chip:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+
+.dr-fields { display: flex; align-items: flex-end; gap: var(--space-8); margin-top: var(--space-12); }
+.dr-field { display: flex; flex-direction: column; gap: 2px; flex: 1 1 0; min-width: 0; }
+.dr-field input {
+  min-height: 32px; padding: var(--space-4) var(--space-8);
+  background: var(--primary-background-color);
+  border: 1px solid var(--ui-border-color); border-radius: var(--border-radius-small);
+  font: var(--font-text2-normal); color: var(--primary-text-color); width: 100%;
+}
+.dr-dash { padding-bottom: var(--space-8); color: var(--secondary-text-color); }
+
+.dr-actions {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-8); margin-top: var(--space-12);
+}
+.dr-clear {
+  min-height: 24px; background: none; border: 0; padding: 0;
+  font: var(--font-text2-normal); color: var(--primary-color); cursor: pointer;
+}
+.dr-clear:hover { text-decoration: underline; }

@@ -32,18 +32,19 @@ const ROUTES = ["/", "/dashboard", "/projects", "/jobs", "/reports", "/templates
                 // sharing one route — a five-column board, a list of dated phases, and a
                 // changelog — and only the board has ever been measured by proxy.
                 "/updates/requests", "/updates/roadmap", "/updates/changelog",
-                // …and every VIEW of the two tabs that have them, because a table, a
-                // timeline and a month grid are three more layouts again — the widest
-                // things in the app, and the ones most likely to push the page sideways.
+                // …and the table view of the two tabs that have one, because a wide
+                // table is the thing most likely to push the page sideways.
                 //
                 // This is why the view lives in the query string rather than in component
-                // state: with it in state these six URLs would all render the board, and
-                // the sweep would report green on layouts it had never drawn. A check
-                // that passes by not testing is the kind this repo trusts least.
-                "/updates/requests?view=table", "/updates/requests?view=gantt",
-                "/updates/requests?view=calendar",
-                "/updates/roadmap?view=table", "/updates/roadmap?view=gantt",
-                "/updates/roadmap?view=calendar"];
+                // state: with it in state these URLs would all render the board, and the
+                // sweep would report green on a layout it had never drawn. A check that
+                // passes by not testing is the kind this repo trusts least. (A gantt and
+                // a calendar were here on 31 Aug and removed on 1 Sep — see
+                // UpdatesViews.tsx for why they are not coming back in that shape.)
+                "/updates/requests?view=table", "/updates/roadmap?view=table",
+                // The standalone report form, which is a page somebody is SENT — so it
+                // is the one most likely to be opened on a phone.
+                "/report"];
 
 // Real devices, not round numbers. 320 is the narrowest still in use; 390 is the
 // iPhone most people have; the landscape row is the same phone turned sideways, which

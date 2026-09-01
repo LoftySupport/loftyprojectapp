@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Button, Heading, Tab, TabList, Text, TextArea, TextField } from "@vibe/core";
-import { ThumbsUp } from "@vibe/icons";
+import { Search, ThumbsUp } from "@vibe/icons";
 import { CommentsPanel } from "../components/CommentsPanel";
 import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
@@ -11,9 +11,11 @@ import { Select } from "../components/Select";
 import { SidePanel } from "../components/SidePanel";
 import { LoadProblem } from "../components/SearchNotices";
 import {
-  MonthEntries, Timeline, ViewSwitcher, useUpdatesView,
-  type DatedEntry, type TimelineBar
+  ViewSwitcher, useUpdatesView
 } from "../components/UpdatesViews";
+import {
+  DateRangeFilter, matchesRange, parseRange, serialiseRange
+} from "../components/DateRange";
 import { SortHeader, useTableSort } from "../components/SortableTable";
 import { useChangelogPulls } from "../data/github";
 import {
@@ -116,15 +118,27 @@ function Requests() {
   const [reloadKey, setReloadKey] = useState(0);
   const { data: items, loading, error } = useQuery(r => r.listFeedback(), [], [reloadKey]);
   const { data: phases } = useQuery(r => r.listRoadmapPhases(), [], [reloadKey]);
-  const [kind, setKind] = useState<"all" | FeedbackKind>("all");
-  const [sort, setSort] = useState<"votes" | "newest">("votes");
+  const [params, setParams] = useSearchParams();
   const [view, setView] = useUpdatesView();
   const [openId, setOpenId] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [busyVote, setBusyVote] = useState<string | null>(null);
-  // The vote a click has already changed, held here so the thumb and the count update
-  // from the row the database returned rather than from a guess.
   const [voted, setVoted] = useState<Record<string, { count: number; mine: boolean }>>({});
+
+  /* Every control on this bar rides the query string, for the reason `saved_views` stores
+     one verbatim: a filtered board is a thing people send each other. `write` drops a
+     param when it is at its default, so a plain board has a plain URL. */
+  const write = (key: string, v: string | null) => {
+    const next = new URLSearchParams(params);
+    if (v) next.set(key, v); else next.delete(key);
+    setParams(next, { replace: true });
+  };
+
+  const search = params.get("q") ?? "";
+  const kind = (params.get("kind") as FeedbackKind | null) ?? "all";
+  const phaseId = params.get("phase") ?? "all";
+  const sort = params.get("sort") === "newest" ? "newest" : "votes";
+  const range = parseRange(params.get("date"));
 
   const withVotes = (f: FeedbackItem): FeedbackItem => {
     const v = voted[f.id];
@@ -132,8 +146,18 @@ function Requests() {
   };
 
   const shown = useMemo(() => {
+    const needle = search.trim().toLowerCase();
     const list = items
       .filter(f => kind === "all" || f.kind === kind)
+      .filter(f => phaseId === "all"
+        || (phaseId === "none" ? f.roadmapPhaseId === null : f.roadmapPhaseId === phaseId))
+      // Reported, not moved: "what came in last week" is the question a date filter on a
+      // queue is asked, and the moved date answers "when did somebody triage it".
+      .filter(f => matchesRange(f.createdAt, range))
+      .filter(f => !needle
+        || f.title.toLowerCase().includes(needle)
+        || f.detail.toLowerCase().includes(needle)
+        || (f.fromName ?? "").toLowerCase().includes(needle))
       // A merged duplicate is off the board (0066): its votes and followers are on the
       // survivor, so leaving it here would show the same request twice with the count
       // split across them — the exact fault merging exists to fix. It is still reachable:
@@ -146,7 +170,7 @@ function Requests() {
         : Date.parse(b.createdAt) - Date.parse(a.createdAt)
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, kind, sort, voted]);
+  }, [items, kind, phaseId, sort, search, params.get("date"), voted]);
 
   const byStage = (stage: FeedbackStage) => shown.filter(f => f.stage === stage);
 
@@ -156,7 +180,7 @@ function Requests() {
    * Gated on `superadmin` because that is what the database enforces — 0060's
    * `guard_feedback_stage_change()` raises 42501 for anybody below it, admins included.
    * The attribute is only set when the rung is held, so the board never offers a gesture
-   * that ends in a refusal: the same rule the jobs board follows for its own drag.
+   * that ends in a refusal.
    */
   const canMoveStage = can("superadmin");
   const [dragged, setDragged] = useState<FeedbackItem | null>(null);
@@ -187,13 +211,15 @@ function Requests() {
   };
 
   const open = shown.find(f => f.id === openId) ?? null;
+  const filtered = search.trim() !== "" || kind !== "all" || phaseId !== "all" || range !== null;
 
   return (
     <section className="panel">
       <div className="panel-head">
         <Text type="text2" weight="bold">Requests and bugs</Text>
         <Text type="text3" color="secondary">
-          {shown.length} {shown.length === 1 ? "item" : "items"}
+          {filtered ? `${shown.length} of ${items.length}` : shown.length}
+          {" "}{shown.length === 1 ? "item" : "items"}
         </Text>
       </div>
       <Text type="text2" color="secondary" ellipsis={false}>
@@ -203,17 +229,63 @@ function Requests() {
       </Text>
 
       <div className="updates-bar">
+        {/* Search first, because on a board of a few hundred it is the control people
+            reach for before any filter. Title, detail and who sent it — the three things
+            somebody remembers about a request they are trying to find again. */}
+        <div className="updates-search">
+          <Search size={16} aria-hidden />
+          <input
+            type="search"
+            value={search}
+            placeholder="Search requests…"
+            aria-label="Search requests"
+            onChange={e => write("q", e.target.value || null)}
+          />
+        </div>
+
         <div className="select-wrap">
-          <Select options={KIND_FILTERS} value={kind} onChange={v => setKind(v as "all" | FeedbackKind)}
+          <Select options={KIND_FILTERS} value={kind}
+                  onChange={v => write("kind", v === "all" ? null : String(v))}
                   aria-label="Show" size="small" />
         </div>
+
+        {/* The filter Amber asked for, on the axis the board cannot already show: the
+            board groups by stage, so a stage filter would be a filter on the columns.
+            Phase is the other thing a request belongs to, and "not planned yet" is a
+            real answer rather than a missing one. */}
         <div className="select-wrap">
-          <Select options={SORTS} value={sort} onChange={v => setSort(v as "votes" | "newest")}
+          <Select
+            options={[
+              { value: "all", label: "Any phase" },
+              { value: "none", label: "Not planned yet" },
+              ...phases.map(p => ({ value: p.id, label: p.name }))
+            ]}
+            value={phaseId}
+            onChange={v => write("phase", v === "all" ? null : String(v))}
+            aria-label="Filter by roadmap phase"
+            size="small"
+          />
+        </div>
+
+        <DateRangeFilter
+          label=""
+          ariaLabel="Filter by when a request was sent in"
+          value={range}
+          onChange={v => write("date", serialiseRange(v))}
+        />
+
+        <div className="select-wrap">
+          <Select options={SORTS} value={sort}
+                  onChange={v => write("sort", v === "votes" ? null : String(v))}
                   aria-label="Sort by" size="small" />
         </div>
+
         <span className="updates-bar-spacer" />
         <ViewSwitcher value={view} onChange={setView} />
-        <Button size="small" onClick={() => report()}>Report something</Button>
+        {/* "+ New", not "Report something" (Amber, 1 Sep): the form takes an idea as
+            readily as a bug, and a button that says "report" asks people with a
+            suggestion whether they are in the right place. */}
+        <Button size="small" onClick={() => report()}>+ New</Button>
       </div>
 
       {error && <LoadProblem error={error} />}
@@ -225,6 +297,13 @@ function Requests() {
         <Text type="text2" color="secondary" element="p" ellipsis={false}
               style={{ marginTop: "var(--space-12)" }}>
           Nothing has been sent in yet. The footer on every page is where it starts.
+        </Text>
+      )}
+
+      {items.length > 0 && shown.length === 0 && (
+        <Text type="text2" color="secondary" element="p" ellipsis={false}
+              style={{ marginTop: "var(--space-12)" }}>
+          No requests match the current filters.
         </Text>
       )}
 
@@ -261,16 +340,20 @@ function Requests() {
                     setDropTarget(null);
                   }}
                 >
-                  <div className="updates-col-head">
+                  {/* The caption under each heading is gone with the Canny restyle —
+                      their columns are a dot and a word. What it said is kept as the
+                      heading's title, because "in review" versus "planned" is the
+                      difference between "we are thinking about it" and "it is going to
+                      happen", and that is worth being able to find. */}
+                  <div className="updates-col-head" title={FEEDBACK_STAGE_MEANING[stage]}>
+                    {/* The dot carries the column's colour, so the heading and the cards
+                        under it read as one group without tinting the whole column. */}
+                    <span className="updates-col-dot" aria-hidden />
                     <Text type="text2" weight="bold" element="div">
                       {FEEDBACK_STAGE_LABELS[stage]}
                     </Text>
                     <span className="updates-count">{column.length}</span>
                   </div>
-                  <Text type="text3" color="secondary" element="div" ellipsis={false}
-                        className="updates-col-meaning">
-                    {FEEDBACK_STAGE_MEANING[stage]}
-                  </Text>
                   <div className="updates-cards">
                     {column.map(f => (
                       <div
@@ -307,8 +390,7 @@ function Requests() {
 
           {/* Declined stays underneath. It is the one ending nobody is moving towards,
               and a column of refusals at the end of the run would read as where requests
-              end up. "Live in the app" left this pair on 31 Aug and became the last
-              column, because it is the destination rather than a sibling of this. */}
+              end up. */}
           <Ended
             title="Declined"
             note="Read, considered, and not going ahead — kept so the answer does not get lost."
@@ -320,24 +402,6 @@ function Requests() {
 
       {items.length > 0 && view === "table" && (
         <RequestsTable rows={shown} phases={phases} onOpen={setOpenId} />
-      )}
-
-      {items.length > 0 && view === "gantt" && (
-        <Timeline
-          bars={requestBars(shown, phases, setOpenId)}
-          nothingNote="Nothing to place yet."
-          unscheduledNote={
-            "Not on the chart — these have no roadmap phase, so there is no window to draw " +
-            "them in. Plan one into a phase and it appears above."
-          }
-        />
-      )}
-
-      {items.length > 0 && view === "calendar" && (
-        <MonthEntries
-          entries={requestEntries(shown, setOpenId)}
-          nothingNote="Nothing to place yet."
-        />
       )}
 
       <RequestPanel
@@ -355,65 +419,22 @@ function Requests() {
   );
 }
 
-/* ================================================ the three non-board views ======= */
+/* ================================================ the table ====================== */
 
 const shortDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : null;
 
-/**
- * A request's bar is its PHASE's window, borrowed and said to be borrowed.
- *
- * A request carries no duration of its own — see the note at the top of UpdatesViews —
- * so anything not planned into a phase gets no bar and is listed underneath by name.
- * Estimating one from votes, age or stage would be inventing a delivery date, which is
- * the single worst thing this screen could do: everybody reads a roadmap as a promise.
- */
-function requestBars(
-  rows: FeedbackItem[],
-  phases: RoadmapPhase[],
-  onOpen: (id: string) => void
-): TimelineBar[] {
-  return rows.map(f => {
-    const phase = phases.find(p => p.id === f.roadmapPhaseId) ?? null;
-    return {
-      id: f.id,
-      label: f.title,
-      sublabel: phase ? `${phase.name} · ${FEEDBACK_STAGE_LABELS[f.stage]}` : FEEDBACK_STAGE_LABELS[f.stage],
-      startsOn: phase?.startsOn ?? null,
-      endsOn: phase?.endsOn ?? null,
-      tone: phase?.status ?? "planned",
-      onOpen: () => onOpen(f.id)
-    };
-  });
-}
-
-/**
- * The two dates a request really has: the day it was sent in, and the day it last moved.
- *
- * Both are columns, neither is derived. A request that has never moved would otherwise
- * show the same day twice, so the move is only emitted when it differs from the report —
- * a calendar that draws two entries for one event reads as two events.
- */
-function requestEntries(rows: FeedbackItem[], onOpen: (id: string) => void): DatedEntry[] {
-  const out: DatedEntry[] = [];
-  for (const f of rows) {
-    out.push({
-      id: `${f.id}-reported`, when: f.createdAt, label: f.title,
-      kind: "reported", onOpen: () => onOpen(f.id)
-    });
-    if (new Date(f.stageEnteredAt).toDateString() !== new Date(f.createdAt).toDateString()) {
-      out.push({
-        id: `${f.id}-moved`, when: f.stageEnteredAt, label: f.title,
-        kind: `moved to ${FEEDBACK_STAGE_LABELS[f.stage].toLowerCase()}`,
-        tone: "moved", onOpen: () => onOpen(f.id)
-      });
-    }
-  }
-  return out;
-}
-
 type ReqCol = "title" | "kind" | "stage" | "phase" | "votes" | "from" | "moved";
 
+/**
+ * The tracker as a table, on the app's own table (Amber, 1 Sep: *"make the table view
+ * match the rest of the UI"*).
+ *
+ * `panel` + `data-table-wrap` + `data-table` + `SortHeader` — the same four things the
+ * jobs table is made of, rather than the bespoke `.updates-table` this used to carry. A
+ * second table style is a second set of paddings, hover colours and header weights to
+ * keep in step, and they do not stay in step.
+ */
 function RequestsTable({ rows, phases, onOpen }: {
   rows: FeedbackItem[];
   phases: RoadmapPhase[];
@@ -439,8 +460,8 @@ function RequestsTable({ rows, phases, onOpen }: {
   );
 
   return (
-    <div className="updates-table-wrap">
-      <table className="updates-table">
+    <div className="panel data-table-wrap">
+      <table className="data-table">
         <thead>
           <tr>
             <SortHeader column="title" label="Request" sort={sort} onSort={toggle} />
@@ -479,6 +500,19 @@ function RequestsTable({ rows, phases, onOpen }: {
   );
 }
 
+/**
+ * One card, Canny-shaped (Amber, 1 Sep, with their board attached).
+ *
+ * The vote box moves to the LEFT and becomes the card's anchor — a caret over a count,
+ * bordered, the width of a thumb. That is not decoration: on their board the number is
+ * the first thing the eye lands on in every row, which is what makes a column of cards
+ * read as a ranking rather than as a list. Ours sorts by votes by default, so the number
+ * and the order now say the same thing in the same place.
+ *
+ * Under the title sits one small capitalised label — their board name, ours the kind.
+ * It is the line that lets somebody scanning a column tell a bug from an idea without
+ * reading either title.
+ */
 function RequestCard({
   item, phase, busy, onVote, onOpen
 }: {
@@ -490,21 +524,10 @@ function RequestCard({
 }) {
   return (
     <article className="updates-card">
+      <VoteButton item={item} busy={busy} onVote={onVote} />
       <button type="button" className="updates-card-open" onClick={onOpen}>
-        <span className={`updates-kind updates-kind-${item.kind}`}>
-          {item.kind === "bug" ? "Bug" : "Request"}
-        </span>
         <Text type="text2" weight="medium" element="span" ellipsis={false}>{item.title}</Text>
-        <Text type="text3" color="secondary" element="span" ellipsis={false}>
-          {/* An em dash, not "Unknown": the profile is gone, and naming somebody would be
-              a claim about who sent it. */}
-          {item.fromName ?? "—"}
-          {/* Said out loud where it applies. 0067's argument about votes holds here: an
-              on-behalf record that does not say so is indistinguishable from one somebody
-              invented, and the person it names is the one entitled to see the difference. */}
-          {item.addedByName && ` (entered by ${item.addedByName})`}
-          {" · "}{new Date(item.createdAt).toLocaleDateString()}
-        </Text>
+        <span className="updates-card-sub">{item.kind === "bug" ? "BUG" : "IDEA"}</span>
         <span className="updates-card-chips">
           {phase && <span className="updates-phase-chip">{phase.name}</span>}
           {item.commentCount > 0 && (
@@ -520,7 +543,6 @@ function RequestCard({
           {item.moveUnseen && <span className="updates-chip is-new">Moved</span>}
         </span>
       </button>
-      <VoteButton item={item} busy={busy} onVote={onVote} />
     </article>
   );
 }
@@ -660,21 +682,47 @@ function RequestPanel({
     <SidePanel open={item !== null} title={item?.title ?? ""} onClose={onClose}>
       {item && (
         <div className="create-form">
-          <div className="updates-panel-head">
-            <span className={`updates-kind updates-kind-${item.kind}`}>
-              {item.kind === "bug" ? "Bug" : "Request"}
-            </span>
-            <span className="updates-stage-chip">{FEEDBACK_STAGE_LABELS[item.stage]}</span>
+          {/* The detail view, Canny-shaped (Amber, 1 Sep, with their post attached): the
+              vote box leads, the title sits beside it, and the stage is a quiet
+              capitalised line underneath rather than a chip in a row of chips. Their
+              layout puts the number and the decision — "53" and "UNDER REVIEW" — in the
+              first inch of the page, which are the two things somebody opening a request
+              came to find out. */}
+          <div className="updates-detail-head">
             <VoteButton item={item} busy={busyVote === item.id} onVote={() => void onVote(item)} />
+            <div className="updates-detail-title">
+              <Text type="text1" weight="bold" element="h3" ellipsis={false}>{item.title}</Text>
+              <span className="updates-detail-stage">
+                {FEEDBACK_STAGE_LABELS[item.stage].toUpperCase()}
+              </span>
+            </div>
           </div>
 
-          <Text type="text3" color="secondary" element="div" ellipsis={false}>
-            From {item.fromName ?? "—"}
-            {item.addedByName && `, entered by ${item.addedByName},`}
-            {" on "}{new Date(item.createdAt).toLocaleDateString()}
-            {" · "}in {FEEDBACK_STAGE_LABELS[item.stage].toLowerCase()} since{" "}
-            {new Date(item.stageEnteredAt).toLocaleDateString()}
-          </Text>
+          {/* Who it is from, as an author block rather than a byline — the same move
+              their post makes, and it is what turns a row in a queue into somebody's
+              request. The initial stands in for an avatar the app has no source for;
+              it is derived from the name rather than invented. */}
+          <div className="updates-author">
+            <span className="updates-avatar" aria-hidden>
+              {(item.fromName ?? "?").trim().charAt(0).toUpperCase()}
+            </span>
+            <div className="updates-author-body">
+              <Text type="text2" weight="medium" element="div" ellipsis={false}>
+                {item.fromName ?? "—"}
+              </Text>
+              {item.detail
+                ? <Text type="text2" element="p" ellipsis={false}>{item.detail}</Text>
+                : <Text type="text2" color="secondary" element="p" ellipsis={false}>
+                    No detail was written — the one line above is all of it.
+                  </Text>}
+              <Text type="text3" color="secondary" element="div" ellipsis={false}>
+                {item.addedByName ? `Entered by ${item.addedByName}` : "Created"}
+                {" · "}{new Date(item.createdAt).toLocaleDateString()}
+                {" · "}in {FEEDBACK_STAGE_LABELS[item.stage].toLowerCase()} since{" "}
+                {new Date(item.stageEnteredAt).toLocaleDateString()}
+              </Text>
+            </div>
+          </div>
 
           {/* Where it went, for the person who filed the duplicate. The whole reason a
               merged request is kept rather than deleted. */}
@@ -686,12 +734,6 @@ function RequestPanel({
               </Text>
             </div>
           )}
-
-          {item.detail
-            ? <Text type="text2" element="p" ellipsis={false}>{item.detail}</Text>
-            : <Text type="text2" color="secondary" element="p" ellipsis={false}>
-                No detail was written — the one line above is all of it.
-              </Text>}
 
           <dl className="updates-facts">
             <dt>Page</dt>
@@ -1045,32 +1087,6 @@ function Roadmap() {
 
       {view === "table" && <PhasesTable phases={phases} items={items} />}
 
-      {view === "gantt" && (
-        <Timeline
-          bars={phases.map(p => ({
-            id: p.id,
-            label: p.name,
-            sublabel: `${ROADMAP_PHASE_STATUS_LABELS[p.status]} · ${
-              items.filter(f => f.roadmapPhaseId === p.id).length} planned`,
-            startsOn: p.startsOn,
-            endsOn: p.endsOn,
-            tone: p.status
-          }))}
-          nothingNote="No phases yet, so there is nothing to place on a timeline."
-          unscheduledNote={
-            "Not on the chart — these phases have no dates set yet. A phase with no dates " +
-            "is a real phase; drawing a guessed bar for it would be a date nobody agreed."
-          }
-        />
-      )}
-
-      {view === "calendar" && (
-        <MonthEntries
-          entries={phaseEntries(phases)}
-          nothingNote="No phase has a date set yet, so there is nothing to put on a calendar."
-        />
-      )}
-
       <RequestPanel
         item={items.find(f => f.id === openId) ?? null}
         all={items}
@@ -1103,24 +1119,6 @@ function phaseDates(phase: RoadmapPhase): string {
   if (phase.startsOn) return `From ${fmt(phase.startsOn)}`;
   if (phase.endsOn) return `By ${fmt(phase.endsOn)}`;
   return "No dates set";
-}
-
-/**
- * A phase's own dates, which are the only dates on this screen that belong to the thing
- * being drawn. Both are nullable and emitted independently: a phase with a start and no
- * agreed end puts one entry on the calendar, not two.
- */
-function phaseEntries(phases: RoadmapPhase[]): DatedEntry[] {
-  const out: DatedEntry[] = [];
-  for (const p of phases) {
-    if (p.startsOn) {
-      out.push({ id: `${p.id}-start`, when: p.startsOn, label: p.name, kind: "phase starts", tone: p.status });
-    }
-    if (p.endsOn) {
-      out.push({ id: `${p.id}-end`, when: p.endsOn, label: p.name, kind: "phase ends", tone: p.status });
-    }
-  }
-  return out;
 }
 
 type PhaseCol = "phase" | "status" | "starts" | "ends" | "planned" | "live";

@@ -20,7 +20,105 @@ Unreleased: 21 changes since then —
 and before it, the spine review described there, because that is the only category of
 change that gets expensive once 200 jobs are in.
 
-Last updated: 2026-08-31.
+Last updated: 2026-09-01.
+
+---
+
+## Session of 2026-09-01 — the tracker gets a front door, and one date picker for the app
+
+Amber, 1 Sep, in one message of eight numbered asks. What is worth carrying forward is
+the two that changed a decision rather than adding a control.
+
+### The gantt and the calendar are gone, one day after being built
+
+*"remove the gantt chart and calendar"*. Built 31 Aug, removed 1 Sep, and the reason is
+the argument against building them again — it is written at the top of `UpdatesViews.tsx`:
+
+**A request has no dates of its own.** The only dates in reach were its phase's, so every
+bar on that gantt was a phase's window borrowed by whatever sat in it: forty requests in
+Phase 1 drew forty identical bars. It was an honest chart of a fact the roadmap already
+showed once. The calendar had the opposite problem — its two real dates, reported and last
+moved, are facts about administration, so a month grid of them answered "when did people
+type things".
+
+The lesson is not "no charts". It is that **a time view needs a duration belonging to the
+thing being drawn**. If requests ever gain start and target dates, a gantt becomes worth
+building, and it will be a different chart.
+
+### One date picker, and it is now the app's
+
+*"include date range that looks like the screenshot… this is the default way for every
+date picker in the app"*. `components/DateRange.tsx`: today · yesterday · last 7 days ·
+last 30 days · next 30 days · custom, with a start/end picker, Clear dates and Done.
+
+**Both directions on purpose.** A tracker filters backwards, a roadmap forwards, and a
+picker with only past presets makes the forward question a custom range every time.
+
+**The end of a range is EXCLUSIVE**, and that is the whole correctness of it: "today" has
+to include something stamped at 23:59, and an inclusive end at midnight silently drops the
+last day of every range. That is the classic off-by-one in date filtering and it is
+invisible, because the control still looks right. Twenty-two cases are checked, including
+that one from both sides.
+
+**The jobs board was swapped onto it too**, which is what makes the claim true rather than
+aspirational — otherwise two screens keep two vocabularies. One thing had to be preserved
+doing it: `saved_views` stores a query string **verbatim** (0048), so a saved board may
+carry `?date=month`, which is not one of the new presets. A value that stops parsing does
+not error — **it silently stops filtering**, which is the worst way for a saved view to
+break — so `month` is still parsed in `filtering.ts` and says why.
+
+### `/report` — a page you can send someone
+
+*"a standalone page (as well as slide out) so that I can share it with people who are not
+able to access the account (still signed into the app even in demo mode)"*.
+
+**Checked first, because half the ask needed no work:** a **viewer** could always file a
+request — `anyone active reports` (0052) asks only for an active profile. A **demo
+account** could not: 0049 taught `is_active_user()` about `profile_is_demo`, so every
+policy hanging off it refuses at once. Forty-two of forty-seven profiles carry the tick,
+so "nobody being trained can send feedback" was the common case.
+
+`0075` adds `is_signed_in_staff()` — `is_active_user()` **minus the demo clause and
+nothing else** — and two narrow policies: send your own report (never on somebody's
+behalf, which is 0070's admin path), and read back **only what you sent**. Reading back
+follows 0049's own precedent, which widened the `profiles` SELECT so a held account may
+read its own row.
+
+**It is deliberately not an anonymous page.** That needs `anon` INSERT, which puts a
+writable table on the public internet and loses the one fact that makes a request
+actionable — who asked — to serve people who are already signed in. Screenshots are also
+deliberately out: 0062's storage policies still hang off `is_active_user()`, and the form
+hides the control rather than offering an upload that fails.
+
+Watched on the live database, rolled back: a demo account sent a request, read back
+**exactly its own one row**, read 0 jobs, 0 votes and 0 roadmap phases, was refused a
+report under another profile and refused the on-behalf path — and a **deactivated** account
+was still refused everything, which is the case separating the new function from "is
+signed in".
+
+`RequireSignedIn` in `App.tsx` is `RequireAuth` minus its last line. That hole is exactly
+one page wide and must stay that way.
+
+### The rest
+
+- **The board and the detail view are Canny-shaped** (their screenshots attached): the
+  vote box leads each card and the detail head, the column heading is a dot and a word,
+  and one capitalised line under each title says which kind it is. The stage captions
+  moved to the heading's `title` rather than being deleted.
+- **"Report something" is now "+ New"** — the form takes an idea as readily as a bug, and
+  a button that says "report" asks people with a suggestion whether they are in the right
+  place.
+- **Search, a phase filter and the date range** ride the query string like everything
+  else. The filter is on **phase** rather than stage, because the board groups by stage
+  and a stage filter would be a filter on the columns.
+- **The table is the app's table** — `panel` + `data-table-wrap` + `data-table` +
+  `SortHeader`, the same four things the jobs table is made of, rather than the bespoke
+  `.updates-table` it carried. A second table style is a second set of paddings and hover
+  colours to keep in step, and they do not stay in step.
+- **`ReportForm` is one component in two places.** Two copies would have been the quick
+  way to add a page; the first thing to drift is always the copy nobody uses daily. The
+  slide-out drives it with `requestSubmit()` because the footer is rendered outside the
+  form and Vibe's `Button` has no `form` prop.
 
 ---
 

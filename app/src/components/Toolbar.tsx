@@ -1,5 +1,6 @@
 import { Button, Text } from "@vibe/core";
 import { Select, toOptions, type SelectOption } from "./Select";
+import { DateRangeFilter, parseRange, serialiseRange } from "./DateRange";
 import "./ui.css";
 
 /**
@@ -111,31 +112,25 @@ export function Toolbar({
         </div>
       )}
 
-      {/* Real since G46 — this select rendered inert (value null, onChange no-op), the
-          one thing this app otherwise refuses to ship. It filters on the one real date
-          every job carries: when it entered its current stage. Values are codes; the
-          labels say the semantics out loud so nobody mistakes it for a due-date filter.
-          It lives in the same filters array as the chips, so it rides the URL and the
-          "Showing N of M" count like any other filter. */}
-      <div className="toolbar-field">
-        <span className="toolbar-label">Date</span>
-        <Select
-          className="toolbar-control"
-          aria-label="Filter by when a job entered its stage"
-          placeholder="Any date"
-          clearable
-          options={[
-            { value: "7d", label: "Moved stage in last 7 days" },
-            { value: "30d", label: "Moved stage in last 30 days" },
-            { value: "month", label: "Moved stage this month" }
-          ]}
-          value={filters.find(f => f.field === "Date")?.value ?? null}
-          onChange={v => {
-            const rest = filters.filter(f => f.field !== "Date");
-            onFiltersChange(v ? [...rest, { field: "Date", value: v }] : rest);
-          }}
-        />
-      </div>
+      {/* The app's standard date control since 1 September (Amber: *"this is the default
+          way for every date picker in the app"*). It replaced a three-option select whose
+          options were written here and whose arithmetic was written in `filtering.ts` —
+          two places to change to add "yesterday", which is why it never grew one.
+
+          The semantics are unchanged: this filters on `job_stage_entered_at`, the one
+          real date every job carries. `DateRangeFilter` is the control; the label below
+          says which date it is about, because a bare "Date" on a board of jobs reads as a
+          due date. */}
+      <DateRangeFilter
+        label="Moved"
+        ariaLabel="Filter by when a job entered its stage"
+        value={parseRange(filters.find(f => f.field === "Date")?.value ?? null)}
+        onChange={v => {
+          const rest = filters.filter(f => f.field !== "Date");
+          const raw = serialiseRange(v);
+          onFiltersChange(raw ? [...rest, { field: "Date", value: raw }] : rest);
+        }}
+      />
 
       <div className="toolbar-field filter-chips">
         <span className="toolbar-label">Filter by</span>

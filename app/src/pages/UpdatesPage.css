@@ -86,6 +86,9 @@
 }
 
 /* ------------------------------------------------------------------- one card */
+/* Canny-shaped since 1 Sep: the vote box leads, the title follows, and a small
+   capitalised line under it says which kind it is. `align-items: flex-start` keeps the
+   vote box pinned to the top of a card whose title wraps to three lines. */
 .updates-card {
   display: flex;
   align-items: flex-start;
@@ -146,9 +149,11 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 0;
+  /* 44x44 rather than 44x40: on their board it is a square, and it is also the iOS tap
+     target, so the two constraints happen to agree. */
   min-width: 44px;
-  min-height: 40px;
+  min-height: 44px;
   padding: var(--space-4);
   background: var(--primary-background-color);
   border: 1px solid var(--ui-border-color);
@@ -468,3 +473,93 @@
    label above — the fixtures put half the requests in no phase precisely so both paths
    get drawn, and only this one was still 16px tall. */
 .tl-undated-open { display: inline-flex; align-items: center; min-height: 24px; }
+
+/* ---- the Canny restyle (Amber, 1 Sep, with their board attached) ---------- */
+
+/* The heading is a dot and a word. The dot inherits the column's own accent through a
+   custom property, so the ramp is still declared once per stage above rather than twice. */
+.updates-col-head { gap: var(--space-6); justify-content: flex-start; }
+.updates-col-dot {
+  flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--updates-dot, var(--primary-color));
+}
+.updates-col-requested      { --updates-dot: var(--positive-color-selected); }
+.updates-col-in_review      { --updates-dot: var(--primary-color); }
+.updates-col-planned        { --updates-dot: var(--primary-hover-color); }
+.updates-col-in_development { --updates-dot: var(--primary-selected-color); }
+.updates-col-shipped        { --updates-dot: var(--positive-color); }
+/* The count goes to the far right, so the dot and the name stay together as one label
+   rather than spreading across the column. */
+.updates-col-head > .updates-count { margin-left: auto; }
+
+/* The kind, under the title. Capitalised and quiet: it is there to be scanned past
+   rather than read — which is what it is for on their board. */
+.updates-card-sub {
+  font: var(--font-text3-normal);
+  letter-spacing: 0.04em;
+  color: var(--secondary-text-color);
+  text-transform: uppercase;
+}
+
+/* ---- search ---------------------------------------------------------------
+   The icon sits inside the input rather than beside it, so the control reads as one
+   thing at the left of the bar. `type=search` for the browser's own clear affordance. */
+.updates-search {
+  display: flex; align-items: center; gap: var(--space-6);
+  flex: 1 1 240px; min-width: 180px; max-width: 380px;
+  min-height: 32px; padding: 0 var(--space-8);
+  background: var(--primary-background-color);
+  border: 1px solid var(--ui-border-color);
+  border-radius: var(--border-radius-small);
+  color: var(--secondary-text-color);
+}
+.updates-search:focus-within { border-color: var(--primary-color); }
+.updates-search input {
+  flex: 1 1 auto; min-width: 0; border: 0; background: none; outline: none;
+  font: var(--font-text2-normal); color: var(--primary-text-color);
+  min-height: 30px;
+}
+
+/* ---- the detail view, Canny-shaped --------------------------------------- */
+.updates-detail-head { display: flex; align-items: flex-start; gap: var(--space-12); }
+.updates-detail-title { min-width: 0; }
+.updates-detail-title h3 { margin: 0; }
+.updates-detail-stage {
+  display: block; margin-top: 2px;
+  font: var(--font-text3-normal); letter-spacing: 0.06em; font-weight: 600;
+  color: var(--secondary-text-color); text-transform: uppercase;
+}
+.updates-author { display: flex; align-items: flex-start; gap: var(--space-8); }
+.updates-author-body { min-width: 0; flex: 1 1 auto; }
+.updates-author-body p { margin: var(--space-4) 0; }
+/* The initial, not a photo: the app has no avatar source, and a coloured circle with a
+   letter in it is honest about that where a generic silhouette pretends otherwise. */
+.updates-avatar {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--primary-selected-color); color: var(--primary-color);
+  font: var(--font-text3-bold);
+}
+
+/* ---- the detail view, Canny-shaped --------------------------------------- */
+.updates-detail-head { display: flex; align-items: flex-start; gap: var(--space-12); }
+.updates-detail-title { min-width: 0; }
+.updates-detail-title h3 { margin: 0; }
+.updates-detail-stage {
+  display: block; margin-top: 2px;
+  font: var(--font-text3-normal); letter-spacing: 0.06em; font-weight: 600;
+  color: var(--secondary-text-color); text-transform: uppercase;
+}
+.updates-author { display: flex; align-items: flex-start; gap: var(--space-8); }
+.updates-author-body { min-width: 0; flex: 1 1 auto; }
+.updates-author-body p { margin: var(--space-4) 0; }
+/* The initial, not a photo: the app has no avatar source, and a coloured circle with a
+   letter in it is honest about that where a generic silhouette pretends otherwise. */
+.updates-avatar {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--primary-selected-color); color: var(--primary-color);
+  font: var(--font-text3-bold);
+}
