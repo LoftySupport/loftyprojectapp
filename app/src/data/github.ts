@@ -15,7 +15,7 @@ import { useEffect, useState } from "react";
  *   reading Lofty's own records, with its own idea of what a job is.
  *
  *   GitHub is not Lofty's data and never becomes it: nothing here is written, joined or
- *   stored, and no policy governs it because it is already public. Putting it on the
+ *   stored, and no RLS policy could govern it if one wanted to. Putting it on the
  *   repository interface would mean every implementation of that interface — including
  *   the stub used with no backend — had to answer for a third-party HTTP API.
  *
@@ -24,19 +24,28 @@ import { useEffect, useState } from "react";
  * ============================================================================
  *
  * ------------------------------------------------------------------- no token, ever
- * `amberbeaumont/loftyprojectapp` is a PUBLIC repository, so this is an unauthenticated
- * read and there is nothing to keep secret. That is not a happy accident, it is the
- * constraint that decided the design: a token here would be inlined into the bundle by
- * Vite exactly the way the handoff describes for `VITE_` variables, and a changelog is
- * not worth handing the world a credential for.
+ * This is an unauthenticated read from the browser and it has to stay that way: a token
+ * here would be inlined into the bundle by Vite exactly the way the handoff describes for
+ * `VITE_` variables, and a changelog is not worth handing the world a credential for.
  *
- * The price is GitHub's unauthenticated limit — 60 requests per hour per IP address,
- * shared by everybody on the Lofty office connection. Hence the session cache below, and
- * hence a rate-limit answer that SAYS it was rate limited rather than rendering an empty
- * changelog, which would read as "nothing has shipped".
+ * ---------------------------------------------------- and therefore, while it is private
+ * `LoftyGroup/loftyprojectapp` is the repository the work now lives in, and it is
+ * PRIVATE. GitHub answers an unauthenticated read of a private repository with 404 — it
+ * will not confirm the repository even exists. So until somebody makes it public, this
+ * feed says it cannot read the repository rather than listing anything.
+ *
+ * It does NOT fall back to `amberbeaumont/loftyprojectapp`. That repository is public and
+ * still carries the history, which is exactly what makes it the wrong answer: it stopped
+ * receiving merges when the work moved here, so it would render a stale list that looks
+ * current — the failure this codebase keeps writing down and keeps having to fix.
+ *
+ * Once it is public the remaining price is GitHub's unauthenticated limit — 60 requests
+ * per hour per IP address, shared by everybody on the Lofty office connection. Hence the
+ * session cache below, and hence a rate-limit answer that SAYS it was rate limited rather
+ * than rendering an empty changelog, which would read as "nothing has shipped".
  */
 
-export const CHANGELOG_REPO = "amberbeaumont/loftyprojectapp";
+export const CHANGELOG_REPO = "LoftyGroup/loftyprojectapp";
 
 /** One merged pull request that declared something for the changelog. */
 export interface PullRequestNote {
@@ -82,7 +91,10 @@ interface GhPull {
   user?: { login?: string } | null;
 }
 
-const CACHE_KEY = "lofty.changelog.pulls.v1";
+// v2 because v1 holds pull requests read from `amberbeaumont/loftyprojectapp`. The cache
+// is sessionStorage with a ten-minute life so it would clear itself, but "would clear
+// itself" is ten minutes of a tab showing the wrong repository's history as this one's.
+const CACHE_KEY = "lofty.changelog.pulls.v2";
 /** Ten minutes. Long enough that clicking between tabs costs nothing against the 60/hour. */
 const CACHE_MS = 10 * 60 * 1000;
 
@@ -110,6 +122,16 @@ async function fetchPulls(): Promise<PullRequestNote[]> {
     throw new Error(
       "GitHub is rate limiting this connection — it allows 60 requests an hour per " +
       "network without a sign-in. The published releases below are unaffected."
+    );
+  }
+  // A 404 here is almost never a wrong path. GitHub refuses to confirm that a private
+  // repository exists, so an unauthenticated read of one is answered 404 rather than 403.
+  // Saying so, because "GitHub answered 404" sends the next person hunting for a typo in
+  // a constant that is correct.
+  if (res.status === 404) {
+    throw new Error(
+      `GitHub will not serve ${CHANGELOG_REPO} without a sign-in, which is what it does ` +
+      "for a private repository. Merged pull requests will appear here once it is public."
     );
   }
   if (!res.ok) throw new Error(`GitHub answered ${res.status}.`);
