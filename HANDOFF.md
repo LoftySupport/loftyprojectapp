@@ -103,6 +103,38 @@ lands*; the short version:
 - Dictionary: 104 new entries and 11 new table descriptions; `data-dictionary.md`
   regenerated.
 
+### The Impeccable pass over the new screens
+
+Amber asked for the Impeccable design skills (impeccable.style) on the UI, so the skill is
+installed under `.claude/skills/impeccable/` (its subagents under `.claude/agents/`) and its
+audit and polish playbooks were run over the eight new files. The detector found one thing
+— the 4px coloured left border marking a record's current stage, the classic AI-UI tell — and
+reading the code against the craft floor found the rest:
+
+- **Colour.** Health chips, the "differs from project" chip and the restricted badge were
+  mixing their own tints with `color-mix` and carrying hex fallbacks that disagreed with
+  `tokens.css`. They now use the same Vibe `-selected` tints and contrast-checked inks as the
+  status pills, so a process's health and a job's status are the same red.
+- **The current stage** is a tinted header and a chip that says *current stage* — a word,
+  not a stripe.
+- **Keyboard.** The overdue-runs report navigated on a row click, which a keyboard cannot
+  reach; the job number is now a link. Focus rings on the property inputs, the process
+  list and the stage headers are the palette's ring, not the browser's.
+- **Numbers** in the process report are right-aligned tabular figures (`.num`).
+- **Read-only** dates and tick boxes render as text, like every other read-only format —
+  no disabled controls beside a value.
+- **Deleting a property definition** takes two clicks, the second one named *Delete for
+  good*; retiring is the recommended path and stays one click.
+- Drawn arrows from `@vibe/icons` replace the ↑↓ glyphs on the property-order buttons;
+  the *N/A* button says *Not applicable*; a panel says *Loading…* rather than *0 of 0
+  recorded* while its values arrive.
+
+Re-verified after: `tsc -b`, lint, build, the detector (clean), and the responsive sweep —
+95 page/size combinations green. `.claude/settings.local.json` (the Impeccable edit hook) and
+the `.agents/` and `.codex/` copies for other tools are ignored, not committed; re-create the
+hook with `npx -y impeccable install` if wanted. `/impeccable init` (a PRODUCT.md and
+DESIGN.md) has not been run — that is an interview with Amber, not a guess.
+
 ### Still open — Amber's, listed in `schema-plan.md` under *What this leaves for Amber*
 
 87 formats to set; durations and at-risk leads on processes; the seven unmapped predecessor

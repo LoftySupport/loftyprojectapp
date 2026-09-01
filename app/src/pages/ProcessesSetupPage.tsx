@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button, Checkbox, Text, TextField } from "@vibe/core";
+import { MoveArrowDown, MoveArrowUp } from "@vibe/icons";
 import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { useProcessProperties, useProcesses, usePropertyDefs, useStages, useTeams } from "../data/useLookups";
@@ -411,8 +412,12 @@ function PropertiesEditor({ process: p, canEdit, onChanged, onError }: {
               </label>
               {canEdit && (
                 <>
-                  <Button size="xs" kind="tertiary" aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)}>↑</Button>
-                  <Button size="xs" kind="tertiary" aria-label="Move down" disabled={i === mine.length - 1} onClick={() => move(i, 1)}>↓</Button>
+                  <Button size="xs" kind="tertiary" aria-label={`Move ${d?.label ?? pp.propertyKey} up`} disabled={i === 0} onClick={() => move(i, -1)}>
+                    <MoveArrowUp size={16} aria-hidden />
+                  </Button>
+                  <Button size="xs" kind="tertiary" aria-label={`Move ${d?.label ?? pp.propertyKey} down`} disabled={i === mine.length - 1} onClick={() => move(i, 1)}>
+                    <MoveArrowDown size={16} aria-hidden />
+                  </Button>
                   <Button size="xs" kind="tertiary" onClick={() => write(current.filter(c => c.propertyKey !== pp.propertyKey))}>Remove</Button>
                 </>
               )}

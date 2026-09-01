@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Text } from "@vibe/core";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useQuery } from "../data/DataProvider";
 import { useProcesses, usePropertyAccess, usePropertyDefs, useTeams } from "../data/useLookups";
 import type { BoardJob } from "../data/boardModel";
@@ -22,7 +22,6 @@ import "./processes.css";
  * rows — the access map decides.
  */
 export function ProcessReport({ jobs }: { jobs: BoardJob[] }) {
-  const navigate = useNavigate();
   const { processes } = useProcesses();
   const { teams } = useTeams();
   const { propertyDefs } = usePropertyDefs();
@@ -92,8 +91,8 @@ export function ProcessReport({ jobs }: { jobs: BoardJob[] }) {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Process</th><th>Stage</th><th>Team</th><th>Runs</th><th>Open</th><th>Waiting</th>
-                  <th>At risk</th><th>Overdue</th><th>Complete</th><th>N/A</th><th>Avg days</th><th>Repeats</th>
+                  <th>Process</th><th>Stage</th><th>Team</th><th className="num">Runs</th><th className="num">Open</th><th className="num">Waiting</th>
+                  <th className="num">At risk</th><th className="num">Overdue</th><th className="num">Complete</th><th className="num">Not applicable</th><th className="num">Avg days</th><th className="num">Repeats</th>
                 </tr>
               </thead>
               <tbody>
@@ -102,15 +101,15 @@ export function ProcessReport({ jobs }: { jobs: BoardJob[] }) {
                     <td><strong>{r.process.name}</strong>{r.process.isMilestone && <span className="slot-chip">milestone</span>}</td>
                     <td className="muted">{r.process.stageName}{r.process.stageGroup ? ` · ${r.process.stageGroup}` : ""}</td>
                     <td className="muted">{r.process.owningTeam ? teamName(r.process.owningTeam, teams) : "—"}</td>
-                    <td>{r.runs}</td>
-                    <td>{r.open}</td>
-                    <td>{r.waiting || "—"}</td>
-                    <td>{r.atRisk ? <span className="health is-at_risk">{r.atRisk}</span> : "—"}</td>
-                    <td>{r.overdue ? <span className="health is-overdue">{r.overdue}</span> : "—"}</td>
-                    <td>{r.complete}</td>
-                    <td>{r.na || "—"}</td>
-                    <td>{r.avgDays ?? "—"}</td>
-                    <td>{r.attempts || "—"}</td>
+                    <td className="num">{r.runs}</td>
+                    <td className="num">{r.open}</td>
+                    <td className="num">{r.waiting || "—"}</td>
+                    <td className="num">{r.atRisk ? <span className="health is-at_risk">{r.atRisk}</span> : "—"}</td>
+                    <td className="num">{r.overdue ? <span className="health is-overdue">{r.overdue}</span> : "—"}</td>
+                    <td className="num">{r.complete}</td>
+                    <td className="num">{r.na || "—"}</td>
+                    <td className="num">{r.avgDays ?? "—"}</td>
+                    <td className="num">{r.attempts || "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -137,9 +136,14 @@ export function ProcessReport({ jobs }: { jobs: BoardJob[] }) {
               <thead><tr><th>Record</th><th>Process</th><th>Health</th><th>Started</th><th>Due</th><th>Waiting on</th></tr></thead>
               <tbody>
                 {overdue.map(r => (
-                  <tr key={r.id} className={r.jobId ? "is-clickable" : undefined}
-                    onClick={r.jobId ? () => navigate(`/jobs/${encodeURIComponent(r.jobId!)}`) : undefined}>
-                    <td>{r.jobId ?? `Project ${r.projectId}`}</td>
+                  <tr key={r.id}>
+                    {/* A link in the cell, not a click on the row: a row is not in the tab
+                        order, and the person on a keyboard is the one this table is for. */}
+                    <td className="nowrap">
+                      {r.jobId
+                        ? <Link to={`/jobs/${encodeURIComponent(r.jobId)}`} className="tap-link">{r.jobId}</Link>
+                        : `Project ${r.projectId}`}
+                    </td>
                     <td>{r.processName}{r.attempt > 1 ? ` (attempt ${r.attempt})` : ""}</td>
                     <td><span className={`health is-${r.health}`}>{PROCESS_RUN_HEALTH_LABELS[r.health]}</span></td>
                     <td>{r.startedAt ? new Date(r.startedAt).toLocaleDateString() : "—"}</td>
@@ -165,14 +169,14 @@ export function ProcessReport({ jobs }: { jobs: BoardJob[] }) {
         ) : (
           <div className="data-table-wrap">
             <table className="data-table">
-              <thead><tr><th>Property</th><th>Stage</th><th>Recorded on</th><th>Missing on</th></tr></thead>
+              <thead><tr><th>Property</th><th>Stage</th><th className="num">Recorded on</th><th className="num">Missing on</th></tr></thead>
               <tbody>
                 {propertyRows.map(({ def, n }) => (
                   <tr key={def.key}>
                     <td><strong>{def.label}</strong></td>
                     <td className="muted">{def.stageName}</td>
-                    <td>{n} job{n === 1 ? "" : "s"}</td>
-                    <td className="muted">{jobs.length - n}</td>
+                    <td className="num">{n} job{n === 1 ? "" : "s"}</td>
+                    <td className="num muted">{jobs.length - n}</td>
                   </tr>
                 ))}
               </tbody>

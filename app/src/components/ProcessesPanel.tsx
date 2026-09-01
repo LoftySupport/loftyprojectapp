@@ -135,7 +135,9 @@ export function ProcessesPanel({
       <div className="panel-head">
         <Text type="text2" weight="bold">{title}</Text>
         <Text type="text3" color="secondary">
-          {runs.filter(r => r.status === "complete").length} complete · {runs.filter(r => isRunOpen(r.status) && r.status !== "not_started").length} in progress
+          {loading
+            ? "Loading…"
+            : `${runs.filter(r => r.status === "complete").length} complete · ${runs.filter(r => isRunOpen(r.status) && r.status !== "not_started").length} in progress`}
         </Text>
       </div>
       {error && <div className="create-problem" role="alert"><Text type="text2" ellipsis={false}>{error}</Text></div>}
@@ -151,7 +153,10 @@ export function ProcessesPanel({
         return (
           <details className={`proc-stage${isCurrent ? " is-current" : ""}`} key={stage} open={isCurrent}>
             <summary>
-              <span>{stage}</span>
+              <span>
+                {stage}
+                {isCurrent && <span className="slot-chip is-current">current stage</span>}
+              </span>
               <span className="proc-summary">
                 {milestones.length > 0 && `${milestonesPassed} of ${milestones.length} milestones · `}
                 {openCount === 0 ? "nothing open — ready to move on" : `${openCount} open`}
@@ -221,7 +226,7 @@ export function ProcessesPanel({
                               Start
                             </Button>
                             <Button size="small" kind="tertiary" disabled={rowBusy} onClick={() => act(p.id, () => repo.startProcessRun(target, p.id, "not_applicable"))}>
-                              N/A
+                              Not applicable
                             </Button>
                           </>
                         )}
@@ -232,7 +237,7 @@ export function ProcessesPanel({
                           </Button>
                         )}
                         {(props.length > 0 || run) && (
-                          <Button size="small" kind="tertiary" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : p.id)}>
+                          <Button size="small" kind="tertiary" aria-expanded={isOpen} aria-controls={`proc-body-${p.id}`} onClick={() => setOpen(isOpen ? null : p.id)}>
                             {isOpen ? "Less" : "Open"}
                           </Button>
                         )}
@@ -240,7 +245,7 @@ export function ProcessesPanel({
                     </div>
 
                     {isOpen && (
-                      <div className="proc-body">
+                      <div className="proc-body" id={`proc-body-${p.id}`}>
                         {run && run.status === "waiting" && can("user") && (
                           <div className="field-inline" style={{ marginBottom: "var(--space-8)" }}>
                             <Text type="text3" element="span">Waiting on</Text>

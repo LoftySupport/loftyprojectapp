@@ -128,7 +128,10 @@ export function PropertySlots({
     }
   }
 
-  if (!accessLoading && !valuesLoading && groups.length === 0) return null;
+  // Nothing to show, or nothing to show YET — either way no panel, so a drawer never
+  // flashes "0 of 0 recorded" for the half-second before the values arrive.
+  if (groups.length === 0) return null;
+  const loading = accessLoading || valuesLoading;
 
   const total = defs.length;
   const recorded = defs.filter(d => own.has(d.key) || fromProject.has(d.key)).length;
@@ -139,7 +142,7 @@ export function PropertySlots({
       <div className="panel-head">
         <Text type="text2" weight="bold">{heading}</Text>
         <Text type="text3" color="secondary">
-          {recorded} of {total} recorded
+          {loading ? "Loading…" : `${recorded} of ${total} recorded`}
         </Text>
       </div>
       {note && (
@@ -209,7 +212,7 @@ export function PropertySlots({
       {showHistory && history.length > 0 && (
         <div className="slot-history">
           <Text type="text3" weight="bold">Recent changes</Text>
-          <ul className="slot-history">
+          <ul className="slot-history-list">
             {history.slice(0, 20).map(h => (
               <li key={h.id}>
                 <Text type="text3" color="secondary" element="span">{new Date(h.at).toLocaleString()}</Text>

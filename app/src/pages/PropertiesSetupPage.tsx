@@ -293,6 +293,7 @@ function PropertyDetail({ def: d, grants, options, teams, profiles, onPatch, onC
   const canGrant = d.restricted ? can("superadmin") : can("admin");
   const [grantee, setGrantee] = useState<string | null>(null);
   const [newOption, setNewOption] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   async function run(fn: () => Promise<unknown>) {
     onError(null);
@@ -410,12 +411,23 @@ function PropertyDetail({ def: d, grants, options, teams, profiles, onPatch, onC
         </div>
       )}
 
-      {canEdit && (
+      {canEdit && !confirmDelete && (
         <div className="field-inline">
-          <Button size="small" kind="tertiary" onClick={() => run(() => repo.deletePropertyDef(d.key))}>
-            Delete definition
+          <Button size="small" kind="tertiary" onClick={() => setConfirmDelete(true)}>
+            Delete definition…
           </Button>
           <Text type="text3" color="secondary" element="span">Deletes its values too. Prefer retiring.</Text>
+        </div>
+      )}
+      {canEdit && confirmDelete && (
+        /* Two clicks, the second one named: the first says what will go, the second does it.
+           Retiring keeps every value; this does not, and there is no undo. */
+        <div className="field-inline" role="alert">
+          <Text type="text2" element="span" ellipsis={false}>
+            Delete <strong>{d.label}</strong> and every value ever recorded in it?
+          </Text>
+          <Button size="small" color="negative" onClick={() => run(() => repo.deletePropertyDef(d.key))}>Delete for good</Button>
+          <Button size="small" kind="tertiary" onClick={() => setConfirmDelete(false)}>Keep it</Button>
         </div>
       )}
     </div>

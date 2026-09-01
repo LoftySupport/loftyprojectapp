@@ -62,6 +62,7 @@ export function PropertyField({ def, value, access, options = [], people = [], o
   switch (def.format) {
     case "date": {
       const d = value?.date ?? null;
+      if (onSave == null) return <Text type="text2" element="span" className="pf-readonly">{d ? fmtDate(d) : "—"}</Text>;
       return (
         <span className="pf-date">
           <input
@@ -84,6 +85,7 @@ export function PropertyField({ def, value, access, options = [], people = [], o
       );
     }
     case "checkbox":
+      if (onSave == null) return <Text type="text2" element="span" className="pf-readonly">{value?.bool == null ? "—" : value.bool ? "Yes" : "No"}</Text>;
       return (
         <span className="pf-inline">
           <input
@@ -238,7 +240,7 @@ function TypedInput({
   const [draft, setDraft] = useState(initial);
   useEffect(() => { setDraft(initial); }, [initial]);
   if (readOnly) {
-    return <Text type="text2" element="span">{display ?? "—"}</Text>;
+    return <Text type="text2" element="span" className="pf-readonly">{display ?? "—"}</Text>;
   }
   return (
     <span className="pf-inline">
