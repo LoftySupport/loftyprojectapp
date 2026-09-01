@@ -16,13 +16,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 49 changes since then —
+Unreleased: 50 changes since then —
+- Added: The platform-layer design — contacts and companies, maintenance, notifications, a readable change history, two-way sync — recorded in schema-plan.md ahead of the build
 - Changed: The properties and processes screens after a design pass — palette-consistent health colours, keyboard-reachable report links, a two-step delete
 - Added: The Impeccable design skill, installed for the repo
 - Changed: The fourth lifecycle phase is Maintenance — handover is the last process of Construction
 - Added: Properties record values on jobs and projects, with per-property security levels, team and person access, and an opt-in restricted flag
-- Added: Processes inside every lifecycle stage — editable by managers, with dependencies, properties collected and checklists
-- …and 44 more.
+- …and 45 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

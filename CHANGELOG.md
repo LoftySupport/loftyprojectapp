@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- The platform-layer design — contacts and companies, maintenance, notifications, a readable change history, two-way sync — recorded in schema-plan.md ahead of the build
 - The Impeccable design skill, installed for the repo
 - Properties record values on jobs and projects, with per-property security levels, team and person access, and an opt-in restricted flag
 - Processes inside every lifecycle stage — editable by managers, with dependencies, properties collected and checklists
