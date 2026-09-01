@@ -135,6 +135,19 @@ the `.agents/` and `.codex/` copies for other tools are ignored, not committed; 
 hook with `npx -y impeccable install` if wanted. `/impeccable init` (a PRODUCT.md and
 DESIGN.md) has not been run — that is an interview with Amber, not a guess.
 
+### The platform layer, designed and not built
+
+Amber's next brief, the same evening: audit of every change readable in the app, tasks with
+checklists, notifications on every channel, a Maintenance tab, contacts and companies with
+job roles, two-way sync by API and MCP, a hundred concurrent users — with normalisation and
+`tablename_attribute` as binding rules. The design is `schema-plan.md`, *1 September,
+evening — the platform layer*, and the artifact it links. Six batches, `0080`–`0085`, one
+PR each; **none is written yet**, and nine decisions listed at the end of that section are
+hers. Three answers she has already given are recorded there (staff-only logins designed
+for a later portal; every maintenance intake channel; all four notification channels chosen
+per person). The naming audit ran against a local replay of all 79 migrations: three old
+tables off the convention, renamed in `0080`.
+
 ### Still open — Amber's, listed in `schema-plan.md` under *What this leaves for Amber*
 
 87 formats to set; durations and at-risk leads on processes; the seven unmapped predecessor

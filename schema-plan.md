@@ -1266,6 +1266,169 @@ process dependencies, 107 template tasks, 99 task dependencies.
 - **"Handover is part of construction" and "7 - Handover" is a process** — consistent. But
   the Maintenance phase now has no processes at all in the workbook, which may be right.
 
+## 1 September, evening — the platform layer: parties, maintenance, notifications, audit, sync
+
+Amber, after the workbook landed: *"think of everything a world class project management
+system and CRM would have… 100 people using it at the same time… every change to a job or
+project is audited and recorded… 2 way sync to external platforms via api and mcp… tasks
+and sub task and checklists… milestone processes… at risk… notifications on incomplete
+tasks and who they go to… a separate tab for maintenance… a list of contacts that are
+classified as clients, companies and/or contractors."* And, via `/supabase-postgres-best-
+practices`: normalisation matters, and every attribute is `tablename_attribute`.
+
+Readable version, with the diagrams and the worked examples (1042-01, Priya Nair, Wandi
+Plumbing, request 1042-01-M3): https://claude.ai/code/artifact/ef5d9221-9715-4e69-a90f-787eb4b4a725 — show
+that one; edit this. **Nothing in this section is built yet.** It is the design and its
+reasoning, ahead of six migration batches (`0080`–`0085`), one pull request each.
+
+### Answers Amber gave, which the design is built on
+
+- **Who signs in:** staff only for now, *designed* so contractors can be given logins later
+  without a rebuild — `contact_profile_id`, nullable, unique, is the whole provision.
+- **Maintenance intake:** every channel — email to a mailbox, a web form, phone calls keyed
+  in by staff, later a portal and the API — landing in one table with a recorded source.
+- **Notification channels:** in-app, email via Microsoft 365, Teams and SMS, each person
+  choosing in their own settings.
+- **Not yet answered** (asked, dismissed): which external platforms first. The design
+  assumes SharePoint and Outlook/Teams and says so.
+
+### Naming, measured rather than asserted
+
+All 79 migrations replayed into a local Postgres; every column in `public` checked against
+`tablename_attribute` with foreign keys allowed to keep the parent's name. **Three tables
+fail, all older than the convention:** `activity_audit` (10 columns: `id`, `changed_at`,
+`old_row`…), `login_activity` (6), and `user_preferences`, whose prefix is the plural
+(`user_preferences_payload`). Every other table conforms. `0080` renames them — cheap now,
+because two repository methods read them and the audit function is being rebuilt anyway.
+
+Redundancy kept on purpose, each maintained by a trigger and marked derived in the
+dictionary: `profile_full_name` (generated), `address_consolidated`, the project stage read
+from its jobs, `project_id` carried on a job's dependents. Redundancy removed: the
+notification matrix that `0050` anticipated as a jsonb bag in `user_preferences` becomes a
+`notification_preferences` table, because a preference the database cannot see is one it
+cannot enforce or report on.
+
+### External parties — the 21 August decision reversed, and why
+
+*Entity model* above says `companies` / `contacts` / `record_parties` are "closed, not
+deferred": Lofty is the developer, a purchaser is one name per house, a text property is
+enough. That held for building and stops holding at handover. Maintenance has homeowners
+who ring three times, a plumber who works through two companies, a fencing contractor who
+is also the purchaser of another lot, and the question "who has Wandi Plumbing been sent to
+this month" — none answerable from a text field. **Maintenance makes external parties
+first-class.** The earlier section stays, superseded, so the next person sees both the
+reason it was closed and the reason it reopened.
+
+The model, all `tablename_attribute`:
+
+| Table | The point |
+|---|---|
+| `classifications` | client, contractor, supplier, consultant, authority… a lookup, editable |
+| `contacts` | a person; names, notes, `contact_profile_id`, `contact_source`; **no email or phone columns** |
+| `companies` | an organisation; `company_abn` checked to 11 digits; `company_address_id` |
+| `contact_methods` | email / phone / mobile rows, exclusive arc to contact or company; one primary per kind |
+| `contact_classifications`, `company_classifications` | multi-valued: Sam Okafor is a client on 1042-03 and a contractor at Okafor Electrical |
+| `company_contacts` | employment over time; **`company_contact_job_role` lives here**, because Bob Marsh's role at Wandi Plumbing differed from his role at Bob's Fencing |
+| `party_roles` | purchaser, site supervisor, plumber, electrician, certifier, council… a lookup |
+| `record_parties` | arc to project / job / process_run / maintenance_request; contact and/or company; `party_role_id`; `record_party_engaged_by_company_id` records a sub-contract as a fact about the engagement, not the company; started/ended; partial unique on (record, role, party) |
+
+Read by every active user; create and edit at `user`; delete at `admin`, refused when
+history exists in favour of `_ended_on`.
+
+### Maintenance
+
+One table for every way a request arrives (`maintenance_request_source`: email, form,
+phone, portal, api). A **request** is the ticket; **items** are the defects inside it (one
+email, three trades); **assignments** are offers to a contractor, one row each so a decline
+keeps its history; **messages** are the thread (in/out, channel, Graph message id unique).
+`maintenance_categories` carry the SLA days and the at-risk lead that the clock reads.
+`maintenance_request_number` is `<job_id>-M<n>`, trigger-assigned like variation numbers
+(Amber to confirm). The contractor answers a signed link (token hash stored, 14-day expiry),
+not a login. Every automation — acknowledgement, SLA start, offer nudges at 48 h, day-before
+reminders, SLA breach to the team's Teams channel, closing mail — is a `notification_delivery`
+written by cron or trigger and sent by the worker; **nothing inside a trigger makes an HTTP
+call.** The warranty flag needs the handover date, which is the completion of the
+`7 - Handover` run, so `job_warranty_ends_on` is a view, not a column to remember.
+
+### Tasks: a third level and time
+
+`task_checklist_items` (and `process_task_checklist_items` on the template): tick boxes with
+no assignee, due date or dependencies, because a task with a twelve-line checklist must not
+be a task with twelve children in "my work". `tasks` gain `task_started_at`,
+`task_expected_days`, `task_at_risk_lead_days` — the same two numbers a process has — so
+instantiated checklist tasks finally get computed due dates and a task can be *at risk*, not
+only overdue. `task_display` derives health the way `process_run_display` does;
+`stage_completion` counts milestones per record and stage once, for the board, the drawer
+and the report.
+
+### Notifications: five tables, one outbox
+
+`notification_types` (defaults per type) · `notification_rules` (audience: assignee, owning
+team, engaged teams, watchers, managers, specific; `_after_days` for escalation; admins
+edit) · `notification_preferences` (one row per person, type, channel; timing and digest
+time) · `notifications` (one row per recipient; `notification_dedupe_key` unique with the
+person so a daily scan writes a new row, never a repeat; `_read_at` is the bell) ·
+`notification_deliveries` (per channel; queued → sending → sent | failed; attempts and
+backoff; claimed with `for update skip locked`). Plus `record_watchers`. The scan is pg_cron
+every 15 minutes over `task_display` and `process_run_display`; the worker is an Edge
+Function woken by pg_net and by a database webhook for the immediate ones; email and Teams
+go through Microsoft Graph from a Lofty mailbox; SMS waits on a provider (Amber's call).
+
+### Audit: from a forensic log to a history anyone can read
+
+Two problems with `activity_audit` today: the trigger fires on 12 tables and the function
+ignores any table not in a hard-coded allowlist (a trap that has bitten twice), and it is
+admin-only jsonb nobody can read on a job. `0080`: no allowlist — the function logs whatever
+fires it, and a verify check asserts every `public` table but the audit tables carries the
+trigger; four extracted columns (`activity_audit_profile_id`, `_job_id`, `_project_id`,
+`_origin`) so a record's history is an index lookup; `record_changes(job_id)` /
+`record_changes(project_id)` as security-definer functions in `private`, granted to
+`authenticated` (`0011`), that check the caller may read the record and return one row per
+changed column, labelled from the dictionary, redaction intact; an Activity tab merging
+those with `activity_events` and `property_value_history`; a people-activity report for
+admins from `login_activity`. Growth: perhaps fifty thousand rows a month at a hundred
+users — indexed for that, with `activity_audit_at` left as the partition key for the month
+when partitioning becomes worth it.
+
+### Sync: the audit log is the change feed
+
+`external_systems` · `external_links` (which SharePoint folder is 1042-01; unique per
+system and external id; etag; last synced) · `sync_cursors` (one per system: the last
+`activity_audit_id` sent — nothing copied into a second queue) · `sync_inbox` (idempotency
+key unique, so a webhook delivered twice is processed once) · `sync_conflicts` (both sides
+changed; a person picks). Loop guard: a worker's writes run with
+`set local app.sync_origin = '<system>'`, the audit row records it, and that system's cursor
+skips its own changes. A stable `api_v1` schema of views for outsiders; each integration is a
+profile of kind *integration* with a permission level, so its writes are audited by name;
+an MCP Edge Function whose tools call the repository with the caller's token. Realtime on
+`jobs`, `tasks`, `process_runs`, `maintenance_requests`, `notifications`.
+
+### A hundred people at once
+
+Enforced by new verify checks: every policy wraps its function in `(select …)`; every
+foreign key column is indexed; every `public` table has RLS and the audit trigger. New:
+transaction-mode pooling; optimistic concurrency through the seam (every update carries the
+`_updated_at` it saw; a mismatch is a 409 and "Ketan changed this 13 seconds ago", never a
+silent overwrite); `statement_timeout` 10 s for `authenticated`; queues by `skip locked`;
+`pg_stat_statements` reviewed monthly.
+
+### Build order
+
+`0080` naming sweep, audit everything, `record_changes`, Activity tab · `0081` checklists
+and task time, `task_display`, `stage_completion` · `0082` parties and the Contacts screen ·
+`0083` notifications with in-app and Graph email first · `0084` maintenance, staff entry
+first, then mailbox, then form · `0085` sync, `api_v1`, MCP, SharePoint.
+
+### What this leaves for Amber
+
+1. Sync targets and order (assumed SharePoint, Outlook/Teams). 2. Warranty months after
+handover. 3. Maintenance categories, SLA days and at-risk leads. 4. Who reads a record's
+history — everyone who can read the record (recommended) or managers+. 5. Who creates
+contacts — users+ (recommended) or managers+. 6. Which notification types are immediate and
+which digest, and the digest time. 7. SMS provider. 8. Contractor accept links without a
+login (recommended yes). 9. Request numbering, `1042-01-M3` or company-wide. With 1, 4 and 5
+answered, `0080`–`0082` can be built at once.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in
