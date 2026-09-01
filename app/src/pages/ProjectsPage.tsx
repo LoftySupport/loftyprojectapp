@@ -241,12 +241,19 @@ export function ProjectsPage() {
 
     const order: string[] =
       grouping === "None" ? [""]
-      : grouping === "Stage" ? stageNames
+      // `viewStages`, not every stage there is — the same list the Jobs kanban lays its
+      // columns out from (Amber, 31 Aug: "the projects per stage should look like the
+      // jobs per stage layout in the kanban board by default"). Reading `stageNames`
+      // meant this board ignored the saved view it was sitting in: Current Projects
+      // rendered Completed, Closed and Cancelled columns, permanently empty, because
+      // `inView` had already filtered those projects out. Two lists, one of which was
+      // the whole lifecycle no matter what the tab said.
+      : grouping === "Stage" ? viewStages
       : grouping === "Status" ? RECORD_STATUSES.map(st => RECORD_STATUS_LABELS[st])
       : [...new Set(rows.map(keyOf))];
 
     return order.map(key => ({ key, projects: rows.filter(p => keyOf(p) === key) }));
-  }, [grouping, rows, stageNames]);
+  }, [grouping, rows, viewStages]);
 
   const narrowed = terms.length > 0 || activeFilterCount(filters) > 0;
   const noMatches = narrowed && rows.length === 0;

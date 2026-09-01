@@ -14,6 +14,9 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Drag requests between stages and roadmap phases, at the rung each move really needs
+- Table, gantt and calendar views on both the tracker and the roadmap
+- An admin can file a request on behalf of somebody who told them about it
 - Total lots on the new project form, following the community and Torrens split or typed in on its own
 - A discussion under every request, with a pinned answer and an internal lane for triage
 - "Someone may have asked this already" — the report form searches while you type, and offers to vote instead
@@ -30,13 +33,20 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- A project can now pass 99 jobs — the hundredth was refused with a duplicate-key error
+- The projects board lays its stage columns out from the saved view it is in, like the jobs board
+- Clicking Dashboard opened Projects for anyone whose landing page was not Dashboard
+- The tracker's month stepper, request titles and gantt labels were under the 24px tap-target floor
 - The count on a projects view tab disagreed with the list it opened, for projects with no jobs
+- Deleting a profile no longer fails when that person had filed a request
 - Zero community and zero Torrens lots no longer reached the database as a constraint error
 - The demo-account checks in verify/ were reporting a failure they did not have — their own setup was being refused
 
 ### Changed
 
+- The tracker view rides the URL, so a gantt or calendar can be linked to and saved
 - The projects board has its own views — All Projects, Current Projects, Archived, and New Projects for the ones nobody has split yet
+- "Shipped" is now "Live in the app", and it is the last column on the board
 - The new project form asks only for suburb, state, postcode and a project type — the street, its numbers and the council are all optional
 - The handoff and the README say what the tracker changed, and what is still open
 - Bugs and requests are readable by everyone, not just admins — a queue nobody can see cannot stop a duplicate request

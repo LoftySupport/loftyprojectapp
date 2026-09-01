@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 21 changes since then —
-- Changed: The projects board has its own views — All Projects, Current Projects, Archived, and New Projects for the ones nobody has split yet
-- Fixed: The count on a projects view tab disagreed with the list it opened, for projects with no jobs
-- Changed: The new project form asks only for suburb, state, postcode and a project type — the street, its numbers and the council are all optional
-- Added: Total lots on the new project form, following the community and Torrens split or typed in on its own
-- Fixed: Zero community and zero Torrens lots no longer reached the database as a constraint error
-- …and 16 more.
+Unreleased: 31 changes since then —
+- Fixed: A project can now pass 99 jobs — the hundredth was refused with a duplicate-key error
+- Fixed: The projects board lays its stage columns out from the saved view it is in, like the jobs board
+- Fixed: Clicking Dashboard opened Projects for anyone whose landing page was not Dashboard
+- Fixed: The tracker's month stepper, request titles and gantt labels were under the 24px tap-target floor
+- Changed: The tracker view rides the URL, so a gantt or calendar can be linked to and saved
+- …and 26 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
