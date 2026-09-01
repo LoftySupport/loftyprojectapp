@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 47 changes since then —
+Unreleased: 49 changes since then —
+- Changed: The properties and processes screens after a design pass — palette-consistent health colours, keyboard-reachable report links, a two-step delete
+- Added: The Impeccable design skill, installed for the repo
 - Changed: The fourth lifecycle phase is Maintenance — handover is the last process of Construction
 - Added: Properties record values on jobs and projects, with per-property security levels, team and person access, and an opt-in restricted flag
 - Added: Processes inside every lifecycle stage — editable by managers, with dependencies, properties collected and checklists
-- Added: The properties-and-processes workbook of 1 September is seeded: 49 processes, 174 properties, the construction schedule
-- Added: Push a project's properties to all its jobs, with a preview
-- …and 42 more.
+- …and 44 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

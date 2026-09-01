@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- The Impeccable design skill, installed for the repo
 - Properties record values on jobs and projects, with per-property security levels, team and person access, and an opt-in restricted flag
 - Processes inside every lifecycle stage — editable by managers, with dependencies, properties collected and checklists
 - The properties-and-processes workbook of 1 September is seeded: 49 processes, 174 properties, the construction schedule
@@ -56,6 +57,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- The properties and processes screens after a design pass — palette-consistent health colours, keyboard-reachable report links, a two-step delete
 - The fourth lifecycle phase is Maintenance — handover is the last process of Construction
 - Job numbers are three digits from 001 — existing jobs renumbered, and a project can now run past 99 lots
 - The request board and detail view restyled, and the table now matches the rest of the app
