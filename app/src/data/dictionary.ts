@@ -945,6 +945,129 @@ export const DICTIONARY: DictionaryEntry[] = [
   e("property_defs.property_def_automation", "Automation", "A note about how the value arrives on its own, when it does.", "text", "Nullable.", "—", "created"),
   e("property_defs.property_def_position", "Position", "Where it sits among its stage's slots. Data, not alphabet: the person defining the fields decides what order a form asks its questions in.", "integer", "Not null, default 0.", "Indexed with the stage.", "created"),
 
+  // ------------------------------------------ property_defs grows its locks (0077)
+  e("property_defs.property_def_restricted", "Restricted", "Opt-in rather than opt-out: when true, nobody but a superadmin sees or touches the property's values unless a property_access row names their team or them. Manager and admin do not bypass it — that is the whole meaning of the word.", "boolean", "Not null, default false. Only a superadmin may flip it (guard_property_def_security).", "Read by private.property_keys(), which every property_values policy calls.", "created"),
+  e("property_defs.property_def_create_level", "Create level", "The lowest permission rung that may record a value for this property, before the team and person rules apply.", "enum", "permission_level. Not null, default 'user'. Admin+ to change.", "One of four rungs, one per verb — setting a signed-off date and changing one are different questions.", "created"),
+  e("property_defs.property_def_read_level", "Read level", "The lowest permission rung that may read a value for this property, before the team and person rules apply.", "enum", "permission_level. Not null, default 'viewer'. Admin+ to change.", "—", "created"),
+  e("property_defs.property_def_update_level", "Update level", "The lowest permission rung that may change a recorded value.", "enum", "permission_level. Not null, default 'user'. Admin+ to change.", "—", "created"),
+  e("property_defs.property_def_delete_level", "Delete level", "The lowest permission rung that may clear a recorded value.", "enum", "permission_level. Not null, default 'manager'. Admin+ to change.", "—", "created"),
+  e("property_defs.property_def_sla_days", "SLA days", "The number the SLA sheet gives for this step, in days, stored as given. Which clock it is counted from is the process's to say.", "integer", "Nullable — the sheet gave none for 78 rows. CHECK >= 0.", "Seeded from the workbook's SLA column (0079).", "created"),
+  e("property_defs.property_def_is_active", "Active", "Retirement, not deletion: a retired property stops appearing on forms and keeps every value ever recorded in it.", "boolean", "Not null, default true.", "Slots and the Setup table read it.", "created"),
+  e("property_defs.property_def_description", "Description", "What the field means, for the person filling it in.", "text", "Nullable.", "—", "created"),
+  e("property_defs.property_def_import_ref", "Source row", "Where the definition came from — \"Properties!12\" — so a question about a field can be taken back to the workbook it was read from.", "text", "Nullable. Null for a property defined in the app.", "Written by the 0079 seed; the generator script is at app/supabase/import.", "created"),
+
+  // ------------------------------------------------------------- property_options (0077)
+  e("property_options.property_def_key", "Property", "Which property this choice belongs to.", "text", "Part of the primary key. FK → property_defs ON UPDATE CASCADE ON DELETE CASCADE.", "property_values.property_value_option_key is pinned to (property, option) by a composite FK, so a value cannot pick another property's choice.", "created"),
+  e("property_options.property_option_key", "Option key", "The stable slug for one choice. The label is the renameable half.", "text", "Part of the primary key. CHECK: lowercase letters, digits and underscores.", "—", "created"),
+  e("property_options.property_option_label", "Option", "What the choice is called on screen.", "text", "Not null, non-blank.", "—", "created"),
+  e("property_options.property_option_position", "Position", "The order the picker lists the choices in.", "integer", "Not null, default 0.", "—", "created"),
+  e("property_options.property_option_is_active", "Active", "A retired choice stops being offered and keeps the values already recorded with it.", "boolean", "Not null, default true.", "—", "created"),
+
+  // -------------------------------------------------------------- property_access (0077)
+  e("property_access.property_access_id", "Grant ID", "One grant: a team or a person, on one property, with the verbs they hold.", "uuid", "Primary key.", "—", "created"),
+  e("property_access.property_def_key", "Property", "The property the grant is on.", "text", "Not null. FK → property_defs ON UPDATE CASCADE ON DELETE CASCADE.", "One row per team and one per person per property (partial unique indexes).", "created"),
+  e("property_access.team_id", "Team", "The team granted — the normal case; a hundred restricted finance fields is one grant repeated.", "text", "Nullable. FK → teams ON UPDATE CASCADE. CHECK: exactly one of team_id and profile_id.", "Compared against private.my_teams().", "created"),
+  e("property_access.profile_id", "Person", "A named person granted — the exception on top of the team.", "uuid", "Nullable. FK → profiles ON DELETE CASCADE.", "—", "created"),
+  e("property_access.property_access_can_create", "Can record", "Whether the grantee may record a value.", "boolean", "Not null, default true. CHECK: at least one verb is granted.", "—", "created"),
+  e("property_access.property_access_can_read", "Can read", "Whether the grantee may see the value.", "boolean", "Not null, default true.", "—", "created"),
+  e("property_access.property_access_can_update", "Can change", "Whether the grantee may change a recorded value.", "boolean", "Not null, default true.", "—", "created"),
+  e("property_access.property_access_can_delete", "Can clear", "Whether the grantee may clear a recorded value.", "boolean", "Not null, default false.", "Writes are admin+ by policy and superadmin on a restricted property by trigger (guard_property_access_writes).", "created"),
+
+  // -------------------------------------------------------------- property_values (0077)
+  e("property_values.property_value_id", "Value ID", "One recorded answer — one row per (property, record). Sparse: no row means not recorded, and clearing a field deletes the row.", "uuid", "Primary key.", "Unique on (property, job) and on (property, project) — partial indexes, because a nullable pair of parents cannot be a key.", "created"),
+  e("property_values.property_def_key", "Property", "Which property this is the answer to.", "text", "Not null.", "Composite FK (key, format) → property_defs (key, format) ON UPDATE CASCADE ON DELETE CASCADE — pins the row to its definition's current format.", "created"),
+  e("property_values.property_def_format", "Format", "The definition's format, carried on the row so the CHECK on the typed columns can read it. Not a second opinion: the composite FK keeps it equal to the definition's.", "text", "Not null.", "Retyping a definition with values in it fails here, on purpose — clear the values first.", "created"),
+  e("property_values.job_id", "Job", "The job the answer is about, for a job property or a pushed copy of a project one.", "text", "Nullable. FK → jobs ON UPDATE CASCADE ON DELETE CASCADE. CHECK: exactly one of job_id and project_id.", "—", "created"),
+  e("property_values.project_id", "Project", "The project the answer is about. A job-scoped property cannot land here (guard_property_value).", "integer", "Nullable. FK → projects ON UPDATE CASCADE ON DELETE CASCADE.", "Jobs read a project property through from here; push_project_properties() copies it onto them.", "created"),
+  e("property_values.property_value_text", "Text", "The answer for text, link and file formats.", "text", "Exactly one typed column is filled, and the format says which (property_values_match_their_format). A link must start https:// or http://.", "—", "created"),
+  e("property_values.property_value_number", "Number", "The answer for number and currency formats.", "numeric", "See property_value_text.", "—", "created"),
+  e("property_values.property_value_date", "Date", "The answer for the date format — the field the tick box sets to today, or a typed date when it happened earlier.", "date", "See property_value_text.", "Indexed with the property, for \"received before\" reports.", "created"),
+  e("property_values.property_value_bool", "Yes/no", "The answer for the checkbox format.", "boolean", "See property_value_text.", "—", "created"),
+  e("property_values.property_value_profile_id", "Person", "The answer for the person format.", "uuid", "See property_value_text. FK → profiles.", "—", "created"),
+  e("property_values.property_value_option_key", "Choice", "The answer for a single select.", "text", "See property_value_text.", "Composite FK (property, option) → property_options — a value cannot pick another property's choice.", "created"),
+  e("property_values.property_value_option_keys", "Choices", "The answers for a multi select.", "text", "See property_value_text. An array of option keys.", "—", "created"),
+  e("property_values.property_value_set_at", "Recorded at", "When the CURRENT answer was recorded. Moves only when the answer changes — not on a no-op save and not on a push that carried the same value.", "timestamptz", "Not null, stamped by guard_property_value().", "—", "created"),
+  e("property_values.property_value_set_by", "Recorded by", "Who recorded the current answer.", "uuid", "Nullable. FK → profiles. Stamped by the database, never sent by the client.", "—", "created"),
+
+  // ------------------------------------------------------ property_value_history (0077)
+  e("property_value_history.property_value_history_id", "History ID", "One change to one answer, append-only, written by trigger.", "bigint", "Primary key, identity.", "No write policies at all: the trigger is SECURITY DEFINER and a history that can be edited is not one.", "created"),
+  e("property_value_history.property_def_key", "Property", "Which property changed. No FK, deliberately — the line records what WAS, and survives the property being deleted.", "text", "Not null.", "Readable only by whoever may read the value (the same private.property_keys('read')).", "created"),
+  e("property_value_history.job_id", "Job", "The job the answer was on, if a job.", "text", "Nullable. No FK.", "—", "created"),
+  e("property_value_history.project_id", "Project", "The project the answer was on, if a project.", "integer", "Nullable. No FK.", "—", "created"),
+  e("property_value_history.property_value_history_old", "Was", "The answer before the change, as one jsonb value. Null on first recording.", "jsonb", "CHECK: old and new differ.", "—", "created"),
+  e("property_value_history.property_value_history_new", "Became", "The answer after the change. Null when it was cleared.", "jsonb", "—", "—", "created"),
+  e("property_value_history.property_value_history_at", "When", "When the change happened.", "timestamptz", "Not null, default now().", "—", "created"),
+  e("property_value_history.property_value_history_by", "Who", "Who made the change.", "uuid", "Nullable. FK → profiles.", "—", "created"),
+
+  // -------------------------------------------------------------------- processes (0078)
+  e("processes.process_id", "Process ID", "What happens inside a lifecycle stage, as a row: a named piece of work pinned to a stage, run on a project or a job, with a team, a duration and the properties it collects. Never stores a value — properties do.", "uuid", "Primary key.", "process_runs, process_dependencies, process_properties and process_tasks hang off it.", "created"),
+  e("processes.process_key", "Key", "The stable slug — the identity the seed and any integration address. The name is the renameable half.", "text", "Unique. Not null. CHECK: lowercase letters, digits and underscores.", "Seeded from the workbook's Processes sheet (0079).", "created"),
+  e("processes.process_name", "Process", "What the process is called — \"Concept Plan\", \"1 - Footings\".", "text", "Not null, non-blank.", "—", "created"),
+  e("processes.process_stage", "Lifecycle stage", "Which of the seven lifecycle stages this process belongs to. The same words as jobs.job_stage, enforced the same way.", "text", "Not null. CHECK against the seven names.", "Groups the process panel on a record and the Setup → Processes editor.", "created"),
+  e("processes.process_stage_group", "Stage group", "The workbook's grouping inside a stage — \"Stage 1\", \"Stage 2\", \"Stage 3\", \"Variation\". A heading on a board, not a rule.", "text", "Nullable.", "—", "created"),
+  e("processes.process_scope", "Level", "Whether the process runs on a project or on a job — the workbook's \"Type\" column.", "text", "Not null. CHECK in ('project','job').", "guard_process_run() refuses a run on the wrong kind of record.", "created"),
+  e("processes.process_owning_team", "Owning team", "Which team does the work. Null when the workbook named nobody.", "text", "Nullable. FK → teams ON UPDATE CASCADE.", "—", "created"),
+  e("processes.process_expected_days", "Expected days", "How many days a run should take from its start. Null means no agreed duration, not zero — the workbook gives none.", "integer", "Nullable. CHECK > 0.", "process_run_display derives due_date = started + this.", "created"),
+  e("processes.process_at_risk_lead_days", "At-risk lead", "How many days before the due date a run starts flagging at risk.", "integer", "Nullable. CHECK > 0, and requires an expectation it is shorter than.", "process_run_display derives at_risk_date = due − this.", "created"),
+  e("processes.process_is_milestone", "Milestone", "Whether passing this process is a milestone of its stage. A count of these is the only progress figure the app reports — never a percentage.", "boolean", "Not null, default false.", "The drawer's Milestones panel reads it.", "created"),
+  e("processes.process_is_external", "External", "Council, SA Water, the EER consultant — nothing downstream moves until they are done and late is not the owning team's fault.", "boolean", "Not null, default false.", "—", "created"),
+  e("processes.process_position", "Position", "The order within its stage.", "integer", "Not null, default 0.", "Indexed with the stage.", "created"),
+  e("processes.process_is_active", "Active", "Retirement, not deletion — a process with runs cannot be deleted (the FK has no cascade), so it is retired.", "boolean", "Not null, default true.", "—", "created"),
+  e("processes.process_description", "Description", "What the process involves, for the person running it.", "text", "Nullable.", "—", "created"),
+  e("processes.process_automation", "Automation", "How this process will run itself, when it does — a note today, a hook tomorrow.", "text", "Nullable.", "—", "created"),
+  e("processes.process_sharepoint_folder", "SharePoint subfolder", "The subfolder inside the record's SharePoint folder where this process's documents are filed. A name; the record holds the folder URL (0040).", "text", "Nullable.", "—", "created"),
+  e("processes.process_import_ref", "Source row", "Where the process came from — \"Processes!7\".", "text", "Nullable. Null for a process defined in the app.", "—", "created"),
+
+  // --------------------------------------------------------- process_dependencies (0078)
+  e("process_dependencies.process_id", "Process", "The process that waits.", "uuid", "Part of the primary key. FK → processes ON DELETE CASCADE. CHECK: not itself.", "The single source of ordering; blocking is derived from these edges.", "created"),
+  e("process_dependencies.depends_on_process_id", "Waits on", "The process that has to finish first.", "uuid", "Part of the primary key. FK → processes ON DELETE CASCADE.", "guard_process_dependency_cycle() refuses a loop.", "created"),
+  e("process_dependencies.process_dependency_lag_days", "Lag days", "Days after the predecessor completes before this one is expected to start. The workbook's SLAs sit on the arrows.", "integer", "Not null, default 0. CHECK >= 0.", "—", "created"),
+
+  // ----------------------------------------------------------- process_properties (0078)
+  e("process_properties.process_id", "Process", "The process that collects the property.", "uuid", "Part of the primary key. FK → processes ON DELETE CASCADE.", "The join is why a property has no process column: one fact can be collected by more than one process.", "created"),
+  e("process_properties.property_def_key", "Property", "The property collected.", "text", "Part of the primary key. FK → property_defs ON UPDATE CASCADE ON DELETE CASCADE.", "—", "created"),
+  e("process_properties.process_property_position", "Position", "The order the process asks for its properties in.", "integer", "Not null, default 0.", "—", "created"),
+  e("process_properties.process_property_required", "Required to complete", "Must be recorded before the run counts as complete. Read by the app; the database does not refuse the completion, because \"complete with a gap\" is sometimes the truth.", "boolean", "Not null, default false.", "—", "created"),
+
+  // ---------------------------------------------------------------- process_tasks (0078)
+  e("process_tasks.process_task_id", "Template task ID", "A line of the checklist a process instantiates — the Construction schedule's 107 lines live here under their seven processes.", "uuid", "Primary key.", "Copied into tasks by instantiate_process_tasks(); never read at runtime.", "created"),
+  e("process_tasks.process_id", "Process", "The process this line belongs to.", "uuid", "Not null. FK → processes ON DELETE CASCADE.", "—", "created"),
+  e("process_tasks.parent_process_task_id", "Parent line", "The schedule's summary lines — \"FOOTINGS, 18 days\" — are parents of the lines beneath them.", "uuid", "Nullable. FK → process_tasks ON DELETE CASCADE. Must belong to the same process (guard_process_task_parent).", "Becomes tasks.parent_task_id on instantiation.", "created"),
+  e("process_tasks.process_task_name", "Task", "What the line says — \"SLAB POUR\".", "text", "Not null, non-blank.", "—", "created"),
+  e("process_tasks.process_task_owning_team", "Team", "Who does it — the schedule's team column, mapped to a slug.", "text", "Nullable. FK → teams ON UPDATE CASCADE.", "—", "created"),
+  e("process_tasks.process_task_expected_days", "Days", "The schedule's duration for the line.", "integer", "Nullable. CHECK >= 0 — the schedule has 0-day claim lines.", "—", "created"),
+  e("process_tasks.process_task_is_external", "External", "Waiting on somebody outside Lofty.", "boolean", "Not null, default false.", "—", "created"),
+  e("process_tasks.process_task_position", "Position", "The order within the process.", "integer", "Not null, default 0.", "—", "created"),
+  e("process_tasks.process_task_import_ref", "Schedule line", "The schedule's own line number, so \"task 93\" in a conversation can be found.", "integer", "Nullable. Unique with the process where set.", "The seed wires parents and dependencies through it.", "created"),
+
+  // ---------------------------------------------------- process_task_dependencies (0078)
+  e("process_task_dependencies.process_task_id", "Task", "The template task that waits.", "uuid", "Part of the primary key. FK → process_tasks ON DELETE CASCADE. CHECK: not itself.", "Same process as the task it waits on, and no cycles (guard_process_task_dependency).", "created"),
+  e("process_task_dependencies.depends_on_process_task_id", "Waits on", "The template task that has to finish first.", "uuid", "Part of the primary key. FK → process_tasks ON DELETE CASCADE.", "—", "created"),
+  e("process_task_dependencies.process_task_dependency_lag_days", "Lag days", "\"Handover is 10 days after the PCI walkthrough\" — 93+10 in the schedule.", "integer", "Not null, default 0. CHECK >= 0.", "Copied into task_dependencies.task_dependency_lag_days on instantiation.", "created"),
+
+  // ----------------------------------------------------------------- process_runs (0078)
+  e("process_runs.process_run_id", "Run ID", "One process, on one record, one attempt. A job holds many at once — that is the point.", "uuid", "Primary key.", "process_run_display adds the derived dates and health.", "created"),
+  e("process_runs.process_id", "Process", "Which process this is a run of.", "uuid", "Not null. FK → processes with NO cascade — a process with runs cannot be deleted, only retired.", "—", "created"),
+  e("process_runs.job_id", "Job", "The job the run is on, for a job process.", "text", "Nullable. FK → jobs ON UPDATE CASCADE ON DELETE CASCADE. CHECK: exactly one of job_id and project_id, matching the process's level (guard_process_run).", "—", "created"),
+  e("process_runs.project_id", "Project", "The project the run is on, for a project process.", "integer", "Nullable. FK → projects ON UPDATE CASCADE ON DELETE CASCADE.", "—", "created"),
+  e("process_runs.process_run_attempt", "Attempt", "Which pass this is. An amendment starts attempt 2 rather than reopening attempt 1, so both durations survive.", "integer", "Not null, default 1. CHECK > 0. Unique with the process and the record.", "—", "created"),
+  e("process_runs.process_run_status", "Status", "not_started · in_progress · waiting · complete · not_applicable. Not applicable is a real answer: a job with no retaining wall has finished the retaining process by having none.", "text", "Not null, default 'not_started'. CHECK against the five.", "Complete ⇔ completed_at set; waiting ⇒ waiting_on set; active ⇒ started_at set.", "created"),
+  e("process_runs.process_run_waiting_on", "Waiting on", "Which team the run waits on, when it is waiting. Blocked is a state, not a stage.", "text", "Nullable. FK → teams ON UPDATE CASCADE. Cleared when the status leaves waiting.", "—", "created"),
+  e("process_runs.process_run_started_at", "Started", "When the run began — the anchor of the SLA clock. Stamped by the database when the status first moves off not_started; editable afterwards for a process that began before it was logged.", "timestamptz", "Nullable until started.", "process_run_display: due = this + expected days.", "created"),
+  e("process_runs.process_run_completed_at", "Completed", "When the run finished. Stamped on complete, cleared on reopen — a completion time on an open run is a lie.", "timestamptz", "Nullable. CHECK: set exactly when status = complete.", "—", "created"),
+  e("process_runs.process_run_completed_by", "Completed by", "Who completed it.", "uuid", "Nullable. FK → profiles. Stamped by the database.", "—", "created"),
+  e("process_runs.process_run_note", "Note", "A sentence about this run — why it is waiting, why it is not applicable.", "text", "Nullable.", "—", "created"),
+
+  // ---------------------------------------------------------- process_run_display (0078)
+  e("process_run_display.process_run_due_date", "Due", "started_at + the process's expected days. Derived in the view, never stored, so re-timing a process re-dates every open run at once.", "view", "Null while the run has not started or the process has no expectation.", "security_invoker: the process_runs policy decides who sees what.", "created"),
+  e("process_run_display.process_run_at_risk_date", "At risk from", "Due date minus the process's at-risk lead.", "view", "Null unless both numbers are set.", "—", "created"),
+  e("process_run_display.process_run_health", "Health", "not_started · no_expectation · on_track · at_risk · overdue · complete · not_applicable — computed from today against the two dates. A run with no expectation reads no_expectation rather than on_track: \"on track against nothing\" is not a fact.", "view", "Derived.", "The first real health figure in the app; the drawer, the board filter and the Processes report read it.", "created"),
+  e("process_run_display.process_run_days_taken", "Days taken", "completed_at − started_at, in days, for a finished run.", "view", "Null until complete.", "The Processes report averages it per process.", "created"),
+
+  // ----------------------------------------------- tasks learn where they came from (0078)
+  e("tasks.process_run_id", "Process run", "The run this task was instantiated for, when it was — a typed-in task has none.", "uuid", "Nullable. FK → process_runs ON DELETE CASCADE.", "0030 promised this column would arrive with the table it references. It did.", "created"),
+  e("tasks.process_task_id", "Template line", "The template line this task was copied from, for \"which jobs skipped the frame check\".", "uuid", "Nullable. FK → process_tasks ON DELETE SET NULL — survives the template being deleted.", "—", "created"),
+
   // ----------------------------------------------------- pipeline_stages (SLA)
   // The lifecycle's lookup (0029, reseeded 0035 and 0045). Only its two SLA columns are
   // dictionaried so far — the first entries the table has had at all.
@@ -1185,9 +1308,29 @@ export const TABLE_DESCRIPTIONS: Record<string, string> = {
   projects:
     "The site — 1042, one row per development, one to many jobs beneath it. Holds the facts the whole site shares (type, addresses, SharePoint folder) that jobs read through rather than copy, and its own lifecycle stage — pulled up by its slowest live job, and pushing lagging jobs up when it is moved.",
   property_defs:
-    "A field defined as a row, not a column — which is what lets a team add what it captures without a schema migration. The property_def_* columns are built; the earlier proposed spelling is kept alongside them, still marked to do, as the record of the first shape. Values wait on property_values.",
+    "A field defined as a row, not a column — which is what lets a team add what it captures without a schema migration. Since 0077 it also carries the locks: four permission rungs (one per verb), a restricted flag that nobody below superadmin bypasses, the SLA days the workbook gave, and where each definition came from. 174 of them were seeded from Amber's workbook of 1 September (0079); 87 arrived with the format `unknown`, which the database refuses to store a value for until a person picks a real one. The earlier proposed spelling is kept alongside, still marked to do, as the record of the first shape.",
   property_values:
-    "One row per property per record, sparse by design — an unset field has no row at all, and the shape of the value is checked against its definition's format. Not built yet: property_defs is live and waiting on it.",
+    "The answers (0077). One row per property per record, sparse by design — an unset field has no row at all, and clearing one deletes the row. Typed columns rather than jsonb, so a date is a date; a composite foreign key pins every row to its definition's current format and the CHECK says which column that format fills. A project property's true value is on the project and read through by its jobs; a row on a job for a project property is a pushed copy. Who may read, record, change or clear a value is the definition's locks, resolved once per statement by private.property_keys().",
+  property_value_history:
+    "Every change to an answer, append-only, written by trigger (0077). Not activity_audit, because that table is admin-only and the whole point of the locks is that admin is not the same right as reading commercial data — this history is readable by exactly the people who may read the value. No foreign keys, on purpose: it records what WAS.",
+  property_options:
+    "The choices a single- or multi-select property offers, as rows (0077). Starts empty: the workbook names \"Agreement type\" as an enum and lists no values, and a list nobody at Lofty wrote would be quoted back as though they had.",
+  property_access:
+    "Who may do what with a property's values, by team or by person, one verb per column (0077). On an unrestricted property these rows narrow access below manager — no rows at all means open at the rung; on a restricted one they are the only way in, and superadmin alone may write them. The seed names the workbook's departments as readers and recorders of their own properties; nothing is restricted yet, and nobody may clear.",
+  processes:
+    "What happens inside a lifecycle stage, as rows (0078): a named piece of work pinned to a stage, run on a project or a job, with a team, an expected duration and the properties it collects. Replaces the idea of nesting pipelines inside the lifecycle — a job holds many processes at once, which one position never could. Never stores a value; properties do. 49 were seeded from the workbook's Processes sheet; managers and above edit them in Setup → Processes.",
+  process_dependencies:
+    "What has to finish before a process can start (0078) — the graph, as a table, because twenty-one of the schedule's steps have two or more predecessors. The single source of ordering; a trigger refuses a cycle. 48 edges came from the workbook, read from its predecessor and successor columns with copy-pasted and backwards rows refused and listed at the end of 0079.",
+  process_properties:
+    "Which properties a process collects, in what order, and which must be recorded before it counts as complete (0078). The join is what lets one fact be collected by more than one process, and why a property has no process column of its own.",
+  process_tasks:
+    "The checklist a process instantiates on a record — template tasks with a team and a duration (0078). The Construction schedule's 107 lines live here under their seven processes; its summary lines are parents. Copied into tasks when a run is instantiated, never read at runtime.",
+  process_task_dependencies:
+    "The order of a process's template tasks, with lag (0078) — \"Handover is 10 days after the PCI walkthrough\". Same process only, no cycles, copied into task_dependencies on instantiation. 99 edges from the schedule, its Excel-mangled cells decoded and both columns read as one edge set.",
+  process_runs:
+    "One process, on one record, one attempt (0078). A job holds many at once — that is the point — and an amendment is a second attempt rather than an overwrite, which is what makes \"how often does this repeat\" a query. Started and completed are stamped by the database; running a process is ordinary work at user, deleting a run is admin's.",
+  process_run_display:
+    "A run with its process and its derived dates (0078): due (start + expected days), at-risk (due − lead) and health. Nothing here is stored — re-time a process and every open run re-dates. The first real health figure in the app.",
   stages:
     "Merged into the stage enum in 0004 — eight seeded values that were the business process, not data anyone maintained. That enum was itself dropped in 0035, and the lifecycle now lives as text under CHECKs with pipeline_stages as its lookup; kept for both steps of the reasoning.",
   taggings:

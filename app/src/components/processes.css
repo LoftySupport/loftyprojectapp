@@ -1,0 +1,124 @@
+/* ---- property fields -------------------------------------------------------
+   One control per format. Mobile first: everything wraps, nothing has a fixed width
+   it cannot give up, and tap targets are at least 24px. */
+.pf-inline { display: inline-flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; min-width: 0; max-width: 100%; }
+.pf-date { display: inline-flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; }
+.pf-date input[type="checkbox"], .pf-inline input[type="checkbox"], .pf-check input { width: 18px; height: 18px; margin: 3px; }
+.pf-input {
+  height: 32px;
+  min-width: 0;
+  width: min(260px, 100%);
+  padding: 0 var(--space-8);
+  border: 1px solid var(--ui-border-color);
+  border-radius: var(--border-radius-small);
+  background: var(--primary-background-color);
+  color: var(--primary-text-color);
+  font: inherit;
+  font-size: 14px;
+}
+.pf-input:focus { outline: none; border-color: var(--primary-color); }
+.pf-input:disabled { opacity: 0.6; }
+.pf-prefix { color: var(--secondary-text-color); }
+.pf-select { min-width: min(220px, 100%); }
+.pf-multi { display: flex; flex-direction: column; gap: 2px; }
+.pf-check { display: inline-flex; align-items: center; gap: var(--space-4); min-height: 24px; }
+.pf-link { color: var(--primary-color); word-break: break-all; }
+.pf-unset { font-style: italic; }
+
+/* The slot list grows a process heading under the stage one, and chips that say where a
+   job's value came from. */
+.slot-process-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-8); flex-wrap: wrap;
+  font: var(--font-text3-bold);
+  margin: var(--space-8) 0 var(--space-4);
+}
+.slot-chip {
+  display: inline-block;
+  font: var(--font-text3-normal);
+  font-size: 11px;
+  border-radius: var(--border-radius-small);
+  padding: 0 var(--space-4);
+  margin-left: var(--space-8);
+  background: var(--allgrey-background-color);
+  color: var(--secondary-text-color);
+}
+.slot-chip.is-pushed { background: var(--lofty-orange-tint, #fde8d8); color: var(--lofty-orange-strong, #9a3b00); }
+.slot-chip.is-differs { background: color-mix(in srgb, var(--negative-ink, #b3261e) 12%, transparent); color: var(--negative-ink, #b3261e); }
+.slot-meta { font: var(--font-text3-normal); color: var(--secondary-text-color); margin-top: 2px; }
+.slot-history { margin-top: var(--space-12); border-top: 1px dashed var(--layout-border-color); padding-top: var(--space-8); }
+.slot-history li { display: flex; gap: var(--space-8); flex-wrap: wrap; padding: 2px 0; }
+@media (max-width: 720px) {
+  .slot-row { flex-direction: column; align-items: stretch; }
+  .slot-value { text-align: left; }
+  .pf-input { width: 100%; }
+}
+
+/* ---- processes on a record ------------------------------------------------- */
+.proc-stage { border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); }
+.proc-stage + .proc-stage { margin-top: var(--space-8); }
+.proc-stage > summary {
+  list-style: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); flex-wrap: wrap;
+  padding: var(--space-8) var(--space-12);
+  min-height: 40px;
+  font: var(--font-text2-bold);
+}
+.proc-stage > summary::-webkit-details-marker { display: none; }
+.proc-stage > summary .proc-summary { font: var(--font-text3-normal); color: var(--secondary-text-color); }
+.proc-stage.is-current > summary { border-left: 4px solid var(--primary-color); }
+.proc-list { margin: 0; padding: 0 var(--space-12) var(--space-8); list-style: none; }
+.proc-row { padding: var(--space-8) 0; border-top: 1px dashed var(--layout-border-color); }
+.proc-row-head { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; }
+.proc-name { flex: 1 1 200px; min-width: 0; display: flex; flex-direction: column; }
+.proc-name .proc-sub { font: var(--font-text3-normal); color: var(--secondary-text-color); }
+.proc-controls { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; }
+.proc-controls .proc-control { min-width: 150px; }
+.proc-body { margin-top: var(--space-8); padding: var(--space-8) var(--space-12); background: var(--allgrey-background-color); border-radius: var(--border-radius-small); }
+.proc-empty { padding: var(--space-8) 0; }
+
+/* Health as a word, not only a colour — one man in twelve cannot see the difference. */
+.health {
+  display: inline-block; font: var(--font-text3-bold); font-size: 11px; line-height: 18px;
+  padding: 0 var(--space-8); border-radius: 9px; white-space: nowrap;
+  background: var(--allgrey-background-color); color: var(--secondary-text-color);
+}
+.health.is-on_track { background: color-mix(in srgb, var(--positive-ink, #1f7a3a) 14%, transparent); color: var(--positive-ink, #1f7a3a); }
+.health.is-at_risk  { background: color-mix(in srgb, var(--warning-ink, #8a5a00) 16%, transparent); color: var(--warning-ink, #8a5a00); }
+.health.is-overdue  { background: color-mix(in srgb, var(--negative-ink, #b3261e) 14%, transparent); color: var(--negative-ink, #b3261e); }
+.health.is-complete { background: color-mix(in srgb, var(--positive-ink, #1f7a3a) 8%, transparent); color: var(--positive-ink, #1f7a3a); }
+.health.is-waiting  { background: color-mix(in srgb, var(--warning-ink, #8a5a00) 10%, transparent); color: var(--warning-ink, #8a5a00); }
+
+/* ---- Setup → Processes ------------------------------------------------------- */
+.proc-editor { display: grid; grid-template-columns: 1fr; gap: var(--space-16); }
+@media (min-width: 900px) { .proc-editor { grid-template-columns: minmax(260px, 1fr) minmax(0, 2fr); } }
+.proc-nav { display: flex; flex-direction: column; gap: var(--space-4); }
+.proc-nav-stage { font: var(--font-text3-bold); color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: 0.04em; margin: var(--space-8) 0 var(--space-4); }
+.proc-nav button {
+  text-align: left; width: 100%; min-height: 32px; padding: var(--space-4) var(--space-8);
+  border: 1px solid transparent; border-radius: var(--border-radius-small); background: transparent;
+  color: var(--primary-text-color); font: var(--font-text2-normal); cursor: pointer;
+  display: flex; justify-content: space-between; gap: var(--space-8);
+}
+.proc-nav button:hover { background: var(--allgrey-background-color); }
+.proc-nav button.is-selected { border-color: var(--primary-color); background: var(--primary-selected-color); }
+.proc-nav button .muted { font: var(--font-text3-normal); }
+.proc-nav button.is-retired { opacity: 0.6; }
+.dep-list { list-style: none; margin: 0; padding: 0; }
+.dep-list li { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; padding: var(--space-4) 0; border-top: 1px dashed var(--layout-border-color); }
+.dep-list li:first-child { border-top: 0; }
+.dep-lag { width: 72px; }
+.tpl-task { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; padding: var(--space-4) 0; border-top: 1px dashed var(--layout-border-color); }
+.tpl-task.is-child { padding-left: var(--space-24); }
+.tpl-task .tpl-name { flex: 1 1 180px; min-width: 0; }
+.picker-list { max-height: 320px; overflow: auto; border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-small); padding: var(--space-4) var(--space-8); }
+.picker-list label { display: flex; align-items: center; gap: var(--space-8); min-height: 28px; }
+
+/* ---- Setup → Properties table ---------------------------------------------- */
+.props-table td .pf-select, .props-table td select { min-width: 120px; }
+.props-table td.is-key code { font-size: 11px; }
+.levels-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--space-8); }
+.lock-badge { display: inline-block; font: var(--font-text3-bold); font-size: 11px; padding: 0 var(--space-4); border-radius: var(--border-radius-small); background: color-mix(in srgb, var(--negative-ink, #b3261e) 12%, transparent); color: var(--negative-ink, #b3261e); }
+
+/* An inline link with a tap target a thumb can hit — 24px minimum, without breaking the
+   sentence it sits in. */
+.tap-link { display: inline-block; min-height: 24px; line-height: 24px; padding: 0 2px; }

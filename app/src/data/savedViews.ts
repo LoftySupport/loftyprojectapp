@@ -59,7 +59,7 @@ const LIFECYCLE = [
   "Acquisition & Development",
   "Pre-construction",
   "Construction",
-  "Handover & Maintenance",
+  "Maintenance",
   "Completed",
   "Closed",
   "Cancelled"

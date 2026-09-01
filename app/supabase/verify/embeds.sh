@@ -30,7 +30,9 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 # Overridable so the check can be pointed at a deliberately-broken copy and
 # watched to FAIL. A check nobody has seen fail is not evidence of anything.
-REPO="${LOFTY_REPO_FILE:-$HERE/../../src/data/supabaseRepository.ts}"
+# Both halves of the Supabase repository: the property-value and process methods (0077,
+# 0078) live in their own module and issue embeds of their own.
+REPO="${LOFTY_REPO_FILE:-$HERE/../../src/data/supabaseRepository.ts $HERE/../../src/data/supabasePropertyProcessRepository.ts}"
 PORT="${LOFTY_PG_PORT:-5433}"
 HOST="${LOFTY_PG_HOST:-/var/tmp}"
 PSQL="psql -h $HOST -p $PORT -U postgres -d lofty_verify -tAq"
@@ -43,12 +45,12 @@ echo "--- PostgREST embed ambiguity ---"
 # a false one — and a false alarm is what makes a check get ignored.
 CODE=$(python3 -c "
 import re, sys
-s = open(sys.argv[1]).read()
+s = ''.join(open(f).read() + '\n' for f in sys.argv[1:])
 s = re.sub(r'/\*.*?\*/', '', s, flags=re.S)
 s = re.sub(r'^\s*//.*$', '', s, flags=re.M)
 s = re.sub(r'^\s*\*.*$', '', s, flags=re.M)
 print(s)
-" "$REPO")
+" $REPO)
 
 # Every (child, parent) pair joined by more than one foreign key. An embed of such a
 # child, from that parent, must name which constraint it means.

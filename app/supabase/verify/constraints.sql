@@ -288,7 +288,7 @@ BEGIN
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on retired stage name (%)', SQLERRM; END;
 
   BEGIN
-    UPDATE jobs SET job_stage = 'Handover & Maintenance' WHERE job_id = '1106-002';
+    UPDATE jobs SET job_stage = 'Maintenance' WHERE job_id = '1106-002';
     GET DIAGNOSTICS touched = ROW_COUNT;
     IF touched = 0 THEN
       RAISE WARNING 'FAIL: the stage probe matched no job — the fixture it targets is gone';

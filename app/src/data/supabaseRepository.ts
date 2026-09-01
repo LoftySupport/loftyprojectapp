@@ -5,6 +5,7 @@ import {
   changesBetween, headline, idsIn, recordLink, type NameLookup
 } from "./auditNarrative";
 import { createStubRepository } from "./stubRepository";
+import { propertyProcessMethods } from "./supabasePropertyProcessRepository";
 import { MAX_SPLIT, OPENING_TEAM, teamSlug } from "./types";
 import { projectDisplayName } from "./types";
 import type {
@@ -47,6 +48,8 @@ import type {
   NewTask,
   TaskPatch,
   PropertyDef,
+  PropertyDefPatch,
+  PermissionLevel,
   Stage,
   StageName,
   Team,
@@ -83,6 +86,16 @@ import type {
 // Wiring page shows it as the one thing genuinely not built rather than as a method
 // somebody forgot. property_defs came off this list with 0043.
 const WIRED: RepositoryMethod[] = [
+  // 0077 / 0078 — property values, access, options and processes.
+  "myPropertyAccess", "listPropertyAccess", "savePropertyAccess", "deletePropertyAccess",
+  "listPropertyOptions", "savePropertyOption", "deletePropertyOption",
+  "listPropertyValues", "setPropertyValue", "clearPropertyValue", "listPropertyValueHistory",
+  "pushProjectProperties",
+  "listProcesses", "createProcess", "updateProcess", "deleteProcess",
+  "listProcessDependencies", "setProcessDependencies", "listProcessProperties", "setProcessProperties",
+  "listProcessTasks", "createProcessTask", "updateProcessTask", "deleteProcessTask",
+  "listProcessTaskDependencies", "setProcessTaskDependencies",
+  "listProcessRuns", "startProcessRun", "updateProcessRun", "deleteProcessRun", "instantiateProcessTasks",
   "listProjects", "getProject", "listJobs", "getJob",
   "createProject", "createJob", "createJobsFromSplit", "deleteJob", "deleteProject",
   "moveJobStage",
@@ -249,7 +262,7 @@ type CommentRow = {
 };
 
 const TASK_COLUMNS =
-  "task_id, job_id, project_id, task_name, task_description, parent_task_id, task_position, task_owning_team, task_assignee_id, task_status, task_due_date, task_completed_at, task_completed_by, task_is_external, task_created_at, task_created_by, task_updated_at, task_updated_by, assignee:profiles!tasks_task_assignee_id_fkey(profile_full_name), finisher:profiles!tasks_task_completed_by_fkey(profile_full_name)";
+  "task_id, job_id, project_id, task_name, task_description, parent_task_id, task_position, task_owning_team, task_assignee_id, task_status, task_due_date, task_completed_at, task_completed_by, task_is_external, process_run_id, process_task_id, task_created_at, task_created_by, task_updated_at, task_updated_by, assignee:profiles!tasks_task_assignee_id_fkey(profile_full_name), finisher:profiles!tasks_task_completed_by_fkey(profile_full_name)";
 
 type TaskRow = {
   task_id: string; job_id: string | null; project_id: number | null;
@@ -259,6 +272,7 @@ type TaskRow = {
   task_status: string; task_due_date: string | null;
   task_completed_at: string | null; task_completed_by: string | null;
   task_is_external: boolean;
+  process_run_id: string | null; process_task_id: string | null;
   task_created_at: string; task_created_by: string | null;
   task_updated_at: string; task_updated_by: string | null;
   // Both embeds name their foreign key, and have to: `tasks` has four keys pointing at
@@ -286,6 +300,8 @@ function toTask(r: TaskRow): TaskEntry {
     completedBy: r.task_completed_by,
     completedByName: r.finisher?.profile_full_name ?? null,
     isExternal: r.task_is_external,
+    processRunId: r.process_run_id,
+    processTaskId: r.process_task_id,
     createdAt: r.task_created_at,
     createdBy: r.task_created_by,
     updatedAt: r.task_updated_at,
@@ -655,6 +671,9 @@ export function createSupabaseRepository(): Repository {
   // listTeams returns, and calling it through the object keeps one definition of what a
   // team looks like instead of two queries that could drift apart.
   const repo: Repository = {
+    // The property-value and process methods (0077, 0078) live in their own module;
+    // they share nothing with the rest but the client.
+    ...propertyProcessMethods(client),
     name: "supabase",
     wired: new Set<RepositoryMethod>(WIRED) as ReadonlySet<keyof Repository>,
 
@@ -2825,11 +2844,18 @@ export function createSupabaseRepository(): Repository {
           property_def_label: input.label,
           property_def_scope: input.scope,
           property_def_stage: input.stageName,
-          property_def_owning_team: input.teamId,
+          property_def_owning_team: input.teamId || null,
           property_def_format: input.format,
           property_def_required: input.required ?? false,
           property_def_automation: emptyToNull(input.automation),
-          property_def_position: input.position ?? 0
+          property_def_position: input.position ?? 0,
+          ...(input.restricted != null ? { property_def_restricted: input.restricted } : {}),
+          ...(input.createLevel ? { property_def_create_level: input.createLevel } : {}),
+          ...(input.readLevel ? { property_def_read_level: input.readLevel } : {}),
+          ...(input.updateLevel ? { property_def_update_level: input.updateLevel } : {}),
+          ...(input.deleteLevel ? { property_def_delete_level: input.deleteLevel } : {}),
+          ...(input.slaDays !== undefined ? { property_def_sla_days: input.slaDays } : {}),
+          ...(input.description !== undefined ? { property_def_description: emptyToNull(input.description) } : {})
         })
         .select(PROPERTY_DEF_COLUMNS)
         .single();
@@ -2837,16 +2863,24 @@ export function createSupabaseRepository(): Repository {
       return toPropertyDef(data as unknown as PropertyDefRow);
     },
 
-    async updatePropertyDef(key: string, patch: Partial<Omit<NewPropertyDef, "key">>): Promise<PropertyDef> {
+    async updatePropertyDef(key: string, patch: PropertyDefPatch): Promise<PropertyDef> {
       const row: Record<string, unknown> = {};
       if ("label" in patch) row.property_def_label = patch.label;
       if ("scope" in patch) row.property_def_scope = patch.scope;
       if ("stageName" in patch) row.property_def_stage = patch.stageName;
-      if ("teamId" in patch) row.property_def_owning_team = patch.teamId;
+      if ("teamId" in patch) row.property_def_owning_team = patch.teamId || null;
       if ("format" in patch) row.property_def_format = patch.format;
       if ("required" in patch) row.property_def_required = patch.required;
       if ("automation" in patch) row.property_def_automation = emptyToNull(patch.automation);
       if ("position" in patch) row.property_def_position = patch.position;
+      if ("restricted" in patch) row.property_def_restricted = patch.restricted;
+      if ("createLevel" in patch) row.property_def_create_level = patch.createLevel;
+      if ("readLevel" in patch) row.property_def_read_level = patch.readLevel;
+      if ("updateLevel" in patch) row.property_def_update_level = patch.updateLevel;
+      if ("deleteLevel" in patch) row.property_def_delete_level = patch.deleteLevel;
+      if ("slaDays" in patch) row.property_def_sla_days = patch.slaDays ?? null;
+      if ("isActive" in patch) row.property_def_is_active = patch.isActive;
+      if ("description" in patch) row.property_def_description = emptyToNull(patch.description);
 
       const { data, error } = await client
         .from("property_defs")
@@ -2930,18 +2964,27 @@ function toDictOverride(r: DictOverrideRow): DictionaryOverride {
 }
 
 const PROPERTY_DEF_COLUMNS =
-  "property_def_key, property_def_label, property_def_scope, property_def_stage, property_def_owning_team, property_def_format, property_def_required, property_def_automation, property_def_position, teams!property_defs_property_def_owning_team_fkey(team_name)";
+  "property_def_key, property_def_label, property_def_scope, property_def_stage, property_def_owning_team, property_def_format, property_def_required, property_def_automation, property_def_position, property_def_restricted, property_def_create_level, property_def_read_level, property_def_update_level, property_def_delete_level, property_def_sla_days, property_def_is_active, property_def_description, property_def_import_ref, teams!property_defs_property_def_owning_team_fkey(team_name)";
 
 type PropertyDefRow = {
   property_def_key: string;
   property_def_label: string;
   property_def_scope: PropertyDef["scope"];
   property_def_stage: string;
-  property_def_owning_team: TeamId;
+  property_def_owning_team: TeamId | null;
   property_def_format: PropertyDef["format"];
   property_def_required: boolean;
   property_def_automation: string | null;
   property_def_position: number;
+  property_def_restricted: boolean;
+  property_def_create_level: PermissionLevel;
+  property_def_read_level: PermissionLevel;
+  property_def_update_level: PermissionLevel;
+  property_def_delete_level: PermissionLevel;
+  property_def_sla_days: number | null;
+  property_def_is_active: boolean;
+  property_def_description: string | null;
+  property_def_import_ref: string | null;
   teams: { team_name: string | null } | null;
 };
 
@@ -2952,11 +2995,20 @@ function toPropertyDef(r: PropertyDefRow): PropertyDef {
     scope: r.property_def_scope,
     stageName: r.property_def_stage,
     teamId: r.property_def_owning_team,
-    teamName: r.teams?.team_name ?? r.property_def_owning_team,
+    teamName: r.property_def_owning_team ? (r.teams?.team_name ?? r.property_def_owning_team) : null,
     format: r.property_def_format,
     required: r.property_def_required,
     automation: r.property_def_automation ?? undefined,
-    position: r.property_def_position
+    position: r.property_def_position,
+    restricted: r.property_def_restricted,
+    createLevel: r.property_def_create_level,
+    readLevel: r.property_def_read_level,
+    updateLevel: r.property_def_update_level,
+    deleteLevel: r.property_def_delete_level,
+    slaDays: r.property_def_sla_days,
+    isActive: r.property_def_is_active,
+    description: r.property_def_description,
+    importRef: r.property_def_import_ref
   };
 }
 

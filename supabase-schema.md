@@ -12,6 +12,7 @@
 > | `permission_grants` keyed on the permission ladder | Keyed on permission sets, because Finance is not a rung |
 > | A `teams` table with `parent_team_id` for a hierarchy to walk | No hierarchy. Every seeded team had a null parent, so it was never real, and the scopes settled as none / own / team / all — none of which walks a tree |
 > | Companies, contacts and parties | Out of scope — this is project and process management, not a CRM |
+> | `property_values` as jsonb keyed on a `property_def_id` uuid; templates and checkpoints as `template_*` tables | Typed columns keyed on `property_def_key`, pinned to the definition's format by a composite FK, with per-property locks (`0077`); processes, their dependencies, properties and checklists in `processes` / `process_*` and `process_runs` (`0078`), seeded from Amber's workbook (`0079`) |
 > | One `activity` table merging comments and system events | Split, because one is user-authored and mutable and the other must be append-only |
 > | `addresses` with a `council_id` FK, no postcode, everything nullable | Council is an enum value on the row; postcode is required; suburb, state and postcode are the whole of what an address must have (0037, then 0073 — a street, its numbers and the council are all optional, because that is what Lofty knows when the land is bought); and `address_history` keeps every name a site has had |
 >

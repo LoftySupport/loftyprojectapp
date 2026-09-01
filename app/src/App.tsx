@@ -224,7 +224,9 @@ export default function App() {
               <Route path="jobs" element={<JobsPage />} />
               <Route path="jobs/:jobNumber" element={<JobsPage />} />
               <Route path="reports" element={<ReportsPage />} />
-              <Route path="templates" element={<TemplatesPage />} />
+              <Route path="processes" element={<TemplatesPage />} />
+              {/* The old address of the same page, for bookmarks. */}
+              <Route path="templates" element={<Navigate to="/processes" replace />} />
               <Route path="admin" element={<AdminPage />} />
               <Route
                 path="settings"

@@ -41,7 +41,7 @@ export type Grouping = (typeof GROUPINGS)[number];
  * it narrows for real. Tag returns with tag wiring; there is deliberately no separate
  * Team-member filter — the Team filter matches membership (Amber, 26 Aug).
  */
-export const FILTERABLE = ["Stage", "Team", "Status", "Type"] as const;
+export const FILTERABLE = ["Stage", "Team", "Status", "Type", "Process", "Process health", "Property", "Recorded"] as const;
 
 /** `field` is the identity — a field appears at most once, so a separate id is a second
  *  way to say the same thing, and the query string keys off the field anyway. */

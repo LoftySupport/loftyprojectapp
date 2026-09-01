@@ -1,14 +1,17 @@
 # Schema plan
 
 **Status:** Phase A (structure) is **built and applied** — migrations `0024`–`0033`, live
-on `gmekuqdjemrfuurxhuib` since 21 August 2026: 24 tables all with RLS, 70 policies, 10
-`security_invoker` views, zero advisor errors. The app reads it: 15 of 18 repository
-methods query Supabase.
+on `gmekuqdjemrfuurxhuib` since 21 August 2026. **Phase C's property model and processes
+are now built and applied too** — `0076`–`0079`, 1 September 2026: `property_values` with
+typed columns and per-property locks, `property_options`, `property_access`,
+`property_value_history`, the `private` schema and its helpers, `processes` with their
+dependencies, properties and checklists, `process_runs`, and the workbook seed of 49
+processes and 174 properties. See *1 September — the workbook lands* at the end of this
+file.
 
-**Phase B (the import) has not run** — 0 projects and 0 jobs. That is the next thing, and
-`HANDOFF.md` carries the running order, including which kinds of change are cheaper before
-it than after. Phase C (properties, permissions, process import) still waits on decisions
-Lofty has not made — listed under *Risks* here and in `HANDOFF.md`.
+**Phase B (the import) has not run** — the 9 projects and 66 jobs on the live database were
+created in the app. `HANDOFF.md` carries the running order, including which kinds of change
+are cheaper before it than after.
 
 **What changed against this plan while building it**, each with its reasoning in the
 migration header: teams became a lookup table before the rest rather than in Phase C, since
@@ -501,7 +504,7 @@ Confirmed by Lofty, 23 August 2026, and applied in `0035`:
 | 1 | Acquisition & Development | |
 | 2 | Pre-construction | |
 | 3 | Construction | |
-| 4 | Handover & Maintenance | |
+| 4 | Handover & Maintenance — **renamed Maintenance, 1 Sep (`0076`)**: handover is the last process of Construction | |
 | 5 | Closed | won |
 
 **No lifecycle phase has an owning team.** Every one of the previous nine carried one; I
@@ -1145,6 +1148,123 @@ noticing before Phase C creates a second home for a fact that already has one.
 
 The stage each is captured at is a `pipeline_stage_properties` row, not a column on the
 definition — the same property is captured at different stages in different pipelines.
+
+
+## 1 September — the workbook lands: properties get values, processes get built
+
+Amber's workbook (`app/supabase/import/lofty-processes-and-properties-2026-09-01.xlsx`) —
+three sheets: the seven lifecycle stages, 175 property rows, 49 processes with the
+Construction schedule's 107 task lines beneath seven of them. With it, one instruction:
+*"add in the attached properties and processes … update the database schema and app
+interface … linked appropriately."* This is the record of how that was built. Migrations
+`0076`–`0079`; the generator that read the workbook is beside it in `import/`.
+
+### Handover is part of construction (`0076`)
+
+The fourth phase is **Maintenance**. Amber: *"the handover and maintenance life cycle stage
+has just been changed to maintenance as handover is part of construction phase"* — and the
+workbook agrees in data: "7 - Handover" is the last of the seven Construction processes.
+Only the name moved; position 4 is still position 4 and `lifecycle_position()` is retaught.
+The workbook's "Aquistion & Development" and "Pre-Constructions" are typos and were not
+adopted.
+
+### The property model, as built (`0077`)
+
+The *Property store* section above proposed typed columns, a composite FK pinning a value
+to its definition's format, and a dedicated history. All three are built as written.
+Three things differ from the earlier text, each on purpose:
+
+- **`unknown` is a format.** 87 of the 175 rows said "unknown (no data)". Most are plainly
+  dates, and it was not the import's place to say so. The definition carries `unknown`, the
+  slot says *format not set*, and the CHECK makes the format incapable of holding a value.
+  Setup → Properties filters to them with one tick; a manager picks the real format.
+- **Locks are on the property row, not in permission sets.** Settled 24 and 28 August,
+  now built: four rungs (create / read / update / delete), a `restricted` flag, and
+  `property_access` rows naming teams and people. Resolution, in order: superadmin;
+  below the verb's rung, refused; restricted → only a named team or person; unrestricted →
+  manager and above, or nobody named at all, or named. **Manager and admin do not bypass
+  restricted.** Superadmin alone flips the flag or grants on a restricted property; admin
+  sets rungs and grants elsewhere; manager edits everything else. Proved rung by rung in
+  `verify/rls.sql` — 27 probes, each watched failing against a permissive policy first.
+- **A job may hold a row for a project property — as a pushed copy.** 0043 said a project
+  property cannot be overridden per job, and *Variations* above said "push needs no push".
+  Amber asked for a push (*"push that information from a project level to all jobs"*), and
+  a push is a copy, so the job holds one after it. Read-through is still the default; the
+  drawer marks a pushed copy and says when it has drifted from the project. A job property
+  still cannot land on a project; the trigger refuses it. `push_project_properties()` is
+  SECURITY INVOKER — the locks decide what moves.
+
+The date control is Amber's: a tick box that records today, beside a date for when it
+happened earlier. Unticking clears. The history line per change is the property's, readable
+by whoever may read the value — not `activity_audit`, which is admin's.
+
+### Processes, as built (`0078`)
+
+*Processes replace the nested pipelines* above is now a schema, with one correction to its
+table names and one to its scope of deletion:
+
+- **`process_runs`, not `job_processes`.** Twenty of the 49 processes run on the *project*
+  (Concept Plan, Site Survey, Planning Approval…), so the instance table has one nullable
+  parent per record type with a `num_nonnulls = 1` CHECK — the same shape as `tasks` and
+  `property_values` — and a name that does not say "job". The attempt number is there: an
+  amendment is attempt 2, not an overwrite.
+- **`pipelines` and `pipeline_stages` stay.** The lifecycle itself is a `pipelines` row,
+  the SLA editor reads `pipeline_stages`, and `seeds.sh` proves the stage list against it.
+  What is gone is the *idea* of nesting; processes take that role, and no child pipeline is
+  seeded. Removing the two tables is its own change once the lifecycle has another home.
+
+What was agreed on 24 August holds: no auto-advance (the stage header on a record says
+"ready to move on" and a person moves it); `not_applicable` is a status; dependencies are
+the single source of ordering, cycle-guarded by trigger; milestones are a boolean and a
+count, never a percentage. Due and health are derived in `process_run_display` from
+`started_at + expected_days`, never stored — the *Health, finally defined* section, built.
+No process has an expected duration yet: the workbook gave none, and the app says "no
+duration set" rather than "on track against nothing".
+
+Three joins hang off a process: `process_dependencies` (with lag), `process_properties`
+(which properties it collects, and which are required to complete — read by the app, not
+enforced by the database, because "complete with a gap" is sometimes the truth), and
+`process_tasks` with `process_task_dependencies` — the checklist a run instantiates via
+`instantiate_process_tasks()`, parents first, dependencies and lags copied. `tasks` gained
+`process_run_id` and `process_task_id`, the columns 0030 promised "in the migration that
+creates the thing it references".
+
+### What the seed decided, and what it refused to (`0079`)
+
+The generator translates cells; it does not guess at them. Everything it *did* decide is
+listed at the end of `0079` and in `--report`:
+
+| Decision | Why |
+|---|---|
+| "unknown (no data)" → format `unknown` (87 rows); blank department → null team (130 rows); no durations, milestones, required flags or restrictions | The sheet did not say. The columns exist for a person to fill. |
+| Block → process where the words differ (17 mappings, e.g. "FCR" → Footings Construction Report; "Lodged for Planning Approval" → Planning Approval); "PWA & Invoice" split by row | Two sheets, two vocabularies for one thing. |
+| Six properties belong to no process (the stage gates, the contract value, "Trello") | Their block is a heading, not a process. They sit under their stage alone. |
+| Predecessor/successor names mapped to processes through 37 aliases; 7 names left unmapped and listed | Those cells speak the older 57-step schedule's vocabulary; a match not in doubt is wired, the rest is reported. |
+| Four "Issued" rows carry the same successor list; credited to PWA, the copies skipped | A variation does not precede the concept plan. The text is byte-identical. |
+| A dependency running backwards through the lifecycle or stage groups is refused | The sheet's own order is its statement of what comes first. |
+| The schedule's date-mangled cells decoded (`"6, 8"` had become 6 August); both columns read as one edge set; summary lines become parent tasks | Documented at `decode_ids()`; 3 edges were declared on one side only. |
+| Seven spelling fixes (Ordererd, Receieved, Construciton, depost, PRACTICLE, RAINWATWATER, CLOTHSLINE) | Labels are renameable in the app; these were fixed on the way in and listed. |
+| "3 - External Cladding" read as Construction; BRC given Pre-construction/Job from the Properties sheet | Its six siblings, its tasks and its properties all say so. |
+
+Counts, for the record: 49 processes, 174 properties (one duplicate row skipped), 48
+process dependencies, 107 template tasks, 99 task dependencies.
+
+### What this leaves for Amber
+
+- **87 formats to set.** Setup → Properties, "Only without a format". Most are dates.
+- **Durations.** No process has an expected number of days; the per-property SLA days from
+  the sheet are stored on the property as given. Setup → Processes takes both the duration
+  and the at-risk lead.
+- **The unmapped predecessor names** at the end of `0079` — Framing Supporting Docs,
+  Contract Check, Footing Quotes Release, Final Construction Check, Quote Steel Framing,
+  Estimating Check of Contract/Selections, Selections Drafting Amendments — are steps the
+  older schedule had and the workbook does not. Either they become processes or the
+  dependencies naming them are prose.
+- **Which properties are restricted.** Nothing is, yet. The mechanism is proved; the list is
+  Lofty's — "mainly finance", 28 August.
+- **Milestones.** No process is flagged. The stage header counts them once some are.
+- **"Handover is part of construction" and "7 - Handover" is a process** — consistent. But
+  the Maintenance phase now has no processes at all in the workbook, which may be right.
 
 ## Verification
 

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { BreadcrumbsBar, BreadcrumbItem, Button, Heading, Tab, TabList, Text, TextField } from "@vibe/core";
-import { useMilestones, useTemplatePhases, useTeams } from "../data/useLookups";
+import { useTemplatePhases, useTeams } from "../data/useLookups";
 import type { BoardJob } from "../data/boardModel";
 import { TITLE_TYPE_LABELS, TITLE_TYPES, type TeamId, type TitleType } from "../data/types";
 import { StatusPill } from "./RecordCards";
 import { PropertySlots } from "./PropertySlots";
+import { ProcessesPanel } from "./ProcessesPanel";
 import { ExpandButton, usePanelExpand } from "./PanelExpand";
 import { useResizablePanel } from "./useResizablePanel";
 import { JOB_MOVE_NOTE, MoveStageControl } from "./MoveStageDialog";
@@ -84,7 +85,6 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
   }, []);
 
   const { expectedDaysByStage } = useTemplatePhases();
-  const { byStage: milestonesByStage } = useMilestones();
 
   // Editing who holds the job — the same `updateJob` the bulk bar writes through, at
   // the same rung (`user`+, backed by the `users update jobs` policy). One record here,
@@ -152,7 +152,6 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
   // Undefined, not 14: no stage has an expected duration set, and inventing one here
   // put a number under "Days in stage" that read as a target somebody had agreed.
   const expected = expectedDaysByStage[job.stage];
-  const milestones = milestonesByStage[job.stage] ?? [];
 
   return (
     <>
@@ -475,18 +474,11 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
             </div>
           </section>
 
-          <section className="panel">
-            <div className="panel-head">
-              <Text type="text2" weight="bold">Milestones</Text>
-              <Text type="text3" color="secondary">from the template for this phase</Text>
-            </div>
-            {milestones.map(c => (
-              <div className="milestone" key={c.label}>
-                <input type="checkbox" disabled aria-label={c.label} />
-                <Text type="text2">{c.label}</Text>
-              </div>
-            ))}
-          </section>
+          {/* The processes of every stage, this one open — with their properties to
+              record and their checklists to create. Milestones are the processes flagged
+              as such; the stage header counts them. This replaced a Milestones panel of
+              disabled checkboxes that had nothing behind it. */}
+          <ProcessesPanel target={{ jobId: job.jobNumber }} scope="job" currentStage={job.stage} />
           </>)}
 
           {(!expanded || tab === 1) && (<>
@@ -498,26 +490,14 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
               property cannot be overridden per job. Editing one happens on the project. */}
           <PropertySlots
             scope="project"
+            target={{ jobId: job.jobNumber }}
             title="Project properties"
-            note="True of the whole site, so every job on it shows the same answer. Change them on the project."
+            note="True of the whole site — read through from the project, or pushed onto this job as its own copy. Change them on the project, or push them from there."
           />
 
           {/* Then the job's own — twenty jobs, twenty answers. */}
-          <PropertySlots scope="job" title="Job properties" />
+          <PropertySlots scope="job" target={{ jobId: job.jobNumber }} title="Job properties" showHistory={expanded} />
 
-          {expanded && (
-            <section className="panel">
-              <div className="panel-head">
-                <Text type="text2" weight="bold">All properties</Text>
-                <Text type="text3" color="secondary">grouped by stage — fills as definitions land</Text>
-              </div>
-              <Text type="text2" color="secondary" ellipsis={false}>
-                Job properties land in here, grouped by the stage that captures them —
-                fencing type, pour date, and whatever else Lofty defines. Add definitions
-                in Setup → Properties and they appear on every job.
-              </Text>
-            </section>
-          )}
           </>)}
 
           {(!expanded || tab === 2) && (<>

@@ -472,14 +472,14 @@ begin
     when others then raise warning 'FAIL: unexpected on pipelines (%)', sqlerrm;
   end;
 
-  -- 0043: defining what the company captures is process design, same bar as pipelines.
+  -- 0043, widened in 0077: defining what the company captures is a manager's work; a user is refused.
   begin
     insert into property_defs (property_def_key, property_def_label, property_def_scope,
                                property_def_stage, property_def_owning_team, property_def_format)
     values ('sneaky_field', 'Sneaky', 'project', 'Construction', 'design', 'text');
-    raise warning 'FAIL: a non-superadmin defined a property';
+    raise warning 'FAIL: a user defined a property';
   exception
-    when insufficient_privilege then raise notice 'ok  property_defs refused a write below superadmin';
+    when insufficient_privilege then raise notice 'ok  property_defs refused a write below manager';
     when others then raise warning 'FAIL: unexpected on property_defs (%)', sqlerrm;
   end;
 
@@ -1028,3 +1028,251 @@ delete from feedback where feedback_title in ('__rls_probe__', '__rls_probe_pare
 reset request.jwt.claim.sub;
 update profiles set profile_permission = 'user'
  where profile_email = 'behaviour-test@lofty.com.au';
+
+-- =============================================================================
+-- 0077 / 0078 — the property locks and the process runs, as real signed-in people
+-- =============================================================================
+-- The resolution the policies promise, walked rung by rung on three fixtures:
+--
+--   probe_pour       unrestricted, nobody named       -> open at the rung to everybody
+--   probe_team_only  unrestricted, finance named      -> finance and managers, nobody else
+--   probe_margin     RESTRICTED, nobody named         -> superadmin only, until granted
+--
+-- The test person sits in design and not in finance. Every count below is read as
+-- `authenticated` with RLS on, so a policy that quietly stopped filtering shows up as
+-- the wrong number, not as silence. Fixtures are made and removed as the owner.
+\echo '=== the property locks (0077) and process runs (0078) ==='
+reset role;
+reset request.jwt.claim.sub;
+
+insert into profile_teams (profile_id, team_id)
+select profile_id, 'design' from profiles where profile_email = 'behaviour-test@lofty.com.au'
+on conflict do nothing;
+delete from profile_teams pt using profiles p
+ where pt.profile_id = p.profile_id and p.profile_email = 'behaviour-test@lofty.com.au'
+   and pt.team_id = 'finance';
+
+insert into property_defs (property_def_key, property_def_label, property_def_scope,
+                           property_def_stage, property_def_format, property_def_restricted)
+values ('probe_margin',    'Probe margin',    'job', 'Pre-construction', 'currency', true),
+       ('probe_pour',      'Probe pour date', 'job', 'Construction',     'date',     false),
+       ('probe_team_only', 'Probe team only', 'job', 'Construction',     'text',     false);
+insert into property_values (property_def_key, property_def_format, job_id, property_value_number)
+select 'probe_margin', 'currency', job_id, 12345 from jobs where job_id like '1106-%' order by job_id limit 1;
+insert into property_values (property_def_key, property_def_format, job_id, property_value_date)
+select 'probe_pour', 'date', job_id, date '2026-09-01' from jobs where job_id like '1106-%' order by job_id limit 1;
+insert into property_values (property_def_key, property_def_format, job_id, property_value_text)
+select 'probe_team_only', 'text', job_id, 'finance only' from jobs where job_id like '1106-%' order by job_id limit 1;
+insert into property_access (property_def_key, team_id) values ('probe_team_only', 'finance');
+
+update profiles set profile_permission = 'user' where profile_email = 'behaviour-test@lofty.com.au';
+
+\echo '--- as a USER in design ---'
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+do $$
+declare n integer; run uuid; other_job text;
+begin
+  select count(*) into n from property_values where property_def_key = 'probe_pour';
+  if n = 1 then raise notice 'ok  a user reads an unrestricted value nobody has narrowed';
+  else raise warning 'FAIL: a user saw % rows of an open property (expected 1)', n; end if;
+
+  select count(*) into n from property_values where property_def_key = 'probe_team_only';
+  if n = 0 then raise notice 'ok  a user outside the named team does not see a team-only value';
+  else raise warning 'FAIL: a user outside finance saw a finance-only value'; end if;
+
+  select count(*) into n from property_values where property_def_key = 'probe_margin';
+  if n = 0 then raise notice 'ok  a user does not see a restricted value';
+  else raise warning 'FAIL: a user saw a restricted value'; end if;
+
+  select count(*) into n from property_value_history where property_def_key = 'probe_margin';
+  if n = 0 then raise notice 'ok  the history of a restricted value is hidden with it';
+  else raise warning 'FAIL: a user read the history of a restricted value'; end if;
+
+  -- Recording is at the user rung on an open property; clearing is manager's, and RLS on
+  -- DELETE filters rather than raising, so the count is the assertion.
+  select job_id into other_job from jobs where job_id like '1106-%' order by job_id desc limit 1;
+  begin
+    insert into property_values (property_def_key, property_def_format, job_id, property_value_date)
+    values ('probe_pour', 'date', other_job, current_date);
+    raise notice 'ok  a user records an open property';
+  exception when others then raise warning 'FAIL: a user could not record an open property (%)', sqlerrm; end;
+  delete from property_values where property_def_key = 'probe_pour' and job_id = other_job;
+  if found then raise warning 'FAIL: a user cleared a value — that is manager''s';
+  else raise notice 'ok  clearing a value is refused below manager'; end if;
+
+  begin
+    insert into property_values (property_def_key, property_def_format, job_id, property_value_text)
+    values ('probe_team_only', 'text', other_job, 'sneaked');
+    raise warning 'FAIL: a user outside finance recorded a finance-only property';
+  exception
+    when insufficient_privilege then raise notice 'ok  a user outside the named team cannot record it either';
+    when others then raise warning 'FAIL: unexpected recording a team-only value (%)', sqlerrm;
+  end;
+
+  begin
+    insert into property_defs (property_def_key, property_def_label, property_def_scope, property_def_stage, property_def_format)
+    values ('probe_sneaky', 'Sneaky', 'job', 'Construction', 'text');
+    raise warning 'FAIL: a user defined a property';
+  exception
+    when insufficient_privilege then raise notice 'ok  defining a property is refused below manager';
+    when others then raise warning 'FAIL: unexpected defining a property (%)', sqlerrm;
+  end;
+
+  begin
+    insert into processes (process_key, process_name, process_stage, process_scope)
+    values ('probe_sneaky', 'Sneaky', 'Construction', 'job');
+    raise warning 'FAIL: a user defined a process';
+  exception
+    when insufficient_privilege then raise notice 'ok  defining a process is refused below manager';
+    when others then raise warning 'FAIL: unexpected defining a process (%)', sqlerrm;
+  end;
+
+  -- Running a process is ordinary work: a user starts one and completes it, and the
+  -- database stamps both times.
+  begin
+    insert into process_runs (process_id, job_id, process_run_status)
+    select process_id, other_job, 'in_progress' from processes where process_key = 'pwa'
+    returning process_run_id into run;
+    update process_runs set process_run_status = 'complete' where process_run_id = run;
+    if (select process_run_completed_at from process_run_display where process_run_id = run) is not null
+       and (select process_run_health from process_run_display where process_run_id = run) = 'complete' then
+      raise notice 'ok  a user runs a process to completion and the view reads it back';
+    else
+      raise warning 'FAIL: the completed run did not read back as complete';
+    end if;
+  exception when others then raise warning 'FAIL: a user could not run a process (%)', sqlerrm; end;
+  delete from process_runs where process_run_id = run;
+  if found then raise warning 'FAIL: a user deleted a process run — that is admin''s';
+  else raise notice 'ok  deleting a run is refused below admin'; end if;
+end $$;
+reset role;
+
+reset request.jwt.claim.sub;
+update profiles set profile_permission = 'manager' where profile_email = 'behaviour-test@lofty.com.au';
+\echo '--- as a MANAGER ---'
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+do $$
+declare n integer;
+begin
+  select count(*) into n from property_values where property_def_key = 'probe_team_only';
+  if n = 1 then raise notice 'ok  a manager sees an unrestricted value whatever team holds it';
+  else raise warning 'FAIL: a manager saw % rows of a team-only value (expected 1)', n; end if;
+
+  select count(*) into n from property_values where property_def_key = 'probe_margin';
+  if n = 0 then raise notice 'ok  a manager does NOT see a restricted value — restricted means restricted';
+  else raise warning 'FAIL: a manager saw a restricted value'; end if;
+
+  begin
+    update property_defs set property_def_label = 'Probe pour date (renamed)' where property_def_key = 'probe_pour';
+    if found then raise notice 'ok  a manager edits a property definition';
+    else raise warning 'FAIL: a manager''s edit to a property definition touched nothing'; end if;
+  exception when others then raise warning 'FAIL: a manager could not edit a property (%)', sqlerrm; end;
+
+  begin
+    update property_defs set property_def_restricted = false where property_def_key = 'probe_margin';
+    raise warning 'FAIL: a manager lifted a restriction';
+  exception
+    when insufficient_privilege then raise notice 'ok  lifting a restriction is refused below superadmin';
+    when others then raise warning 'FAIL: unexpected lifting a restriction (%)', sqlerrm;
+  end;
+
+  begin
+    update property_defs set property_def_read_level = 'manager' where property_def_key = 'probe_pour';
+    raise warning 'FAIL: a manager changed a security level';
+  exception
+    when insufficient_privilege then raise notice 'ok  changing a security level is refused below admin';
+    when others then raise warning 'FAIL: unexpected changing a level (%)', sqlerrm;
+  end;
+
+  begin
+    insert into property_access (property_def_key, team_id) values ('probe_pour', 'design');
+    raise warning 'FAIL: a manager granted property access';
+  exception
+    when insufficient_privilege then raise notice 'ok  granting access is refused below admin';
+    when others then raise warning 'FAIL: unexpected granting access (%)', sqlerrm;
+  end;
+
+  begin
+    insert into processes (process_key, process_name, process_stage, process_scope)
+    values ('probe_manager_process', 'Manager''s process', 'Construction', 'job');
+    raise notice 'ok  a manager defines a process';
+  exception when others then raise warning 'FAIL: a manager could not define a process (%)', sqlerrm; end;
+end $$;
+reset role;
+
+reset request.jwt.claim.sub;
+update profiles set profile_permission = 'admin' where profile_email = 'behaviour-test@lofty.com.au';
+\echo '--- as an ADMIN ---'
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+do $$
+declare n integer;
+begin
+  select count(*) into n from property_values where property_def_key = 'probe_margin';
+  if n = 0 then raise notice 'ok  an admin does NOT see a restricted value either';
+  else raise warning 'FAIL: an admin saw a restricted value'; end if;
+
+  begin
+    insert into property_access (property_def_key, team_id) values ('probe_margin', 'design');
+    raise warning 'FAIL: an admin granted access to a RESTRICTED property';
+  exception
+    when insufficient_privilege then raise notice 'ok  access to a restricted property is superadmin''s to grant';
+    when others then raise warning 'FAIL: unexpected granting restricted access (%)', sqlerrm;
+  end;
+
+  begin
+    insert into property_access (property_def_key, team_id) values ('probe_team_only', 'design');
+    raise notice 'ok  an admin grants a team access to an unrestricted property';
+  exception when others then raise warning 'FAIL: an admin could not grant access (%)', sqlerrm; end;
+end $$;
+reset role;
+
+reset request.jwt.claim.sub;
+update profiles set profile_permission = 'superadmin' where profile_email = 'behaviour-test@lofty.com.au';
+\echo '--- as a SUPERADMIN ---'
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+do $$
+declare n integer;
+begin
+  select count(*) into n from property_values where property_def_key = 'probe_margin';
+  if n = 1 then raise notice 'ok  a superadmin sees the restricted value';
+  else raise warning 'FAIL: a superadmin saw % rows of a restricted value (expected 1)', n; end if;
+
+  begin
+    insert into property_access (property_def_key, team_id) values ('probe_margin', 'design');
+    raise notice 'ok  a superadmin grants design access to the restricted property';
+  exception when others then raise warning 'FAIL: a superadmin could not grant restricted access (%)', sqlerrm; end;
+end $$;
+reset role;
+
+reset request.jwt.claim.sub;
+update profiles set profile_permission = 'user' where profile_email = 'behaviour-test@lofty.com.au';
+\echo '--- as the USER again, now that design is named ---'
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+do $$
+declare n integer;
+begin
+  select count(*) into n from property_values where property_def_key = 'probe_margin';
+  if n = 1 then raise notice 'ok  the grant opens the restricted value to the named team';
+  else raise warning 'FAIL: design was granted the restricted value and saw % rows', n; end if;
+
+  select count(*) into n from property_values where property_def_key = 'probe_team_only';
+  if n = 1 then raise notice 'ok  the grant opens the team-only value to the second team';
+  else raise warning 'FAIL: design was granted the team-only value and saw % rows', n; end if;
+
+  select count(*) into n from my_property_access() where property_def_key = 'probe_margin' and can_read;
+  if n = 1 then raise notice 'ok  my_property_access() agrees with the policy';
+  else raise warning 'FAIL: my_property_access() disagrees with what the policy let through'; end if;
+end $$;
+reset role;
+
+-- Left as found.
+reset request.jwt.claim.sub;
+delete from processes where process_key = 'probe_manager_process';
+delete from property_defs where property_def_key in ('probe_margin', 'probe_pour', 'probe_team_only');
+delete from property_value_history where property_def_key in ('probe_margin', 'probe_pour', 'probe_team_only');
+update profiles set profile_permission = 'user' where profile_email = 'behaviour-test@lofty.com.au';
