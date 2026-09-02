@@ -899,31 +899,38 @@ export const DICTIONARY: DictionaryEntry[] = [
   // ------------------------------------------------- activity_audit (built)
   // Added outside the numbered migrations. Documented here because it is real and
   // load-bearing — it is where stage history lives now that job_stages is gone.
-  e("activity_audit.id", "Audit entry",
-    "One row per change to a tracked table. The trg_activity_audit_row trigger fires after every insert, update and delete on profiles, addresses, projects and jobs — profile_teams was the fifth until 0022 folded it into profiles.teams.",
-    "integer", "Primary key, bigint identity. The only index on the table.",
-    "Written by log_activity_audit(); never by the app. Readable since 0058 by any active user, but only where table_name is in ('projects', 'jobs') — the rows this app renders as history. Everything else, profiles history above all, stays unreadable.",
-    "created", "Amber Beaumont — outside the migrations"),
-  e("activity_audit.table_name", "Table", "Which table changed, alongside schema_name.", "text", "Not null.",
+  e("activity_audit.activity_audit_id", "Audit entry",
+    "One row per insert, update or delete on EVERY table in public except the six that are themselves logs (0080 removed the allowlist that had kept it to twelve). Renamed from `id` in 0080 to join the tablename_attribute convention.",
+    "bigint", "Primary key, identity.",
+    "Written by log_activity_audit(); never by the app. Readable by any active user except restricted property values, internal comments and the two personal tables (Amber, 1 Sep: \"everything and everyone except for restricted fields\"); admins read all.",
+    "created", "Amber Beaumont — outside the migrations; renamed 0080"),
+  e("activity_audit.activity_audit_table", "Table", "Which table changed. Renamed from `table_name` in 0080.", "text", "Not null.",
     "Load-bearing since 0058: the read policy is table_name in ('projects', 'jobs'), so this column is what keeps 184 rows of profiles history out of a viewer's reach. Both directions were watched — a viewer reads 230 project and job rows and 0 of anything else; the same policy without the table list handed them the profiles history. Filtering by it is a sequential scan today — worth an index on (table_name, changed_at) now that every drawer open runs two of these queries.",
     "created", "Amber Beaumont — outside the migrations"),
-  e("activity_audit.operation", "Operation", "INSERT, UPDATE or DELETE.", "text", "Not null.", "—", "created", "Amber Beaumont — outside the migrations"),
-  e("activity_audit.old_row", "Before", "The whole row as it was, as jsonb. Null on insert.", "jsonb", "Nullable.",
+  e("activity_audit.activity_audit_operation", "Operation", "INSERT, UPDATE or DELETE. Renamed from `operation` in 0080.", "text", "Not null.", "—", "created", "Amber Beaumont — outside the migrations; renamed 0080"),
+  e("activity_audit.activity_audit_old_row", "Before", "The whole row as it was, as jsonb, credentials redacted. Null on insert. Renamed from `old_row` in 0080.", "jsonb", "Nullable.",
     "to_jsonb(old). Because it captures every column, old_row->>'stage' is where a job's previous stage is recorded.",
     "created", "Amber Beaumont — outside the migrations"),
-  e("activity_audit.new_row", "After", "The whole row as it became, as jsonb. Null on delete.", "jsonb", "Nullable.",
+  e("activity_audit.activity_audit_new_row", "After", "The whole row as it became, as jsonb. Null on delete. Renamed from `new_row` in 0080.", "jsonb", "Nullable.",
     "to_jsonb(new). new_row->>'stage' paired with changed_at is what replaces job_stages.entered_at.",
     "created", "Amber Beaumont — outside the migrations"),
-  e("activity_audit.changed_at", "Changed on", "When the change happened.", "timestamptz", "Not null.",
+  e("activity_audit.activity_audit_at", "Changed on", "When the change happened. Renamed from `changed_at` in 0080.", "timestamptz", "Not null.",
     "The timestamp any reconstruction of time-in-stage measures between.",
     "created", "Amber Beaumont — outside the migrations"),
-  e("activity_audit.changed_by", "Changed by", "The database role that made the change; jwt_sub carries the authenticated user.", "text", "Nullable.", "Paired with jwt_sub.", "created", "Amber Beaumont — outside the migrations"),
+  e("activity_audit.activity_audit_role", "Database role", "The database role that made the change (authenticated, postgres). Who the PERSON was is activity_audit_profile_id. Renamed from `changed_by` in 0080.", "text", "Not null.", "—", "created", "Amber Beaumont — outside the migrations; renamed 0080"),
+  e("activity_audit.activity_audit_jwt_sub", "Auth user", "auth.uid() as text at write time. Kept for rows older than activity_audit_profile_id and for the people-activity report. Renamed from `jwt_sub` in 0080.", "text", "Nullable. Default auth.uid()::text.", "Indexed with activity_audit_at.", "created", "Amber Beaumont — outside the migrations; renamed 0080"),
+  e("activity_audit.activity_audit_profile_id", "Who", "The person, as a profile, resolved from auth.uid() at write time (0080). Null for a migration, a seed, or a trigger with nobody behind it — never a stand-in.", "uuid", "Nullable. No FK: the history outlives the account.", "Indexed with activity_audit_at, newest first.", "created"),
+  e("activity_audit.activity_audit_job_id", "Job", "The job the change was on, resolved from the row at write time: directly, or through its task, variation, process run or comment (0080). Null when the change was not about a job.", "text", "Nullable. No FK: history outlives the record.", "Partial index (job, at desc). A job's Activity tab is this lookup across every table.", "created"),
+  e("activity_audit.activity_audit_project_id", "Project", "The project, the same way — and a job's change carries its project, so a project's history includes its jobs' (0080).", "integer", "Nullable. No FK.", "Partial index (project, at desc).", "created"),
+  e("activity_audit.activity_audit_origin", "Origin", "Where the write came from: `app`, or the slug a sync worker set in app.sync_origin (0080). The loop guard: a system's own changes are never sent back to it, and the feed names the integration as the actor.", "text", "Not null, default 'app'. CHECK: a slug.", "—", "created"),
 
   // -------------------------------------------------- login_activity (built)
-  e("login_activity.id", "Login entry", "One row per authentication event.", "integer", "Primary key, bigint identity.", "Written from auth.users by log_login_activity_from_auth_users().", "created", "Amber Beaumont — outside the migrations"),
-  e("login_activity.user_id", "User", "Who signed in.", "uuid", "Nullable. Indexed.", "References auth.users(id). Email is denormalised alongside it so the row survives account deletion.", "created", "Amber Beaumont — outside the migrations"),
-  e("login_activity.event_type", "Event", "What kind of authentication event it was.", "text", "Nullable.", "Details in metadata.", "created", "Amber Beaumont — outside the migrations"),
-  e("login_activity.occurred_at", "Occurred on", "When it happened.", "timestamptz", "Not null. Indexed descending.", "Indexed for \"most recent first\", which is how it is read.", "created", "Amber Beaumont — outside the migrations"),
+  e("login_activity.login_activity_id", "Login entry", "One row per authentication event. Renamed from `id` in 0080.", "bigint", "Primary key, identity.", "Written from auth.users by log_login_activity_from_auth_users(), rewritten in 0080 for the new names and proved by behaviour.sql §35.", "created", "Amber Beaumont — outside the migrations; renamed 0080"),
+  e("login_activity.login_activity_user_id", "User", "Who signed in (auth.users.id). Renamed from `user_id` in 0080.", "uuid", "Not null. Indexed.", "The email is denormalised alongside it so the row survives account deletion.", "created", "Amber Beaumont — outside the migrations; renamed 0080"),
+  e("login_activity.login_activity_email", "Email", "The address at the time, kept so the row outlives the account.", "text", "Nullable.", "—", "created", "Amber Beaumont — outside the migrations; renamed 0080"),
+  e("login_activity.login_activity_event_type", "Event", "SIGNUP or LOGIN. Renamed from `event_type` in 0080.", "text", "Not null.", "—", "created", "Amber Beaumont — outside the migrations; renamed 0080"),
+  e("login_activity.login_activity_at", "Occurred on", "When it happened. Renamed from `occurred_at` in 0080.", "timestamptz", "Not null. Indexed descending.", "Indexed for \"most recent first\", which is how it is read.", "created", "Amber Beaumont — outside the migrations; renamed 0080"),
+  e("login_activity.login_activity_metadata", "Details", "The provider and nothing else (0008 stopped it storing the auth.users row). Renamed from `metadata` in 0080.", "jsonb", "Nullable.", "—", "created", "Amber Beaumont — outside the migrations; renamed 0080"),
 
   // ------------------------------------------------------------------ activity
   e("activity.id", "Activity ID", "One feed for both events and comments — the UI interleaves them, so the schema should not keep them apart. Distinct from activity_audit: this is what people read, that is what the database records.", "uuid", "Primary key.", "—", "to_do", PROPOSED),
@@ -1124,7 +1131,7 @@ export const DICTIONARY: DictionaryEntry[] = [
 
   // ------------------------------------------------------ user_preferences (0050)
   e("user_preferences.profile_id", "Whose preferences", "The person these belong to — and the key, so there is exactly one row each and no way to end up with two disagreeing about where somebody lands.", "uuid", "Primary key. FK → profiles(profile_id) ON DELETE CASCADE.", "Owner-only by RLS. Deliberately its own table rather than a column on profiles: authenticated holds UPDATE on every profiles column including profile_permission, so a self-row policy there would also open the permission ladder.", "created"),
-  e("user_preferences.user_preferences_payload", "Preferences", "The bag: landing page, default jobs view, and whatever joins them. Roams with the profile (Amber's Q9), so the site laptop opens the same app as the office one.", "jsonb", "Not null, default {}. CHECK: must be a JSON object.", "One bag rather than a column per preference — preferences are open-ended and a column each means a migration each. The app validates on read and falls back to the default for anything it does not recognise, so an unknown key is inert. localStorage keeps a copy for the first render, before the profile has loaded.", "created"),
+  e("user_preferences.user_preference_payload", "Preferences", "The bag: landing page, default jobs view, and whatever joins them. Roams with the profile (Amber's Q9), so the site laptop opens the same app as the office one.", "jsonb", "Not null, default {}. CHECK: must be a JSON object. Renamed from the plural user_preferences_payload in 0080.", "One bag rather than a column per preference — preferences are open-ended and a column each means a migration each. The app validates on read and falls back to the default for anything it does not recognise, so an unknown key is inert. localStorage keeps a copy for the first render, before the profile has loaded.", "created"),
 
   // ---------------------------------------------------------------- feedback (0052)
   e("feedback.feedback_id", "Report", "One bug or idea somebody sent from the footer (Amber, 28 Aug: \"this way I can track what needs to be implemented\").", "uuid", "Primary key, default gen_random_uuid().", "The widest write in the schema and one of its narrowest reads: anyone active may insert, only admin and above may select. The policies are split for exactly that, rather than one for-all.", "created"),
@@ -1230,7 +1237,7 @@ export const TABLE_DESCRIPTIONS: Record<string, string> = {
   activity:
     "The concept spec's one-table feed — events and comments together, because the UI interleaves them. The built schema answers the same need with two tables, comments and activity_events, interleaved on read; these entries are kept as the shape that was proposed before that split.",
   activity_audit:
-    "The forensic log. A trigger writes one row for every insert, update and delete on the tracked tables, whole rows as jsonb — which is where stage history lives now that job_stages is gone. Built outside the numbered migrations, and admin-only until 0058 gave every active user the projects and jobs slice of it: the job drawer's Activity panel and a project's Project activity read it directly, diffing old_row against new_row and naming the columns that moved. Updates where nothing but a touch column changed are dropped on the way out, or the feed would be three quarters \"job_updated_at changed\".",
+    "The change log. Since 0080 a trigger writes one row for every insert, update and delete on every table in public except the six that are themselves logs — whole rows before and after as jsonb, with the person, the job and the project extracted at write time so a record's history is an index lookup across tasks, process runs, property values, comments and the record itself. Readable by every active user except restricted property values, internal comments and the two personal tables; admins read all. The job drawer's Activity panel and a project's Project activity read it directly, diffing before against after and naming the columns that moved; touches where nothing but an updated-at stamp changed are dropped on the way out. Also the change feed the sync cursors will read, with activity_audit_origin as the loop guard.",
   activity_events:
     "The readable feed — \"moved this to Construction\" as a kind plus its nouns, rendered into a sentence by the app rather than stored as one. Append-only: triggers write it, nobody edits it, and neither it nor activity_audit can be derived from the other.",
   address_history:

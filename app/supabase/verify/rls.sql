@@ -132,7 +132,7 @@ begin
   -- have let somebody save preferences onto their own profiles row would also have let
   -- them edit profile_permission on it.
   begin
-    insert into user_preferences (profile_id, user_preferences_payload)
+    insert into user_preferences (profile_id, user_preference_payload)
     values ((select profile_id from profiles
               where profile_email <> 'behaviour-test@lofty.com.au' limit 1),
             '{"landingPage":"Jobs"}'::jsonb);
@@ -144,10 +144,10 @@ begin
   end;
 
   begin
-    insert into user_preferences (profile_id, user_preferences_payload)
+    insert into user_preferences (profile_id, user_preference_payload)
     values ((select profile_id from profiles where profile_email = 'behaviour-test@lofty.com.au'),
             '{"landingPage":"Jobs"}'::jsonb)
-    on conflict (profile_id) do update set user_preferences_payload = excluded.user_preferences_payload;
+    on conflict (profile_id) do update set user_preference_payload = excluded.user_preference_payload;
     if (select count(*) from user_preferences) = 1 then
       raise notice 'ok  user_preferences: your own bag is yours, and only yours is visible';
     else
@@ -1269,6 +1269,70 @@ begin
   else raise warning 'FAIL: my_property_access() disagrees with what the policy let through'; end if;
 end $$;
 reset role;
+
+-- ---------------------------------------------------------------- the audit, readable (0080)
+-- Amber: "record history is viewable for everything and everyone except for restricted
+-- fields". As a USER: a task's audit row on a job is readable; the restricted property's
+-- audit row is not, and the open one is; the personal tables' rows are not.
+\echo '--- the audit is readable by a user, except restricted values and personal tables (0080) ---'
+reset request.jwt.claim.sub;
+insert into tasks (job_id, task_name) values ('1106-002', 'rls probe task 0080');
+update tasks set task_status = 'in_progress' where task_name = 'rls probe task 0080';
+-- A restricted property NOBODY has been granted — probe_margin was opened to design above,
+-- and the test person is in design, so it can no longer stand for "locked".
+insert into property_defs (property_def_key, property_def_label, property_def_scope, property_def_stage, property_def_format, property_def_restricted)
+values ('probe_locked_0080', 'Probe locked', 'job', 'Pre-construction', 'text', true);
+insert into property_values (property_def_key, property_def_format, job_id, property_value_text)
+values ('probe_locked_0080', 'text', '1106-002', 'secret');
+insert into user_preferences (profile_id, user_preference_payload)
+select profile_id, '{"probe":"0080"}'::jsonb from profiles where profile_email = 'behaviour-test@lofty.com.au'
+on conflict (profile_id) do update set user_preference_payload = excluded.user_preference_payload;
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+do $$
+declare n integer;
+begin
+  select count(*) into n from activity_audit
+   where activity_audit_table = 'tasks' and activity_audit_job_id = '1106-002'
+     and activity_audit_new_row ->> 'task_name' = 'rls probe task 0080';
+  if n >= 2 then raise notice 'ok  a user reads the audit rows of a task on a job (% rows)', n;
+  else raise warning 'FAIL: a user saw % audit rows for a task change, expected at least 2', n; end if;
+
+  select count(*) into n from activity_audit
+   where activity_audit_table = 'property_values'
+     and coalesce(activity_audit_new_row, activity_audit_old_row) ->> 'property_def_key' = 'probe_locked_0080';
+  if n = 0 then raise notice 'ok  the restricted property''s audit rows are hidden from a user';
+  else raise warning 'FAIL: a user saw % audit rows of the restricted property probe_locked_0080', n; end if;
+
+  select count(*) into n from activity_audit
+   where activity_audit_table = 'property_values'
+     and coalesce(activity_audit_new_row, activity_audit_old_row) ->> 'property_def_key' = 'probe_margin';
+  if n >= 1 then raise notice 'ok  the restricted property GRANTED to the user''s team shows its audit rows';
+  else raise warning 'FAIL: design was granted probe_margin and saw none of its audit rows'; end if;
+
+  select count(*) into n from activity_audit
+   where activity_audit_table = 'property_values'
+     and coalesce(activity_audit_new_row, activity_audit_old_row) ->> 'property_def_key' = 'probe_pour';
+  if n >= 1 then raise notice 'ok  the open property''s audit rows are readable by a user';
+  else raise warning 'FAIL: a user saw no audit rows of the open property probe_pour'; end if;
+
+  select count(*) into n from activity_audit where activity_audit_table = 'user_preferences';
+  if n = 0 then raise notice 'ok  the personal tables'' audit rows are hidden from a user';
+  else raise warning 'FAIL: a user saw % audit rows of user_preferences', n; end if;
+
+  begin
+    insert into activity_audit (activity_audit_schema, activity_audit_table, activity_audit_operation)
+    values ('public', 'jobs', 'INSERT');
+    raise warning 'FAIL: a user wrote an audit row by hand';
+  exception when insufficient_privilege then raise notice 'ok  the audit is append-only from triggers; a user cannot write it';
+    when others then raise warning 'FAIL: unexpected writing the audit (%)', sqlerrm; end;
+end $$;
+reset role;
+reset request.jwt.claim.sub;
+delete from tasks where task_name = 'rls probe task 0080';
+delete from user_preferences where user_preference_payload ->> 'probe' = '0080';
+delete from property_defs where property_def_key = 'probe_locked_0080';
+delete from property_value_history where property_def_key = 'probe_locked_0080';
 
 -- Left as found.
 reset request.jwt.claim.sub;

@@ -329,10 +329,10 @@ select 'last_login_at recorded on the profile: ' ||
        (select (profile_last_login_at is not null)::text
           from profiles where profile_email='signin-test@lofty.com.au');
 
-select event_type, (occurred_at is not null) as has_time
+select login_activity_event_type, (login_activity_at is not null) as has_time
 from login_activity
-where email = 'signin-test@lofty.com.au'
-order by event_type;
+where login_activity_email = 'signin-test@lofty.com.au'
+order by login_activity_event_type;
 
 -- ---------------------------------------------------------------------------
 -- 36. An address says which place it means
@@ -549,3 +549,68 @@ select case
       and coalesce(array_to_string(c.reloptions, ','), '') not like '%security_invoker=%'
   )
 end;
+
+-- ============================================================================
+-- 39. Every table is audited, and a change knows which record it was on (0080)
+--
+-- The allowlist inside log_activity_audit() meant a trigger could be attached and log
+-- nothing — 0043's property_defs, found in 0077. The function has no list now, and this
+-- asserts the trigger is on every table in public except the six that are logs, so the
+-- table created next month fails here the day it is created without one.
+-- ============================================================================
+\echo '--- 39. every table carries the audit trigger, and a task change carries its job and project'
+select case
+  when not exists (
+    select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relkind = 'r'
+      and c.relname <> all (private.audit_exempt_tables())
+      and not exists (select 1 from pg_trigger t where t.tgrelid = c.oid and t.tgname = 'trg_activity_audit_row'))
+  then 'ok  every non-log table in public carries trg_activity_audit_row'
+  else 'FAIL: tables without the audit trigger: ' || (
+    select string_agg(c.relname, ', ' order by c.relname)
+    from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relkind = 'r'
+      and c.relname <> all (private.audit_exempt_tables())
+      and not exists (select 1 from pg_trigger t where t.tgrelid = c.oid and t.tgname = 'trg_activity_audit_row'))
+end;
+
+-- The three renamed tables conform to tablename_attribute, and so does everything else:
+-- every column in public is prefixed by its table's singular name, or is a foreign key
+-- keeping its parent's name. Asserted once over information_schema rather than by eye.
+select case when count(*) = 0
+  then 'ok  every column in public is tablename_attribute (or a foreign key keeping its parent''s name)'
+  else 'FAIL: columns off the naming convention: ' || string_agg(t || '.' || c, ', ' order by t, c) end
+from (
+  select c.table_name t, c.column_name c
+  from information_schema.columns c
+  join information_schema.tables tb on tb.table_schema = c.table_schema and tb.table_name = c.table_name and tb.table_type = 'BASE TABLE'
+  where c.table_schema = 'public'
+    and c.column_name not like regexp_replace(regexp_replace(regexp_replace(c.table_name, 'sses$', 'ss'), 'ies$', 'y'), '([^s])s$', '\1') || '\_%'
+    and c.column_name not in (
+      select kcu.column_name from information_schema.key_column_usage kcu
+      join information_schema.table_constraints tc using (constraint_name, table_schema)
+      where tc.constraint_type = 'FOREIGN KEY' and tc.table_schema = 'public')
+    and c.column_name not in ('project_id', 'job_id', 'profile_id', 'team_id', 'task_id', 'variation_id', 'process_id',
+                              'document_id', 'comment_id', 'tag_id', 'address_id', 'property_def_key', 'feedback_id',
+                              'process_run_id', 'process_task_id', 'pipeline_id', 'pipeline_stage_id', 'release_id', 'roadmap_phase_id')
+) x;
+
+-- A task's change lands with the job it is on AND that job's project, resolved through the
+-- task, so a project's history includes work on its jobs.
+insert into tasks (job_id, task_name) values ('1106-002', 'behaviour probe task 0080');
+update tasks set task_status = 'in_progress' where task_name = 'behaviour probe task 0080';
+select case when count(*) = 1
+  then 'ok  a task update is audited with activity_audit_job_id 1106-002 and its project 1106'
+  else 'FAIL: expected 1 audited task update carrying job and project, found ' || count(*) end
+from activity_audit
+where activity_audit_table = 'tasks' and activity_audit_operation = 'UPDATE'
+  and activity_audit_job_id = '1106-002' and activity_audit_project_id = 1106
+  and activity_audit_new_row ->> 'task_name' = 'behaviour probe task 0080';
+
+-- A property value recorded on a job is audited the same way — the row carries job_id
+-- directly, and 0077's history table is still written beside it.
+select case when count(*) >= 1
+  then 'ok  property_values carries the audit trigger (a recorded value is a change)'
+  else 'FAIL: property_values is not audited' end
+from pg_trigger t where t.tgrelid = 'property_values'::regclass and t.tgname = 'trg_activity_audit_row';
+delete from tasks where task_name = 'behaviour probe task 0080';

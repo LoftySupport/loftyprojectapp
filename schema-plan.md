@@ -1292,6 +1292,66 @@ reasoning, ahead of six migration batches (`0080`–`0085`), one pull request ea
 - **Not yet answered** (asked, dismissed): which external platforms first. The design
   assumes SharePoint and Outlook/Teams and says so.
 
+### Amber's answers, 2 September — and what arrived with them
+
+1. **Sync order:** SharePoint and Outlook/Teams first, **then Xero, then SiteBook.**
+2. **Warranty:** 3 months after handover is standard; a job moves Completed → Closed at 12
+   months (the archive rule 0045 already runs).
+3. **Maintenance categories and SLAs:** SLAs editable in the app. The categories are not a
+   hand-typed list — they **pull from the contractors assigned during construction**, so
+   the app knows who did what on site and therefore who repairs it. Each job carries
+   **purchase orders**, referenced there too. A contractor is on many jobs at once; a job has
+   many contractors. → `record_parties` on construction process runs is the source of
+   "who did the plumbing on 1042-01"; a maintenance item's default assignee is that party.
+   Cost centres (Amber's 438-row `Cost_Centre.xlsx`, codes like 200.01 *Plumber - Underfloor*)
+   are the trade vocabulary; products (`Products.xlsx`, 50 rows keyed cost-centre.item with a
+   supplier, unit, GST and price valid-from) are the price book behind a purchase order.
+   Both become tables in the Xero batch; the maintenance category references a cost centre.
+4. **History readable by everyone**, for everything, except restricted fields. Built in
+   `0080`; the only other rows withheld are internal comments and the two personal tables.
+5. **Contacts created by users and above, with manager sign-off** → a contact or company
+   carries `_approved_at` / `_approved_by`; unapproved ones are usable but flagged, and the
+   manager's queue is a notification.
+6. **Notification defaults:** assignments, mentions and maintenance arrivals immediate;
+   overdue and at-risk in a 07:30 digest; **and any change to working drawings immediate.**
+7. **SMS:** later. Nothing else waits on it.
+8. **Contractor accept links without a login: yes, and logged** — the acceptance is an
+   audited write with `activity_audit_origin = 'accept_link'` and the assignment id.
+9. **Request number** `1042-01-M3`: yes. Job sequences are three digits (`1106-002`), so the
+   number reads `1106-002-M3`.
+
+Also asked: email, phone, address and ABN on contacts and companies (→ `contact_methods`,
+`company_address_id`, `company_abn`); a `sitebook_id` property on jobs (a job-level text
+property, and the value the SiteBook connector will treat as its external id); the audit
+visible read-only to everyone (`0080`); tasks and sub-tasks built (`0081`).
+
+**What arrived with the answers.** `Lofty_Jobs_Grouped_by_Project.xlsx` — 801 job rows
+across 121 projects with old job numbers, agreement type, stage, address, client type,
+client names, CMA, sales consultant, site manager: **this is the Phase B import data.**
+`Project_Schedule_1.xlsx` — the 57 pre-construction steps with team, days and predecessors
+by ID, which settles the seven predecessor names the workbook could not and gives the
+durations Amber was asked for. `Sitebook_Schedule_09.07.xlsx` — per-job trade bookings and
+per-trade supplier quotes: the contractor list, and the shape of purchase orders. SiteBook
+screenshots — **project roles** (SS Site Supervisor, CM, CA, CMA, SET, AC, SEL, DFT, SCH, WM,
+SA; personnel per project; a "show in contractor portal" flag) → `staff_roles` and
+`record_staff_roles` join the parties batch; the **contract** step (start date, amount ex
+and inc GST, build days, claim payment terms, delays) → the Xero batch. And a reading rule:
+**"retail" as a job type means residential with an external client; "development" is
+still residential.**
+
+### Built so far
+
+- **`0080` — the audit tables join the convention, and every table joins the audit.**
+  The three renames; the allowlist gone from `log_activity_audit()`; the trigger on every
+  non-log table (39 of 45) with behaviour.sql §39 asserting the set stays complete and
+  every column stays `tablename_attribute`; four columns extracted at write time
+  (`activity_audit_profile_id`, `_job_id`, `_project_id`, `_origin`, backfilled); the read
+  policy Amber asked for; the login trigger rewritten for the names (behaviour §35 proves
+  sign-in end to end). The Activity panel on a job or project now reads one indexed query
+  across every table and names tasks, process runs, property values and comments. Proved:
+  the RLS probes were watched failing against a permissive policy (3 locked-property rows
+  and 7 preference rows visible) before they passed.
+
 ### Naming, measured rather than asserted
 
 All 79 migrations replayed into a local Postgres; every column in `public` checked against

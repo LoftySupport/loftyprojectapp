@@ -2,8 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Repository, RepositoryMethod } from "./repository";
 import type { DictionaryOverride } from "./dictionary";
 import {
-  changesBetween, headline, idsIn, recordLink, type NameLookup
-} from "./auditNarrative";
+  changesBetween, headline, idsIn, recordLink, type NameLookup, type SubjectNames } from "./auditNarrative";
 import { createStubRepository } from "./stubRepository";
 import { propertyProcessMethods } from "./supabasePropertyProcessRepository";
 import { MAX_SPLIT, OPENING_TEAM, teamSlug } from "./types";
@@ -334,7 +333,7 @@ function toComment(r: CommentRow): CommentEntry {
 const ADDRESS_COLUMNS =
   "address_id, address_lot_number, address_street_number, address_street_1, address_street_2, address_suburb, address_state, address_postcode, address_council";
 
-/** One `activity_audit` row, as this file reads it. */
+/** One `activity_audit` row, as this file reads it (the pre-0080 shape `auditNarrative` diffs). */
 type AuditRow = {
   id: number;
   table_name: string;
@@ -343,7 +342,72 @@ type AuditRow = {
   jwt_sub: string | null;
   old_row: Record<string, unknown> | null;
   new_row: Record<string, unknown> | null;
+  /** Who, as a profile — extracted at write time since 0080; null on older rows and on writes with nobody behind them. */
+  profile_id: string | null;
+  job_id: string | null;
+  project_id: number | null;
+  origin: string;
 };
+
+/**
+ * The columns as 0080 named them. Every read of the audit table goes through
+ * `fromAuditRow`, so the rename touched one place in the app rather than four.
+ */
+const AUDIT_COLUMNS =
+  "activity_audit_id, activity_audit_table, activity_audit_operation, activity_audit_at, activity_audit_jwt_sub, activity_audit_old_row, activity_audit_new_row, activity_audit_profile_id, activity_audit_job_id, activity_audit_project_id, activity_audit_origin";
+
+interface AuditDbRow {
+  activity_audit_id: number;
+  activity_audit_table: string;
+  activity_audit_operation: string;
+  activity_audit_at: string;
+  activity_audit_jwt_sub: string | null;
+  activity_audit_old_row: Record<string, unknown> | null;
+  activity_audit_new_row: Record<string, unknown> | null;
+  activity_audit_profile_id: string | null;
+  activity_audit_job_id: string | null;
+  activity_audit_project_id: number | null;
+  activity_audit_origin: string;
+}
+
+const fromAuditRow = (r: AuditDbRow): AuditRow => ({
+  id: r.activity_audit_id,
+  table_name: r.activity_audit_table,
+  operation: r.activity_audit_operation,
+  changed_at: r.activity_audit_at,
+  jwt_sub: r.activity_audit_jwt_sub,
+  old_row: r.activity_audit_old_row,
+  new_row: r.activity_audit_new_row,
+  profile_id: r.activity_audit_profile_id,
+  job_id: r.activity_audit_job_id,
+  project_id: r.activity_audit_project_id,
+  origin: r.activity_audit_origin
+});
+
+/**
+ * The names a feed line needs that are not in the row: a process run's process, a
+ * property value's label. Fetched once per batch and handed to `recordLink`, so the line
+ * reads "2 - Frame started" and "Frame inspection booked is now 4 Sep 2026" rather than
+ * two uuids.
+ */
+async function resolveSubjects(client: SupabaseClient, rows: AuditRow[]): Promise<SubjectNames> {
+  const processIds = [...new Set(rows.filter(r => r.table_name === "process_runs")
+    .map(r => String((r.new_row ?? r.old_row)?.process_id ?? "")).filter(Boolean))];
+  const keys = [...new Set(rows.filter(r => r.table_name === "property_values" || r.table_name === "property_access" || r.table_name === "property_options")
+    .map(r => String((r.new_row ?? r.old_row)?.property_def_key ?? "")).filter(Boolean))];
+  const [procs, defs] = await Promise.all([
+    processIds.length
+      ? client.from("processes").select("process_id, process_name").in("process_id", processIds)
+      : Promise.resolve({ data: [] as { process_id: string; process_name: string }[] }),
+    keys.length
+      ? client.from("property_defs").select("property_def_key, property_def_label").in("property_def_key", keys)
+      : Promise.resolve({ data: [] as { property_def_key: string; property_def_label: string }[] })
+  ]);
+  return {
+    process: new Map(((procs.data ?? []) as { process_id: string; process_name: string }[]).map(p => [p.process_id, p.process_name])),
+    property: new Map(((defs.data ?? []) as { property_def_key: string; property_def_label: string }[]).map(d => [d.property_def_key, d.property_def_label]))
+  };
+}
 
 /**
  * The people named anywhere in a batch of audit rows, resolved in one pass.
@@ -358,7 +422,7 @@ async function resolvePeople(
   client: SupabaseClient, rows: AuditRow[]
 ): Promise<{ byAuth: Map<string, string>; byProfile: Map<string, string> }> {
   const subs = [...new Set(rows.map(r => r.jwt_sub).filter(Boolean))] as string[];
-  const ids = [...new Set(rows.flatMap(r => idsIn(r)))];
+  const ids = [...new Set([...rows.flatMap(r => idsIn(r)), ...rows.map(r => r.profile_id).filter((v): v is string => Boolean(v))])];
   const byAuth = new Map<string, string>();
   const byProfile = new Map<string, string>();
 
@@ -408,9 +472,12 @@ function whole_days(from: string, to: string): number {
  * lines that carry no information, which is the opposite of the "neat and clean" this
  * was asked to be. An event nobody can act on is not history; it is a row in a table.
  */
-function narrate(r: AuditRow, lookup: NameLookup): RecordActivity | null {
-  const { subject, href } = recordLink(r.table_name, r.new_row ?? r.old_row);
-  const who = r.jwt_sub ? lookup.actor(r.jwt_sub) : null;
+function narrate(r: AuditRow, lookup: NameLookup, names: SubjectNames): RecordActivity | null {
+  const { subject, href } = recordLink(r.table_name, r.new_row ?? r.old_row, names);
+  const who = (r.profile_id ? lookup.person(r.profile_id) : null)
+    ?? (r.jwt_sub ? lookup.actor(r.jwt_sub) : null)
+    // An integration is an actor with a name, not "system" (0080's origin column).
+    ?? (r.origin && r.origin !== "app" ? `${r.origin} sync` : null);
   const verb = headline(r);
   const base = { id: String(r.id), at: r.changed_at, subject, href, who };
 
@@ -939,13 +1006,13 @@ export function createSupabaseRepository(): Repository {
       const [audit, logins] = await Promise.all([
         client.from("activity_audit")
           // The snapshots come too, which is what lets a line say WHICH record and WHAT
-          // moved on it (Amber, 28 August). This read is admin-only by policy, so the
-          // whole-row jsonb is going to somebody already entitled to every column in it.
-          .select("id, table_name, operation, changed_at, jwt_sub, old_row, new_row")
-          .in("jwt_sub", authIds).order("changed_at", { ascending: false }).limit(limit),
+          // moved on it (Amber, 28 August). Since 0080 every active user may read this,
+          // less the restricted values the policy withholds.
+          .select(AUDIT_COLUMNS)
+          .in("activity_audit_jwt_sub", authIds).order("activity_audit_at", { ascending: false }).limit(limit),
         client.from("login_activity")
-          .select("id, user_id, event_type, occurred_at")
-          .in("user_id", authIds).order("occurred_at", { ascending: false }).limit(limit)
+          .select("login_activity_id, login_activity_user_id, login_activity_event_type, login_activity_at")
+          .in("login_activity_user_id", authIds).order("login_activity_at", { ascending: false }).limit(limit)
       ]);
       if (audit.error) throw audit.error;
       if (logins.error) throw logins.error;
@@ -960,8 +1027,8 @@ export function createSupabaseRepository(): Repository {
        * record feed: this list answers "what has this person been doing", and a save
        * that changed nothing is still something they did.
        */
-      const auditRows = (audit.data ?? []) as unknown as AuditRow[];
-      const { byProfile } = await resolvePeople(client, auditRows);
+      const auditRows = ((audit.data ?? []) as unknown as AuditDbRow[]).map(fromAuditRow);
+      const [{ byProfile }, names] = await Promise.all([resolvePeople(client, auditRows), resolveSubjects(client, auditRows)]);
       const lookup: NameLookup = {
         person: id => byProfile.get(id) ?? null,
         actor: sub => byAuthId.get(sub) ?? null
@@ -970,7 +1037,7 @@ export function createSupabaseRepository(): Repository {
       const entries: ActivityEntry[] = [
         ...auditRows
           .map(a => {
-            const { subject, href } = recordLink(a.table_name, a.new_row ?? a.old_row);
+            const { subject, href } = recordLink(a.table_name, a.new_row ?? a.old_row, names);
             const changes = a.operation === "UPDATE" ? changesBetween(a, lookup) : [];
             const verb = OPERATION_WORDS[a.operation] ?? a.operation;
             return {
@@ -993,14 +1060,14 @@ export function createSupabaseRepository(): Repository {
               summary: `${verb} ${subject || a.table_name}`
             };
           }),
-        ...((logins.data ?? []) as unknown as { id: number; user_id: string; event_type: string; occurred_at: string }[])
+        ...((logins.data ?? []) as unknown as { login_activity_id: number; login_activity_user_id: string; login_activity_event_type: string; login_activity_at: string }[])
           .map(l => ({
-            id: `login-${l.id}`,
+            id: `login-${l.login_activity_id}`,
             kind: "login" as const,
-            at: l.occurred_at,
-            actorAuthId: l.user_id,
-            summary: (l.event_type === "SIGNUP" ? "First signed in" : "Signed in")
-              + (byAuthId.size > 1 ? ` — ${byAuthId.get(l.user_id) ?? "unknown"}` : "")
+            at: l.login_activity_at,
+            actorAuthId: l.login_activity_user_id,
+            summary: (l.login_activity_event_type === "SIGNUP" ? "First signed in" : "Signed in")
+              + (byAuthId.size > 1 ? ` — ${byAuthId.get(l.login_activity_user_id) ?? "unknown"}` : "")
           }))
       ];
 
@@ -1899,46 +1966,29 @@ export function createSupabaseRepository(): Repository {
     },
 
     /**
-     * One record's history (0058).
+     * One record's history — every table (0080).
      *
-     * Two queries, not a join: PostgREST cannot OR across two jsonb paths in one
-     * request, and a project wants its own rows plus its jobs'. Both are narrow — an
-     * index-free scan over a few hundred rows today, and bounded by `limit` — and
-     * merging two sorted lists here is cheaper than the view it would otherwise take.
+     * One indexed query: 0080 extracts the job and the project from every audited row at
+     * write time, so a job's feed is `activity_audit_job_id = …` across tasks, process
+     * runs, property values, comments and the job itself, and a project's feed includes
+     * its jobs' rows. The two jsonb-path scans 0058 needed are gone with it.
      */
     async listRecordActivity(
       opts: { projectId?: number; jobId?: string; limit?: number }
     ): Promise<RecordActivity[]> {
       const limit = opts.limit ?? 50;
-      const rows: AuditRow[] = [];
-
-      const pull = async (table: "projects" | "jobs", column: string, value: string) => {
-        const { data, error } = await client
-          .from("activity_audit")
-          .select("id, table_name, operation, changed_at, jwt_sub, old_row, new_row")
-          .eq("table_name", table)
-          // The id lives inside the snapshot, so it is a jsonb path rather than a
-          // column. `->>` keeps it text, which is what the filter compares.
-          .eq(`new_row->>${column}`, value)
-          .order("changed_at", { ascending: false })
-          .limit(limit);
-        if (error) throw error;
-        rows.push(...((data ?? []) as unknown as AuditRow[]));
-      };
-
-      if (opts.jobId) {
-        await pull("jobs", "job_id", opts.jobId);
-      } else if (opts.projectId != null) {
-        await pull("projects", "project_id", String(opts.projectId));
-        await pull("jobs", "project_id", String(opts.projectId));
-      } else {
-        return [];
-      }
+      let q = client.from("activity_audit").select(AUDIT_COLUMNS);
+      if (opts.jobId) q = q.eq("activity_audit_job_id", opts.jobId);
+      else if (opts.projectId != null) q = q.eq("activity_audit_project_id", opts.projectId);
+      else return [];
+      const { data, error } = await q.order("activity_audit_at", { ascending: false }).limit(limit);
+      if (error) throw error;
+      const rows = ((data ?? []) as unknown as AuditDbRow[]).map(fromAuditRow);
 
       // Who, and who the values name. Two lookups for the whole feed rather than one
       // per row, and a null when a person is not one we can name — a row written by the
       // import or by a migration has nobody behind it, and saying "Unknown" invents one.
-      const { byAuth, byProfile } = await resolvePeople(client, rows);
+      const [{ byAuth, byProfile }, names] = await Promise.all([resolvePeople(client, rows), resolveSubjects(client, rows)]);
       const lookup: NameLookup = {
         person: id => byProfile.get(id) ?? null,
         actor: sub => byAuth.get(sub) ?? null
@@ -1946,10 +1996,8 @@ export function createSupabaseRepository(): Repository {
 
       return rows
         // A touch with nothing behind it is dropped rather than shown as "updated".
-        .map(r => narrate(r, lookup))
-        .filter((e): e is RecordActivity => e !== null)
-        .sort((a, b) => (a.at < b.at ? 1 : -1))
-        .slice(0, limit);
+        .map(r => narrate(r, lookup, names))
+        .filter((e): e is RecordActivity => e !== null);
     },
 
     /**
@@ -2007,13 +2055,13 @@ export function createSupabaseRepository(): Repository {
     async listJobStageHistory(jobId: string): Promise<StagePeriod[]> {
       const { data, error } = await client
         .from("activity_audit")
-        .select("id, table_name, operation, changed_at, jwt_sub, old_row, new_row")
-        .eq("table_name", "jobs")
-        .eq("new_row->>job_id", jobId)
-        .order("changed_at", { ascending: true });
+        .select(AUDIT_COLUMNS)
+        .eq("activity_audit_table", "jobs")
+        .eq("activity_audit_job_id", jobId)
+        .order("activity_audit_at", { ascending: true });
       if (error) throw error;
 
-      const rows = (data ?? []) as unknown as AuditRow[];
+      const rows = ((data ?? []) as unknown as AuditDbRow[]).map(fromAuditRow);
       const periods: StagePeriod[] = [];
       for (const r of rows) {
         const was = r.old_row?.job_stage;
@@ -2713,10 +2761,10 @@ export function createSupabaseRepository(): Repository {
     async listMyPreferences(): Promise<Record<string, unknown>> {
       const { data, error } = await client
         .from("user_preferences")
-        .select("user_preferences_payload")
+        .select("user_preference_payload")
         .maybeSingle();
       if (error) throw error;
-      const bag = data?.user_preferences_payload;
+      const bag = data?.user_preference_payload;
       return bag && typeof bag === "object" && !Array.isArray(bag)
         ? (bag as Record<string, unknown>)
         : {};
@@ -2732,7 +2780,7 @@ export function createSupabaseRepository(): Repository {
       const next = { ...current, ...patch };
       const { error } = await client
         .from("user_preferences")
-        .upsert({ profile_id: me.id, user_preferences_payload: next }, { onConflict: "profile_id" });
+        .upsert({ profile_id: me.id, user_preference_payload: next }, { onConflict: "profile_id" });
       if (error) throw error;
       return next;
     },

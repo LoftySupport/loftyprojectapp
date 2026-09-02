@@ -135,6 +135,23 @@ the `.agents/` and `.codex/` copies for other tools are ignored, not committed; 
 hook with `npx -y impeccable install` if wanted. `/impeccable init` (a PRODUCT.md and
 DESIGN.md) has not been run — that is an interview with Amber, not a guess.
 
+### The platform layer — `0080` built, `0081`–`0085` to go
+
+Amber answered the nine questions on 2 September (recorded in `schema-plan.md`, *Amber's
+answers, 2 September*) and sent the Phase B import data with them —
+`Lofty_Jobs_Grouped_by_Project.xlsx`, 801 jobs across 121 projects — plus cost centres,
+products, the SiteBook schedule and the 57-step pre-construction schedule with predecessor
+IDs. **The import has not been run**; it is the next big job after the platform batches.
+
+`0080` is built and green: every table audited, the audit readable by everyone except
+restricted fields, the three old tables renamed to the convention. Local verify:
+`LOFTY_PG_PORT=5432 LOFTY_PG_HOST=/var/run/postgresql ./check.sh` from `app/supabase/verify`
+(Postgres 16 started with `service postgresql start`). **`0080` is not yet applied to the
+live database** — the Supabase MCP server needs re-authorising in this session; apply
+`0080` through the dashboard SQL editor or a re-authorised session before the app that
+reads the new column names is deployed, because the renamed columns and the app move
+together.
+
 ### The platform layer, designed and not built
 
 Amber's next brief, the same evening: audit of every change readable in the app, tasks with
