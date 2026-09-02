@@ -14,6 +14,8 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Maintenance — a tab for what homeowners report after handover: requests numbered on the job, items per trade, offers to contractors with an accept link, the thread, SLA health and warranty
+- Setup → Maintenance — the warranty period, offer and reminder clocks, and the trades with their SLAs
 - Notifications — assigned, mentioned, at risk, overdue, stage moved, working drawings changed — in the bell, by email and Teams, immediate or in a daily digest, chosen per person in Settings
 - Setup → Notifications — who hears what, with escalation after days late
 - Contacts — people and companies outside Lofty, classified, with the company beside each person, how to reach them, and what they are doing on each job, project and process

@@ -16,13 +16,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 60 changes since then —
+Unreleased: 62 changes since then —
+- Added: Maintenance — a tab for what homeowners report after handover: requests numbered on the job, items per trade, offers to contractors with an accept link, the thread, SLA health and warranty
+- Added: Setup → Maintenance — the warranty period, offer and reminder clocks, and the trades with their SLAs
 - Added: Notifications — assigned, mentioned, at risk, overdue, stage moved, working drawings changed — in the bell, by email and Teams, immediate or in a daily digest, chosen per person in Settings
 - Added: Setup → Notifications — who hears what, with escalation after days late
 - Added: Contacts — people and companies outside Lofty, classified, with the company beside each person, how to reach them, and what they are doing on each job, project and process
-- Added: SiteBook's project roles on a project, held by Lofty people
-- Changed: The decision against external parties is reversed — maintenance makes them first-class
-- …and 55 more.
+- …and 57 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
