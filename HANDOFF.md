@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 58 changes since then —
+Unreleased: 60 changes since then —
+- Added: Notifications — assigned, mentioned, at risk, overdue, stage moved, working drawings changed — in the bell, by email and Teams, immediate or in a daily digest, chosen per person in Settings
+- Added: Setup → Notifications — who hears what, with escalation after days late
 - Added: Contacts — people and companies outside Lofty, classified, with the company beside each person, how to reach them, and what they are doing on each job, project and process
 - Added: SiteBook's project roles on a project, held by Lofty people
 - Changed: The decision against external parties is reversed — maintenance makes them first-class
-- Added: Tasks carry sub-tasks and checklists, start and expected days, and read at risk before they are overdue
-- Added: Stage completion counted once in the database — milestones passed and processes open per stage
-- …and 53 more.
+- …and 55 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
