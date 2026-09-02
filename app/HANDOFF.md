@@ -8,7 +8,7 @@
 > | This document says | What is true now |
 > |---|---|
 > | The repo is `amberbeaumont/loftyprojectapp` | `LoftySupport/loftyprojectapp`. It moved to `LoftyGroup/loftyprojectapp` on 1 September and then on to the `LoftySupport` account, which is where it lives now |
-> | The Netlify site serves a hand-uploaded build, not linked to a repo | It builds from git — but still from `amberbeaumont/loftyprojectapp`. Relinking it to this repo is one of the two open items in the root handoff |
+> | The Netlify site serves a hand-uploaded build, not linked to a repo | It builds from git, from `LoftySupport/loftyprojectapp`, on a Netlify site recreated on 2 September. Its environment variables are the open item in the root handoff |
 > | Link Netlify with **base directory `app`** | Base directory is the **repo root**. The app moved out of `/app/` and `app/netlify.toml` was deleted; the root `netlify.toml` is the only one Netlify reads |
 > | Close PR #11 on the prototype repo | Already done — closed unmerged as superseded |
 > | Supabase is not created yet | Created, migrated past `0069`, seeded, and the app reads it. Auth is live |

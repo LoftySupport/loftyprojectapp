@@ -43,10 +43,11 @@ built from.** It started in `amberbeaumont/loftyprojectapp`, moved to
 `LoftyGroup/loftyprojectapp` on 1 September, and now lives here under the `LoftySupport`
 account. The personal one is public and still holds the history up to 1 September, so it
 answers when something reads it — with an answer that stopped that day and does not say
-so. Two things have not caught up with the move and neither can be fixed from in here: the
-Netlify site still builds from the old repository, and this one is private where the old
-one was public, which is what the changelog's live pull-request feed depends on. Both are
-written up, with the exact steps, in [HANDOFF.md](HANDOFF.md) under *This is the
+so. Two things need doing outside this repository: the Netlify site was recreated on
+2 September and builds from here, but its Supabase environment variables have not been
+set yet, so the sign-in page says *Not configured*; and this repository is private where
+the old one was public, which is what the changelog's live pull-request feed depends on.
+Both are written up, with the exact steps, in [HANDOFF.md](HANDOFF.md) under *This is the
 repository now*.
 
 ---
@@ -56,7 +57,7 @@ repository now*.
 | URL | What |
 | --- | --- |
 | [`LoftySupport/loftyprojectapp`](https://github.com/LoftySupport/loftyprojectapp) | **This repository.** Where the code, the branches and the pull requests live |
-| [`loftyprojectapp.netlify.app`](https://loftyprojectapp.netlify.app) | **The build.** Every screen, on Vibe — *currently still built from the old repository* |
+| [`loftyprojectapp.netlify.app`](https://loftyprojectapp.netlify.app) | **The build.** Every screen, on Vibe — *built from this repository since 2 September; its environment variables still need setting* |
 | `…/signin` | Microsoft Entra sign-in — the only route open without a session |
 | `…/dictionary` | The data dictionary |
 | `…/binding-template` | The tokenised prototype — **layout** reference only |
