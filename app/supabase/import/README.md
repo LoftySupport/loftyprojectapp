@@ -1,63 +1,75 @@
-# Phase B — importing the live jobs
+# Phase B — importing the jobs
 
-`lofty-job-import-template.xlsx` is the sheet Lofty fills in. `build_template.py`
-generates it; edit the script, not the workbook, so the dropdowns stay the database's
-own lists rather than a copy that drifted.
+Two generations of tooling live here. The first (the template) was built before Amber
+grouped the jobs herself; the second (the generator) reads her grouping. Both are kept:
+the template is still the right shape for a *future* batch nobody has grouped yet.
+
+## The generator — `generate-jobs-import.py`
+
+```
+python3 generate-jobs-import.py --report   # what it decided and refused; writes nothing
+python3 generate-jobs-import.py            # writes ../migrations/0087_the_jobs_workbook_of_31_august.sql
+```
+
+Source: `lofty-jobs-grouped-by-project-2026-08-31.xlsx` — Amber's grouping of the old
+system's CERTIFICATION tab: 801 job rows, 121 projects numbered 1001–1121, sequences
+`01, 02…` inside each, the old job number beside every row, and a Method tab saying how the
+grouping was done. The generator regroups nothing.
+
+It emits one `import_staging_jobs` row (0086) per sheet row, carrying the sheet row
+**verbatim** as jsonb and, beside it, a **spine** jsonb of what the row means for
+addresses, projects and jobs — with the original beside anything it normalised, and a
+`skip_reason` where it refused. The rules are at the top of the script; the short version:
+
+- project number and sequence from the sheet; `project_type` is `residential` for every
+  row (Amber, 2 Sep: *retail* is residential with an external client, *development* is
+  residential) — the client type is kept for Phase C;
+- `#61` → `61`; a suburb is resolved against the SA postcode list (`Happy valley` → `Happy
+  Valley`, one explicit alias `Mitchel Park` → `Mitchell Park`); a suburb the sheet failed
+  to split off (`Grandview Grove Sturt`) is recognised from the street cell's tail;
+- `Lot 12` → the address's lot number; `Res 3` → the address's second line; a lot only in
+  the site cell (`Res 1 , Lot 311 (portion of lot 232) Dankie Rd`) is read from there;
+- postcode from the SA list; council from the same list the app uses (`saSuburbs.ts`),
+  none for a suburb the app treats as ambiguous;
+- `OTR - Community Title = Yes` → `title_type community`; `No` → nothing, because *not
+  community* is not the same statement as *torrens*;
+- five rows with no address at all are staged with a `skip_reason` and make no job.
+
+It does **not** load anything. `import_spine()` does, and takes the four decisions the
+sheet cannot make — owning team, lifecycle stage, numbering base, what *Cancelling* /
+*On Hold* / *In Doubt* mean as a status — as parameters with no defaults. Seven old numbers
+are shared by several rows; the load refuses them until told the rule
+(`p_disambiguate_old_numbers => true` appends the sheet's lot label: `1288 · Lot 1`).
+
+`unimport_spine()` removes exactly what a load made — jobs and their children, their
+addresses, and the projects the audit shows the import inserted — and clears the stamps.
+The staging rows stay; Phase C reads them again for property values.
+
+The migration is 1.2 MB. That is 801 rows × 194 columns of source kept verbatim, and it is
+the record of what was imported; nothing is trimmed to make the file smaller.
+
+## The template — `lofty-job-import-template.xlsx`
+
+`build_template.py` generates it; edit the script, not the workbook, so the dropdowns stay
+the database's own lists rather than a copy that drifted.
 
 ```
 python3 build_template.py
 ```
 
-## What the sheet is for
-
-Reconstructing **projects**. That is the whole difficulty of this import and it is not a
-technical one: the old system has no project key, its job numbers are a flat sequence,
-and nothing in them says which jobs share a site — they are not even contiguous. A person
+It is for reconstructing **projects** by hand. The old system has no project key, its job
+numbers are a flat sequence, and nothing in them says which jobs share a site — a person
 who knows the sites has to group them, and the `site_group` column is where that judgement
-goes.
+goes. Two traps, both spelled out on the sheet's first tab: a job in the wrong group
+silently inherits the wrong council, the wrong developer and the wrong site facts; and
+`lot_sequence` follows lot order, not old-number order, because the sequence becomes the
+job number, which goes on contracts.
 
-Two traps, both spelled out on the sheet's first tab:
+Its dropdowns are checked against the database by `verify/seeds.sh`, because the sheet
+once went on offering nine lifecycle stages after `0035` replaced them with five.
 
-- **A job in the wrong group is not a cosmetic error.** Project properties read through to
-  every job, so it silently inherits the wrong council, the wrong developer and the wrong
-  site facts, and nothing complains.
-- **`lot_sequence` follows lot order, not old-number order.** Lofty's own example has them
-  scrambled — Lot 3 is 12367, Lot 4 is 12356 — and the sequence becomes the job number,
-  which goes on contracts.
+## Not in the spine
 
-Where a grouping is not confidently known, each job gets its own `site_group` and becomes a
-single-job project. That asserts nothing nobody verified.
-
-## What happens to it
-
-The rows land in `import_staging_jobs` **verbatim**, as jsonb, before anything is created
-from them. Phase B builds the spine from those rows; Phase C reads the *same* rows again
-for property values once `property_defs` exists. Nobody re-exports anything, and the raw
-source stays in the database as the record of what was imported.
-
-`import_staging_jobs` is not built yet — it is specified in `schema-plan.md` under
-"Loading jobs before properties exist".
-
-## Checking it
-
-Two things are checked rather than assumed, because both had already gone wrong once.
-
-**The dropdowns are checked against the database** by `verify/seeds.sh`, which reads this
-script's `STAGES`, `STATES`, `STATUSES`, `PROJECT_TYPES`, `TEAMS` and `COUNCILS` and
-compares each with the live list — the lifecycle's stages, the `au_state` and `sa_council`
-enums, the check constraints on `job_status` and `project_type`, and the active teams.
-It exists because the sheet went on offering the nine lifecycle stages after `0035`
-replaced them with five, so seven of its stage values were ones the database would refuse
-on insert and the example row shipped with one of them. A wrong dropdown is worse than a
-free-text box: it reads as the list of permitted answers.
-
-**The `jobs_on_site` formula is checked by filling the sheet in and reading the result** —
-four rows sharing a `site_group` read 4, two sharing another read 2, blank rows stay blank.
-That matters because the column's whole job is to catch a miscoded group: a site you know
-has four lots showing 3 is the error it is there to surface, and a formula that quietly
-returned nothing would have removed the check while looking like it was there.
-
-## Not in the sheet
-
-Contract values, dates and statuses beyond the job's own — those are property values, and
-`property_defs` does not exist. They stay in the staging row until Phase C.
+Contract values, dates and statuses beyond the job's own, client names, the CMA and sales
+consultant — those are property values and parties, and they stay in the staging row's
+verbatim jsonb until Phase C.
