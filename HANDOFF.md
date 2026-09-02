@@ -68,6 +68,22 @@ redirect and the allowed origins still match. The two variables the Supabase Net
 extension used to add (`SUPABASE_ANON_KEY`, `SUPABASE_DATABASE_URL`) are read by nothing
 and are not needed.
 
+**Deploy previews from Claude's branches are blocked, and it is the plan, not the build.**
+The first preview raised on PR #4 died with *"Build blocked: Unrecognized Git contributor.
+This plan allows only verified account members to push to private repos."* `./build.sh`
+passes on the same commit. Netlify's starter plan builds a private repository's commits
+only when the commit **author** is a verified member of the Netlify team; the commits from
+these sessions are authored `Claude <noreply@anthropic.com>`, which cannot be a team
+member. Amber's merge commit on `main` (`0d84e59`) built because its author is hers, so
+**merging still deploys production** — the merge commit's author is whoever clicks merge.
+Until one of these is done, expect every PR from a session to show a red Netlify check
+that means nothing about the code:
+
+- **Make the repository public.** Netlify verifies contributors only on private
+  repositories. This is the same switch the Updates feed is waiting on.
+- **Or move the site to a plan that builds unverified contributors** (Pro and above), if
+  the repository is to stay private.
+
 **Ben Johnson's email.** Amber: *"there should be no emails that are @loftygroup — all
 emails are @lofty.com.au."* He was the only such row: `0016` seeded him as
 `ben@loftygroup.com.au` in both columns and flagged it as "left as supplied". `0085`
@@ -91,8 +107,9 @@ database** (see *The platform layer* below).
   `ben@lofty.com.au`, nothing more is needed. Not inferred.
 - **Apply `0080`–`0085`** to the live database, in order, once the app that reads the
   renamed columns is ready to deploy with them.
-- **Public or private.** Unchanged: the Updates feed reads merged pull requests without a
-  token and cannot read a private repository.
+- **Public or private.** Now carrying two consequences instead of one: the Updates feed
+  cannot read a private repository, and Netlify will not build deploy previews from a
+  session's commits on one. Public fixes both; a Netlify Pro plan fixes only the second.
 
 ---
 
