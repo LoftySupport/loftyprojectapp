@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-443 properties across 66 tables.
+532 properties across 80 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 394 | In the migration and the types |
+| Created | 483 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -106,6 +106,18 @@ The construction sub-stages inside the Construction phase — slab, frame, lock-
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `build_stages.id` | Build stage | The construction sub-stage inside Construction & execution — slab, frame, lock-up and so on. | `integer` | — | Primary key. | Referenced by jobs.build_stage_id. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 
+## `classifications`
+
+What a contact or company IS to Lofty — client, contractor, supplier, consultant, authority, other (0082). A lookup managers edit; applied many-to-one through contact_classifications and company_classifications because a client can also be a contractor.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `classifications.classification_id` | Classification | What a contact or company IS to Lofty — client, contractor, supplier, consultant, authority, other (0082). A lookup managers edit; applied many-to-one because the same person can be two of them. | `text` | — | Primary key, a slug. | Read by every active user; managers write. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `classifications.classification_name` | Name | The word on screen. | `text` | — | Not null, unique, not blank. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `classifications.classification_applies_to` | Applies to | contact, company or both — Authority is a company, never a person. | `text` | — | Not null, default both. CHECK. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `classifications.classification_position` | Order | Where in the picker. | `integer` | — | Not null, default 0 (smallint). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `classifications.classification_is_active` | Active | Retired classifications keep their rows and leave the picker. | `boolean` | — | Not null, default true. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
 ## `comment_mentions`
 
 Who was @-mentioned in which comment, as rows rather than parsed out of the body on read — a mention that disappears when somebody fixes a typo is not a notification. The null read_at rows are the unread queue, and only the mentioned person can mark theirs read.
@@ -130,6 +142,114 @@ What people write on a record. Threaded one level deep in practice, marked edite
 | `comments.comment_is_pinned` | Pinned | The official answer, held at the top of a thread. | `boolean` | — | Not null, default false. | Admin+, enforced by guard_comment_standing() rather than by a policy: pinning is a COLUMN rule, and the author's own edit policy would otherwise let anybody pin themselves to the top. A boolean here rather than a pinned_comment_id on the parent — pinning is a property of the comment. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `comments.comment_is_internal` | Internal | The team's own lane: triage talk the person who asked cannot read. | `boolean` | — | Not null, default false. | Enforced by the read policy, so an internal comment never reaches a non-admin at all — including the count on the board, which is why that count is computed in the view rather than in the app. Default false: nothing already written became hidden. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `comments.comment_feedback_stage` | Stage announced | Set when this comment was the note that came with a stage change — the stage it announced. | `text` | — | Nullable. CHECK: only on a comment that has a feedback_id. | One note per MOVE rather than one per request: a column on feedback would mean the note explaining 'planned' was overwritten by the note explaining 'in development', and what was said at each step would be gone. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `companies`
+
+An organisation Lofty deals with (0082): name, trading name, an eleven-digit ABN, an address row. People are contacts joined through company_contacts; reach it through contact_methods; classified through company_classifications; signed off by a manager after a user creates it. The 21 August decision against external parties, reversed: maintenance made them first-class.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `companies.company_id` | Company | An organisation Lofty deals with — a contractor, a supplier, a council, a client company (0082). One row however many people work there. | `uuid` | — | Primary key. | Read by every active user; users create and edit; admins delete — and the FKs from record_parties refuse a delete while history exists. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `companies.company_name` | Name | The legal or common name. | `text` | — | Not null, not blank. Unique on lower(trim(name)). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `companies.company_trading_name` | Trading name | The name on the ute, when it differs. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `companies.company_abn` | ABN | Australian Business Number, eleven digits, digits only — the app may show it spaced. Unique where present. | `text` | — | Nullable. CHECK: ^[0-9]{11}$. Partial unique index. | The Xero connector will match on it. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `companies.company_address_id` | Address | Where they are, as an addresses row — the same table a project's address lives in. | `uuid` | — | Nullable. FK → addresses. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `companies.company_notes` | Notes | Free text about the company. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `companies.company_source` | Source | Where the row came from: app, import, email, form, api, sitebook. | `text` | — | Not null, default app. CHECK. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `companies.company_is_active` | Active | Retired companies keep their rows and history. | `boolean` | — | Not null, default true. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `companies.company_approved_at` | Signed off | When a manager approved it (Amber, 2 Sep: users create, managers sign off). Null means usable but awaiting sign-off. A manager creating a company approves it by existing. | `timestamptz` | — | Nullable. CHECK: set together with approved_by. | Only manager and above may change the pair (guard_party_approval). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `companies.company_approved_by` | Signed off by | The manager, stamped from the session — never typed. | `uuid` | — | Nullable. FK → profiles. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `company_classifications`
+
+Which classifications a company carries — a plumbing company that is a contractor and a supplier (0082).
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `company_classifications.company_id` | Company | Which company carries the classification (0082). | `uuid` | — | Primary key with classification_id. FK → companies ON DELETE CASCADE. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `company_classifications.classification_id` | Classification | Which one. | `text` | — | Primary key with company_id. FK → classifications. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `company_contacts`
+
+A person at a company, over time, with the job role they hold there (0082). Ending a row keeps the history; one current row per pair. The company beside a person in the Contacts list is read from here.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `company_contacts.company_contact_id` | Employment | A person at a company, over time, with the job role they hold THERE (0082) — Bob Marsh is a fencer at Bob's Fencing and was a labourer at Wandi Plumbing. | `uuid` | — | Primary key. | Read by every active user; users write. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `company_contacts.company_id` | Company | Where. | `uuid` | — | Not null. FK → companies. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `company_contacts.contact_id` | Contact | Who. | `uuid` | — | Not null. FK → contacts. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `company_contacts.company_contact_job_role` | Job role | What they do at that company — the role Amber asked to record, kept here because it differs per company. | `text` | — | Nullable. | Shown beside the person in the Contacts list. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `company_contacts.company_contact_is_primary` | Primary | The company shown beside the person when they have several. | `boolean` | — | Not null, default false. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `company_contacts.company_contact_started_on` | Started | When they started there, if known. | `date` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `company_contacts.company_contact_ended_on` | Ended | When they left. Null is current; one current row per pair (partial unique index). Ending keeps the history. | `date` | — | Nullable. CHECK ≥ started. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `company_display`
+
+A company as the Contacts list reads it (0082): name, ABN, primary email and phone, classifications, how many people work there and how many records it is on.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `company_display.company_primary_email` | Email | The primary email of possibly several. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `company_display.company_primary_phone` | Phone | The primary phone. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `company_display.company_classification_ids` | Classifications | Every classification the company carries. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `company_display.company_people_count` | People | How many people currently work there. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `company_display.company_open_parties` | On records | How many records the company is on, as the party or as the one who engaged the party. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `contact_classifications`
+
+Which classifications a contact carries — several at once (0082).
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `contact_classifications.contact_id` | Contact | Which contact carries the classification (0082). | `uuid` | — | Primary key with classification_id. FK → contacts ON DELETE CASCADE. | Several rows per contact: a client who is also a contractor. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `contact_classifications.classification_id` | Classification | Which one. | `text` | — | Primary key with contact_id. FK → classifications. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `contact_display`
+
+A contact as the Contacts list reads them (0082): the person, primary email and phone, their current company and role there, classifications, how many records they are on. Derived from the normalised tables, never stored.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `contact_display.contact_company_name` | Company | The company beside the person — read from the current employment row (company_contacts where nothing has ended), a view and never a copy. | `view` | — | Null when they are at no company. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `contact_display.contact_job_role` | Job role | Their role at that company. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `contact_display.contact_primary_email` | Email | The primary email of possibly several. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `contact_display.contact_primary_phone` | Phone | The primary mobile, else the primary phone. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `contact_display.contact_classification_ids` | Classifications | Every classification the contact carries, in picker order. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `contact_display.contact_open_parties` | On records | How many records they are currently on. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `contact_methods`
+
+How to reach a contact or a company (0082): email, phone, mobile, other, as rows because people have several, with one primary per kind so a notification has one definite address. Exclusive arc — a method belongs to a contact or a company, never both.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `contact_methods.contact_method_id` | Contact method | One way to reach a contact or a company — email, phone, mobile, other — as rows, because people have several (0082). | `uuid` | — | Primary key. | Read by every active user; users write. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `contact_methods.contact_id` | Contact | Whose it is, when a person's. | `uuid` | — | Nullable. FK → contacts ON DELETE CASCADE. CHECK: exactly one of contact_id, company_id. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `contact_methods.company_id` | Company | Whose it is, when a company's. | `uuid` | — | Nullable. FK → companies ON DELETE CASCADE. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `contact_methods.contact_method_kind` | Kind | email, phone, mobile or other. | `text` | — | Not null. CHECK. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `contact_methods.contact_method_value` | Value | The address or number. Emails are checked for an @ and stored lower-case. | `text` | — | Not null, not blank. CHECK on emails. | Indexed on lower(value) for search. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `contact_methods.contact_method_label` | Label | work, home, after hours… | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `contact_methods.contact_method_is_primary` | Primary | The one a notification goes to. One primary per kind per party — a partial unique index refuses a second. | `boolean` | — | Not null, default false. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `contact_methods.contact_method_is_verified` | Verified | Whether the address has been confirmed (a bounce-free send, a reply). For the notification worker. | `boolean` | — | Not null, default false. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `contacts`
+
+A person outside Lofty (0082): names, notes, an address row, and contact_profile_id as the whole provision for a future contractor login. Everything else is rows in its own table — emails and phones, classifications, employment, what they do on a record — which is why the Contacts list is a view.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `contacts.contact_id` | Contact | A person outside Lofty — a purchaser, a tradesperson, a council officer (0082). Names only: emails and phones are rows in contact_methods, classifications in contact_classifications, employment in company_contacts, what they do on a record in record_parties. | `uuid` | — | Primary key. | Read by every active user; users create and edit; admins delete, refused while history exists. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `contacts.contact_first_name` | First name | Required — the one thing always known. | `text` | — | Not null, not blank. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `contacts.contact_last_name` | Last name | Optional: a tradesperson known only as Bob is still a contact. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `contacts.contact_full_name` | Full name | Generated from the two parts, so it cannot drift. | `text` | — | Generated, stored. Trigram-indexed for search. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `contacts.contact_preferred_name` | Preferred name | What they like to be called. Null means use the first name. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `contacts.contact_address_id` | Address | Where they live or work, as an addresses row. | `uuid` | — | Nullable. FK → addresses. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `contacts.contact_notes` | Notes | Free text about the person. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `contacts.contact_profile_id` | Login | The whole provision for a contractor portal: the profile this person will sign in with, when that is built. Null for everyone today. | `uuid` | — | Nullable, unique. FK → profiles. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `contacts.contact_source` | Source | Where the row came from: app, import, email, form, api, sitebook. | `text` | — | Not null, default app. CHECK. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `contacts.contact_is_active` | Active | Retired contacts keep their rows and history. | `boolean` | — | Not null, default true. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `contacts.contact_approved_at` | Signed off | When a manager approved the contact. Null means usable but awaiting sign-off. | `timestamptz` | — | Nullable. CHECK: set together with approved_by. | Only manager and above may change the pair. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `contacts.contact_approved_by` | Signed off by | The manager, stamped from the session. | `uuid` | — | Nullable. FK → profiles. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `council_regions`
 
@@ -361,6 +481,18 @@ One row per authentication event, copied out of auth.users with the email denorm
 | `login_activity.login_activity_event_type` | Event | SIGNUP or LOGIN. Renamed from `event_type` in 0080. | `text` | — | Not null. | — | Created | 2026-08-01 · Amber Beaumont — outside the migrations; renamed 0080 | 2026-08-01 · Amber Beaumont — outside the migrations; renamed 0080 |
 | `login_activity.login_activity_at` | Occurred on | When it happened. Renamed from `occurred_at` in 0080. | `timestamptz` | — | Not null. Indexed descending. | Indexed for "most recent first", which is how it is read. | Created | 2026-08-01 · Amber Beaumont — outside the migrations; renamed 0080 | 2026-08-01 · Amber Beaumont — outside the migrations; renamed 0080 |
 | `login_activity.login_activity_metadata` | Details | The provider and nothing else (0008 stopped it storing the auth.users row). Renamed from `metadata` in 0080. | `jsonb` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont — outside the migrations; renamed 0080 | 2026-08-01 · Amber Beaumont — outside the migrations; renamed 0080 |
+
+## `party_roles`
+
+What an external party is doing on a record — purchaser, contractor, certifier, council… (0082). A lookup, so a role is never spelled four ways; a trigger keeps person-only roles off companies.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `party_roles.party_role_id` | Party role | What an external party is doing ON a record — purchaser, contractor, certifier, council… (0082). A lookup, so Plumber is never spelled four ways. | `text` | — | Primary key, a slug. | Read by every active user; managers write. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `party_roles.party_role_name` | Name | The word on screen. | `text` | — | Not null, unique. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `party_roles.party_role_applies_to` | Applies to | contact, company or both. Purchaser is a person; council is a company. A trigger refuses a company purchaser. | `text` | — | Not null, default both. CHECK. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `party_roles.party_role_position` | Order | Where in the picker. | `integer` | — | Not null, default 0 (smallint). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `party_roles.party_role_is_active` | Active | Retired roles keep their rows. | `boolean` | — | Not null, default true. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `permission_grants`
 
@@ -695,6 +827,49 @@ The answers (0077). One row per property per record, sparse by design — an uns
 | `property_values.property_value_set_at` | Recorded at | When the CURRENT answer was recorded. Moves only when the answer changes — not on a no-op save and not on a push that carried the same value. | `timestamptz` | — | Not null, stamped by guard_property_value(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `property_values.property_value_set_by` | Recorded by | Who recorded the current answer. | `uuid` | — | Nullable. FK → profiles. Stamped by the database, never sent by the client. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
+## `record_parties`
+
+Who, from outside Lofty, is on a project, a job or a process run, and as what (0082). A contact and/or a company in a party role; engaged_by names a sub-contract. Ending a row keeps the history and is how a party is removed — the FKs refuse a contact or company delete while one exists. A party on a construction run is what the maintenance categories will read: who did the plumbing here.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `record_parties.record_party_id` | Party on a record | Who, from outside Lofty, is on a project, a job or a process run, and as what (0082): Priya Nair, purchaser, 1042-01; Okafor Electrical, electrician, the 2nd Fix run. | `uuid` | — | Primary key. | Read by every active user; users write. The maintenance batch adds maintenance_request_id to the arc. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `record_parties.project_id` | Project | The record, when a project. | `integer` | — | Nullable. FK → projects ON DELETE CASCADE. CHECK: exactly one of project_id, job_id, process_run_id. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `record_parties.job_id` | Job | The record, when a job. | `text` | — | Nullable. FK → jobs ON DELETE CASCADE. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `record_parties.process_run_id` | Process run | The record, when a run — the plumber on THIS job's plumbing, which is what the maintenance categories read. | `uuid` | — | Nullable. FK → process_runs ON DELETE CASCADE. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `record_parties.contact_id` | Contact | The person, if a person is named. | `uuid` | — | Nullable. FK → contacts (no cascade: refuses the contact's deletion while this exists). CHECK: at least one of contact_id, company_id. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `record_parties.company_id` | Company | The company, if one is named — alone, or with the person acting for it. | `uuid` | — | Nullable. FK → companies (no cascade). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `record_parties.party_role_id` | Role | What they are doing here. | `text` | — | Not null. FK → party_roles. | A trigger refuses a person-only role on a company and vice versa. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `record_parties.record_party_engaged_by_company_id` | Engaged by | Who brought them onto this record — a sub-contract is a fact about the engagement, not about the company. | `uuid` | — | Nullable. FK → companies. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `record_parties.record_party_is_primary` | Primary | The main one of several in the same role. | `boolean` | — | Not null, default false. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `record_parties.record_party_started_on` | From | When the engagement began. | `date` | — | Not null, default today. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `record_parties.record_party_ended_on` | To | When it ended. Null is current — and the same party in the same role on the same record is unique while current. Ending is how a party is removed. | `date` | — | Nullable. CHECK ≥ started. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `record_parties.record_party_note` | Note | Why, or anything else worth a line. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `record_party_display`
+
+A party on a record with its names resolved (0082): who, which company, which role, engaged by whom, and for a run-level party which process and which job that run is on.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `record_party_display.record_job_id` | Job | The job a party is ultimately on — its own, or its process run's — so a job's drawer lists the trades on its runs too. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `record_party_display.record_project_id` | Project | The project, the same way. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `record_party_display.process_name` | Process | For a party on a run, which process. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `record_staff_roles`
+
+Which Lofty person holds which SiteBook project role on which project or job (0082). Ending a row keeps the history.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `record_staff_roles.record_staff_role_id` | Staff role on a record | Which Lofty person holds which SiteBook project role on which project or job (0082) — SS Atelio Storti on 1507. | `uuid` | — | Primary key. | Read by every active user; managers write. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `record_staff_roles.project_id` | Project | The record, when a project. | `integer` | — | Nullable. FK → projects ON DELETE CASCADE. CHECK: exactly one of project_id, job_id. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `record_staff_roles.job_id` | Job | The record, when a job. | `text` | — | Nullable. FK → jobs ON DELETE CASCADE. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `record_staff_roles.staff_role_id` | Role | Which role. | `text` | — | Not null. FK → staff_roles. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `record_staff_roles.profile_id` | Person | Who holds it. | `uuid` | — | Not null. FK → profiles. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `record_staff_roles.record_staff_role_started_on` | From | When they took it on. | `date` | — | Not null, default today. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `record_staff_roles.record_staff_role_ended_on` | To | When they handed it over. Null is current; one current row per person, role and record. | `date` | — | Nullable. CHECK ≥ started. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
 ## `release_entries`
 
 The lines under one release, in Keep a Changelog's four kinds. A line may name the request it came from, which is the loop closing — the person who asked sees their own words in the changelog — and is null for the improvements nobody filed a request for.
@@ -746,6 +921,18 @@ A person's named board states (Amber's Q9, third layer) — the query string of 
 | `saved_views.saved_view_name` | Name | What the person calls it — "My site work". Unique per person per board, so choosing one is never a coin-toss between two of the same name. | `text` | — | Not null. CHECK: not blank after trimming. UNIQUE (profile_id, board, name). | The duplicate is refused rather than overwritten: overwriting a view somebody meant to keep is worse than a message naming the clash. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `saved_views.saved_view_shared_with_team` | Shared with | The team this view is handed to, or null for private — the default (0051, Amber: "team views matter"). A shared view is readable by everyone in that team and editable only by whoever made it. | `text` | — | Nullable. FK → teams(team_id). | The read and write policies are separate for exactly this: a widened for-all policy would have let anybody in the team delete the owner's view. Two people may still both call a view "Site this week" — the tab row carries whose it is rather than the constraint forbidding it. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `saved_views.saved_view_query` | The view itself | The board's query string without the leading ?, stored verbatim — view mode, grouping, filters, saved-view slice, exactly as the address bar holds them. | `text` | — | Not null. | The URL is already the app's serialisation of "what am I looking at"; a second schema for the same fact could only disagree with it. Unknown keys fall back harmlessly on read, exactly as a pasted link does. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `staff_roles`
+
+SiteBook's project roles as Lofty runs them — SS, CM, CA, CMA, SET, AC, SEL, DFT, SCH, WM, SA (0082). Held on a project or job through record_staff_roles.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `staff_roles.staff_role_id` | Staff role | SiteBook's project roles as Lofty runs them (0082): SS Site Supervisor, CM Construction Manager, CA Contracts Administrator, CMA Construction & Maintenance Admin, SET Sales Estimator, AC Accounts, SEL Selections, DFT Drafting, SCH Scheduling, WM Workflow Manager, SA Sales Administrator. | `text` | — | Primary key, a slug. | Read by every active user; managers write. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `staff_roles.staff_role_abbreviation` | Abbreviation | The two- or three-letter code SiteBook prints beside a person. | `text` | — | Not null, unique. CHECK: 1–5 capitals. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `staff_roles.staff_role_name` | Name | The role spelled out. | `text` | — | Not null, unique. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `staff_roles.staff_role_position` | Order | SiteBook's order. | `integer` | — | Not null, default 0 (smallint). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `staff_roles.staff_role_is_active` | Active | Retired roles keep their rows. | `boolean` | — | Not null, default true. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `stage_completion`
 

@@ -2276,3 +2276,214 @@ export interface NewJob {
   stage?: StageName;
   status?: RecordStatus;
 }
+
+// ---------------------------------------------------------------------------
+// Parties (0082): contacts, companies, classifications, employment, roles on records
+// ---------------------------------------------------------------------------
+
+/** A lookup row shared by classifications, party roles and staff roles. */
+export interface Classification {
+  id: string;
+  name: string;
+  appliesTo: "contact" | "company" | "both";
+  position: number;
+  isActive: boolean;
+}
+export interface PartyRole {
+  id: string;
+  name: string;
+  appliesTo: "contact" | "company" | "both";
+  position: number;
+  isActive: boolean;
+}
+export interface StaffRole {
+  id: string;
+  abbreviation: string;
+  name: string;
+  position: number;
+  isActive: boolean;
+}
+
+export const PARTY_SOURCES = ["app", "import", "email", "form", "api", "sitebook"] as const;
+export type PartySource = (typeof PARTY_SOURCES)[number];
+
+/** A company as the Contacts list reads it (company_display). */
+export interface Company {
+  id: Uuid;
+  name: string;
+  tradingName: string | null;
+  abn: string | null;
+  addressId: Uuid | null;
+  address: string | null;
+  notes: string | null;
+  source: PartySource;
+  isActive: boolean;
+  /** Null until a manager signs it off (Amber, 2 Sep). Usable meanwhile, flagged. */
+  approvedAt: IsoDateTime | null;
+  approvedBy: Uuid | null;
+  primaryEmail: string | null;
+  primaryPhone: string | null;
+  classificationIds: string[];
+  peopleCount: number;
+  openParties: number;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+export interface NewCompany {
+  name: string;
+  tradingName?: string | null;
+  abn?: string | null;
+  notes?: string | null;
+  classificationIds?: string[];
+  email?: string | null;
+  phone?: string | null;
+}
+export interface CompanyPatch {
+  name?: string;
+  tradingName?: string | null;
+  abn?: string | null;
+  addressId?: Uuid | null;
+  notes?: string | null;
+  isActive?: boolean;
+}
+
+/** A person as the Contacts list reads them (contact_display): with their company beside them. */
+export interface Contact {
+  id: Uuid;
+  firstName: string;
+  lastName: string | null;
+  fullName: string;
+  preferredName: string | null;
+  addressId: Uuid | null;
+  address: string | null;
+  notes: string | null;
+  /** The future login. Null for everyone today. */
+  profileId: Uuid | null;
+  source: PartySource;
+  isActive: boolean;
+  approvedAt: IsoDateTime | null;
+  approvedBy: Uuid | null;
+  primaryEmail: string | null;
+  primaryPhone: string | null;
+  /** Current employment, if any — read from company_contacts where nothing has ended. */
+  companyId: Uuid | null;
+  companyName: string | null;
+  jobRole: string | null;
+  classificationIds: string[];
+  openParties: number;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+export interface NewContact {
+  firstName: string;
+  lastName?: string | null;
+  preferredName?: string | null;
+  notes?: string | null;
+  classificationIds?: string[];
+  email?: string | null;
+  phone?: string | null;
+  /** Put them at a company straight away, with the role they hold there. */
+  companyId?: Uuid | null;
+  jobRole?: string | null;
+}
+export interface ContactPatch {
+  firstName?: string;
+  lastName?: string | null;
+  preferredName?: string | null;
+  addressId?: Uuid | null;
+  notes?: string | null;
+  isActive?: boolean;
+}
+
+export const CONTACT_METHOD_KINDS = ["email", "phone", "mobile", "other"] as const;
+export type ContactMethodKind = (typeof CONTACT_METHOD_KINDS)[number];
+export const CONTACT_METHOD_LABELS: Record<ContactMethodKind, string> = {
+  email: "Email", phone: "Phone", mobile: "Mobile", other: "Other"
+};
+
+/** One way to reach a contact or a company. Exactly one of the two ids is set. */
+export interface ContactMethod {
+  id: Uuid;
+  contactId: Uuid | null;
+  companyId: Uuid | null;
+  kind: ContactMethodKind;
+  value: string;
+  label: string | null;
+  isPrimary: boolean;
+  isVerified: boolean;
+}
+export interface NewContactMethod {
+  contactId?: Uuid | null;
+  companyId?: Uuid | null;
+  kind: ContactMethodKind;
+  value: string;
+  label?: string | null;
+  isPrimary?: boolean;
+}
+
+/** A person at a company, over time, with the role they hold there. */
+export interface CompanyContact {
+  id: Uuid;
+  companyId: Uuid;
+  companyName: string;
+  contactId: Uuid;
+  contactName: string;
+  jobRole: string | null;
+  isPrimary: boolean;
+  startedOn: IsoDate | null;
+  endedOn: IsoDate | null;
+}
+
+/** A party on a record, names resolved (record_party_display). */
+export interface RecordParty {
+  id: Uuid;
+  projectId: number | null;
+  jobId: string | null;
+  processRunId: Uuid | null;
+  /** The job a run-level party is ultimately on, so a drawer can list them. */
+  recordJobId: string | null;
+  recordProjectId: number | null;
+  contactId: Uuid | null;
+  contactName: string | null;
+  companyId: Uuid | null;
+  companyName: string | null;
+  roleId: string;
+  roleName: string;
+  engagedByCompanyId: Uuid | null;
+  engagedByCompanyName: string | null;
+  isPrimary: boolean;
+  startedOn: IsoDate;
+  endedOn: IsoDate | null;
+  note: string | null;
+  processName: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
+}
+export interface NewRecordParty {
+  projectId?: number;
+  jobId?: string;
+  processRunId?: Uuid;
+  contactId?: Uuid | null;
+  companyId?: Uuid | null;
+  roleId: string;
+  engagedByCompanyId?: Uuid | null;
+  isPrimary?: boolean;
+  note?: string | null;
+}
+
+/** A Lofty person holding a SiteBook project role on a project or job. */
+export interface RecordStaffRole {
+  id: Uuid;
+  projectId: number | null;
+  jobId: string | null;
+  roleId: string;
+  roleAbbreviation: string;
+  roleName: string;
+  profileId: Uuid;
+  profileName: string;
+  startedOn: IsoDate;
+  endedOn: IsoDate | null;
+}
+
+/** Which record a party or a role hangs off. Exactly one. */
+export type PartyTarget = { projectId: number } | { jobId: string } | { processRunId: Uuid };

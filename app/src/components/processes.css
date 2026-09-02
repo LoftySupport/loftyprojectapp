@@ -160,3 +160,34 @@
 .task-days { width: 72px; }
 .health.is-no_due_date, .health.is-cancelled { background: var(--allgrey-background-color); color: var(--secondary-text-color); }
 .health.is-done { background: var(--positive-color-selected); color: var(--positive-ink); }
+
+/* ---- parties on a record (0082) ---------------------------------------------- */
+.party-list { list-style: none; margin: 0; padding: 0; }
+.party-row { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; padding: var(--space-4) 0; border-top: 1px dashed var(--layout-border-color); min-height: 32px; }
+.party-row:first-child { border-top: 0; }
+.party-role { font: var(--font-text3-bold); color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: 0.04em; flex: 0 0 120px; }
+.party-who { flex: 1 1 200px; min-width: 0; }
+.party-reach { display: flex; gap: var(--space-12); flex-wrap: wrap; font: var(--font-text3-normal); }
+.party-add { display: flex; gap: var(--space-8); flex-wrap: wrap; align-items: center; margin-top: var(--space-8); }
+.party-add > div { flex: 1 1 180px; min-width: 160px; }
+.party-compact { margin-top: var(--space-8); }
+.link-button { background: none; border: 0; padding: 0; color: var(--primary-color); font: inherit; cursor: pointer; text-decoration: underline; }
+.link-button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+
+/* ---- the Contacts screen ------------------------------------------------------ */
+.contacts-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-16); }
+/* A grid item's minimum is its content's, and the content is a max-content table: without
+   this the track grows past the phone and the page scrolls sideways (measured: 61px on a
+   390px phone). The table scrolls inside its own wrapper instead. */
+.contacts-grid > * { min-width: 0; }
+@media (min-width: 960px) { .contacts-grid.has-detail { grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr); align-items: start; } }
+.contact-row { cursor: pointer; }
+.contact-row.is-selected td { background: var(--primary-selected-color); }
+.contact-classes { display: inline-flex; gap: var(--space-4); flex-wrap: wrap; }
+.contact-detail .field-row { padding: var(--space-8) 0; }
+.method-list { list-style: none; margin: 0; padding: 0; }
+.method-list li { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; padding: var(--space-4) 0; border-top: 1px dashed var(--layout-border-color); min-height: 32px; }
+.method-list li:first-child { border-top: 0; }
+.method-kind { font: var(--font-text3-bold); color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: 0.04em; flex: 0 0 64px; }
+.approval-chip { display: inline-block; font: var(--font-text3-bold); font-size: 11px; padding: 0 var(--space-8); border-radius: 9px; line-height: 18px; background: var(--warning-color-selected); color: var(--warning-ink); white-space: nowrap; }
+.approval-chip.is-approved { background: var(--positive-color-selected); color: var(--positive-ink); }

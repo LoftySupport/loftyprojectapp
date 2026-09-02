@@ -674,3 +674,64 @@ delete from tasks where process_run_id in (select process_run_id from process_ru
 delete from process_runs where process_id in (select process_id from processes where process_key = 'behaviour_probe_0081');
 delete from processes where process_key = 'behaviour_probe_0081';
 delete from tasks where task_name = 'behaviour probe 0081';
+
+-- ============================================================================
+-- 41. Contacts show their company beside them; a party on a run belongs to its job (0082)
+-- ============================================================================
+\echo '--- 41. contact_display resolves company, role, primary email; a run-level party surfaces on the job'
+insert into companies (company_name, company_abn) values ('Behaviour Plumbing 0082', '53004085616');
+insert into contacts (contact_first_name, contact_last_name) values ('Behaviour', 'Plumber 0082');
+insert into contact_methods (contact_id, contact_method_kind, contact_method_value, contact_method_is_primary)
+select contact_id, 'email', 'Behaviour.Plumber@Example.com', true from contacts where contact_last_name = 'Plumber 0082';
+insert into contact_methods (contact_id, contact_method_kind, contact_method_value)
+select contact_id, 'email', 'second@example.com' from contacts where contact_last_name = 'Plumber 0082';
+insert into company_contacts (company_id, contact_id, company_contact_job_role)
+select co.company_id, c.contact_id, 'Plumber' from companies co, contacts c
+ where co.company_name = 'Behaviour Plumbing 0082' and c.contact_last_name = 'Plumber 0082';
+insert into contact_classifications (contact_id, classification_id)
+select contact_id, 'contractor' from contacts where contact_last_name = 'Plumber 0082';
+select case when contact_company_name = 'Behaviour Plumbing 0082' and contact_job_role = 'Plumber'
+             and contact_primary_email = 'Behaviour.Plumber@Example.com' and contact_classification_ids = array['contractor']
+  then 'ok  contact_display: company beside the person, their role there, the PRIMARY email of two, the classification'
+  else 'FAIL: contact_display read ' || coalesce(contact_company_name, 'no company') || ' / ' || coalesce(contact_job_role, 'no role') || ' / ' || coalesce(contact_primary_email, 'no email') end
+from contact_display where contact_last_name = 'Plumber 0082';
+
+-- Ending the employment takes the company off the person without losing the row.
+update company_contacts set company_contact_ended_on = current_date
+ where contact_id = (select contact_id from contacts where contact_last_name = 'Plumber 0082');
+select case when contact_company_name is null
+  then 'ok  ending the employment clears the company beside the person; the history row stays'
+  else 'FAIL: an ended employment still shows ' || contact_company_name end
+from contact_display where contact_last_name = 'Plumber 0082';
+
+-- A party on a process run of 1106-002 lists under the job.
+insert into processes (process_key, process_name, process_stage, process_scope, process_position)
+values ('behaviour_probe_0082', 'Behaviour probe 0082', 'Construction', 'job', 998) on conflict (process_key) do nothing;
+insert into process_runs (process_id, job_id, process_run_status)
+select process_id, '1106-002', 'in_progress' from processes where process_key = 'behaviour_probe_0082';
+insert into record_parties (process_run_id, company_id, party_role_id)
+select r.process_run_id, co.company_id, 'contractor'
+  from process_runs r join processes p using (process_id), companies co
+ where p.process_key = 'behaviour_probe_0082' and co.company_name = 'Behaviour Plumbing 0082';
+select case when count(*) = 1
+  then 'ok  a party on a process run surfaces on its job (record_job_id 1106-002, process named)'
+  else 'FAIL: expected 1 run-level party under 1106-002, found ' || count(*) end
+from record_party_display where record_job_id = '1106-002' and process_name = 'Behaviour probe 0082';
+
+-- Deleting a company that is a party is refused: end the party instead.
+do $$
+begin
+  begin
+    delete from companies where company_name = 'Behaviour Plumbing 0082';
+    raise warning 'FAIL: a company with an open party was deleted';
+  exception when foreign_key_violation then raise notice 'ok  a company on a record cannot be deleted; the party is ended instead';
+  end;
+end $$;
+
+-- Left as found.
+delete from record_parties where company_id = (select company_id from companies where company_name = 'Behaviour Plumbing 0082');
+delete from process_runs where process_id in (select process_id from processes where process_key = 'behaviour_probe_0082');
+delete from processes where process_key = 'behaviour_probe_0082';
+delete from company_contacts where contact_id = (select contact_id from contacts where contact_last_name = 'Plumber 0082');
+delete from contacts where contact_last_name = 'Plumber 0082';
+delete from companies where company_name = 'Behaviour Plumbing 0082';

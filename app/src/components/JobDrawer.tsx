@@ -11,6 +11,7 @@ import { ExpandButton, usePanelExpand } from "./PanelExpand";
 import { useResizablePanel } from "./useResizablePanel";
 import { JOB_MOVE_NOTE, MoveStageControl } from "./MoveStageDialog";
 import { ActivityFeed } from "./ActivityFeed";
+import { PartiesPanel } from "./PartiesPanel";
 import { JobTimeline } from "./JobTimeline";
 import { TasksPanel } from "./TasksPanel";
 import { CloneJobDialog } from "./CloneDialog";
@@ -510,6 +511,10 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
           {/* What has to be done on this job. Above the timeline because a checklist is
               worked from, and a history is read — the thing you act on goes first. */}
           <TasksPanel jobId={job.jobNumber} />
+
+          {/* Who from outside Lofty is on this job — the purchaser, the trades on its runs
+              (0082). Sits with the work because "ring the plumber" is a task. */}
+          <PartiesPanel target={{ jobId: job.jobNumber }} />
 
           {/* The job as a gantt, a calendar or a list (Amber, 28 August). It sits with
               the activity because it is the same history read a different way — every

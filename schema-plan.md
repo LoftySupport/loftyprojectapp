@@ -1352,6 +1352,26 @@ still residential.**
   the RLS probes were watched failing against a permissive policy (3 locked-property rows
   and 7 preference rows visible) before they passed.
 
+- **`0081` — tasks grow checklists and time; a job learns its SiteBook id.** `task_started_at`,
+  `task_expected_days`, `task_at_risk_lead_days` (lead ≤ duration, CHECKed); `task_checklist_items`
+  and `process_task_checklist_items`, copied by `instantiate_process_tasks()` along with expected
+  days — the item 0078 left undone; `task_display` deriving due, at-risk and health the way
+  `process_run_display` does; `stage_completion` counting milestones and open processes per
+  record and stage; `sitebook_id` seeded as a job-level text property. The tasks panel shows
+  sub-tasks, checklists, health as a word and the two numbers per task; the Setup → Processes
+  list shows each process's duration and at-risk lead as a column.
+- **`0082` — parties.** `classifications`, `party_roles`, `staff_roles` (SiteBook's eleven,
+  seeded), `companies` (ABN eleven digits, address row), `contacts` (`contact_profile_id` for the
+  future login), `contact_methods` (one primary per kind per party), the two classification
+  junctions, `company_contacts` (job role lives here), `record_parties` (project / job / process
+  run; contact and/or company; role; `engaged_by`; ended, never deleted), `record_staff_roles`;
+  three display views; `guard_party_approval()` — users create unapproved, managers sign off
+  and are stamped, a manager's own creation approves by existing. The Contacts screen (people
+  with their company beside them, companies, detail with methods, classifications, employment,
+  the records they are on, sign-off), parties on the job drawer and project page and inside
+  each process run, SiteBook project roles on the project, and a Setup → Contacts section for
+  the three lookups. The 21 August decision is superseded, with the reason kept.
+
 ### Naming, measured rather than asserted
 
 All 79 migrations replayed into a local Postgres; every column in `public` checked against

@@ -1374,6 +1374,79 @@ reset role;
 reset request.jwt.claim.sub;
 delete from tasks where task_name = 'rls probe task 0081';
 
+-- ---------------------------------------------------------------- parties (0082)
+-- Amber: users and above create contacts and companies, with manager sign-off. As a USER:
+-- create both (unapproved), reach and classify them, put one on a job; fail to approve,
+-- fail to write a lookup. Then as a MANAGER: approve, and the stamp names the manager.
+\echo '--- a user creates a contact and a company, unapproved; a manager signs off (0082) ---'
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+do $$
+declare co uuid; ct uuid; n integer;
+begin
+  begin
+    insert into companies (company_name, company_abn) values ('RLS Fencing 0082', '83914571673') returning company_id into co;
+    insert into contacts (contact_first_name, contact_last_name) values ('Rls', 'Fencer 0082') returning contact_id into ct;
+    insert into contact_methods (contact_id, contact_method_kind, contact_method_value, contact_method_is_primary) values (ct, 'mobile', '0400 111 222', true);
+    insert into contact_classifications (contact_id, classification_id) values (ct, 'contractor');
+    insert into company_contacts (company_id, contact_id, company_contact_job_role) values (co, ct, 'Fencer');
+    insert into record_parties (job_id, contact_id, company_id, party_role_id) values ('1106-002', ct, co, 'contractor');
+    select count(*) into n from contact_display where contact_id = ct and contact_approved_at is null and contact_company_name = 'RLS Fencing 0082';
+    if n = 1 then raise notice 'ok  a user creates a contact at a company, reaches, classifies and places them — unapproved';
+    else raise warning 'FAIL: the user''s contact did not come back unapproved with its company (% rows)', n; end if;
+  exception when others then raise warning 'FAIL: unexpected creating parties as a user (%)', sqlerrm; end;
+
+  begin
+    update contacts set contact_approved_at = now() where contact_id = ct;
+    raise warning 'FAIL: a user approved a contact';
+  exception when insufficient_privilege then raise notice 'ok  a user cannot sign off a contact';
+    when others then raise warning 'FAIL: unexpected approving as a user (%)', sqlerrm; end;
+
+  begin
+    insert into party_roles (party_role_id, party_role_name) values ('sneaky_role', 'Sneaky');
+    raise warning 'FAIL: a user added a party role';
+  exception when insufficient_privilege then raise notice 'ok  party_roles refuse a write below manager';
+    when others then raise warning 'FAIL: unexpected on party_roles (%)', sqlerrm; end;
+
+  begin
+    insert into record_staff_roles (job_id, staff_role_id, profile_id) values ('1106-002', 'site_supervisor', (select current_profile_id()));
+    raise warning 'FAIL: a user assigned a staff role';
+  exception when insufficient_privilege then raise notice 'ok  record_staff_roles refuse a write below manager';
+    when others then raise warning 'FAIL: unexpected on record_staff_roles (%)', sqlerrm; end;
+
+  begin
+    delete from companies where company_id = co;
+    if exists (select 1 from companies where company_id = co) then raise notice 'ok  a user cannot delete a company (the row is still there)';
+    else raise warning 'FAIL: a user deleted a company'; end if;
+  exception when foreign_key_violation then raise notice 'ok  a company on a record cannot be deleted';
+    when others then raise warning 'FAIL: unexpected deleting a company as a user (%)', sqlerrm; end;
+end $$;
+reset role;
+reset request.jwt.claim.sub;
+update profiles set profile_permission = 'manager' where profile_email = 'behaviour-test@lofty.com.au';
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+do $$
+declare n integer;
+begin
+  update contacts set contact_approved_at = now() where contact_last_name = 'Fencer 0082';
+  select count(*) into n from contacts
+   where contact_last_name = 'Fencer 0082' and contact_approved_at is not null and contact_approved_by = (select current_profile_id());
+  if n = 1 then raise notice 'ok  a manager signs off the contact, and the stamp names the manager';
+  else raise warning 'FAIL: the manager''s approval did not stamp (% rows)', n; end if;
+  insert into companies (company_name) values ('RLS Managers Co 0082');
+  select count(*) into n from companies where company_name = 'RLS Managers Co 0082' and company_approved_at is not null;
+  if n = 1 then raise notice 'ok  a company a manager creates is approved by existing';
+  else raise warning 'FAIL: a manager-created company came back unapproved'; end if;
+end $$;
+reset role;
+reset request.jwt.claim.sub;
+update profiles set profile_permission = 'user' where profile_email = 'behaviour-test@lofty.com.au';
+delete from record_parties where job_id = '1106-002' and contact_id in (select contact_id from contacts where contact_last_name = 'Fencer 0082');
+delete from company_contacts where contact_id in (select contact_id from contacts where contact_last_name = 'Fencer 0082');
+delete from contacts where contact_last_name = 'Fencer 0082';
+delete from companies where company_name in ('RLS Fencing 0082', 'RLS Managers Co 0082');
+
 -- Left as found.
 reset request.jwt.claim.sub;
 delete from processes where process_key = 'probe_manager_process';

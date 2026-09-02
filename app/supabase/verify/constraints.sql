@@ -550,4 +550,23 @@ BEGIN
     RAISE WARNING 'FAIL: a blank checklist line was accepted'; END IF;
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  task_checklist_items_text_is_not_blank rejected a blank line';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  task_checklist_items_text_is_not_blank rejected a blank line)', SQLERRM; END;
+
+  -- 0082: an ABN is eleven digits, an email has an @, a party names somebody, one primary email per person.
+  BEGIN
+    INSERT INTO companies (company_name, company_abn) VALUES ('Constraint probe co 0082', '12345');
+    RAISE WARNING 'FAIL: a five-digit ABN was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  companies_abn_is_eleven_digits rejected 12345';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  companies_abn_is_eleven_digits rejected 12345)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO record_parties (job_id, party_role_id) VALUES ('1106-002', 'contractor');
+    RAISE WARNING 'FAIL: a party naming nobody was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  record_parties_names_somebody rejected a party with no contact and no company';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  record_parties_names_somebody rejected it)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO contact_methods (contact_method_kind, contact_method_value) VALUES ('email', 'nobody@example.com');
+    RAISE WARNING 'FAIL: a contact method with no party was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  contact_methods_one_party rejected a method belonging to nobody';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  contact_methods_one_party rejected it)', SQLERRM; END;
 END $$;

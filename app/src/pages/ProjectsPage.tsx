@@ -38,6 +38,8 @@ import { ProjectsGantt } from "../components/ProjectsGantt";
 import { ActivityFeed } from "../components/ActivityFeed";
 import { CommentsPanel } from "../components/CommentsPanel";
 import { TasksPanel } from "../components/TasksPanel";
+import { PartiesPanel } from "../components/PartiesPanel";
+import { StaffRolesPanel } from "../components/StaffRolesPanel";
 import { useToasts } from "../components/Toasts";
 import { AddressFields } from "../components/CreateDialogs";
 import { useQuery } from "../data/DataProvider";
@@ -905,6 +907,11 @@ function ProjectDetail({
         {/* Site-wide work — the things that belong to the project rather than to any one
             lot. A task hangs off exactly one of the two, which the CHECK enforces. */}
         <TasksPanel projectId={project.projectId} title="Tasks on this project" />
+
+        {/* SiteBook's project roles — who at Lofty holds SS, CM, CA… on this project — and
+            the outside parties: the council, the certifier, the developer's agent (0082). */}
+        <StaffRolesPanel projectId={project.projectId} />
+        <PartiesPanel target={{ projectId: project.projectId }} />
 
         {/* The newest comment IS the latest update — one mechanism, not a field and a
             feed that could disagree. */}

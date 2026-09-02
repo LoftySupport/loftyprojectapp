@@ -65,7 +65,24 @@ import type {
   TemplateMilestone,
   TemplatePhase,
   SavedViewBoard,
-  UserSavedView
+  UserSavedView,
+  Classification,
+  PartyRole,
+  StaffRole,
+  Company,
+  NewCompany,
+  CompanyPatch,
+  Contact,
+  NewContact,
+  ContactPatch,
+  ContactMethod,
+  NewContactMethod,
+  CompanyContact,
+  RecordParty,
+  NewRecordParty,
+  RecordStaffRole,
+  PartyTarget,
+  Uuid,
 } from "./types";
 
 /**
@@ -385,6 +402,45 @@ export interface Repository {
   /** Stage completion for one record, or for every record when no target is given. */
   listStageCompletion(target?: RecordTarget): Promise<StageCompletion[]>;
 
+  // ---- parties (0082): contacts, companies, roles ---------------------------
+  listClassifications(): Promise<Classification[]>;
+  saveClassification(row: Classification): Promise<Classification>;
+  listPartyRoles(): Promise<PartyRole[]>;
+  savePartyRole(row: PartyRole): Promise<PartyRole>;
+  listStaffRoles(): Promise<StaffRole[]>;
+  saveStaffRole(row: StaffRole): Promise<StaffRole>;
+  /** Every contact, with their company beside them; `search` narrows by name, email or phone. */
+  listContacts(opts?: { search?: string; includeInactive?: boolean }): Promise<Contact[]>;
+  getContact(id: string): Promise<Contact | null>;
+  /** User and above. Created unapproved unless the creator is a manager or above. */
+  createContact(input: NewContact): Promise<Contact>;
+  updateContact(id: string, patch: ContactPatch): Promise<Contact>;
+  /** Manager and above; the guard refuses anyone else and stamps who. */
+  approveContact(id: string, approved: boolean): Promise<Contact>;
+  setContactClassifications(id: string, classificationIds: string[]): Promise<void>;
+  listCompanies(opts?: { search?: string; includeInactive?: boolean }): Promise<Company[]>;
+  getCompany(id: string): Promise<Company | null>;
+  createCompany(input: NewCompany): Promise<Company>;
+  updateCompany(id: string, patch: CompanyPatch): Promise<Company>;
+  approveCompany(id: string, approved: boolean): Promise<Company>;
+  setCompanyClassifications(id: string, classificationIds: string[]): Promise<void>;
+  listContactMethods(party: { contactId?: string; companyId?: string }): Promise<ContactMethod[]>;
+  addContactMethod(input: NewContactMethod): Promise<ContactMethod>;
+  updateContactMethod(id: string, patch: { value?: string; label?: string | null; isPrimary?: boolean; isVerified?: boolean }): Promise<ContactMethod>;
+  deleteContactMethod(id: string): Promise<void>;
+  /** Employment rows for a company or a person, current first. */
+  listCompanyContacts(party: { contactId?: string; companyId?: string }): Promise<CompanyContact[]>;
+  addCompanyContact(input: { companyId: string; contactId: string; jobRole?: string | null; isPrimary?: boolean; startedOn?: string | null }): Promise<CompanyContact>;
+  updateCompanyContact(id: string, patch: { jobRole?: string | null; isPrimary?: boolean; endedOn?: string | null }): Promise<CompanyContact>;
+  /** Parties on a record — a job's include those on its process runs. */
+  listRecordParties(target: PartyTarget | { contactId: string } | { companyId: string }): Promise<RecordParty[]>;
+  addRecordParty(input: NewRecordParty): Promise<RecordParty>;
+  updateRecordParty(id: string, patch: { roleId?: string; engagedByCompanyId?: Uuid | null; isPrimary?: boolean; note?: string | null; endedOn?: string | null }): Promise<RecordParty>;
+  deleteRecordParty(id: string): Promise<void>;
+  listRecordStaffRoles(target: { projectId?: number; jobId?: string }): Promise<RecordStaffRole[]>;
+  addRecordStaffRole(input: { projectId?: number; jobId?: string; roleId: string; profileId: string }): Promise<RecordStaffRole>;
+  endRecordStaffRole(id: string, endedOn: string): Promise<RecordStaffRole>;
+
   // ---- the tracker: bugs, requests, votes (0052, 0060–0063) ----------------
   /**
    * Send a bug or a feature request. Anyone active may — the widest write in the app —
@@ -653,6 +709,38 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "updateProcessTaskChecklistItem",
   "deleteProcessTaskChecklistItem",
   "listStageCompletion",
+  "listClassifications",
+  "saveClassification",
+  "listPartyRoles",
+  "savePartyRole",
+  "listStaffRoles",
+  "saveStaffRole",
+  "listContacts",
+  "getContact",
+  "createContact",
+  "updateContact",
+  "approveContact",
+  "setContactClassifications",
+  "listCompanies",
+  "getCompany",
+  "createCompany",
+  "updateCompany",
+  "approveCompany",
+  "setCompanyClassifications",
+  "listContactMethods",
+  "addContactMethod",
+  "updateContactMethod",
+  "deleteContactMethod",
+  "listCompanyContacts",
+  "addCompanyContact",
+  "updateCompanyContact",
+  "listRecordParties",
+  "addRecordParty",
+  "updateRecordParty",
+  "deleteRecordParty",
+  "listRecordStaffRoles",
+  "addRecordStaffRole",
+  "endRecordStaffRole",
   "submitFeedback",
   "listFeedback",
   "setFeedbackStage",
@@ -771,6 +859,38 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   updateProcessTaskChecklistItem: "process_task_checklist_items",
   deleteProcessTaskChecklistItem: "process_task_checklist_items",
   listStageCompletion: "stage_completion",
+  listClassifications: "classifications",
+  saveClassification: "classifications",
+  listPartyRoles: "party_roles",
+  savePartyRole: "party_roles",
+  listStaffRoles: "staff_roles",
+  saveStaffRole: "staff_roles",
+  listContacts: "contact_display",
+  getContact: "contact_display",
+  createContact: "contacts",
+  updateContact: "contacts",
+  approveContact: "contacts",
+  setContactClassifications: "contact_classifications",
+  listCompanies: "company_display",
+  getCompany: "company_display",
+  createCompany: "companies",
+  updateCompany: "companies",
+  approveCompany: "companies",
+  setCompanyClassifications: "company_classifications",
+  listContactMethods: "contact_methods",
+  addContactMethod: "contact_methods",
+  updateContactMethod: "contact_methods",
+  deleteContactMethod: "contact_methods",
+  listCompanyContacts: "company_contacts",
+  addCompanyContact: "company_contacts",
+  updateCompanyContact: "company_contacts",
+  listRecordParties: "record_party_display",
+  addRecordParty: "record_parties",
+  updateRecordParty: "record_parties",
+  deleteRecordParty: "record_parties",
+  listRecordStaffRoles: "record_staff_roles",
+  addRecordStaffRole: "record_staff_roles",
+  endRecordStaffRole: "record_staff_roles",
   createTask: "tasks",
   updateTask: "tasks",
   deleteTask: "tasks",

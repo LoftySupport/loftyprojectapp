@@ -5,6 +5,7 @@ import {
   changesBetween, headline, idsIn, recordLink, type NameLookup, type SubjectNames } from "./auditNarrative";
 import { createStubRepository } from "./stubRepository";
 import { propertyProcessMethods } from "./supabasePropertyProcessRepository";
+import { partyMethods } from "./supabasePartyRepository";
 import { MAX_SPLIT, OPENING_TEAM, teamSlug } from "./types";
 import { projectDisplayName } from "./types";
 import type {
@@ -116,7 +117,8 @@ const WIRED: RepositoryMethod[] = [
   "cloneJob", "listRecordActivity",
   "listMyPreferences", "saveMyPreferences",
   "listPropertyDefs", "createPropertyDef", "updatePropertyDef", "deletePropertyDef",
-  "listDictionaryOverrides", "saveDictionaryOverride"
+  "listDictionaryOverrides", "saveDictionaryOverride",
+  "listClassifications", "saveClassification", "listPartyRoles", "savePartyRole", "listStaffRoles", "saveStaffRole", "listContacts", "getContact", "createContact", "updateContact", "approveContact", "setContactClassifications", "listCompanies", "getCompany", "createCompany", "updateCompany", "approveCompany", "setCompanyClassifications", "listContactMethods", "addContactMethod", "updateContactMethod", "deleteContactMethod", "listCompanyContacts", "addCompanyContact", "updateCompanyContact", "listRecordParties", "addRecordParty", "updateRecordParty", "deleteRecordParty", "listRecordStaffRoles", "addRecordStaffRole", "endRecordStaffRole", "listTaskChecklist", "addTaskChecklistItem", "updateTaskChecklistItem", "deleteTaskChecklistItem", "listProcessTaskChecklist", "addProcessTaskChecklistItem", "updateProcessTaskChecklistItem", "deleteProcessTaskChecklistItem", "listStageCompletion"
 ];
 
 /**
@@ -802,6 +804,7 @@ export function createSupabaseRepository(): Repository {
     // The property-value and process methods (0077, 0078) live in their own module;
     // they share nothing with the rest but the client.
     ...propertyProcessMethods(client),
+    ...partyMethods(client),
     name: "supabase",
     wired: new Set<RepositoryMethod>(WIRED) as ReadonlySet<keyof Repository>,
 

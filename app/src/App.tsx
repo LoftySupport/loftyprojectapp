@@ -16,6 +16,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { JobsPage } from "./pages/JobsPage";
 import { ReportsPage } from "./pages/ReportsPage";
+import { ContactsPage } from "./pages/ContactsPage";
 import { TemplatesPage } from "./pages/TemplatesPage";
 import { AdminPage } from "./pages/AdminPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -224,6 +225,7 @@ export default function App() {
               <Route path="jobs" element={<JobsPage />} />
               <Route path="jobs/:jobNumber" element={<JobsPage />} />
               <Route path="reports" element={<ReportsPage />} />
+              <Route path="contacts" element={<ContactsPage />} />
               <Route path="processes" element={<TemplatesPage />} />
               {/* The old address of the same page, for bookmarks. */}
               <Route path="templates" element={<Navigate to="/processes" replace />} />
