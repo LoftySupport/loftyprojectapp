@@ -18,7 +18,6 @@ import { JobsPage } from "./pages/JobsPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { ContactsPage } from "./pages/ContactsPage";
 import { MaintenancePage } from "./pages/MaintenancePage";
-import { TemplatesPage } from "./pages/TemplatesPage";
 import { AdminPage } from "./pages/AdminPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
@@ -228,9 +227,13 @@ export default function App() {
               <Route path="reports" element={<ReportsPage />} />
               <Route path="contacts" element={<ContactsPage />} />
               <Route path="maintenance" element={<MaintenancePage />} />
-              <Route path="processes" element={<TemplatesPage />} />
-              {/* The old address of the same page, for bookmarks. */}
-              <Route path="templates" element={<Navigate to="/processes" replace />} />
+              {/* Processes are configuration, not a destination (Amber, 2 Sep: "processes
+                  are not a page on the sidebar, they are part of setup only"). The two
+                  addresses the page has had — /templates until 1 Sep, /processes after —
+                  both land on Setup → Processes, so nothing bookmarked or pasted into Teams
+                  goes dead. */}
+              <Route path="processes" element={<Navigate to="/setup/processes" replace />} />
+              <Route path="templates" element={<Navigate to="/setup/processes" replace />} />
               <Route path="admin" element={<AdminPage />} />
               <Route
                 path="settings"

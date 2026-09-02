@@ -190,10 +190,12 @@ export function ProjectsPage() {
     { key: "start", label: "Start date", offByDefault: true,
       sort: p => p.startDate ?? null,
       cell: p => (p.startDate ? new Date(p.startDate).toLocaleDateString() : "—") },
+    // No target date reads "Not set" (Amber, 2 Sep) — the same words the card and the
+    // detail use, so a blank never turns into a column token or an "Invalid Date".
     { key: "target", label: "Target completion", sort: p => p.targetCompletion ?? null,
       cell: p => (p.targetCompletion
         ? new Date(p.targetCompletion).toLocaleDateString()
-        : <Token>projects.target_completion</Token>) },
+        : <span className="muted pf-unset">Not set</span>) },
     // Intended lots, and the split between the two kinds of title (0053). Null on both
     // means nobody has said, which is not the same statement as zero — hence the dash
     // rather than "0 / 0".
@@ -809,7 +811,10 @@ function ProjectDetail({
               ) : value != null ? (
                 <Text type="text2" weight="medium">{new Date(value).toLocaleDateString()}</Text>
               ) : (
-                <Token>{`projects.${key === "startDate" ? "start_date" : key === "endDate" ? "end_date" : "target_completion"}`}</Token>
+                /* Read-only and unset: the words, not the column name (Amber, 2 Sep, on
+                   the target date; the three dates share this row so they share the
+                   answer). */
+                <Text type="text2" color="secondary"><span className="pf-unset">Not set</span></Text>
               )}
             </div>
           ))}

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Button, Checkbox, Text, TextField } from "@vibe/core";
 import { MoveArrowDown, MoveArrowUp } from "@vibe/icons";
 import { useQuery, useRepository } from "../data/DataProvider";
@@ -6,10 +7,11 @@ import { usePermission } from "../data/PermissionProvider";
 import { useProcessProperties, useProcesses, usePropertyDefs, useStages, useTeams } from "../data/useLookups";
 import { Field, Problem } from "../components/Form";
 import { Select } from "../components/Select";
+import { BlurText, NumberInput } from "../components/InlineInputs";
 import {
   PROPERTY_SCOPES, WORKING_STAGES, teamName,
   type NewProcess, type Process, type ProcessDependency, type ProcessPatch, type ProcessTask,
-  type ProcessTaskDependency, type PropertyScope, type Team, type TeamId
+  type ProcessTaskChecklistItem, type ProcessTaskDependency, type PropertyScope, type Team, type TeamId
 } from "../data/types";
 import "../components/ui.css";
 import "../components/processes.css";
@@ -23,10 +25,16 @@ import "../components/processes.css";
  * or in conjunction with that process, are also editable in the app by managers, admin
  * and super admin."
  *
- * So, per process: its facts (stage, level, team, duration, at-risk lead, milestone),
- * what it WAITS ON and what it LEADS TO (the dependency graph, edited from either side
- * but stored once), the PROPERTIES it collects and which are required to complete it,
- * and its CHECKLIST — the template tasks a run instantiates, with their own order.
+ * Amber, 2 Sep: "the processes and properties should follow correct format and be easy
+ * to edit, not in a drop down but always show in a sidebar like elsewhere in the app."
+ *
+ * So this is the same shape as Contacts and Maintenance: the LIST on the left is a table,
+ * one row per process grouped by stage, and the SELECTED process opens in a panel beside
+ * it (under it on a phone) with everything about it editable in place — its facts, what it
+ * WAITS ON and what it LEADS TO, the PROPERTIES it collects, and its CHECKLIST with every
+ * template task's team, days, parent, order and tick-box lines all shown, none of them
+ * behind a toggle. The selection rides the URL (`?process=…`) so a process can be linked
+ * to and survives a refresh, the way a contact or a maintenance request does.
  *
  * Every save goes through the seam one field at a time, and the database is the judge:
  * a cycle, a lead longer than the duration, a key that is not a slug all come back as
@@ -38,119 +46,143 @@ const slugify = (label: string) =>
     .replace(/^\s*\d+\s*-\s*/, "").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").replace(/^[0-9]/, "p_$&");
 
 export function ProcessesSetupPage() {
-  const repo = useRepository();
+  const [params, setParams] = useSearchParams();
   const { can } = usePermission();
   const canEdit = can("manager");
   const [reload, setReload] = useState(0);
   const bump = () => setReload(n => n + 1);
 
-  const { processes, byStage } = useProcesses(reload);
+  const { processes } = useProcesses(reload);
   const { stageNames } = useStages();
   const { teams } = useTeams();
   const { data: deps } = useQuery(r => r.listProcessDependencies(), [], [reload]);
+  const { byProcess: propsByProcess } = useProcessProperties(reload);
+  const { data: allTasks } = useQuery(r => r.listProcessTasks(), [], [reload]);
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
+  const selectedId = params.get("process");
+  const creating = params.get("new") === "1";
+  const [stageFilter, setStageFilter] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
   const [showRetired, setShowRetired] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const setParam = (patch: Record<string, string | null>) => {
+    const next = new URLSearchParams(params);
+    for (const [k, v] of Object.entries(patch)) { if (v == null) next.delete(k); else next.set(k, v); }
+    setParams(next, { replace: true });
+  };
+  const select = (id: string | null) => setParam({ process: id, new: null });
+
   const selected = processes.find(p => p.id === selectedId) ?? null;
-  const stages = stageNames.length ? stageNames : [...byStage.keys()];
+  const stages = stageNames.length ? stageNames : [...new Set(processes.map(p => p.stageName))];
+  const tasksByProcess = useMemo(() => {
+    const m = new Map<string, number>();
+    allTasks.forEach(t => m.set(t.processId, (m.get(t.processId) ?? 0) + 1));
+    return m;
+  }, [allTasks]);
+
+  const terms = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const shown = processes.filter(p =>
+    (showRetired || p.isActive || p.id === selectedId)
+    && (!stageFilter || p.stageName === stageFilter)
+    && terms.every(t => `${p.name} ${p.key} ${p.stageGroup ?? ""} ${p.owningTeam ? teamName(p.owningTeam, teams) : ""}`.toLowerCase().includes(t))
+  );
+  const groups = stages
+    .map(stage => ({ stage, list: shown.filter(p => p.stageName === stage).sort((a, b) => a.position - b.position || a.name.localeCompare(b.name)) }))
+    .filter(g => g.list.length > 0);
 
   const active = processes.filter(p => p.isActive).length;
+  const hasDetail = Boolean(selected || creating);
 
   return (
     <>
       <div className="panel-head">
         <Text type="text2" weight="bold">Processes ({active} active{processes.length - active ? `, ${processes.length - active} retired` : ""})</Text>
-        <div className="panel-actions">
-          <Checkbox label="Show retired" checked={showRetired} onChange={() => setShowRetired(v => !v)} />
-          {canEdit && <Button size="small" onClick={() => { setCreating(true); setSelectedId(null); }}>+ New process</Button>}
-        </div>
+        <Text type="text3" color="secondary">{canEdit ? "Managers and above edit everything here." : "You can read everything here; managers and above edit it."}</Text>
       </div>
       <Text type="text2" color="secondary" ellipsis={false}>
         A process is a piece of work inside a lifecycle stage — <strong>Concept Plan</strong>,
         <strong> Working Drawings</strong>, <strong>1 - Footings</strong>. Each says which stage
         it belongs to, whether it runs on the project or on each job, who does it, how long it
         should take, what it waits on and what it leads to, which properties it collects, and
-        the checklist it hands a job. {canEdit ? "Managers and above edit everything here." : "You can read everything here; managers and above edit it."}
+        the checklist it hands a job. Pick one and it opens beside the list.
       </Text>
 
       {error && <Problem>{error}</Problem>}
 
-      <div className="proc-editor" style={{ marginTop: "var(--space-16)" }}>
-        <nav className="proc-nav panel" aria-label="Processes by stage">
-          {stages.map(stage => {
-            const list = (byStage.get(stage) ?? []).filter(p => showRetired || p.isActive || p.id === selectedId);
-            if (list.length === 0) return null;
-            return (
-              <div key={stage}>
-                <div className="proc-nav-stage">{stage}</div>
-                {list.map(p => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    className={`${p.id === selectedId ? "is-selected" : ""}${p.isActive ? "" : " is-retired"}`}
-                    onClick={() => { setSelectedId(p.id); setCreating(false); }}
-                    aria-current={p.id === selectedId ? "true" : undefined}
-                  >
-                    <span>{p.name}</span>
-                    {/* The at-risk lead as a column (Amber, 2 Sep): "7d · at risk 2d before" reads
-                        the rule without opening the process. Blank stays blank. */}
-                    <span className="muted">
-                      {[p.stageGroup, p.scope,
-                        p.expectedDays != null ? `${p.expectedDays}d` : null,
-                        p.atRiskLeadDays != null ? `at risk ${p.atRiskLeadDays}d before` : null
-                      ].filter(Boolean).join(" · ")}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            );
-          })}
-          {processes.length === 0 && (
-            <Text type="text3" color="secondary" ellipsis={false}>No processes defined yet.</Text>
-          )}
-        </nav>
+      <div className="toolbar" style={{ marginTop: "var(--space-12)" }}>
+        <Select aria-label="Filter by stage" clearable placeholder="All stages" options={stages.map(s => ({ value: s, label: s }))}
+          value={stageFilter} onChange={setStageFilter} />
+        <TextField size="small" id="procs-search" inputAriaLabel="Search processes" placeholder="Search…" value={search} onChange={setSearch} />
+        <Checkbox label="Show retired" checked={showRetired} onChange={() => setShowRetired(v => !v)} />
+        {canEdit && <Button size="small" onClick={() => setParam({ new: "1", process: null })}>+ New process</Button>}
+      </div>
 
-        <div>
-          {creating && (
-            <NewProcessForm
-              stageNames={stages}
-              teams={teams}
-              onCancel={() => setCreating(false)}
-              onCreated={p => { setCreating(false); setSelectedId(p.id); bump(); }}
-            />
-          )}
-          {!creating && !selected && (
-            <section className="panel">
-              <Text type="text2" color="secondary" ellipsis={false}>
-                Pick a process to see and edit it. On a phone the list is above; on a desk it is
-                beside this.
-              </Text>
-            </section>
-          )}
-          {!creating && selected && (
-            <ProcessEditor
-              key={selected.id}
-              process={selected}
-              all={processes}
-              deps={deps}
-              teams={teams}
-              stageNames={stages}
-              canEdit={canEdit}
-              onChanged={bump}
-              onError={setError}
-              onRetire={async () => {
-                setError(null);
-                try {
-                  await repo.updateProcess(selected.id, { isActive: !selected.isActive });
-                  bump();
-                } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
-              }}
-            />
-          )}
-        </div>
+      <div className={`contacts-grid${hasDetail ? " has-detail" : ""}`}>
+        <section className="panel">
+          <div className="data-table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr><th>Process</th><th>Group</th><th>Runs on</th><th>Team</th><th className="num">Days</th><th className="num">At risk</th><th className="num">Properties</th><th className="num">Checklist</th></tr>
+              </thead>
+              {groups.map(g => (
+                <tbody className="group" key={g.stage}>
+                  <tr className="group-head"><th colSpan={8} scope="colgroup">{g.stage} · {g.list.length}</th></tr>
+                  {g.list.map(p => (
+                    <tr key={p.id} className={`contact-row${p.id === selectedId ? " is-selected" : ""}`} onClick={() => select(p.id)} aria-current={p.id === selectedId ? "true" : undefined}>
+                      <td>
+                        <button type="button" className="link-button tap-link" onClick={e => { e.stopPropagation(); select(p.id); }}>
+                          <strong>{p.name}</strong>
+                        </button>
+                        {p.isMilestone && <span className="slot-chip">milestone</span>}
+                        {p.isExternal && <span className="slot-chip">external</span>}
+                        {!p.isActive && <span className="slot-chip">retired</span>}
+                      </td>
+                      <td className="muted">{p.stageGroup ?? "—"}</td>
+                      <td className="muted">{p.scope === "project" ? "project" : "each job"}</td>
+                      <td className="muted">{p.owningTeam ? teamName(p.owningTeam, teams) : "—"}</td>
+                      {/* Blank stays blank: no duration is not zero days (Amber, 2 Sep, on the at-risk column). */}
+                      <td className="num">{p.expectedDays ?? <span className="muted">—</span>}</td>
+                      <td className="num">{p.atRiskLeadDays != null ? `${p.atRiskLeadDays}d before` : <span className="muted">—</span>}</td>
+                      <td className="num">{(propsByProcess.get(p.id) ?? []).length || <span className="muted">—</span>}</td>
+                      <td className="num">{tasksByProcess.get(p.id) || <span className="muted">—</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              ))}
+            </table>
+            {processes.length === 0 && (
+              <Text type="text2" color="secondary" element="p" ellipsis={false}>No processes defined yet.</Text>
+            )}
+            {processes.length > 0 && shown.length === 0 && (
+              <Text type="text2" color="secondary" element="p" ellipsis={false}>Nothing matches — clear the search or the stage filter.</Text>
+            )}
+          </div>
+        </section>
+
+        {creating && canEdit && (
+          <NewProcessForm
+            stageNames={stages}
+            teams={teams}
+            onCancel={() => setParam({ new: null })}
+            onCreated={p => { bump(); select(p.id); }}
+          />
+        )}
+        {!creating && selected && (
+          <ProcessEditor
+            key={selected.id}
+            process={selected}
+            all={processes}
+            deps={deps}
+            teams={teams}
+            stageNames={stages}
+            canEdit={canEdit}
+            onChanged={bump}
+            onError={setError}
+            onClose={() => select(null)}
+            onDeleted={() => { bump(); select(null); }}
+          />
+        )}
       </div>
     </>
   );
@@ -178,8 +210,11 @@ function NewProcessForm({ stageNames, teams, onCancel, onCreated }: {
   }
 
   return (
-    <section className="panel">
-      <div className="panel-head"><Text type="text2" weight="bold">New process</Text></div>
+    <section className="panel contact-detail" aria-label="New process">
+      <div className="panel-head">
+        <Text type="text2" weight="bold">New process</Text>
+        <Button size="small" kind="tertiary" onClick={onCancel}>Cancel</Button>
+      </div>
       {error && <Problem>{error}</Problem>}
       <div className="create-form">
         <Field label="Name" required>
@@ -213,7 +248,7 @@ function NewProcessForm({ stageNames, teams, onCancel, onCreated }: {
 }
 
 // -------------------------------------------------------------------- the editor
-function ProcessEditor({ process: p, all, deps, teams, stageNames, canEdit, onChanged, onError, onRetire }: {
+function ProcessEditor({ process: p, all, deps, teams, stageNames, canEdit, onChanged, onError, onClose, onDeleted }: {
   process: Process;
   all: Process[];
   deps: ProcessDependency[];
@@ -222,10 +257,12 @@ function ProcessEditor({ process: p, all, deps, teams, stageNames, canEdit, onCh
   canEdit: boolean;
   onChanged: () => void;
   onError: (e: string | null) => void;
-  onRetire: () => void;
+  onClose: () => void;
+  onDeleted: () => void;
 }) {
   const repo = useRepository();
   const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   async function patch(change: ProcessPatch) {
     setSaving(true); onError(null);
@@ -240,23 +277,29 @@ function ProcessEditor({ process: p, all, deps, teams, stageNames, canEdit, onCh
   const teamOptions = teams.filter(t => t.isActive || t.id === p.owningTeam).map(t => ({ value: t.id, label: t.name }));
 
   return (
-    <div className="stack">
-      <section className="panel">
+    <div className="stack" aria-label={`Details of ${p.name}`}>
+      <section className="panel contact-detail">
         <div className="panel-head">
           <div>
             <Text type="text2" weight="bold">{p.name}</Text>
-            <div className="slot-sub"><code>{p.key}</code>{p.importRef && <> · from {p.importRef}</>}{!p.isActive && <span className="slot-chip">retired</span>}</div>
+            <div className="slot-sub">
+              <code>{p.key}</code> · {p.stageName}{p.importRef && <> · from {p.importRef}</>}
+              {!p.isActive && <span className="slot-chip">retired</span>}
+            </div>
           </div>
-          {canEdit && (
-            <Button size="small" kind="tertiary" onClick={onRetire} disabled={saving}>
-              {p.isActive ? "Retire" : "Restore"}
-            </Button>
-          )}
+          <div className="panel-actions">
+            {canEdit && (
+              <Button size="small" kind="tertiary" onClick={() => patch({ isActive: !p.isActive })} disabled={saving}>
+                {p.isActive ? "Retire" : "Restore"}
+              </Button>
+            )}
+            <Button size="small" kind="tertiary" onClick={onClose} aria-label="Close details">Close</Button>
+          </div>
         </div>
 
         <div className="create-form">
           <Field label="Name" required>
-            <BlurField value={p.name} disabled={!canEdit || saving} label="Process name" onCommit={v => v.trim() && patch({ name: v.trim() })} />
+            <BlurText value={p.name} disabled={!canEdit || saving} label="Process name" onCommit={v => v.trim() && patch({ name: v.trim() })} wide />
           </Field>
           <Field label="Lifecycle stage" required>
             {canEdit ? (
@@ -264,7 +307,7 @@ function ProcessEditor({ process: p, all, deps, teams, stageNames, canEdit, onCh
             ) : <Text type="text2">{p.stageName}</Text>}
           </Field>
           <Field label="Stage group" hint="a heading inside the stage — Stage 1, Stage 2, Variation">
-            <BlurField value={p.stageGroup ?? ""} disabled={!canEdit || saving} label="Stage group" onCommit={v => patch({ stageGroup: v.trim() || null })} />
+            <BlurText value={p.stageGroup ?? ""} disabled={!canEdit || saving} label="Stage group" onCommit={v => patch({ stageGroup: v.trim() || null })} plain />
           </Field>
           <Field label="Runs on" required>
             {canEdit ? (
@@ -277,10 +320,10 @@ function ProcessEditor({ process: p, all, deps, teams, stageNames, canEdit, onCh
             ) : <Text type="text2">{p.owningTeam ? teamName(p.owningTeam, teams) : "No team named"}</Text>}
           </Field>
           <Field label="Expected days" hint="how long a run should take from its start. Blank means no agreed duration, not zero">
-            <NumberField value={p.expectedDays} disabled={!canEdit || saving} label="Expected days" onCommit={v => patch({ expectedDays: v })} />
+            <NumberInput value={p.expectedDays} disabled={!canEdit || saving} label="Expected days" min={0} onCommit={v => patch({ expectedDays: v })} />
           </Field>
           <Field label="At-risk lead (days)" hint="how many days before the due date a run flags at risk — must be shorter than the duration">
-            <NumberField value={p.atRiskLeadDays} disabled={!canEdit || saving} label="At-risk lead days" onCommit={v => patch({ atRiskLeadDays: v })} />
+            <NumberInput value={p.atRiskLeadDays} disabled={!canEdit || saving} label="At-risk lead days" min={0} onCommit={v => patch({ atRiskLeadDays: v })} />
           </Field>
           <Field label="Milestone" hint="counted at the stage — never turned into a percentage">
             <Checkbox label="Passing this process is a milestone of its stage" checked={p.isMilestone} disabled={!canEdit || saving} onChange={() => patch({ isMilestone: !p.isMilestone })} />
@@ -289,16 +332,16 @@ function ProcessEditor({ process: p, all, deps, teams, stageNames, canEdit, onCh
             <Checkbox label="Waits on somebody outside Lofty" checked={p.isExternal} disabled={!canEdit || saving} onChange={() => patch({ isExternal: !p.isExternal })} />
           </Field>
           <Field label="Position" hint="order within the stage">
-            <NumberField value={p.position} disabled={!canEdit || saving} label="Position" onCommit={v => patch({ position: v ?? 0 })} />
+            <NumberInput value={p.position} disabled={!canEdit || saving} label="Position" onCommit={v => patch({ position: v ?? 0 })} />
           </Field>
           <Field label="Description">
-            <BlurField value={p.description ?? ""} disabled={!canEdit || saving} label="Description" onCommit={v => patch({ description: v.trim() || null })} />
+            <BlurText value={p.description ?? ""} disabled={!canEdit || saving} label="Description" onCommit={v => patch({ description: v.trim() || null })} wide plain />
           </Field>
           <Field label="Automation" hint="how this process will run itself, when it does — a note today">
-            <BlurField value={p.automation ?? ""} disabled={!canEdit || saving} label="Automation" onCommit={v => patch({ automation: v.trim() || null })} />
+            <BlurText value={p.automation ?? ""} disabled={!canEdit || saving} label="Automation" onCommit={v => patch({ automation: v.trim() || null })} wide plain />
           </Field>
           <Field label="SharePoint subfolder" hint="inside the record's folder — a name, not a link">
-            <BlurField value={p.sharepointFolder ?? ""} disabled={!canEdit || saving} label="SharePoint subfolder" onCommit={v => patch({ sharepointFolder: v.trim() || null })} />
+            <BlurText value={p.sharepointFolder ?? ""} disabled={!canEdit || saving} label="SharePoint subfolder" onCommit={v => patch({ sharepointFolder: v.trim() || null })} plain />
           </Field>
         </div>
       </section>
@@ -306,6 +349,30 @@ function ProcessEditor({ process: p, all, deps, teams, stageNames, canEdit, onCh
       <DependenciesEditor process={p} all={all} waitsOn={waitsOn} leadsTo={leadsTo} byId={byId} canEdit={canEdit} onChanged={onChanged} onError={onError} />
       <PropertiesEditor process={p} canEdit={canEdit} onChanged={onChanged} onError={onError} />
       <ChecklistEditor process={p} teams={teams} canEdit={canEdit} onError={onError} />
+
+      {canEdit && (
+        <section className="panel">
+          {!confirmDelete ? (
+            <div className="field-inline">
+              <Button size="small" kind="tertiary" onClick={() => setConfirmDelete(true)}>Delete process…</Button>
+              <Text type="text3" color="secondary" element="span" ellipsis={false}>
+                Removes its checklist and its place in the order. A process with runs on a record is refused — retire it instead.
+              </Text>
+            </div>
+          ) : (
+            /* Two clicks, the second one named: retiring keeps the history, this does not. */
+            <div className="field-inline" role="alert">
+              <Text type="text2" element="span" ellipsis={false}>Delete <strong>{p.name}</strong> for good?</Text>
+              <Button size="small" color="negative" onClick={async () => {
+                onError(null);
+                try { await repo.deleteProcess(p.id); onDeleted(); }
+                catch (e) { onError(e instanceof Error ? e.message : String(e)); setConfirmDelete(false); }
+              }}>Delete for good</Button>
+              <Button size="small" kind="tertiary" onClick={() => setConfirmDelete(false)}>Keep it</Button>
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }
@@ -339,16 +406,15 @@ function DependenciesEditor({ process: p, all, waitsOn, leadsTo, byId, canEdit, 
           <li key={d.dependsOnProcessId}>
             <Text type="text2" element="span" style={{ flex: "1 1 200px" }}>{byId.get(d.dependsOnProcessId)?.name ?? "?"}</Text>
             <Text type="text3" color="secondary" element="span">then</Text>
-            <input type="number" min={0} className="pf-input dep-lag" aria-label={`Lag after ${byId.get(d.dependsOnProcessId)?.name}`}
-              defaultValue={d.lagDays} disabled={!canEdit}
-              onBlur={e => { const lag = Math.max(0, Number(e.target.value) || 0); if (lag !== d.lagDays) write(current.map(c => c.processId === d.dependsOnProcessId ? { ...c, lagDays: lag } : c)); }} />
+            <NumberInput small min={0} value={d.lagDays} disabled={!canEdit} label={`Lag after ${byId.get(d.dependsOnProcessId)?.name ?? "the process"}`}
+              onCommit={v => { const lag = Math.max(0, v ?? 0); if (lag !== d.lagDays) write(current.map(c => c.processId === d.dependsOnProcessId ? { ...c, lagDays: lag } : c)); }} />
             <Text type="text3" color="secondary" element="span">days</Text>
             {canEdit && <Button size="xs" kind="tertiary" onClick={() => write(current.filter(c => c.processId !== d.dependsOnProcessId))}>Remove</Button>}
           </li>
         ))}
       </ul>
       {canEdit && (
-        <div className="field-inline" style={{ marginTop: "var(--space-8)" }}>
+        <div className="field-inline" style={{ marginTop: "var(--space-8)", flexWrap: "wrap" }}>
           <Select aria-label="Add a process this waits on" clearable placeholder="Add a process this waits on…"
             options={candidates.map(c => ({ value: c.id, label: `${c.name} (${c.stageName}${c.stageGroup ? `, ${c.stageGroup}` : ""})` }))}
             value={adding} onChange={v => setAdding(v)} />
@@ -433,7 +499,7 @@ function PropertiesEditor({ process: p, canEdit, onChanged, onError }: {
         })}
       </ul>
       {canEdit && (
-        <div className="field-inline" style={{ marginTop: "var(--space-8)" }}>
+        <div className="field-inline" style={{ marginTop: "var(--space-8)", flexWrap: "wrap" }}>
           <Select aria-label="Add a property this process collects" clearable placeholder="Add a property…"
             options={candidates.map(d => ({ value: d.key, label: `${d.label} — ${d.stageName}${d.scope === "project" ? " (project)" : ""}` }))}
             value={adding} onChange={v => setAdding(v)} />
@@ -448,6 +514,12 @@ function PropertiesEditor({ process: p, canEdit, onChanged, onError }: {
 }
 
 // --------------------------------------------------------------------- checklist
+/**
+ * Every template task with everything about it in view — name, team, days, whether it
+ * waits on somebody outside, which task it sits under, what it waits on, and its tick-box
+ * lines (0081). Nothing is behind an "Order" or "More" button: the sidebar is the place
+ * to edit, so it shows the whole thing (Amber, 2 Sep).
+ */
 function ChecklistEditor({ process: p, teams, canEdit, onError }: {
   process: Process; teams: readonly Team[]; canEdit: boolean; onError: (e: string | null) => void;
 }) {
@@ -455,8 +527,8 @@ function ChecklistEditor({ process: p, teams, canEdit, onError }: {
   const [reload, setReload] = useState(0);
   const { data: tasks } = useQuery(r => r.listProcessTasks(p.id), [], [p.id, reload]);
   const { data: deps } = useQuery(r => r.listProcessTaskDependencies(p.id), [], [p.id, reload]);
+  const { data: lines } = useQuery(r => r.listProcessTaskChecklist(p.id), [], [p.id, reload]);
   const [newName, setNewName] = useState("");
-  const [open, setOpen] = useState<string | null>(null);
   const bump = () => setReload(n => n + 1);
 
   async function run(fn: () => Promise<unknown>) {
@@ -477,9 +549,18 @@ function ChecklistEditor({ process: p, teams, canEdit, onError }: {
     tasks.filter(t => t.parentId != null && !tasks.some(x => x.id === t.parentId)).forEach(t => out.push(t));
     return out;
   }, [tasks]);
-  const byId = new Map(tasks.map(t => [t.id, t]));
-  const waitsOn = (id: string) => deps.filter(d => d.taskId === id);
+  const linesByTask = useMemo(() => {
+    const m = new Map<string, ProcessTaskChecklistItem[]>();
+    lines.forEach(l => { (m.get(l.processTaskId) ?? m.set(l.processTaskId, []).get(l.processTaskId)!).push(l); });
+    m.forEach(list => list.sort((a, b) => a.position - b.position));
+    return m;
+  }, [lines]);
   const teamOptions = teams.filter(t => t.isActive).map(t => ({ value: t.id, label: t.name }));
+  const add = () => {
+    if (!newName.trim()) return;
+    run(() => repo.createProcessTask({ processId: p.id, name: newName.trim(), position: tasks.length + 1 }));
+    setNewName("");
+  };
 
   return (
     <section className="panel">
@@ -488,110 +569,112 @@ function ChecklistEditor({ process: p, teams, canEdit, onError }: {
         <Text type="text3" color="secondary">the tasks a run hands the record — with team, days and order</Text>
       </div>
       {tasks.length === 0 && <Text type="text3" color="secondary" ellipsis={false}>No checklist. A run of this process creates no tasks.</Text>}
-      {ordered.map(t => {
-        const isOpen = open === t.id;
-        const w = waitsOn(t.id);
-        return (
-          <div key={t.id}>
-            <div className={`tpl-task${t.parentId ? " is-child" : ""}`}>
-              <span className="tpl-name">
-                <BlurField value={t.name} disabled={!canEdit} label={`Task ${t.name}`} onCommit={v => v.trim() && run(() => repo.updateProcessTask(t.id, { name: v.trim() }))} plain />
-                <span className="slot-sub">
-                  {[t.importRef != null ? `line ${t.importRef}` : null, w.length ? `waits on ${w.map(d => byId.get(d.dependsOnTaskId)?.name ?? "?").join(", ")}` : null].filter(Boolean).join(" · ")}
-                </span>
-              </span>
-              {canEdit ? (
-                <Select className="proc-control" aria-label={`Team for ${t.name}`} clearable placeholder="No team" options={teamOptions} value={t.owningTeam}
-                  onChange={v => run(() => repo.updateProcessTask(t.id, { owningTeam: v as TeamId | null }))} />
-              ) : <Text type="text3" color="secondary" element="span">{t.owningTeam ? teamName(t.owningTeam, teams) : "—"}</Text>}
-              <NumberField value={t.expectedDays} disabled={!canEdit} label={`Days for ${t.name}`} small onCommit={v => run(() => repo.updateProcessTask(t.id, { expectedDays: v }))} />
-              <Text type="text3" color="secondary" element="span">days</Text>
-              {canEdit && (
-                <>
-                  <Button size="xs" kind="tertiary" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : t.id)}>{isOpen ? "Less" : "Order"}</Button>
-                  <Button size="xs" kind="tertiary" onClick={() => run(() => repo.deleteProcessTask(t.id))}>Remove</Button>
-                </>
-              )}
-            </div>
-            {isOpen && canEdit && (
-              <TaskOrderEditor task={t} tasks={tasks} waitsOn={w} onWrite={next => run(() => repo.setProcessTaskDependencies(t.id, next))}
-                onParent={v => run(() => repo.updateProcessTask(t.id, { parentId: v }))} />
-            )}
-          </div>
-        );
-      })}
+      {ordered.map(t => (
+        <TemplateTask key={t.id} task={t} tasks={tasks} waitsOn={deps.filter(d => d.taskId === t.id)} lines={linesByTask.get(t.id) ?? []}
+          teamOptions={teamOptions} teams={teams} canEdit={canEdit} run={run} />
+      ))}
       {canEdit && (
-        <div className="field-inline" style={{ marginTop: "var(--space-8)" }}>
+        <div className="field-inline" style={{ marginTop: "var(--space-8)", flexWrap: "wrap" }}>
           <input className="pf-input" style={{ width: "min(320px, 100%)" }} aria-label="New task name" placeholder="Add a task…" value={newName}
             onChange={e => setNewName(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter" && newName.trim()) { run(() => repo.createProcessTask({ processId: p.id, name: newName.trim(), position: tasks.length + 1 })); setNewName(""); } }} />
-          <Button size="small" disabled={!newName.trim()} onClick={() => { run(() => repo.createProcessTask({ processId: p.id, name: newName.trim(), position: tasks.length + 1 })); setNewName(""); }}>Add task</Button>
+            onKeyDown={e => { if (e.key === "Enter") add(); }} />
+          <Button size="small" disabled={!newName.trim()} onClick={add}>Add task</Button>
         </div>
       )}
     </section>
   );
 }
 
-function TaskOrderEditor({ task, tasks, waitsOn, onWrite, onParent }: {
-  task: ProcessTask; tasks: ProcessTask[]; waitsOn: ProcessTaskDependency[];
-  onWrite: (next: { taskId: string; lagDays: number }[]) => void;
-  onParent: (parentId: string | null) => void;
+function TemplateTask({ task: t, tasks, waitsOn, lines, teamOptions, teams, canEdit, run }: {
+  task: ProcessTask; tasks: ProcessTask[]; waitsOn: ProcessTaskDependency[]; lines: ProcessTaskChecklistItem[];
+  teamOptions: { value: string; label: string }[]; teams: readonly Team[]; canEdit: boolean;
+  run: (fn: () => Promise<unknown>) => Promise<void>;
 }) {
+  const repo = useRepository();
   const [adding, setAdding] = useState<string | null>(null);
+  const [newLine, setNewLine] = useState("");
+  const byId = new Map(tasks.map(x => [x.id, x]));
   const current = waitsOn.map(d => ({ taskId: d.dependsOnTaskId, lagDays: d.lagDays }));
-  const others = tasks.filter(t => t.id !== task.id);
-  const byId = new Map(tasks.map(t => [t.id, t]));
+  const others = tasks.filter(x => x.id !== t.id);
+  const addLine = () => {
+    if (!newLine.trim()) return;
+    run(() => repo.addProcessTaskChecklistItem(t.id, newLine.trim()));
+    setNewLine("");
+  };
+
   return (
-    <div className="proc-body">
-      <div className="field-inline">
-        <Text type="text3" element="span">Under</Text>
-        <Select className="proc-control" aria-label={`Parent of ${task.name}`} clearable placeholder="No parent"
-          options={others.filter(t => t.parentId == null).map(t => ({ value: t.id, label: t.name }))}
-          value={task.parentId} onChange={v => onParent(v)} />
+    <div className={`tpl-task${t.parentId ? " is-child" : ""}`} style={{ flexDirection: "column", alignItems: "stretch" }}>
+      <div className="field-inline" style={{ flexWrap: "wrap" }}>
+        <span className="tpl-name">
+          <BlurText value={t.name} disabled={!canEdit} label={`Task ${t.name}`} onCommit={v => v.trim() && run(() => repo.updateProcessTask(t.id, { name: v.trim() }))} wide plain />
+          {t.importRef != null && <span className="slot-sub">line {t.importRef}</span>}
+        </span>
+        {canEdit ? (
+          <Select className="proc-control" aria-label={`Team for ${t.name}`} clearable placeholder="No team" options={teamOptions} value={t.owningTeam}
+            onChange={v => run(() => repo.updateProcessTask(t.id, { owningTeam: v as TeamId | null }))} />
+        ) : <Text type="text3" color="secondary" element="span">{t.owningTeam ? teamName(t.owningTeam, teams) : "no team"}</Text>}
+        <NumberInput value={t.expectedDays} disabled={!canEdit} label={`Days for ${t.name}`} small min={0} onCommit={v => run(() => repo.updateProcessTask(t.id, { expectedDays: v }))} />
+        <Text type="text3" color="secondary" element="span">days</Text>
+        <label className="pf-check">
+          <input type="checkbox" checked={t.isExternal} disabled={!canEdit} onChange={e => run(() => repo.updateProcessTask(t.id, { isExternal: e.target.checked }))} />
+          <Text type="text3" element="span">external</Text>
+        </label>
+        {canEdit && <Button size="xs" kind="tertiary" onClick={() => run(() => repo.deleteProcessTask(t.id))}>Remove</Button>}
       </div>
-      <Text type="text3" weight="bold" element="div" style={{ marginTop: "var(--space-8)" }}>Waits on</Text>
-      <ul className="dep-list">
-        {waitsOn.map(d => (
-          <li key={d.dependsOnTaskId}>
-            <Text type="text2" element="span" style={{ flex: "1 1 160px" }}>{byId.get(d.dependsOnTaskId)?.name ?? "?"}</Text>
-            <Text type="text3" color="secondary" element="span">then</Text>
-            <input type="number" min={0} className="pf-input dep-lag" aria-label="Lag days" defaultValue={d.lagDays}
-              onBlur={e => { const lag = Math.max(0, Number(e.target.value) || 0); if (lag !== d.lagDays) onWrite(current.map(c => c.taskId === d.dependsOnTaskId ? { ...c, lagDays: lag } : c)); }} />
-            <Text type="text3" color="secondary" element="span">days</Text>
-            <Button size="xs" kind="tertiary" onClick={() => onWrite(current.filter(c => c.taskId !== d.dependsOnTaskId))}>Remove</Button>
-          </li>
-        ))}
-      </ul>
-      <div className="field-inline" style={{ marginTop: "var(--space-4)" }}>
-        <Select aria-label="Add a task this waits on" clearable placeholder="Add a task this waits on…"
-          options={others.filter(t => !current.some(c => c.taskId === t.id)).map(t => ({ value: t.id, label: t.name }))}
-          value={adding} onChange={v => setAdding(v)} />
-        <Button size="small" disabled={!adding} onClick={() => { if (adding) { onWrite([...current, { taskId: adding, lagDays: 0 }]); setAdding(null); } }}>Add</Button>
+
+      <div className="proc-body">
+        <div className="field-inline" style={{ flexWrap: "wrap" }}>
+          <Text type="text3" element="span">Under</Text>
+          {canEdit ? (
+            <Select className="proc-control" aria-label={`Parent of ${t.name}`} clearable placeholder="No parent — a top-level task"
+              options={others.filter(x => x.parentId == null).map(x => ({ value: x.id, label: x.name }))}
+              value={t.parentId} onChange={v => run(() => repo.updateProcessTask(t.id, { parentId: v }))} />
+          ) : <Text type="text3" color="secondary" element="span">{t.parentId ? byId.get(t.parentId)?.name ?? "?" : "nothing — a top-level task"}</Text>}
+        </div>
+
+        <Text type="text3" weight="bold" element="div" style={{ marginTop: "var(--space-8)" }}>Waits on</Text>
+        {waitsOn.length === 0 && <Text type="text3" color="secondary" ellipsis={false}>Nothing — it can start with the run.</Text>}
+        <ul className="dep-list">
+          {waitsOn.map(d => (
+            <li key={d.dependsOnTaskId}>
+              <Text type="text2" element="span" style={{ flex: "1 1 160px" }}>{byId.get(d.dependsOnTaskId)?.name ?? "?"}</Text>
+              <Text type="text3" color="secondary" element="span">then</Text>
+              <NumberInput small min={0} value={d.lagDays} disabled={!canEdit} label={`Lag after ${byId.get(d.dependsOnTaskId)?.name ?? "the task"}`}
+                onCommit={v => { const lag = Math.max(0, v ?? 0); if (lag !== d.lagDays) run(() => repo.setProcessTaskDependencies(t.id, current.map(c => c.taskId === d.dependsOnTaskId ? { ...c, lagDays: lag } : c))); }} />
+              <Text type="text3" color="secondary" element="span">days</Text>
+              {canEdit && <Button size="xs" kind="tertiary" onClick={() => run(() => repo.setProcessTaskDependencies(t.id, current.filter(c => c.taskId !== d.dependsOnTaskId)))}>Remove</Button>}
+            </li>
+          ))}
+        </ul>
+        {canEdit && (
+          <div className="field-inline" style={{ marginTop: "var(--space-4)", flexWrap: "wrap" }}>
+            <Select aria-label={`Add a task ${t.name} waits on`} clearable placeholder="Add a task this waits on…"
+              options={others.filter(x => !current.some(c => c.taskId === x.id)).map(x => ({ value: x.id, label: x.name }))}
+              value={adding} onChange={v => setAdding(v)} />
+            <Button size="small" disabled={!adding} onClick={() => { if (adding) { run(() => repo.setProcessTaskDependencies(t.id, [...current, { taskId: adding, lagDays: 0 }])); setAdding(null); } }}>Add</Button>
+          </div>
+        )}
+
+        <Text type="text3" weight="bold" element="div" style={{ marginTop: "var(--space-8)" }}>Tick boxes ({lines.length})</Text>
+        {lines.length === 0 && <Text type="text3" color="secondary" ellipsis={false}>None — the task is one line when a run creates it.</Text>}
+        <ul className="dep-list">
+          {lines.map(l => (
+            <li key={l.id}>
+              <span style={{ flex: "1 1 200px", minWidth: 0 }}>
+                <BlurText value={l.text} disabled={!canEdit} label={`Tick box ${l.text}`} onCommit={v => v.trim() && run(() => repo.updateProcessTaskChecklistItem(l.id, { text: v.trim() }))} wide plain />
+              </span>
+              {canEdit && <Button size="xs" kind="tertiary" aria-label={`Remove tick box ${l.text}`} onClick={() => run(() => repo.deleteProcessTaskChecklistItem(l.id))}>Remove</Button>}
+            </li>
+          ))}
+        </ul>
+        {canEdit && (
+          <div className="field-inline" style={{ marginTop: "var(--space-4)", flexWrap: "wrap" }}>
+            <input className="pf-input" style={{ width: "min(320px, 100%)" }} aria-label={`New tick box for ${t.name}`} placeholder="Add a tick box…" value={newLine}
+              onChange={e => setNewLine(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addLine(); }} />
+            <Button size="small" disabled={!newLine.trim()} onClick={addLine}>Add</Button>
+          </div>
+        )}
       </div>
     </div>
-  );
-}
-
-// ------------------------------------------------------------------ small inputs
-function BlurField({ value, disabled, label, onCommit, plain }: { value: string; disabled: boolean; label: string; onCommit: (v: string) => void; plain?: boolean }) {
-  const [draft, setDraft] = useState(value);
-  useEffect(() => { setDraft(value); }, [value]);
-  if (disabled && plain) return <Text type="text2" element="span">{value}</Text>;
-  return (
-    <input className="pf-input" style={plain ? { width: "100%" } : undefined} aria-label={label} value={draft} disabled={disabled}
-      onChange={e => setDraft(e.target.value)}
-      onBlur={() => { if (draft !== value) onCommit(draft); }}
-      onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
-  );
-}
-
-function NumberField({ value, disabled, label, onCommit, small }: { value: number | null; disabled: boolean; label: string; onCommit: (v: number | null) => void; small?: boolean }) {
-  const [draft, setDraft] = useState(value == null ? "" : String(value));
-  useEffect(() => { setDraft(value == null ? "" : String(value)); }, [value]);
-  return (
-    <input type="number" inputMode="numeric" className={`pf-input${small ? " dep-lag" : ""}`} aria-label={label} value={draft} disabled={disabled} placeholder={small ? "" : "not set"}
-      onChange={e => setDraft(e.target.value)}
-      onBlur={() => { const v = draft.trim() === "" ? null : Number(draft); if (v !== value) onCommit(v); }}
-      onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
   );
 }

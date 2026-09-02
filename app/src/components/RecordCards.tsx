@@ -268,10 +268,13 @@ export function ProjectCard({
         </dd>
         <dt><Text type="text3" color="secondary">Target</Text></dt>
         <dd>
-          <Text type="text3">
+          {/* A project with no target date says so in words (Amber, 2 Sep: "don't show the
+              variable… have as not set"). Not a column token, not a dash, never a date
+              parsed from nothing. */}
+          <Text type="text3" color={targetCompletion ? undefined : "secondary"}>
             {targetCompletion
               ? new Date(targetCompletion).toLocaleDateString()
-              : <Token>projects.target_completion</Token>}
+              : <span className="pf-unset">Not set</span>}
           </Text>
         </dd>
       </dl>

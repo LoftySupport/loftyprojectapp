@@ -16,13 +16,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 64 changes since then —
+Unreleased: 68 changes since then —
+- Fixed: A project with no target date reads "Not set" on its card, in the table and on its page — no column token
+- Changed: Setup → Processes and Setup → Properties open the selected record in a panel beside the list, everything editable there — nothing behind a More or Order toggle
+- Added: Setup → Processes edits the tick-box lines of a template task, and every task shows its team, days, parent and order at once
+- Removed: Processes is no longer a destination in the main navigation — it is part of Setup; /processes and /templates forward there
 - Fixed: Ben Johnson's email address is ben@lofty.com.au — it had been seeded at a domain Lofty does not use
-- Changed: Updates → Merged from the build reads merged pull requests from LoftySupport/loftyprojectapp, where the repository lives now
-- Added: Maintenance — a tab for what homeowners report after handover: requests numbered on the job, items per trade, offers to contractors with an accept link, the thread, SLA health and warranty
-- Added: Setup → Maintenance — the warranty period, offer and reminder clocks, and the trades with their SLAs
-- Added: Notifications — assigned, mentioned, at risk, overdue, stage moved, working drawings changed — in the bell, by email and Teams, immediate or in a daily digest, chosen per person in Settings
-- …and 59 more.
+- …and 63 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

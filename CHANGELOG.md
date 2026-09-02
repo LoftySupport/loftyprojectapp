@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Setup → Processes edits the tick-box lines of a template task, and every task shows its team, days, parent and order at once
 - Maintenance — a tab for what homeowners report after handover: requests numbered on the job, items per trade, offers to contractors with an accept link, the thread, SLA health and warranty
 - Setup → Maintenance — the warranty period, offer and reminder clocks, and the trades with their SLAs
 - Notifications — assigned, mentioned, at risk, overdue, stage moved, working drawings changed — in the bell, by email and Teams, immediate or in a daily digest, chosen per person in Settings
@@ -53,6 +54,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- A project with no target date reads "Not set" on its card, in the table and on its page — no column token
 - Ben Johnson's email address is ben@lofty.com.au — it had been seeded at a domain Lofty does not use
 - The changelog on Updates reads this repository's merged pull requests, not the old repository's
 - The hundredth job on a project was refused with a duplicate-key error
@@ -68,6 +70,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- Setup → Processes and Setup → Properties open the selected record in a panel beside the list, everything editable there — nothing behind a More or Order toggle
 - Updates → Merged from the build reads merged pull requests from LoftySupport/loftyprojectapp, where the repository lives now
 - The decision against external parties is reversed — maintenance makes them first-class
 - Every table is audited now, and a record's history is readable by everyone except restricted fields
@@ -86,4 +89,5 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Removed
 
+- Processes is no longer a destination in the main navigation — it is part of Setup; /processes and /templates forward there
 - The tracker's gantt and calendar
