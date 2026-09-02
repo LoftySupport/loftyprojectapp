@@ -4,6 +4,7 @@ import { Button, Heading, Text, TextField } from "@vibe/core";
 import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { useAuth } from "../data/AuthProvider";
+import { supabaseUrl } from "../data/supabaseEnv";
 import { Field, Problem } from "../components/Form";
 import { Select } from "../components/Select";
 import { LoadProblem } from "../components/SearchNotices";
@@ -399,8 +400,9 @@ function RequestDetail({ id, onChanged, onClose }: { id: string; onChanged: () =
 
 // -----------------------------------------------------------------------------------------
 function acceptLinkFor(token: string): string | null {
-  const base = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/$/, "");
-  return base ? `${base}/functions/v1/maintenance-accept?t=${token}` : null;
+  // supabaseUrl, not the raw variable: the project URL can arrive under either of two
+  // names and resolving it twice is how one of them gets forgotten.
+  return supabaseUrl ? `${supabaseUrl}/functions/v1/maintenance-accept?t=${token}` : null;
 }
 
 function ItemRow({ item, closed, canWrite, onRun }: { item: MaintenanceItem; closed: boolean; canWrite: boolean; onRun: (fn: () => Promise<unknown>) => Promise<void> }) {

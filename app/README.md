@@ -62,6 +62,13 @@ VITE_SUPABASE_URL=https://<project>.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_<...>
 ```
 
+**Or let the Netlify Supabase extension supply them.** A site connected to Supabase with
+the Vite framework selected gets `VITE_SUPABASE_DATABASE_URL` and `VITE_SUPABASE_ANON_KEY`
+— the project URL and the legacy anon key, under the extension's names. The app reads
+either pair and prefers the two above when both are set, so adding a publishable key later
+supersedes the anon key without anyone deleting anything. `src/data/supabaseEnv.ts` is
+where that is decided.
+
 On Netlify these are project environment variables rather than a file, set on the
 `loftyprojectapp` project for all deploy contexts and all scopes. Vite reads them at
 build time and inlines them, so nothing needs them at runtime — but set them with all
