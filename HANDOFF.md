@@ -68,21 +68,20 @@ redirect and the allowed origins still match. The two variables the Supabase Net
 extension used to add (`SUPABASE_ANON_KEY`, `SUPABASE_DATABASE_URL`) are read by nothing
 and are not needed.
 
-**Deploy previews from Claude's branches are blocked, and it is the plan, not the build.**
-The first preview raised on PR #4 died with *"Build blocked: Unrecognized Git contributor.
-This plan allows only verified account members to push to private repos."* `./build.sh`
-passes on the same commit. Netlify's starter plan builds a private repository's commits
-only when the commit **author** is a verified member of the Netlify team; the commits from
-these sessions are authored `Claude <noreply@anthropic.com>`, which cannot be a team
-member. Amber's merge commit on `main` (`0d84e59`) built because its author is hers, so
-**merging still deploys production** — the merge commit's author is whoever clicks merge.
-Until one of these is done, expect every PR from a session to show a red Netlify check
-that means nothing about the code:
-
-- **Make the repository public.** Netlify verifies contributors only on private
-  repositories. This is the same switch the Updates feed is waiting on.
-- **Or move the site to a plan that builds unverified contributors** (Pro and above), if
-  the repository is to stay private.
+**Deploy previews build now — after one was refused, and worth knowing why.** The first
+preview raised on PR #4 (06:10 UTC) died before building: *"Build blocked: Unrecognized
+Git contributor. This plan allows only verified account members to push to private
+repos."* `./build.sh` passes on the same commit. Netlify's starter plan builds a private
+repository's commits only when the commit **author** is a verified member of the Netlify
+team; the commits from these sessions are authored `Claude <noreply@anthropic.com>`, which
+cannot be one. Three minutes later the next push built and the preview went green, with
+the repository **still private** — so something changed on the Netlify side in between
+(plan, team, or a verification setting); what, exactly, is not readable from here and is
+worth Amber writing down. If a red Netlify check with that message comes back, it is not
+the code: make the repository public (Netlify verifies contributors only on private ones,
+and the Updates feed is waiting on the same switch), or keep the site on a plan that builds
+unverified contributors. Merging always deploys production either way — the merge commit's
+author is whoever clicks merge.
 
 **Ben Johnson's email.** Amber: *"there should be no emails that are @loftygroup — all
 emails are @lofty.com.au."* He was the only such row: `0016` seeded him as
@@ -107,9 +106,9 @@ database** (see *The platform layer* below).
   `ben@lofty.com.au`, nothing more is needed. Not inferred.
 - **Apply `0080`–`0085`** to the live database, in order, once the app that reads the
   renamed columns is ready to deploy with them.
-- **Public or private.** Now carrying two consequences instead of one: the Updates feed
-  cannot read a private repository, and Netlify will not build deploy previews from a
-  session's commits on one. Public fixes both; a Netlify Pro plan fixes only the second.
+- **Public or private.** Unchanged: the Updates feed reads merged pull requests without a
+  token and cannot read a private repository. Netlify's contributor check on private
+  repositories (above) is the second thing that turns on the same switch, if it recurs.
 
 ---
 
