@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 62 changes since then —
+Unreleased: 64 changes since then —
+- Fixed: Ben Johnson's email address is ben@lofty.com.au — it had been seeded at a domain Lofty does not use
+- Changed: Updates → Merged from the build reads merged pull requests from LoftySupport/loftyprojectapp, where the repository lives now
 - Added: Maintenance — a tab for what homeowners report after handover: requests numbered on the job, items per trade, offers to contractors with an accept link, the thread, SLA health and warranty
 - Added: Setup → Maintenance — the warranty period, offer and reminder clocks, and the trades with their SLAs
 - Added: Notifications — assigned, mentioned, at risk, overdue, stage moved, working drawings changed — in the bell, by email and Teams, immediate or in a daily digest, chosen per person in Settings
-- Added: Setup → Notifications — who hears what, with escalation after days late
-- Added: Contacts — people and companies outside Lofty, classified, with the company beside each person, how to reach them, and what they are doing on each job, project and process
-- …and 57 more.
+- …and 59 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -21,7 +21,94 @@ Next job: [Phase B, the import](#next-phase-b-the-import)** — and before it, t
 described there, because that is the only category of change that gets expensive once 200 jobs
 are in.
 
-Last updated: 2026-09-01.
+Last updated: 2026-09-02.
+
+---
+
+## Session of 2026-09-02 — the repository moves again, the Netlify site is new, and one address
+
+Three things, two of them Amber's messages and one found while checking the second.
+
+**The repository is `LoftySupport/loftyprojectapp`.** It moved from `LoftyGroup` to the
+`LoftySupport` GitHub account — a user account, not an organisation. `CHANGELOG_REPO` in
+`app/src/data/github.ts` follows it, the session cache key is bumped so nothing cached
+against the previous repository can be shown as this one's, and every doc that named the
+old location names the new one. The repository is still **private**, so Updates → *Merged
+from the build* still renders its honest error rather than a list. Same decision as before.
+
+**The Netlify site was recreated, and the sign-in page says *Not configured*.** Amber's
+screenshot: *"This build has no `VITE_SUPABASE_URL` or `VITE_SUPABASE_PUBLISHABLE_KEY`, so
+there is nothing to sign in to."* Read from Netlify's API rather than guessed:
+
+- `loftyprojectapp.netlify.app` is a **new Netlify site** — a new site id, on a new team.
+  The site verified on 23 August (the one under *The environment variables*) answers 404
+  now.
+- Its first production deploy went out at 06:04 UTC on 2 September, from
+  `LoftySupport/loftyprojectapp`, branch `main`, commit `0d84e59`. So the build-source row
+  under *This is the repository now* is **resolved**: pushes to this repository deploy.
+- What did not come across is the site's configuration. Environment variables belong to a
+  site, not a repository, and a new site starts with none. The API available here does not
+  list variables, so the evidence is the error itself — that message is rendered only when
+  `import.meta.env` has neither value at build time.
+
+The fix is Amber's, in Netlify, and takes a few minutes:
+
+1. Netlify → `loftyprojectapp` → **Project configuration → Environment variables → Add a
+   variable**, twice: `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`. The values
+   are in the Supabase dashboard → Project Settings → API: the project URL, and the
+   **publishable** key (`sb_publishable_…`). Scope: all deploy contexts, as before.
+   **Never the `service_role` key** — a `VITE_` variable is inlined into the bundle and
+   shipped to every browser; the publishable key is meant to be public and RLS is the
+   security boundary, the service key bypasses RLS entirely.
+2. **Deploys → Trigger deploy → Deploy project.** The values are read at build time, so an
+   existing deploy cannot pick them up.
+
+Nothing on the Supabase or Entra side needs to change: the URL is the same, so the OAuth
+redirect and the allowed origins still match. The two variables the Supabase Netlify
+extension used to add (`SUPABASE_ANON_KEY`, `SUPABASE_DATABASE_URL`) are read by nothing
+and are not needed.
+
+**Deploy previews build now — after one was refused, and worth knowing why.** The first
+preview raised on PR #4 (06:10 UTC) died before building: *"Build blocked: Unrecognized
+Git contributor. This plan allows only verified account members to push to private
+repos."* `./build.sh` passes on the same commit. Netlify's starter plan builds a private
+repository's commits only when the commit **author** is a verified member of the Netlify
+team; the commits from these sessions are authored `Claude <noreply@anthropic.com>`, which
+cannot be one. Three minutes later the next push built and the preview went green, with
+the repository **still private** — so something changed on the Netlify side in between
+(plan, team, or a verification setting); what, exactly, is not readable from here and is
+worth Amber writing down. If a red Netlify check with that message comes back, it is not
+the code: make the repository public (Netlify verifies contributors only on private ones,
+and the Updates feed is waiting on the same switch), or keep the site on a plan that builds
+unverified contributors. Merging always deploys production either way — the merge commit's
+author is whoever clicks merge.
+
+**Ben Johnson's email.** Amber: *"there should be no emails that are @loftygroup — all
+emails are @lofty.com.au."* He was the only such row: `0016` seeded him as
+`ben@loftygroup.com.au` in both columns and flagged it as "left as supplied". `0085`
+corrects the live row rather than editing the applied seed: `profile_email` becomes
+`ben@lofty.com.au`, and `profile_login_email` becomes **null rather than a guess** — it is
+the key the sign-in trigger matches first, everyone else's is `@loftybg.onmicrosoft.com`,
+and a wrong guess surfaces as "your account is not set up". Null lets the trigger fall
+through to `ben@lofty.com.au`, and shows as a blank in Setup → Team if Entra presents
+something else. The migration is idempotent and raises if any `@loftygroup.com.au` address
+is left standing; that raise was watched firing against a planted row before it was
+trusted. `0080`–`0085` replay clean from empty and `check.sh` is green at 65 constraint
+checks. **`0085` queues behind `0080`–`0084`, which are still not applied to the live
+database** (see *The platform layer* below).
+
+### What needs Amber
+
+- **Set the two Netlify variables and redeploy** (steps above). Until then the deployed
+  site is this repository's build with nothing to sign in to.
+- **Ben Johnson's Microsoft sign-in address.** If it is `ben@loftybg.onmicrosoft.com` like
+  everyone else's, that is one `update` on `profile_login_email`; if he signs in as
+  `ben@lofty.com.au`, nothing more is needed. Not inferred.
+- **Apply `0080`–`0085`** to the live database, in order, once the app that reads the
+  renamed columns is ready to deploy with them.
+- **Public or private.** Unchanged: the Updates feed reads merged pull requests without a
+  token and cannot read a private repository. Netlify's contributor check on private
+  repositories (above) is the second thing that turns on the same switch, if it recurs.
 
 ---
 
@@ -135,7 +222,7 @@ the `.agents/` and `.codex/` copies for other tools are ignored, not committed; 
 hook with `npx -y impeccable install` if wanted. `/impeccable init` (a PRODUCT.md and
 DESIGN.md) has not been run — that is an interview with Amber, not a guess.
 
-### The platform layer — `0080`–`0084` built, `0085` to go
+### The platform layer — `0080`–`0084` built, the sync to go
 
 Amber answered the nine questions on 2 September (recorded in `schema-plan.md`, *Amber's
 answers, 2 September*) and sent the Phase B import data with them —
@@ -155,7 +242,8 @@ Functions — `maintenance-accept`, `maintenance-inbound`, and the delivery work
 the maintenance thread — all **written and not deployed** (steps in
 `app/supabase/functions/deliver-notifications/README.md`). PR #2 was merged by Amber on
 2 September at the design commit; `0080`–`0084` are on the same branch, rebased onto main,
-in a new PR. Next: `0085` sync. Local verify:
+in a new PR. `0085` is taken by a one-row data correction (Ben Johnson's address — see *Session of
+2026-09-02* above); the sync is next and will be `0086`. Local verify:
 `LOFTY_PG_PORT=5432 LOFTY_PG_HOST=/var/run/postgresql ./check.sh` from `app/supabase/verify`
 (Postgres 16 started with `service postgresql start`). **`0080`–`0084` are not yet applied to the
 live database** — the Supabase MCP server needs re-authorising in this session; apply
@@ -1402,30 +1490,34 @@ with nothing in them. Every remaining token on screen is one of those two cases.
 
 ## What this is
 
-`LoftyGroup/loftyprojectapp` — the V0 build of Lofty's job pipeline board. React,
+`LoftySupport/loftyprojectapp` — the V0 build of Lofty's job pipeline board. React,
 Vibe (monday.com's design system) and Supabase.
 
-### This is the repository now — and two things have not caught up
+### This is the repository now — and what has and has not caught up
 
-The work started in `amberbeaumont/loftyprojectapp`, a personal account, and moved under
-the Lofty organisation on 1 September. `LoftyGroup/loftyprojectapp` is where commits,
-branches and pull requests go from here; the git remote in this checkout already points
-at it.
+The work started in `amberbeaumont/loftyprojectapp`, a personal account, moved to
+`LoftyGroup/loftyprojectapp` on 1 September, and now lives in
+`LoftySupport/loftyprojectapp`. `LoftySupport` is a GitHub **user account**, not an
+organisation, which matters below when a GitHub App has to be installed on it. This is
+where commits, branches and pull requests go from here; the git remote in this checkout
+already points at it, and nothing should read `LoftyGroup/loftyprojectapp` any more — it
+was a stop on the way, and merges stopped there when the work moved on.
 
-The old repository still exists, is still **public**, and still carries every commit up to
-the move. That is worth writing down rather than forgetting, because it is the dangerous
-kind of stale: it answers, and its answer looks current. Anything still reading it gets
-history that stopped on 1 September with no sign that it stopped.
+The personal repository still exists, is still **public**, and still carries every commit
+up to 1 September. That is worth writing down rather than forgetting, because it is the
+dangerous kind of stale: it answers, and its answer looks current. Anything still reading
+it gets history that stopped on 1 September with no sign that it stopped.
 
-Two things still point at it, and **neither can be fixed from inside this repository**:
+Two things pointed at it on 1 September. One resolved itself on 2 September and left a
+smaller problem behind; **neither can be fixed from inside this repository**:
 
 | | What is wrong | Who fixes it, and where |
 | --- | --- | --- |
-| **The Netlify build source** | `loftyprojectapp.netlify.app` still builds from `amberbeaumont/loftyprojectapp` on `main`. Pushes to *this* repository do not deploy, and do not raise deploy previews. The last production deploy, `2c48791`, came from there | Netlify → `loftyprojectapp` → Project configuration → Build & deploy → **Link to a different repository** → `LoftyGroup/loftyprojectapp`, branch `main`, base directory **blank** (the site's base is the repo root — see *Where it is deployed*). The Netlify GitHub App needs org-owner approval for `LoftyGroup` |
-| **Repository visibility** | This repository is **private**; the old one is public. The Updates changelog reads merged pull requests from the browser with no token — see `app/src/data/github.ts` for why a token cannot go there — and GitHub answers an unauthenticated read of a private repository with 404 | A decision, not a fix. Make `LoftyGroup/loftyprojectapp` public and the feed works exactly as before. Keep it private and the feed has to be generated at build time instead, which is a different piece of work and has not been done |
+| **The Netlify build source** | **Resolved 2 September** — `loftyprojectapp.netlify.app` is a *new* Netlify site (new site id, new team) building from `LoftySupport/loftyprojectapp` on `main`; first deploy `0d84e59`. What did not come across is the site's **environment variables**: the new site has no `VITE_SUPABASE_URL` or `VITE_SUPABASE_PUBLISHABLE_KEY`, so the sign-in page says *Not configured* | Netlify → `loftyprojectapp` → Project configuration → **Environment variables** → add both, values from the Supabase dashboard → Project Settings → API (URL and the `sb_publishable_…` key, never `service_role`), then Deploys → **Trigger deploy**. Steps and reasoning in *Session of 2026-09-02* |
+| **Repository visibility** | This repository is **private**; the old one is public. The Updates changelog reads merged pull requests from the browser with no token — see `app/src/data/github.ts` for why a token cannot go there — and GitHub answers an unauthenticated read of a private repository with 404 | A decision, not a fix. Make `LoftySupport/loftyprojectapp` public and the feed works exactly as before. Keep it private and the feed has to be generated at build time instead, which is a different piece of work and has not been done |
 
-Until the first row is done, the deployed site is not this repository's build. Until the
-second is decided, Updates → *Merged from the build* renders its error state saying the
+Until the variables are set, the deployed site is this repository's build with nothing to
+sign in to. Until the second is decided, Updates → *Merged from the build* renders its error state saying the
 repository is private, which is the honest answer and deliberately not an empty list.
 
 The schema is being designed one table at a time and the app is built ahead of it, so
@@ -1863,6 +1955,10 @@ around as a second source of truth for a setting only one file decides, which is
 shape of a config that eventually contradicts the live one.
 
 ### The environment variables, and where the security actually comes from
+
+> **Stale as of 2 September.** The site this was verified against is gone; the site now at
+> `loftyprojectapp.netlify.app` is new and has **none** of these set — see *Session of
+> 2026-09-02*. Kept because what belongs where, and why, has not changed.
 
 Verified against the live site, 23 August:
 

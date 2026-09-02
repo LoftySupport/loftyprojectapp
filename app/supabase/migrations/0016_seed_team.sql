@@ -13,7 +13,9 @@
 --     @lofty.com.au. They are different fields for that reason — `email` is what the app
 --     shows and what people actually use.
 --   * Ben Johnson is @loftygroup.com.au for both, which is the only row where the two
---     match. Left as supplied.
+--     match. Left as supplied — and supplied wrong: Lofty has no such domain. 0085 corrects
+--     the live row to ben@lofty.com.au and clears the login address rather than guessing
+--     it. The row below is kept as written so that a replay reproduces the history.
 --
 -- One correction was applied to the source: `amber@lofty.com.auy` had a trailing "y" and
 -- is seeded as `amber@lofty.com.au`. Flagged here rather than silently fixed, because a

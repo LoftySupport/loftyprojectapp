@@ -29,15 +29,17 @@ import { useEffect, useState } from "react";
  * `VITE_` variables, and a changelog is not worth handing the world a credential for.
  *
  * ---------------------------------------------------- and therefore, while it is private
- * `LoftyGroup/loftyprojectapp` is the repository the work now lives in, and it is
+ * `LoftySupport/loftyprojectapp` is the repository the work now lives in, and it is
  * PRIVATE. GitHub answers an unauthenticated read of a private repository with 404 — it
  * will not confirm the repository even exists. So until somebody makes it public, this
  * feed says it cannot read the repository rather than listing anything.
  *
- * It does NOT fall back to `amberbeaumont/loftyprojectapp`. That repository is public and
- * still carries the history, which is exactly what makes it the wrong answer: it stopped
- * receiving merges when the work moved here, so it would render a stale list that looks
- * current — the failure this codebase keeps writing down and keeps having to fix.
+ * It does NOT fall back to `amberbeaumont/loftyprojectapp`, and it does not read
+ * `LoftyGroup/loftyprojectapp` either. The first is public and still carries the history,
+ * which is exactly what makes it the wrong answer: it stopped receiving merges when the
+ * work moved on, so it would render a stale list that looks current — the failure this
+ * codebase keeps writing down and keeps having to fix. The second was the stop between
+ * the two, and merges stopped there the same way.
  *
  * Once it is public the remaining price is GitHub's unauthenticated limit — 60 requests
  * per hour per IP address, shared by everybody on the Lofty office connection. Hence the
@@ -45,7 +47,7 @@ import { useEffect, useState } from "react";
  * than rendering an empty changelog, which would read as "nothing has shipped".
  */
 
-export const CHANGELOG_REPO = "LoftyGroup/loftyprojectapp";
+export const CHANGELOG_REPO = "LoftySupport/loftyprojectapp";
 
 /** One merged pull request that declared something for the changelog. */
 export interface PullRequestNote {
@@ -91,10 +93,12 @@ interface GhPull {
   user?: { login?: string } | null;
 }
 
-// v2 because v1 holds pull requests read from `amberbeaumont/loftyprojectapp`. The cache
-// is sessionStorage with a ten-minute life so it would clear itself, but "would clear
-// itself" is ten minutes of a tab showing the wrong repository's history as this one's.
-const CACHE_KEY = "lofty.changelog.pulls.v2";
+// v3. v1 holds pull requests read from `amberbeaumont/loftyprojectapp`; v2 was keyed to
+// `LoftyGroup/loftyprojectapp`, which was private and so most likely never held anything —
+// but "most likely" is not a reason to let one repository's key answer for another. The
+// cache is sessionStorage with a ten-minute life so it would clear itself, but "would
+// clear itself" is ten minutes of a tab showing the wrong repository's history as this one's.
+const CACHE_KEY = "lofty.changelog.pulls.v3";
 /** Ten minutes. Long enough that clicking between tabs costs nothing against the 60/hour. */
 const CACHE_MS = 10 * 60 * 1000;
 
