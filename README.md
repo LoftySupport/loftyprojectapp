@@ -16,13 +16,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 68 changes since then —
+Unreleased: 70 changes since then —
+- Fixed: Maintenance due dates, warranty, health and daily reminders all work on the Adelaide calendar day — a request no longer turns overdue at 09:30 in the morning
+- Added: The live database is at 0085 — Maintenance, Contacts and notifications tables exist, and the Maintenance tab loads
 - Fixed: A project with no target date reads "Not set" on its card, in the table and on its page — no column token
 - Changed: Setup → Processes and Setup → Properties open the selected record in a panel beside the list, everything editable there — nothing behind a More or Order toggle
 - Added: Setup → Processes edits the tick-box lines of a template task, and every task shows its team, days, parent and order at once
-- Removed: Processes is no longer a destination in the main navigation — it is part of Setup; /processes and /templates forward there
-- Fixed: Ben Johnson's email address is ben@lofty.com.au — it had been seeded at a domain Lofty does not use
-- …and 63 more.
+- …and 65 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
