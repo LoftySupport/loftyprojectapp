@@ -14,6 +14,11 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Contacts — people and companies outside Lofty, classified, with the company beside each person, how to reach them, and what they are doing on each job, project and process
+- SiteBook's project roles on a project, held by Lofty people
+- Tasks carry sub-tasks and checklists, start and expected days, and read at risk before they are overdue
+- Stage completion counted once in the database — milestones passed and processes open per stage
+- A SiteBook ID property on every job
 - The platform-layer design — contacts and companies, maintenance, notifications, a readable change history, two-way sync — recorded in schema-plan.md ahead of the build
 - The Impeccable design skill, installed for the repo
 - Properties record values on jobs and projects, with per-property security levels, team and person access, and an opt-in restricted flag
@@ -58,6 +63,9 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- The decision against external parties is reversed — maintenance makes them first-class
+- Every table is audited now, and a record's history is readable by everyone except restricted fields
+- The three oldest tables follow the tablename_attribute naming rule
 - The properties and processes screens after a design pass — palette-consistent health colours, keyboard-reachable report links, a two-step delete
 - The fourth lifecycle phase is Maintenance — handover is the last process of Construction
 - Job numbers are three digits from 001 — existing jobs renumbered, and a project can now run past 99 lots

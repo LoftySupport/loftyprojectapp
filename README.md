@@ -16,13 +16,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 50 changes since then —
-- Added: The platform-layer design — contacts and companies, maintenance, notifications, a readable change history, two-way sync — recorded in schema-plan.md ahead of the build
-- Changed: The properties and processes screens after a design pass — palette-consistent health colours, keyboard-reachable report links, a two-step delete
-- Added: The Impeccable design skill, installed for the repo
-- Changed: The fourth lifecycle phase is Maintenance — handover is the last process of Construction
-- Added: Properties record values on jobs and projects, with per-property security levels, team and person access, and an opt-in restricted flag
-- …and 45 more.
+Unreleased: 58 changes since then —
+- Added: Contacts — people and companies outside Lofty, classified, with the company beside each person, how to reach them, and what they are doing on each job, project and process
+- Added: SiteBook's project roles on a project, held by Lofty people
+- Changed: The decision against external parties is reversed — maintenance makes them first-class
+- Added: Tasks carry sub-tasks and checklists, start and expected days, and read at risk before they are overdue
+- Added: Stage completion counted once in the database — milestones passed and processes open per stage
+- …and 53 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
