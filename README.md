@@ -38,14 +38,16 @@ The stakeholder prototype this grew out of lives in a separate repo,
 deliberately frozen. That one stays under `amberbeaumont` on purpose — it is an artefact,
 not the live build.
 
-**This repository is `LoftyGroup/loftyprojectapp`, and it is the only one the app is
-built from.** It moved here from `amberbeaumont/loftyprojectapp` on 1 September. The old
-one is public and still holds the history up to that day, so it answers when something
-reads it — with an answer that stopped on 1 September and does not say so. Two things
-have not caught up with the move and neither can be fixed from in here: the Netlify site
-still builds from the old repository, and this one is private where the old one was
-public, which is what the changelog's live pull-request feed depends on. Both are written
-up, with the exact steps, in [HANDOFF.md](HANDOFF.md) under *This is the repository now*.
+**This repository is `LoftySupport/loftyprojectapp`, and it is the only one the app is
+built from.** It started in `amberbeaumont/loftyprojectapp`, moved to
+`LoftyGroup/loftyprojectapp` on 1 September, and now lives here under the `LoftySupport`
+account. The personal one is public and still holds the history up to 1 September, so it
+answers when something reads it — with an answer that stopped that day and does not say
+so. Two things have not caught up with the move and neither can be fixed from in here: the
+Netlify site still builds from the old repository, and this one is private where the old
+one was public, which is what the changelog's live pull-request feed depends on. Both are
+written up, with the exact steps, in [HANDOFF.md](HANDOFF.md) under *This is the
+repository now*.
 
 ---
 
@@ -53,7 +55,7 @@ up, with the exact steps, in [HANDOFF.md](HANDOFF.md) under *This is the reposit
 
 | URL | What |
 | --- | --- |
-| [`LoftyGroup/loftyprojectapp`](https://github.com/LoftyGroup/loftyprojectapp) | **This repository.** Where the code, the branches and the pull requests live |
+| [`LoftySupport/loftyprojectapp`](https://github.com/LoftySupport/loftyprojectapp) | **This repository.** Where the code, the branches and the pull requests live |
 | [`loftyprojectapp.netlify.app`](https://loftyprojectapp.netlify.app) | **The build.** Every screen, on Vibe — *currently still built from the old repository* |
 | `…/signin` | Microsoft Entra sign-in — the only route open without a session |
 | `…/dictionary` | The data dictionary |

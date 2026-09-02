@@ -1402,27 +1402,30 @@ with nothing in them. Every remaining token on screen is one of those two cases.
 
 ## What this is
 
-`LoftyGroup/loftyprojectapp` — the V0 build of Lofty's job pipeline board. React,
+`LoftySupport/loftyprojectapp` — the V0 build of Lofty's job pipeline board. React,
 Vibe (monday.com's design system) and Supabase.
 
 ### This is the repository now — and two things have not caught up
 
-The work started in `amberbeaumont/loftyprojectapp`, a personal account, and moved under
-the Lofty organisation on 1 September. `LoftyGroup/loftyprojectapp` is where commits,
-branches and pull requests go from here; the git remote in this checkout already points
-at it.
+The work started in `amberbeaumont/loftyprojectapp`, a personal account, moved to
+`LoftyGroup/loftyprojectapp` on 1 September, and now lives in
+`LoftySupport/loftyprojectapp`. `LoftySupport` is a GitHub **user account**, not an
+organisation, which matters below when a GitHub App has to be installed on it. This is
+where commits, branches and pull requests go from here; the git remote in this checkout
+already points at it, and nothing should read `LoftyGroup/loftyprojectapp` any more — it
+was a stop on the way, and merges stopped there when the work moved on.
 
-The old repository still exists, is still **public**, and still carries every commit up to
-the move. That is worth writing down rather than forgetting, because it is the dangerous
-kind of stale: it answers, and its answer looks current. Anything still reading it gets
-history that stopped on 1 September with no sign that it stopped.
+The personal repository still exists, is still **public**, and still carries every commit
+up to 1 September. That is worth writing down rather than forgetting, because it is the
+dangerous kind of stale: it answers, and its answer looks current. Anything still reading
+it gets history that stopped on 1 September with no sign that it stopped.
 
 Two things still point at it, and **neither can be fixed from inside this repository**:
 
 | | What is wrong | Who fixes it, and where |
 | --- | --- | --- |
-| **The Netlify build source** | `loftyprojectapp.netlify.app` still builds from `amberbeaumont/loftyprojectapp` on `main`. Pushes to *this* repository do not deploy, and do not raise deploy previews. The last production deploy, `2c48791`, came from there | Netlify → `loftyprojectapp` → Project configuration → Build & deploy → **Link to a different repository** → `LoftyGroup/loftyprojectapp`, branch `main`, base directory **blank** (the site's base is the repo root — see *Where it is deployed*). The Netlify GitHub App needs org-owner approval for `LoftyGroup` |
-| **Repository visibility** | This repository is **private**; the old one is public. The Updates changelog reads merged pull requests from the browser with no token — see `app/src/data/github.ts` for why a token cannot go there — and GitHub answers an unauthenticated read of a private repository with 404 | A decision, not a fix. Make `LoftyGroup/loftyprojectapp` public and the feed works exactly as before. Keep it private and the feed has to be generated at build time instead, which is a different piece of work and has not been done |
+| **The Netlify build source** | `loftyprojectapp.netlify.app` still builds from `amberbeaumont/loftyprojectapp` on `main`. Pushes to *this* repository do not deploy, and do not raise deploy previews. The last production deploy, `2c48791`, came from there | Netlify → `loftyprojectapp` → Project configuration → Build & deploy → **Link to a different repository** → `LoftySupport/loftyprojectapp`, branch `main`, base directory **blank** (the site's base is the repo root — see *Where it is deployed*). The Netlify GitHub App has to be installed on the `LoftySupport` GitHub account before the repository appears in that list. It is a user account, not an organisation, so whoever holds its sign-in installs the app — there is no organisation owner to approve it |
+| **Repository visibility** | This repository is **private**; the old one is public. The Updates changelog reads merged pull requests from the browser with no token — see `app/src/data/github.ts` for why a token cannot go there — and GitHub answers an unauthenticated read of a private repository with 404 | A decision, not a fix. Make `LoftySupport/loftyprojectapp` public and the feed works exactly as before. Keep it private and the feed has to be generated at build time instead, which is a different piece of work and has not been done |
 
 Until the first row is done, the deployed site is not this repository's build. Until the
 second is decided, Updates → *Merged from the build* renders its error state saying the
