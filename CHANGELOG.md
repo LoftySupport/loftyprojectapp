@@ -53,6 +53,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- Ben Johnson's email address is ben@lofty.com.au — it had been seeded at a domain Lofty does not use
 - The changelog on Updates reads this repository's merged pull requests, not the old repository's
 - The hundredth job on a project was refused with a duplicate-key error
 - A project can now pass 99 jobs — the hundredth was refused with a duplicate-key error

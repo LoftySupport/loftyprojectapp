@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 63 changes since then —
+Unreleased: 64 changes since then —
+- Fixed: Ben Johnson's email address is ben@lofty.com.au — it had been seeded at a domain Lofty does not use
 - Changed: Updates → Merged from the build reads merged pull requests from LoftySupport/loftyprojectapp, where the repository lives now
 - Added: Maintenance — a tab for what homeowners report after handover: requests numbered on the job, items per trade, offers to contractors with an accept link, the thread, SLA health and warranty
 - Added: Setup → Maintenance — the warranty period, offer and reminder clocks, and the trades with their SLAs
 - Added: Notifications — assigned, mentioned, at risk, overdue, stage moved, working drawings changed — in the bell, by email and Teams, immediate or in a daily digest, chosen per person in Settings
-- Added: Setup → Notifications — who hears what, with escalation after days late
-- …and 58 more.
+- …and 59 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
