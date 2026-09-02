@@ -25,6 +25,82 @@ Last updated: 2026-09-02.
 
 ---
 
+## Session of 2026-09-02, evening — Amber launches, and five things are wrong
+
+Amber, in one message, on the LoftySupport app the morning it went live: *"i can't see the
+maintenance connected it says not table. also if there is a no target date set on the
+project, don't show the variable… the jobs and projects that were attached earlier have
+not been added… the processes and properties should follow correct format and be easy to
+edit, not in a drop down but always show in a sidebar like elsewhere in the app. processes
+are not a page on the sidebar, they are part of setup only."*
+
+### The Maintenance tab says "table does not exist" because the database is at 0079
+
+Checked against the live project rather than assumed: `list_migrations` ends at
+`0079_the_workbook_of_1_september`. The deployed bundle reads `maintenance_requests`,
+`contacts`, `notifications` and the renamed audit columns, all of which arrive with
+`0080`–`0084`. The migrations replay clean here (65 constraint checks, RLS holding) and
+were **about to be applied through the Supabase connector — which is authorised and
+answers — when the session's permission mode refused the write** to production. So they
+are still not applied, and that is the first thing to do, in this order, in the dashboard
+SQL editor or from a session allowed to write:
+
+`0080` → `0081` → `0082` → `0083` → `0084` → `0085`
+
+Each file is idempotent and carries its own proof block, which raises rather than
+leaving a half-applied schema behind. After `0084`, Maintenance loads; `0085` is the one-row
+correction to Ben Johnson's address.
+
+### The four app changes
+
+- **No target date reads "Not set"** — on the project card, in the Projects table and on
+  the project page — in place of the `projects.target_completion` token. The token was the
+  house rule's "name the column" blank; Amber wants words. The three date rows on the
+  project page share the answer, because two spellings of "empty" in one block is worse
+  than either.
+- **Setup → Processes and Setup → Properties are on the Contacts pattern**: a table on the
+  left, one row per record grouped by stage, and the selected record in a panel beside it
+  (under it on a phone) with everything editable in place — nothing behind a *More* row or
+  an *Order* toggle any more. The selection rides the URL (`?process=…`, `?property=…`), so
+  a process or a property is a link, like a contact or a maintenance request. Properties
+  gained an editable stage and position in the panel; Processes gained the template
+  checklist's **tick-box lines** (0081's `process_task_checklist_items`, which had repository
+  methods and no screen) and a two-click delete, and every template task now shows its
+  team, days, external flag, parent and what it waits on at once. `components/InlineInputs.tsx`
+  is the one copy of the blur-to-save text and number boxes both pages used to carry.
+- **Processes is out of the main navigation.** `/processes` and `/templates` both land on
+  `/setup/processes`; the read-only Processes page (`TemplatesPage.tsx`) is gone, because
+  the same facts are the Setup list. The responsive sweep lost the route and is green at
+  115 combinations.
+
+### The import — found, profiled, tooled, and waiting on four answers
+
+The workbooks were not in the repository; they are in Amber's Google Drive, and the
+connector could read them: `Lofty_Jobs_Grouped_by_Project.xlsx` (801 rows, 121 projects
+numbered 1001–1121, sequences `01`…), `Estimating & Scheduling Jobs to Site Tracker.xlsx`
+and `Sitebook Schedule 09.07.xlsx`. The first is the Phase B source and is checked in as
+`app/supabase/import/lofty-jobs-grouped-by-project-2026-08-31.xlsx`. What profiling it
+found, and what the import cannot decide for itself, is under *What needs Amber* below and,
+in full, in `schema-plan.md`, *Phase B — what the workbook forces* (the import branch,
+`0086`–`0087`).
+
+### What needs Amber
+
+1. **Apply `0080`–`0085`** (above). Nothing else on this list shows until they are in.
+2. **Project numbers.** The workbook numbers 1001–1121; the live database already holds
+   projects 1002–1010 with 66 jobs, made by hand between 25 and 31 August — and two of them
+   are sites the workbook also has (1010 is the workbook's 1005, 30 Luprena Avenue; 1009's
+   old numbers 2347–2349 are not in the sheet). Keep the workbook's numbers and remove the
+   nine, or start the import at 1011 and keep them? The import takes either.
+3. **Owning team and stage** for every imported job — the sheet names people, not teams,
+   and carries no lifecycle stage. And what *Cancelling* (39 rows), *On Hold* (20) and
+   *In Doubt* (5) mean as a job status.
+4. **Seven old numbers shared by several rows** (1288, 1382, 1399, 1516, 1528, 1597, 1920;
+   `jobs.job_number_old` is unique). Proposed rule: append the sheet's lot or residence
+   label — `1288 · Lot 1` — the way Amber's own hand-entered `1216 - D1` already reads.
+
+---
+
 ## Session of 2026-09-02, later — the variables were there all along, under other names
 
 The sign-in page still said *Not configured* after the site was connected to Supabase, and

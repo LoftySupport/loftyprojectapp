@@ -4,7 +4,7 @@ import {
   Avatar, Dialog, DialogContentContainer, Text, TextField
 } from "@vibe/core";
 import {
-  Announcement, Doc, Home, Menu, NavigationChevronLeft, NavigationChevronRight,
+  Announcement, Home, Menu, NavigationChevronLeft, NavigationChevronRight,
   Person, SettingsKnobs, Group, Broom } from "@vibe/icons";
 import { HouseChart, HousePin, Houses } from "../theme/houseIcons";
 import { initialsOf, useAuth } from "../data/AuthProvider";
@@ -40,9 +40,10 @@ const PAGES = [
   { to: "/maintenance", label: "Maintenance", icon: Broom },
   { to: "/reports", label: "Reports", icon: HouseChart },
   { to: "/contacts", label: "Contacts", icon: Group },
-  // Was "Templates". The page shows the processes inside each phase since 0078, and
-  // processes is the word Lofty uses (Amber, 1 Sep).
-  { to: "/processes", label: "Processes", icon: Doc },
+  // Processes is NOT here (Amber, 2 Sep: "processes are not a page on the sidebar, they
+  // are part of setup only"). It was Templates, then Processes, as a destination beside
+  // the work; it is configuration, so it lives at Setup → Processes and /processes
+  // forwards there for the bookmarks that still carry it.
   // The tracker (0060–0063). In the main nav rather than in Setup, because it is for
   // everybody: Setup is configuration and this is "what is happening with the app".
   { to: "/updates", label: "Updates", icon: Announcement },

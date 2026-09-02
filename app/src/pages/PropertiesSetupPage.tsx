@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Button, Checkbox, Text, TextField } from "@vibe/core";
 import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { useProcessProperties, useProcesses, usePropertyDefs, usePropertyOptions, useStages, useTeams } from "../data/useLookups";
 import { Field, Problem } from "../components/Form";
 import { Select } from "../components/Select";
+import { BlurText, NumberInput } from "../components/InlineInputs";
 import {
   PERMISSION_LEVELS, PROPERTY_FORMATS, PROPERTY_SCOPES, RECORDABLE_FORMATS, teamName,
   type NewPropertyDef, type PermissionLevel, type PropertyAccess, type PropertyDef, type PropertyDefPatch,
@@ -20,18 +22,29 @@ import "../components/processes.css";
  * properties are editable." And: security levels per property, team-level CRUD, and a
  * restricted flag that is opt-in.
  *
- * Each row edits on blur or change and the database answers — a manager retitles and
+ * Amber, 2 Sep: "the processes and properties should follow correct format and be easy
+ * to edit, not in a drop down but always show in a sidebar like elsewhere in the app."
+ *
+ * So the table on the left is a LIST — one row per property, grouped by the stage that
+ * captures it, read-only — and the selected property opens in a panel beside it (under it
+ * on a phone) where EVERYTHING about it is editable and in view: label, level, stage, team,
+ * format, SLA, position, description, required, active, restricted, the four security
+ * rungs, the teams and people with access, the choices of a select, and delete. Nothing
+ * sits behind a "More" toggle or an expanding row any more. The selection rides the URL
+ * (`?property=…`), like a contact or a maintenance request.
+ *
+ * Each field saves on blur or change and the database answers — a manager retitles and
  * retypes, an admin sets the four rungs and the grants, a superadmin alone restricts.
- * The controls below manager's rung are read-only; the ones above it are hidden below
- * the rung that may use them, because a control the database will refuse is a lie.
+ * Below manager the page is the same page, read-only; the controls above manager's rung
+ * are hidden below the rung that may use them, because a control the database will
+ * refuse is a lie.
  *
  * THE 87 WITH NO FORMAT
  *
  *   The workbook said "unknown (no data)" and the seed kept the word. Those rows are the
- *   first thing this page wants sorted, so they filter to the top with one tick, and the
- *   format picker is the only control on them that is not greyed out. A slot with no
- *   format cannot be recorded against — the CHECK says so — which is the honest state
- *   until somebody who knows says "date".
+ *   first thing this page wants sorted, so they filter to the top with one tick and read
+ *   "not set" in the list. A slot with no format cannot be recorded against — the CHECK
+ *   says so — which is the honest state until somebody who knows says "date".
  */
 
 const slugify = (label: string) =>
@@ -44,6 +57,7 @@ const EMPTY_DEF: NewPropertyDef = {
 const LEVEL_OPTIONS = PERMISSION_LEVELS.map(l => ({ value: l, label: l }));
 
 export function PropertiesSetupPage() {
+  const [params, setParams] = useSearchParams();
   const repo = useRepository();
   const { can } = usePermission();
   const canEdit = can("manager");
@@ -59,19 +73,23 @@ export function PropertiesSetupPage() {
   const { data: grants } = useQuery(r => r.listPropertyAccess(), [], [reload]);
   const { data: profiles } = useQuery(r => r.listProfiles(), []);
 
-  const [draft, setDraft] = useState<NewPropertyDef | null>(null);
-  const [keyTouched, setKeyTouched] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const selectedKey = params.get("property");
+  const creating = params.get("new") === "1";
   const [error, setError] = useState<string | null>(null);
-  const [open, setOpen] = useState<string | null>(null);
 
-  // Filters: which stage, only-unknown, only-restricted, retired shown, and a search.
+  // Filters: which stage, only-unknown, retired shown, and a search.
   const [stageFilter, setStageFilter] = useState<string | null>(null);
   const [onlyUnknown, setOnlyUnknown] = useState(false);
   const [showRetired, setShowRetired] = useState(false);
   const [search, setSearch] = useState("");
 
-  const teamOptions = teams.filter(t => t.isActive).map(t => ({ value: t.id, label: t.name }));
+  const setParam = (patch: Record<string, string | null>) => {
+    const next = new URLSearchParams(params);
+    for (const [k, v] of Object.entries(patch)) { if (v == null) next.delete(k); else next.set(k, v); }
+    setParams(next, { replace: true });
+  };
+  const select = (key: string | null) => setParam({ property: key, new: null });
+
   const grantsByKey = useMemo(() => {
     const m = new Map<string, PropertyAccess[]>();
     grants.forEach(g => { (m.get(g.propertyKey) ?? m.set(g.propertyKey, []).get(g.propertyKey)!).push(g); });
@@ -80,17 +98,21 @@ export function PropertiesSetupPage() {
 
   const terms = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const shown = propertyDefs.filter(d =>
-    (showRetired || d.isActive)
+    (showRetired || d.isActive || d.key === selectedKey)
     && (!stageFilter || d.stageName === stageFilter)
     && (!onlyUnknown || d.format === "unknown")
     && terms.every(t => `${d.label} ${d.key} ${d.teamName ?? ""} ${d.format} ${d.scope}`.toLowerCase().includes(t))
   );
-  const groups = (stageNames.length ? stageNames : [...new Set(shown.map(d => d.stageName))])
-    .map(stage => ({ stage, defs: shown.filter(d => d.stageName === stage) }))
+  const stages = stageNames.length ? stageNames : [...new Set(propertyDefs.map(d => d.stageName))];
+  const groups = stages
+    .map(stage => ({ stage, defs: shown.filter(d => d.stageName === stage).sort((a, b) => a.position - b.position || a.label.localeCompare(b.label)) }))
     .filter(g => g.defs.length > 0);
 
+  const selected = propertyDefs.find(d => d.key === selectedKey) ?? null;
   const unknownCount = propertyDefs.filter(d => d.isActive && d.format === "unknown").length;
   const restrictedCount = propertyDefs.filter(d => d.restricted).length;
+  const hasDetail = Boolean(selected || creating);
+  const activeProfiles = useMemo(() => profiles.filter(p => p.active).map(p => ({ id: p.id, name: p.fullName })), [profiles]);
 
   async function patch(key: string, change: PropertyDefPatch) {
     setError(null);
@@ -98,28 +120,13 @@ export function PropertiesSetupPage() {
     catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }
 
-  async function saveDraft() {
-    if (!draft) return;
-    setSaving(true); setError(null);
-    try { await repo.createPropertyDef(draft); setDraft(null); setKeyTouched(false); bump(); }
-    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
-    finally { setSaving(false); }
-  }
-
-  const draftValid = draft !== null && /^[a-z][a-z0-9_]*$/.test(draft.key) && draft.label.trim() !== "" && draft.stageName !== "";
-
   return (
-    <section className="panel">
+    <>
       <div className="panel-head">
         <Text type="text2" weight="bold">Property definitions ({propertyDefs.filter(d => d.isActive).length})</Text>
         <div className="panel-actions">
-          {unknownCount > 0 && (
-            <Text type="text3" color="secondary">{unknownCount} without a format</Text>
-          )}
+          {unknownCount > 0 && <Text type="text3" color="secondary">{unknownCount} without a format</Text>}
           {restrictedCount > 0 && <span className="lock-badge">{restrictedCount} restricted</span>}
-          {canEdit && draft === null && (
-            <Button size="small" onClick={() => { setDraft(EMPTY_DEF); setKeyTouched(false); }}>+ Add property</Button>
-          )}
         </div>
       </div>
       <Text type="text2" color="secondary" ellipsis={false}>
@@ -127,140 +134,78 @@ export function PropertiesSetupPage() {
         answer for the site, pushable to the jobs — or <strong>job</strong>), which stage and process collect it,
         what shape the value takes, and who may see and change it: four permission rungs, the teams and people
         named below them, and <strong>restricted</strong> — opt-in, nobody but a superadmin until a team or person
-        is granted. {canEdit ? "Managers edit wording, format and team; admins set the rungs and grants; superadmins restrict." : "Managers and above edit."}
+        is granted. Pick one and it opens beside the list. {canEdit ? "Managers edit wording, format and team; admins set the rungs and grants; superadmins restrict." : "Managers and above edit."}
       </Text>
 
       {error && <Problem>{error}</Problem>}
 
       <div className="toolbar" style={{ marginTop: "var(--space-12)" }}>
-        <Select aria-label="Filter by stage" clearable placeholder="All stages" options={stageNames.map(s => ({ value: s, label: s }))}
+        <Select aria-label="Filter by stage" clearable placeholder="All stages" options={stages.map(s => ({ value: s, label: s }))}
           value={stageFilter} onChange={setStageFilter} />
         <TextField size="small" id="props-search" inputAriaLabel="Search properties" placeholder="Search…" value={search} onChange={setSearch} />
         <Checkbox label="Only without a format" checked={onlyUnknown} onChange={() => setOnlyUnknown(v => !v)} />
         <Checkbox label="Show retired" checked={showRetired} onChange={() => setShowRetired(v => !v)} />
+        {canEdit && <Button size="small" onClick={() => setParam({ new: "1", property: null })}>+ Add property</Button>}
       </div>
 
-      {draft !== null && (
-        <div className="new-address-block">
-          <div className="panel-head"><Text type="text2" weight="bold">New property</Text></div>
-          <div className="create-form">
-            <Field label="Label" required>
-              <TextField value={draft.label} id="prop-label" inputAriaLabel="Property label"
-                onChange={v => setDraft({ ...draft, label: v, key: keyTouched ? draft.key : slugify(v) })} />
-            </Field>
-            <Field label="Key" required hint="the identity — lowercase letters, digits and underscores">
-              <TextField value={draft.key} id="prop-key" inputAriaLabel="Property key"
-                onChange={v => { setKeyTouched(true); setDraft({ ...draft, key: v }); }} />
-            </Field>
-            <Field label="Level" required hint="a project property is one answer for the whole site, pushable to its jobs">
-              <Select aria-label="Property level" options={PROPERTY_SCOPES.map(v => ({ value: v, label: v }))}
-                value={draft.scope} onChange={v => setDraft({ ...draft, scope: v as PropertyScope })} />
-            </Field>
-            <Field label="Captured at" required>
-              <Select aria-label="Captured at stage" options={stageNames.map(n => ({ value: n, label: n }))}
-                value={draft.stageName} onChange={v => setDraft({ ...draft, stageName: v })} placeholder="Select a stage" />
-            </Field>
-            <Field label="Captured by" hint="leave blank if no team is answerable yet">
-              <Select aria-label="Captured by team" clearable placeholder="No team" options={teamOptions}
-                value={draft.teamId ?? null} onChange={v => setDraft({ ...draft, teamId: v as TeamId | null })} />
-            </Field>
-            <Field label="Format" required>
-              <Select aria-label="Property format" options={RECORDABLE_FORMATS.map(f => ({ value: f, label: f }))}
-                value={draft.format} onChange={v => setDraft({ ...draft, format: v as PropertyFormat })} />
-            </Field>
-            <Field label="Description">
-              <TextField value={draft.description ?? ""} id="prop-desc" inputAriaLabel="Description"
-                onChange={v => setDraft({ ...draft, description: v || null })} />
-            </Field>
-            {can("superadmin") && (
-              <Field label="Restricted" hint="opt-in: hidden from everyone below superadmin until granted">
-                <Checkbox label="Restricted" checked={draft.restricted ?? false} onChange={() => setDraft({ ...draft, restricted: !(draft.restricted ?? false) })} />
-              </Field>
-            )}
-          </div>
-          <div className="field-inline" style={{ marginTop: "var(--space-8)" }}>
-            <Button size="small" onClick={saveDraft} disabled={saving || !draftValid}>{saving ? "Saving…" : "Add property"}</Button>
-            <Button size="small" kind="tertiary" onClick={() => setDraft(null)}>Cancel</Button>
-          </div>
-        </div>
-      )}
-
-      {propertyDefs.length === 0 && draft === null && (
-        <div className="search-note">
-          <Text type="text3" ellipsis={false}>
-            <strong>Nothing defined yet.</strong> The table starts empty on purpose — a guess on this screen
-            gets quoted back as though it were agreed.
-          </Text>
-        </div>
-      )}
-
-      {groups.map(g => (
-        <div className="slot-stage" key={g.stage}>
-          <div className="slot-stage-head">{g.stage} · {g.defs.length} propert{g.defs.length === 1 ? "y" : "ies"}</div>
+      <div className={`contacts-grid${hasDetail ? " has-detail" : ""}`}>
+        <section className="panel">
+          {propertyDefs.length === 0 && (
+            <div className="search-note">
+              <Text type="text3" ellipsis={false}>
+                <strong>Nothing defined yet.</strong> The table starts empty on purpose — a guess on this screen
+                gets quoted back as though it were agreed.
+              </Text>
+            </div>
+          )}
           <div className="data-table-wrap">
             <table className="data-table props-table">
               <thead>
-                <tr>
-                  <th>Label</th><th>Process</th><th>Level</th><th>Team</th><th>Format</th><th>SLA</th><th>Access</th><th aria-label="More"></th>
-                </tr>
+                <tr><th>Property</th><th>Process</th><th>Level</th><th>Team</th><th>Format</th><th className="num">SLA</th><th>Access</th></tr>
               </thead>
-              <tbody>
-                {g.defs.map(d => {
-                  const procs = (processesByProperty.get(d.key) ?? []).map(pp => processById.get(pp.processId)?.name).filter(Boolean);
-                  const isOpen = open === d.key;
-                  const rowGrants = grantsByKey.get(d.key) ?? [];
-                  return (
-                    <RowWithDetail key={d.key} open={isOpen} colSpan={8} detail={
-                      <PropertyDetail def={d} grants={rowGrants} options={optionsByProperty.get(d.key) ?? []}
-                        teams={teams} profiles={profiles.filter(p => p.active).map(p => ({ id: p.id, name: p.fullName }))}
-                        onPatch={change => patch(d.key, change)} onChanged={bump} onError={setError} />
-                    }>
-                      <td>
-                        {canEdit ? (
-                          <BlurText value={d.label} label={`Label of ${d.label}`} onCommit={v => v.trim() && patch(d.key, { label: v.trim() })} />
-                        ) : <strong>{d.label}</strong>}
-                        <div className="slot-sub is-key"><code>{d.key}</code>{!d.isActive && <span className="slot-chip">retired</span>}{d.restricted && <span className="slot-chip is-differs">restricted</span>}</div>
-                      </td>
-                      <td className="muted">{procs.length ? procs.join(", ") : "—"}</td>
-                      <td>
-                        {canEdit ? (
-                          <Select aria-label={`Level of ${d.label}`} options={PROPERTY_SCOPES.map(v => ({ value: v, label: v }))} value={d.scope} onChange={v => patch(d.key, { scope: v as PropertyScope })} />
-                        ) : d.scope}
-                      </td>
-                      <td>
-                        {canEdit ? (
-                          <Select aria-label={`Team for ${d.label}`} clearable placeholder="No team" options={teamOptions} value={d.teamId} onChange={v => patch(d.key, { teamId: v as TeamId | null })} />
-                        ) : (d.teamName ?? "—")}
-                      </td>
-                      <td>
-                        {canEdit ? (
-                          <Select aria-label={`Format of ${d.label}`} placeholder="Set a format"
-                            options={PROPERTY_FORMATS.filter(f => f !== "unknown" || d.format === "unknown").map(f => ({ value: f, label: f === "unknown" ? "— not set —" : f }))}
-                            value={d.format} onChange={v => patch(d.key, { format: v as PropertyFormat })} />
-                        ) : d.format === "unknown" ? <span className="pf-unset">not set</span> : d.format}
-                      </td>
-                      <td>
-                        {canEdit ? (
-                          <NumberCell value={d.slaDays} label={`SLA days for ${d.label}`} onCommit={v => patch(d.key, { slaDays: v })} />
-                        ) : (d.slaDays ?? "—")}
-                      </td>
-                      <td className="muted">
-                        {describeAccess(d, rowGrants, teams)}
-                      </td>
-                      <td>
-                        <Button kind="tertiary" size="small" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : d.key)}>
-                          {isOpen ? "Less" : "More"}
-                        </Button>
-                      </td>
-                    </RowWithDetail>
-                  );
-                })}
-              </tbody>
+              {groups.map(g => (
+                <tbody className="group" key={g.stage}>
+                  <tr className="group-head"><th colSpan={7} scope="colgroup">{g.stage} · {g.defs.length} propert{g.defs.length === 1 ? "y" : "ies"}</th></tr>
+                  {g.defs.map(d => {
+                    const procs = (processesByProperty.get(d.key) ?? []).map(pp => processById.get(pp.processId)?.name).filter(Boolean);
+                    return (
+                      <tr key={d.key} className={`contact-row${d.key === selectedKey ? " is-selected" : ""}`} onClick={() => select(d.key)} aria-current={d.key === selectedKey ? "true" : undefined}>
+                        <td>
+                          <button type="button" className="link-button tap-link" onClick={e => { e.stopPropagation(); select(d.key); }}>
+                            <strong>{d.label}</strong>
+                          </button>
+                          <div className="slot-sub is-key"><code>{d.key}</code>{!d.isActive && <span className="slot-chip">retired</span>}{d.restricted && <span className="slot-chip is-differs">restricted</span>}{d.required && <span className="slot-chip">required</span>}</div>
+                        </td>
+                        <td className="muted">{procs.length ? procs.join(", ") : "—"}</td>
+                        <td className="muted">{d.scope}</td>
+                        <td className="muted">{d.teamName ?? "—"}</td>
+                        <td>{d.format === "unknown" ? <span className="pf-unset muted">not set</span> : d.format}</td>
+                        <td className="num">{d.slaDays ?? <span className="muted">—</span>}</td>
+                        <td className="muted">{describeAccess(d, grantsByKey.get(d.key) ?? [], teams)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              ))}
             </table>
+            {propertyDefs.length > 0 && shown.length === 0 && (
+              <Text type="text2" color="secondary" element="p" ellipsis={false}>Nothing matches — clear the search or the filters.</Text>
+            )}
           </div>
-        </div>
-      ))}
-    </section>
+        </section>
+
+        {creating && canEdit && (
+          <NewPropertyForm stageNames={stages} teams={teams} onCancel={() => setParam({ new: null })} onCreated={key => { bump(); select(key); }} />
+        )}
+        {!creating && selected && (
+          <PropertyDetail key={selected.key} def={selected} grants={grantsByKey.get(selected.key) ?? []} options={optionsByProperty.get(selected.key) ?? []}
+            processNames={(processesByProperty.get(selected.key) ?? []).map(pp => processById.get(pp.processId)?.name).filter((n): n is string => Boolean(n))}
+            stageNames={stages} teams={teams} profiles={activeProfiles}
+            onPatch={change => patch(selected.key, change)} onChanged={bump} onError={setError}
+            onClose={() => select(null)} onDeleted={() => { bump(); select(null); }} />
+        )}
+      </div>
+    </>
   );
 }
 
@@ -271,20 +216,82 @@ function describeAccess(d: PropertyDef, grants: PropertyAccess[], teams: readonl
   return `everyone at ${d.readLevel}+`;
 }
 
-/** A table row that can open a full-width detail row beneath it. */
-function RowWithDetail({ open, colSpan, detail, children }: { open: boolean; colSpan: number; detail: React.ReactNode; children: React.ReactNode }) {
+// ------------------------------------------------------------------ new property
+function NewPropertyForm({ stageNames, teams, onCancel, onCreated }: {
+  stageNames: string[]; teams: readonly Team[]; onCancel: () => void; onCreated: (key: string) => void;
+}) {
+  const repo = useRepository();
+  const { can } = usePermission();
+  const [draft, setDraft] = useState<NewPropertyDef>(EMPTY_DEF);
+  const [keyTouched, setKeyTouched] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const teamOptions = teams.filter(t => t.isActive).map(t => ({ value: t.id, label: t.name }));
+  const valid = /^[a-z][a-z0-9_]*$/.test(draft.key) && draft.label.trim() !== "" && draft.stageName !== "";
+
+  async function save() {
+    setSaving(true); setError(null);
+    try { const d = await repo.createPropertyDef(draft); onCreated(d.key); }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    finally { setSaving(false); }
+  }
+
   return (
-    <>
-      <tr>{children}</tr>
-      {open && <tr><td colSpan={colSpan}>{detail}</td></tr>}
-    </>
+    <section className="panel contact-detail" aria-label="New property">
+      <div className="panel-head">
+        <Text type="text2" weight="bold">New property</Text>
+        <Button size="small" kind="tertiary" onClick={onCancel}>Cancel</Button>
+      </div>
+      {error && <Problem>{error}</Problem>}
+      <div className="create-form">
+        <Field label="Label" required>
+          <TextField value={draft.label} id="prop-label" inputAriaLabel="Property label"
+            onChange={v => setDraft({ ...draft, label: v, key: keyTouched ? draft.key : slugify(v) })} />
+        </Field>
+        <Field label="Key" required hint="the identity — lowercase letters, digits and underscores">
+          <TextField value={draft.key} id="prop-key" inputAriaLabel="Property key"
+            onChange={v => { setKeyTouched(true); setDraft({ ...draft, key: v }); }} />
+        </Field>
+        <Field label="Level" required hint="a project property is one answer for the whole site, pushable to its jobs">
+          <Select aria-label="Property level" options={PROPERTY_SCOPES.map(v => ({ value: v, label: v }))}
+            value={draft.scope} onChange={v => setDraft({ ...draft, scope: v as PropertyScope })} />
+        </Field>
+        <Field label="Captured at" required>
+          <Select aria-label="Captured at stage" options={stageNames.map(n => ({ value: n, label: n }))}
+            value={draft.stageName} onChange={v => setDraft({ ...draft, stageName: v })} placeholder="Select a stage" />
+        </Field>
+        <Field label="Captured by" hint="leave blank if no team is answerable yet">
+          <Select aria-label="Captured by team" clearable placeholder="No team" options={teamOptions}
+            value={draft.teamId ?? null} onChange={v => setDraft({ ...draft, teamId: v as TeamId | null })} />
+        </Field>
+        <Field label="Format" required>
+          <Select aria-label="Property format" options={RECORDABLE_FORMATS.map(f => ({ value: f, label: f }))}
+            value={draft.format} onChange={v => setDraft({ ...draft, format: v as PropertyFormat })} />
+        </Field>
+        <Field label="Description">
+          <TextField value={draft.description ?? ""} id="prop-desc" inputAriaLabel="Description"
+            onChange={v => setDraft({ ...draft, description: v || null })} />
+        </Field>
+        {can("superadmin") && (
+          <Field label="Restricted" hint="opt-in: hidden from everyone below superadmin until granted">
+            <Checkbox label="Restricted" checked={draft.restricted ?? false} onChange={() => setDraft({ ...draft, restricted: !(draft.restricted ?? false) })} />
+          </Field>
+        )}
+      </div>
+      <div className="field-inline" style={{ marginTop: "var(--space-8)" }}>
+        <Button size="small" onClick={save} disabled={saving || !valid}>{saving ? "Saving…" : "Add property"}</Button>
+        <Button size="small" kind="tertiary" onClick={onCancel}>Cancel</Button>
+      </div>
+    </section>
   );
 }
 
-function PropertyDetail({ def: d, grants, options, teams, profiles, onPatch, onChanged, onError }: {
-  def: PropertyDef; grants: PropertyAccess[]; options: PropertyOption[];
-  teams: readonly Team[]; profiles: { id: string; name: string }[];
+// ------------------------------------------------------------------ the detail
+function PropertyDetail({ def: d, grants, options, processNames, stageNames, teams, profiles, onPatch, onChanged, onError, onClose, onDeleted }: {
+  def: PropertyDef; grants: PropertyAccess[]; options: PropertyOption[]; processNames: string[];
+  stageNames: string[]; teams: readonly Team[]; profiles: { id: string; name: string }[];
   onPatch: (change: PropertyDefPatch) => Promise<void>; onChanged: () => void; onError: (e: string | null) => void;
+  onClose: () => void; onDeleted: () => void;
 }) {
   const repo = useRepository();
   const { can } = usePermission();
@@ -294,12 +301,18 @@ function PropertyDetail({ def: d, grants, options, teams, profiles, onPatch, onC
   const [grantee, setGrantee] = useState<string | null>(null);
   const [newOption, setNewOption] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const teamOptions = teams.filter(t => t.isActive || t.id === d.teamId).map(t => ({ value: t.id, label: t.name }));
 
   async function run(fn: () => Promise<unknown>) {
     onError(null);
     try { await fn(); onChanged(); }
     catch (e) { onError(e instanceof Error ? e.message : String(e)); }
   }
+  const addOption = () => {
+    if (!newOption.trim()) return;
+    run(() => repo.savePropertyOption({ propertyKey: d.key, key: slugify(newOption), label: newOption.trim(), position: options.length + 1, isActive: true }));
+    setNewOption("");
+  };
 
   const levelSelect = (label: string, value: PermissionLevel, key: keyof PropertyDefPatch) => (
     <div>
@@ -311,32 +324,76 @@ function PropertyDetail({ def: d, grants, options, teams, profiles, onPatch, onC
   );
 
   return (
-    <div className="stack-tight">
-      <div className="create-form">
-        <Field label="Description" hint="what the field means, for whoever fills it in">
-          {canEdit ? (
-            <BlurText value={d.description ?? ""} label={`Description of ${d.label}`} onCommit={v => onPatch({ description: v.trim() || null })} wide />
-          ) : <Text type="text2" ellipsis={false}>{d.description ?? "—"}</Text>}
-        </Field>
-        <Field label="Required" hint="required to leave its stage — not required to create the record">
-          <Checkbox label="Required to exit the stage" checked={d.required} disabled={!canEdit} onChange={() => onPatch({ required: !d.required })} />
-        </Field>
-        <Field label="Active" hint="a retired property keeps every value ever recorded in it">
-          <Checkbox label={d.isActive ? "Active" : "Retired"} checked={d.isActive} disabled={!canEdit} onChange={() => onPatch({ isActive: !d.isActive })} />
-        </Field>
-        <Field label="Restricted" hint="opt-in: nobody below superadmin sees or touches its values unless granted below. Superadmin only.">
-          <Checkbox label="Restricted" checked={d.restricted} disabled={!can("superadmin")} onChange={() => onPatch({ restricted: !d.restricted })} />
-        </Field>
-        {d.importRef && (
-          <Field label="Source"><Text type="text2">{d.importRef}</Text></Field>
-        )}
-      </div>
+    <div className="stack" aria-label={`Details of ${d.label}`}>
+      <section className="panel contact-detail">
+        <div className="panel-head">
+          <div>
+            <Text type="text2" weight="bold">{d.label}</Text>
+            <div className="slot-sub">
+              <code>{d.key}</code> · {d.stageName}{processNames.length > 0 && <> · collected by {processNames.join(", ")}</>}
+              {!d.isActive && <span className="slot-chip">retired</span>}{d.restricted && <span className="slot-chip is-differs">restricted</span>}
+            </div>
+          </div>
+          <Button size="small" kind="tertiary" onClick={onClose} aria-label="Close details">Close</Button>
+        </div>
 
-      <div>
-        <Text type="text3" weight="bold">Security levels</Text>
+        <div className="create-form">
+          <Field label="Label" required>
+            <BlurText value={d.label} disabled={!canEdit} label={`Label of ${d.label}`} onCommit={v => v.trim() && onPatch({ label: v.trim() })} wide />
+          </Field>
+          <Field label="Level" required hint="a project property is one answer for the whole site, pushable to its jobs">
+            {canEdit ? (
+              <Select aria-label={`Level of ${d.label}`} options={PROPERTY_SCOPES.map(v => ({ value: v, label: v }))} value={d.scope} onChange={v => onPatch({ scope: v as PropertyScope })} />
+            ) : <Text type="text2">{d.scope}</Text>}
+          </Field>
+          <Field label="Captured at" required>
+            {canEdit ? (
+              <Select aria-label={`Stage of ${d.label}`} options={stageNames.map(n => ({ value: n, label: n }))} value={d.stageName} onChange={v => onPatch({ stageName: v })} />
+            ) : <Text type="text2">{d.stageName}</Text>}
+          </Field>
+          <Field label="Captured by" hint="the team answerable for it — blank if nobody is yet">
+            {canEdit ? (
+              <Select aria-label={`Team for ${d.label}`} clearable placeholder="No team" options={teamOptions} value={d.teamId} onChange={v => onPatch({ teamId: v as TeamId | null })} />
+            ) : <Text type="text2">{d.teamName ?? "No team"}</Text>}
+          </Field>
+          <Field label="Format" required hint={d.format === "unknown" ? "not set — nothing can be recorded against it until it is" : undefined}>
+            {canEdit ? (
+              <Select aria-label={`Format of ${d.label}`} placeholder="Set a format"
+                options={PROPERTY_FORMATS.filter(f => f !== "unknown" || d.format === "unknown").map(f => ({ value: f, label: f === "unknown" ? "— not set —" : f }))}
+                value={d.format} onChange={v => onPatch({ format: v as PropertyFormat })} />
+            ) : d.format === "unknown" ? <span className="pf-unset">not set</span> : <Text type="text2">{d.format}</Text>}
+          </Field>
+          <Field label="SLA days" hint="the SLA sheet's number for this step, as given">
+            <NumberInput value={d.slaDays} disabled={!canEdit} label={`SLA days for ${d.label}`} min={0} onCommit={v => onPatch({ slaDays: v })} />
+          </Field>
+          <Field label="Position" hint="order among its stage's slots">
+            <NumberInput value={d.position} disabled={!canEdit} label={`Position of ${d.label}`} onCommit={v => onPatch({ position: v ?? 0 })} />
+          </Field>
+          <Field label="Description" hint="what the field means, for whoever fills it in">
+            <BlurText value={d.description ?? ""} disabled={!canEdit} label={`Description of ${d.label}`} onCommit={v => onPatch({ description: v.trim() || null })} wide plain />
+          </Field>
+          <Field label="Required" hint="required to leave its stage — not required to create the record">
+            <Checkbox label="Required to exit the stage" checked={d.required} disabled={!canEdit} onChange={() => onPatch({ required: !d.required })} />
+          </Field>
+          <Field label="Active" hint="a retired property keeps every value ever recorded in it">
+            <Checkbox label={d.isActive ? "Active" : "Retired"} checked={d.isActive} disabled={!canEdit} onChange={() => onPatch({ isActive: !d.isActive })} />
+          </Field>
+          <Field label="Restricted" hint="opt-in: nobody below superadmin sees or touches its values unless granted below. Superadmin only.">
+            <Checkbox label="Restricted" checked={d.restricted} disabled={!can("superadmin")} onChange={() => onPatch({ restricted: !d.restricted })} />
+          </Field>
+          {d.importRef && (
+            <Field label="Source"><Text type="text2">{d.importRef}</Text></Field>
+          )}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <Text type="text2" weight="bold">Security levels</Text>
+          <Text type="text3" color="secondary">{canLevels ? "the lowest rung that may do each thing" : "admins set these"}</Text>
+        </div>
         <Text type="text3" color="secondary" ellipsis={false} element="p">
-          The lowest rung that may do each thing. Then, below manager, the teams and people named
-          decide — no one named means open at the rung. {canLevels ? "" : "Admins set these."}
+          Then, below manager, the teams and people named decide — no one named means open at the rung.
         </Text>
         <div className="levels-grid">
           {levelSelect("Record", d.createLevel, "createLevel")}
@@ -344,10 +401,13 @@ function PropertyDetail({ def: d, grants, options, teams, profiles, onPatch, onC
           {levelSelect("Change", d.updateLevel, "updateLevel")}
           {levelSelect("Clear", d.deleteLevel, "deleteLevel")}
         </div>
-      </div>
+      </section>
 
-      <div>
-        <Text type="text3" weight="bold">Teams and people with access</Text>
+      <section className="panel">
+        <div className="panel-head">
+          <Text type="text2" weight="bold">Teams and people with access</Text>
+          <Text type="text3" color="secondary">{d.restricted ? "the only way in" : "narrows access below manager"}</Text>
+        </div>
         {grants.length === 0 && (
           <Text type="text3" color="secondary" ellipsis={false} element="p">
             {d.restricted ? "Nobody yet — superadmin only." : "Nobody named — open to everyone at the rungs above; managers and above always."}
@@ -371,7 +431,7 @@ function PropertyDetail({ def: d, grants, options, teams, profiles, onPatch, onC
           ))}
         </ul>
         {canGrant && (
-          <div className="field-inline" style={{ marginTop: "var(--space-4)" }}>
+          <div className="field-inline" style={{ marginTop: "var(--space-4)", flexWrap: "wrap" }}>
             <Select aria-label={`Grant access to ${d.label}`} clearable placeholder="Add a team or a person…"
               options={[
                 ...teams.filter(t => t.isActive && !grants.some(g => g.teamId === t.id)).map(t => ({ value: `team:${t.id}`, label: `Team · ${t.name}` })),
@@ -386,11 +446,14 @@ function PropertyDetail({ def: d, grants, options, teams, profiles, onPatch, onC
             }}>Grant</Button>
           </div>
         )}
-      </div>
+      </section>
 
       {(d.format === "single select" || d.format === "multi select") && (
-        <div>
-          <Text type="text3" weight="bold">Choices ({options.length})</Text>
+        <section className="panel">
+          <div className="panel-head">
+            <Text type="text2" weight="bold">Choices ({options.length})</Text>
+            <Text type="text3" color="secondary">what the picker offers</Text>
+          </div>
           {options.length === 0 && <Text type="text3" color="secondary" ellipsis={false} element="p">No choices yet — the workbook named none, so the picker offers nothing until somebody adds them here.</Text>}
           <ul className="dep-list">
             {options.map(o => (
@@ -402,56 +465,39 @@ function PropertyDetail({ def: d, grants, options, teams, profiles, onPatch, onC
             ))}
           </ul>
           {canEdit && (
-            <div className="field-inline" style={{ marginTop: "var(--space-4)" }}>
+            <div className="field-inline" style={{ marginTop: "var(--space-4)", flexWrap: "wrap" }}>
               <input className="pf-input" aria-label={`New choice for ${d.label}`} placeholder="Add a choice…" value={newOption} onChange={e => setNewOption(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && newOption.trim()) { run(() => repo.savePropertyOption({ propertyKey: d.key, key: slugify(newOption), label: newOption.trim(), position: options.length + 1, isActive: true })); setNewOption(""); } }} />
-              <Button size="small" disabled={!newOption.trim()} onClick={() => { run(() => repo.savePropertyOption({ propertyKey: d.key, key: slugify(newOption), label: newOption.trim(), position: options.length + 1, isActive: true })); setNewOption(""); }}>Add</Button>
+                onKeyDown={e => { if (e.key === "Enter") addOption(); }} />
+              <Button size="small" disabled={!newOption.trim()} onClick={addOption}>Add</Button>
             </div>
           )}
-        </div>
+        </section>
       )}
 
-      {canEdit && !confirmDelete && (
-        <div className="field-inline">
-          <Button size="small" kind="tertiary" onClick={() => setConfirmDelete(true)}>
-            Delete definition…
-          </Button>
-          <Text type="text3" color="secondary" element="span">Deletes its values too. Prefer retiring.</Text>
-        </div>
-      )}
-      {canEdit && confirmDelete && (
-        /* Two clicks, the second one named: the first says what will go, the second does it.
-           Retiring keeps every value; this does not, and there is no undo. */
-        <div className="field-inline" role="alert">
-          <Text type="text2" element="span" ellipsis={false}>
-            Delete <strong>{d.label}</strong> and every value ever recorded in it?
-          </Text>
-          <Button size="small" color="negative" onClick={() => run(() => repo.deletePropertyDef(d.key))}>Delete for good</Button>
-          <Button size="small" kind="tertiary" onClick={() => setConfirmDelete(false)}>Keep it</Button>
-        </div>
+      {canEdit && (
+        <section className="panel">
+          {!confirmDelete ? (
+            <div className="field-inline">
+              <Button size="small" kind="tertiary" onClick={() => setConfirmDelete(true)}>Delete definition…</Button>
+              <Text type="text3" color="secondary" element="span">Deletes its values too. Prefer retiring.</Text>
+            </div>
+          ) : (
+            /* Two clicks, the second one named: the first says what will go, the second does it.
+               Retiring keeps every value; this does not, and there is no undo. */
+            <div className="field-inline" role="alert">
+              <Text type="text2" element="span" ellipsis={false}>
+                Delete <strong>{d.label}</strong> and every value ever recorded in it?
+              </Text>
+              <Button size="small" color="negative" onClick={async () => {
+                onError(null);
+                try { await repo.deletePropertyDef(d.key); onDeleted(); }
+                catch (e) { onError(e instanceof Error ? e.message : String(e)); setConfirmDelete(false); }
+              }}>Delete for good</Button>
+              <Button size="small" kind="tertiary" onClick={() => setConfirmDelete(false)}>Keep it</Button>
+            </div>
+          )}
+        </section>
       )}
     </div>
-  );
-}
-
-function BlurText({ value, label, onCommit, wide }: { value: string; label: string; onCommit: (v: string) => void; wide?: boolean }) {
-  const [draft, setDraft] = useState(value);
-  useEffect(() => { setDraft(value); }, [value]);
-  return (
-    <input className="pf-input" style={wide ? { width: "100%" } : { width: "min(240px, 100%)" }} aria-label={label} value={draft}
-      onChange={e => setDraft(e.target.value)}
-      onBlur={() => { if (draft !== value) onCommit(draft); }}
-      onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
-  );
-}
-
-function NumberCell({ value, label, onCommit }: { value: number | null; label: string; onCommit: (v: number | null) => void }) {
-  const [draft, setDraft] = useState(value == null ? "" : String(value));
-  useEffect(() => { setDraft(value == null ? "" : String(value)); }, [value]);
-  return (
-    <input type="number" min={0} inputMode="numeric" className="pf-input dep-lag" aria-label={label} value={draft}
-      onChange={e => setDraft(e.target.value)}
-      onBlur={() => { const v = draft.trim() === "" ? null : Number(draft); if (v !== value) onCommit(v); }}
-      onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
   );
 }
