@@ -58,9 +58,17 @@ builds, each one run and printed: extension names alone, this app's names alone,
 together, neither, empty strings, a `postgres://` string where the URL should be, and a
 URL with trailing slashes.
 
-So there is nothing for Amber to add in Netlify. **The one thing still needed is a
-deploy**, because `VITE_` values are read when the site is built and the live bundle was
-built before this change. Merging to `main` does it.
+So there was nothing for Amber to add in Netlify, only a deploy — `VITE_` values are read
+when the site is built, and the live bundle predated the change.
+
+**Merged and deployed the same morning, and sign-in is live.** The production bundle at
+`loftyprojectapp.netlify.app` now carries `https://gmekuqdjemrfuurxhuib.supabase.co` and a
+key that decodes to `role: anon` on that project, with no `service_role` anywhere in it.
+The whole chain was walked, not assumed: `/auth/v1/authorize?provider=azure` with the
+production origin as `redirect_to` answers `302` to
+`login.microsoftonline.com/4fa1ee97-…/oauth2/v2.0/authorize` with no error parameter, so
+the provider is enabled, the origin is on the allow list, and the hand-off to the Lofty
+tenant is intact.
 
 Three things worth carrying forward:
 
@@ -166,9 +174,9 @@ database** (see *The platform layer* below).
 
 ### What needs Amber
 
-- ~~**Set the two Netlify variables and redeploy**~~ — **not needed.** The extension
-  already sets them under its own names and the app reads those names now. What remains is
-  a deploy, which merging this work does.
+- ~~**Set the two Netlify variables and redeploy**~~ — **done, and nothing was added.**
+  The extension already set them under its own names, the app reads those names now, and
+  the deploy that followed the merge put a configured bundle on the production URL.
 - **Ben Johnson's Microsoft sign-in address.** If it is `ben@loftybg.onmicrosoft.com` like
   everyone else's, that is one `update` on `profile_login_email`; if he signs in as
   `ben@lofty.com.au`, nothing more is needed. Not inferred.
@@ -1581,11 +1589,10 @@ smaller problem behind; **neither can be fixed from inside this repository**:
 
 | | What is wrong | Who fixes it, and where |
 | --- | --- | --- |
-| **The Netlify build source** | **Resolved 2 September** — `loftyprojectapp.netlify.app` is a *new* Netlify site (new site id, new team) building from `LoftySupport/loftyprojectapp` on `main`; first deploy `0d84e59`. The sign-in page said *Not configured* on it, which read like missing environment variables and was not: the site is connected to Supabase and the extension sets `VITE_SUPABASE_DATABASE_URL` and `VITE_SUPABASE_ANON_KEY`, names the app did not read | **Resolved in code** — `app/src/data/supabaseEnv.ts` reads either spelling. Nothing to add in Netlify; the deployed bundle predates the change, so it takes a deploy. Reasoning in *Session of 2026-09-02, later* |
+| **The Netlify build source** | **Resolved and deployed 2 September** — `loftyprojectapp.netlify.app` is a *new* Netlify site (new site id, new team) building from `LoftySupport/loftyprojectapp` on `main`; first deploy `0d84e59`. The sign-in page said *Not configured* on it, which read like missing environment variables and was not: the site is connected to Supabase and the extension sets `VITE_SUPABASE_DATABASE_URL` and `VITE_SUPABASE_ANON_KEY`, names the app did not read | **Closed** — `app/src/data/supabaseEnv.ts` reads either spelling, nothing was added in Netlify, and the deploy after merging put a configured bundle on the production URL. Reasoning in *Session of 2026-09-02, later* |
 | **Repository visibility** | This repository is **private**; the old one is public. The Updates changelog reads merged pull requests from the browser with no token — see `app/src/data/github.ts` for why a token cannot go there — and GitHub answers an unauthenticated read of a private repository with 404 | A decision, not a fix. Make `LoftySupport/loftyprojectapp` public and the feed works exactly as before. Keep it private and the feed has to be generated at build time instead, which is a different piece of work and has not been done |
 
-Until that deploy goes out, the deployed site is this repository's build with nothing to
-sign in to. Until the second is decided, Updates → *Merged from the build* renders its error state saying the
+That deploy has gone out and the site signs in. Until the second is decided, Updates → *Merged from the build* renders its error state saying the
 repository is private, which is the honest answer and deliberately not an empty list.
 
 The schema is being designed one table at a time and the app is built ahead of it, so
