@@ -1,5 +1,6 @@
 import { Button, Heading, Text } from "@vibe/core";
 import { useAuth } from "../data/AuthProvider";
+import { supabaseEnv } from "../data/supabaseEnv";
 import "./SignInPage.css";
 
 /**
@@ -40,13 +41,35 @@ export function SignInPage() {
         {status === "unavailable" ? (
           /* No Supabase client in this build, so the button could not work. Saying so
              beats a button that silently does nothing — and it is a build-time state,
-             not something a visitor can put the app into. */
+             not something a visitor can put the app into.
+
+             It names which half is missing, and both accepted spellings, because the
+             first version of this message sent somebody to add two variables that were
+             already set — Netlify's Supabase extension had written the same values under
+             names of its own. "This build has no VITE_SUPABASE_URL" is a true sentence
+             that pointed at the wrong fix, and the missing sentence was the one about
+             build time. */
           <div className="signin-error" role="alert">
             <Text type="text2" element="span" ellipsis={false}>
-              <strong>Not configured.</strong> This build has no{" "}
-              <code className="sb-token">VITE_SUPABASE_URL</code> or{" "}
-              <code className="sb-token">VITE_SUPABASE_PUBLISHABLE_KEY</code>, so there is
-              nothing to sign in to.
+              <strong>Not configured.</strong> This build has{" "}
+              {supabaseEnv.urlUnusable
+                ? "a Supabase URL that is not a project URL"
+                : !supabaseEnv.hasUrl && !supabaseEnv.hasKey
+                  ? "no Supabase project URL and no key"
+                  : !supabaseEnv.hasUrl
+                    ? "a Supabase key but no project URL"
+                    : "a Supabase project URL but no key"}
+              , so there is nothing to sign in to.
+            </Text>
+            <Text type="text3" element="span" ellipsis={false}>
+              Either spelling is read:{" "}
+              <code className="sb-token">VITE_SUPABASE_URL</code> and{" "}
+              <code className="sb-token">VITE_SUPABASE_PUBLISHABLE_KEY</code>, or the
+              Netlify Supabase extension's{" "}
+              <code className="sb-token">VITE_SUPABASE_DATABASE_URL</code> and{" "}
+              <code className="sb-token">VITE_SUPABASE_ANON_KEY</code>. They are read when
+              the site is built, so a deploy that went out before they were set still
+              shows this until it is built again.
             </Text>
           </div>
         ) : (

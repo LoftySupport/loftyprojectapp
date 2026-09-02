@@ -25,6 +25,65 @@ Last updated: 2026-09-02.
 
 ---
 
+## Session of 2026-09-02, later — the variables were there all along, under other names
+
+The sign-in page still said *Not configured* after the site was connected to Supabase, and
+the previous entry below had the cause wrong. It is not that the new Netlify site has no
+variables. It is that the extension names them itself.
+
+Netlify → `loftyprojectapp` → Supabase extension → Configuration lists six:
+
+| Variable | Reaches the browser | This app read it before |
+|---|---|---|
+| `SUPABASE_DATABASE_URL` | no — no `VITE_` prefix | no |
+| `SUPABASE_ANON_KEY` | no | no |
+| `SUPABASE_SERVICE_ROLE_KEY` | no | no, and must stay that way |
+| `SUPABASE_JWT_SECRET` | no | no, and must stay that way |
+| **`VITE_SUPABASE_DATABASE_URL`** | **yes** | **no — wrong name** |
+| **`VITE_SUPABASE_ANON_KEY`** | **yes** | **no — wrong name** |
+
+The extension asks which framework the site uses, and Vite was chosen, so it does make
+public copies of the two values that are safe to publish. It just calls the project URL a
+"database URL" and the key an "anon key", where this app was written against
+`VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`. Both prefixed correctly, both
+holding the right values, neither one read. The bundle at `loftyprojectapp.netlify.app`
+was downloaded and searched to confirm it: no `supabase.co` URL and no key anywhere in it.
+
+**The app now reads either spelling**, and prefers its own two when both are set, so a
+publishable key added later quietly supersedes the extension's legacy anon key.
+`app/src/data/supabaseEnv.ts` is the one place the pair is resolved; the client, the
+maintenance accept link and the two pages that explain an empty app all read it from
+there rather than reaching for `import.meta.env` again. Watched, not assumed — seven
+builds, each one run and printed: extension names alone, this app's names alone, both
+together, neither, empty strings, a `postgres://` string where the URL should be, and a
+URL with trailing slashes.
+
+So there is nothing for Amber to add in Netlify. **The one thing still needed is a
+deploy**, because `VITE_` values are read when the site is built and the live bundle was
+built before this change. Merging to `main` does it.
+
+Three things worth carrying forward:
+
+- **A "database URL" that is an API URL.** The extension's value is
+  `https://gmekuqdjemrfuurxhuib.supabase.co` — the project URL, despite the name, and the
+  same project the Entra redirect URI already points at. The resolver refuses anything
+  that is not `https://` so that a real connection string could never be handed to
+  `createClient`; note that a `VITE_` variable is inlined into the public bundle
+  regardless of what the code then does with it, so the guard protects correctness, not
+  secrecy.
+- **`SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_JWT_SECRET` are back.** They were deleted on
+  purpose in August; the extension re-provisioned them when the site was connected. They
+  are unprefixed, so nothing reaches the browser and nothing in this repo reads them —
+  but the reasoning under *The Netlify environment* below has not changed, and deleting
+  them by hand will likely have the extension write them again. Amber's call: leave them,
+  or disconnect the extension and set the two `VITE_` variables by hand.
+- **The error message named the wrong fix.** *"This build has no `VITE_SUPABASE_URL` or
+  `VITE_SUPABASE_PUBLISHABLE_KEY`"* sent somebody to add variables that were already set.
+  It now says which half is missing, lists both accepted spellings, and says that they are
+  read at build time — the sentence that would have saved this round trip.
+
+---
+
 ## Session of 2026-09-02 — the repository moves again, the Netlify site is new, and one address
 
 Three things, two of them Amber's messages and one found while checking the second.
@@ -38,7 +97,15 @@ from the build* still renders its honest error rather than a list. Same decision
 
 **The Netlify site was recreated, and the sign-in page says *Not configured*.** Amber's
 screenshot: *"This build has no `VITE_SUPABASE_URL` or `VITE_SUPABASE_PUBLISHABLE_KEY`, so
-there is nothing to sign in to."* Read from Netlify's API rather than guessed:
+there is nothing to sign in to."*
+
+> **Superseded, same day** — see *the variables were there all along* above. The site
+> conclusions here are right; the cause and the fix are not. The variables existed, under
+> the extension's own names, and no one needed to add anything. Kept because the wrong
+> half was reached by sound reasoning from an API that could not list variables, and the
+> lesson is that "cannot read it" is not "it is not there".
+
+Read from Netlify's API rather than guessed:
 
 - `loftyprojectapp.netlify.app` is a **new Netlify site** — a new site id, on a new team.
   The site verified on 23 August (the one under *The environment variables*) answers 404
@@ -99,8 +166,9 @@ database** (see *The platform layer* below).
 
 ### What needs Amber
 
-- **Set the two Netlify variables and redeploy** (steps above). Until then the deployed
-  site is this repository's build with nothing to sign in to.
+- ~~**Set the two Netlify variables and redeploy**~~ — **not needed.** The extension
+  already sets them under its own names and the app reads those names now. What remains is
+  a deploy, which merging this work does.
 - **Ben Johnson's Microsoft sign-in address.** If it is `ben@loftybg.onmicrosoft.com` like
   everyone else's, that is one `update` on `profile_login_email`; if he signs in as
   `ben@lofty.com.au`, nothing more is needed. Not inferred.
@@ -1513,10 +1581,10 @@ smaller problem behind; **neither can be fixed from inside this repository**:
 
 | | What is wrong | Who fixes it, and where |
 | --- | --- | --- |
-| **The Netlify build source** | **Resolved 2 September** — `loftyprojectapp.netlify.app` is a *new* Netlify site (new site id, new team) building from `LoftySupport/loftyprojectapp` on `main`; first deploy `0d84e59`. What did not come across is the site's **environment variables**: the new site has no `VITE_SUPABASE_URL` or `VITE_SUPABASE_PUBLISHABLE_KEY`, so the sign-in page says *Not configured* | Netlify → `loftyprojectapp` → Project configuration → **Environment variables** → add both, values from the Supabase dashboard → Project Settings → API (URL and the `sb_publishable_…` key, never `service_role`), then Deploys → **Trigger deploy**. Steps and reasoning in *Session of 2026-09-02* |
+| **The Netlify build source** | **Resolved 2 September** — `loftyprojectapp.netlify.app` is a *new* Netlify site (new site id, new team) building from `LoftySupport/loftyprojectapp` on `main`; first deploy `0d84e59`. The sign-in page said *Not configured* on it, which read like missing environment variables and was not: the site is connected to Supabase and the extension sets `VITE_SUPABASE_DATABASE_URL` and `VITE_SUPABASE_ANON_KEY`, names the app did not read | **Resolved in code** — `app/src/data/supabaseEnv.ts` reads either spelling. Nothing to add in Netlify; the deployed bundle predates the change, so it takes a deploy. Reasoning in *Session of 2026-09-02, later* |
 | **Repository visibility** | This repository is **private**; the old one is public. The Updates changelog reads merged pull requests from the browser with no token — see `app/src/data/github.ts` for why a token cannot go there — and GitHub answers an unauthenticated read of a private repository with 404 | A decision, not a fix. Make `LoftySupport/loftyprojectapp` public and the feed works exactly as before. Keep it private and the feed has to be generated at build time instead, which is a different piece of work and has not been done |
 
-Until the variables are set, the deployed site is this repository's build with nothing to
+Until that deploy goes out, the deployed site is this repository's build with nothing to
 sign in to. Until the second is decided, Updates → *Merged from the build* renders its error state saying the
 repository is private, which is the honest answer and deliberately not an empty list.
 
@@ -1559,6 +1627,13 @@ The Supabase Netlify extension provisions four variables of its own —
 `SUPABASE_SERVICE_ROLE_KEY`. None of them reach the browser, because **Vite only exposes
 variables prefixed `VITE_`**. That is the whole reason the app sat on mock data with a
 fully populated environment: it was a prefix mismatch, not a missing value.
+
+**And then it happened again, one layer up.** Told the site is a Vite site, the extension
+also writes `VITE_SUPABASE_DATABASE_URL` and `VITE_SUPABASE_ANON_KEY` — correctly
+prefixed, correctly public, and named nothing like the `VITE_SUPABASE_URL` and
+`VITE_SUPABASE_PUBLISHABLE_KEY` the app read. Same outage, same screen, different half of
+the variable name. `app/src/data/supabaseEnv.ts` now accepts either pair and prefers this
+app's own, so neither spelling is a trap; see *Session of 2026-09-02, later*.
 
 **`SUPABASE_JWT_SECRET` and `SUPABASE_SERVICE_ROLE_KEY` have been deleted from Netlify.
 Do not put them back.** This is a static Vite build — no Netlify Functions, no edge

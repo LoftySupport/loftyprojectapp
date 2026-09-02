@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { supabaseKey, supabaseUrl } from "./supabaseEnv";
 import type { Repository, RepositoryMethod } from "./repository";
 import type { DictionaryOverride } from "./dictionary";
 import {
@@ -705,19 +706,8 @@ const toProfile = (r: ProfileRow): Profile => ({
   teams: (r.profile_teams ?? []).map(t => t.team_id).sort()
 });
 
-// The publishable key (`sb_publishable_…`), not the legacy JWT anon key. Both work, and
-// both are safe in a client bundle — this key is public by design and RLS is what
-// actually protects the data. The publishable one rotates independently of the JWT
-// secret, which the legacy anon key does not, so a compromise there does not force a
-// re-issue of every token.
-//
-// Never the service role key. It bypasses RLS entirely, and anything named VITE_* is
-// inlined into the JavaScript that ships to the browser.
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
-
 export const supabase: SupabaseClient | null =
-  url && publishableKey ? createClient(url, publishableKey) : null;
+  supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
 export function isSupabaseConfigured(): boolean {
   return Boolean(supabase);
