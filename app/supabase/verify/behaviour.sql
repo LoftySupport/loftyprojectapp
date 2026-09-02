@@ -614,3 +614,63 @@ select case when count(*) >= 1
   else 'FAIL: property_values is not audited' end
 from pg_trigger t where t.tgrelid = 'property_values'::regclass and t.tgname = 'trg_activity_audit_row';
 delete from tasks where task_name = 'behaviour probe task 0080';
+
+-- ============================================================================
+-- 40. Tasks know their health, checklists are copied, a stage counts its milestones (0081)
+-- ============================================================================
+\echo '--- 40. task_display derives due and health; instantiation copies days and checklist lines; stage_completion counts'
+insert into tasks (job_id, task_name, task_expected_days, task_at_risk_lead_days)
+values ('1106-002', 'behaviour probe 0081', 7, 2);
+update tasks set task_status = 'in_progress' where task_name = 'behaviour probe 0081';
+update tasks set task_started_at = now() - interval '5 days' where task_name = 'behaviour probe 0081';
+select case when task_health = 'at_risk' and task_due_effective = current_date + 2
+  then 'ok  a 7-day task with a 2-day lead, 5 days in, reads at_risk and due in 2 days'
+  else 'FAIL: expected at_risk due today+2, got ' || task_health || ' due ' || coalesce(task_due_effective::text, 'null') end
+from task_display where task_name = 'behaviour probe 0081';
+
+insert into task_checklist_items (task_id, task_checklist_item_text)
+select task_id, 'probe line' from tasks where task_name = 'behaviour probe 0081';
+update task_checklist_items set task_checklist_item_is_done = true where task_checklist_item_text = 'probe line';
+select case when task_checklist_total = 1 and task_checklist_done = 1
+  then 'ok  task_display counts the ticked checklist line'
+  else 'FAIL: task_display counted ' || task_checklist_total || ' lines, ' || task_checklist_done || ' done' end
+from task_display where task_name = 'behaviour probe 0081';
+select case when task_checklist_item_done_at is not null and task_checklist_item_done_by is null
+  then 'ok  ticking as the owner stamps the time and leaves the person null — never a stand-in'
+  else 'FAIL: done_at/done_by not stamped as expected' end
+from task_checklist_items where task_checklist_item_text = 'probe line';
+
+-- A template line with expected days and a checklist line, instantiated onto a run.
+insert into processes (process_key, process_name, process_stage, process_scope, process_position)
+values ('behaviour_probe_0081', 'Behaviour probe 0081', 'Construction', 'job', 999)
+on conflict (process_key) do nothing;
+insert into process_tasks (process_id, process_task_name, process_task_expected_days)
+select process_id, 'probe template task', 4 from processes where process_key = 'behaviour_probe_0081';
+insert into process_task_checklist_items (process_task_id, process_task_checklist_item_text)
+select process_task_id, 'probe template line' from process_tasks where process_task_name = 'probe template task';
+insert into process_runs (process_id, job_id, process_run_status)
+select process_id, '1106-002', 'in_progress' from processes where process_key = 'behaviour_probe_0081';
+select instantiate_process_tasks(process_run_id) as made
+from process_runs r join processes p using (process_id) where p.process_key = 'behaviour_probe_0081';
+select case when t.task_expected_days = 4 and d.task_checklist_total = 1
+  then 'ok  instantiation copied the template''s 4 expected days and its checklist line'
+  else 'FAIL: instantiated task has ' || coalesce(t.task_expected_days::text, 'null') || ' days and ' || d.task_checklist_total || ' lines' end
+from tasks t join task_display d using (task_id)
+where t.task_name = 'probe template task';
+
+-- stage_completion: the probe process is open on 1106-002's Construction stage.
+select case when processes_open >= 1 and processes_total >= processes_open
+  then 'ok  stage_completion sees the open probe process on 1106-002 / Construction (' || processes_open || ' of ' || processes_total || ' open)'
+  else 'FAIL: stage_completion reads ' || processes_open || ' open of ' || processes_total end
+from stage_completion where job_id = '1106-002' and stage = 'Construction';
+
+select case when exists (select 1 from property_defs where property_def_key = 'sitebook_id' and property_def_scope = 'job')
+  then 'ok  sitebook_id is a job-level property definition'
+  else 'FAIL: sitebook_id not seeded' end;
+
+-- Left as found. process_runs does not cascade from processes (a run is history), so the
+-- probe's run and its instantiated tasks go first.
+delete from tasks where process_run_id in (select process_run_id from process_runs r join processes p using (process_id) where p.process_key = 'behaviour_probe_0081');
+delete from process_runs where process_id in (select process_id from processes where process_key = 'behaviour_probe_0081');
+delete from processes where process_key = 'behaviour_probe_0081';
+delete from tasks where task_name = 'behaviour probe 0081';

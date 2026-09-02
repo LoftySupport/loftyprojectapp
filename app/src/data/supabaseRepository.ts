@@ -46,6 +46,10 @@ import type {
   TaskStatus,
   NewTask,
   TaskPatch,
+  TaskChecklistItem,
+  ProcessTaskChecklistItem,
+  StageCompletion,
+  RecordTarget,
   PropertyDef,
   PropertyDefPatch,
   PermissionLevel,
@@ -260,8 +264,13 @@ type CommentRow = {
   author: { profile_full_name: string | null } | null;
 };
 
+/**
+ * Read from `task_display` (0081), which resolves the names and derives due, at-risk and
+ * health — so the view, not this file, decides what "at risk" means. Writes still go to
+ * `tasks`, and re-read the row through the view.
+ */
 const TASK_COLUMNS =
-  "task_id, job_id, project_id, task_name, task_description, parent_task_id, task_position, task_owning_team, task_assignee_id, task_status, task_due_date, task_completed_at, task_completed_by, task_is_external, process_run_id, process_task_id, task_created_at, task_created_by, task_updated_at, task_updated_by, assignee:profiles!tasks_task_assignee_id_fkey(profile_full_name), finisher:profiles!tasks_task_completed_by_fkey(profile_full_name)";
+  "task_id, job_id, project_id, task_name, task_description, parent_task_id, task_position, task_owning_team, task_assignee_id, task_status, task_due_date, task_completed_at, task_completed_by, task_is_external, process_run_id, process_task_id, task_started_at, task_expected_days, task_at_risk_lead_days, task_created_at, task_created_by, task_updated_at, task_updated_by, task_assignee_name, task_completed_by_name, task_due_effective, task_at_risk_date, task_health, task_checklist_total, task_checklist_done, task_subtask_total, task_subtask_done";
 
 type TaskRow = {
   task_id: string; job_id: string | null; project_id: number | null;
@@ -272,14 +281,56 @@ type TaskRow = {
   task_completed_at: string | null; task_completed_by: string | null;
   task_is_external: boolean;
   process_run_id: string | null; process_task_id: string | null;
+  task_started_at: string | null; task_expected_days: number | null; task_at_risk_lead_days: number | null;
   task_created_at: string; task_created_by: string | null;
   task_updated_at: string; task_updated_by: string | null;
-  // Both embeds name their foreign key, and have to: `tasks` has four keys pointing at
-  // `profiles` (assignee, completed_by, created_by, updated_by) and PostgREST refuses
-  // to guess between them — the unqualified embed returns PGRST201 for every read.
-  assignee: { profile_full_name: string | null } | null;
-  finisher: { profile_full_name: string | null } | null;
+  task_assignee_name: string | null; task_completed_by_name: string | null;
+  task_due_effective: string | null; task_at_risk_date: string | null;
+  task_health: TaskEntry["health"];
+  task_checklist_total: number; task_checklist_done: number;
+  task_subtask_total: number; task_subtask_done: number;
 };
+
+/** One task back through the view after a write, so the caller gets derived dates and counts. */
+async function readTask(client: SupabaseClient, id: string): Promise<TaskEntry> {
+  const { data, error } = await client.from("task_display").select(TASK_COLUMNS).eq("task_id", id).single();
+  if (error) throw error;
+  return toTask(data as unknown as TaskRow);
+}
+
+const CHECKLIST_COLUMNS =
+  "task_checklist_item_id, task_id, task_checklist_item_position, task_checklist_item_text, task_checklist_item_is_done, task_checklist_item_done_at, task_checklist_item_done_by, task_checklist_item_created_at, ticker:profiles!task_checklist_items_task_checklist_item_done_by_fkey(profile_full_name)";
+
+type ChecklistRow = {
+  task_checklist_item_id: string; task_id: string; task_checklist_item_position: number;
+  task_checklist_item_text: string; task_checklist_item_is_done: boolean;
+  task_checklist_item_done_at: string | null; task_checklist_item_done_by: string | null;
+  task_checklist_item_created_at: string;
+  ticker: { profile_full_name: string | null } | null;
+};
+
+const toChecklistItem = (r: ChecklistRow): TaskChecklistItem => ({
+  id: r.task_checklist_item_id,
+  taskId: r.task_id,
+  position: r.task_checklist_item_position,
+  text: r.task_checklist_item_text,
+  isDone: r.task_checklist_item_is_done,
+  doneAt: r.task_checklist_item_done_at,
+  doneBy: r.task_checklist_item_done_by,
+  doneByName: r.ticker?.profile_full_name ?? null
+});
+
+type TemplateChecklistRow = {
+  process_task_checklist_item_id: string; process_task_id: string;
+  process_task_checklist_item_position: number; process_task_checklist_item_text: string;
+};
+
+const toTemplateChecklistItem = (r: TemplateChecklistRow): ProcessTaskChecklistItem => ({
+  id: r.process_task_checklist_item_id,
+  processTaskId: r.process_task_id,
+  position: r.process_task_checklist_item_position,
+  text: r.process_task_checklist_item_text
+});
 
 function toTask(r: TaskRow): TaskEntry {
   return {
@@ -292,12 +343,22 @@ function toTask(r: TaskRow): TaskEntry {
     position: r.task_position,
     owningTeam: (r.task_owning_team as TeamId | null) ?? null,
     assigneeId: r.task_assignee_id,
-    assigneeName: r.assignee?.profile_full_name ?? null,
+    assigneeName: r.task_assignee_name,
     status: r.task_status as TaskStatus,
     dueDate: r.task_due_date,
     completedAt: r.task_completed_at,
     completedBy: r.task_completed_by,
-    completedByName: r.finisher?.profile_full_name ?? null,
+    completedByName: r.task_completed_by_name,
+    startedAt: r.task_started_at,
+    expectedDays: r.task_expected_days,
+    atRiskLeadDays: r.task_at_risk_lead_days,
+    dueEffective: r.task_due_effective,
+    atRiskDate: r.task_at_risk_date,
+    health: r.task_health,
+    checklistTotal: r.task_checklist_total,
+    checklistDone: r.task_checklist_done,
+    subtaskTotal: r.task_subtask_total,
+    subtaskDone: r.task_subtask_done,
     isExternal: r.task_is_external,
     processRunId: r.process_run_id,
     processTaskId: r.process_task_id,
@@ -2097,7 +2158,7 @@ export function createSupabaseRepository(): Repository {
     // ---- tasks -----------------------------------------------------------
 
     async listTasks(opts: { jobId?: string; projectId?: number }): Promise<TaskEntry[]> {
-      let q = client.from("tasks").select(TASK_COLUMNS);
+      let q = client.from("task_display").select(TASK_COLUMNS);
       // Exactly one parent, the same rule the CHECK enforces. Asking with neither would
       // quietly return every task in the company.
       if (opts.jobId != null) q = q.eq("job_id", opts.jobId);
@@ -2131,14 +2192,16 @@ export function createSupabaseRepository(): Repository {
           task_assignee_id: task.assigneeId ?? null,
           task_due_date: task.dueDate ?? null,
           task_is_external: task.isExternal ?? false,
-          parent_task_id: task.parentTaskId ?? null
+          parent_task_id: task.parentTaskId ?? null,
+          task_expected_days: task.expectedDays ?? null,
+          task_at_risk_lead_days: task.atRiskLeadDays ?? null
           // No task_created_by: stamp_created_by fills it from the session, which is the
           // only version of "who added this" a client cannot forge.
         })
-        .select(TASK_COLUMNS)
+        .select("task_id")
         .single();
       if (error) throw error;
-      return toTask(data as unknown as TaskRow);
+      return readTask(client, (data as { task_id: string }).task_id);
     },
 
     async updateTask(id: string, patch: TaskPatch): Promise<TaskEntry> {
@@ -2151,16 +2214,126 @@ export function createSupabaseRepository(): Repository {
       if (patch.dueDate !== undefined) row.task_due_date = patch.dueDate;
       if (patch.isExternal !== undefined) row.task_is_external = patch.isExternal;
       if (patch.position !== undefined) row.task_position = patch.position;
+      if (patch.startedAt !== undefined) row.task_started_at = patch.startedAt;
+      if (patch.expectedDays !== undefined) row.task_expected_days = patch.expectedDays;
+      if (patch.atRiskLeadDays !== undefined) row.task_at_risk_lead_days = patch.atRiskLeadDays;
+      if (patch.parentTaskId !== undefined) row.parent_task_id = patch.parentTaskId;
       if (Object.keys(row).length === 0) throw new Error("Nothing to change.");
 
       // `task_completed_at` is deliberately not settable here. stamp_task_completion
       // sets it when the status becomes done and clears it when it stops being done,
       // and tasks_done_has_a_time refuses any row where the two disagree — so the app
       // sends the status and the database keeps the pair honest.
-      const { data, error } = await client
-        .from("tasks").update(row).eq("task_id", id).select(TASK_COLUMNS).single();
+      const { error } = await client.from("tasks").update(row).eq("task_id", id);
       if (error) throw error;
-      return toTask(data as unknown as TaskRow);
+      return readTask(client, id);
+    },
+
+    // ---- checklists (0081) ----------------------------------------------
+    async listTaskChecklist(opts: { jobId?: string; projectId?: number }): Promise<TaskChecklistItem[]> {
+      // The lines of every task on the record in one read, filtered through the task's
+      // own parent rather than fetched per task.
+      let ids = client.from("tasks").select("task_id");
+      if (opts.jobId != null) ids = ids.eq("job_id", opts.jobId);
+      else if (opts.projectId != null) ids = ids.eq("project_id", opts.projectId);
+      else throw new Error("listTaskChecklist needs a jobId or a projectId.");
+      const { data: taskIds, error: idError } = await ids;
+      if (idError) throw idError;
+      const list = ((taskIds ?? []) as { task_id: string }[]).map(t => t.task_id);
+      if (!list.length) return [];
+      const { data, error } = await client
+        .from("task_checklist_items")
+        .select(CHECKLIST_COLUMNS)
+        .in("task_id", list)
+        .order("task_checklist_item_position", { ascending: true })
+        .order("task_checklist_item_created_at", { ascending: true });
+      if (error) throw error;
+      return (data as unknown as ChecklistRow[]).map(toChecklistItem);
+    },
+
+    async addTaskChecklistItem(taskId: string, text: string): Promise<TaskChecklistItem> {
+      const clean = text.trim();
+      if (!clean) throw new Error("Give the line some words first.");
+      const { data, error } = await client
+        .from("task_checklist_items")
+        .insert({ task_id: taskId, task_checklist_item_text: clean })
+        .select(CHECKLIST_COLUMNS)
+        .single();
+      if (error) throw error;
+      return toChecklistItem(data as unknown as ChecklistRow);
+    },
+
+    async updateTaskChecklistItem(id: string, patch: { text?: string; isDone?: boolean; position?: number }): Promise<TaskChecklistItem> {
+      const row: Record<string, unknown> = {};
+      if (patch.text !== undefined) row.task_checklist_item_text = patch.text.trim();
+      if (patch.isDone !== undefined) row.task_checklist_item_is_done = patch.isDone;
+      if (patch.position !== undefined) row.task_checklist_item_position = patch.position;
+      if (Object.keys(row).length === 0) throw new Error("Nothing to change.");
+      const { data, error } = await client
+        .from("task_checklist_items").update(row).eq("task_checklist_item_id", id).select(CHECKLIST_COLUMNS).single();
+      if (error) throw error;
+      return toChecklistItem(data as unknown as ChecklistRow);
+    },
+
+    async deleteTaskChecklistItem(id: string): Promise<void> {
+      const { error } = await client.from("task_checklist_items").delete().eq("task_checklist_item_id", id);
+      if (error) throw error;
+    },
+
+    async listProcessTaskChecklist(processId: string): Promise<ProcessTaskChecklistItem[]> {
+      const { data, error } = await client
+        .from("process_task_checklist_items")
+        .select("process_task_checklist_item_id, process_task_id, process_task_checklist_item_position, process_task_checklist_item_text, process_tasks!inner(process_id)")
+        .eq("process_tasks.process_id", processId)
+        .order("process_task_checklist_item_position", { ascending: true });
+      if (error) throw error;
+      return ((data ?? []) as unknown as TemplateChecklistRow[]).map(toTemplateChecklistItem);
+    },
+
+    async addProcessTaskChecklistItem(processTaskId: string, text: string): Promise<ProcessTaskChecklistItem> {
+      const clean = text.trim();
+      if (!clean) throw new Error("Give the line some words first.");
+      const { data, error } = await client
+        .from("process_task_checklist_items")
+        .insert({ process_task_id: processTaskId, process_task_checklist_item_text: clean })
+        .select("process_task_checklist_item_id, process_task_id, process_task_checklist_item_position, process_task_checklist_item_text")
+        .single();
+      if (error) throw error;
+      return toTemplateChecklistItem(data as unknown as TemplateChecklistRow);
+    },
+
+    async updateProcessTaskChecklistItem(id: string, patch: { text?: string; position?: number }): Promise<ProcessTaskChecklistItem> {
+      const row: Record<string, unknown> = {};
+      if (patch.text !== undefined) row.process_task_checklist_item_text = patch.text.trim();
+      if (patch.position !== undefined) row.process_task_checklist_item_position = patch.position;
+      if (Object.keys(row).length === 0) throw new Error("Nothing to change.");
+      const { data, error } = await client
+        .from("process_task_checklist_items").update(row).eq("process_task_checklist_item_id", id)
+        .select("process_task_checklist_item_id, process_task_id, process_task_checklist_item_position, process_task_checklist_item_text").single();
+      if (error) throw error;
+      return toTemplateChecklistItem(data as unknown as TemplateChecklistRow);
+    },
+
+    async deleteProcessTaskChecklistItem(id: string): Promise<void> {
+      const { error } = await client.from("process_task_checklist_items").delete().eq("process_task_checklist_item_id", id);
+      if (error) throw error;
+    },
+
+    async listStageCompletion(target?: RecordTarget): Promise<StageCompletion[]> {
+      let q = client.from("stage_completion")
+        .select("job_id, project_id, stage, stage_is_current, processes_total, processes_open, milestones_total, milestones_passed, stage_is_complete");
+      if (target?.jobId != null) q = q.eq("job_id", target.jobId);
+      else if (target?.projectId != null) q = q.eq("project_id", target.projectId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return ((data ?? []) as unknown as {
+        job_id: string | null; project_id: number | null; stage: string; stage_is_current: boolean;
+        processes_total: number; processes_open: number; milestones_total: number; milestones_passed: number; stage_is_complete: boolean;
+      }[]).map(r => ({
+        jobId: r.job_id, projectId: r.project_id, stage: r.stage, isCurrent: r.stage_is_current,
+        processesTotal: r.processes_total, processesOpen: r.processes_open,
+        milestonesTotal: r.milestones_total, milestonesPassed: r.milestones_passed, isComplete: r.stage_is_complete
+      }));
     },
 
     async deleteTask(id: string): Promise<void> {

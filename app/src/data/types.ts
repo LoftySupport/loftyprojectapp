@@ -1207,6 +1207,12 @@ export interface Task {
   processRunId: Uuid | null;
   /** The template line it was copied from, or null. */
   processTaskId: Uuid | null;
+  /** When work began (0081) — stamped on the first move off "to do", editable after. */
+  startedAt: IsoDateTime | null;
+  /** How long it should take from its start; null is "no agreed duration", not zero. */
+  expectedDays: number | null;
+  /** Days before due that it reads at risk. Never longer than expectedDays (CHECK). */
+  atRiskLeadDays: number | null;
   createdAt: IsoDateTime;
   createdBy: Uuid | null;
   updatedAt: IsoDateTime;
@@ -1245,6 +1251,58 @@ export const isTaskLive = (s: TaskStatus): boolean => s !== "done" && s !== "can
 export interface TaskEntry extends Task {
   assigneeName: string | null;
   completedByName: string | null;
+  /** Typed due date, or start + expected days when nobody typed one (task_display). */
+  dueEffective: IsoDate | null;
+  atRiskDate: IsoDate | null;
+  health: TaskHealth;
+  checklistTotal: number;
+  checklistDone: number;
+  subtaskTotal: number;
+  subtaskDone: number;
+}
+
+/** What `task_display` derives from today against the two dates. Never stored. */
+export type TaskHealth = "no_due_date" | "on_track" | "at_risk" | "overdue" | "done" | "cancelled";
+export const TASK_HEALTH_LABELS: Record<TaskHealth, string> = {
+  no_due_date: "No due date",
+  on_track: "On track",
+  at_risk: "At risk",
+  overdue: "Overdue",
+  done: "Done",
+  cancelled: "Cancelled"
+};
+
+/** One tick box under a task (0081). */
+export interface TaskChecklistItem {
+  id: Uuid;
+  taskId: Uuid;
+  position: number;
+  text: string;
+  isDone: boolean;
+  doneAt: IsoDateTime | null;
+  doneBy: Uuid | null;
+  doneByName: string | null;
+}
+
+/** One tick box on a template line, copied to every run's task (0081). */
+export interface ProcessTaskChecklistItem {
+  id: Uuid;
+  processTaskId: Uuid;
+  position: number;
+  text: string;
+}
+
+/** Stage completion as the database counts it (0081): counts, never a percentage. */
+export interface StageCompletion {
+  jobId: string | null;
+  projectId: number | null;
+  stage: string;
+  isCurrent: boolean;
+  processesTotal: number;
+  processesOpen: number;
+  milestonesTotal: number;
+  milestonesPassed: number;
+  isComplete: boolean;
 }
 
 /**
@@ -1265,6 +1323,8 @@ export interface NewTask {
   dueDate?: IsoDate | null;
   isExternal?: boolean;
   parentTaskId?: Uuid | null;
+  expectedDays?: number | null;
+  atRiskLeadDays?: number | null;
 }
 
 /** What an edit may move. Completion rides `status` and nothing else. */
@@ -1277,6 +1337,10 @@ export interface TaskPatch {
   dueDate?: IsoDate | null;
   isExternal?: boolean;
   position?: number;
+  startedAt?: IsoDateTime | null;
+  expectedDays?: number | null;
+  atRiskLeadDays?: number | null;
+  parentTaskId?: Uuid | null;
 }
 
 /**

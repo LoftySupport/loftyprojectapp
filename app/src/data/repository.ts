@@ -33,6 +33,9 @@ import type {
   TaskEntry,
   NewTask,
   TaskPatch,
+  TaskChecklistItem,
+  ProcessTaskChecklistItem,
+  StageCompletion,
   PropertyDef,
   PropertyDefPatch,
   PropertyOption,
@@ -368,6 +371,20 @@ export interface Repository {
   /** Remove one. Admin-only by policy; sub-tasks go with it (ON DELETE CASCADE). */
   deleteTask(id: string): Promise<void>;
 
+  // ---- checklists under tasks, and on template lines (0081) -----------------
+  /** The tick boxes under every task on one record, in order. */
+  listTaskChecklist(opts: { jobId?: string; projectId?: number }): Promise<TaskChecklistItem[]>;
+  addTaskChecklistItem(taskId: string, text: string): Promise<TaskChecklistItem>;
+  /** Ticking is `isDone`; the database stamps who and when, and clears both on untick. */
+  updateTaskChecklistItem(id: string, patch: { text?: string; isDone?: boolean; position?: number }): Promise<TaskChecklistItem>;
+  deleteTaskChecklistItem(id: string): Promise<void>;
+  listProcessTaskChecklist(processId: string): Promise<ProcessTaskChecklistItem[]>;
+  addProcessTaskChecklistItem(processTaskId: string, text: string): Promise<ProcessTaskChecklistItem>;
+  updateProcessTaskChecklistItem(id: string, patch: { text?: string; position?: number }): Promise<ProcessTaskChecklistItem>;
+  deleteProcessTaskChecklistItem(id: string): Promise<void>;
+  /** Stage completion for one record, or for every record when no target is given. */
+  listStageCompletion(target?: RecordTarget): Promise<StageCompletion[]>;
+
   // ---- the tracker: bugs, requests, votes (0052, 0060–0063) ----------------
   /**
    * Send a bug or a feature request. Anyone active may — the widest write in the app —
@@ -627,6 +644,15 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "createTask",
   "updateTask",
   "deleteTask",
+  "listTaskChecklist",
+  "addTaskChecklistItem",
+  "updateTaskChecklistItem",
+  "deleteTaskChecklistItem",
+  "listProcessTaskChecklist",
+  "addProcessTaskChecklistItem",
+  "updateProcessTaskChecklistItem",
+  "deleteProcessTaskChecklistItem",
+  "listStageCompletion",
   "submitFeedback",
   "listFeedback",
   "setFeedbackStage",
@@ -735,7 +761,16 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   listJobStageHistory: "activity_audit",
   listMyMentions: "comment_mentions",
   markMentionRead: "comment_mentions",
-  listTasks: "tasks",
+  listTasks: "task_display",
+  listTaskChecklist: "task_checklist_items",
+  addTaskChecklistItem: "task_checklist_items",
+  updateTaskChecklistItem: "task_checklist_items",
+  deleteTaskChecklistItem: "task_checklist_items",
+  listProcessTaskChecklist: "process_task_checklist_items",
+  addProcessTaskChecklistItem: "process_task_checklist_items",
+  updateProcessTaskChecklistItem: "process_task_checklist_items",
+  deleteProcessTaskChecklistItem: "process_task_checklist_items",
+  listStageCompletion: "stage_completion",
   createTask: "tasks",
   updateTask: "tasks",
   deleteTask: "tasks",

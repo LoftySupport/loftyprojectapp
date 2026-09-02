@@ -219,6 +219,15 @@ export function createStubRepository(): Repository {
     async deleteTask(): Promise<void> {
       throw new Error("Removing a task needs Supabase.");
     },
+    async listTaskChecklist(): Promise<never[]> { return []; },
+    async addTaskChecklistItem(): Promise<never> { throw new Error("A checklist needs Supabase."); },
+    async updateTaskChecklistItem(): Promise<never> { throw new Error("A checklist needs Supabase."); },
+    async deleteTaskChecklistItem(): Promise<void> { throw new Error("A checklist needs Supabase."); },
+    async listProcessTaskChecklist(): Promise<never[]> { return []; },
+    async addProcessTaskChecklistItem(): Promise<never> { throw new Error("A template checklist needs Supabase."); },
+    async updateProcessTaskChecklistItem(): Promise<never> { throw new Error("A template checklist needs Supabase."); },
+    async deleteProcessTaskChecklistItem(): Promise<void> { throw new Error("A template checklist needs Supabase."); },
+    async listStageCompletion(): Promise<never[]> { return []; },
 
     // Cloning needs a job to clone and a sequence to issue the new number; a stub run
     // has neither.

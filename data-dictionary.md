@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-418 properties across 62 tables.
+443 properties across 66 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 369 | In the migration and the types |
+| Created | 394 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -450,6 +450,17 @@ One process, on one record, one attempt (0078). A job holds many at once — tha
 | `process_runs.process_run_completed_by` | Completed by | Who completed it. | `uuid` | — | Nullable. FK → profiles. Stamped by the database. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `process_runs.process_run_note` | Note | A sentence about this run — why it is waiting, why it is not applicable. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
+## `process_task_checklist_items`
+
+The tick boxes a template line hands a job (0081), written by managers in Setup → Processes and copied by instantiate_process_tasks().
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `process_task_checklist_items.process_task_checklist_item_id` | Template line | One tick box on a template task (0081), copied to every run's task by instantiate_process_tasks(). | `uuid` | — | Primary key. | Managers write; every active user reads. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `process_task_checklist_items.process_task_id` | Template task | The template line it belongs to. | `uuid` | — | Not null. FK → process_tasks ON DELETE CASCADE. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `process_task_checklist_items.process_task_checklist_item_position` | Order | Where in the list. | `integer` | — | Not null, default 0 (smallint). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `process_task_checklist_items.process_task_checklist_item_text` | Line | The words. | `text` | — | Not null. CHECK: not blank. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
 ## `process_task_dependencies`
 
 The order of a process's template tasks, with lag (0078) — "Handover is 10 days after the PCI walkthrough". Same process only, no cycles, copied into task_dependencies on instantiation. 99 edges from the schedule, its Excel-mangled cells decoded and both columns read as one edge set.
@@ -736,6 +747,17 @@ A person's named board states (Amber's Q9, third layer) — the query string of 
 | `saved_views.saved_view_shared_with_team` | Shared with | The team this view is handed to, or null for private — the default (0051, Amber: "team views matter"). A shared view is readable by everyone in that team and editable only by whoever made it. | `text` | — | Nullable. FK → teams(team_id). | The read and write policies are separate for exactly this: a widened for-all policy would have let anybody in the team delete the owner's view. Two people may still both call a view "Site this week" — the tab row carries whose it is rather than the constraint forbidding it. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `saved_views.saved_view_query` | The view itself | The board's query string without the leading ?, stored verbatim — view mode, grouping, filters, saved-view slice, exactly as the address bar holds them. | `text` | — | Not null. | The URL is already the app's serialisation of "what am I looking at"; a second schema for the same fact could only disagree with it. Unknown keys fall back harmlessly on read, exactly as a pasted link does. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
+## `stage_completion`
+
+Per record and lifecycle stage (0081): how many active processes, how many still open, how many milestones and how many passed. Complete when nothing is open. Counts, never a percentage.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `stage_completion.stage` | Stage | One row per record and lifecycle stage: the active processes of that stage against the record's latest run of each. | `view` | — | — | Read by the board, the drawer and the report so they count the same way. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `stage_completion.processes_open` | Open processes | Processes with no run yet, or whose latest run is neither complete nor not applicable. | `view` | — | — | Zero means the stage is complete. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `stage_completion.milestones_passed` | Milestones passed | Of the stage's milestone processes, how many have a complete or not-applicable latest run. A count beside a total — never a percentage (24 Aug). | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `stage_completion.stage_is_complete` | Stage complete | True when nothing in the stage is open. Informational: a person moves the lifecycle (no auto-advance, 24 Aug). | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
 ## `stages`
 
 Merged into the stage enum in 0004 — eight seeded values that were the business process, not data anyone maintained. That enum was itself dropped in 0035, and the lifecycle now lives as text under CHECKs with pipeline_stages as its lookup; kept for both steps of the reasoning.
@@ -764,6 +786,20 @@ Free labels for a board — "Council hold", "Design variation" — the same shap
 | `tags.tag_is_active` | Active | Retiring a tag is a flag, not a delete — deleting one would take every tagging with it. | `boolean` | — | Not null, default true. There is no DELETE policy on this table. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `tags.id` | Tag | A free label on a job — IF, Council hold, Design variation. | `uuid` | — | Primary key. | Many-to-many with jobs via job_tags. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 
+## `task_checklist_items`
+
+Tick boxes under a task (0081): text, order, who ticked it when. Not a task — no assignee, due date, status or dependencies — so a task with twelve lines is one task, not thirteen. Copied from the template line's checklist when a run is instantiated.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `task_checklist_items.task_checklist_item_id` | Checklist line | One tick box under a task (0081). Deliberately not a task — no assignee, due date, status or dependencies. | `uuid` | — | Primary key, default gen_random_uuid(). | Read by every active user; users add, tick, edit and remove lines. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `task_checklist_items.task_id` | Task | The task it sits under. | `uuid` | — | Not null. FK → tasks ON DELETE CASCADE. Indexed with position. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `task_checklist_items.task_checklist_item_position` | Order | Where in the list. | `integer` | — | Not null, default 0 (smallint). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `task_checklist_items.task_checklist_item_text` | Line | The words. | `text` | — | Not null. CHECK: not blank. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `task_checklist_items.task_checklist_item_is_done` | Ticked | Whether it is done. The trigger stamps done_at and done_by when it turns true and clears both when it turns false. | `boolean` | — | Not null, default false. CHECK: ticked = (done_at is not null). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `task_checklist_items.task_checklist_item_done_at` | Ticked at | When it was ticked. | `timestamptz` | — | Nullable, stamped by trigger. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `task_checklist_items.task_checklist_item_done_by` | Ticked by | Who ticked it — the signed-in person, or null for a migration. | `uuid` | — | Nullable. FK → profiles. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
 ## `task_dependencies`
 
 The edges between tasks — which one waits for which, with the lag carried on the edge because Lofty's process map puts its SLAs on the arrows, not the steps. Triggers refuse cycles and refuse edges between tasks on different records.
@@ -773,6 +809,20 @@ The edges between tasks — which one waits for which, with the lag carried on t
 | `task_dependencies.task_id` | Task | The task that waits. | `uuid` | — | Part of the primary key. CHECK task_dependencies_not_self. | FK → tasks(task_id) ON DELETE CASCADE. A trigger refuses any edge that would close a cycle, and another refuses an edge between tasks on different records. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `task_dependencies.depends_on_task_id` | Waits for | The task that has to finish first. | `uuid` | — | Part of the primary key. Indexed on its own for the reverse direction. | FK → tasks(task_id) ON DELETE CASCADE. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `task_dependencies.task_dependency_lag_days` | Lag | How many days after the predecessor finishes this one is due. On the edge rather than on the task because Lofty's process map puts its SLAs on the ARROWS — "Within 14 Days" labels a transition between two steps, not either step itself. | `integer` | — | smallint. Not null, default 0. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `task_display`
+
+A task with its names, counts and derived dates (0081): due (typed, or start + expected days), at-risk (due − lead) and health, computed from today the way process_run_display does. Nothing here is stored — re-time a task and it re-dates.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `task_display.task_due_effective` | Due | The typed due date, or start + expected days when nobody typed one. Derived, never stored. | `view` | — | Null while neither is known. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `task_display.task_at_risk_date` | At risk from | Due minus the at-risk lead. | `view` | — | Null unless both are set. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `task_display.task_health` | Health | no_due_date · on_track · at_risk · overdue · done · cancelled — today against the two dates, the way process_run_display does it, so a card, a filter and a notification never disagree. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `task_display.task_checklist_total` | Checklist lines | How many tick boxes the task carries. | `view` | — | — | Shown as 3/5 on the task. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `task_display.task_checklist_done` | Lines ticked | How many of them are ticked. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `task_display.task_subtask_total` | Sub-tasks | How many tasks sit under this one. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `task_display.task_subtask_done` | Sub-tasks done | How many of those are done. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `tasks`
 
@@ -796,6 +846,9 @@ One thing to be done. A checklist item instantiated from a template and a task s
 | `tasks.task_position` | Order | Display order within the record. | `integer` | — | smallint. Not null, default 0. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `tasks.process_run_id` | Process run | The run this task was instantiated for, when it was — a typed-in task has none. | `uuid` | — | Nullable. FK → process_runs ON DELETE CASCADE. | 0030 promised this column would arrive with the table it references. It did. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `tasks.process_task_id` | Template line | The template line this task was copied from, for "which jobs skipped the frame check". | `uuid` | — | Nullable. FK → process_tasks ON DELETE SET NULL — survives the template being deleted. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `tasks.task_started_at` | Started | When work began (0081) — the anchor of the clock. Stamped when the status first leaves "to do"; editable afterwards, never cleared by the database. | `timestamptz` | — | Nullable. | Due, when nobody typed one, is this plus task_expected_days. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `tasks.task_expected_days` | Expected days | How long it should take from its start (0081). Null is "no agreed duration", not zero: without it a task can be overdue but never at risk. Copied from the template line when a run is instantiated. | `integer` | — | Nullable. CHECK ≥ 0 (smallint). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `tasks.task_at_risk_lead_days` | At-risk lead | Days before due that the task reads at risk (0081) — a 7-day task with lead 2 is at risk from day 5. The same rule a process has. | `integer` | — | Nullable. CHECK ≥ 0 and ≤ task_expected_days (smallint). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `teams`
 

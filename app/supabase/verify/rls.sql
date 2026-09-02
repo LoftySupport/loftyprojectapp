@@ -1334,6 +1334,46 @@ delete from user_preferences where user_preference_payload ->> 'probe' = '0080';
 delete from property_defs where property_def_key = 'probe_locked_0080';
 delete from property_value_history where property_def_key = 'probe_locked_0080';
 
+-- ---------------------------------------------------------------- checklists (0081)
+\echo '--- a user ticks a checklist line; a user cannot write a template line (0081) ---'
+reset request.jwt.claim.sub;
+insert into tasks (job_id, task_name) values ('1106-002', 'rls probe task 0081');
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+do $$
+declare item uuid; n integer;
+begin
+  begin
+    insert into task_checklist_items (task_id, task_checklist_item_text)
+    select task_id, 'rls line' from tasks where task_name = 'rls probe task 0081'
+    returning task_checklist_item_id into item;
+    update task_checklist_items set task_checklist_item_is_done = true where task_checklist_item_id = item;
+    select count(*) into n from task_checklist_items
+     where task_checklist_item_id = item and task_checklist_item_is_done and task_checklist_item_done_by is not null;
+    if n = 1 then raise notice 'ok  a user adds and ticks a checklist line, and the tick names them';
+    else raise warning 'FAIL: the ticked line did not record the user (% rows)', n; end if;
+    delete from task_checklist_items where task_checklist_item_id = item;
+    if not exists (select 1 from task_checklist_items where task_checklist_item_id = item) then
+      raise notice 'ok  a user removes their own checklist line';
+    else raise warning 'FAIL: a user could not remove a checklist line'; end if;
+  exception when others then raise warning 'FAIL: unexpected on checklist items (%)', sqlerrm; end;
+
+  begin
+    insert into process_task_checklist_items (process_task_id, process_task_checklist_item_text)
+    select process_task_id, 'sneaky' from process_tasks limit 1;
+    if found then raise warning 'FAIL: a user wrote a template checklist line';
+    else raise notice 'note: no template task to probe against'; end if;
+  exception when insufficient_privilege then raise notice 'ok  template checklist lines refuse a write below manager';
+    when others then raise warning 'FAIL: unexpected on template checklist (%)', sqlerrm; end;
+
+  select count(*) into n from stage_completion where job_id = '1106-002';
+  if n >= 1 then raise notice 'ok  a user reads stage_completion for a job (% stage rows)', n;
+  else raise warning 'FAIL: a user saw no stage_completion rows for 1106-002'; end if;
+end $$;
+reset role;
+reset request.jwt.claim.sub;
+delete from tasks where task_name = 'rls probe task 0081';
+
 -- Left as found.
 reset request.jwt.claim.sub;
 delete from processes where process_key = 'probe_manager_process';

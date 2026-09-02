@@ -95,7 +95,14 @@ export function ProcessesSetupPage() {
                     aria-current={p.id === selectedId ? "true" : undefined}
                   >
                     <span>{p.name}</span>
-                    <span className="muted">{[p.stageGroup, p.scope].filter(Boolean).join(" · ")}</span>
+                    {/* The at-risk lead as a column (Amber, 2 Sep): "7d · at risk 2d before" reads
+                        the rule without opening the process. Blank stays blank. */}
+                    <span className="muted">
+                      {[p.stageGroup, p.scope,
+                        p.expectedDays != null ? `${p.expectedDays}d` : null,
+                        p.atRiskLeadDays != null ? `at risk ${p.atRiskLeadDays}d before` : null
+                      ].filter(Boolean).join(" · ")}
+                    </span>
                   </button>
                 ))}
               </div>

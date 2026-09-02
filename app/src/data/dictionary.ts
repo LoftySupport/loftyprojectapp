@@ -1074,6 +1074,39 @@ export const DICTIONARY: DictionaryEntry[] = [
   // ----------------------------------------------- tasks learn where they came from (0078)
   e("tasks.process_run_id", "Process run", "The run this task was instantiated for, when it was — a typed-in task has none.", "uuid", "Nullable. FK → process_runs ON DELETE CASCADE.", "0030 promised this column would arrive with the table it references. It did.", "created"),
   e("tasks.process_task_id", "Template line", "The template line this task was copied from, for \"which jobs skipped the frame check\".", "uuid", "Nullable. FK → process_tasks ON DELETE SET NULL — survives the template being deleted.", "—", "created"),
+  e("tasks.task_started_at", "Started", "When work began (0081) — the anchor of the clock. Stamped when the status first leaves \"to do\"; editable afterwards, never cleared by the database.", "timestamptz", "Nullable.", "Due, when nobody typed one, is this plus task_expected_days.", "created"),
+  e("tasks.task_expected_days", "Expected days", "How long it should take from its start (0081). Null is \"no agreed duration\", not zero: without it a task can be overdue but never at risk. Copied from the template line when a run is instantiated.", "integer", "Nullable. CHECK ≥ 0 (smallint).", "—", "created"),
+  e("tasks.task_at_risk_lead_days", "At-risk lead", "Days before due that the task reads at risk (0081) — a 7-day task with lead 2 is at risk from day 5. The same rule a process has.", "integer", "Nullable. CHECK ≥ 0 and ≤ task_expected_days (smallint).", "—", "created"),
+
+  // ------------------------------------------------------ task_checklist_items (0081)
+  e("task_checklist_items.task_checklist_item_id", "Checklist line", "One tick box under a task (0081). Deliberately not a task — no assignee, due date, status or dependencies.", "uuid", "Primary key, default gen_random_uuid().", "Read by every active user; users add, tick, edit and remove lines.", "created"),
+  e("task_checklist_items.task_id", "Task", "The task it sits under.", "uuid", "Not null. FK → tasks ON DELETE CASCADE. Indexed with position.", "—", "created"),
+  e("task_checklist_items.task_checklist_item_position", "Order", "Where in the list.", "integer", "Not null, default 0 (smallint).", "—", "created"),
+  e("task_checklist_items.task_checklist_item_text", "Line", "The words.", "text", "Not null. CHECK: not blank.", "—", "created"),
+  e("task_checklist_items.task_checklist_item_is_done", "Ticked", "Whether it is done. The trigger stamps done_at and done_by when it turns true and clears both when it turns false.", "boolean", "Not null, default false. CHECK: ticked = (done_at is not null).", "—", "created"),
+  e("task_checklist_items.task_checklist_item_done_at", "Ticked at", "When it was ticked.", "timestamptz", "Nullable, stamped by trigger.", "—", "created"),
+  e("task_checklist_items.task_checklist_item_done_by", "Ticked by", "Who ticked it — the signed-in person, or null for a migration.", "uuid", "Nullable. FK → profiles.", "—", "created"),
+
+  // ---------------------------------------------- process_task_checklist_items (0081)
+  e("process_task_checklist_items.process_task_checklist_item_id", "Template line", "One tick box on a template task (0081), copied to every run's task by instantiate_process_tasks().", "uuid", "Primary key.", "Managers write; every active user reads.", "created"),
+  e("process_task_checklist_items.process_task_id", "Template task", "The template line it belongs to.", "uuid", "Not null. FK → process_tasks ON DELETE CASCADE.", "—", "created"),
+  e("process_task_checklist_items.process_task_checklist_item_position", "Order", "Where in the list.", "integer", "Not null, default 0 (smallint).", "—", "created"),
+  e("process_task_checklist_items.process_task_checklist_item_text", "Line", "The words.", "text", "Not null. CHECK: not blank.", "—", "created"),
+
+  // ---------------------------------------------------------- task_display (0081)
+  e("task_display.task_due_effective", "Due", "The typed due date, or start + expected days when nobody typed one. Derived, never stored.", "view", "Null while neither is known.", "—", "created"),
+  e("task_display.task_at_risk_date", "At risk from", "Due minus the at-risk lead.", "view", "Null unless both are set.", "—", "created"),
+  e("task_display.task_health", "Health", "no_due_date · on_track · at_risk · overdue · done · cancelled — today against the two dates, the way process_run_display does it, so a card, a filter and a notification never disagree.", "view", "—", "—", "created"),
+  e("task_display.task_checklist_total", "Checklist lines", "How many tick boxes the task carries.", "view", "—", "Shown as 3/5 on the task.", "created"),
+  e("task_display.task_checklist_done", "Lines ticked", "How many of them are ticked.", "view", "—", "—", "created"),
+  e("task_display.task_subtask_total", "Sub-tasks", "How many tasks sit under this one.", "view", "—", "—", "created"),
+  e("task_display.task_subtask_done", "Sub-tasks done", "How many of those are done.", "view", "—", "—", "created"),
+
+  // ------------------------------------------------------ stage_completion (0081)
+  e("stage_completion.stage", "Stage", "One row per record and lifecycle stage: the active processes of that stage against the record's latest run of each.", "view", "—", "Read by the board, the drawer and the report so they count the same way.", "created"),
+  e("stage_completion.processes_open", "Open processes", "Processes with no run yet, or whose latest run is neither complete nor not applicable.", "view", "—", "Zero means the stage is complete.", "created"),
+  e("stage_completion.milestones_passed", "Milestones passed", "Of the stage's milestone processes, how many have a complete or not-applicable latest run. A count beside a total — never a percentage (24 Aug).", "view", "—", "—", "created"),
+  e("stage_completion.stage_is_complete", "Stage complete", "True when nothing in the stage is open. Informational: a person moves the lifecycle (no auto-advance, 24 Aug).", "view", "—", "—", "created"),
 
   // ----------------------------------------------------- pipeline_stages (SLA)
   // The lifecycle's lookup (0029, reseeded 0035 and 0045). Only its two SLA columns are
@@ -1346,6 +1379,14 @@ export const TABLE_DESCRIPTIONS: Record<string, string> = {
     "Free labels for a board — \"Council hold\", \"Design variation\" — the same shape as teams and for the same reason: the list is data, it will change, and a retired tag must leave the pickers without breaking the records that carry it.",
   task_dependencies:
     "The edges between tasks — which one waits for which, with the lag carried on the edge because Lofty's process map puts its SLAs on the arrows, not the steps. Triggers refuse cycles and refuse edges between tasks on different records.",
+  task_checklist_items:
+    "Tick boxes under a task (0081): text, order, who ticked it when. Not a task — no assignee, due date, status or dependencies — so a task with twelve lines is one task, not thirteen. Copied from the template line's checklist when a run is instantiated.",
+  process_task_checklist_items:
+    "The tick boxes a template line hands a job (0081), written by managers in Setup → Processes and copied by instantiate_process_tasks().",
+  task_display:
+    "A task with its names, counts and derived dates (0081): due (typed, or start + expected days), at-risk (due − lead) and health, computed from today the way process_run_display does. Nothing here is stored — re-time a task and it re-dates.",
+  stage_completion:
+    "Per record and lifecycle stage (0081): how many active processes, how many still open, how many milestones and how many passed. Complete when nothing is open. Counts, never a percentage.",
   tasks:
     "One thing to be done. A checklist item instantiated from a template and a task somebody typed live in the same table, because they differ only by origin; completion is a timestamp with deliberately no boolean beside it, and the external flag keeps council's statutory 28 days off Design's overdue report.",
   teams:

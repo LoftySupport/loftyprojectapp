@@ -533,4 +533,21 @@ BEGIN
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  self-added vote)', SQLERRM; END;
 
   DELETE FROM feedback WHERE feedback_title = '__constraint_probe__';
+
+  -- 0081: a lead longer than the duration would flag a task at risk before it started.
+  BEGIN
+    INSERT INTO tasks (job_id, task_name, task_expected_days, task_at_risk_lead_days)
+    VALUES ('1106-002', 'constraint probe 0081', 7, 9);
+    RAISE WARNING 'FAIL: a 9-day at-risk lead on a 7-day task was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  tasks_at_risk_lead_within_duration rejected lead 9 on 7 days';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  tasks_at_risk_lead_within_duration rejected lead 9 on 7 days)', SQLERRM; END;
+
+  -- 0081: a checklist line with no words is not a line.
+  BEGIN
+    INSERT INTO task_checklist_items (task_id, task_checklist_item_text)
+    SELECT task_id, '  ' FROM tasks WHERE job_id = '1106-002' LIMIT 1;
+    IF NOT FOUND THEN RAISE NOTICE 'note: no task on 1106-002 to hang a blank checklist line on'; ELSE
+    RAISE WARNING 'FAIL: a blank checklist line was accepted'; END IF;
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  task_checklist_items_text_is_not_blank rejected a blank line';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  task_checklist_items_text_is_not_blank rejected a blank line)', SQLERRM; END;
 END $$;
