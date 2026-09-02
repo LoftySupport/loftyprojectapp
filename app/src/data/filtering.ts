@@ -59,8 +59,50 @@ function jobMatchesOne(j: BoardJob, f: ToolbarFilter): boolean {
   }
 }
 
+/**
+ * Two pairs of chips read TOGETHER, because each half alone answers the wrong question.
+ *
+ *   Process + Process health   "Concept Plan, overdue" is one fact about one run. Process
+ *                              alone = the job has a run of it (any state); health alone =
+ *                              any run in that state; both = that process in that state.
+ *   Property + Recorded        "Pour date, not recorded". Property alone = it is recorded;
+ *                              Recorded alone = has any / has none of the readable
+ *                              properties; both = that property is / is not recorded.
+ *
+ * The absence filter is only honest for properties the person may read — a restricted
+ * property they cannot see would otherwise read as "not recorded" on every job. The
+ * picker offers only readable properties, and `recordedKeys` on the board job is built
+ * from rows RLS already let through, so a key nobody may see is never offered.
+ */
+function jobMatchesPairs(j: BoardJob, filters: ToolbarFilter[]): boolean {
+  const val = (field: string) => filters.find(f => f.field === field)?.value || null;
+  const process = val("Process");
+  const health = val("Process health");
+  if (process || health) {
+    const runs = j.processRuns.filter(r => !process || r.processKey === process);
+    if (process && !health && runs.length === 0) return false;
+    if (health) {
+      const want = health === "waiting" ? (r: BoardJob["processRuns"][number]) => r.status === "waiting" : (r: BoardJob["processRuns"][number]) => r.health === health;
+      if (health === "not_started" && process) {
+        // "Not started" for a named process means no run at all, or a run still at not_started.
+        if (runs.length > 0 && !runs.some(r => r.status === "not_started")) return false;
+      } else if (!runs.some(want)) return false;
+    }
+  }
+  const property = val("Property");
+  const recorded = val("Recorded");
+  if (property || recorded) {
+    const has = property ? j.recordedKeys.includes(property) : j.recordedKeys.length > 0;
+    if (recorded === "no") { if (has) return false; }
+    else if (!has) return false;
+  }
+  return true;
+}
+
+const PAIRED = new Set(["Process", "Process health", "Property", "Recorded"]);
+
 export function jobMatchesFilters(j: BoardJob, filters: ToolbarFilter[]): boolean {
-  return filters.every(f => jobMatchesOne(j, f));
+  return filters.every(f => PAIRED.has(f.field) || jobMatchesOne(j, f)) && jobMatchesPairs(j, filters);
 }
 
 /**
@@ -72,12 +114,30 @@ export function jobMatchesFilters(j: BoardJob, filters: ToolbarFilter[]): boolea
  * job, so that one is compared directly.
  */
 export function projectMatchesFilters(p: BoardProject, filters: ToolbarFilter[]): boolean {
+  const paired = filters.filter(f => PAIRED.has(f.field));
   return filters.every(f => {
     if (f.value == null || f.value === "") return true;
+    if (PAIRED.has(f.field)) return true;
     if (f.field === "Status") return p.status === f.value;
     return p.jobs.some(j => jobMatchesOne(j, f));
-  });
+  }) && (paired.every(f => !f.value) || p.jobs.some(j => jobMatchesPairs(j, paired)));
 }
+
+/** The health options the Process health chip offers, in the order a board reads them. */
+export const PROCESS_HEALTH_FILTER_OPTIONS = [
+  { value: "overdue", label: "Overdue" },
+  { value: "at_risk", label: "At risk" },
+  { value: "on_track", label: "On track" },
+  { value: "waiting", label: "Waiting" },
+  { value: "no_expectation", label: "No duration set" },
+  { value: "not_started", label: "Not started" },
+  { value: "complete", label: "Complete" },
+  { value: "not_applicable", label: "Not applicable" }
+];
+export const RECORDED_FILTER_OPTIONS = [
+  { value: "yes", label: "Recorded" },
+  { value: "no", label: "Not recorded" }
+];
 
 /** For the count line: "Showing 4 of 37" is only honest if something is actually cut. */
 export function activeFilterCount(filters: ToolbarFilter[]): number {

@@ -16,13 +16,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 40 changes since then —
-- Fixed: The changelog on Updates reads this repository's merged pull requests, not the old repository's
-- Changed: Job numbers are three digits from 001 — existing jobs renumbered, and a project can now run past 99 lots
-- Fixed: The hundredth job on a project was refused with a duplicate-key error
-- Added: A standalone /report page that works for accounts held at the demo gate
-- Added: One date range picker across the app — today, yesterday, last 7, last 30, next 30, custom
-- …and 35 more.
+Unreleased: 50 changes since then —
+- Added: The platform-layer design — contacts and companies, maintenance, notifications, a readable change history, two-way sync — recorded in schema-plan.md ahead of the build
+- Changed: The properties and processes screens after a design pass — palette-consistent health colours, keyboard-reachable report links, a two-step delete
+- Added: The Impeccable design skill, installed for the repo
+- Changed: The fourth lifecycle phase is Maintenance — handover is the last process of Construction
+- Added: Properties record values on jobs and projects, with per-property security levels, team and person access, and an opt-in restricted flag
+- …and 45 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

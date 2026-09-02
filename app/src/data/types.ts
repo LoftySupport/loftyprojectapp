@@ -1203,6 +1203,10 @@ export interface Task {
    * council's statutory 28 days are not Design running late.
    */
   isExternal: boolean;
+  /** The process run this was instantiated for (0078) — null for a typed-in task. */
+  processRunId: Uuid | null;
+  /** The template line it was copied from, or null. */
+  processTaskId: Uuid | null;
   createdAt: IsoDateTime;
   createdBy: Uuid | null;
   updatedAt: IsoDateTime;
@@ -1489,12 +1493,15 @@ export interface Tag {
  * Due to be replaced by `pipeline_stages` rows, at which point this constant goes the
  * same way the team list just did. Until then it mirrors the database exactly, and the
  * order is board order.
+ *
+ * Position 4 was "Handover & Maintenance" until 0076 (Amber, 1 September): handover is
+ * the last process of Construction, so the phase after it is just Maintenance.
  */
 export const STAGE_NAMES = [
   "Acquisition & Development",
   "Pre-construction",
   "Construction",
-  "Handover & Maintenance",
+  "Maintenance",
   "Completed",
   "Closed",
   "Cancelled"
@@ -1573,38 +1580,68 @@ export interface TemplateMilestone {
 export const PROPERTY_SCOPES = ["project", "job"] as const;
 export type PropertyScope = (typeof PROPERTY_SCOPES)[number];
 
-/** Mirrors the CHECK in 0043 exactly — the picker offers only what the database takes. */
+/**
+ * Mirrors the CHECK in 0077 exactly — the picker offers only what the database takes.
+ *
+ * `unknown` is the workbook's own "unknown (no data)": the definition exists, the slot
+ * renders, and nothing can be recorded against it until somebody picks a real format.
+ * It is a format the database refuses to store a value for, on purpose.
+ */
 export const PROPERTY_FORMATS = [
   "text", "number", "currency", "date", "checkbox",
-  "file", "single select", "multi select", "person", "link"
+  "file", "single select", "multi select", "person", "link", "unknown"
 ] as const;
 export type PropertyFormat = (typeof PROPERTY_FORMATS)[number];
+
+/** The formats a value can actually be recorded in — everything but `unknown`. */
+export const RECORDABLE_FORMATS = PROPERTY_FORMATS.filter(f => f !== "unknown") as readonly PropertyFormat[];
 
 /**
  * `property_defs`. A property IS a field — the two words mean the same thing.
  *
  * Every one lives at project or job level and carries two pieces of context: which
  * stage captures it, and which team captures it. Stage is deliberately not a third
- * level — a pour date is a property of a *job* that happens to be filled in at
- * Scheduling & Estimating.
+ * level — a pour date is a property of a *job* that happens to be filled in during
+ * Construction. Which *process* collects it is a `process_properties` row, because the
+ * same fact can be collected by more than one process.
  *
  * These are rows, not columns, which is why nothing in this app has `field_1`. The
  * count is data.
+ *
+ * THE LOCKS (0077). Four rungs, one per verb, plus `restricted`. Resolution for a verb:
+ * superadmin always; below the verb's rung never; restricted — only a team or person
+ * named in `property_access`; unrestricted — manager and above, or nobody named at all,
+ * or named. Manager does NOT bypass restricted. The database resolves this; the app
+ * reads the answer through `myPropertyAccess()` and hides controls accordingly.
  */
 export interface PropertyDef {
   key: string;
   label: string;
   scope: PropertyScope;
   stageName: string;
-  /** The slug, for edits; `teamName` is the display name resolved on the read. */
-  teamId: TeamId;
-  teamName: string;
+  /** The slug, for edits; `teamName` is the display name resolved on the read. Null
+   *  when the workbook named nobody — a blank, not a gap to fill. */
+  teamId: TeamId | null;
+  teamName: string | null;
   format: PropertyFormat;
   /** Required to *leave* its stage, not required to create the record. */
   required: boolean;
   automation?: string;
   /** Order among its stage's slots — data, not alphabet. */
   position: number;
+  /** Opt-in: when true nobody but superadmin touches its values unless granted. */
+  restricted: boolean;
+  createLevel: PermissionLevel;
+  readLevel: PermissionLevel;
+  updateLevel: PermissionLevel;
+  deleteLevel: PermissionLevel;
+  /** The SLA sheet's number for this step, in days, as given. Null when it gave none. */
+  slaDays: number | null;
+  /** Retired properties stop appearing on forms and keep every value ever recorded. */
+  isActive: boolean;
+  description: string | null;
+  /** Where it came from — "Properties!12" — so a question can go back to the sheet. */
+  importRef: string | null;
 }
 
 /**
@@ -1616,11 +1653,296 @@ export interface NewPropertyDef {
   label: string;
   scope: PropertyScope;
   stageName: string;
-  teamId: TeamId;
+  teamId?: TeamId | null;
   format: PropertyFormat;
   required?: boolean;
   automation?: string | null;
   position?: number;
+  restricted?: boolean;
+  createLevel?: PermissionLevel;
+  readLevel?: PermissionLevel;
+  updateLevel?: PermissionLevel;
+  deleteLevel?: PermissionLevel;
+  slaDays?: number | null;
+  isActive?: boolean;
+  description?: string | null;
+}
+
+export type PropertyDefPatch = Partial<Omit<NewPropertyDef, "key">>;
+
+/** A choice on a single- or multi-select property (`property_options`). */
+export interface PropertyOption {
+  propertyKey: string;
+  key: string;
+  label: string;
+  position: number;
+  isActive: boolean;
+}
+
+/**
+ * One grant on one property (`property_access`): a team OR a person, and the verbs
+ * they hold. On an unrestricted property these narrow access below manager; on a
+ * restricted one they are the only way in.
+ */
+export interface PropertyAccess {
+  id: Uuid;
+  propertyKey: string;
+  teamId: TeamId | null;
+  profileId: Uuid | null;
+  canCreate: boolean;
+  canRead: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+}
+
+export interface NewPropertyAccess {
+  propertyKey: string;
+  teamId?: TeamId | null;
+  profileId?: Uuid | null;
+  canCreate: boolean;
+  canRead: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+}
+
+/**
+ * What the signed-in person may do with each property's values — the database's own
+ * answer (`my_property_access()`), so a control the screen offers is one the policies
+ * will accept. A property absent from the list may not be read.
+ */
+export interface MyPropertyAccess {
+  propertyKey: string;
+  canCreate: boolean;
+  canRead: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+}
+
+/**
+ * The answer, typed. Exactly one member is set, and which one is the format's call —
+ * the database refuses a text in a date slot. `null` everywhere means "clear it".
+ */
+export interface PropertyValueData {
+  text?: string | null;
+  number?: number | null;
+  date?: IsoDate | null;
+  bool?: boolean | null;
+  profileId?: Uuid | null;
+  optionKey?: string | null;
+  optionKeys?: string[] | null;
+}
+
+/**
+ * `property_values` — one row per (property, record). Sparse: no row means not
+ * recorded. A job may carry a row for a project-scoped property only as a pushed copy
+ * (`pushProjectProperties`); the drawer marks those, and the project's own value is the
+ * one read through otherwise.
+ */
+export interface PropertyValue {
+  id: Uuid;
+  propertyKey: string;
+  format: PropertyFormat;
+  jobId: string | null;
+  projectId: number | null;
+  value: PropertyValueData;
+  /** When the current answer was recorded and by whom — moves only when the answer does. */
+  setAt: IsoDateTime;
+  setById: Uuid | null;
+  setByName: string | null;
+}
+
+/** A line of `property_value_history` — what the answer was, and what it became. */
+export interface PropertyValueHistoryEntry {
+  id: number;
+  propertyKey: string;
+  jobId: string | null;
+  projectId: number | null;
+  oldValue: unknown;
+  newValue: unknown;
+  at: IsoDateTime;
+  byName: string | null;
+}
+
+/** A record a value or a process run hangs off — exactly one of the two. */
+export interface RecordTarget {
+  jobId?: string;
+  projectId?: number;
+}
+
+// -------------------------------------------------------------- processes
+
+/**
+ * `processes` (0078). What happens inside a lifecycle stage, as rows: a named piece of
+ * work pinned to a stage, run on a project or a job, with a team, an expected duration
+ * and the properties it collects. A process never stores a value — properties do.
+ *
+ * Replaces the idea of nesting pipelines inside the lifecycle: a job holds many
+ * processes at once (fencing can be at "registered mail collected" while retaining is
+ * unanswered), which one position never could.
+ */
+export interface Process {
+  id: Uuid;
+  key: string;
+  name: string;
+  stageName: string;
+  /** The workbook's grouping inside a stage — "Stage 1", "Stage 2", "Stage 3", "Variation". */
+  stageGroup: string | null;
+  scope: PropertyScope;
+  owningTeam: TeamId | null;
+  /** How many days a run should take from its start. Null: no agreed duration, not zero. */
+  expectedDays: number | null;
+  atRiskLeadDays: number | null;
+  /** A boolean, never a percentage: "4 of 7 milestones passed" is true. */
+  isMilestone: boolean;
+  isExternal: boolean;
+  position: number;
+  isActive: boolean;
+  description: string | null;
+  automation: string | null;
+  /** The subfolder inside the record's SharePoint folder — a name, not a URL. */
+  sharepointFolder: string | null;
+  importRef: string | null;
+}
+
+export interface NewProcess {
+  key: string;
+  name: string;
+  stageName: string;
+  scope: PropertyScope;
+  stageGroup?: string | null;
+  owningTeam?: TeamId | null;
+  expectedDays?: number | null;
+  atRiskLeadDays?: number | null;
+  isMilestone?: boolean;
+  isExternal?: boolean;
+  position?: number;
+  description?: string | null;
+  automation?: string | null;
+  sharepointFolder?: string | null;
+}
+
+export type ProcessPatch = Partial<Omit<NewProcess, "key">> & { isActive?: boolean };
+
+/** `process_dependencies` — the process waits for `dependsOnProcessId`, plus lag. */
+export interface ProcessDependency {
+  processId: Uuid;
+  dependsOnProcessId: Uuid;
+  lagDays: number;
+}
+
+/** `process_properties` — a property this process collects, and whether it must be recorded to complete. */
+export interface ProcessProperty {
+  processId: Uuid;
+  propertyKey: string;
+  position: number;
+  required: boolean;
+}
+
+/** `process_tasks` — a template line of the checklist a run instantiates. */
+export interface ProcessTask {
+  id: Uuid;
+  processId: Uuid;
+  parentId: Uuid | null;
+  name: string;
+  owningTeam: TeamId | null;
+  expectedDays: number | null;
+  isExternal: boolean;
+  position: number;
+  importRef: number | null;
+}
+
+export interface NewProcessTask {
+  processId: Uuid;
+  name: string;
+  parentId?: Uuid | null;
+  owningTeam?: TeamId | null;
+  expectedDays?: number | null;
+  isExternal?: boolean;
+  position?: number;
+}
+
+export type ProcessTaskPatch = Partial<Omit<NewProcessTask, "processId">>;
+
+/** `process_task_dependencies` — a template task waits for another, plus lag. */
+export interface ProcessTaskDependency {
+  taskId: Uuid;
+  dependsOnTaskId: Uuid;
+  lagDays: number;
+}
+
+export const PROCESS_RUN_STATUSES = [
+  "not_started", "in_progress", "waiting", "complete", "not_applicable"
+] as const;
+export type ProcessRunStatus = (typeof PROCESS_RUN_STATUSES)[number];
+
+export const PROCESS_RUN_STATUS_LABELS: Record<ProcessRunStatus, string> = {
+  not_started: "Not started",
+  in_progress: "In progress",
+  waiting: "Waiting",
+  complete: "Complete",
+  not_applicable: "Not applicable"
+};
+
+/** What `process_run_display` derives from the SLA. Never stored. */
+export type ProcessRunHealth =
+  | "not_started" | "no_expectation" | "on_track" | "at_risk" | "overdue"
+  | "complete" | "not_applicable";
+
+export const PROCESS_RUN_HEALTH_LABELS: Record<ProcessRunHealth, string> = {
+  not_started: "Not started",
+  no_expectation: "No duration set",
+  on_track: "On track",
+  at_risk: "At risk",
+  overdue: "Overdue",
+  complete: "Complete",
+  not_applicable: "Not applicable"
+};
+
+/** A run is still being worked while it is one of these. */
+export const isRunOpen = (s: ProcessRunStatus) =>
+  s === "not_started" || s === "in_progress" || s === "waiting";
+
+/**
+ * `process_run_display` — one process, on one record, one attempt, with the dates and
+ * health the view derives from the process's SLA.
+ */
+export interface ProcessRun {
+  id: Uuid;
+  processId: Uuid;
+  processKey: string;
+  processName: string;
+  stageName: string;
+  stageGroup: string | null;
+  scope: PropertyScope;
+  owningTeam: TeamId | null;
+  isMilestone: boolean;
+  isExternal: boolean;
+  expectedDays: number | null;
+  atRiskLeadDays: number | null;
+  position: number;
+  jobId: string | null;
+  projectId: number | null;
+  /** The project the record belongs to, for a job run as well as a project run. */
+  recordProjectId: number | null;
+  attempt: number;
+  status: ProcessRunStatus;
+  waitingOn: TeamId | null;
+  startedAt: IsoDateTime | null;
+  completedAt: IsoDateTime | null;
+  completedById: Uuid | null;
+  note: string | null;
+  dueDate: IsoDate | null;
+  atRiskDate: IsoDate | null;
+  health: ProcessRunHealth;
+  daysTaken: number | null;
+}
+
+export interface ProcessRunPatch {
+  status?: ProcessRunStatus;
+  waitingOn?: TeamId | null;
+  note?: string | null;
+  /** Override the start the database stamped — a process that began before it was logged. */
+  startedAt?: IsoDateTime | null;
 }
 
 // ------------------------------------------------------------------ creating

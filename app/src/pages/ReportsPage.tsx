@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button, Heading, Tab, TabList, Text } from "@vibe/core";
 import { PROJECT_TYPES, PROJECT_TYPE_LABELS, RECORD_STATUS_LABELS } from "../data/types";
-import { useStages, useTeams } from "../data/useLookups";
+import { useProcesses, usePropertyAccess, usePropertyDefs, useStages, useTeams } from "../data/useLookups";
 import { useBoardRecords } from "../data/boardModel";
 import { jobMatchesQuery, matchedOnPreviousAddress, useSearch } from "../data/SearchProvider";
 import { LoadProblem, NoResults, NothingYet, PreviousAddressNote } from "../components/SearchNotices";
@@ -10,7 +10,8 @@ import { StatusPill } from "../components/RecordCards";
 import { Token } from "../components/Token";
 import { Toolbar, type ToolbarFilter } from "../components/Toolbar";
 import { toOptions } from "../components/Select";
-import { jobMatchesFilters } from "../data/filtering";
+import { PROCESS_HEALTH_FILTER_OPTIONS, RECORDED_FILTER_OPTIONS, jobMatchesFilters } from "../data/filtering";
+import { ProcessReport } from "../components/ProcessReport";
 import { STAGE_ACCENTS } from "../theme/accents";
 import "../components/ui.css";
 
@@ -29,6 +30,9 @@ export function ReportsPage() {
 
   const { stageNames } = useStages();
   const { teamNames } = useTeams();
+  const { processes } = useProcesses();
+  const { propertyDefs } = usePropertyDefs();
+  const { access: filterAccess } = usePropertyAccess();
   /**
    * Reports read the same filtered set as the board — a report of "the jobs in view"
    * that quietly ignored the search would contradict the screen you came from.
@@ -68,6 +72,10 @@ export function ReportsPage() {
     field === "Stage" ? toOptions(stageNames)
     : field === "Team" ? toOptions(teamNames)
     : field === "Type" ? PROJECT_TYPES.map(t => ({ value: t, label: PROJECT_TYPE_LABELS[t] }))
+    : field === "Process" ? processes.filter(x => x.isActive).map(x => ({ value: x.key, label: `${x.name} (${x.stageName})` }))
+    : field === "Process health" ? PROCESS_HEALTH_FILTER_OPTIONS
+    : field === "Property" ? propertyDefs.filter(d => d.isActive && filterAccess(d.key).canRead).map(d => ({ value: d.key, label: `${d.label} (${d.scope})` }))
+    : field === "Recorded" ? RECORDED_FILTER_OPTIONS
     : [];
 
   return (
@@ -92,7 +100,14 @@ export function ReportsPage() {
         <Tab>Portfolio overview</Tab>
         <Tab>Leadership summary</Tab>
         <Tab>Job report</Tab>
+        <Tab>Processes</Tab>
       </TabList>
+
+      {tab === 3 && !noMatches && !loading && all.length > 0 && (
+        <div style={{ marginTop: "var(--space-16)" }}>
+          <ProcessReport jobs={jobs} />
+        </div>
+      )}
 
       {loading && (
         <div className="panel" style={{ marginTop: "var(--space-16)" }}>

@@ -1,7 +1,10 @@
 import { useCallback, useMemo } from "react";
 import { useQuery } from "./DataProvider";
 import { teamName } from "./types";
-import type { PropertyDef, PropertyScope, TeamId, TemplateMilestone } from "./types";
+import type {
+  MyPropertyAccess, Process, ProcessProperty, PropertyDef, PropertyOption, PropertyScope,
+  TeamId, TemplateMilestone
+} from "./types";
 
 /**
  * The lookups, read through the seam.
@@ -91,14 +94,74 @@ const COLUMN_BACKED_KEYS = ["address", "type", "contract", "deposit", "drawings"
 export function usePropertyDefs(reloadKey: number = 0) {
   const { data, loading } = useQuery(r => r.listPropertyDefs(), [], [reloadKey]);
 
-  /** The slots that render on a record — those without a column of their own. */
+  /** The slots that render on a record — active, and without a column of their own. */
   const slotsFor = useMemo(
     () => (scope: PropertyScope) =>
-      data.filter(d => d.scope === scope && !COLUMN_BACKED_KEYS.includes(d.key)),
+      data.filter(d => d.scope === scope && d.isActive && !COLUMN_BACKED_KEYS.includes(d.key)),
     [data]
   );
 
-  return { propertyDefs: data, slotsFor, loading };
+  const byKey = useMemo(() => new Map(data.map(d => [d.key, d])), [data]);
+
+  return { propertyDefs: data, slotsFor, byKey, loading };
+}
+
+/**
+ * What the signed-in person may do with each property's values — the database's own
+ * answer, read once. A key absent from the map may not be read at all, which is how a
+ * restricted property vanishes from every slot list rather than rendering a locked row:
+ * a locked row would tell somebody that a figure exists, and on a restricted property
+ * the existence is part of what is restricted.
+ */
+export function usePropertyAccess(reloadKey: number = 0) {
+  const { data, loading, error } = useQuery(r => r.myPropertyAccess(), [], [reloadKey]);
+  const byKey = useMemo(() => new Map(data.map(a => [a.propertyKey, a])), [data]);
+  const access = useCallback(
+    (key: string): MyPropertyAccess =>
+      byKey.get(key) ?? { propertyKey: key, canCreate: false, canRead: false, canUpdate: false, canDelete: false },
+    [byKey]
+  );
+  return { access, byKey, loading, error };
+}
+
+/** The choices of every select property, grouped by property. */
+export function usePropertyOptions(reloadKey: number = 0) {
+  const { data, loading } = useQuery(r => r.listPropertyOptions(), [], [reloadKey]);
+  const byProperty = useMemo(() => {
+    const out = new Map<string, PropertyOption[]>();
+    data.forEach(o => { (out.get(o.propertyKey) ?? out.set(o.propertyKey, []).get(o.propertyKey)!).push(o); });
+    return out;
+  }, [data]);
+  return { options: data, byProperty, loading };
+}
+
+/** The processes, and the two ways a screen asks for them. */
+export function useProcesses(reloadKey: number = 0) {
+  const { data, loading, error } = useQuery(r => r.listProcesses(), [], [reloadKey]);
+  const byStage = useMemo(() => {
+    const out = new Map<string, Process[]>();
+    data.forEach(p => { (out.get(p.stageName) ?? out.set(p.stageName, []).get(p.stageName)!).push(p); });
+    return out;
+  }, [data]);
+  const byId = useMemo(() => new Map(data.map(p => [p.id, p])), [data]);
+  return { processes: data, byStage, byId, loading, error };
+}
+
+/** Which properties each process collects, both ways round. */
+export function useProcessProperties(reloadKey: number = 0) {
+  const { data, loading } = useQuery(r => r.listProcessProperties(), [], [reloadKey]);
+  const byProcess = useMemo(() => {
+    const out = new Map<string, ProcessProperty[]>();
+    data.forEach(pp => { (out.get(pp.processId) ?? out.set(pp.processId, []).get(pp.processId)!).push(pp); });
+    out.forEach(list => list.sort((a, b) => a.position - b.position));
+    return out;
+  }, [data]);
+  const byProperty = useMemo(() => {
+    const out = new Map<string, ProcessProperty[]>();
+    data.forEach(pp => { (out.get(pp.propertyKey) ?? out.set(pp.propertyKey, []).get(pp.propertyKey)!).push(pp); });
+    return out;
+  }, [data]);
+  return { processProperties: data, byProcess, byProperty, loading };
 }
 
 /** Group definitions by the stage that captures them, in pipeline order. */

@@ -7,13 +7,13 @@ import {
 import {
   LINEAR_STAGES, PROJECT_TYPES, PROJECT_TYPE_LABELS, RECORD_STATUS_LABELS, RECORD_STATUSES
 } from "../data/types";
-import { useStages, useTeams, useTemplatePhases } from "../data/useLookups";
+import { useProcesses, usePropertyAccess, usePropertyDefs, useStages, useTeams, useTemplatePhases } from "../data/useLookups";
 import { useAuth } from "../data/AuthProvider";
 import { useBoardRecords, type BoardJob } from "../data/boardModel";
 import { jobMatchesQuery, matchedOnPreviousAddress, useSearch } from "../data/SearchProvider";
 import { useBoardParams } from "../data/useBoardParams";
 import { JOB_VIEWS, savedViewBySlug, stagesInView } from "../data/savedViews";
-import { activeFilterCount, jobMatchesFilters, statusOptions } from "../data/filtering";
+import { PROCESS_HEALTH_FILTER_OPTIONS, RECORDED_FILTER_OPTIONS, activeFilterCount, jobMatchesFilters, statusOptions } from "../data/filtering";
 import { LoadProblem, NoResults, NothingYet, PreviousAddressNote } from "../components/SearchNotices";
 import { SavedViewTabs } from "../components/SavedViewTabs";
 import { useSavedViews } from "../data/useSavedViews";
@@ -52,6 +52,10 @@ import "../components/ui.css";
 export function JobsPage() {
   const { stages, stageNames } = useStages();
   const { teams, teamNames } = useTeams();
+  // For the Process / Property filter chips (0077, 0078).
+  const { processes } = useProcesses();
+  const { propertyDefs } = usePropertyDefs();
+  const { access: filterAccess } = usePropertyAccess();
   const { expectedDaysByStage } = useTemplatePhases();
   // No create state and no project list any more: nothing is created from this page, so
   // there is nothing to re-read after and no picker to feed. Both went with the New job
@@ -143,6 +147,10 @@ export function JobsPage() {
       case "Team": return toOptions(teamNames);
       case "Status": return statusOptions();
       case "Type": return PROJECT_TYPES.map(t => ({ value: t, label: PROJECT_TYPE_LABELS[t] }));
+      case "Process": return processes.filter(x => x.isActive).map(x => ({ value: x.key, label: `${x.name} (${x.stageName})` }));
+      case "Process health": return PROCESS_HEALTH_FILTER_OPTIONS;
+      case "Property": return propertyDefs.filter(d => d.isActive && filterAccess(d.key).canRead).map(d => ({ value: d.key, label: `${d.label} (${d.scope})` }));
+      case "Recorded": return RECORDED_FILTER_OPTIONS;
       default: return [];
     }
   };

@@ -37,7 +37,9 @@ const PAGES = [
   { to: "/projects", label: "Projects", icon: Houses },
   { to: "/jobs", label: "Jobs", icon: HousePin },
   { to: "/reports", label: "Reports", icon: HouseChart },
-  { to: "/templates", label: "Templates", icon: Doc },
+  // Was "Templates". The page shows the processes inside each phase since 0078, and
+  // processes is the word Lofty uses (Amber, 1 Sep).
+  { to: "/processes", label: "Processes", icon: Doc },
   // The tracker (0060–0063). In the main nav rather than in Setup, because it is for
   // everybody: Setup is configuration and this is "what is happening with the app".
   { to: "/updates", label: "Updates", icon: Announcement },

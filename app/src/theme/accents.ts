@@ -29,7 +29,7 @@ export const STAGE_ACCENTS: Record<string, ColumnAccent> = {
   "Acquisition & Development": { strip: "#7ec7cd", ink: "#0e4d53", tint: "#eef7f8" },
   "Pre-construction":          { strip: "#4faab2", ink: "#0b454b", tint: "#e7f3f4" },
   "Construction":              { strip: "#218b94", ink: "#08434a", tint: "#e1eff0" },
-  "Handover & Maintenance":    { strip: "#00747f", ink: "#00434a", tint: "#dbebec" },
+  "Maintenance":    { strip: "#00747f", ink: "#00434a", tint: "#dbebec" },
   // …and the ends of the lifecycle carry the ramp to its deepest.
   "Completed":                 { strip: "#00565e", ink: "#00343a", tint: "#d5e6e8" },
   "Closed":                    { strip: "#00434a", ink: "#00272c", tint: "#cfe1e3" },

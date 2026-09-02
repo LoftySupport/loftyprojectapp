@@ -4,3 +4,8 @@ dist
 .env.local
 .env*.local
 .netlify
+
+# Impeccable's copies for other tools, and Claude's local-only hook settings
+.agents/
+.codex/
+.claude/settings.local.json

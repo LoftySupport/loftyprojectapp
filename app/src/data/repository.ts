@@ -34,6 +34,27 @@ import type {
   NewTask,
   TaskPatch,
   PropertyDef,
+  PropertyDefPatch,
+  PropertyOption,
+  PropertyAccess,
+  NewPropertyAccess,
+  MyPropertyAccess,
+  PropertyValue,
+  PropertyValueData,
+  PropertyValueHistoryEntry,
+  RecordTarget,
+  Process,
+  NewProcess,
+  ProcessPatch,
+  ProcessDependency,
+  ProcessProperty,
+  ProcessTask,
+  NewProcessTask,
+  ProcessTaskPatch,
+  ProcessTaskDependency,
+  ProcessRun,
+  ProcessRunPatch,
+  ProcessRunStatus,
   Stage,
   StageName,
   TeamId,
@@ -497,8 +518,67 @@ export interface Repository {
    * casually would detach what people call a field from what the import calls it.
    */
   createPropertyDef(input: NewPropertyDef): Promise<PropertyDef>;
-  updatePropertyDef(key: string, patch: Partial<Omit<NewPropertyDef, "key">>): Promise<PropertyDef>;
+  updatePropertyDef(key: string, patch: PropertyDefPatch): Promise<PropertyDef>;
   deletePropertyDef(key: string): Promise<void>;
+
+  // ---- property values, options and access (0077) ------------------------
+  /**
+   * What the signed-in person may do with each property's values — the database's own
+   * answer, so a control the screen offers is one the policies will accept. A property
+   * missing from the list may not be read at all.
+   */
+  myPropertyAccess(): Promise<MyPropertyAccess[]>;
+  /** Every grant on every property — who may do what. Readable by all; the value is the secret, not the grant. */
+  listPropertyAccess(): Promise<PropertyAccess[]>;
+  /** Upsert one grant (a team or a person on one property). Admin+; superadmin on a restricted property. */
+  savePropertyAccess(input: NewPropertyAccess): Promise<PropertyAccess>;
+  deletePropertyAccess(id: string): Promise<void>;
+  listPropertyOptions(): Promise<PropertyOption[]>;
+  savePropertyOption(input: PropertyOption): Promise<PropertyOption>;
+  deletePropertyOption(propertyKey: string, optionKey: string): Promise<void>;
+  /**
+   * The recorded answers. For a job: its own rows plus its project's project-level rows,
+   * so the drawer can read a project value through and mark a pushed copy apart from it.
+   * With no target: every row the person may read (the board's filters and the reports).
+   */
+  listPropertyValues(target?: RecordTarget): Promise<PropertyValue[]>;
+  /** Record or change one answer. An upsert on (property, record); the database checks the format. */
+  setPropertyValue(target: RecordTarget, propertyKey: string, value: PropertyValueData): Promise<PropertyValue>;
+  /** Clear an answer — deletes the row; the history keeps what it was. */
+  clearPropertyValue(target: RecordTarget, propertyKey: string): Promise<void>;
+  listPropertyValueHistory(target: RecordTarget): Promise<PropertyValueHistoryEntry[]>;
+  /**
+   * Copy a project's project-level values onto every live job on it (all, or the keys
+   * given). Returns how many job rows were written. Amber's "push to jobs".
+   */
+  pushProjectProperties(projectId: number, keys?: string[]): Promise<number>;
+
+  // ---- processes (0078) -------------------------------------------------
+  listProcesses(): Promise<Process[]>;
+  createProcess(input: NewProcess): Promise<Process>;
+  updateProcess(id: string, patch: ProcessPatch): Promise<Process>;
+  /** Refused by the database once the process has been run — retire it instead. */
+  deleteProcess(id: string): Promise<void>;
+  listProcessDependencies(): Promise<ProcessDependency[]>;
+  /** Replace what one process waits on. The database refuses a cycle. */
+  setProcessDependencies(processId: string, dependsOn: { processId: string; lagDays: number }[]): Promise<ProcessDependency[]>;
+  listProcessProperties(): Promise<ProcessProperty[]>;
+  /** Replace which properties one process collects, in order, and which are required to complete it. */
+  setProcessProperties(processId: string, properties: { propertyKey: string; required: boolean }[]): Promise<ProcessProperty[]>;
+  listProcessTasks(processId?: string): Promise<ProcessTask[]>;
+  createProcessTask(input: NewProcessTask): Promise<ProcessTask>;
+  updateProcessTask(id: string, patch: ProcessTaskPatch): Promise<ProcessTask>;
+  deleteProcessTask(id: string): Promise<void>;
+  listProcessTaskDependencies(processId: string): Promise<ProcessTaskDependency[]>;
+  setProcessTaskDependencies(taskId: string, dependsOn: { taskId: string; lagDays: number }[]): Promise<ProcessTaskDependency[]>;
+  /** Runs on one record, or — with no target — every run the person may see. */
+  listProcessRuns(target?: RecordTarget): Promise<ProcessRun[]>;
+  /** Begin a process on a record. Attempt is the next number for that process on that record. */
+  startProcessRun(target: RecordTarget, processId: string, status?: ProcessRunStatus): Promise<ProcessRun>;
+  updateProcessRun(id: string, patch: ProcessRunPatch): Promise<ProcessRun>;
+  deleteProcessRun(id: string): Promise<void>;
+  /** Copy the process's checklist onto the run's record, once. Returns how many tasks were made. */
+  instantiateProcessTasks(runId: string): Promise<number>;
 }
 
 export type RepositoryMethod = Exclude<keyof Repository, "name" | "wired">;
@@ -578,7 +658,38 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "saveDictionaryOverride",
   "createPropertyDef",
   "updatePropertyDef",
-  "deletePropertyDef"
+  "deletePropertyDef",
+  "myPropertyAccess",
+  "listPropertyAccess",
+  "savePropertyAccess",
+  "deletePropertyAccess",
+  "listPropertyOptions",
+  "savePropertyOption",
+  "deletePropertyOption",
+  "listPropertyValues",
+  "setPropertyValue",
+  "clearPropertyValue",
+  "listPropertyValueHistory",
+  "pushProjectProperties",
+  "listProcesses",
+  "createProcess",
+  "updateProcess",
+  "deleteProcess",
+  "listProcessDependencies",
+  "setProcessDependencies",
+  "listProcessProperties",
+  "setProcessProperties",
+  "listProcessTasks",
+  "createProcessTask",
+  "updateProcessTask",
+  "deleteProcessTask",
+  "listProcessTaskDependencies",
+  "setProcessTaskDependencies",
+  "listProcessRuns",
+  "startProcessRun",
+  "updateProcessRun",
+  "deleteProcessRun",
+  "instantiateProcessTasks"
 ];
 
 /** Human labels for the wiring checklist on the Status page. */
@@ -654,11 +765,42 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   saveMyPreferences: "user_preferences",
   listTemplatePhases: "pipeline_stages",
   updateStageSla: "pipeline_stages",
-  listTemplateMilestones: "pipeline_stage_tasks (not built)",
+  listTemplateMilestones: "processes (milestones)",
   listPropertyDefs: "property_defs",
   listDictionaryOverrides: "dictionary_overrides",
   saveDictionaryOverride: "dictionary_overrides",
   createPropertyDef: "property_defs",
   updatePropertyDef: "property_defs",
-  deletePropertyDef: "property_defs"
+  deletePropertyDef: "property_defs",
+  myPropertyAccess: "my_property_access()",
+  listPropertyAccess: "property_access",
+  savePropertyAccess: "property_access",
+  deletePropertyAccess: "property_access",
+  listPropertyOptions: "property_options",
+  savePropertyOption: "property_options",
+  deletePropertyOption: "property_options",
+  listPropertyValues: "property_values",
+  setPropertyValue: "property_values",
+  clearPropertyValue: "property_values",
+  listPropertyValueHistory: "property_value_history",
+  pushProjectProperties: "push_project_properties()",
+  listProcesses: "processes",
+  createProcess: "processes",
+  updateProcess: "processes",
+  deleteProcess: "processes",
+  listProcessDependencies: "process_dependencies",
+  setProcessDependencies: "process_dependencies",
+  listProcessProperties: "process_properties",
+  setProcessProperties: "process_properties",
+  listProcessTasks: "process_tasks",
+  createProcessTask: "process_tasks",
+  updateProcessTask: "process_tasks",
+  deleteProcessTask: "process_tasks",
+  listProcessTaskDependencies: "process_task_dependencies",
+  setProcessTaskDependencies: "process_task_dependencies",
+  listProcessRuns: "process_run_display",
+  startProcessRun: "process_runs",
+  updateProcessRun: "process_runs",
+  deleteProcessRun: "process_runs",
+  instantiateProcessTasks: "instantiate_process_tasks()"
 };

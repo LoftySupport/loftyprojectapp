@@ -56,7 +56,7 @@ export const SEED_STAGES: Stage[] = [
   { id: 1, name: "Acquisition & Development", position: 1, ...SEEDED },
   { id: 2, name: "Pre-construction", position: 2, ...SEEDED },
   { id: 3, name: "Construction", position: 3, ...SEEDED },
-  { id: 4, name: "Handover & Maintenance", position: 4, ...SEEDED },
+  { id: 4, name: "Maintenance", position: 4, ...SEEDED },
   { id: 5, name: "Completed", position: 5, ...SEEDED },
   { id: 6, name: "Closed", position: 6, ...SEEDED },
   { id: 7, name: "Cancelled", position: 7, ...SEEDED }
@@ -341,6 +341,41 @@ export function createStubRepository(): Repository {
     },
     async deletePropertyDef(): Promise<void> {
       throw new Error("Removing a property needs Supabase.");
-    }
+    },
+
+    // ---- property values, options, access and processes (0077, 0078) ------
+    // Reads answer empty; writes say what they need. Same posture as everything
+    // above: a fabricated success here would be a slot that appears to save.
+    async myPropertyAccess() { return []; },
+    async listPropertyAccess() { return []; },
+    async savePropertyAccess(): Promise<never> { throw new Error("Granting property access needs Supabase."); },
+    async deletePropertyAccess(): Promise<never> { throw new Error("Removing property access needs Supabase."); },
+    async listPropertyOptions() { return []; },
+    async savePropertyOption(): Promise<never> { throw new Error("Saving a property option needs Supabase."); },
+    async deletePropertyOption(): Promise<never> { throw new Error("Removing a property option needs Supabase."); },
+    async listPropertyValues() { return []; },
+    async setPropertyValue(): Promise<never> { throw new Error("Recording a property value needs Supabase."); },
+    async clearPropertyValue(): Promise<never> { throw new Error("Clearing a property value needs Supabase."); },
+    async listPropertyValueHistory() { return []; },
+    async pushProjectProperties(): Promise<never> { throw new Error("Pushing project properties to jobs needs Supabase."); },
+    async listProcesses() { return []; },
+    async createProcess(): Promise<never> { throw new Error("Defining a process needs Supabase."); },
+    async updateProcess(): Promise<never> { throw new Error("Editing a process needs Supabase."); },
+    async deleteProcess(): Promise<never> { throw new Error("Removing a process needs Supabase."); },
+    async listProcessDependencies() { return []; },
+    async setProcessDependencies(): Promise<never> { throw new Error("Editing process dependencies needs Supabase."); },
+    async listProcessProperties() { return []; },
+    async setProcessProperties(): Promise<never> { throw new Error("Editing a process's properties needs Supabase."); },
+    async listProcessTasks() { return []; },
+    async createProcessTask(): Promise<never> { throw new Error("Adding a template task needs Supabase."); },
+    async updateProcessTask(): Promise<never> { throw new Error("Editing a template task needs Supabase."); },
+    async deleteProcessTask(): Promise<never> { throw new Error("Removing a template task needs Supabase."); },
+    async listProcessTaskDependencies() { return []; },
+    async setProcessTaskDependencies(): Promise<never> { throw new Error("Editing task dependencies needs Supabase."); },
+    async listProcessRuns() { return []; },
+    async startProcessRun(): Promise<never> { throw new Error("Starting a process needs Supabase."); },
+    async updateProcessRun(): Promise<never> { throw new Error("Updating a process needs Supabase."); },
+    async deleteProcessRun(): Promise<never> { throw new Error("Removing a process run needs Supabase."); },
+    async instantiateProcessTasks(): Promise<never> { throw new Error("Creating a process checklist needs Supabase."); }
   };
 }

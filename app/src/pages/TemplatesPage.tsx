@@ -1,68 +1,60 @@
+import { Link } from "react-router-dom";
 import { Chips, Counter, Heading, Text } from "@vibe/core";
-import { PROJECT_TYPES, PROJECT_TYPE_LABELS } from "../data/types";
-import { useMilestones, usePropertyDefs, useStages, useTemplatePhases } from "../data/useLookups";
+import { PROJECT_TYPES, PROJECT_TYPE_LABELS, teamName } from "../data/types";
+import { useProcessProperties, useProcesses, usePropertyDefs, useStages, useTeams, useTemplatePhases } from "../data/useLookups";
+import { usePermission } from "../data/PermissionProvider";
 import { accentStyle, columnAccent } from "../theme/accents";
 import "../components/ui.css";
+import "../components/processes.css";
 
 /**
- * The job template — the set-up a new job inherits.
+ * The job template, read as a page: each lifecycle phase, and inside it the processes a
+ * record passes through, with what each collects and who does it.
  *
- * Half of this page is now real and half of it is missing, and the difference matters
- * more than either half. The phases and the team that picks each one up come from
- * `pipeline_stages`. The milestones and the fields do not exist: `pipeline_stage_tasks`
- * and `property_defs` are specified and not built.
+ * Everything here is read from the database — the phases from `pipeline_stages`, the
+ * processes from `processes` (0078), the fields from `property_defs`. Nothing is invented
+ * to fill a space: a phase with no processes says so, and a process with no duration says
+ * "no duration set" rather than borrowing one.
  *
- * What this page used to show instead was 36 milestones and 11 field definitions that
- * were invented — "Slab poured", "Defect walkthrough", plausible enough that the page's
- * own comment described them as "the process itself". They were not. The real process is
- * the 57-step preconstruction schedule and the process map, both still being revised, and
- * both needing a person to map each step to a team.
- *
- * So the sections stay, with nothing in them and a line saying why. A section that is
- * visibly unconfigured invites somebody to configure it; a section full of a convincing
- * guess gets quoted back at people as though Lofty had agreed it.
+ * Editing happens in Setup → Processes and Setup → Properties; this page links there.
  */
 export function TemplatesPage() {
   const { stageNames } = useStages();
   const { teamsByStage, expectedDaysByStage } = useTemplatePhases();
-  const { byStage: milestonesByStage, milestones } = useMilestones();
+  const { byStage: processesByStage, processes } = useProcesses();
+  const { byProcess } = useProcessProperties();
   const { slotsFor } = usePropertyDefs();
+  const { teams } = useTeams();
+  const { can } = usePermission();
 
-  const milestoneCount = milestones.length;
-  const jobFields = slotsFor("job");
+  const activeProcesses = processes.filter(p => p.isActive);
+  const milestoneCount = activeProcesses.filter(p => p.isMilestone).length;
+  const fieldCount = slotsFor("job").length + slotsFor("project").length;
 
   return (
     <>
       <div className="page-head page-head-row">
         <div>
-          <Heading type="h2" weight="bold">Job template</Heading>
-          <Text type="text2" color="secondary">
-            The phases a job passes through, the team that picks it up at each one, and what
-            they are expected to complete before it moves on.
+          <Heading type="h2" weight="bold">Processes</Heading>
+          <Text type="text2" color="secondary" ellipsis={false}>
+            The phases a record passes through, the processes inside each, and what every
+            process collects. {can("manager") ? <>Edit them in <Link to="/setup/processes" className="tap-link">Setup → Processes</Link>.</> : null}
           </Text>
         </div>
         <Text type="text3" color="secondary">
-          {stageNames.length} phases · {milestoneCount} milestones
+          {stageNames.length} phases · {activeProcesses.length} processes · {milestoneCount} milestones · {fieldCount} fields
         </Text>
       </div>
 
-      {(milestoneCount === 0 || jobFields.length === 0) && (
+      {activeProcesses.length === 0 && (
         <div className="search-note">
           <Text type="text3" ellipsis={false}>
-            The <strong>phases</strong> and the team that owns each one are read from the
-            database. The <strong>milestones</strong> and <strong>fields</strong> are not
-            configured yet — those tables are not built, and the lists that used to appear
-            here were written to fill the space rather than taken from Lofty's process.
+            The <strong>phases</strong> are read from the database. No <strong>processes</strong> are
+            defined yet — managers add them in Setup → Processes, and they appear here and on every record.
           </Text>
         </div>
       )}
 
-      {/* One template, applying to every project type.
-          There was a chip per type here. They highlighted on click and nothing below read
-          the selection, so switching from Residential to Commercial showed the identical
-          page — a filter that looked broken rather than a feature that did not exist yet.
-          Read-only chips instead: they still say who the template covers, and they no
-          longer promise to narrow it. */}
       <div className="toolbar">
         <span className="toolbar-label">Applies to</span>
         {PROJECT_TYPES.map(t => (
@@ -72,62 +64,54 @@ export function TemplatesPage() {
 
       <div className="phase-grid">
         {stageNames.map((stage, i) => {
-          const fields = jobFields.filter(f => f.stageName === stage);
+          const ps = (processesByStage.get(stage) ?? []).filter(p => p.isActive).sort((a, b) => a.position - b.position);
+          const groups = [...new Set(ps.map(p => p.stageGroup ?? ""))];
           return (
-            /* The same ramp the board wears (theme/accents). These are the same seven
-               phases; wearing one flat colour here and a ramp there made the template
-               read as a different vocabulary from the board it describes. */
             <section className="phase-card" key={stage} style={accentStyle(columnAccent("Stage", stage, i))}>
               <Text type="text3" color="secondary">Phase {i + 1}</Text>
               <Heading type="h3" weight="medium">{stage}</Heading>
 
               <div className="stack-tight" style={{ marginTop: "var(--space-8)" }}>
                 <Text type="text3" color="secondary">
-                  {(teamsByStage[stage] ?? []).join(" or ") || "No owning team set"}
+                  {(teamsByStage[stage] ?? []).join(" or ") || "No owning team — several teams work inside a phase"}
                 </Text>
                 <Text type="text3" color="secondary">
-                  {expectedDaysByStage[stage] != null
-                    ? `Expected ${expectedDaysByStage[stage]} days`
-                    : "No expected duration set"}
+                  {expectedDaysByStage[stage] != null ? `Expected ${expectedDaysByStage[stage]} days` : "No expected duration set"}
                 </Text>
               </div>
 
               <div className="card-divider" style={{ margin: "var(--space-12) 0" }} />
 
               <div className="panel-head">
-                <Text type="text3" weight="bold">Milestones</Text>
-                <Counter count={milestonesByStage[stage]?.length ?? 0} kind="line" />
+                <Text type="text3" weight="bold">Processes</Text>
+                <Counter count={ps.length} kind="line" />
               </div>
-              {(milestonesByStage[stage] ?? []).length === 0 ? (
-                <Text type="text3" color="secondary" ellipsis={false}>
-                  None defined yet.
-                </Text>
-              ) : (
-                (milestonesByStage[stage] ?? []).map(c => (
-                  <div className="milestone" key={c.label}>
-                    <input type="checkbox" disabled aria-label={c.label} />
-                    <Text type="text3">{c.label}</Text>
-                  </div>
-                ))
-              )}
-
-              {fields.length > 0 && (
-                <>
-                  <div className="card-divider" style={{ margin: "var(--space-12) 0" }} />
-                  <div className="panel-head">
-                    <Text type="text3" weight="bold">Fields captured here</Text>
-                    <Counter count={fields.length} kind="line" />
-                  </div>
-                  {fields.map(f => (
-                    <div className="milestone" key={f.key}>
-                      <Text type="text3">
-                        {f.label}
-                        {f.required && <span className="slot-required">required</span>}
-                      </Text>
-                    </div>
-                  ))}
-                </>
-              )}
+              {ps.length === 0 && <Text type="text3" color="secondary" ellipsis={false}>None defined for this phase.</Text>}
+              {groups.map(group => (
+                <div key={group || "none"}>
+                  {group && groups.length > 1 && <div className="slot-process-head"><span>{group}</span></div>}
+                  {ps.filter(p => (p.stageGroup ?? "") === group).map(p => {
+                    const n = (byProcess.get(p.id) ?? []).length;
+                    return (
+                      <div className="milestone" key={p.id}>
+                        <Text type="text3" ellipsis={false}>
+                          {p.name}
+                          {p.isMilestone && <span className="slot-chip">milestone</span>}
+                          {p.isExternal && <span className="slot-chip">external</span>}
+                          <span className="slot-sub">
+                            {[
+                              p.scope === "project" ? "project" : "each job",
+                              p.owningTeam ? teamName(p.owningTeam, teams) : null,
+                              p.expectedDays != null ? `${p.expectedDays} days` : null,
+                              n ? `${n} field${n === 1 ? "" : "s"}` : null
+                            ].filter(Boolean).join(" · ")}
+                          </span>
+                        </Text>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
             </section>
           );
         })}

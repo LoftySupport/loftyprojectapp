@@ -1,7 +1,9 @@
 import { useMemo } from "react";
 import { useQuery } from "./DataProvider";
 import { useTeams } from "./useLookups";
-import { teamName, type ProjectType, type RecordStatus, type TeamId, type TitleType } from "./types";
+import {
+  teamName, type ProcessRunHealth, type ProcessRunStatus, type ProjectType, type RecordStatus, type TeamId, type TitleType
+} from "./types";
 
 /**
  * What the boards render, built from real records.
@@ -101,6 +103,17 @@ export interface BoardJob {
   originalAddress?: string | null;
   /** The site the job belongs to. Read through from the project, never copied. */
   projectAddress?: string | null;
+  /**
+   * The latest attempt of every process run on this job (0078) — what the Process and
+   * Process health chips filter on, and what the card can summarise.
+   */
+  processRuns: { processKey: string; status: ProcessRunStatus; health: ProcessRunHealth }[];
+  /**
+   * The keys of every property recorded on this job that the reader may see — its own
+   * rows plus its project's read-through ones. Built from rows RLS already let through,
+   * so an absence filter here is only ever asked of a property the person may read.
+   */
+  recordedKeys: string[];
 }
 
 export interface BoardProject {
@@ -181,6 +194,10 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
   // Names for the audit columns. Small and cached by the query hook — 47 rows — and it
   // is the only way to turn `job_created_by` into something a person recognises.
   const { data: profiles, loading: prLoading } = useQuery(r => r.listProfiles(), []);
+  // Every run and every recorded value the reader may see (0077, 0078): two reads for the
+  // whole board rather than one per card, and both already narrowed by RLS.
+  const { data: runs } = useQuery(r => r.listProcessRuns(), [], [reloadKey]);
+  const { data: values } = useQuery(r => r.listPropertyValues(), [], [reloadKey]);
 
   return useMemo(() => {
     const now = Date.now();
@@ -190,6 +207,21 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
     const teamsOf = new Map(
       profiles.map(p => [p.id, p.teams.map(t => teamName(t, teams))])
     );
+
+    // Latest attempt per (job, process); project runs are summarised onto the project.
+    const runsByJob = new Map<string, Map<string, { processKey: string; status: ProcessRunStatus; health: ProcessRunHealth; attempt: number }>>();
+    runs.forEach(r => {
+      if (!r.jobId) return;
+      const m = runsByJob.get(r.jobId) ?? runsByJob.set(r.jobId, new Map()).get(r.jobId)!;
+      const prior = m.get(r.processId);
+      if (!prior || r.attempt > prior.attempt) m.set(r.processId, { processKey: r.processKey, status: r.status, health: r.health, attempt: r.attempt });
+    });
+    const keysByJob = new Map<string, Set<string>>();
+    const keysByProject = new Map<number, Set<string>>();
+    values.forEach(v => {
+      if (v.jobId) (keysByJob.get(v.jobId) ?? keysByJob.set(v.jobId, new Set()).get(v.jobId)!).add(v.propertyKey);
+      if (v.projectId != null) (keysByProject.get(v.projectId) ?? keysByProject.set(v.projectId, new Set()).get(v.projectId)!).add(v.propertyKey);
+    });
 
     const boardJobs: BoardJob[] = jobs.map(j => ({
       jobNumber: j.id,
@@ -211,7 +243,9 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
       projectSharepointUrl: j.projectSharepointUrl,
       currentAddress: j.currentAddress,
       originalAddress: j.originalAddress,
-      projectAddress: j.projectCurrentAddress
+      projectAddress: j.projectCurrentAddress,
+      processRuns: [...(runsByJob.get(j.id)?.values() ?? [])].map(({ processKey, status, health }) => ({ processKey, status, health })),
+      recordedKeys: [...new Set([...(keysByJob.get(j.id) ?? []), ...(keysByProject.get(j.projectId) ?? [])])]
     }));
 
     const byProject = new Map<string, BoardJob[]>();
@@ -256,5 +290,5 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
       loading: pLoading || jLoading || tLoading || prLoading,
       error: pError ?? jError
     };
-  }, [projects, jobs, teams, profiles, pLoading, jLoading, tLoading, prLoading, pError, jError]);
+  }, [projects, jobs, teams, profiles, runs, values, pLoading, jLoading, tLoading, prLoading, pError, jError]);
 }

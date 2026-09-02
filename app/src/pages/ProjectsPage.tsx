@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { Button, Heading, Text, TextField } from "@vibe/core";
-import { useStages, useTeams } from "../data/useLookups";
+import { useProcesses, usePropertyAccess, usePropertyDefs, useStages, useTeams } from "../data/useLookups";
 import { useAuth } from "../data/AuthProvider";
 import { useBoardRecords, type BoardProject } from "../data/boardModel";
 import {
@@ -9,13 +9,15 @@ import {
 } from "../data/SearchProvider";
 import { useBoardParams } from "../data/useBoardParams";
 import { PROJECT_VIEWS, savedViewBySlug, stagesInView, type SavedView } from "../data/savedViews";
-import { activeFilterCount, projectMatchesFilters, statusOptions } from "../data/filtering";
+import { PROCESS_HEALTH_FILTER_OPTIONS, RECORDED_FILTER_OPTIONS, activeFilterCount, projectMatchesFilters, statusOptions } from "../data/filtering";
 import { LoadProblem, NoResults, NothingYet, PreviousAddressNote } from "../components/SearchNotices";
 import { SavedViewTabs } from "../components/SavedViewTabs";
 import { useSavedViews } from "../data/useSavedViews";
 import { Board } from "../components/Board";
 import { ProjectCard, StatusPill } from "../components/RecordCards";
 import { PropertySlots } from "../components/PropertySlots";
+import { ProcessesPanel } from "../components/ProcessesPanel";
+import { PushToJobs } from "../components/PushToJobs";
 import {
   PROJECT_TYPES, PROJECT_TYPE_LABELS, RECORD_STATUSES, RECORD_STATUS_LABELS, teamName,
   type StageName, type TeamId
@@ -93,6 +95,9 @@ function projectInView(
 export function ProjectsPage() {
   const { stageNames } = useStages();
   const { teams, teamNames } = useTeams();
+  const { processes } = useProcesses();
+  const { propertyDefs } = usePropertyDefs();
+  const { access: filterAccess } = usePropertyAccess();
   // The inline add row is hidden below `user`, matching the insert policy on `projects`.
   // A control that offers to do what RLS will refuse is worse than no control — this is
   // the app's can() hiding it, and the policy is what actually decides.
@@ -266,6 +271,10 @@ export function ProjectsPage() {
       case "Team": return toOptions(teamNames);
       case "Status": return statusOptions();
       case "Type": return PROJECT_TYPES.map(t => ({ value: t, label: PROJECT_TYPE_LABELS[t] }));
+      case "Process": return processes.filter(x => x.isActive).map(x => ({ value: x.key, label: `${x.name} (${x.stageName})` }));
+      case "Process health": return PROCESS_HEALTH_FILTER_OPTIONS;
+      case "Property": return propertyDefs.filter(d => d.isActive && filterAccess(d.key).canRead).map(d => ({ value: d.key, label: `${d.label} (${d.scope})` }));
+      case "Recorded": return RECORDED_FILTER_OPTIONS;
       default: return [];
     }
   };
@@ -599,6 +608,9 @@ function ProjectDetail({
   const { toast } = useToasts();
   const [removing, setRemoving] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
+  // The push-to-jobs preview (Amber, 1 Sep). Open until pushed or cancelled.
+  const [pushing, setPushing] = useState(false);
+  const [propsReload, setPropsReload] = useState(0);
 
   /**
    * Searching within one project — its own box, not the header's.
@@ -903,8 +915,11 @@ function ProjectDetail({
             empty on a site where all the work happens in the lots. */}
         <ActivityFeed projectId={project.projectId} title="Project activity" />
 
-        {/* Project-level fields, in the stage that captures each one. */}
-        <PropertySlots scope="project" />
+        {/* Project-level fields, in the stage and process that capture each one. */}
+        <PropertySlots scope="project" target={{ projectId: project.projectId }} reloadKey={propsReload} showHistory />
+
+        {/* The project's own processes — the site-wide ones, Concept Plan through DA. */}
+        <ProcessesPanel target={{ projectId: project.projectId }} scope="project" currentStage={project.stage} reloadKey={propsReload} />
 
         <section className="panel">
           <div className="panel-head">
@@ -926,13 +941,9 @@ function ProjectDetail({
                     ` · ${project.jobs.length} created`}
                 </Text>
               )}
-              {/* G30 — the entry point ships, the flow rides variations (Amber's Q8).
-                  The button answers instead of doing nothing. */}
-              <Button
-                size="small"
-                kind="secondary"
-                onClick={() => toast("Push to jobs comes with variations — a project-level change will fan out to its jobs with a per-job preview.", "normal")}
-              >
+              {/* Amber, 1 Sep: a project property is pushed to all jobs from here. The
+                  button opens a preview of what would move; the function does the copy. */}
+              <Button size="small" kind="secondary" onClick={() => setPushing(true)} disabled={pushing}>
                 Push to jobs…
               </Button>
               <Button size="small" onClick={onSplit}>+ Create jobs</Button>
@@ -943,6 +954,19 @@ function ProjectDetail({
             <div className="create-problem" role="alert">
               <Text type="text2" ellipsis={false}>{removeError}</Text>
             </div>
+          )}
+
+          {pushing && (
+            <PushToJobs
+              projectId={project.projectId}
+              jobCount={project.jobs.filter(j => j.stage !== "Closed" && j.stage !== "Cancelled").length}
+              onClose={() => setPushing(false)}
+              onDone={n => {
+                setPushing(false);
+                setPropsReload(k => k + 1);
+                toast(n === 0 ? "Nothing was pushed — the jobs already carry these values, or none is live." : `Pushed ${n} value${n === 1 ? "" : "s"} onto the jobs.`, "normal");
+              }}
+            />
           )}
 
           {project.jobs.length === 0 && (

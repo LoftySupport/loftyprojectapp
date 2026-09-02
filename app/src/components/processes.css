@@ -1,0 +1,143 @@
+/* ---- property fields -------------------------------------------------------
+   One control per format. Mobile first: everything wraps, nothing has a fixed width
+   it cannot give up, and tap targets are at least 24px. */
+.pf-inline { display: inline-flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; min-width: 0; max-width: 100%; }
+.pf-date { display: inline-flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; }
+.pf-date input[type="checkbox"], .pf-inline input[type="checkbox"], .pf-check input { width: 18px; height: 18px; margin: 3px; }
+.pf-input {
+  height: 32px;
+  min-width: 0;
+  width: min(260px, 100%);
+  padding: 0 var(--space-8);
+  border: 1px solid var(--ui-border-color);
+  border-radius: var(--border-radius-small);
+  background: var(--primary-background-color);
+  color: var(--primary-text-color);
+  font: inherit;
+  font-size: 14px;
+}
+/* Focus is a ring from the palette, not the browser's default blue. The same ring the
+   saved-view controls draw, so a keyboard user sees one signal everywhere. */
+.pf-input:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; border-color: var(--primary-color); }
+.pf-input::placeholder { color: var(--secondary-text-color); }
+.pf-input:disabled { cursor: not-allowed; }
+.pf-input:disabled { opacity: 0.6; }
+.pf-readonly { display: inline-block; min-height: 24px; line-height: 24px; }
+.pf-prefix { color: var(--secondary-text-color); }
+.pf-select { min-width: min(220px, 100%); }
+.pf-multi { display: flex; flex-direction: column; gap: 2px; }
+.pf-check { display: inline-flex; align-items: center; gap: var(--space-4); min-height: 24px; }
+.pf-link { color: var(--primary-color); word-break: break-all; }
+.pf-unset { font-style: italic; }
+
+/* The slot list grows a process heading under the stage one, and chips that say where a
+   job's value came from. */
+.slot-process-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-8); flex-wrap: wrap;
+  font: var(--font-text3-bold);
+  margin: var(--space-8) 0 var(--space-4);
+}
+.slot-chip {
+  display: inline-block;
+  font: var(--font-text3-normal);
+  font-size: 11px;
+  border-radius: var(--border-radius-small);
+  padding: 0 var(--space-4);
+  margin-left: var(--space-8);
+  background: var(--allgrey-background-color);
+  color: var(--secondary-text-color);
+}
+/* The tints are Vibe's own -selected family and the inks are tokens.css's — the same pair
+   the status pills already use, so a chip and a pill saying "trouble" are the same red. */
+.slot-chip.is-pushed  { background: var(--lofty-orange-tint); color: var(--lofty-orange-strong); }
+.slot-chip.is-differs { background: var(--negative-color-selected); color: var(--negative-ink); }
+.slot-chip.is-current { background: var(--primary-selected-color); color: var(--primary-color); }
+.slot-meta { font: var(--font-text3-normal); color: var(--secondary-text-color); margin-top: 2px; }
+.slot-history { margin-top: var(--space-12); border-top: 1px dashed var(--layout-border-color); padding-top: var(--space-8); }
+.slot-history-list { list-style: none; margin: var(--space-4) 0 0; padding: 0; }
+.slot-history-list li { display: flex; gap: var(--space-8); flex-wrap: wrap; padding: 2px 0; }
+@media (max-width: 720px) {
+  .slot-row { flex-direction: column; align-items: stretch; }
+  .slot-value { text-align: left; }
+  .pf-input { width: 100%; }
+}
+
+/* ---- processes on a record ------------------------------------------------- */
+.proc-stage { border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); }
+.proc-stage + .proc-stage { margin-top: var(--space-8); }
+.proc-stage > summary {
+  list-style: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); flex-wrap: wrap;
+  padding: var(--space-8) var(--space-12);
+  min-height: 40px;
+  font: var(--font-text2-bold);
+}
+.proc-stage > summary::-webkit-details-marker { display: none; }
+.proc-stage > summary:hover { background: var(--primary-background-hover-color); }
+.proc-stage > summary:focus-visible { outline: 2px solid var(--primary-color); outline-offset: -2px; }
+.proc-stage > summary .proc-summary { font: var(--font-text3-normal); color: var(--secondary-text-color); }
+/* The record's own stage is tinted and says so in a chip — a word, not a stripe. */
+.proc-stage.is-current > summary { background: var(--primary-selected-color); }
+.proc-stage.is-current[open] > summary { border-bottom: 1px solid var(--layout-border-color); }
+.proc-list { margin: 0; padding: 0 var(--space-12) var(--space-8); list-style: none; }
+.proc-row { padding: var(--space-8) 0; border-top: 1px dashed var(--layout-border-color); }
+.proc-row-head { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; }
+.proc-name { flex: 1 1 200px; min-width: 0; display: flex; flex-direction: column; }
+.proc-name .proc-sub { font: var(--font-text3-normal); color: var(--secondary-text-color); }
+.proc-controls { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; }
+.proc-controls .proc-control { min-width: 150px; }
+.proc-body { margin-top: var(--space-8); padding: var(--space-8) var(--space-12); background: var(--allgrey-background-color); border-radius: var(--border-radius-small); }
+.proc-empty { padding: var(--space-8) 0; }
+
+/* Health as a word, not only a colour — one man in twelve cannot see the difference. */
+.health {
+  display: inline-block; font: var(--font-text3-bold); font-size: 11px; line-height: 18px;
+  padding: 0 var(--space-8); border-radius: 9px; white-space: nowrap;
+  background: var(--allgrey-background-color); color: var(--secondary-text-color);
+}
+/* Same four tones as .status-pill — the inks contrast-checked in tokens.css on Vibe's own
+   -selected tints — so a process's health and a job's status never disagree about colour. */
+.health.is-on_track { background: var(--positive-color-selected); color: var(--positive-ink); }
+.health.is-complete { background: var(--positive-color-selected); color: var(--positive-ink); }
+.health.is-at_risk  { background: var(--warning-color-selected);  color: var(--warning-ink); }
+.health.is-waiting  { background: var(--warning-color-selected);  color: var(--warning-ink); }
+.health.is-overdue  { background: var(--negative-color-selected); color: var(--negative-ink); }
+
+/* ---- Setup → Processes ------------------------------------------------------- */
+.proc-editor { display: grid; grid-template-columns: 1fr; gap: var(--space-16); }
+@media (min-width: 900px) { .proc-editor { grid-template-columns: minmax(260px, 1fr) minmax(0, 2fr); } }
+.proc-nav { display: flex; flex-direction: column; gap: var(--space-4); }
+.proc-nav-stage { font: var(--font-text3-bold); color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: 0.04em; margin: var(--space-8) 0 var(--space-4); }
+.proc-nav button {
+  text-align: left; width: 100%; min-height: 32px; padding: var(--space-4) var(--space-8);
+  border: 1px solid transparent; border-radius: var(--border-radius-small); background: transparent;
+  color: var(--primary-text-color); font: var(--font-text2-normal); cursor: pointer;
+  display: flex; justify-content: space-between; gap: var(--space-8);
+}
+.proc-nav button:hover { background: var(--allgrey-background-color); }
+.proc-nav button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+.proc-nav button.is-selected { border-color: var(--primary-color); background: var(--primary-selected-color); }
+.proc-nav button .muted { font: var(--font-text3-normal); }
+.proc-nav button.is-retired { opacity: 0.6; }
+.dep-list { list-style: none; margin: 0; padding: 0; }
+.dep-list li { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; padding: var(--space-4) 0; border-top: 1px dashed var(--layout-border-color); }
+.dep-list li:first-child { border-top: 0; }
+.dep-lag { width: 72px; }
+.tpl-task { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; padding: var(--space-4) 0; border-top: 1px dashed var(--layout-border-color); }
+.tpl-task.is-child { padding-left: var(--space-24); }
+.tpl-task .tpl-name { flex: 1 1 180px; min-width: 0; }
+.picker-list { max-height: 320px; overflow: auto; border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-small); padding: var(--space-4) var(--space-8); }
+.picker-list label { display: flex; align-items: center; gap: var(--space-8); min-height: 28px; flex-wrap: wrap; }
+.picker-list input[type="checkbox"] { width: 18px; height: 18px; margin: 3px; flex-shrink: 0; }
+
+/* ---- Setup → Properties table ---------------------------------------------- */
+.props-table td .pf-select, .props-table td select { min-width: 120px; }
+.props-table td.is-key code { font-size: 11px; }
+.levels-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--space-8); }
+.lock-badge { display: inline-block; font: var(--font-text3-bold); font-size: 11px; padding: 0 var(--space-4); border-radius: var(--border-radius-small); background: var(--negative-color-selected); color: var(--negative-ink); }
+/* A count in a table cell that is also a health chip keeps its digits lined up. */
+.data-table .health { font-variant-numeric: tabular-nums; }
+
+/* An inline link with a tap target a thumb can hit — 24px minimum, without breaking the
+   sentence it sits in. */
+.tap-link { display: inline-block; min-height: 24px; line-height: 24px; padding: 0 2px; }

@@ -33,7 +33,13 @@ const KEY_BY_FIELD: Record<string, string> = {
   "Status": "status",
   "Date": "date",
   "Type": "type",
-  "Tag": "tag"
+  "Tag": "tag",
+  // 0078 / 0077: which process a job is in and how it is going; which property is or is
+  // not recorded. `process` + `health` read together, as do `property` + `recorded`.
+  "Process": "process",
+  "Process health": "health",
+  "Property": "property",
+  "Recorded": "recorded"
 };
 const FIELD_BY_KEY: Record<string, string> = Object.fromEntries(
   Object.entries(KEY_BY_FIELD).map(([field, key]) => [key, field])

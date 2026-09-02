@@ -14,6 +14,14 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- The platform-layer design — contacts and companies, maintenance, notifications, a readable change history, two-way sync — recorded in schema-plan.md ahead of the build
+- The Impeccable design skill, installed for the repo
+- Properties record values on jobs and projects, with per-property security levels, team and person access, and an opt-in restricted flag
+- Processes inside every lifecycle stage — editable by managers, with dependencies, properties collected and checklists
+- The properties-and-processes workbook of 1 September is seeded: 49 processes, 174 properties, the construction schedule
+- Push a project's properties to all its jobs, with a preview
+- Filter jobs by process and process health, and by whether a property is recorded
+- A Processes report — where every process stands across the jobs in view
 - A standalone /report page that works for accounts held at the demo gate
 - One date range picker across the app — today, yesterday, last 7, last 30, next 30, custom
 - Search, a phase filter and a date range on the tracker
@@ -50,6 +58,8 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- The properties and processes screens after a design pass — palette-consistent health colours, keyboard-reachable report links, a two-step delete
+- The fourth lifecycle phase is Maintenance — handover is the last process of Construction
 - Job numbers are three digits from 001 — existing jobs renumbered, and a project can now run past 99 lots
 - The request board and detail view restyled, and the table now matches the rest of the app
 - The tracker view rides the URL, so a gantt or calendar can be linked to and saved
