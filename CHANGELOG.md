@@ -67,6 +67,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- Updates → Merged from the build reads merged pull requests from LoftySupport/loftyprojectapp, where the repository lives now
 - The decision against external parties is reversed — maintenance makes them first-class
 - Every table is audited now, and a record's history is readable by everyone except restricted fields
 - The three oldest tables follow the tablename_attribute naming rule
