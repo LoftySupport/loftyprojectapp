@@ -36,20 +36,27 @@ are not a page on the sidebar, they are part of setup only."*
 
 ### The Maintenance tab says "table does not exist" because the database is at 0079
 
-Checked against the live project rather than assumed: `list_migrations` ends at
-`0079_the_workbook_of_1_september`. The deployed bundle reads `maintenance_requests`,
+Checked against the live project rather than assumed: `list_migrations` ended at
+`0079_the_workbook_of_1_september` while the deployed bundle reads `maintenance_requests`,
 `contacts`, `notifications` and the renamed audit columns, all of which arrive with
-`0080`–`0084`. The migrations replay clean here (65 constraint checks, RLS holding) and
-were **about to be applied through the Supabase connector — which is authorised and
-answers — when the session's permission mode refused the write** to production. So they
-are still not applied, and that is the first thing to do, in this order, in the dashboard
-SQL editor or from a session allowed to write:
+`0080`–`0084`.
 
-`0080` → `0081` → `0082` → `0083` → `0084` → `0085`
+**Applied, later the same evening, through the Supabase connector:** `0080` → `0081` →
+`0082` → `0083` went in cleanly. **`0084` refused itself once** — its proof block raised
+*"due was not set from the category's 5 days"* and the whole migration rolled back, so the
+live database sat at `0083` with nothing half-applied. The cause was the clock, not the
+schema: the guard stores the due date as the Adelaide calendar day plus the SLA, and the
+proof compared it with `current_date`, which on a UTC server is *yesterday* in Adelaide
+until 09:30 each morning. The apply ran at 07:00 Adelaide. The local replay had passed
+only because it ran earlier in the day; run again at the same hour it failed identically,
+which is the failure the fix was proved against.
 
-Each file is idempotent and carries its own proof block, which raises rather than
-leaving a half-applied schema behind. After `0084`, Maintenance loads; `0085` is the one-row
-correction to Ben Johnson's address.
+The fix (`claude/0084-adelaide-dates`) puts every "today" in `0084` on the Adelaide date —
+the proof, and also `job_is_in_warranty`, the `overdue`/`at_risk` health, the days-late
+count and the once-a-day notification keys, which had the same mix and would have flipped
+overdue at 09:30 local rather than midnight. `0084` was then applied live from the
+corrected file, and `0085` after it. `list_migrations` now ends at `0085`; Maintenance has
+its tables and its views. Nothing in `0080`–`0085` was ever applied twice.
 
 ### The four app changes
 

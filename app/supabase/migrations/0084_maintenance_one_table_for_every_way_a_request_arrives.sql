@@ -9,6 +9,17 @@
 -- repair it"*; contractor accept links without a login *"yes but needs to be logged"*;
 -- the request number `1042-01-M3` — *"yes"*.
 --
+-- DATES ARE ADELAIDE DATES
+--
+--   `maintenance_request_due_on` is a date, set by the guard from the report's Adelaide
+--   calendar day. Every comparison against it — health, warranty, the once-a-day
+--   notification keys, and the proof below — uses `(now() at time zone
+--   'Australia/Adelaide')::date` for "today", never `current_date`. Supabase runs
+--   Postgres in UTC, so `current_date` is yesterday in Adelaide until 09:30 each
+--   morning: on the live apply of 2 September (07:00 Adelaide, 21:30 UTC the day
+--   before) the proof compared the Adelaide due date with the UTC one and refused the
+--   whole migration. Watched failing on the local replay at the same hour, then passing.
+--
 -- THE SHAPE
 --
 --   maintenance_settings      one row: warranty months, hours a contractor has to answer,
@@ -490,7 +501,7 @@ create view job_warranty with (security_invoker = true) as
          h.process_run_completed_at as job_handover_at,
          (h.process_run_completed_at::date + (s.maintenance_setting_warranty_months || ' months')::interval)::date as job_warranty_ends_on,
          (h.process_run_completed_at is not null
-          and current_date <= (h.process_run_completed_at::date + (s.maintenance_setting_warranty_months || ' months')::interval)::date) as job_is_in_warranty
+          and (now() at time zone 'Australia/Adelaide')::date <= (h.process_run_completed_at::date + (s.maintenance_setting_warranty_months || ' months')::interval)::date) as job_is_in_warranty
     from jobs j
     cross join maintenance_settings s
     left join lateral (
@@ -528,9 +539,9 @@ create view maintenance_request_display with (security_invoker = true) as
            when r.maintenance_request_status in ('closed', 'rejected') then 'closed'
            when r.maintenance_request_status = 'completed' then 'complete'
            when r.maintenance_request_due_on is null then 'no_sla'
-           when current_date > r.maintenance_request_due_on then 'overdue'
+           when (now() at time zone 'Australia/Adelaide')::date > r.maintenance_request_due_on then 'overdue'
            when cat.maintenance_category_at_risk_lead_days is not null
-                and current_date >= r.maintenance_request_due_on - cat.maintenance_category_at_risk_lead_days then 'at_risk'
+                and (now() at time zone 'Australia/Adelaide')::date >= r.maintenance_request_due_on - cat.maintenance_category_at_risk_lead_days then 'at_risk'
            else 'on_track'
          end as maintenance_request_health,
          (select count(*) from maintenance_messages m where m.maintenance_request_id = r.maintenance_request_id)::integer as maintenance_request_messages_total,
@@ -771,13 +782,13 @@ begin
       format('%s was offered "%s" on %s and has not answered within %s hours.', coalesce(r.contractor, 'The contractor'), r.maintenance_item_description,
              to_char(r.maintenance_assignment_offered_at at time zone 'Australia/Adelaide', 'DD Mon'), hours),
       '/maintenance?request=' || r.maintenance_request_id,
-      format('maintenance_no_answer:%s:%s', r.maintenance_assignment_id, current_date),
+      format('maintenance_no_answer:%s:%s', r.maintenance_assignment_id, (now() at time zone 'Australia/Adelaide')::date),
       r.job_id, null, null, null, null);
   end loop;
 
   -- Requests at risk or over SLA, once a day, escalating by days late.
   for r in select * from maintenance_request_display where maintenance_request_health in ('at_risk', 'overdue') loop
-    late := greatest(0, current_date - r.maintenance_request_due_on);
+    late := greatest(0, (now() at time zone 'Australia/Adelaide')::date - r.maintenance_request_due_on);
     who := private.notification_recipients('maintenance_sla_breach', r.job_id, null, r.maintenance_request_owner_profile_id, 'maintenance', null, late);
     made := made + private.notify('maintenance_sla_breach', who,
       format('%s is %s', r.maintenance_request_number, case when r.maintenance_request_health = 'overdue' then 'over its SLA' else 'at risk' end),
@@ -785,7 +796,7 @@ begin
              to_char(r.maintenance_request_due_on, 'DD Mon'),
              case when late > 0 then format(', %s day%s ago', late, case when late = 1 then '' else 's' end) else '' end),
       '/maintenance?request=' || r.maintenance_request_id,
-      format('maintenance_sla_breach:%s:%s', r.maintenance_request_id, current_date),
+      format('maintenance_sla_breach:%s:%s', r.maintenance_request_id, (now() at time zone 'Australia/Adelaide')::date),
       r.job_id, null, null, null, null);
   end loop;
 
@@ -811,7 +822,7 @@ begin
       format('%s for "%s", %s.', coalesce(r.contractor, 'A contractor'), r.maintenance_item_description,
              to_char(r.maintenance_assignment_scheduled_for at time zone 'Australia/Adelaide', 'Dy DD Mon HH24:MI')),
       '/maintenance?request=' || r.maintenance_request_id,
-      format('maintenance_visit_tomorrow:%s:%s', r.maintenance_assignment_id, current_date),
+      format('maintenance_visit_tomorrow:%s:%s', r.maintenance_assignment_id, (now() at time zone 'Australia/Adelaide')::date),
       r.job_id, null, null, null, null);
     -- The homeowner's reminder, once per visit.
     insert into maintenance_messages (maintenance_request_id, maintenance_assignment_id, maintenance_message_direction, maintenance_message_channel,
@@ -975,7 +986,8 @@ begin
   insert into maintenance_requests (job_id, maintenance_request_source, maintenance_request_reported_by_contact_id, maintenance_request_summary, maintenance_category_id)
   values (probe_job, 'phone', homeowner, 'leaking ensuite tap', 'probe_plumbing_0084') returning maintenance_request_id, maintenance_request_number into req, req_no;
   if req_no <> probe_job || '-M1' then raise exception '0084 proof: request numbered %, expected %-M1', req_no, probe_job; end if;
-  if (select maintenance_request_due_on from maintenance_requests where maintenance_request_id = req) <> current_date + 5 then
+  -- Adelaide "today", not current_date: the server is UTC and the two differ after 14:30 UTC.
+  if (select maintenance_request_due_on from maintenance_requests where maintenance_request_id = req) <> (now() at time zone 'Australia/Adelaide')::date + 5 then
     raise exception '0084 proof: due was not set from the category''s 5 days';
   end if;
   insert into maintenance_items (maintenance_request_id, maintenance_item_description, maintenance_category_id)
