@@ -191,3 +191,16 @@
 .method-kind { font: var(--font-text3-bold); color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: 0.04em; flex: 0 0 64px; }
 .approval-chip { display: inline-block; font: var(--font-text3-bold); font-size: 11px; padding: 0 var(--space-8); border-radius: 9px; line-height: 18px; background: var(--warning-color-selected); color: var(--warning-ink); white-space: nowrap; }
 .approval-chip.is-approved { background: var(--positive-color-selected); color: var(--positive-ink); }
+
+/* Maintenance (0084): the thread and the items on a request, and the once-only token box. */
+.maint-thread { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-8); }
+.maint-msg { padding: var(--space-8) var(--space-12); border-radius: var(--border-radius-medium); background: var(--allgrey-background-color); border-left: 3px solid var(--ui-border-color); }
+.maint-msg.is-in  { border-left-color: var(--primary-color); }
+.maint-msg.is-out { border-left-color: var(--positive-color); }
+.maint-msg.is-note { background: transparent; border-left-style: dashed; }
+.maint-msg-head { display: flex; flex-wrap: wrap; gap: var(--space-8); align-items: center; font: var(--font-text3-normal); margin-bottom: var(--space-4); }
+.maint-item { padding: var(--space-8) 0; border-top: 1px solid var(--ui-border-color); display: flex; flex-direction: column; gap: var(--space-4); }
+.maint-item:first-of-type { border-top: 0; }
+.maint-item-head { display: flex; gap: var(--space-8); align-items: flex-start; flex-wrap: wrap; }
+.token-box { border: 1px solid var(--warning-color); background: var(--warning-color-selected); border-radius: var(--border-radius-medium); padding: var(--space-8) var(--space-12); display: flex; flex-direction: column; gap: var(--space-4); }
+.token-link { display: block; font-size: 12px; word-break: break-all; user-select: all; }

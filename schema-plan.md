@@ -1390,6 +1390,40 @@ still residential.**
   The bell reads the inbox; Settings has the per-type, per-channel matrix with digest time;
   Setup → Notifications edits types and rules and shows the outbox; Watch on jobs and projects.
 
+- **`0084` — maintenance: one table for every way a request arrives.** `maintenance_settings`
+  (one row, CHECKed to one: warranty months 3, hours to answer an offer 48, reminder the day
+  before, accept link 14 days, the intake mailbox — null until Amber names it),
+  `maintenance_categories` (a trade and its clock: the party role that did the work on site,
+  SLA days, at-risk lead ≤ SLA, the Lofty team; **empty on purpose**), `maintenance_requests`
+  (numbered `<job>-M<n>` by trigger from a high-water mark on the job; source email / phone /
+  form / portal / api / staff; due from the category's SLA unless typed; closing refused while
+  an item is open; a reply reopens), `maintenance_items` (one defect, one trade; done stamped),
+  `maintenance_assignments` (an offer to a contractor: one open per item; the accept link's
+  token stored only as a sha256, expiring, spent on use, and the use audited with origin
+  `accept_link`), `maintenance_messages` (the thread: in, out, note; the outgoing rows are an
+  outbox the same worker drains), `maintenance_message_secrets` (the token parked for the
+  worker, service-role only, deleted on send — the RLS probe found the first version, where
+  the caller-run offer could not write it, and a one-insert definer in `private` fixed it).
+  `record_parties` and `document_links` gain `maintenance_request_id` in their arcs. Views:
+  `job_warranty` (handover = the completed 7 - Handover run, end = handover + settings' months;
+  nobody types it), `maintenance_request_display` (address, reporter and how to reach them,
+  owner, category clock, warranty flag, counts, next visit, health no_sla · on_track · at_risk
+  · overdue · complete · closed), `maintenance_item_display` (the current offer and, from the
+  job's parties in the category's role, who did that trade originally — the default repairer).
+  Automation: a new request notifies the Maintenance team; `offer_maintenance_item()` queues the
+  email with the link and returns the token once; `maintenance_scan()` every 15 minutes —
+  unanswered offers, at-risk and over-SLA requests (escalating to the managers after 3 days),
+  visits tomorrow with the homeowner's reminder; `receive_maintenance_email()` matches inbound
+  mail by number, then sender, else opens a request on the purchaser's job, and refuses the
+  rest for a person. Three Edge Functions: `maintenance-accept` (the contractor's page, no
+  login), `maintenance-inbound` (the mailbox's POST), and the delivery worker extended to the
+  thread — **written, not deployed**. The app: a Maintenance tab (queue worst-first, the
+  request with its items, offers, thread and close), Setup → Maintenance (settings, trades,
+  the thread's outbox), a maintenance panel with the warranty line on every job drawer.
+  Proved: behaviour §43 (warranty from the run; M1/M2 numbering; due, at-risk and health from
+  the category; the scan does not repeat and does escalate; mail matched by sender; a
+  stranger's mail refused), four constraint probes, eleven RLS probes — each watched failing.
+
 ### Naming, measured rather than asserted
 
 All 79 migrations replayed into a local Postgres; every column in `public` checked against

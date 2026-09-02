@@ -767,3 +767,82 @@ select case when count(*) >= 1 then 'ok  seven days late escalates to a manager 
 from notifications n join tasks t using (task_id) join profiles p on p.profile_id = n.profile_id
 where t.task_name = 'behaviour probe 0083' and n.notification_type_id = 'task_overdue' and p.profile_permission >= 'manager';
 delete from tasks where task_name = 'behaviour probe 0083';
+
+\echo '--- 43. maintenance: warranty from the handover run; a number per job; due and health from the category; the scan does not repeat; mail nobody can match is refused'
+-- Handover completed 40 days ago: inside the settings'' three months.
+insert into process_runs (process_id, job_id, process_run_status, process_run_completed_at)
+select process_id, '1106-002', 'complete', now() - interval '40 days' from processes where process_key = 'handover';
+select case when job_is_in_warranty and job_warranty_ends_on = ((now() - interval '40 days')::date + interval '3 months')::date
+  then 'ok  job_warranty: handed over 40 days ago, in warranty until handover + 3 months'
+  else 'FAIL: job_warranty said in_warranty=' || job_is_in_warranty || ' ends ' || job_warranty_ends_on end
+from job_warranty where job_id = '1106-002';
+
+insert into maintenance_categories (maintenance_category_id, maintenance_category_name, party_role_id, maintenance_category_sla_days, maintenance_category_at_risk_lead_days)
+values ('probe_tiling_0084', 'Probe tiling', 'contractor', 7, 2);
+insert into contacts (contact_first_name, contact_last_name) values ('Probe', 'Reporter 0084');
+insert into contact_methods (contact_id, contact_method_kind, contact_method_value, contact_method_is_primary)
+select contact_id, 'email', 'reporter0084@example.com', true from contacts where contact_last_name = 'Reporter 0084';
+-- Reported 6 days ago on a 7-day SLA with a 2-day lead: due tomorrow, at risk since yesterday.
+insert into maintenance_requests (job_id, maintenance_request_source, maintenance_request_reported_by_contact_id, maintenance_request_reported_at,
+                                  maintenance_request_summary, maintenance_category_id, maintenance_request_owner_profile_id)
+select '1106-002', 'email', contact_id, now() - interval '6 days', 'behaviour probe 0084 cracked tile', 'probe_tiling_0084',
+       (select profile_id from profiles where profile_email = 'behaviour-test@lofty.com.au')
+  from contacts where contact_last_name = 'Reporter 0084';
+-- Reported 10 days ago: three days over.
+insert into maintenance_requests (job_id, maintenance_request_source, maintenance_request_reported_at, maintenance_request_summary, maintenance_category_id, maintenance_request_owner_profile_id)
+values ('1106-002', 'phone', now() - interval '10 days', 'behaviour probe 0084 loose grout', 'probe_tiling_0084',
+        (select profile_id from profiles where profile_email = 'behaviour-test@lofty.com.au'));
+select case when string_agg(maintenance_request_number, ',' order by maintenance_request_number) = '1106-002-M1,1106-002-M2'
+  then 'ok  requests numbered 1106-002-M1 and 1106-002-M2'
+  else 'FAIL: numbered ' || string_agg(maintenance_request_number, ',' order by maintenance_request_number) end
+from maintenance_requests where job_id = '1106-002';
+select case when maintenance_request_due_on = (maintenance_request_reported_at at time zone 'Australia/Adelaide')::date + 7
+             and maintenance_request_at_risk_on = maintenance_request_due_on - 2
+             and maintenance_request_health = 'at_risk' and maintenance_request_is_warranty
+  then 'ok  M1: due = reported + 7, at risk = due − 2, health at_risk, inside warranty'
+  else 'FAIL: M1 due ' || maintenance_request_due_on || ' at-risk ' || maintenance_request_at_risk_on || ' health ' || maintenance_request_health || ' warranty ' || maintenance_request_is_warranty end
+from maintenance_request_display where maintenance_request_number = '1106-002-M1';
+select case when maintenance_request_health = 'overdue' then 'ok  M2: three days over its SLA reads overdue'
+  else 'FAIL: M2 health ' || maintenance_request_health end
+from maintenance_request_display where maintenance_request_number = '1106-002-M2';
+select case when maintenance_request_reported_by_email = 'reporter0084@example.com' then 'ok  the reporter''s email is resolved from contact_methods'
+  else 'FAIL: reporter email ' || coalesce(maintenance_request_reported_by_email, 'null') end
+from maintenance_request_display where maintenance_request_number = '1106-002-M1';
+
+select maintenance_scan() as first_maintenance_scan \gset
+select maintenance_scan() as second_maintenance_scan \gset
+select case when count(*) = 2 then 'ok  two scans, one maintenance_sla_breach row per request for the owner — the dedupe key holds for the day'
+  else 'FAIL: ' || count(*) || ' maintenance_sla_breach rows for the owner after two scans' end
+from notifications n join profiles p on p.profile_id = n.profile_id
+where n.notification_type_id = 'maintenance_sla_breach' and n.job_id = '1106-002' and p.profile_email = 'behaviour-test@lofty.com.au';
+-- Three days over passes the managers'' after_days of 3: a manager who is NOT the owner hears
+-- about M2 (the owner is an admin here and would hear as owner regardless — counting them
+-- would prove nothing), and nobody but the owner hears about M1, one day short of the lead.
+select case when count(*) filter (where n.notification_title like '1106-002-M2%') >= 1
+             and count(*) filter (where n.notification_title like '1106-002-M1%') = 0
+  then 'ok  three days over escalates to the managers (after_days 3); at risk stays with the owner'
+  else 'FAIL: managers other than the owner heard about M2 ' || count(*) filter (where n.notification_title like '1106-002-M2%')
+       || ' times and about M1 ' || count(*) filter (where n.notification_title like '1106-002-M1%') || ' times' end
+from notifications n join profiles p on p.profile_id = n.profile_id
+where n.notification_type_id = 'maintenance_sla_breach' and n.job_id = '1106-002'
+  and p.profile_permission >= 'manager' and p.profile_email <> 'behaviour-test@lofty.com.au';
+
+-- Inbound mail: the sender''s open request is found without a number; a stranger with no number is refused.
+select case when matched_by = 'sender' and maintenance_request_number = '1106-002-M1' then 'ok  mail from the reporter with no number lands on their open request'
+  else 'FAIL: matched_by ' || coalesce(matched_by, 'null') || ' on ' || coalesce(maintenance_request_number, 'null') end
+from receive_maintenance_email('graph-in-0084-a', 'reporter0084@example.com', 'the tile again', 'still cracked');
+do $$
+begin
+  perform receive_maintenance_email('graph-in-0084-b', 'stranger@example.com', 'hello', 'who is this');
+  raise warning 'FAIL: mail from a stranger with no request number was accepted';
+exception when others then
+  if sqlerrm like '%log it by hand%' then raise notice 'ok  mail from a stranger with no request number is refused, for a person to log';
+  else raise warning 'FAIL: unexpected refusing a stranger''s mail (%)', sqlerrm; end if;
+end $$;
+
+-- Left as found.
+delete from maintenance_requests where job_id = '1106-002';
+delete from notifications where notification_type_id like 'maintenance_%' and job_id = '1106-002';
+delete from maintenance_categories where maintenance_category_id = 'probe_tiling_0084';
+delete from contacts where contact_last_name = 'Reporter 0084';
+delete from process_runs where job_id = '1106-002' and process_id = (select process_id from processes where process_key = 'handover');

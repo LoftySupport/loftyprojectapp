@@ -232,6 +232,26 @@ export function recordLink(
     }
     case "addresses":
       return { subject: String(row.consolidated_address ?? ""), href: null };
+    // Maintenance (0084): everything on a request opens the request in the Maintenance tab.
+    case "maintenance_requests": {
+      const id = row.maintenance_request_id == null ? "" : String(row.maintenance_request_id);
+      return { subject: `maintenance request ${String(row.maintenance_request_number ?? "")}`, href: id ? `/maintenance?request=${id}` : null };
+    }
+    case "maintenance_items": {
+      const id = row.maintenance_request_id == null ? "" : String(row.maintenance_request_id);
+      return { subject: `maintenance item “${String(row.maintenance_item_description ?? "")}”`, href: id ? `/maintenance?request=${id}` : null };
+    }
+    case "maintenance_assignments":
+      return { subject: "a maintenance offer", href: null };
+    case "maintenance_messages": {
+      const id = row.maintenance_request_id == null ? "" : String(row.maintenance_request_id);
+      const dir = String(row.maintenance_message_direction ?? "");
+      return { subject: dir === "in" ? "an incoming maintenance message" : dir === "out" ? "an outgoing maintenance message" : "a maintenance note", href: id ? `/maintenance?request=${id}` : null };
+    }
+    case "maintenance_categories":
+      return { subject: `maintenance category “${String(row.maintenance_category_name ?? "")}”`, href: "/setup/maintenance" };
+    case "maintenance_settings":
+      return { subject: "the maintenance settings", href: "/setup/maintenance" };
     default:
       return { subject: "", href: null };
   }
@@ -246,6 +266,9 @@ export function headline(snap: AuditSnapshot): string | null {
       case "property_values": return "recorded";
       case "comments": return "added";
       case "tasks": return "added";
+      case "maintenance_requests": return "logged";
+      case "maintenance_assignments": return "offered";
+      case "maintenance_messages": return "recorded";
       default: return "created";
     }
   }

@@ -135,7 +135,7 @@ the `.agents/` and `.codex/` copies for other tools are ignored, not committed; 
 hook with `npx -y impeccable install` if wanted. `/impeccable init` (a PRODUCT.md and
 DESIGN.md) has not been run — that is an interview with Amber, not a guess.
 
-### The platform layer — `0080`–`0083` built, `0084`–`0085` to go
+### The platform layer — `0080`–`0084` built, `0085` to go
 
 Amber answered the nine questions on 2 September (recorded in `schema-plan.md`, *Amber's
 answers, 2 September*) and sent the Phase B import data with them —
@@ -149,11 +149,17 @@ and a `task_display` / `stage_completion` pair of views; contacts, companies, cl
 employment with job role, parties on records, and SiteBook's project roles; notifications end to end in the database with the in-app channel
 live and the email/Teams worker written but **not deployed** (see
 `app/supabase/functions/deliver-notifications/README.md` — it needs an Entra app registration
-and secrets). Next: `0084` maintenance, `0085` sync. Local verify:
+and secrets). `0084` maintenance is built and green too (`schema-plan.md`, *Built so far*):
+the Maintenance tab, Setup → Maintenance, the warranty on every job drawer, and three Edge
+Functions — `maintenance-accept`, `maintenance-inbound`, and the delivery worker extended to
+the maintenance thread — all **written and not deployed** (steps in
+`app/supabase/functions/deliver-notifications/README.md`). PR #2 was merged by Amber on
+2 September at the design commit; `0080`–`0084` are on the same branch, rebased onto main,
+in a new PR. Next: `0085` sync. Local verify:
 `LOFTY_PG_PORT=5432 LOFTY_PG_HOST=/var/run/postgresql ./check.sh` from `app/supabase/verify`
-(Postgres 16 started with `service postgresql start`). **`0080`–`0083` are not yet applied to the
+(Postgres 16 started with `service postgresql start`). **`0080`–`0084` are not yet applied to the
 live database** — the Supabase MCP server needs re-authorising in this session; apply
-`0080`–`0083` in order through the dashboard SQL editor or a re-authorised session before the app that
+`0080`–`0084` in order through the dashboard SQL editor or a re-authorised session before the app that
 reads the new column names is deployed, because the renamed columns and the app move
 together.
 

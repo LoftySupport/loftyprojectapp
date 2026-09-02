@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-579 properties across 86 tables.
+689 properties across 96 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 530 | In the migration and the types |
+| Created | 640 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -286,6 +286,7 @@ One place a document is attached — a separate table because the same soil repo
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `document_links.document_link_id` | Attachment | One place a document is attached. Separate from the document itself because the same soil report belongs to a project AND to every job on it — four parent columns on `documents` would mean four copies of one PDF and four places for its name to drift. | `uuid` | — | Primary key. | FK → documents(document_id) ON DELETE CASCADE. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `document_links.project_id` | Attached to project | Set when the parent is a project. | `integer` | — | Nullable. CHECK document_links_one_parent: exactly one of the four parents. | FK → projects(project_id). Partially indexed, and partially UNIQUE with document_id so the same file cannot be attached to the same record twice — a full four-column unique would never fire, because a null never equals a null. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `document_links.maintenance_request_id` | Maintenance request | The parent, when a photo or report belongs to a maintenance request (0084). | `uuid` | — | Nullable. FK → maintenance_requests ON DELETE CASCADE. Part of the exactly-one-parent CHECK. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `documents`
 
@@ -436,6 +437,17 @@ Merged into projects.project_type. A job's type is its project's type — a comm
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `job_types.id` | Job type (merged) | Merged into the project_type enum. A job's type is its project's type — a commercial project does not contain residential jobs, so a second column would only ever be a chance to disagree with the first. Read it through job_display.project_type. | `integer` | — | Table dropped. | Superseded by projects.project_type, inherited by jobs through the job_display view. | Merged | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 
+## `job_warranty`
+
+When each job was handed over — the completion of its 7 - Handover run — and when its warranty ends, handover plus the settings' months (0084). Derived; nobody types the end date.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `job_warranty.job_id` | Job | One row per job. | `view` | — | — | Read by the job drawer's maintenance panel. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `job_warranty.job_handover_at` | Handed over | The completion of the job's 7 - Handover run (latest attempt). Null until it completes — nobody types it. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `job_warranty.job_warranty_ends_on` | Warranty ends | Handover + maintenance_settings.warranty_months. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `job_warranty.job_is_in_warranty` | In warranty | Handed over, and today is not past the end. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
 ## `jobs`
 
 One dwelling's build — "1042-01", which is both what Lofty says out loud and the primary key. Carries the lifecycle stage, the owning team and assignee, both addresses, the engaged teams and the SharePoint folder: the board is mostly this table.
@@ -468,6 +480,7 @@ One dwelling's build — "1042-01", which is both what Lofty says out loud and t
 | `jobs.job_created_by` | Created by | Who created it. | `uuid` | — | Nullable. | FK → profiles(id). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `jobs.job_updated_at` | Updated on | When it last changed. Maintained by the touch_updated_at trigger, not by the app. | `timestamptz` | — | Not null, default now(). | Set by the jobs_touch trigger on every update. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `jobs.job_updated_by` | Updated by | Who last changed it. | `uuid` | — | Nullable. | FK → profiles(id). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `jobs.job_maintenance_seq_high_water` | Maintenance sequence high-water | The highest maintenance request sequence ever handed out on this job (0084) — the counter behind 1042-01-M3. Never goes down, so a deleted request's number is never reused. | `integer` | — | smallint. Not null, default 0. | Bumped by assign_maintenance_request_number() under the job row's lock. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `login_activity`
 
@@ -481,6 +494,172 @@ One row per authentication event, copied out of auth.users with the email denorm
 | `login_activity.login_activity_event_type` | Event | SIGNUP or LOGIN. Renamed from `event_type` in 0080. | `text` | — | Not null. | — | Created | 2026-08-01 · Amber Beaumont — outside the migrations; renamed 0080 | 2026-08-01 · Amber Beaumont — outside the migrations; renamed 0080 |
 | `login_activity.login_activity_at` | Occurred on | When it happened. Renamed from `occurred_at` in 0080. | `timestamptz` | — | Not null. Indexed descending. | Indexed for "most recent first", which is how it is read. | Created | 2026-08-01 · Amber Beaumont — outside the migrations; renamed 0080 | 2026-08-01 · Amber Beaumont — outside the migrations; renamed 0080 |
 | `login_activity.login_activity_metadata` | Details | The provider and nothing else (0008 stopped it storing the auth.users row). Renamed from `metadata` in 0080. | `jsonb` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont — outside the migrations; renamed 0080 | 2026-08-01 · Amber Beaumont — outside the migrations; renamed 0080 |
+
+## `maintenance_assignments`
+
+An offer of one item to one contractor (0084): offered → accepted → scheduled → done, or declined / cancelled. One open offer per item; a decline keeps its row. The accept link is a token: only its hash lives here, it expires, and using it is audited with origin accept_link (Amber: "yes but needs to be logged").
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `maintenance_assignments.maintenance_assignment_id` | Offer | An offer of one item to one contractor (0084). A decline keeps its row; the next offer is a new one. | `uuid` | — | Primary key. | Users write; offer_maintenance_item() is the usual way. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_assignments.maintenance_item_id` | Item | Which item. | `uuid` | — | Not null. FK → maintenance_items ON DELETE CASCADE. Partial unique: one offer per item while offered, accepted or scheduled (proved biting). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_assignments.company_id` | Company | The contractor's company. | `uuid` | — | Nullable. FK → companies. CHECK: company or contact (maintenance_assignments_names_somebody, proved biting). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_assignments.contact_id` | Person | The contractor as a person, when known. | `uuid` | — | Nullable. FK → contacts. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_assignments.maintenance_assignment_status` | Status | offered → accepted → scheduled → done, or declined / cancelled. The item follows it by trigger. | `text` | — | Not null, default offered. CHECK on the six. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_assignments.maintenance_assignment_offered_at` | Offered | When the offer went — what the unanswered-offer scan measures from. | `timestamptz` | — | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_assignments.maintenance_assignment_responded_at` | Answered | When the contractor answered, by link or by phone. | `timestamptz` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_assignments.maintenance_assignment_scheduled_for` | Scheduled for | The visit time the contractor gave. | `timestamptz` | — | Nullable. | maintenance_scan() sends the day-before reminders from it. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_assignments.maintenance_assignment_note` | Note | Lofty's note to the contractor, and their reply. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_assignments.maintenance_assignment_token_hash` | Accept link (hash) | The sha256 of the accept-link token. The token itself is never stored here; it is returned once to the caller and parked for the worker. Nulled when the link is used. | `text` | — | Nullable. Partial index. | answer_maintenance_offer() looks the link up by this. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_assignments.maintenance_assignment_token_expires_at` | Link expires | When the accept link stops working (settings' accept_link_days after the offer). | `timestamptz` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_assignments.maintenance_assignment_created_at` | Created | — | `timestamptz` | — | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_assignments.maintenance_assignment_created_by` | Created by | — | `uuid` | — | Nullable. FK → profiles. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_assignments.maintenance_assignment_updated_at` | Updated | — | `timestamptz` | — | Not null, default now(). moddatetime trigger. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_assignments.maintenance_assignment_updated_by` | Updated by | — | `uuid` | — | Nullable. FK → profiles. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `maintenance_categories`
+
+A trade and its clock (0084): the party role that did this work on site — so the default repairer is that party on the job — the SLA days, the at-risk lead and the Lofty team. Empty on purpose: the categories come from the contractors on the jobs and the SLAs are Amber's to set in the app.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `maintenance_categories.maintenance_category_id` | Category | A trade and its clock (0084) — the slug. Empty on purpose: Amber said the categories come from the contractors on the jobs and the SLAs are hers to set in the app. | `text` | — | Primary key. CHECK: slug shape. | Everyone reads; managers edit in Setup → Maintenance. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_categories.maintenance_category_name` | Name | What the category is called on screen. | `text` | — | Not null, unique. CHECK not blank. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_categories.party_role_id` | Trade (party role) | The party role that did this work on site — so the default repairer of an item in this category is that party on the job's construction runs (Amber, answer 3). | `text` | — | Nullable. FK → party_roles ON UPDATE CASCADE. | Read by maintenance_item_display as maintenance_item_original_trade. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_categories.team_id` | Lofty team | Which team owns requests in this category. | `text` | — | Nullable. FK → teams ON UPDATE CASCADE. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_categories.maintenance_category_sla_days` | SLA days | How many days from report to due for this category. Null means no SLA — a real state, shown as such. | `integer` | — | smallint. Nullable. CHECK >= 0. | guard_maintenance_request() sets due from it when nobody typed one. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_categories.maintenance_category_at_risk_lead_days` | At-risk lead | How many days before due a request in this category reads at risk (Amber: "7 days, at 5 days at risk" → SLA 7, lead 2). | `integer` | — | smallint. Nullable. CHECK >= 0 and, when both are set, lead <= SLA (maintenance_categories_lead_within_sla, proved biting). | Read by maintenance_request_display for health. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_categories.maintenance_category_position` | Order | Where it sits in the list. | `integer` | — | smallint. Not null, default 0. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_categories.maintenance_category_is_active` | Active | Retiring a category is a flag; requests keep their history. | `boolean` | — | Not null, default true. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_categories.maintenance_category_created_at` | Created | — | `timestamptz` | — | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_categories.maintenance_category_created_by` | Created by | — | `uuid` | — | Nullable. FK → profiles. Stamped by trigger. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_categories.maintenance_category_updated_at` | Updated | — | `timestamptz` | — | Not null, default now(). moddatetime trigger. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_categories.maintenance_category_updated_by` | Updated by | — | `uuid` | — | Nullable. FK → profiles. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `maintenance_item_display`
+
+An item with its current offer and its contractor named (0084), and — from the parties on the job's construction runs — who did that trade originally, which is the default repairer.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `maintenance_item_display.maintenance_item_original_trade` | Original trade | Who did this trade on the job during construction, from record_parties on the job and its runs in the category's party role — the default repairer (Amber, answer 3). | `view` | — | — | Shown beside the Offer button so the right contractor is one click. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_item_display.maintenance_assignment_status` | Current offer | The item's current (or last) offer and its contractor, flattened onto the item. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `maintenance_items`
+
+The defects inside a request (0084) — one line per trade, so "leaking tap, cracked tile" is one email and two items. Assigned through offers; done is stamped with who and when; not applicable is a real answer.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `maintenance_items.maintenance_item_id` | Item | One defect, one trade (0084): the lines inside a request — "leaking ensuite tap, cracked laundry tile" is one email and two items. | `uuid` | — | Primary key. | Users write. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_items.maintenance_request_id` | Request | Which request. | `uuid` | — | Not null. FK → maintenance_requests ON DELETE CASCADE. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_items.maintenance_item_position` | Order | Where it sits in the request. | `integer` | — | smallint. Not null, default 0. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_items.maintenance_item_description` | Description | What is wrong. | `text` | — | Not null. CHECK not blank. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_items.maintenance_item_location` | Location | Where in the house — ensuite, laundry, garage. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_items.maintenance_category_id` | Category | The trade for this item; the default repairer is that party on the job. | `text` | — | Nullable. FK → maintenance_categories ON UPDATE CASCADE. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_items.maintenance_item_status` | Status | open → assigned → scheduled → done, or not_applicable. Follows the item's assignment by trigger. | `text` | — | Not null, default open. CHECK on the five. CHECK: done exactly when completed_at is set. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_items.maintenance_item_is_warranty` | Warranty item | Whether Lofty covers it. Null means not yet decided — not "no". | `boolean` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_items.maintenance_item_cost` | Cost | What the repair cost, if known. | `numeric` | — | numeric(12,2). Nullable. CHECK >= 0. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_items.maintenance_item_completed_at` | Done | Stamped by trigger when the status becomes done; cleared if it is reopened. | `timestamptz` | — | Nullable, paired with status by CHECK. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_items.maintenance_item_completed_by` | Done by | Who marked it done. | `uuid` | — | Nullable. FK → profiles. Stamped by trigger. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_items.maintenance_item_created_at` | Created | — | `timestamptz` | — | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_items.maintenance_item_created_by` | Created by | — | `uuid` | — | Nullable. FK → profiles. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_items.maintenance_item_updated_at` | Updated | — | `timestamptz` | — | Not null, default now(). moddatetime trigger. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_items.maintenance_item_updated_by` | Updated by | — | `uuid` | — | Nullable. FK → profiles. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `maintenance_message_secrets`
+
+The accept-link token behind a queued offer email (0084), parked for the worker to fill the link from and deleted when the mail is sent. Service role only — RLS on with no policies, revoked from the API roles, written through one narrow definer. Not audited: a log of secrets is a second copy of them.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `maintenance_message_secrets.maintenance_message_id` | Message | The queued offer email the token belongs to (0084). | `uuid` | — | Primary key. FK → maintenance_messages ON DELETE CASCADE. | Service role only: RLS on, no policies, revoked from the API roles. Not audited. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_message_secrets.maintenance_message_secret_token` | Token | The accept-link token, held until the worker fills the link and sends; deleted on send. | `text` | — | Not null. | Written only through private.park_maintenance_message_secret(); the RLS probe shows a user sees none. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_message_secrets.maintenance_message_secret_created_at` | Parked | — | `timestamptz` | — | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `maintenance_messages`
+
+The thread on a request (0084): what came in (matched to its request by the number in the subject, else the sender, else a new request), what went out (the offer with its link, the reminder, the closing mail — queued here and sent by the worker), and what was said on the phone. Graph's message id is unique so mail is matched once.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `maintenance_messages.maintenance_message_id` | Message | One entry in a request's thread (0084): what came in, what went out, what was said on the phone. | `uuid` | — | Primary key. | Users write notes; triggers and RPCs write the rest. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_messages.maintenance_request_id` | Request | Which request's thread. | `uuid` | — | Not null. FK → maintenance_requests ON DELETE CASCADE. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_messages.maintenance_assignment_id` | Offer | The offer this message is about, when it is about one. | `uuid` | — | Nullable. FK → maintenance_assignments ON DELETE SET NULL. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_messages.maintenance_message_direction` | Direction | in (from outside), out (Lofty's, sent by the worker), note (said on the phone, decided in the office). | `text` | — | Not null. CHECK. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_messages.maintenance_message_channel` | Channel | email, sms, phone, form, portal, app. | `text` | — | Not null. CHECK. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_messages.maintenance_message_from_contact_id` | From (contact) | The outside sender, when matched to a contact. | `uuid` | — | Nullable. FK → contacts. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_messages.maintenance_message_from_profile_id` | From (staff) | The Lofty person who wrote a note. | `uuid` | — | Nullable. FK → profiles. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_messages.maintenance_message_to_address` | To | The address an outgoing message goes to, or an incoming one came from. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_messages.maintenance_message_subject` | Subject | The email subject. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_messages.maintenance_message_body` | Body | The words. An outgoing offer carries {{ACCEPT_LINK}} until the worker fills it. | `text` | — | Not null. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_messages.maintenance_message_status` | Status | received (came in) · queued (for the worker) · sending · sent · failed (after five tries) · noted. | `text` | — | Not null, default received. CHECK. Partial index on queued outgoing by next_attempt_at. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_messages.maintenance_message_attempts` | Attempts | How many times the worker has tried to send it. | `integer` | — | smallint. Not null, default 0. | Backoff 5, 25, 125 minutes. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_messages.maintenance_message_next_attempt_at` | Next attempt | When the worker should next try. | `timestamptz` | — | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_messages.maintenance_message_external_id` | External id | Graph's message id — unique, so inbound mail is matched once and a reminder is queued once. | `text` | — | Nullable, unique. | receive_maintenance_email() is idempotent on it. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_messages.maintenance_message_error` | Error | The last send failure, in the provider's words. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_messages.maintenance_message_at` | When | When it was sent, received or noted. | `timestamptz` | — | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_messages.maintenance_message_created_by` | Recorded by | Who wrote the row, when a person did. | `uuid` | — | Nullable. FK → profiles. Stamped by trigger. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `maintenance_request_display`
+
+A request as the Maintenance tab reads it (0084): the job's address, who reported it and how to reach them, the owner, the category and its clock, the warranty flag, item and offer counts, the next visit, and health derived from today.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `maintenance_request_display.maintenance_request_health` | Health | no_sla · on_track · at_risk · overdue · complete · closed, computed from today, due and the category's lead — the way process_run_display does it. Nothing stored. | `view` | — | — | The Maintenance tab's colour and word; maintenance_scan() reads it for the SLA notifications. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_request_display.maintenance_request_at_risk_on` | At risk on | Due − the category's lead. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_request_display.maintenance_request_is_warranty` | Warranty | Reported on or before the job's warranty end. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_request_display.maintenance_request_reported_by_email` | Reporter's email | The reporter's primary email from contact_methods. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_request_display.maintenance_request_reported_by_phone` | Reporter's phone | Mobile first, then phone. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_request_display.maintenance_request_items_total` | Items | How many items the request has. | `view` | — | — | Shown as done / total — a count, never a percentage. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_request_display.maintenance_request_items_done` | Items done | Done or not applicable. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_request_display.maintenance_request_offers_open` | Offers awaiting answer | Offers still in offered. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_request_display.maintenance_request_next_visit` | Next visit | The earliest scheduled visit still ahead. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `maintenance_requests`
+
+The ticket (0084): one per thing a homeowner reported on a handed-over job, however it arrived — email, phone, form, portal, API or staff. Numbered <job>-M<n> by trigger under the job's lock; due from the category's SLA; closing refused while an item is open; a reply to a closed request reopens it.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `maintenance_requests.maintenance_request_id` | Request | The ticket (0084): one per thing a homeowner reported on a handed-over job, however it arrived. | `uuid` | — | Primary key. | Everyone active reads; users create and update; admins delete. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_requests.job_id` | Job | Which job the request is about. Always a job — maintenance is per house. | `text` | — | Not null. FK → jobs ON UPDATE CASCADE. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_requests.maintenance_request_sequence` | Sequence | The n in <job>-Mn, handed out by trigger from the job's high-water mark. | `integer` | — | smallint. Set by trigger. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_requests.maintenance_request_number` | Number | 1042-01-M3 (Amber, answer 9: "yes"). Stamped at insert and never regenerated — it goes in emails. | `text` | — | Unique. Set by trigger. | How inbound mail is matched to its request. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_requests.maintenance_request_source` | Source | How it arrived: email, phone, form, portal, api, staff (Amber: "manual email or phone call and forms. Think of every option"). | `text` | — | Not null, default staff. CHECK on the six. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_requests.maintenance_request_reported_by_contact_id` | Reported by | The homeowner (or whoever rang) as a contact — so their email and phone come from contact_methods and the closing mail has somewhere to go. | `uuid` | — | Nullable. FK → contacts. | Inbound mail is matched to its sender through this. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_requests.maintenance_request_reported_at` | Reported | When it was reported — the start of the SLA clock, and what the warranty flag compares with handover. | `timestamptz` | — | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_requests.maintenance_request_summary` | Summary | One line: what is wrong. | `text` | — | Not null. CHECK not blank (proved biting). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_requests.maintenance_request_description` | Description | The longer account — the email body, the notes from the call. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_requests.maintenance_request_priority` | Priority | urgent, high, normal, low. | `text` | — | Not null, default normal. CHECK. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_requests.maintenance_request_status` | Status | new → triaged → in_progress / waiting_on_contractor / waiting_on_client → completed → closed, or rejected. Closing is refused by trigger while an item is open (Amber, answer 2: Completed → Closed). | `text` | — | Not null, default new. CHECK on the eight. CHECK: closed or rejected exactly when closed_at is set. | A reply to a closed request reopens it to in_progress. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_requests.maintenance_category_id` | Category | The trade, which sets the SLA. | `text` | — | Nullable. FK → maintenance_categories ON UPDATE CASCADE. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_requests.maintenance_request_due_on` | Due | Reported + the category's SLA days, set by trigger unless somebody typed a date. Null means no SLA. | `date` | — | Nullable. | Health is derived from it in the display view. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_requests.maintenance_request_owner_profile_id` | Owner | The Lofty person driving the request — the assignee the notification rules mean. | `uuid` | — | Nullable. FK → profiles. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_requests.maintenance_request_closed_at` | Closed | Stamped by trigger when the status becomes closed or rejected; cleared when it reopens. | `timestamptz` | — | Nullable, paired with status by CHECK. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_requests.maintenance_request_closed_by` | Closed by | Who closed it. | `uuid` | — | Nullable. FK → profiles. Stamped by trigger. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_requests.maintenance_request_closed_reason` | Closed reason | Why — quoted in the homeowner's closing email. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_requests.maintenance_request_external_ref` | External reference | A SiteBook or other system's id for the same request, for the sync batch. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_requests.maintenance_request_created_at` | Created | — | `timestamptz` | — | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_requests.maintenance_request_created_by` | Created by | — | `uuid` | — | Nullable. FK → profiles. Stamped by trigger. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_requests.maintenance_request_updated_at` | Updated | — | `timestamptz` | — | Not null, default now(). moddatetime trigger. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_requests.maintenance_request_updated_by` | Updated by | — | `uuid` | — | Nullable. FK → profiles. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `maintenance_settings`
+
+One row (0084): the warranty months after handover (Amber: 3 standard), the hours a contractor has to answer an offer, the day-before reminder, how long an accept link lives, the intake mailbox. Managers edit; everyone reads. A CHECK keeps it to one row.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `maintenance_settings.maintenance_setting_id` | Settings row | The one row (0084). A CHECK pins the key to 1 so a second row cannot exist. | `integer` | — | Primary key, smallint, CHECK = 1. | Everyone reads; managers edit. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_settings.maintenance_setting_warranty_months` | Warranty months | How long after handover a job is in warranty (Amber, 2 Sep: "3 months is standard"). Default 3; job_warranty derives the end date from it. | `integer` | — | smallint. Not null, default 3. CHECK > 0. | Read by job_warranty and maintenance_request_display. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_settings.maintenance_setting_offer_response_hours` | Hours to answer an offer | How long a contractor has to answer an offer before maintenance_scan() tells the owner (default 48). | `integer` | — | smallint. Not null, default 48. CHECK > 0. | Read by the scan and quoted in the offer email. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_settings.maintenance_setting_reminder_days_before` | Reminder days before a visit | How many days before a scheduled visit the reminders go — to the owner in-app and to the homeowner by email (default 1). | `integer` | — | smallint. Not null, default 1. CHECK >= 0. | Read by maintenance_scan(). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_settings.maintenance_setting_intake_mailbox` | Intake mailbox | The address homeowners write to — what the maintenance-inbound function reads. Null until Amber names it. | `text` | — | Nullable. | Shown in Setup → Maintenance; nothing is invented for it. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_settings.maintenance_setting_accept_link_days` | Accept link lives (days) | How long a contractor's accept link works before it expires (default 14). | `integer` | — | smallint. Not null, default 14. CHECK > 0. | Sets maintenance_assignment_token_expires_at at offer time. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_settings.maintenance_setting_updated_at` | Updated | When the row was last changed. | `timestamptz` | — | Not null, default now(). moddatetime trigger. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_settings.maintenance_setting_updated_by` | Updated by | Who changed it. | `uuid` | — | Nullable. FK → profiles. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `notification_deliveries`
 
@@ -923,6 +1102,7 @@ Who, from outside Lofty, is on a project, a job or a process run, and as what (0
 | `record_parties.record_party_started_on` | From | When the engagement began. | `date` | — | Not null, default today. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `record_parties.record_party_ended_on` | To | When it ended. Null is current — and the same party in the same role on the same record is unique while current. Ending is how a party is removed. | `date` | — | Nullable. CHECK ≥ started. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `record_parties.record_party_note` | Note | Why, or anything else worth a line. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `record_parties.maintenance_request_id` | Maintenance request | The record, when a maintenance request (0084) — the homeowner and the trades on it are parties like any other. | `uuid` | — | Nullable. FK → maintenance_requests ON DELETE CASCADE. Part of the exactly-one-record CHECK and the one-current unique index. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `record_party_display`
 

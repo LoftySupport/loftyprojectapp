@@ -2575,3 +2575,205 @@ export interface DeliveryStat {
   count: number;
   lastSentAt: IsoDateTime | null;
 }
+
+// ---------------------------------------------------------------------------
+// Maintenance (0084)
+// ---------------------------------------------------------------------------
+export const MAINTENANCE_SOURCES = ["email", "phone", "form", "portal", "api", "staff"] as const;
+export type MaintenanceSource = (typeof MAINTENANCE_SOURCES)[number];
+export const MAINTENANCE_SOURCE_LABELS: Record<MaintenanceSource, string> = {
+  email: "Email", phone: "Phone call", form: "Web form", portal: "Portal", api: "API", staff: "Logged by staff"
+};
+export const MAINTENANCE_STATUSES = ["new", "triaged", "in_progress", "waiting_on_contractor", "waiting_on_client", "completed", "closed", "rejected"] as const;
+export type MaintenanceStatus = (typeof MAINTENANCE_STATUSES)[number];
+export const MAINTENANCE_STATUS_LABELS: Record<MaintenanceStatus, string> = {
+  new: "New", triaged: "Triaged", in_progress: "In progress", waiting_on_contractor: "Waiting on contractor",
+  waiting_on_client: "Waiting on client", completed: "Completed", closed: "Closed", rejected: "Rejected"
+};
+export const MAINTENANCE_PRIORITIES = ["urgent", "high", "normal", "low"] as const;
+export type MaintenancePriority = (typeof MAINTENANCE_PRIORITIES)[number];
+export const MAINTENANCE_PRIORITY_LABELS: Record<MaintenancePriority, string> = { urgent: "Urgent", high: "High", normal: "Normal", low: "Low" };
+export type MaintenanceHealth = "no_sla" | "on_track" | "at_risk" | "overdue" | "complete" | "closed";
+export const MAINTENANCE_HEALTH_LABELS: Record<MaintenanceHealth, string> = {
+  no_sla: "No SLA", on_track: "On track", at_risk: "At risk", overdue: "Over SLA", complete: "Complete", closed: "Closed"
+};
+export const MAINTENANCE_ITEM_STATUSES = ["open", "assigned", "scheduled", "done", "not_applicable"] as const;
+export type MaintenanceItemStatus = (typeof MAINTENANCE_ITEM_STATUSES)[number];
+export const MAINTENANCE_ITEM_STATUS_LABELS: Record<MaintenanceItemStatus, string> = {
+  open: "Open", assigned: "Assigned", scheduled: "Scheduled", done: "Done", not_applicable: "Not applicable"
+};
+export const MAINTENANCE_ASSIGNMENT_STATUSES = ["offered", "accepted", "declined", "scheduled", "done", "cancelled"] as const;
+export type MaintenanceAssignmentStatus = (typeof MAINTENANCE_ASSIGNMENT_STATUSES)[number];
+export const MAINTENANCE_ASSIGNMENT_STATUS_LABELS: Record<MaintenanceAssignmentStatus, string> = {
+  offered: "Offered — awaiting answer", accepted: "Accepted", declined: "Declined", scheduled: "Scheduled", done: "Done", cancelled: "Cancelled"
+};
+export type MaintenanceMessageDirection = "in" | "out" | "note";
+export type MaintenanceMessageChannel = "email" | "sms" | "phone" | "form" | "portal" | "app";
+export type MaintenanceMessageStatus = "received" | "queued" | "sending" | "sent" | "failed" | "noted";
+
+/** The one row of maintenance_settings. Managers edit; everyone reads. */
+export interface MaintenanceSettings {
+  warrantyMonths: number;
+  offerResponseHours: number;
+  reminderDaysBefore: number;
+  acceptLinkDays: number;
+  intakeMailbox: string | null;
+  updatedAt: IsoDateTime;
+}
+
+/** A trade and its clock (0084). Empty until Amber writes them. */
+export interface MaintenanceCategory {
+  id: string;
+  name: string;
+  partyRoleId: string | null;
+  teamId: TeamId | null;
+  slaDays: number | null;
+  atRiskLeadDays: number | null;
+  position: number;
+  isActive: boolean;
+}
+
+/** A request as maintenance_request_display reads it. */
+export interface MaintenanceRequest {
+  id: Uuid;
+  jobId: string;
+  projectId: number;
+  number: string;
+  sequence: number;
+  source: MaintenanceSource;
+  reportedByContactId: Uuid | null;
+  reportedByName: string | null;
+  reportedByEmail: string | null;
+  reportedByPhone: string | null;
+  reportedAt: IsoDateTime;
+  summary: string;
+  description: string | null;
+  priority: MaintenancePriority;
+  status: MaintenanceStatus;
+  categoryId: string | null;
+  categoryName: string | null;
+  dueOn: IsoDate | null;
+  atRiskOn: IsoDate | null;
+  health: MaintenanceHealth;
+  ownerProfileId: Uuid | null;
+  ownerName: string | null;
+  closedAt: IsoDateTime | null;
+  closedReason: string | null;
+  externalRef: string | null;
+  jobAddress: string;
+  jobSuburb: string | null;
+  handoverAt: IsoDateTime | null;
+  warrantyEndsOn: IsoDate | null;
+  isWarranty: boolean;
+  itemsTotal: number;
+  itemsDone: number;
+  offersOpen: number;
+  nextVisit: IsoDateTime | null;
+  messagesTotal: number;
+  lastMessageAt: IsoDateTime | null;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+export interface NewMaintenanceRequest {
+  jobId: string;
+  summary: string;
+  source: MaintenanceSource;
+  description?: string | null;
+  priority?: MaintenancePriority;
+  reportedByContactId?: Uuid | null;
+  reportedAt?: IsoDateTime | null;
+  categoryId?: string | null;
+  ownerProfileId?: Uuid | null;
+}
+export interface MaintenanceRequestPatch {
+  summary?: string;
+  description?: string | null;
+  priority?: MaintenancePriority;
+  status?: MaintenanceStatus;
+  categoryId?: string | null;
+  dueOn?: IsoDate | null;
+  ownerProfileId?: Uuid | null;
+  reportedByContactId?: Uuid | null;
+  closedReason?: string | null;
+  externalRef?: string | null;
+}
+
+/** An item with its current offer, as maintenance_item_display reads it. */
+export interface MaintenanceItem {
+  id: Uuid;
+  requestId: Uuid;
+  position: number;
+  description: string;
+  location: string | null;
+  categoryId: string | null;
+  categoryName: string | null;
+  partyRoleId: string | null;
+  status: MaintenanceItemStatus;
+  isWarranty: boolean | null;
+  cost: number | null;
+  completedAt: IsoDateTime | null;
+  completedByName: string | null;
+  /** Who did this trade on the job during construction — the default repairer (Amber, answer 3). */
+  originalTrade: string | null;
+  assignment: MaintenanceAssignment | null;
+}
+export interface MaintenanceAssignment {
+  id: Uuid;
+  status: MaintenanceAssignmentStatus;
+  companyId: Uuid | null;
+  companyName: string | null;
+  contactId: Uuid | null;
+  contactName: string | null;
+  offeredAt: IsoDateTime;
+  respondedAt: IsoDateTime | null;
+  scheduledFor: IsoDateTime | null;
+  note: string | null;
+}
+export interface MaintenanceItemPatch {
+  description?: string;
+  location?: string | null;
+  categoryId?: string | null;
+  status?: MaintenanceItemStatus;
+  isWarranty?: boolean | null;
+  cost?: number | null;
+  position?: number;
+}
+/** What offer_maintenance_item() hands back: the token exactly once. */
+export interface MaintenanceOffer {
+  assignmentId: Uuid;
+  /** Shown once and never stored in the clear; the link is built from it on the spot. */
+  acceptToken: string;
+  sentTo: string | null;
+}
+
+export interface MaintenanceMessage {
+  id: Uuid;
+  requestId: Uuid;
+  assignmentId: Uuid | null;
+  direction: MaintenanceMessageDirection;
+  channel: MaintenanceMessageChannel;
+  fromContactId: Uuid | null;
+  fromProfileId: Uuid | null;
+  toAddress: string | null;
+  subject: string | null;
+  body: string;
+  status: MaintenanceMessageStatus;
+  attempts: number;
+  error: string | null;
+  at: IsoDateTime;
+}
+
+/** The warranty line on a job: handover and when the period ends. Derived, never typed. */
+export interface JobWarranty {
+  jobId: string;
+  handoverAt: IsoDateTime | null;
+  warrantyEndsOn: IsoDate | null;
+  isInWarranty: boolean;
+}
+
+/** What the thread's outbox holds, per status — the Setup → Maintenance panel. */
+export interface MaintenanceOutboxStat {
+  status: MaintenanceMessageStatus;
+  count: number;
+  lastAt: IsoDateTime | null;
+}

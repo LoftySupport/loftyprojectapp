@@ -56,11 +56,34 @@ same row), groups a person's due rows into one message, sends, and marks each ro
 re-queues it with backoff (5, 25, 125 minutes; failed after five tries). The response is a
 per-channel count, which is what to look at first when something seems not to arrive.
 
+## The maintenance thread (0084)
+
+The same run also drains `maintenance_messages` (direction `out`, status `queued`): the offer to
+a contractor, the day-before visit reminder, the homeowner's closing email. Each is one email
+already worded by the database. The offer carries `{{ACCEPT_LINK}}`; the claim returns the token
+parked for it in `maintenance_message_secrets`, the worker builds
+`<SUPABASE_URL>/functions/v1/maintenance-accept?t=<token>` into the body, and
+`complete_maintenance_message()` deletes the token on success. Set `MAINTENANCE_SENDER_MAILBOX`
+(defaults to `MS_SENDER_MAILBOX`) so replies land in the intake mailbox that
+`maintenance-inbound` reads. Two more functions belong to this thread:
+
+```
+supabase functions deploy maintenance-accept --no-verify-jwt     # the contractor's link, public
+supabase functions deploy maintenance-inbound --no-verify-jwt    # POST from the mailbox watcher, x-inbound-secret
+supabase secrets set INBOUND_SECRET=$(openssl rand -hex 24)
+```
+
+`maintenance-inbound` expects `{ externalId, from, subject, body, receivedAt }` per message —
+a Power Automate flow on the intake mailbox, or a Graph change subscription plus a fetch. It
+answers 422 when the database cannot place the mail (no request number, sender not a purchaser
+on record); leave those in the mailbox for a person. The response summary gains a
+`maintenance` count.
+
 ## What it does not do yet
 
 - SMS. The channel exists end to end except the send; pick a provider and add a `sendSms`
   beside `sendEmail`.
 - Teams channel posts. Rules can name a team; delivery is still one-to-one chats to each
   member. A channel webhook per team is the next step.
-- Reply handling. Replies to the notifications mailbox land in Outlook; nothing reads them.
-  The maintenance batch's inbound mail is where that starts.
+- Reply handling for notifications. Replies to the notifications mailbox land in Outlook;
+  nothing reads them. The maintenance mailbox is read (above); the notifications one is not.

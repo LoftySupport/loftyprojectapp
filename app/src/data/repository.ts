@@ -89,6 +89,8 @@ import type {
   NotificationPreference,
   Notification,
   RecordWatch,
+  JobWarranty, MaintenanceAssignmentStatus, MaintenanceCategory, MaintenanceItem, MaintenanceItemPatch, MaintenanceMessage, MaintenanceMessageChannel,
+  MaintenanceOffer, MaintenanceOutboxStat, MaintenanceRequest, MaintenanceRequestPatch, MaintenanceSettings, NewMaintenanceRequest,
   DeliveryStat,
 } from "./types";
 
@@ -466,6 +468,35 @@ export interface Repository {
   /** Admin: what the outbox holds, per channel and status. */
   listDeliveryStats(): Promise<DeliveryStat[]>;
 
+  // ---- maintenance (0084) ----------------------------------------------------
+  getMaintenanceSettings(): Promise<MaintenanceSettings>;
+  /** Manager and above; the policy refuses anyone else. */
+  saveMaintenanceSettings(patch: Partial<Omit<MaintenanceSettings, "updatedAt">>): Promise<MaintenanceSettings>;
+  listMaintenanceCategories(opts?: { includeInactive?: boolean }): Promise<MaintenanceCategory[]>;
+  /** Manager and above. Upsert on the slug. */
+  saveMaintenanceCategory(row: MaintenanceCategory): Promise<MaintenanceCategory>;
+  /** Requests from maintenance_request_display. `queue` open means not closed or rejected. */
+  listMaintenanceRequests(opts?: { jobId?: string; queue?: "open" | "closed" | "all"; search?: string; limit?: number }): Promise<MaintenanceRequest[]>;
+  getMaintenanceRequest(id: string): Promise<MaintenanceRequest | null>;
+  /** User and above. The number is stamped by trigger; due comes from the category. */
+  createMaintenanceRequest(input: NewMaintenanceRequest): Promise<MaintenanceRequest>;
+  /** A status of closed is refused by the database while an item is open. */
+  updateMaintenanceRequest(id: string, patch: MaintenanceRequestPatch): Promise<MaintenanceRequest>;
+  listMaintenanceItems(requestId: string): Promise<MaintenanceItem[]>;
+  addMaintenanceItem(input: { requestId: string; description: string; location?: string | null; categoryId?: string | null }): Promise<MaintenanceItem>;
+  updateMaintenanceItem(id: string, patch: MaintenanceItemPatch): Promise<MaintenanceItem>;
+  deleteMaintenanceItem(id: string): Promise<void>;
+  /** Offer an item to a company and/or a person: writes the assignment, queues the email, returns the token once. */
+  offerMaintenanceItem(input: { itemId: string; companyId?: string | null; contactId?: string | null; note?: string | null }): Promise<MaintenanceOffer>;
+  /** Staff recording an answer given by phone, a visit time, or a cancel. */
+  updateMaintenanceAssignment(id: string, patch: { status?: MaintenanceAssignmentStatus; scheduledFor?: string | null; note?: string | null }): Promise<void>;
+  listMaintenanceMessages(requestId: string): Promise<MaintenanceMessage[]>;
+  /** A note on the thread — what was said on the phone, what was decided. */
+  addMaintenanceNote(input: { requestId: string; body: string; channel?: MaintenanceMessageChannel; assignmentId?: string | null }): Promise<MaintenanceMessage>;
+  getJobWarranty(jobId: string): Promise<JobWarranty | null>;
+  /** What the thread's outbox holds, per status. */
+  listMaintenanceOutboxStats(): Promise<MaintenanceOutboxStat[]>;
+
   // ---- the tracker: bugs, requests, votes (0052, 0060–0063) ----------------
   /**
    * Send a bug or a feature request. Anyone active may — the widest write in the app —
@@ -780,6 +811,24 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "watchRecord",
   "unwatchRecord",
   "listDeliveryStats",
+  "getMaintenanceSettings",
+  "saveMaintenanceSettings",
+  "listMaintenanceCategories",
+  "saveMaintenanceCategory",
+  "listMaintenanceRequests",
+  "getMaintenanceRequest",
+  "createMaintenanceRequest",
+  "updateMaintenanceRequest",
+  "listMaintenanceItems",
+  "addMaintenanceItem",
+  "updateMaintenanceItem",
+  "deleteMaintenanceItem",
+  "offerMaintenanceItem",
+  "updateMaintenanceAssignment",
+  "listMaintenanceMessages",
+  "addMaintenanceNote",
+  "getJobWarranty",
+  "listMaintenanceOutboxStats",
   "submitFeedback",
   "listFeedback",
   "setFeedbackStage",
@@ -944,6 +993,24 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   watchRecord: "record_watchers",
   unwatchRecord: "record_watchers",
   listDeliveryStats: "notification_deliveries",
+  getMaintenanceSettings: "maintenance_settings",
+  saveMaintenanceSettings: "maintenance_settings",
+  listMaintenanceCategories: "maintenance_categories",
+  saveMaintenanceCategory: "maintenance_categories",
+  listMaintenanceRequests: "maintenance_request_display",
+  getMaintenanceRequest: "maintenance_request_display",
+  createMaintenanceRequest: "maintenance_requests",
+  updateMaintenanceRequest: "maintenance_requests",
+  listMaintenanceItems: "maintenance_item_display",
+  addMaintenanceItem: "maintenance_items",
+  updateMaintenanceItem: "maintenance_items",
+  deleteMaintenanceItem: "maintenance_items",
+  offerMaintenanceItem: "maintenance_assignments + maintenance_messages",
+  updateMaintenanceAssignment: "maintenance_assignments",
+  listMaintenanceMessages: "maintenance_messages",
+  addMaintenanceNote: "maintenance_messages",
+  getJobWarranty: "job_warranty",
+  listMaintenanceOutboxStats: "maintenance_messages",
   createTask: "tasks",
   updateTask: "tasks",
   deleteTask: "tasks",

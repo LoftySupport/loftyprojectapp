@@ -38,6 +38,9 @@ select '99', 'Somewhere Else Road', 'Modbury', '5092', 'City of Tea Tree Gully',
 -- What Supabase grants the API roles. Without these, everything below fails on table
 -- privileges rather than on policy, and would pass for the wrong reason.
 grant usage on schema public to authenticated, anon;
+-- Supabase also grants the API roles usage on `extensions` (pg_trgm operators in searches,
+-- pgcrypto in offer_maintenance_item run as the caller); the shim has to say so too.
+grant usage on schema extensions to authenticated, anon;
 grant select, insert, update, delete on all tables in schema public to authenticated;
 grant select on all tables in schema public to anon;
 
@@ -1511,6 +1514,88 @@ delete from record_watchers where job_id = '1106-002';
 delete from notification_preferences where notification_type_id = 'task_overdue';
 delete from tasks where task_name like 'rls probe 0083%';
 delete from notifications where notification_title like '%rls probe 0083%';
+
+-- ---------------------------------------------------------------- maintenance (0084)
+\echo '--- a user logs a request and offers an item; settings and categories are the managers''; the token and the two service RPCs are nobody''s (0084) ---'
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+do $$
+declare n integer; req uuid; req_no text; item uuid; co uuid; tok text; sent text;
+begin
+  select count(*) into n from maintenance_settings;
+  if n = 1 then raise notice 'ok  a user reads the one settings row';
+  else raise warning 'FAIL: a user saw % settings rows', n; end if;
+
+  update maintenance_settings set maintenance_setting_warranty_months = 12 where maintenance_setting_id = 1;
+  get diagnostics n = row_count;
+  if n = 0 then raise notice 'ok  a user cannot change the settings (0 rows reached)';
+  else raise warning 'FAIL: a user changed the maintenance settings'; end if;
+
+  begin
+    insert into maintenance_categories (maintenance_category_id, maintenance_category_name) values ('rls_probe_0084', 'RLS probe');
+    raise warning 'FAIL: a user added a maintenance category';
+  exception when insufficient_privilege then raise notice 'ok  maintenance categories refuse a write below manager';
+    when others then raise warning 'FAIL: unexpected on categories (%)', sqlerrm; end;
+
+  insert into maintenance_requests (job_id, maintenance_request_source, maintenance_request_summary)
+  values ('1106-002', 'phone', 'rls probe 0084') returning maintenance_request_id, maintenance_request_number into req, req_no;
+  if req_no ~ '^1106-002-M[0-9]+$' then raise notice 'ok  a user logs a request and it is numbered on the job (%)', req_no;
+  else raise warning 'FAIL: the request was numbered %', req_no; end if;
+
+  insert into maintenance_items (maintenance_request_id, maintenance_item_description) values (req, 'rls probe item') returning maintenance_item_id into item;
+  insert into companies (company_name) values ('RLS probe trade 0084') returning company_id into co;
+  insert into contact_methods (company_id, contact_method_kind, contact_method_value, contact_method_is_primary) values (co, 'email', 'trade0084@example.com', true);
+  select o.accept_token, o.sent_to into tok, sent from offer_maintenance_item(item, co, null, null) o;
+  if length(tok) = 48 and sent = 'trade0084@example.com' then raise notice 'ok  a user offers an item; the token comes back once and the email is queued to the company';
+  else raise warning 'FAIL: offer returned token length % to %', length(tok), sent; end if;
+
+  begin
+    select count(*) into n from maintenance_message_secrets;
+    if n = 0 then raise notice 'ok  the parked token is invisible to a user (RLS, no policy)';
+    else raise warning 'FAIL: a user read % parked tokens', n; end if;
+  exception when insufficient_privilege then raise notice 'ok  the parked token is invisible to a user (table revoked)'; end;
+
+  begin
+    perform answer_maintenance_offer(tok, true);
+    raise warning 'FAIL: a user answered an offer through the service RPC';
+  exception when insufficient_privilege then raise notice 'ok  answer_maintenance_offer() is not a user''s to call';
+    when others then raise warning 'FAIL: unexpected answering (%)', sqlerrm; end;
+
+  begin
+    perform receive_maintenance_email('rls-0084', 'x@example.com', 'x', 'x');
+    raise warning 'FAIL: a user fed the inbound mail RPC';
+  exception when insufficient_privilege then raise notice 'ok  receive_maintenance_email() is not a user''s to call';
+    when others then raise warning 'FAIL: unexpected on inbound (%)', sqlerrm; end;
+
+  delete from maintenance_requests where maintenance_request_id = req;
+  get diagnostics n = row_count;
+  if n = 0 and exists (select 1 from maintenance_requests where maintenance_request_id = req) then raise notice 'ok  a user cannot delete a request (the row is still there)';
+  else raise warning 'FAIL: a user deleted a maintenance request'; end if;
+end $$;
+reset role;
+reset request.jwt.claim.sub;
+update profiles set profile_permission = 'manager' where profile_email = 'behaviour-test@lofty.com.au';
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+do $$
+declare n integer;
+begin
+  update maintenance_settings set maintenance_setting_offer_response_hours = 48 where maintenance_setting_id = 1;
+  get diagnostics n = row_count;
+  if n = 1 then raise notice 'ok  a manager edits the settings (the SLAs are theirs)';
+  else raise warning 'FAIL: a manager could not edit the settings'; end if;
+  begin
+    insert into maintenance_categories (maintenance_category_id, maintenance_category_name, maintenance_category_sla_days) values ('rls_probe_0084', 'RLS probe', 5);
+    raise notice 'ok  a manager adds a category';
+  exception when others then raise warning 'FAIL: a manager could not add a category (%)', sqlerrm; end;
+end $$;
+reset role;
+reset request.jwt.claim.sub;
+update profiles set profile_permission = 'user' where profile_email = 'behaviour-test@lofty.com.au';
+delete from maintenance_requests where job_id = '1106-002';
+delete from maintenance_categories where maintenance_category_id = 'rls_probe_0084';
+delete from companies where company_name = 'RLS probe trade 0084';
+delete from notifications where notification_type_id like 'maintenance_%' and job_id = '1106-002';
 
 -- Left as found.
 reset request.jwt.claim.sub;

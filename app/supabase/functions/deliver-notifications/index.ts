@@ -11,6 +11,12 @@
 //   sms    — no provider yet (Amber, 2 Sep: "to be setup later"). Rows stay queued; this
 //            worker skips the channel and says so in its response.
 //
+// Since 0084 it also drains the maintenance thread's outbox (`maintenance_messages`, direction
+// out): the offer to a contractor, the day-before reminder, the closing email to the
+// homeowner. Those are one message each, already worded by the database; this worker fills
+// the offer's `{{ACCEPT_LINK}}` from the token the claim hands back (parked for it in
+// `maintenance_message_secrets`, deleted on send) and sends from the maintenance mailbox.
+//
 // Digests: rows held for a person's digest time become due together; the worker groups
 // what is due per person and channel into ONE message rather than twenty.
 //
@@ -24,6 +30,9 @@
 //                                                  Chat.ReadWrite.All application permissions
 //   MS_SENDER_MAILBOX                           e.g. notifications@lofty.com.au
 //   APP_BASE_URL                                e.g. https://app.lofty.com.au, for the links
+//   MAINTENANCE_SENDER_MAILBOX                  e.g. maintenance@lofty.com.au — the maintenance thread's
+//                                              from address (replies go back to the intake mailbox);
+//                                              falls back to MS_SENDER_MAILBOX
 //   DELIVER_SECRET                              a shared secret the scheduler sends as
 //                                              `x-deliver-secret`, so nobody else can trigger sends
 //
@@ -105,6 +114,28 @@ async function sendEmail(token: string, to: string, rows: Claimed[]): Promise<st
   return res.headers.get("request-id") ?? "accepted";
 }
 
+/** One already-worded message to one address — the maintenance thread's, not composed here. */
+async function sendRawEmail(token: string, from: string, to: string, subject: string, text: string): Promise<string> {
+  const res = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(from)}/sendMail`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify({ message: { subject, body: { contentType: "Text", content: text }, toRecipients: [{ emailAddress: { address: to } }] }, saveToSentItems: true })
+  });
+  if (!res.ok) throw new Error(`Graph sendMail: ${res.status} ${await res.text()}`);
+  return res.headers.get("request-id") ?? "accepted";
+}
+
+type MaintenanceClaimed = {
+  maintenance_message_id: string;
+  maintenance_request_id: string;
+  maintenance_assignment_id: string | null;
+  maintenance_message_to_address: string | null;
+  maintenance_message_subject: string | null;
+  maintenance_message_body: string;
+  maintenance_message_attempts: number;
+  accept_link_token: string | null;
+};
+
 async function sendTeams(token: string, userPrincipalName: string, rows: Claimed[]): Promise<string> {
   // A one-to-one chat from the sending account to the person, created (or found) then posted to.
   const { text } = compose(rows);
@@ -172,6 +203,40 @@ Deno.serve(async req => {
       } catch (e) {
         for (const r of group) await db.rpc("complete_notification_delivery", { p_id: r.notification_delivery_id, p_ok: false, p_error: String(e) });
         summary[channel].failed += group.length;
+      }
+    }
+  }
+
+  // The maintenance thread (0084): each row is one email, worded by the database.
+  summary.maintenance = { sent: 0, failed: 0 };
+  if (!env("MS_TENANT_ID")) { summary.maintenance.skipped = "Microsoft Graph secrets not set"; }
+  else {
+    const { data, error } = await db.rpc("claim_maintenance_messages", { p_limit: 100 });
+    if (error) summary.maintenance.skipped = `claim failed: ${error.message}`;
+    else {
+      const rows = (data ?? []) as MaintenanceClaimed[];
+      if (rows.length) {
+        const from = env("MAINTENANCE_SENDER_MAILBOX") || env("MS_SENDER_MAILBOX");
+        const acceptBase = `${env("SUPABASE_URL").replace(/\/$/, "")}/functions/v1/maintenance-accept?t=`;
+        let token: string | null = null;
+        try { token = await graphToken(); } catch (e) { summary.maintenance.skipped = String(e); }
+        for (const r of rows) {
+          try {
+            if (!token) throw new Error("no Graph token");
+            if (!r.maintenance_message_to_address) throw new Error("no address on the message");
+            let body = r.maintenance_message_body;
+            if (body.includes("{{ACCEPT_LINK}}")) {
+              if (!r.accept_link_token) throw new Error("the offer's token was not parked for the worker — offer again");
+              body = body.replaceAll("{{ACCEPT_LINK}}", acceptBase + r.accept_link_token);
+            }
+            const id = await sendRawEmail(token, from, r.maintenance_message_to_address, r.maintenance_message_subject ?? "Lofty maintenance", body);
+            await db.rpc("complete_maintenance_message", { p_id: r.maintenance_message_id, p_ok: true, p_external_id: id });
+            summary.maintenance.sent += 1;
+          } catch (e) {
+            await db.rpc("complete_maintenance_message", { p_id: r.maintenance_message_id, p_ok: false, p_error: String(e) });
+            summary.maintenance.failed += 1;
+          }
+        }
       }
     }
   }
