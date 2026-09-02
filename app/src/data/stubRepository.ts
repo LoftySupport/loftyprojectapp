@@ -260,6 +260,20 @@ export function createStubRepository(): Repository {
     async listRecordStaffRoles(): Promise<never[]> { return []; },
     async addRecordStaffRole(): Promise<never> { throw new Error("Contacts need Supabase."); },
     async endRecordStaffRole(): Promise<never> { throw new Error("Contacts need Supabase."); },
+    async listNotificationTypes(): Promise<never[]> { return []; },
+    async saveNotificationType(): Promise<never> { throw new Error("Notifications need Supabase."); },
+    async listNotificationRules(): Promise<never[]> { return []; },
+    async addNotificationRule(): Promise<never> { throw new Error("Notifications need Supabase."); },
+    async updateNotificationRule(): Promise<never> { throw new Error("Notifications need Supabase."); },
+    async deleteNotificationRule(): Promise<void> { throw new Error("Notifications need Supabase."); },
+    async listMyNotificationPreferences(): Promise<never[]> { return []; },
+    async saveMyNotificationPreference(): Promise<void> { throw new Error("Notifications need Supabase."); },
+    async listMyNotifications(): Promise<never[]> { return []; },
+    async markNotificationsRead(): Promise<number> { return 0; },
+    async listMyWatches(): Promise<never[]> { return []; },
+    async watchRecord(): Promise<void> { throw new Error("Notifications need Supabase."); },
+    async unwatchRecord(): Promise<void> { throw new Error("Notifications need Supabase."); },
+    async listDeliveryStats(): Promise<never[]> { return []; },
 
     // Cloning needs a job to clone and a sequence to issue the new number; a stub run
     // has neither.

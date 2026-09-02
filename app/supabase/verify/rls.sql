@@ -1447,6 +1447,71 @@ delete from company_contacts where contact_id in (select contact_id from contact
 delete from contacts where contact_last_name = 'Fencer 0082';
 delete from companies where company_name in ('RLS Fencing 0082', 'RLS Managers Co 0082');
 
+-- ---------------------------------------------------------------- notifications (0083)
+\echo '--- a user reads only their own inbox, sets their own preferences, cannot write the inbox or the rules (0083) ---'
+reset request.jwt.claim.sub;
+insert into tasks (job_id, task_name, task_assignee_id)
+select '1106-002', 'rls probe 0083', profile_id from profiles where profile_email = 'behaviour-test@lofty.com.au';
+insert into tasks (job_id, task_name, task_assignee_id)
+select '1106-002', 'rls probe 0083 other', profile_id from profiles where profile_email <> 'behaviour-test@lofty.com.au' and profile_is_active limit 1;
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+do $$
+declare n integer; mine integer;
+begin
+  select count(*) into n from notifications where notification_type_id = 'task_assigned' and notification_title like '%rls probe 0083%';
+  select count(*) into mine from notifications where notification_type_id = 'task_assigned' and notification_title = 'You were assigned rls probe 0083';
+  if n = mine and mine = 1 then raise notice 'ok  a user sees their own notification and not the other person''s';
+  else raise warning 'FAIL: a user saw % rls-probe notifications, % their own', n, mine; end if;
+
+  perform mark_my_notifications_read();
+  if not exists (select 1 from notifications where notification_read_at is null) then raise notice 'ok  mark_my_notifications_read() clears the person''s own unread';
+  else raise warning 'FAIL: unread notifications remain after mark_my_notifications_read()'; end if;
+
+  begin
+    insert into notifications (profile_id, notification_type_id, notification_title, notification_dedupe_key)
+    values ((select current_profile_id()), 'mention', 'forged', 'forged');
+    raise warning 'FAIL: a user wrote into the inbox';
+  exception when insufficient_privilege then raise notice 'ok  the inbox refuses a client insert';
+    when others then raise warning 'FAIL: unexpected writing the inbox (%)', sqlerrm; end;
+
+  begin
+    insert into notification_preferences (profile_id, notification_type_id, notification_preference_channel, notification_preference_is_enabled)
+    values ((select current_profile_id()), 'task_overdue', 'email', false);
+    raise notice 'ok  a user turns a channel off for themselves';
+  exception when others then raise warning 'FAIL: unexpected saving a preference (%)', sqlerrm; end;
+
+  begin
+    insert into notification_preferences (profile_id, notification_type_id, notification_preference_channel, notification_preference_is_enabled)
+    select profile_id, 'task_overdue', 'email', false from profiles where profile_email <> 'behaviour-test@lofty.com.au' limit 1;
+    raise warning 'FAIL: a user set another person''s preference';
+  exception when insufficient_privilege then raise notice 'ok  a user cannot set another person''s preference';
+    when others then raise warning 'FAIL: unexpected on another''s preference (%)', sqlerrm; end;
+
+  begin
+    insert into notification_rules (notification_type_id, notification_rule_audience) values ('mention', 'managers');
+    raise warning 'FAIL: a user added a notification rule';
+  exception when insufficient_privilege then raise notice 'ok  notification rules refuse a write below admin';
+    when others then raise warning 'FAIL: unexpected on rules (%)', sqlerrm; end;
+
+  begin
+    insert into record_watchers (profile_id, job_id) values ((select current_profile_id()), '1106-002');
+    raise notice 'ok  a user watches a job';
+  exception when others then raise warning 'FAIL: unexpected watching (%)', sqlerrm; end;
+
+  begin
+    perform claim_notification_deliveries('email', 1);
+    raise warning 'FAIL: a user drained the outbox';
+  exception when insufficient_privilege then raise notice 'ok  the outbox claim is not a user''s to call';
+    when others then raise warning 'FAIL: unexpected claiming deliveries (%)', sqlerrm; end;
+end $$;
+reset role;
+reset request.jwt.claim.sub;
+delete from record_watchers where job_id = '1106-002';
+delete from notification_preferences where notification_type_id = 'task_overdue';
+delete from tasks where task_name like 'rls probe 0083%';
+delete from notifications where notification_title like '%rls probe 0083%';
+
 -- Left as found.
 reset request.jwt.claim.sub;
 delete from processes where process_key = 'probe_manager_process';

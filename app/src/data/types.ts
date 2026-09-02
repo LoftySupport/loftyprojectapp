@@ -2487,3 +2487,91 @@ export interface RecordStaffRole {
 
 /** Which record a party or a role hangs off. Exactly one. */
 export type PartyTarget = { projectId: number } | { jobId: string } | { processRunId: Uuid };
+
+// ---------------------------------------------------------------------------
+// Notifications (0083)
+// ---------------------------------------------------------------------------
+export const NOTIFICATION_CHANNELS = ["in_app", "email", "teams", "sms"] as const;
+export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
+export const NOTIFICATION_CHANNEL_LABELS: Record<NotificationChannel, string> = {
+  in_app: "In-app", email: "Email", teams: "Teams", sms: "SMS"
+};
+export type NotificationTiming = "immediate" | "digest";
+
+export interface NotificationType {
+  id: string;
+  name: string;
+  description: string | null;
+  defaultChannels: NotificationChannel[];
+  defaultTiming: NotificationTiming;
+  position: number;
+  isActive: boolean;
+}
+
+export const NOTIFICATION_AUDIENCES = ["assignee", "owning_team", "engaged_teams", "watchers", "managers", "mentioned", "specific_team", "specific_person"] as const;
+export type NotificationAudience = (typeof NOTIFICATION_AUDIENCES)[number];
+export const NOTIFICATION_AUDIENCE_LABELS: Record<NotificationAudience, string> = {
+  assignee: "The assignee",
+  owning_team: "The owning team",
+  engaged_teams: "The engaged teams",
+  watchers: "Whoever watches the record",
+  managers: "The managers",
+  mentioned: "The person mentioned",
+  specific_team: "A named team",
+  specific_person: "A named person"
+};
+
+export interface NotificationRule {
+  id: Uuid;
+  typeId: string;
+  audience: NotificationAudience;
+  teamId: TeamId | null;
+  profileId: Uuid | null;
+  afterDays: number;
+  isActive: boolean;
+}
+export interface NewNotificationRule {
+  typeId: string;
+  audience: NotificationAudience;
+  teamId?: TeamId | null;
+  profileId?: Uuid | null;
+  afterDays?: number;
+}
+
+/** One person's choice for one type on one channel. Absent means the type's default. */
+export interface NotificationPreference {
+  typeId: string;
+  channel: NotificationChannel;
+  isEnabled: boolean;
+  timing: NotificationTiming | null;
+  digestTime: string | null;
+}
+
+export interface Notification {
+  id: number;
+  typeId: string;
+  projectId: number | null;
+  jobId: string | null;
+  taskId: Uuid | null;
+  processRunId: Uuid | null;
+  commentId: Uuid | null;
+  title: string;
+  body: string | null;
+  href: string | null;
+  createdAt: IsoDateTime;
+  readAt: IsoDateTime | null;
+}
+
+export interface RecordWatch {
+  id: Uuid;
+  projectId: number | null;
+  jobId: string | null;
+}
+
+/** What the outbox looks like from Setup: counts per channel and status. */
+export interface DeliveryStat {
+  channel: NotificationChannel;
+  status: string;
+  count: number;
+  lastSentAt: IsoDateTime | null;
+}

@@ -1372,6 +1372,24 @@ still residential.**
   each process run, SiteBook project roles on the project, and a Setup → Contacts section for
   the three lookups. The 21 August decision is superseded, with the reason kept.
 
+- **`0083` — notifications: who hears what, on which channel, when.** `notification_types`
+  (ten, seeded with Amber's defaults: assignments, mentions, working drawings and sign-off
+  arrivals immediate; overdue and at-risk in the 07:30 digest), `notification_rules` (the
+  "who": assignee, owning team, engaged teams, watchers, managers, the mentioned person, a
+  named team or person, with `after_days` so overdue-5-days reaches the managers),
+  `notification_preferences` (a table, not 0050's jsonb bag: one row per person, type and
+  channel), `record_watchers`, `notifications` (the inbox, deduped per person and key),
+  `notification_deliveries` (the outbox: in_app sent as written, email and Teams queued or
+  held for the digest time, SMS written and waiting for a provider). `private.notify()` writes;
+  `private.notification_recipients()` resolves audiences; `notify_scan()` runs every 15
+  minutes by pg_cron over `task_display` and `process_run_display`; triggers fire on
+  assignment, mention, stage move, a working-drawings run or property, and a party awaiting
+  sign-off. The worker is `supabase/functions/deliver-notifications` (Microsoft Graph; claims
+  with skip locked, groups per person, backs off, fails after five) with its deploy steps in
+  its README — **not deployed from here**: it needs the Entra app registration and secrets.
+  The bell reads the inbox; Settings has the per-type, per-channel matrix with digest time;
+  Setup → Notifications edits types and rules and shows the outbox; Watch on jobs and projects.
+
 ### Naming, measured rather than asserted
 
 All 79 migrations replayed into a local Postgres; every column in `public` checked against

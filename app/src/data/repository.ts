@@ -83,6 +83,13 @@ import type {
   RecordStaffRole,
   PartyTarget,
   Uuid,
+  NotificationType,
+  NotificationRule,
+  NewNotificationRule,
+  NotificationPreference,
+  Notification,
+  RecordWatch,
+  DeliveryStat,
 } from "./types";
 
 /**
@@ -441,6 +448,24 @@ export interface Repository {
   addRecordStaffRole(input: { projectId?: number; jobId?: string; roleId: string; profileId: string }): Promise<RecordStaffRole>;
   endRecordStaffRole(id: string, endedOn: string): Promise<RecordStaffRole>;
 
+  // ---- notifications (0083) ------------------------------------------------
+  listNotificationTypes(): Promise<NotificationType[]>;
+  saveNotificationType(row: NotificationType): Promise<NotificationType>;
+  listNotificationRules(): Promise<NotificationRule[]>;
+  addNotificationRule(input: NewNotificationRule): Promise<NotificationRule>;
+  updateNotificationRule(id: string, patch: { afterDays?: number; isActive?: boolean }): Promise<NotificationRule>;
+  deleteNotificationRule(id: string): Promise<void>;
+  listMyNotificationPreferences(): Promise<NotificationPreference[]>;
+  saveMyNotificationPreference(pref: NotificationPreference): Promise<void>;
+  /** The inbox, newest first. */
+  listMyNotifications(opts?: { unreadOnly?: boolean; limit?: number }): Promise<Notification[]>;
+  markNotificationsRead(ids?: number[]): Promise<number>;
+  listMyWatches(): Promise<RecordWatch[]>;
+  watchRecord(target: { projectId?: number; jobId?: string }): Promise<void>;
+  unwatchRecord(target: { projectId?: number; jobId?: string }): Promise<void>;
+  /** Admin: what the outbox holds, per channel and status. */
+  listDeliveryStats(): Promise<DeliveryStat[]>;
+
   // ---- the tracker: bugs, requests, votes (0052, 0060–0063) ----------------
   /**
    * Send a bug or a feature request. Anyone active may — the widest write in the app —
@@ -741,6 +766,20 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "listRecordStaffRoles",
   "addRecordStaffRole",
   "endRecordStaffRole",
+  "listNotificationTypes",
+  "saveNotificationType",
+  "listNotificationRules",
+  "addNotificationRule",
+  "updateNotificationRule",
+  "deleteNotificationRule",
+  "listMyNotificationPreferences",
+  "saveMyNotificationPreference",
+  "listMyNotifications",
+  "markNotificationsRead",
+  "listMyWatches",
+  "watchRecord",
+  "unwatchRecord",
+  "listDeliveryStats",
   "submitFeedback",
   "listFeedback",
   "setFeedbackStage",
@@ -891,6 +930,20 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   listRecordStaffRoles: "record_staff_roles",
   addRecordStaffRole: "record_staff_roles",
   endRecordStaffRole: "record_staff_roles",
+  listNotificationTypes: "notification_types",
+  saveNotificationType: "notification_types",
+  listNotificationRules: "notification_rules",
+  addNotificationRule: "notification_rules",
+  updateNotificationRule: "notification_rules",
+  deleteNotificationRule: "notification_rules",
+  listMyNotificationPreferences: "notification_preferences",
+  saveMyNotificationPreference: "notification_preferences",
+  listMyNotifications: "notifications",
+  markNotificationsRead: "notifications",
+  listMyWatches: "record_watchers",
+  watchRecord: "record_watchers",
+  unwatchRecord: "record_watchers",
+  listDeliveryStats: "notification_deliveries",
   createTask: "tasks",
   updateTask: "tasks",
   deleteTask: "tasks",

@@ -11,6 +11,7 @@ import { PermissionsPage } from "./PermissionsPage";
 import { PropertiesSetupPage } from "./PropertiesSetupPage";
 import { ProcessesSetupPage } from "./ProcessesSetupPage";
 import { ContactLookupsPage } from "./ContactLookupsPage";
+import { NotificationsSetupPage } from "./NotificationsSetupPage";
 import { WiringPage } from "./WiringPage";
 import "../components/ui.css";
 
@@ -47,6 +48,7 @@ const SECTIONS = [
   { slug: "properties",  label: "Properties",  adminOnly: false },
   { slug: "processes",   label: "Processes",   adminOnly: false },
   { slug: "contacts",    label: "Contacts",    adminOnly: false },
+  { slug: "notifications", label: "Notifications", adminOnly: false },
   { slug: "permissions", label: "Permissions", adminOnly: false },
   { slug: "dictionary",  label: "Dictionary",  adminOnly: false },
   { slug: "wiring",      label: "Wiring",      adminOnly: false },
@@ -86,6 +88,7 @@ export function SetupPage() {
         {section === "properties"  && <PropertiesSetupPage />}
         {section === "processes"   && <ProcessesSetupPage />}
         {section === "contacts"    && <ContactLookupsPage />}
+        {section === "notifications" && <NotificationsSetupPage />}
         {/* Moved off Admin. Admin is about people; a permission model is configuration,
             which is what this screen is for. */}
         {section === "permissions" && <PermissionsPage />}

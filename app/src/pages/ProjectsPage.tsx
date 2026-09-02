@@ -40,6 +40,7 @@ import { CommentsPanel } from "../components/CommentsPanel";
 import { TasksPanel } from "../components/TasksPanel";
 import { PartiesPanel } from "../components/PartiesPanel";
 import { StaffRolesPanel } from "../components/StaffRolesPanel";
+import { WatchButton } from "../components/WatchButton";
 import { useToasts } from "../components/Toasts";
 import { AddressFields } from "../components/CreateDialogs";
 import { useQuery } from "../data/DataProvider";
@@ -910,6 +911,7 @@ function ProjectDetail({
 
         {/* SiteBook's project roles — who at Lofty holds SS, CM, CA… on this project — and
             the outside parties: the council, the certifier, the developer's agent (0082). */}
+        <div className="field-inline" style={{ justifyContent: "flex-end" }}><WatchButton projectId={project.projectId} /></div>
         <StaffRolesPanel projectId={project.projectId} />
         <PartiesPanel target={{ projectId: project.projectId }} />
 

@@ -135,7 +135,7 @@ the `.agents/` and `.codex/` copies for other tools are ignored, not committed; 
 hook with `npx -y impeccable install` if wanted. `/impeccable init` (a PRODUCT.md and
 DESIGN.md) has not been run — that is an interview with Amber, not a guess.
 
-### The platform layer — `0080`–`0082` built, `0083`–`0085` to go
+### The platform layer — `0080`–`0083` built, `0084`–`0085` to go
 
 Amber answered the nine questions on 2 September (recorded in `schema-plan.md`, *Amber's
 answers, 2 September*) and sent the Phase B import data with them —
@@ -143,15 +143,17 @@ answers, 2 September*) and sent the Phase B import data with them —
 products, the SiteBook schedule and the 57-step pre-construction schedule with predecessor
 IDs. **The import has not been run**; it is the next big job after the platform batches.
 
-`0080`–`0082` are built and green: every table audited and the audit readable by everyone
+`0080`–`0083` are built and green: every table audited and the audit readable by everyone
 except restricted fields; tasks with sub-tasks, checklists, start and expected days, at-risk
 and a `task_display` / `stage_completion` pair of views; contacts, companies, classifications,
-employment with job role, parties on records, and SiteBook's project roles. Next: `0083`
-notifications (Amber's channels and defaults are recorded), `0084` maintenance, `0085` sync. Local verify:
+employment with job role, parties on records, and SiteBook's project roles; notifications end to end in the database with the in-app channel
+live and the email/Teams worker written but **not deployed** (see
+`app/supabase/functions/deliver-notifications/README.md` — it needs an Entra app registration
+and secrets). Next: `0084` maintenance, `0085` sync. Local verify:
 `LOFTY_PG_PORT=5432 LOFTY_PG_HOST=/var/run/postgresql ./check.sh` from `app/supabase/verify`
-(Postgres 16 started with `service postgresql start`). **`0080`–`0082` are not yet applied to the
+(Postgres 16 started with `service postgresql start`). **`0080`–`0083` are not yet applied to the
 live database** — the Supabase MCP server needs re-authorising in this session; apply
-`0080`–`0082` in order through the dashboard SQL editor or a re-authorised session before the app that
+`0080`–`0083` in order through the dashboard SQL editor or a re-authorised session before the app that
 reads the new column names is deployed, because the renamed columns and the app move
 together.
 

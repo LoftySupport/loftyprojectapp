@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-532 properties across 80 tables.
+579 properties across 86 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 483 | In the migration and the types |
+| Created | 530 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -482,6 +482,84 @@ One row per authentication event, copied out of auth.users with the email denorm
 | `login_activity.login_activity_at` | Occurred on | When it happened. Renamed from `occurred_at` in 0080. | `timestamptz` | — | Not null. Indexed descending. | Indexed for "most recent first", which is how it is read. | Created | 2026-08-01 · Amber Beaumont — outside the migrations; renamed 0080 | 2026-08-01 · Amber Beaumont — outside the migrations; renamed 0080 |
 | `login_activity.login_activity_metadata` | Details | The provider and nothing else (0008 stopped it storing the auth.users row). Renamed from `metadata` in 0080. | `jsonb` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont — outside the migrations; renamed 0080 | 2026-08-01 · Amber Beaumont — outside the migrations; renamed 0080 |
 
+## `notification_deliveries`
+
+The outbox (0083): one row per channel per notification. in_app sent as written; email, teams and sms queued or held for the digest time, claimed by the worker with for update skip locked, retried with backoff, failed after five. SMS rows wait for a provider.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `notification_deliveries.notification_delivery_id` | Delivery | One channel's send of one notification (0083) — the outbox. in_app is sent as written; email, teams and sms wait for the worker (supabase/functions/deliver-notifications). | `bigint` | — | Primary key, identity. | The person reads their own; admins read all; the worker writes through two service-role RPCs. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_deliveries.notification_id` | Notification | Which notification. | `bigint` | — | Not null. FK → notifications ON DELETE CASCADE. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_deliveries.notification_delivery_channel` | Channel | in_app, email, teams or sms. | `text` | — | Not null. CHECK. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_deliveries.notification_delivery_status` | Status | queued (send now) · held (a digest, until next_attempt_at) · sending (claimed) · sent · failed (after five tries) · skipped. | `text` | — | Not null, default queued. CHECK. | Partial index on queued and held by next_attempt_at. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_deliveries.notification_delivery_address` | Address | The email or account the send goes to, resolved when the row was written. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_deliveries.notification_delivery_attempts` | Attempts | How many times the worker has tried. | `integer` | — | Not null, default 0 (smallint). | Backoff 5, 25, 125 minutes; failed after five. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_deliveries.notification_delivery_next_attempt_at` | Next attempt | When it is next due — now for immediate, the digest time for held, later after a failure. | `timestamptz` | — | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_deliveries.notification_delivery_sent_at` | Sent | When it went. | `timestamptz` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_deliveries.notification_delivery_external_id` | Provider id | Graph's request or message id, the receipt. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_deliveries.notification_delivery_error` | Error | The last failure, in the provider's words. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `notification_preferences`
+
+How each person hears each type on each channel (0083): on or off, immediate or digest, digest time. One row per person, type and channel; a table rather than the jsonb bag 0050 planned, so the worker can read it. Own rows only.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `notification_preferences.profile_id` | Person | Whose choice (0083, Amber: "selected in user settings"). One row per person, type and channel; no row means the type's default. | `uuid` | — | Primary key with type and channel. FK → profiles ON DELETE CASCADE. | Own rows only by RLS. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_preferences.notification_type_id` | Type | Which type. | `text` | — | Primary key part. FK → notification_types. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_preferences.notification_preference_channel` | Channel | in_app, email, teams or sms. | `text` | — | Primary key part. CHECK. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_preferences.notification_preference_is_enabled` | On | Whether this channel is on for this type. | `boolean` | — | Not null, default true. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_preferences.notification_preference_timing` | Timing | immediate or digest; null means the type's default. | `text` | — | Nullable. CHECK. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_preferences.notification_preference_digest_time` | Digest time | When the daily digest comes, Adelaide time; null means 07:30. A time of day. | `text` | — | Nullable (time). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `notification_rules`
+
+Who hears each type (0083, Amber: "who they go to"): assignee, owning team, engaged teams, watchers, managers, the mentioned person, or a named team or person — with after_days for escalation. Admins edit.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `notification_rules.notification_rule_id` | Notification rule | Who hears a type (0083, Amber: "who they go to"): the assignee, the owning team, the engaged teams, the watchers, the managers, the mentioned person, or a named team or person. | `uuid` | — | Primary key. | Read by every active user; admins edit. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_rules.notification_type_id` | Type | Which type the rule is for. | `text` | — | Not null. FK → notification_types ON DELETE CASCADE. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_rules.notification_rule_audience` | Audience | assignee · owning_team · engaged_teams · watchers · managers · mentioned · specific_team · specific_person. Managers are the owning team's members at manager or above, else every manager. | `text` | — | Not null. CHECK. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_rules.team_id` | Team | For specific_team. | `text` | — | Nullable. FK → teams. CHECK: set when the audience is specific_team. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_rules.profile_id` | Person | For specific_person. | `uuid` | — | Nullable. FK → profiles. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_rules.notification_rule_after_days` | After days | Escalation: fire only once the thing has been overdue this many days — "overdue 5 days → managers". | `integer` | — | Not null, default 0 (smallint). CHECK ≥ 0. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_rules.notification_rule_is_active` | Active | A paused rule fires nothing. | `boolean` | — | Not null, default true. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `notification_types`
+
+What the app can tell somebody (0083) and the channels and timing a person gets until they choose: assignments, mentions and working-drawings changes immediate; overdue and at-risk in the 07:30 digest (Amber, 2 Sep). Admins edit.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `notification_types.notification_type_id` | Notification type | What the app can tell somebody (0083): task_assigned, task_at_risk, task_overdue, process_at_risk, process_overdue, mention, stage_changed, working_drawings_changed, party_awaiting_sign_off, property_pushed. The slugs triggers and the scan name. | `text` | — | Primary key, a slug. | Read by every active user; admins edit the defaults. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_types.notification_type_name` | Name | The words in settings and the inbox. | `text` | — | Not null, unique. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_types.notification_type_description` | Description | When it fires, for the settings screen. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_types.notification_type_default_channels` | Default channels | Which of in_app, email, teams, sms a person gets until they choose (Amber's defaults: assignments, mentions and arrivals in-app and email; overdue and at-risk the same; stage moves in-app). A text array. | `text` | — | Not null (text[]). CHECK: a subset of the four. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_types.notification_type_default_timing` | Default timing | immediate, or digest — once a day at the person's digest time (07:30 unless they choose). Overdue and at-risk are digest; assignments, mentions and working drawings immediate (Amber, 2 Sep). | `text` | — | Not null. CHECK. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_types.notification_type_position` | Order | Where in the settings list. | `integer` | — | Not null, default 0 (smallint). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_types.notification_type_is_active` | Active | A retired type fires nothing. | `boolean` | — | Not null, default true. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `notifications`
+
+The inbox (0083): one row per person per thing said, with the record and where to click; read_at is the bell. Written only by private.notify() from triggers and the 15-minute scan, deduped per person and key so a daily scan never repeats itself.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `notifications.notification_id` | Notification | One thing said to one person (0083) — the inbox. Written only by private.notify(), from triggers and the 15-minute scan; a person reads and marks read their own. | `bigint` | — | Primary key, identity. | No client insert; own rows only. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notifications.profile_id` | Person | Whose inbox. | `uuid` | — | Not null. FK → profiles ON DELETE CASCADE. Indexed newest-first and by unread. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notifications.notification_type_id` | Type | What kind of thing was said. | `text` | — | Not null. FK → notification_types. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notifications.project_id` | Project | The record it points at, when a project. No FK: the inbox outlives the record. | `integer` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notifications.job_id` | Job | The record it points at, when a job. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notifications.task_id` | Task | The task, when about one. | `uuid` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notifications.process_run_id` | Process run | The run, when about one. | `uuid` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notifications.comment_id` | Comment | The comment, for a mention. | `uuid` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notifications.notification_title` | Title | The line in the bell — "Frame inspection is overdue". | `text` | — | Not null. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notifications.notification_body` | Body | The sentence under it, with the record and the date. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notifications.notification_href` | Link | Where clicking goes, as an app path. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notifications.notification_dedupe_key` | Dedupe key | One per person per thing said: task_overdue:<task>:<date>, so a daily scan writes a new row tomorrow and never a repeat today. | `text` | — | Not null. Unique with profile_id. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notifications.notification_read_at` | Read | When the person read it. Null is the bell's badge. | `timestamptz` | — | Nullable. | mark_my_notifications_read() sets it for the caller's own rows. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
 ## `party_roles`
 
 What an external party is doing on a record — purchaser, contractor, certifier, council… (0082). A lookup, so a role is never spelled four ways; a trigger keeps person-only roles off companies.
@@ -869,6 +947,17 @@ Which Lofty person holds which SiteBook project role on which project or job (00
 | `record_staff_roles.profile_id` | Person | Who holds it. | `uuid` | — | Not null. FK → profiles. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `record_staff_roles.record_staff_role_started_on` | From | When they took it on. | `date` | — | Not null, default today. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `record_staff_roles.record_staff_role_ended_on` | To | When they handed it over. Null is current; one current row per person, role and record. | `date` | — | Nullable. CHECK ≥ started. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `record_watchers`
+
+Follow this job or project (0083): an audience the rules can name. Own rows only.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `record_watchers.record_watcher_id` | Watch | "Follow this job" (0083): a person on a record, an audience the rules can name. | `uuid` | — | Primary key. | Own rows only; every active user reads who watches. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `record_watchers.profile_id` | Person | Who watches. | `uuid` | — | Not null. FK → profiles ON DELETE CASCADE. Unique with the record. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `record_watchers.project_id` | Project | The record, when a project. | `integer` | — | Nullable. FK → projects ON DELETE CASCADE. CHECK: exactly one of project_id, job_id. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `record_watchers.job_id` | Job | The record, when a job. | `text` | — | Nullable. FK → jobs ON DELETE CASCADE. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `release_entries`
 

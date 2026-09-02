@@ -6,6 +6,7 @@ import {
 import { createStubRepository } from "./stubRepository";
 import { propertyProcessMethods } from "./supabasePropertyProcessRepository";
 import { partyMethods } from "./supabasePartyRepository";
+import { notificationMethods } from "./supabaseNotificationRepository";
 import { MAX_SPLIT, OPENING_TEAM, teamSlug } from "./types";
 import { projectDisplayName } from "./types";
 import type {
@@ -118,7 +119,8 @@ const WIRED: RepositoryMethod[] = [
   "listMyPreferences", "saveMyPreferences",
   "listPropertyDefs", "createPropertyDef", "updatePropertyDef", "deletePropertyDef",
   "listDictionaryOverrides", "saveDictionaryOverride",
-  "listClassifications", "saveClassification", "listPartyRoles", "savePartyRole", "listStaffRoles", "saveStaffRole", "listContacts", "getContact", "createContact", "updateContact", "approveContact", "setContactClassifications", "listCompanies", "getCompany", "createCompany", "updateCompany", "approveCompany", "setCompanyClassifications", "listContactMethods", "addContactMethod", "updateContactMethod", "deleteContactMethod", "listCompanyContacts", "addCompanyContact", "updateCompanyContact", "listRecordParties", "addRecordParty", "updateRecordParty", "deleteRecordParty", "listRecordStaffRoles", "addRecordStaffRole", "endRecordStaffRole", "listTaskChecklist", "addTaskChecklistItem", "updateTaskChecklistItem", "deleteTaskChecklistItem", "listProcessTaskChecklist", "addProcessTaskChecklistItem", "updateProcessTaskChecklistItem", "deleteProcessTaskChecklistItem", "listStageCompletion"
+  "listClassifications", "saveClassification", "listPartyRoles", "savePartyRole", "listStaffRoles", "saveStaffRole", "listContacts", "getContact", "createContact", "updateContact", "approveContact", "setContactClassifications", "listCompanies", "getCompany", "createCompany", "updateCompany", "approveCompany", "setCompanyClassifications", "listContactMethods", "addContactMethod", "updateContactMethod", "deleteContactMethod", "listCompanyContacts", "addCompanyContact", "updateCompanyContact", "listRecordParties", "addRecordParty", "updateRecordParty", "deleteRecordParty", "listRecordStaffRoles", "addRecordStaffRole", "endRecordStaffRole", "listTaskChecklist", "addTaskChecklistItem", "updateTaskChecklistItem", "deleteTaskChecklistItem", "listProcessTaskChecklist", "addProcessTaskChecklistItem", "updateProcessTaskChecklistItem", "deleteProcessTaskChecklistItem", "listStageCompletion",
+  "listNotificationTypes", "saveNotificationType", "listNotificationRules", "addNotificationRule", "updateNotificationRule", "deleteNotificationRule", "listMyNotificationPreferences", "saveMyNotificationPreference", "listMyNotifications", "markNotificationsRead", "listMyWatches", "watchRecord", "unwatchRecord", "listDeliveryStats"
 ];
 
 /**
@@ -805,6 +807,7 @@ export function createSupabaseRepository(): Repository {
     // they share nothing with the rest but the client.
     ...propertyProcessMethods(client),
     ...partyMethods(client),
+    ...notificationMethods(client),
     name: "supabase",
     wired: new Set<RepositoryMethod>(WIRED) as ReadonlySet<keyof Repository>,
 

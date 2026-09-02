@@ -1203,6 +1203,60 @@ export const DICTIONARY: DictionaryEntry[] = [
   e("record_party_display.record_project_id", "Project", "The project, the same way.", "view", "—", "—", "created"),
   e("record_party_display.process_name", "Process", "For a party on a run, which process.", "view", "—", "—", "created"),
 
+  // ---------------------------------------------------------- notifications (0083)
+  e("notification_types.notification_type_id", "Notification type", "What the app can tell somebody (0083): task_assigned, task_at_risk, task_overdue, process_at_risk, process_overdue, mention, stage_changed, working_drawings_changed, party_awaiting_sign_off, property_pushed. The slugs triggers and the scan name.", "text", "Primary key, a slug.", "Read by every active user; admins edit the defaults.", "created"),
+  e("notification_types.notification_type_name", "Name", "The words in settings and the inbox.", "text", "Not null, unique.", "—", "created"),
+  e("notification_types.notification_type_description", "Description", "When it fires, for the settings screen.", "text", "Nullable.", "—", "created"),
+  e("notification_types.notification_type_default_channels", "Default channels", "Which of in_app, email, teams, sms a person gets until they choose (Amber's defaults: assignments, mentions and arrivals in-app and email; overdue and at-risk the same; stage moves in-app). A text array.", "text", "Not null (text[]). CHECK: a subset of the four.", "—", "created"),
+  e("notification_types.notification_type_default_timing", "Default timing", "immediate, or digest — once a day at the person's digest time (07:30 unless they choose). Overdue and at-risk are digest; assignments, mentions and working drawings immediate (Amber, 2 Sep).", "text", "Not null. CHECK.", "—", "created"),
+  e("notification_types.notification_type_position", "Order", "Where in the settings list.", "integer", "Not null, default 0 (smallint).", "—", "created"),
+  e("notification_types.notification_type_is_active", "Active", "A retired type fires nothing.", "boolean", "Not null, default true.", "—", "created"),
+
+  e("notification_rules.notification_rule_id", "Notification rule", "Who hears a type (0083, Amber: \"who they go to\"): the assignee, the owning team, the engaged teams, the watchers, the managers, the mentioned person, or a named team or person.", "uuid", "Primary key.", "Read by every active user; admins edit.", "created"),
+  e("notification_rules.notification_type_id", "Type", "Which type the rule is for.", "text", "Not null. FK → notification_types ON DELETE CASCADE.", "—", "created"),
+  e("notification_rules.notification_rule_audience", "Audience", "assignee · owning_team · engaged_teams · watchers · managers · mentioned · specific_team · specific_person. Managers are the owning team's members at manager or above, else every manager.", "text", "Not null. CHECK.", "—", "created"),
+  e("notification_rules.team_id", "Team", "For specific_team.", "text", "Nullable. FK → teams. CHECK: set when the audience is specific_team.", "—", "created"),
+  e("notification_rules.profile_id", "Person", "For specific_person.", "uuid", "Nullable. FK → profiles.", "—", "created"),
+  e("notification_rules.notification_rule_after_days", "After days", "Escalation: fire only once the thing has been overdue this many days — \"overdue 5 days → managers\".", "integer", "Not null, default 0 (smallint). CHECK ≥ 0.", "—", "created"),
+  e("notification_rules.notification_rule_is_active", "Active", "A paused rule fires nothing.", "boolean", "Not null, default true.", "—", "created"),
+
+  e("notification_preferences.profile_id", "Person", "Whose choice (0083, Amber: \"selected in user settings\"). One row per person, type and channel; no row means the type's default.", "uuid", "Primary key with type and channel. FK → profiles ON DELETE CASCADE.", "Own rows only by RLS.", "created"),
+  e("notification_preferences.notification_type_id", "Type", "Which type.", "text", "Primary key part. FK → notification_types.", "—", "created"),
+  e("notification_preferences.notification_preference_channel", "Channel", "in_app, email, teams or sms.", "text", "Primary key part. CHECK.", "—", "created"),
+  e("notification_preferences.notification_preference_is_enabled", "On", "Whether this channel is on for this type.", "boolean", "Not null, default true.", "—", "created"),
+  e("notification_preferences.notification_preference_timing", "Timing", "immediate or digest; null means the type's default.", "text", "Nullable. CHECK.", "—", "created"),
+  e("notification_preferences.notification_preference_digest_time", "Digest time", "When the daily digest comes, Adelaide time; null means 07:30. A time of day.", "text", "Nullable (time).", "—", "created"),
+
+  e("record_watchers.record_watcher_id", "Watch", "\"Follow this job\" (0083): a person on a record, an audience the rules can name.", "uuid", "Primary key.", "Own rows only; every active user reads who watches.", "created"),
+  e("record_watchers.profile_id", "Person", "Who watches.", "uuid", "Not null. FK → profiles ON DELETE CASCADE. Unique with the record.", "—", "created"),
+  e("record_watchers.project_id", "Project", "The record, when a project.", "integer", "Nullable. FK → projects ON DELETE CASCADE. CHECK: exactly one of project_id, job_id.", "—", "created"),
+  e("record_watchers.job_id", "Job", "The record, when a job.", "text", "Nullable. FK → jobs ON DELETE CASCADE.", "—", "created"),
+
+  e("notifications.notification_id", "Notification", "One thing said to one person (0083) — the inbox. Written only by private.notify(), from triggers and the 15-minute scan; a person reads and marks read their own.", "bigint", "Primary key, identity.", "No client insert; own rows only.", "created"),
+  e("notifications.profile_id", "Person", "Whose inbox.", "uuid", "Not null. FK → profiles ON DELETE CASCADE. Indexed newest-first and by unread.", "—", "created"),
+  e("notifications.notification_type_id", "Type", "What kind of thing was said.", "text", "Not null. FK → notification_types.", "—", "created"),
+  e("notifications.project_id", "Project", "The record it points at, when a project. No FK: the inbox outlives the record.", "integer", "Nullable.", "—", "created"),
+  e("notifications.job_id", "Job", "The record it points at, when a job.", "text", "Nullable.", "—", "created"),
+  e("notifications.task_id", "Task", "The task, when about one.", "uuid", "Nullable.", "—", "created"),
+  e("notifications.process_run_id", "Process run", "The run, when about one.", "uuid", "Nullable.", "—", "created"),
+  e("notifications.comment_id", "Comment", "The comment, for a mention.", "uuid", "Nullable.", "—", "created"),
+  e("notifications.notification_title", "Title", "The line in the bell — \"Frame inspection is overdue\".", "text", "Not null.", "—", "created"),
+  e("notifications.notification_body", "Body", "The sentence under it, with the record and the date.", "text", "Nullable.", "—", "created"),
+  e("notifications.notification_href", "Link", "Where clicking goes, as an app path.", "text", "Nullable.", "—", "created"),
+  e("notifications.notification_dedupe_key", "Dedupe key", "One per person per thing said: task_overdue:<task>:<date>, so a daily scan writes a new row tomorrow and never a repeat today.", "text", "Not null. Unique with profile_id.", "—", "created"),
+  e("notifications.notification_read_at", "Read", "When the person read it. Null is the bell's badge.", "timestamptz", "Nullable.", "mark_my_notifications_read() sets it for the caller's own rows.", "created"),
+
+  e("notification_deliveries.notification_delivery_id", "Delivery", "One channel's send of one notification (0083) — the outbox. in_app is sent as written; email, teams and sms wait for the worker (supabase/functions/deliver-notifications).", "bigint", "Primary key, identity.", "The person reads their own; admins read all; the worker writes through two service-role RPCs.", "created"),
+  e("notification_deliveries.notification_id", "Notification", "Which notification.", "bigint", "Not null. FK → notifications ON DELETE CASCADE.", "—", "created"),
+  e("notification_deliveries.notification_delivery_channel", "Channel", "in_app, email, teams or sms.", "text", "Not null. CHECK.", "—", "created"),
+  e("notification_deliveries.notification_delivery_status", "Status", "queued (send now) · held (a digest, until next_attempt_at) · sending (claimed) · sent · failed (after five tries) · skipped.", "text", "Not null, default queued. CHECK.", "Partial index on queued and held by next_attempt_at.", "created"),
+  e("notification_deliveries.notification_delivery_address", "Address", "The email or account the send goes to, resolved when the row was written.", "text", "Nullable.", "—", "created"),
+  e("notification_deliveries.notification_delivery_attempts", "Attempts", "How many times the worker has tried.", "integer", "Not null, default 0 (smallint).", "Backoff 5, 25, 125 minutes; failed after five.", "created"),
+  e("notification_deliveries.notification_delivery_next_attempt_at", "Next attempt", "When it is next due — now for immediate, the digest time for held, later after a failure.", "timestamptz", "Not null, default now().", "—", "created"),
+  e("notification_deliveries.notification_delivery_sent_at", "Sent", "When it went.", "timestamptz", "Nullable.", "—", "created"),
+  e("notification_deliveries.notification_delivery_external_id", "Provider id", "Graph's request or message id, the receipt.", "text", "Nullable.", "—", "created"),
+  e("notification_deliveries.notification_delivery_error", "Error", "The last failure, in the provider's words.", "text", "Nullable.", "—", "created"),
+
   // ------------------------------------------------------ stage_completion (0081)
   e("stage_completion.stage", "Stage", "One row per record and lifecycle stage: the active processes of that stage against the record's latest run of each.", "view", "—", "Read by the board, the drawer and the report so they count the same way.", "created"),
   e("stage_completion.processes_open", "Open processes", "Processes with no run yet, or whose latest run is neither complete nor not applicable.", "view", "—", "Zero means the stage is complete.", "created"),
@@ -1508,6 +1562,18 @@ export const TABLE_DESCRIPTIONS: Record<string, string> = {
     "A company as the Contacts list reads it (0082): name, ABN, primary email and phone, classifications, how many people work there and how many records it is on.",
   record_party_display:
     "A party on a record with its names resolved (0082): who, which company, which role, engaged by whom, and for a run-level party which process and which job that run is on.",
+  notification_types:
+    "What the app can tell somebody (0083) and the channels and timing a person gets until they choose: assignments, mentions and working-drawings changes immediate; overdue and at-risk in the 07:30 digest (Amber, 2 Sep). Admins edit.",
+  notification_rules:
+    "Who hears each type (0083, Amber: \"who they go to\"): assignee, owning team, engaged teams, watchers, managers, the mentioned person, or a named team or person — with after_days for escalation. Admins edit.",
+  notification_preferences:
+    "How each person hears each type on each channel (0083): on or off, immediate or digest, digest time. One row per person, type and channel; a table rather than the jsonb bag 0050 planned, so the worker can read it. Own rows only.",
+  record_watchers:
+    "Follow this job or project (0083): an audience the rules can name. Own rows only.",
+  notifications:
+    "The inbox (0083): one row per person per thing said, with the record and where to click; read_at is the bell. Written only by private.notify() from triggers and the 15-minute scan, deduped per person and key so a daily scan never repeats itself.",
+  notification_deliveries:
+    "The outbox (0083): one row per channel per notification. in_app sent as written; email, teams and sms queued or held for the digest time, claimed by the worker with for update skip locked, retried with backoff, failed after five. SMS rows wait for a provider.",
   task_checklist_items:
     "Tick boxes under a task (0081): text, order, who ticked it when. Not a task — no assignee, due date, status or dependencies — so a task with twelve lines is one task, not thirteen. Copied from the template line's checklist when a run is instantiated.",
   process_task_checklist_items:

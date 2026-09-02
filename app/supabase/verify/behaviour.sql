@@ -735,3 +735,35 @@ delete from processes where process_key = 'behaviour_probe_0082';
 delete from company_contacts where contact_id = (select contact_id from contacts where contact_last_name = 'Plumber 0082');
 delete from contacts where contact_last_name = 'Plumber 0082';
 delete from companies where company_name = 'Behaviour Plumbing 0082';
+
+-- ============================================================================
+-- 42. Notifications: assigned fires once to the assignee; the scan fires once a day (0083)
+-- ============================================================================
+\echo '--- 42. a task assignment notifies its assignee once, in-app sent and email queued; the scan does not repeat itself'
+insert into tasks (job_id, task_name, task_assignee_id)
+select '1106-002', 'behaviour probe 0083', profile_id from profiles where profile_email = 'behaviour-test@lofty.com.au';
+select case when count(*) = 1 then 'ok  one task_assigned notification for the assignee'
+  else 'FAIL: ' || count(*) || ' task_assigned notifications' end
+from notifications n join tasks t using (task_id) where t.task_name = 'behaviour probe 0083' and n.notification_type_id = 'task_assigned';
+select case when count(*) filter (where notification_delivery_channel = 'in_app' and notification_delivery_status = 'sent') = 1
+             and count(*) filter (where notification_delivery_channel = 'email' and notification_delivery_status = 'queued') = 1
+  then 'ok  in_app sent on the spot, email queued for the worker'
+  else 'FAIL: deliveries were ' || string_agg(notification_delivery_channel || '=' || notification_delivery_status, ', ') end
+from notification_deliveries d join notifications n using (notification_id) join tasks t using (task_id)
+where t.task_name = 'behaviour probe 0083' and n.notification_type_id = 'task_assigned';
+
+update tasks set task_status = 'in_progress', task_expected_days = 2 where task_name = 'behaviour probe 0083';
+update tasks set task_started_at = now() - interval '9 days' where task_name = 'behaviour probe 0083';
+select notify_scan() as first_scan \gset
+select notify_scan() as second_scan \gset
+-- The owning team and the managers hear too (their own rows); the assignee's row is the one counted.
+select case when count(*) = 1 then 'ok  two scans, one task_overdue row for the assignee — the dedupe key holds for the day'
+  else 'FAIL: ' || count(*) || ' task_overdue rows for the assignee after two scans' end
+from notifications n join tasks t using (task_id) join profiles p on p.profile_id = n.profile_id
+where t.task_name = 'behaviour probe 0083' and n.notification_type_id = 'task_overdue' and p.profile_email = 'behaviour-test@lofty.com.au';
+-- 7 days late passes the managers' after_days of 5: a manager-or-above also hears.
+select case when count(*) >= 1 then 'ok  seven days late escalates to a manager (after_days 5)'
+  else 'FAIL: no manager heard about a task 7 days overdue' end
+from notifications n join tasks t using (task_id) join profiles p on p.profile_id = n.profile_id
+where t.task_name = 'behaviour probe 0083' and n.notification_type_id = 'task_overdue' and p.profile_permission >= 'manager';
+delete from tasks where task_name = 'behaviour probe 0083';
