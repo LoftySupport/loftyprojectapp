@@ -38,6 +38,9 @@ select '99', 'Somewhere Else Road', 'Modbury', '5092', 'City of Tea Tree Gully',
 -- What Supabase grants the API roles. Without these, everything below fails on table
 -- privileges rather than on policy, and would pass for the wrong reason.
 grant usage on schema public to authenticated, anon;
+-- Supabase also grants the API roles usage on `extensions` (pg_trgm operators in searches,
+-- pgcrypto in offer_maintenance_item run as the caller); the shim has to say so too.
+grant usage on schema extensions to authenticated, anon;
 grant select, insert, update, delete on all tables in schema public to authenticated;
 grant select on all tables in schema public to anon;
 
@@ -132,7 +135,7 @@ begin
   -- have let somebody save preferences onto their own profiles row would also have let
   -- them edit profile_permission on it.
   begin
-    insert into user_preferences (profile_id, user_preferences_payload)
+    insert into user_preferences (profile_id, user_preference_payload)
     values ((select profile_id from profiles
               where profile_email <> 'behaviour-test@lofty.com.au' limit 1),
             '{"landingPage":"Jobs"}'::jsonb);
@@ -144,10 +147,10 @@ begin
   end;
 
   begin
-    insert into user_preferences (profile_id, user_preferences_payload)
+    insert into user_preferences (profile_id, user_preference_payload)
     values ((select profile_id from profiles where profile_email = 'behaviour-test@lofty.com.au'),
             '{"landingPage":"Jobs"}'::jsonb)
-    on conflict (profile_id) do update set user_preferences_payload = excluded.user_preferences_payload;
+    on conflict (profile_id) do update set user_preference_payload = excluded.user_preference_payload;
     if (select count(*) from user_preferences) = 1 then
       raise notice 'ok  user_preferences: your own bag is yours, and only yours is visible';
     else
@@ -1269,6 +1272,330 @@ begin
   else raise warning 'FAIL: my_property_access() disagrees with what the policy let through'; end if;
 end $$;
 reset role;
+
+-- ---------------------------------------------------------------- the audit, readable (0080)
+-- Amber: "record history is viewable for everything and everyone except for restricted
+-- fields". As a USER: a task's audit row on a job is readable; the restricted property's
+-- audit row is not, and the open one is; the personal tables' rows are not.
+\echo '--- the audit is readable by a user, except restricted values and personal tables (0080) ---'
+reset request.jwt.claim.sub;
+insert into tasks (job_id, task_name) values ('1106-002', 'rls probe task 0080');
+update tasks set task_status = 'in_progress' where task_name = 'rls probe task 0080';
+-- A restricted property NOBODY has been granted — probe_margin was opened to design above,
+-- and the test person is in design, so it can no longer stand for "locked".
+insert into property_defs (property_def_key, property_def_label, property_def_scope, property_def_stage, property_def_format, property_def_restricted)
+values ('probe_locked_0080', 'Probe locked', 'job', 'Pre-construction', 'text', true);
+insert into property_values (property_def_key, property_def_format, job_id, property_value_text)
+values ('probe_locked_0080', 'text', '1106-002', 'secret');
+insert into user_preferences (profile_id, user_preference_payload)
+select profile_id, '{"probe":"0080"}'::jsonb from profiles where profile_email = 'behaviour-test@lofty.com.au'
+on conflict (profile_id) do update set user_preference_payload = excluded.user_preference_payload;
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+do $$
+declare n integer;
+begin
+  select count(*) into n from activity_audit
+   where activity_audit_table = 'tasks' and activity_audit_job_id = '1106-002'
+     and activity_audit_new_row ->> 'task_name' = 'rls probe task 0080';
+  if n >= 2 then raise notice 'ok  a user reads the audit rows of a task on a job (% rows)', n;
+  else raise warning 'FAIL: a user saw % audit rows for a task change, expected at least 2', n; end if;
+
+  select count(*) into n from activity_audit
+   where activity_audit_table = 'property_values'
+     and coalesce(activity_audit_new_row, activity_audit_old_row) ->> 'property_def_key' = 'probe_locked_0080';
+  if n = 0 then raise notice 'ok  the restricted property''s audit rows are hidden from a user';
+  else raise warning 'FAIL: a user saw % audit rows of the restricted property probe_locked_0080', n; end if;
+
+  select count(*) into n from activity_audit
+   where activity_audit_table = 'property_values'
+     and coalesce(activity_audit_new_row, activity_audit_old_row) ->> 'property_def_key' = 'probe_margin';
+  if n >= 1 then raise notice 'ok  the restricted property GRANTED to the user''s team shows its audit rows';
+  else raise warning 'FAIL: design was granted probe_margin and saw none of its audit rows'; end if;
+
+  select count(*) into n from activity_audit
+   where activity_audit_table = 'property_values'
+     and coalesce(activity_audit_new_row, activity_audit_old_row) ->> 'property_def_key' = 'probe_pour';
+  if n >= 1 then raise notice 'ok  the open property''s audit rows are readable by a user';
+  else raise warning 'FAIL: a user saw no audit rows of the open property probe_pour'; end if;
+
+  select count(*) into n from activity_audit where activity_audit_table = 'user_preferences';
+  if n = 0 then raise notice 'ok  the personal tables'' audit rows are hidden from a user';
+  else raise warning 'FAIL: a user saw % audit rows of user_preferences', n; end if;
+
+  begin
+    insert into activity_audit (activity_audit_schema, activity_audit_table, activity_audit_operation)
+    values ('public', 'jobs', 'INSERT');
+    raise warning 'FAIL: a user wrote an audit row by hand';
+  exception when insufficient_privilege then raise notice 'ok  the audit is append-only from triggers; a user cannot write it';
+    when others then raise warning 'FAIL: unexpected writing the audit (%)', sqlerrm; end;
+end $$;
+reset role;
+reset request.jwt.claim.sub;
+delete from tasks where task_name = 'rls probe task 0080';
+delete from user_preferences where user_preference_payload ->> 'probe' = '0080';
+delete from property_defs where property_def_key = 'probe_locked_0080';
+delete from property_value_history where property_def_key = 'probe_locked_0080';
+
+-- ---------------------------------------------------------------- checklists (0081)
+\echo '--- a user ticks a checklist line; a user cannot write a template line (0081) ---'
+reset request.jwt.claim.sub;
+insert into tasks (job_id, task_name) values ('1106-002', 'rls probe task 0081');
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+do $$
+declare item uuid; n integer;
+begin
+  begin
+    insert into task_checklist_items (task_id, task_checklist_item_text)
+    select task_id, 'rls line' from tasks where task_name = 'rls probe task 0081'
+    returning task_checklist_item_id into item;
+    update task_checklist_items set task_checklist_item_is_done = true where task_checklist_item_id = item;
+    select count(*) into n from task_checklist_items
+     where task_checklist_item_id = item and task_checklist_item_is_done and task_checklist_item_done_by is not null;
+    if n = 1 then raise notice 'ok  a user adds and ticks a checklist line, and the tick names them';
+    else raise warning 'FAIL: the ticked line did not record the user (% rows)', n; end if;
+    delete from task_checklist_items where task_checklist_item_id = item;
+    if not exists (select 1 from task_checklist_items where task_checklist_item_id = item) then
+      raise notice 'ok  a user removes their own checklist line';
+    else raise warning 'FAIL: a user could not remove a checklist line'; end if;
+  exception when others then raise warning 'FAIL: unexpected on checklist items (%)', sqlerrm; end;
+
+  begin
+    insert into process_task_checklist_items (process_task_id, process_task_checklist_item_text)
+    select process_task_id, 'sneaky' from process_tasks limit 1;
+    if found then raise warning 'FAIL: a user wrote a template checklist line';
+    else raise notice 'note: no template task to probe against'; end if;
+  exception when insufficient_privilege then raise notice 'ok  template checklist lines refuse a write below manager';
+    when others then raise warning 'FAIL: unexpected on template checklist (%)', sqlerrm; end;
+
+  select count(*) into n from stage_completion where job_id = '1106-002';
+  if n >= 1 then raise notice 'ok  a user reads stage_completion for a job (% stage rows)', n;
+  else raise warning 'FAIL: a user saw no stage_completion rows for 1106-002'; end if;
+end $$;
+reset role;
+reset request.jwt.claim.sub;
+delete from tasks where task_name = 'rls probe task 0081';
+
+-- ---------------------------------------------------------------- parties (0082)
+-- Amber: users and above create contacts and companies, with manager sign-off. As a USER:
+-- create both (unapproved), reach and classify them, put one on a job; fail to approve,
+-- fail to write a lookup. Then as a MANAGER: approve, and the stamp names the manager.
+\echo '--- a user creates a contact and a company, unapproved; a manager signs off (0082) ---'
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+do $$
+declare co uuid; ct uuid; n integer;
+begin
+  begin
+    insert into companies (company_name, company_abn) values ('RLS Fencing 0082', '83914571673') returning company_id into co;
+    insert into contacts (contact_first_name, contact_last_name) values ('Rls', 'Fencer 0082') returning contact_id into ct;
+    insert into contact_methods (contact_id, contact_method_kind, contact_method_value, contact_method_is_primary) values (ct, 'mobile', '0400 111 222', true);
+    insert into contact_classifications (contact_id, classification_id) values (ct, 'contractor');
+    insert into company_contacts (company_id, contact_id, company_contact_job_role) values (co, ct, 'Fencer');
+    insert into record_parties (job_id, contact_id, company_id, party_role_id) values ('1106-002', ct, co, 'contractor');
+    select count(*) into n from contact_display where contact_id = ct and contact_approved_at is null and contact_company_name = 'RLS Fencing 0082';
+    if n = 1 then raise notice 'ok  a user creates a contact at a company, reaches, classifies and places them — unapproved';
+    else raise warning 'FAIL: the user''s contact did not come back unapproved with its company (% rows)', n; end if;
+  exception when others then raise warning 'FAIL: unexpected creating parties as a user (%)', sqlerrm; end;
+
+  begin
+    update contacts set contact_approved_at = now() where contact_id = ct;
+    raise warning 'FAIL: a user approved a contact';
+  exception when insufficient_privilege then raise notice 'ok  a user cannot sign off a contact';
+    when others then raise warning 'FAIL: unexpected approving as a user (%)', sqlerrm; end;
+
+  begin
+    insert into party_roles (party_role_id, party_role_name) values ('sneaky_role', 'Sneaky');
+    raise warning 'FAIL: a user added a party role';
+  exception when insufficient_privilege then raise notice 'ok  party_roles refuse a write below manager';
+    when others then raise warning 'FAIL: unexpected on party_roles (%)', sqlerrm; end;
+
+  begin
+    insert into record_staff_roles (job_id, staff_role_id, profile_id) values ('1106-002', 'site_supervisor', (select current_profile_id()));
+    raise warning 'FAIL: a user assigned a staff role';
+  exception when insufficient_privilege then raise notice 'ok  record_staff_roles refuse a write below manager';
+    when others then raise warning 'FAIL: unexpected on record_staff_roles (%)', sqlerrm; end;
+
+  begin
+    delete from companies where company_id = co;
+    if exists (select 1 from companies where company_id = co) then raise notice 'ok  a user cannot delete a company (the row is still there)';
+    else raise warning 'FAIL: a user deleted a company'; end if;
+  exception when foreign_key_violation then raise notice 'ok  a company on a record cannot be deleted';
+    when others then raise warning 'FAIL: unexpected deleting a company as a user (%)', sqlerrm; end;
+end $$;
+reset role;
+reset request.jwt.claim.sub;
+update profiles set profile_permission = 'manager' where profile_email = 'behaviour-test@lofty.com.au';
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+do $$
+declare n integer;
+begin
+  update contacts set contact_approved_at = now() where contact_last_name = 'Fencer 0082';
+  select count(*) into n from contacts
+   where contact_last_name = 'Fencer 0082' and contact_approved_at is not null and contact_approved_by = (select current_profile_id());
+  if n = 1 then raise notice 'ok  a manager signs off the contact, and the stamp names the manager';
+  else raise warning 'FAIL: the manager''s approval did not stamp (% rows)', n; end if;
+  insert into companies (company_name) values ('RLS Managers Co 0082');
+  select count(*) into n from companies where company_name = 'RLS Managers Co 0082' and company_approved_at is not null;
+  if n = 1 then raise notice 'ok  a company a manager creates is approved by existing';
+  else raise warning 'FAIL: a manager-created company came back unapproved'; end if;
+end $$;
+reset role;
+reset request.jwt.claim.sub;
+update profiles set profile_permission = 'user' where profile_email = 'behaviour-test@lofty.com.au';
+delete from record_parties where job_id = '1106-002' and contact_id in (select contact_id from contacts where contact_last_name = 'Fencer 0082');
+delete from company_contacts where contact_id in (select contact_id from contacts where contact_last_name = 'Fencer 0082');
+delete from contacts where contact_last_name = 'Fencer 0082';
+delete from companies where company_name in ('RLS Fencing 0082', 'RLS Managers Co 0082');
+
+-- ---------------------------------------------------------------- notifications (0083)
+\echo '--- a user reads only their own inbox, sets their own preferences, cannot write the inbox or the rules (0083) ---'
+reset request.jwt.claim.sub;
+insert into tasks (job_id, task_name, task_assignee_id)
+select '1106-002', 'rls probe 0083', profile_id from profiles where profile_email = 'behaviour-test@lofty.com.au';
+insert into tasks (job_id, task_name, task_assignee_id)
+select '1106-002', 'rls probe 0083 other', profile_id from profiles where profile_email <> 'behaviour-test@lofty.com.au' and profile_is_active limit 1;
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+do $$
+declare n integer; mine integer;
+begin
+  select count(*) into n from notifications where notification_type_id = 'task_assigned' and notification_title like '%rls probe 0083%';
+  select count(*) into mine from notifications where notification_type_id = 'task_assigned' and notification_title = 'You were assigned rls probe 0083';
+  if n = mine and mine = 1 then raise notice 'ok  a user sees their own notification and not the other person''s';
+  else raise warning 'FAIL: a user saw % rls-probe notifications, % their own', n, mine; end if;
+
+  perform mark_my_notifications_read();
+  if not exists (select 1 from notifications where notification_read_at is null) then raise notice 'ok  mark_my_notifications_read() clears the person''s own unread';
+  else raise warning 'FAIL: unread notifications remain after mark_my_notifications_read()'; end if;
+
+  begin
+    insert into notifications (profile_id, notification_type_id, notification_title, notification_dedupe_key)
+    values ((select current_profile_id()), 'mention', 'forged', 'forged');
+    raise warning 'FAIL: a user wrote into the inbox';
+  exception when insufficient_privilege then raise notice 'ok  the inbox refuses a client insert';
+    when others then raise warning 'FAIL: unexpected writing the inbox (%)', sqlerrm; end;
+
+  begin
+    insert into notification_preferences (profile_id, notification_type_id, notification_preference_channel, notification_preference_is_enabled)
+    values ((select current_profile_id()), 'task_overdue', 'email', false);
+    raise notice 'ok  a user turns a channel off for themselves';
+  exception when others then raise warning 'FAIL: unexpected saving a preference (%)', sqlerrm; end;
+
+  begin
+    insert into notification_preferences (profile_id, notification_type_id, notification_preference_channel, notification_preference_is_enabled)
+    select profile_id, 'task_overdue', 'email', false from profiles where profile_email <> 'behaviour-test@lofty.com.au' limit 1;
+    raise warning 'FAIL: a user set another person''s preference';
+  exception when insufficient_privilege then raise notice 'ok  a user cannot set another person''s preference';
+    when others then raise warning 'FAIL: unexpected on another''s preference (%)', sqlerrm; end;
+
+  begin
+    insert into notification_rules (notification_type_id, notification_rule_audience) values ('mention', 'managers');
+    raise warning 'FAIL: a user added a notification rule';
+  exception when insufficient_privilege then raise notice 'ok  notification rules refuse a write below admin';
+    when others then raise warning 'FAIL: unexpected on rules (%)', sqlerrm; end;
+
+  begin
+    insert into record_watchers (profile_id, job_id) values ((select current_profile_id()), '1106-002');
+    raise notice 'ok  a user watches a job';
+  exception when others then raise warning 'FAIL: unexpected watching (%)', sqlerrm; end;
+
+  begin
+    perform claim_notification_deliveries('email', 1);
+    raise warning 'FAIL: a user drained the outbox';
+  exception when insufficient_privilege then raise notice 'ok  the outbox claim is not a user''s to call';
+    when others then raise warning 'FAIL: unexpected claiming deliveries (%)', sqlerrm; end;
+end $$;
+reset role;
+reset request.jwt.claim.sub;
+delete from record_watchers where job_id = '1106-002';
+delete from notification_preferences where notification_type_id = 'task_overdue';
+delete from tasks where task_name like 'rls probe 0083%';
+delete from notifications where notification_title like '%rls probe 0083%';
+
+-- ---------------------------------------------------------------- maintenance (0084)
+\echo '--- a user logs a request and offers an item; settings and categories are the managers''; the token and the two service RPCs are nobody''s (0084) ---'
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+do $$
+declare n integer; req uuid; req_no text; item uuid; co uuid; tok text; sent text;
+begin
+  select count(*) into n from maintenance_settings;
+  if n = 1 then raise notice 'ok  a user reads the one settings row';
+  else raise warning 'FAIL: a user saw % settings rows', n; end if;
+
+  update maintenance_settings set maintenance_setting_warranty_months = 12 where maintenance_setting_id = 1;
+  get diagnostics n = row_count;
+  if n = 0 then raise notice 'ok  a user cannot change the settings (0 rows reached)';
+  else raise warning 'FAIL: a user changed the maintenance settings'; end if;
+
+  begin
+    insert into maintenance_categories (maintenance_category_id, maintenance_category_name) values ('rls_probe_0084', 'RLS probe');
+    raise warning 'FAIL: a user added a maintenance category';
+  exception when insufficient_privilege then raise notice 'ok  maintenance categories refuse a write below manager';
+    when others then raise warning 'FAIL: unexpected on categories (%)', sqlerrm; end;
+
+  insert into maintenance_requests (job_id, maintenance_request_source, maintenance_request_summary)
+  values ('1106-002', 'phone', 'rls probe 0084') returning maintenance_request_id, maintenance_request_number into req, req_no;
+  if req_no ~ '^1106-002-M[0-9]+$' then raise notice 'ok  a user logs a request and it is numbered on the job (%)', req_no;
+  else raise warning 'FAIL: the request was numbered %', req_no; end if;
+
+  insert into maintenance_items (maintenance_request_id, maintenance_item_description) values (req, 'rls probe item') returning maintenance_item_id into item;
+  insert into companies (company_name) values ('RLS probe trade 0084') returning company_id into co;
+  insert into contact_methods (company_id, contact_method_kind, contact_method_value, contact_method_is_primary) values (co, 'email', 'trade0084@example.com', true);
+  select o.accept_token, o.sent_to into tok, sent from offer_maintenance_item(item, co, null, null) o;
+  if length(tok) = 48 and sent = 'trade0084@example.com' then raise notice 'ok  a user offers an item; the token comes back once and the email is queued to the company';
+  else raise warning 'FAIL: offer returned token length % to %', length(tok), sent; end if;
+
+  begin
+    select count(*) into n from maintenance_message_secrets;
+    if n = 0 then raise notice 'ok  the parked token is invisible to a user (RLS, no policy)';
+    else raise warning 'FAIL: a user read % parked tokens', n; end if;
+  exception when insufficient_privilege then raise notice 'ok  the parked token is invisible to a user (table revoked)'; end;
+
+  begin
+    perform answer_maintenance_offer(tok, true);
+    raise warning 'FAIL: a user answered an offer through the service RPC';
+  exception when insufficient_privilege then raise notice 'ok  answer_maintenance_offer() is not a user''s to call';
+    when others then raise warning 'FAIL: unexpected answering (%)', sqlerrm; end;
+
+  begin
+    perform receive_maintenance_email('rls-0084', 'x@example.com', 'x', 'x');
+    raise warning 'FAIL: a user fed the inbound mail RPC';
+  exception when insufficient_privilege then raise notice 'ok  receive_maintenance_email() is not a user''s to call';
+    when others then raise warning 'FAIL: unexpected on inbound (%)', sqlerrm; end;
+
+  delete from maintenance_requests where maintenance_request_id = req;
+  get diagnostics n = row_count;
+  if n = 0 and exists (select 1 from maintenance_requests where maintenance_request_id = req) then raise notice 'ok  a user cannot delete a request (the row is still there)';
+  else raise warning 'FAIL: a user deleted a maintenance request'; end if;
+end $$;
+reset role;
+reset request.jwt.claim.sub;
+update profiles set profile_permission = 'manager' where profile_email = 'behaviour-test@lofty.com.au';
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+do $$
+declare n integer;
+begin
+  update maintenance_settings set maintenance_setting_offer_response_hours = 48 where maintenance_setting_id = 1;
+  get diagnostics n = row_count;
+  if n = 1 then raise notice 'ok  a manager edits the settings (the SLAs are theirs)';
+  else raise warning 'FAIL: a manager could not edit the settings'; end if;
+  begin
+    insert into maintenance_categories (maintenance_category_id, maintenance_category_name, maintenance_category_sla_days) values ('rls_probe_0084', 'RLS probe', 5);
+    raise notice 'ok  a manager adds a category';
+  exception when others then raise warning 'FAIL: a manager could not add a category (%)', sqlerrm; end;
+end $$;
+reset role;
+reset request.jwt.claim.sub;
+update profiles set profile_permission = 'user' where profile_email = 'behaviour-test@lofty.com.au';
+delete from maintenance_requests where job_id = '1106-002';
+delete from maintenance_categories where maintenance_category_id = 'rls_probe_0084';
+delete from companies where company_name = 'RLS probe trade 0084';
+delete from notifications where notification_type_id like 'maintenance_%' and job_id = '1106-002';
 
 -- Left as found.
 reset request.jwt.claim.sub;

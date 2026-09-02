@@ -7,32 +7,33 @@ import { Select } from "./Select";
 import { Problem } from "./Form";
 import { LoadProblem } from "./SearchNotices";
 import {
-  TASK_STATUSES, TASK_STATUS_LABELS, isTaskLive, teamName,
-  type TaskEntry, type TaskStatus, type TeamId
+  TASK_HEALTH_LABELS, TASK_STATUSES, TASK_STATUS_LABELS, isTaskLive, teamName,
+  type TaskChecklistItem, type TaskEntry, type TaskStatus, type TeamId
 } from "../data/types";
 import "./ui.css";
+import "./processes.css";
 
 /**
- * What has to be done on this job or this project.
+ * What has to be done on this job or this project — tasks, their sub-tasks, and the
+ * checklist under each (Amber, 2 Sep: "tasks and sub task and checklists are essential
+ * for users and teams").
  *
- * The `tasks` table has been built and empty since the first migration — name, owning
- * team, assignee, status, due date, sub-tasks, and a completion the database stamps —
- * and no screen has ever read it. This is that screen.
+ * THREE LEVELS, TWO KINDS
  *
- * **It is the missing half of two things people have already asked for.** A due date
- * that moves ("Deanna changed selections due date from 1/7/26 to 7/7/26") is a task's
- * due date, and the activity feed narrates the change the moment one moves, because
- * `tasks` carries the same audit trigger as jobs and projects. And a job's progress
- * stops being "which stage is it in" once there are tasks to count.
+ *   A task and a sub-task are the same row (`parent_task_id`), so a sub-task has its own
+ *   assignee, due date and health, and shows indented under its parent. A checklist line
+ *   is lighter on purpose (0081): a tick box with words, no assignee and no date, so a
+ *   task with twelve lines stays one task in "my work".
  *
- * **Five states, not a tick box.** Blocked and "waiting on someone outside Lofty" are
- * the states that explain why a job has stopped; a checklist that only knows done from
- * not-done cannot tell "nobody has started this" from "the council has had it three
- * weeks". External is kept separate from blocked on purpose — council's statutory 28
- * days are not Design running late, and the two must not be added together in a report.
+ * HEALTH IS THE VIEW'S WORD
  *
- * Nothing is seeded. An empty job says it is empty rather than showing a template
- * nobody at Lofty wrote.
+ *   Due is what somebody typed, or start + expected days when nobody did; at risk is due
+ *   minus the lead; both come from `task_display`, the same way a process run's do, so
+ *   this panel never computes a date the report would disagree with. "No due date" is a
+ *   real state and says so.
+ *
+ * Nothing is seeded. An empty job says it is empty rather than showing a template nobody
+ * at Lofty wrote.
  */
 export function TasksPanel({
   jobId, projectId, title = "Tasks"
@@ -48,6 +49,9 @@ export function TasksPanel({
   const { data: tasks, loading, error } = useQuery<TaskEntry[]>(
     r => r.listTasks({ jobId, projectId }), [], [reload, jobId, projectId]
   );
+  const { data: lines } = useQuery<TaskChecklistItem[]>(
+    r => r.listTaskChecklist({ jobId, projectId }), [], [reload, jobId, projectId]
+  );
   const { data: profiles } = useQuery(r => r.listProfiles(), []);
 
   const [draft, setDraft] = useState("");
@@ -55,13 +59,36 @@ export function TasksPanel({
   const [busy, setBusy] = useState(false);
   /** Which task has its second row of controls showing. One at a time. */
   const [open, setOpen] = useState<string | null>(null);
+  /** Which task is growing a sub-task right now. */
+  const [subFor, setSubFor] = useState<string | null>(null);
+  const [subDraft, setSubDraft] = useState("");
+  /** The checklist line being typed, per task. */
+  const [lineDraft, setLineDraft] = useState<Record<string, string>>({});
   const [problem, setProblem] = useState<string | null>(null);
 
   /** Done over the ones that count. Cancelled is neither done nor outstanding. */
   const counted = useMemo(() => tasks.filter(t => t.status !== "cancelled"), [tasks]);
   const done = useMemo(() => counted.filter(t => t.status === "done").length, [counted]);
+  const atRisk = useMemo(() => tasks.filter(t => t.health === "at_risk").length, [tasks]);
+  const overdue = useMemo(() => tasks.filter(t => t.health === "overdue").length, [tasks]);
 
-  const today = new Date().toISOString().slice(0, 10);
+  /** Parents in order, each followed by its children; an orphan whose parent is gone still shows. */
+  const ordered = useMemo(() => {
+    const byId = new Set(tasks.map(t => t.id));
+    const parents = tasks.filter(t => t.parentTaskId == null || !byId.has(t.parentTaskId));
+    const out: { task: TaskEntry; child: boolean }[] = [];
+    parents.forEach(p => {
+      out.push({ task: p, child: false });
+      tasks.filter(c => c.parentTaskId === p.id).forEach(c => out.push({ task: c, child: true }));
+    });
+    return out;
+  }, [tasks]);
+
+  const linesByTask = useMemo(() => {
+    const m = new Map<string, TaskChecklistItem[]>();
+    lines.forEach(l => { (m.get(l.taskId) ?? m.set(l.taskId, []).get(l.taskId)!).push(l); });
+    return m;
+  }, [lines]);
 
   async function run(what: () => Promise<unknown>) {
     setBusy(true);
@@ -80,13 +107,32 @@ export function TasksPanel({
     const name = draft.trim();
     if (!name) return;
     return run(async () => {
-      // Position is left at its default: the list orders by position then by when it
-      // was created, so tasks nobody has reordered stay in the order they were typed.
       await repo.createTask({ jobId, projectId, name, dueDate: draftDue || null });
       setDraft("");
       setDraftDue("");
     });
   };
+
+  const addSub = (parent: TaskEntry) => {
+    const name = subDraft.trim();
+    if (!name) return;
+    return run(async () => {
+      await repo.createTask({ jobId, projectId, name, parentTaskId: parent.id });
+      setSubDraft("");
+      setSubFor(null);
+    });
+  };
+
+  const addLine = (task: TaskEntry) => {
+    const text = (lineDraft[task.id] ?? "").trim();
+    if (!text) return;
+    return run(async () => {
+      await repo.addTaskChecklistItem(task.id, text);
+      setLineDraft(d => ({ ...d, [task.id]: "" }));
+    });
+  };
+
+  const fmt = (iso: string) => new Date(iso.length === 10 ? iso + "T00:00:00" : iso).toLocaleDateString();
 
   return (
     <section className="panel">
@@ -95,6 +141,8 @@ export function TasksPanel({
         {counted.length > 0 && (
           <Text type="text3" color="secondary">
             {done} of {counted.length} done
+            {overdue > 0 && ` · ${overdue} overdue`}
+            {atRisk > 0 && ` · ${atRisk} at risk`}
           </Text>
         )}
       </div>
@@ -130,16 +178,18 @@ export function TasksPanel({
       {!loading && !error && tasks.length === 0 && (
         <Text type="text2" color="secondary" element="p" ellipsis={false}>
           No tasks yet. Anything added here carries its own due date, team and assignee,
-          and shows up in this record’s history when it changes.
+          can hold sub-tasks and a checklist, and shows up in this record’s history when it changes.
         </Text>
       )}
 
       {tasks.length > 0 && (
         <ul className="task-list">
-          {tasks.map(t => {
-            const overdue = t.dueDate != null && isTaskLive(t.status) && t.dueDate < today;
+          {ordered.map(({ task: t, child }) => {
+            const taskLines = linesByTask.get(t.id) ?? [];
+            const isOpen = open === t.id;
+            const live = isTaskLive(t.status);
             return (
-              <li key={t.id} className={t.status === "done" ? "is-done" : undefined}>
+              <li key={t.id} className={[t.status === "done" ? "is-done" : "", child ? "is-child" : ""].filter(Boolean).join(" ") || undefined}>
                 {/* One click to finish, one to undo. The database stamps who and when
                     on the way through, and clears both on the way back. */}
                 <input
@@ -155,17 +205,24 @@ export function TasksPanel({
                 <div className="task-body">
                   <Text type="text2" element="div" ellipsis={false} className="task-name">
                     {t.name}
+                    {/* Health as a word, from the view — never computed here. */}
+                    {live && t.health !== "no_due_date" && (
+                      <span className={`health is-${t.health}`} style={{ marginLeft: 8 }}>{TASK_HEALTH_LABELS[t.health]}</span>
+                    )}
                   </Text>
                   <div className="task-meta">
-                    {/* Due, and whether it has passed. Overdue is said in words as well
-                        as colour — a red date is invisible to a screen reader and to
-                        about one man in twelve. */}
-                    {t.dueDate && (
-                      <Text type="text3" color={overdue ? undefined : "secondary"} element="span"
-                        className={overdue ? "task-overdue" : undefined}>
-                        Due {new Date(t.dueDate + "T00:00:00").toLocaleDateString()}
-                        {overdue && " · overdue"}
+                    {t.dueEffective && (
+                      <Text type="text3" color={t.health === "overdue" ? undefined : "secondary"} element="span"
+                        className={t.health === "overdue" ? "task-overdue" : undefined}>
+                        Due {fmt(t.dueEffective)}{t.dueDate == null && t.expectedDays != null ? ` (${t.expectedDays} days from start)` : ""}
+                        {t.health === "overdue" && " · overdue"}
                       </Text>
+                    )}
+                    {live && t.atRiskDate && t.health === "on_track" && (
+                      <Text type="text3" color="secondary" element="span">at risk from {fmt(t.atRiskDate)}</Text>
+                    )}
+                    {t.startedAt && live && (
+                      <Text type="text3" color="secondary" element="span">started {fmt(t.startedAt)}</Text>
                     )}
                     {t.assigneeName && (
                       <Text type="text3" color="secondary" element="span">{t.assigneeName}</Text>
@@ -175,6 +232,12 @@ export function TasksPanel({
                     )}
                     {t.isExternal && (
                       <Text type="text3" color="secondary" element="span">waiting on someone outside Lofty</Text>
+                    )}
+                    {t.subtaskTotal > 0 && (
+                      <Text type="text3" color="secondary" element="span">{t.subtaskDone}/{t.subtaskTotal} sub-tasks</Text>
+                    )}
+                    {t.checklistTotal > 0 && (
+                      <Text type="text3" color="secondary" element="span">{t.checklistDone}/{t.checklistTotal} checklist</Text>
                     )}
                     {t.status === "done" && t.completedByName && (
                       <Text type="text3" color="secondary" element="span">
@@ -206,16 +269,16 @@ export function TasksPanel({
                     />
                     <Button
                       kind="tertiary" size="small"
-                      aria-expanded={open === t.id}
-                      aria-label={`${open === t.id ? "Hide" : "Show"} who is doing ${t.name}`}
-                      onClick={() => setOpen(open === t.id ? null : t.id)}
+                      aria-expanded={isOpen}
+                      aria-label={`${isOpen ? "Hide" : "Show"} the details of ${t.name}`}
+                      onClick={() => setOpen(isOpen ? null : t.id)}
                     >
-                      {open === t.id ? "Less" : "More"}
+                      {isOpen ? "Less" : "More"}
                     </Button>
                   </div>
                 )}
 
-                {can("user") && open === t.id && (
+                {can("user") && isOpen && (
                   <div className="task-more">
                     <Select
                       className="task-control"
@@ -235,6 +298,31 @@ export function TasksPanel({
                       value={t.owningTeam}
                       onChange={v => run(() => repo.updateTask(t.id, { owningTeam: v as TeamId | null }))}
                     />
+                    {/* The same two numbers a process has (0081). Blank is "no agreed
+                        duration", never zero; the database refuses a lead longer than
+                        the duration and says so in its own words. */}
+                    <label className="task-external">
+                      <Text type="text3" element="span">Expected</Text>
+                      <input type="number" min={0} inputMode="numeric" className="pf-input task-days"
+                        aria-label={`Expected days for ${t.name}`} defaultValue={t.expectedDays ?? ""}
+                        onBlur={e => { const v = e.target.value.trim() === "" ? null : Number(e.target.value); if (v !== t.expectedDays) run(() => repo.updateTask(t.id, { expectedDays: v })); }} />
+                      <Text type="text3" element="span">days</Text>
+                    </label>
+                    <label className="task-external">
+                      <Text type="text3" element="span">At risk</Text>
+                      <input type="number" min={0} inputMode="numeric" className="pf-input task-days"
+                        aria-label={`At-risk lead days for ${t.name}`} defaultValue={t.atRiskLeadDays ?? ""}
+                        onBlur={e => { const v = e.target.value.trim() === "" ? null : Number(e.target.value); if (v !== t.atRiskLeadDays) run(() => repo.updateTask(t.id, { atRiskLeadDays: v })); }} />
+                      <Text type="text3" element="span">days before due</Text>
+                    </label>
+                    {t.startedAt && (
+                      <label className="task-external">
+                        <Text type="text3" element="span">Started</Text>
+                        <input type="date" className="date-input" aria-label={`Start date of ${t.name}`}
+                          defaultValue={t.startedAt.slice(0, 10)}
+                          onChange={e => { if (e.target.value) run(() => repo.updateTask(t.id, { startedAt: e.target.value + "T09:00:00" })); }} />
+                      </label>
+                    )}
                     {/* Kept apart from Blocked on purpose: council's statutory 28 days
                         are not Design running late, and a report that adds the two
                         together says the wrong team is slow. */}
@@ -246,6 +334,13 @@ export function TasksPanel({
                       />
                       <Text type="text3" element="span">Waiting on someone outside Lofty</Text>
                     </label>
+                    {!child && (
+                      <Button kind="tertiary" size="small" disabled={busy}
+                        aria-expanded={subFor === t.id}
+                        onClick={() => { setSubFor(subFor === t.id ? null : t.id); setSubDraft(""); }}>
+                        {subFor === t.id ? "Cancel sub-task" : "Add a sub-task"}
+                      </Button>
+                    )}
                     {/* Admin-only by policy. Hidden below that so nobody is offered a
                         button the database will refuse — courtesy, not security. */}
                     {can("admin") && (
@@ -256,6 +351,54 @@ export function TasksPanel({
                       </Button>
                     )}
                   </div>
+                )}
+
+                {can("user") && subFor === t.id && (
+                  <div className="task-sub-composer">
+                    <input className="pf-input" aria-label={`Name of the new sub-task under ${t.name}`}
+                      placeholder="Add a sub-task…" value={subDraft} autoFocus
+                      onChange={e => setSubDraft(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") addSub(t); }} />
+                    <Button size="small" disabled={busy || !subDraft.trim()} onClick={() => addSub(t)}>Add sub-task</Button>
+                  </div>
+                )}
+
+                {/* The checklist: shown whenever it has lines, or when the task is open
+                    so a line can be added. Ticking stamps who and when in the database. */}
+                {(taskLines.length > 0 || isOpen) && (
+                  <>
+                    {taskLines.length > 0 && (
+                      <ul className="task-checklist" aria-label={`Checklist for ${t.name}`}>
+                        {taskLines.map(l => (
+                          <li key={l.id}>
+                            <input type="checkbox" checked={l.isDone} disabled={busy || !can("user")}
+                              aria-label={`${l.isDone ? "Untick" : "Tick"} ${l.text}`}
+                              onChange={e => run(() => repo.updateTaskChecklistItem(l.id, { isDone: e.target.checked }))} />
+                            <Text type="text3" element="span" className={l.isDone ? "is-ticked" : undefined} ellipsis={false}>{l.text}</Text>
+                            {l.isDone && l.doneByName && l.doneAt && (
+                              <Text type="text3" color="secondary" element="span">{l.doneByName} · {fmt(l.doneAt)}</Text>
+                            )}
+                            {can("user") && isOpen && (
+                              <Button kind="tertiary" size="xs" className="task-line-remove" disabled={busy}
+                                aria-label={`Remove the line ${l.text}`}
+                                onClick={() => run(() => repo.deleteTaskChecklistItem(l.id))}>
+                                Remove
+                              </Button>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {can("user") && isOpen && (
+                      <div className="task-add-line">
+                        <input className="pf-input" aria-label={`New checklist line for ${t.name}`}
+                          placeholder="Add a checklist line…" value={lineDraft[t.id] ?? ""}
+                          onChange={e => setLineDraft(d => ({ ...d, [t.id]: e.target.value }))}
+                          onKeyDown={e => { if (e.key === "Enter") addLine(t); }} />
+                        <Button size="small" kind="secondary" disabled={busy || !(lineDraft[t.id] ?? "").trim()} onClick={() => addLine(t)}>Add line</Button>
+                      </div>
+                    )}
+                  </>
                 )}
               </li>
             );

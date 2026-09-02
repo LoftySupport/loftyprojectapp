@@ -41,12 +41,23 @@ import {
  * recorded, and "when did this row last change" still has an answer.
  */
 export const AUDIT_NOISE = new Set([
-  "job_updated_at", "job_updated_by",
-  "project_updated_at", "project_updated_by",
-  "profile_updated_at", "profile_updated_by",
-  "address_updated_at", "address_updated_by",
-  "job_stage_entered_at", "project_stage_entered_at"
+  "job_stage_entered_at", "project_stage_entered_at",
+  // The value's own stamp pair: who recorded it is the line's author, not a change.
+  "property_value_set_at", "property_value_set_by"
 ]);
+
+/**
+ * Since 0080 every table is audited, so the noise rule is the convention itself rather
+ * than a list: every table's touch pair is `<table>_updated_at` / `<table>_updated_by`.
+ */
+export const isNoise = (column: string): boolean =>
+  AUDIT_NOISE.has(column) || column.endsWith("_updated_at") || column.endsWith("_updated_by");
+
+/** Names the row cannot carry: a process run's process, a property value's label. */
+export interface SubjectNames {
+  process: Map<string, string>;
+  property: Map<string, string>;
+}
 
 /** One field that moved, with both sides already rendered for reading. */
 export interface FieldChange {
@@ -152,7 +163,7 @@ export function changesBetween(
   const before = snap.old_row ?? {};
   const after = snap.new_row ?? {};
   const columns = Object.keys(after).filter(
-    k => !AUDIT_NOISE.has(k) && String(before[k] ?? "") !== String(after[k] ?? "")
+    k => !isNoise(k) && String(before[k] ?? "") !== String(after[k] ?? "")
   );
 
   return columns.map(column => {
@@ -171,10 +182,36 @@ export function changesBetween(
 
 /** Where the record a line is about lives, so the subject can be a link to it. */
 export function recordLink(
-  table: string, row: Record<string, unknown> | null
+  table: string, row: Record<string, unknown> | null, names?: SubjectNames
 ): { subject: string; href: string | null } {
   if (!row) return { subject: "", href: null };
+  // Where a change on a job's or project's dependent lives: the record it belongs to.
+  const home = row.job_id != null ? `/jobs/${String(row.job_id)}`
+    : row.project_id != null ? `/projects/${String(row.project_id)}` : null;
   switch (table) {
+    case "tasks":
+      return { subject: `task “${String(row.task_name ?? "")}”`, href: home };
+    case "task_checklist_items":
+      return { subject: `checklist item “${String(row.task_checklist_item_text ?? "")}”`, href: null };
+    case "process_runs": {
+      const name = names?.process.get(String(row.process_id ?? "")) ?? "a process";
+      const attempt = Number(row.process_run_attempt ?? 1);
+      return { subject: `process ${name}${attempt > 1 ? ` (attempt ${attempt})` : ""}`, href: home };
+    }
+    case "property_values": {
+      const label = names?.property.get(String(row.property_def_key ?? "")) ?? String(row.property_def_key ?? "a property");
+      return { subject: label, href: home };
+    }
+    case "comments":
+      return { subject: "a comment", href: home };
+    case "documents":
+      return { subject: `document “${String(row.document_name ?? "")}”`, href: null };
+    case "variations":
+      return { subject: `variation ${String(row.variation_number ?? "")}`, href: home };
+    case "property_defs":
+      return { subject: `property definition “${String(row.property_def_label ?? row.property_def_key ?? "")}”`, href: "/setup/properties" };
+    case "processes":
+      return { subject: `process definition “${String(row.process_name ?? "")}”`, href: "/setup/processes" };
     case "jobs": {
       const id = row.job_id == null ? "" : String(row.job_id);
       return { subject: id, href: id ? `/jobs/${id}` : null };
@@ -195,6 +232,26 @@ export function recordLink(
     }
     case "addresses":
       return { subject: String(row.consolidated_address ?? ""), href: null };
+    // Maintenance (0084): everything on a request opens the request in the Maintenance tab.
+    case "maintenance_requests": {
+      const id = row.maintenance_request_id == null ? "" : String(row.maintenance_request_id);
+      return { subject: `maintenance request ${String(row.maintenance_request_number ?? "")}`, href: id ? `/maintenance?request=${id}` : null };
+    }
+    case "maintenance_items": {
+      const id = row.maintenance_request_id == null ? "" : String(row.maintenance_request_id);
+      return { subject: `maintenance item “${String(row.maintenance_item_description ?? "")}”`, href: id ? `/maintenance?request=${id}` : null };
+    }
+    case "maintenance_assignments":
+      return { subject: "a maintenance offer", href: null };
+    case "maintenance_messages": {
+      const id = row.maintenance_request_id == null ? "" : String(row.maintenance_request_id);
+      const dir = String(row.maintenance_message_direction ?? "");
+      return { subject: dir === "in" ? "an incoming maintenance message" : dir === "out" ? "an outgoing maintenance message" : "a maintenance note", href: id ? `/maintenance?request=${id}` : null };
+    }
+    case "maintenance_categories":
+      return { subject: `maintenance category “${String(row.maintenance_category_name ?? "")}”`, href: "/setup/maintenance" };
+    case "maintenance_settings":
+      return { subject: "the maintenance settings", href: "/setup/maintenance" };
     default:
       return { subject: "", href: null };
   }
@@ -203,9 +260,19 @@ export function recordLink(
 /** The verb for a row that is not a field-by-field update. */
 export function headline(snap: AuditSnapshot): string | null {
   if (snap.operation === "INSERT") {
-    return snap.table_name === "projects" ? "opened" : "created";
+    switch (snap.table_name) {
+      case "projects": return "opened";
+      case "process_runs": return "started";
+      case "property_values": return "recorded";
+      case "comments": return "added";
+      case "tasks": return "added";
+      case "maintenance_requests": return "logged";
+      case "maintenance_assignments": return "offered";
+      case "maintenance_messages": return "recorded";
+      default: return "created";
+    }
   }
-  if (snap.operation === "DELETE") return "deleted";
+  if (snap.operation === "DELETE") return snap.table_name === "property_values" ? "cleared" : "deleted";
   return null;
 }
 

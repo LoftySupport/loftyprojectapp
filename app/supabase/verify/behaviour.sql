@@ -329,10 +329,10 @@ select 'last_login_at recorded on the profile: ' ||
        (select (profile_last_login_at is not null)::text
           from profiles where profile_email='signin-test@lofty.com.au');
 
-select event_type, (occurred_at is not null) as has_time
+select login_activity_event_type, (login_activity_at is not null) as has_time
 from login_activity
-where email = 'signin-test@lofty.com.au'
-order by event_type;
+where login_activity_email = 'signin-test@lofty.com.au'
+order by login_activity_event_type;
 
 -- ---------------------------------------------------------------------------
 -- 36. An address says which place it means
@@ -549,3 +549,300 @@ select case
       and coalesce(array_to_string(c.reloptions, ','), '') not like '%security_invoker=%'
   )
 end;
+
+-- ============================================================================
+-- 39. Every table is audited, and a change knows which record it was on (0080)
+--
+-- The allowlist inside log_activity_audit() meant a trigger could be attached and log
+-- nothing — 0043's property_defs, found in 0077. The function has no list now, and this
+-- asserts the trigger is on every table in public except the six that are logs, so the
+-- table created next month fails here the day it is created without one.
+-- ============================================================================
+\echo '--- 39. every table carries the audit trigger, and a task change carries its job and project'
+select case
+  when not exists (
+    select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relkind = 'r'
+      and c.relname <> all (private.audit_exempt_tables())
+      and not exists (select 1 from pg_trigger t where t.tgrelid = c.oid and t.tgname = 'trg_activity_audit_row'))
+  then 'ok  every non-log table in public carries trg_activity_audit_row'
+  else 'FAIL: tables without the audit trigger: ' || (
+    select string_agg(c.relname, ', ' order by c.relname)
+    from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relkind = 'r'
+      and c.relname <> all (private.audit_exempt_tables())
+      and not exists (select 1 from pg_trigger t where t.tgrelid = c.oid and t.tgname = 'trg_activity_audit_row'))
+end;
+
+-- The three renamed tables conform to tablename_attribute, and so does everything else:
+-- every column in public is prefixed by its table's singular name, or is a foreign key
+-- keeping its parent's name. Asserted once over information_schema rather than by eye.
+select case when count(*) = 0
+  then 'ok  every column in public is tablename_attribute (or a foreign key keeping its parent''s name)'
+  else 'FAIL: columns off the naming convention: ' || string_agg(t || '.' || c, ', ' order by t, c) end
+from (
+  select c.table_name t, c.column_name c
+  from information_schema.columns c
+  join information_schema.tables tb on tb.table_schema = c.table_schema and tb.table_name = c.table_name and tb.table_type = 'BASE TABLE'
+  where c.table_schema = 'public'
+    and c.column_name not like regexp_replace(regexp_replace(regexp_replace(c.table_name, 'sses$', 'ss'), 'ies$', 'y'), '([^s])s$', '\1') || '\_%'
+    and c.column_name not in (
+      select kcu.column_name from information_schema.key_column_usage kcu
+      join information_schema.table_constraints tc using (constraint_name, table_schema)
+      where tc.constraint_type = 'FOREIGN KEY' and tc.table_schema = 'public')
+    and c.column_name not in ('project_id', 'job_id', 'profile_id', 'team_id', 'task_id', 'variation_id', 'process_id',
+                              'document_id', 'comment_id', 'tag_id', 'address_id', 'property_def_key', 'feedback_id',
+                              'process_run_id', 'process_task_id', 'pipeline_id', 'pipeline_stage_id', 'release_id', 'roadmap_phase_id')
+) x;
+
+-- A task's change lands with the job it is on AND that job's project, resolved through the
+-- task, so a project's history includes work on its jobs.
+insert into tasks (job_id, task_name) values ('1106-002', 'behaviour probe task 0080');
+update tasks set task_status = 'in_progress' where task_name = 'behaviour probe task 0080';
+select case when count(*) = 1
+  then 'ok  a task update is audited with activity_audit_job_id 1106-002 and its project 1106'
+  else 'FAIL: expected 1 audited task update carrying job and project, found ' || count(*) end
+from activity_audit
+where activity_audit_table = 'tasks' and activity_audit_operation = 'UPDATE'
+  and activity_audit_job_id = '1106-002' and activity_audit_project_id = 1106
+  and activity_audit_new_row ->> 'task_name' = 'behaviour probe task 0080';
+
+-- A property value recorded on a job is audited the same way — the row carries job_id
+-- directly, and 0077's history table is still written beside it.
+select case when count(*) >= 1
+  then 'ok  property_values carries the audit trigger (a recorded value is a change)'
+  else 'FAIL: property_values is not audited' end
+from pg_trigger t where t.tgrelid = 'property_values'::regclass and t.tgname = 'trg_activity_audit_row';
+delete from tasks where task_name = 'behaviour probe task 0080';
+
+-- ============================================================================
+-- 40. Tasks know their health, checklists are copied, a stage counts its milestones (0081)
+-- ============================================================================
+\echo '--- 40. task_display derives due and health; instantiation copies days and checklist lines; stage_completion counts'
+insert into tasks (job_id, task_name, task_expected_days, task_at_risk_lead_days)
+values ('1106-002', 'behaviour probe 0081', 7, 2);
+update tasks set task_status = 'in_progress' where task_name = 'behaviour probe 0081';
+update tasks set task_started_at = now() - interval '5 days' where task_name = 'behaviour probe 0081';
+select case when task_health = 'at_risk' and task_due_effective = current_date + 2
+  then 'ok  a 7-day task with a 2-day lead, 5 days in, reads at_risk and due in 2 days'
+  else 'FAIL: expected at_risk due today+2, got ' || task_health || ' due ' || coalesce(task_due_effective::text, 'null') end
+from task_display where task_name = 'behaviour probe 0081';
+
+insert into task_checklist_items (task_id, task_checklist_item_text)
+select task_id, 'probe line' from tasks where task_name = 'behaviour probe 0081';
+update task_checklist_items set task_checklist_item_is_done = true where task_checklist_item_text = 'probe line';
+select case when task_checklist_total = 1 and task_checklist_done = 1
+  then 'ok  task_display counts the ticked checklist line'
+  else 'FAIL: task_display counted ' || task_checklist_total || ' lines, ' || task_checklist_done || ' done' end
+from task_display where task_name = 'behaviour probe 0081';
+select case when task_checklist_item_done_at is not null and task_checklist_item_done_by is null
+  then 'ok  ticking as the owner stamps the time and leaves the person null — never a stand-in'
+  else 'FAIL: done_at/done_by not stamped as expected' end
+from task_checklist_items where task_checklist_item_text = 'probe line';
+
+-- A template line with expected days and a checklist line, instantiated onto a run.
+insert into processes (process_key, process_name, process_stage, process_scope, process_position)
+values ('behaviour_probe_0081', 'Behaviour probe 0081', 'Construction', 'job', 999)
+on conflict (process_key) do nothing;
+insert into process_tasks (process_id, process_task_name, process_task_expected_days)
+select process_id, 'probe template task', 4 from processes where process_key = 'behaviour_probe_0081';
+insert into process_task_checklist_items (process_task_id, process_task_checklist_item_text)
+select process_task_id, 'probe template line' from process_tasks where process_task_name = 'probe template task';
+insert into process_runs (process_id, job_id, process_run_status)
+select process_id, '1106-002', 'in_progress' from processes where process_key = 'behaviour_probe_0081';
+select instantiate_process_tasks(process_run_id) as made
+from process_runs r join processes p using (process_id) where p.process_key = 'behaviour_probe_0081';
+select case when t.task_expected_days = 4 and d.task_checklist_total = 1
+  then 'ok  instantiation copied the template''s 4 expected days and its checklist line'
+  else 'FAIL: instantiated task has ' || coalesce(t.task_expected_days::text, 'null') || ' days and ' || d.task_checklist_total || ' lines' end
+from tasks t join task_display d using (task_id)
+where t.task_name = 'probe template task';
+
+-- stage_completion: the probe process is open on 1106-002's Construction stage.
+select case when processes_open >= 1 and processes_total >= processes_open
+  then 'ok  stage_completion sees the open probe process on 1106-002 / Construction (' || processes_open || ' of ' || processes_total || ' open)'
+  else 'FAIL: stage_completion reads ' || processes_open || ' open of ' || processes_total end
+from stage_completion where job_id = '1106-002' and stage = 'Construction';
+
+select case when exists (select 1 from property_defs where property_def_key = 'sitebook_id' and property_def_scope = 'job')
+  then 'ok  sitebook_id is a job-level property definition'
+  else 'FAIL: sitebook_id not seeded' end;
+
+-- Left as found. process_runs does not cascade from processes (a run is history), so the
+-- probe's run and its instantiated tasks go first.
+delete from tasks where process_run_id in (select process_run_id from process_runs r join processes p using (process_id) where p.process_key = 'behaviour_probe_0081');
+delete from process_runs where process_id in (select process_id from processes where process_key = 'behaviour_probe_0081');
+delete from processes where process_key = 'behaviour_probe_0081';
+delete from tasks where task_name = 'behaviour probe 0081';
+
+-- ============================================================================
+-- 41. Contacts show their company beside them; a party on a run belongs to its job (0082)
+-- ============================================================================
+\echo '--- 41. contact_display resolves company, role, primary email; a run-level party surfaces on the job'
+insert into companies (company_name, company_abn) values ('Behaviour Plumbing 0082', '53004085616');
+insert into contacts (contact_first_name, contact_last_name) values ('Behaviour', 'Plumber 0082');
+insert into contact_methods (contact_id, contact_method_kind, contact_method_value, contact_method_is_primary)
+select contact_id, 'email', 'Behaviour.Plumber@Example.com', true from contacts where contact_last_name = 'Plumber 0082';
+insert into contact_methods (contact_id, contact_method_kind, contact_method_value)
+select contact_id, 'email', 'second@example.com' from contacts where contact_last_name = 'Plumber 0082';
+insert into company_contacts (company_id, contact_id, company_contact_job_role)
+select co.company_id, c.contact_id, 'Plumber' from companies co, contacts c
+ where co.company_name = 'Behaviour Plumbing 0082' and c.contact_last_name = 'Plumber 0082';
+insert into contact_classifications (contact_id, classification_id)
+select contact_id, 'contractor' from contacts where contact_last_name = 'Plumber 0082';
+select case when contact_company_name = 'Behaviour Plumbing 0082' and contact_job_role = 'Plumber'
+             and contact_primary_email = 'Behaviour.Plumber@Example.com' and contact_classification_ids = array['contractor']
+  then 'ok  contact_display: company beside the person, their role there, the PRIMARY email of two, the classification'
+  else 'FAIL: contact_display read ' || coalesce(contact_company_name, 'no company') || ' / ' || coalesce(contact_job_role, 'no role') || ' / ' || coalesce(contact_primary_email, 'no email') end
+from contact_display where contact_last_name = 'Plumber 0082';
+
+-- Ending the employment takes the company off the person without losing the row.
+update company_contacts set company_contact_ended_on = current_date
+ where contact_id = (select contact_id from contacts where contact_last_name = 'Plumber 0082');
+select case when contact_company_name is null
+  then 'ok  ending the employment clears the company beside the person; the history row stays'
+  else 'FAIL: an ended employment still shows ' || contact_company_name end
+from contact_display where contact_last_name = 'Plumber 0082';
+
+-- A party on a process run of 1106-002 lists under the job.
+insert into processes (process_key, process_name, process_stage, process_scope, process_position)
+values ('behaviour_probe_0082', 'Behaviour probe 0082', 'Construction', 'job', 998) on conflict (process_key) do nothing;
+insert into process_runs (process_id, job_id, process_run_status)
+select process_id, '1106-002', 'in_progress' from processes where process_key = 'behaviour_probe_0082';
+insert into record_parties (process_run_id, company_id, party_role_id)
+select r.process_run_id, co.company_id, 'contractor'
+  from process_runs r join processes p using (process_id), companies co
+ where p.process_key = 'behaviour_probe_0082' and co.company_name = 'Behaviour Plumbing 0082';
+select case when count(*) = 1
+  then 'ok  a party on a process run surfaces on its job (record_job_id 1106-002, process named)'
+  else 'FAIL: expected 1 run-level party under 1106-002, found ' || count(*) end
+from record_party_display where record_job_id = '1106-002' and process_name = 'Behaviour probe 0082';
+
+-- Deleting a company that is a party is refused: end the party instead.
+do $$
+begin
+  begin
+    delete from companies where company_name = 'Behaviour Plumbing 0082';
+    raise warning 'FAIL: a company with an open party was deleted';
+  exception when foreign_key_violation then raise notice 'ok  a company on a record cannot be deleted; the party is ended instead';
+  end;
+end $$;
+
+-- Left as found.
+delete from record_parties where company_id = (select company_id from companies where company_name = 'Behaviour Plumbing 0082');
+delete from process_runs where process_id in (select process_id from processes where process_key = 'behaviour_probe_0082');
+delete from processes where process_key = 'behaviour_probe_0082';
+delete from company_contacts where contact_id = (select contact_id from contacts where contact_last_name = 'Plumber 0082');
+delete from contacts where contact_last_name = 'Plumber 0082';
+delete from companies where company_name = 'Behaviour Plumbing 0082';
+
+-- ============================================================================
+-- 42. Notifications: assigned fires once to the assignee; the scan fires once a day (0083)
+-- ============================================================================
+\echo '--- 42. a task assignment notifies its assignee once, in-app sent and email queued; the scan does not repeat itself'
+insert into tasks (job_id, task_name, task_assignee_id)
+select '1106-002', 'behaviour probe 0083', profile_id from profiles where profile_email = 'behaviour-test@lofty.com.au';
+select case when count(*) = 1 then 'ok  one task_assigned notification for the assignee'
+  else 'FAIL: ' || count(*) || ' task_assigned notifications' end
+from notifications n join tasks t using (task_id) where t.task_name = 'behaviour probe 0083' and n.notification_type_id = 'task_assigned';
+select case when count(*) filter (where notification_delivery_channel = 'in_app' and notification_delivery_status = 'sent') = 1
+             and count(*) filter (where notification_delivery_channel = 'email' and notification_delivery_status = 'queued') = 1
+  then 'ok  in_app sent on the spot, email queued for the worker'
+  else 'FAIL: deliveries were ' || string_agg(notification_delivery_channel || '=' || notification_delivery_status, ', ') end
+from notification_deliveries d join notifications n using (notification_id) join tasks t using (task_id)
+where t.task_name = 'behaviour probe 0083' and n.notification_type_id = 'task_assigned';
+
+update tasks set task_status = 'in_progress', task_expected_days = 2 where task_name = 'behaviour probe 0083';
+update tasks set task_started_at = now() - interval '9 days' where task_name = 'behaviour probe 0083';
+select notify_scan() as first_scan \gset
+select notify_scan() as second_scan \gset
+-- The owning team and the managers hear too (their own rows); the assignee's row is the one counted.
+select case when count(*) = 1 then 'ok  two scans, one task_overdue row for the assignee — the dedupe key holds for the day'
+  else 'FAIL: ' || count(*) || ' task_overdue rows for the assignee after two scans' end
+from notifications n join tasks t using (task_id) join profiles p on p.profile_id = n.profile_id
+where t.task_name = 'behaviour probe 0083' and n.notification_type_id = 'task_overdue' and p.profile_email = 'behaviour-test@lofty.com.au';
+-- 7 days late passes the managers' after_days of 5: a manager-or-above also hears.
+select case when count(*) >= 1 then 'ok  seven days late escalates to a manager (after_days 5)'
+  else 'FAIL: no manager heard about a task 7 days overdue' end
+from notifications n join tasks t using (task_id) join profiles p on p.profile_id = n.profile_id
+where t.task_name = 'behaviour probe 0083' and n.notification_type_id = 'task_overdue' and p.profile_permission >= 'manager';
+delete from tasks where task_name = 'behaviour probe 0083';
+
+\echo '--- 43. maintenance: warranty from the handover run; a number per job; due and health from the category; the scan does not repeat; mail nobody can match is refused'
+-- Handover completed 40 days ago: inside the settings'' three months.
+insert into process_runs (process_id, job_id, process_run_status, process_run_completed_at)
+select process_id, '1106-002', 'complete', now() - interval '40 days' from processes where process_key = 'handover';
+select case when job_is_in_warranty and job_warranty_ends_on = ((now() - interval '40 days')::date + interval '3 months')::date
+  then 'ok  job_warranty: handed over 40 days ago, in warranty until handover + 3 months'
+  else 'FAIL: job_warranty said in_warranty=' || job_is_in_warranty || ' ends ' || job_warranty_ends_on end
+from job_warranty where job_id = '1106-002';
+
+insert into maintenance_categories (maintenance_category_id, maintenance_category_name, party_role_id, maintenance_category_sla_days, maintenance_category_at_risk_lead_days)
+values ('probe_tiling_0084', 'Probe tiling', 'contractor', 7, 2);
+insert into contacts (contact_first_name, contact_last_name) values ('Probe', 'Reporter 0084');
+insert into contact_methods (contact_id, contact_method_kind, contact_method_value, contact_method_is_primary)
+select contact_id, 'email', 'reporter0084@example.com', true from contacts where contact_last_name = 'Reporter 0084';
+-- Reported 6 days ago on a 7-day SLA with a 2-day lead: due tomorrow, at risk since yesterday.
+insert into maintenance_requests (job_id, maintenance_request_source, maintenance_request_reported_by_contact_id, maintenance_request_reported_at,
+                                  maintenance_request_summary, maintenance_category_id, maintenance_request_owner_profile_id)
+select '1106-002', 'email', contact_id, now() - interval '6 days', 'behaviour probe 0084 cracked tile', 'probe_tiling_0084',
+       (select profile_id from profiles where profile_email = 'behaviour-test@lofty.com.au')
+  from contacts where contact_last_name = 'Reporter 0084';
+-- Reported 10 days ago: three days over.
+insert into maintenance_requests (job_id, maintenance_request_source, maintenance_request_reported_at, maintenance_request_summary, maintenance_category_id, maintenance_request_owner_profile_id)
+values ('1106-002', 'phone', now() - interval '10 days', 'behaviour probe 0084 loose grout', 'probe_tiling_0084',
+        (select profile_id from profiles where profile_email = 'behaviour-test@lofty.com.au'));
+select case when string_agg(maintenance_request_number, ',' order by maintenance_request_number) = '1106-002-M1,1106-002-M2'
+  then 'ok  requests numbered 1106-002-M1 and 1106-002-M2'
+  else 'FAIL: numbered ' || string_agg(maintenance_request_number, ',' order by maintenance_request_number) end
+from maintenance_requests where job_id = '1106-002';
+select case when maintenance_request_due_on = (maintenance_request_reported_at at time zone 'Australia/Adelaide')::date + 7
+             and maintenance_request_at_risk_on = maintenance_request_due_on - 2
+             and maintenance_request_health = 'at_risk' and maintenance_request_is_warranty
+  then 'ok  M1: due = reported + 7, at risk = due − 2, health at_risk, inside warranty'
+  else 'FAIL: M1 due ' || maintenance_request_due_on || ' at-risk ' || maintenance_request_at_risk_on || ' health ' || maintenance_request_health || ' warranty ' || maintenance_request_is_warranty end
+from maintenance_request_display where maintenance_request_number = '1106-002-M1';
+select case when maintenance_request_health = 'overdue' then 'ok  M2: three days over its SLA reads overdue'
+  else 'FAIL: M2 health ' || maintenance_request_health end
+from maintenance_request_display where maintenance_request_number = '1106-002-M2';
+select case when maintenance_request_reported_by_email = 'reporter0084@example.com' then 'ok  the reporter''s email is resolved from contact_methods'
+  else 'FAIL: reporter email ' || coalesce(maintenance_request_reported_by_email, 'null') end
+from maintenance_request_display where maintenance_request_number = '1106-002-M1';
+
+select maintenance_scan() as first_maintenance_scan \gset
+select maintenance_scan() as second_maintenance_scan \gset
+select case when count(*) = 2 then 'ok  two scans, one maintenance_sla_breach row per request for the owner — the dedupe key holds for the day'
+  else 'FAIL: ' || count(*) || ' maintenance_sla_breach rows for the owner after two scans' end
+from notifications n join profiles p on p.profile_id = n.profile_id
+where n.notification_type_id = 'maintenance_sla_breach' and n.job_id = '1106-002' and p.profile_email = 'behaviour-test@lofty.com.au';
+-- Three days over passes the managers'' after_days of 3: a manager who is NOT the owner hears
+-- about M2 (the owner is an admin here and would hear as owner regardless — counting them
+-- would prove nothing), and nobody but the owner hears about M1, one day short of the lead.
+select case when count(*) filter (where n.notification_title like '1106-002-M2%') >= 1
+             and count(*) filter (where n.notification_title like '1106-002-M1%') = 0
+  then 'ok  three days over escalates to the managers (after_days 3); at risk stays with the owner'
+  else 'FAIL: managers other than the owner heard about M2 ' || count(*) filter (where n.notification_title like '1106-002-M2%')
+       || ' times and about M1 ' || count(*) filter (where n.notification_title like '1106-002-M1%') || ' times' end
+from notifications n join profiles p on p.profile_id = n.profile_id
+where n.notification_type_id = 'maintenance_sla_breach' and n.job_id = '1106-002'
+  and p.profile_permission >= 'manager' and p.profile_email <> 'behaviour-test@lofty.com.au';
+
+-- Inbound mail: the sender''s open request is found without a number; a stranger with no number is refused.
+select case when matched_by = 'sender' and maintenance_request_number = '1106-002-M1' then 'ok  mail from the reporter with no number lands on their open request'
+  else 'FAIL: matched_by ' || coalesce(matched_by, 'null') || ' on ' || coalesce(maintenance_request_number, 'null') end
+from receive_maintenance_email('graph-in-0084-a', 'reporter0084@example.com', 'the tile again', 'still cracked');
+do $$
+begin
+  perform receive_maintenance_email('graph-in-0084-b', 'stranger@example.com', 'hello', 'who is this');
+  raise warning 'FAIL: mail from a stranger with no request number was accepted';
+exception when others then
+  if sqlerrm like '%log it by hand%' then raise notice 'ok  mail from a stranger with no request number is refused, for a person to log';
+  else raise warning 'FAIL: unexpected refusing a stranger''s mail (%)', sqlerrm; end if;
+end $$;
+
+-- Left as found.
+delete from maintenance_requests where job_id = '1106-002';
+delete from notifications where notification_type_id like 'maintenance_%' and job_id = '1106-002';
+delete from maintenance_categories where maintenance_category_id = 'probe_tiling_0084';
+delete from contacts where contact_last_name = 'Reporter 0084';
+delete from process_runs where job_id = '1106-002' and process_id = (select process_id from processes where process_key = 'handover');

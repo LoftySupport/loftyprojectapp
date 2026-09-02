@@ -899,31 +899,38 @@ export const DICTIONARY: DictionaryEntry[] = [
   // ------------------------------------------------- activity_audit (built)
   // Added outside the numbered migrations. Documented here because it is real and
   // load-bearing — it is where stage history lives now that job_stages is gone.
-  e("activity_audit.id", "Audit entry",
-    "One row per change to a tracked table. The trg_activity_audit_row trigger fires after every insert, update and delete on profiles, addresses, projects and jobs — profile_teams was the fifth until 0022 folded it into profiles.teams.",
-    "integer", "Primary key, bigint identity. The only index on the table.",
-    "Written by log_activity_audit(); never by the app. Readable since 0058 by any active user, but only where table_name is in ('projects', 'jobs') — the rows this app renders as history. Everything else, profiles history above all, stays unreadable.",
-    "created", "Amber Beaumont — outside the migrations"),
-  e("activity_audit.table_name", "Table", "Which table changed, alongside schema_name.", "text", "Not null.",
+  e("activity_audit.activity_audit_id", "Audit entry",
+    "One row per insert, update or delete on EVERY table in public except the six that are themselves logs (0080 removed the allowlist that had kept it to twelve). Renamed from `id` in 0080 to join the tablename_attribute convention.",
+    "bigint", "Primary key, identity.",
+    "Written by log_activity_audit(); never by the app. Readable by any active user except restricted property values, internal comments and the two personal tables (Amber, 1 Sep: \"everything and everyone except for restricted fields\"); admins read all.",
+    "created", "Amber Beaumont — outside the migrations; renamed 0080"),
+  e("activity_audit.activity_audit_table", "Table", "Which table changed. Renamed from `table_name` in 0080.", "text", "Not null.",
     "Load-bearing since 0058: the read policy is table_name in ('projects', 'jobs'), so this column is what keeps 184 rows of profiles history out of a viewer's reach. Both directions were watched — a viewer reads 230 project and job rows and 0 of anything else; the same policy without the table list handed them the profiles history. Filtering by it is a sequential scan today — worth an index on (table_name, changed_at) now that every drawer open runs two of these queries.",
     "created", "Amber Beaumont — outside the migrations"),
-  e("activity_audit.operation", "Operation", "INSERT, UPDATE or DELETE.", "text", "Not null.", "—", "created", "Amber Beaumont — outside the migrations"),
-  e("activity_audit.old_row", "Before", "The whole row as it was, as jsonb. Null on insert.", "jsonb", "Nullable.",
+  e("activity_audit.activity_audit_operation", "Operation", "INSERT, UPDATE or DELETE. Renamed from `operation` in 0080.", "text", "Not null.", "—", "created", "Amber Beaumont — outside the migrations; renamed 0080"),
+  e("activity_audit.activity_audit_old_row", "Before", "The whole row as it was, as jsonb, credentials redacted. Null on insert. Renamed from `old_row` in 0080.", "jsonb", "Nullable.",
     "to_jsonb(old). Because it captures every column, old_row->>'stage' is where a job's previous stage is recorded.",
     "created", "Amber Beaumont — outside the migrations"),
-  e("activity_audit.new_row", "After", "The whole row as it became, as jsonb. Null on delete.", "jsonb", "Nullable.",
+  e("activity_audit.activity_audit_new_row", "After", "The whole row as it became, as jsonb. Null on delete. Renamed from `new_row` in 0080.", "jsonb", "Nullable.",
     "to_jsonb(new). new_row->>'stage' paired with changed_at is what replaces job_stages.entered_at.",
     "created", "Amber Beaumont — outside the migrations"),
-  e("activity_audit.changed_at", "Changed on", "When the change happened.", "timestamptz", "Not null.",
+  e("activity_audit.activity_audit_at", "Changed on", "When the change happened. Renamed from `changed_at` in 0080.", "timestamptz", "Not null.",
     "The timestamp any reconstruction of time-in-stage measures between.",
     "created", "Amber Beaumont — outside the migrations"),
-  e("activity_audit.changed_by", "Changed by", "The database role that made the change; jwt_sub carries the authenticated user.", "text", "Nullable.", "Paired with jwt_sub.", "created", "Amber Beaumont — outside the migrations"),
+  e("activity_audit.activity_audit_role", "Database role", "The database role that made the change (authenticated, postgres). Who the PERSON was is activity_audit_profile_id. Renamed from `changed_by` in 0080.", "text", "Not null.", "—", "created", "Amber Beaumont — outside the migrations; renamed 0080"),
+  e("activity_audit.activity_audit_jwt_sub", "Auth user", "auth.uid() as text at write time. Kept for rows older than activity_audit_profile_id and for the people-activity report. Renamed from `jwt_sub` in 0080.", "text", "Nullable. Default auth.uid()::text.", "Indexed with activity_audit_at.", "created", "Amber Beaumont — outside the migrations; renamed 0080"),
+  e("activity_audit.activity_audit_profile_id", "Who", "The person, as a profile, resolved from auth.uid() at write time (0080). Null for a migration, a seed, or a trigger with nobody behind it — never a stand-in.", "uuid", "Nullable. No FK: the history outlives the account.", "Indexed with activity_audit_at, newest first.", "created"),
+  e("activity_audit.activity_audit_job_id", "Job", "The job the change was on, resolved from the row at write time: directly, or through its task, variation, process run or comment (0080). Null when the change was not about a job.", "text", "Nullable. No FK: history outlives the record.", "Partial index (job, at desc). A job's Activity tab is this lookup across every table.", "created"),
+  e("activity_audit.activity_audit_project_id", "Project", "The project, the same way — and a job's change carries its project, so a project's history includes its jobs' (0080).", "integer", "Nullable. No FK.", "Partial index (project, at desc).", "created"),
+  e("activity_audit.activity_audit_origin", "Origin", "Where the write came from: `app`, or the slug a sync worker set in app.sync_origin (0080). The loop guard: a system's own changes are never sent back to it, and the feed names the integration as the actor.", "text", "Not null, default 'app'. CHECK: a slug.", "—", "created"),
 
   // -------------------------------------------------- login_activity (built)
-  e("login_activity.id", "Login entry", "One row per authentication event.", "integer", "Primary key, bigint identity.", "Written from auth.users by log_login_activity_from_auth_users().", "created", "Amber Beaumont — outside the migrations"),
-  e("login_activity.user_id", "User", "Who signed in.", "uuid", "Nullable. Indexed.", "References auth.users(id). Email is denormalised alongside it so the row survives account deletion.", "created", "Amber Beaumont — outside the migrations"),
-  e("login_activity.event_type", "Event", "What kind of authentication event it was.", "text", "Nullable.", "Details in metadata.", "created", "Amber Beaumont — outside the migrations"),
-  e("login_activity.occurred_at", "Occurred on", "When it happened.", "timestamptz", "Not null. Indexed descending.", "Indexed for \"most recent first\", which is how it is read.", "created", "Amber Beaumont — outside the migrations"),
+  e("login_activity.login_activity_id", "Login entry", "One row per authentication event. Renamed from `id` in 0080.", "bigint", "Primary key, identity.", "Written from auth.users by log_login_activity_from_auth_users(), rewritten in 0080 for the new names and proved by behaviour.sql §35.", "created", "Amber Beaumont — outside the migrations; renamed 0080"),
+  e("login_activity.login_activity_user_id", "User", "Who signed in (auth.users.id). Renamed from `user_id` in 0080.", "uuid", "Not null. Indexed.", "The email is denormalised alongside it so the row survives account deletion.", "created", "Amber Beaumont — outside the migrations; renamed 0080"),
+  e("login_activity.login_activity_email", "Email", "The address at the time, kept so the row outlives the account.", "text", "Nullable.", "—", "created", "Amber Beaumont — outside the migrations; renamed 0080"),
+  e("login_activity.login_activity_event_type", "Event", "SIGNUP or LOGIN. Renamed from `event_type` in 0080.", "text", "Not null.", "—", "created", "Amber Beaumont — outside the migrations; renamed 0080"),
+  e("login_activity.login_activity_at", "Occurred on", "When it happened. Renamed from `occurred_at` in 0080.", "timestamptz", "Not null. Indexed descending.", "Indexed for \"most recent first\", which is how it is read.", "created", "Amber Beaumont — outside the migrations; renamed 0080"),
+  e("login_activity.login_activity_metadata", "Details", "The provider and nothing else (0008 stopped it storing the auth.users row). Renamed from `metadata` in 0080.", "jsonb", "Nullable.", "—", "created", "Amber Beaumont — outside the migrations; renamed 0080"),
 
   // ------------------------------------------------------------------ activity
   e("activity.id", "Activity ID", "One feed for both events and comments — the UI interleaves them, so the schema should not keep them apart. Distinct from activity_audit: this is what people read, that is what the database records.", "uuid", "Primary key.", "—", "to_do", PROPOSED),
@@ -1067,6 +1074,312 @@ export const DICTIONARY: DictionaryEntry[] = [
   // ----------------------------------------------- tasks learn where they came from (0078)
   e("tasks.process_run_id", "Process run", "The run this task was instantiated for, when it was — a typed-in task has none.", "uuid", "Nullable. FK → process_runs ON DELETE CASCADE.", "0030 promised this column would arrive with the table it references. It did.", "created"),
   e("tasks.process_task_id", "Template line", "The template line this task was copied from, for \"which jobs skipped the frame check\".", "uuid", "Nullable. FK → process_tasks ON DELETE SET NULL — survives the template being deleted.", "—", "created"),
+  e("tasks.task_started_at", "Started", "When work began (0081) — the anchor of the clock. Stamped when the status first leaves \"to do\"; editable afterwards, never cleared by the database.", "timestamptz", "Nullable.", "Due, when nobody typed one, is this plus task_expected_days.", "created"),
+  e("tasks.task_expected_days", "Expected days", "How long it should take from its start (0081). Null is \"no agreed duration\", not zero: without it a task can be overdue but never at risk. Copied from the template line when a run is instantiated.", "integer", "Nullable. CHECK ≥ 0 (smallint).", "—", "created"),
+  e("tasks.task_at_risk_lead_days", "At-risk lead", "Days before due that the task reads at risk (0081) — a 7-day task with lead 2 is at risk from day 5. The same rule a process has.", "integer", "Nullable. CHECK ≥ 0 and ≤ task_expected_days (smallint).", "—", "created"),
+
+  // ------------------------------------------------------ task_checklist_items (0081)
+  e("task_checklist_items.task_checklist_item_id", "Checklist line", "One tick box under a task (0081). Deliberately not a task — no assignee, due date, status or dependencies.", "uuid", "Primary key, default gen_random_uuid().", "Read by every active user; users add, tick, edit and remove lines.", "created"),
+  e("task_checklist_items.task_id", "Task", "The task it sits under.", "uuid", "Not null. FK → tasks ON DELETE CASCADE. Indexed with position.", "—", "created"),
+  e("task_checklist_items.task_checklist_item_position", "Order", "Where in the list.", "integer", "Not null, default 0 (smallint).", "—", "created"),
+  e("task_checklist_items.task_checklist_item_text", "Line", "The words.", "text", "Not null. CHECK: not blank.", "—", "created"),
+  e("task_checklist_items.task_checklist_item_is_done", "Ticked", "Whether it is done. The trigger stamps done_at and done_by when it turns true and clears both when it turns false.", "boolean", "Not null, default false. CHECK: ticked = (done_at is not null).", "—", "created"),
+  e("task_checklist_items.task_checklist_item_done_at", "Ticked at", "When it was ticked.", "timestamptz", "Nullable, stamped by trigger.", "—", "created"),
+  e("task_checklist_items.task_checklist_item_done_by", "Ticked by", "Who ticked it — the signed-in person, or null for a migration.", "uuid", "Nullable. FK → profiles.", "—", "created"),
+
+  // ---------------------------------------------- process_task_checklist_items (0081)
+  e("process_task_checklist_items.process_task_checklist_item_id", "Template line", "One tick box on a template task (0081), copied to every run's task by instantiate_process_tasks().", "uuid", "Primary key.", "Managers write; every active user reads.", "created"),
+  e("process_task_checklist_items.process_task_id", "Template task", "The template line it belongs to.", "uuid", "Not null. FK → process_tasks ON DELETE CASCADE.", "—", "created"),
+  e("process_task_checklist_items.process_task_checklist_item_position", "Order", "Where in the list.", "integer", "Not null, default 0 (smallint).", "—", "created"),
+  e("process_task_checklist_items.process_task_checklist_item_text", "Line", "The words.", "text", "Not null. CHECK: not blank.", "—", "created"),
+
+  // ---------------------------------------------------------- task_display (0081)
+  e("task_display.task_due_effective", "Due", "The typed due date, or start + expected days when nobody typed one. Derived, never stored.", "view", "Null while neither is known.", "—", "created"),
+  e("task_display.task_at_risk_date", "At risk from", "Due minus the at-risk lead.", "view", "Null unless both are set.", "—", "created"),
+  e("task_display.task_health", "Health", "no_due_date · on_track · at_risk · overdue · done · cancelled — today against the two dates, the way process_run_display does it, so a card, a filter and a notification never disagree.", "view", "—", "—", "created"),
+  e("task_display.task_checklist_total", "Checklist lines", "How many tick boxes the task carries.", "view", "—", "Shown as 3/5 on the task.", "created"),
+  e("task_display.task_checklist_done", "Lines ticked", "How many of them are ticked.", "view", "—", "—", "created"),
+  e("task_display.task_subtask_total", "Sub-tasks", "How many tasks sit under this one.", "view", "—", "—", "created"),
+  e("task_display.task_subtask_done", "Sub-tasks done", "How many of those are done.", "view", "—", "—", "created"),
+
+  // ---------------------------------------------------------- parties (0082)
+  e("classifications.classification_id", "Classification", "What a contact or company IS to Lofty — client, contractor, supplier, consultant, authority, other (0082). A lookup managers edit; applied many-to-one because the same person can be two of them.", "text", "Primary key, a slug.", "Read by every active user; managers write.", "created"),
+  e("classifications.classification_name", "Name", "The word on screen.", "text", "Not null, unique, not blank.", "—", "created"),
+  e("classifications.classification_applies_to", "Applies to", "contact, company or both — Authority is a company, never a person.", "text", "Not null, default both. CHECK.", "—", "created"),
+  e("classifications.classification_position", "Order", "Where in the picker.", "integer", "Not null, default 0 (smallint).", "—", "created"),
+  e("classifications.classification_is_active", "Active", "Retired classifications keep their rows and leave the picker.", "boolean", "Not null, default true.", "—", "created"),
+
+  e("party_roles.party_role_id", "Party role", "What an external party is doing ON a record — purchaser, contractor, certifier, council… (0082). A lookup, so Plumber is never spelled four ways.", "text", "Primary key, a slug.", "Read by every active user; managers write.", "created"),
+  e("party_roles.party_role_name", "Name", "The word on screen.", "text", "Not null, unique.", "—", "created"),
+  e("party_roles.party_role_applies_to", "Applies to", "contact, company or both. Purchaser is a person; council is a company. A trigger refuses a company purchaser.", "text", "Not null, default both. CHECK.", "—", "created"),
+  e("party_roles.party_role_position", "Order", "Where in the picker.", "integer", "Not null, default 0 (smallint).", "—", "created"),
+  e("party_roles.party_role_is_active", "Active", "Retired roles keep their rows.", "boolean", "Not null, default true.", "—", "created"),
+
+  e("staff_roles.staff_role_id", "Staff role", "SiteBook's project roles as Lofty runs them (0082): SS Site Supervisor, CM Construction Manager, CA Contracts Administrator, CMA Construction & Maintenance Admin, SET Sales Estimator, AC Accounts, SEL Selections, DFT Drafting, SCH Scheduling, WM Workflow Manager, SA Sales Administrator.", "text", "Primary key, a slug.", "Read by every active user; managers write.", "created"),
+  e("staff_roles.staff_role_abbreviation", "Abbreviation", "The two- or three-letter code SiteBook prints beside a person.", "text", "Not null, unique. CHECK: 1–5 capitals.", "—", "created"),
+  e("staff_roles.staff_role_name", "Name", "The role spelled out.", "text", "Not null, unique.", "—", "created"),
+  e("staff_roles.staff_role_position", "Order", "SiteBook's order.", "integer", "Not null, default 0 (smallint).", "—", "created"),
+  e("staff_roles.staff_role_is_active", "Active", "Retired roles keep their rows.", "boolean", "Not null, default true.", "—", "created"),
+
+  e("companies.company_id", "Company", "An organisation Lofty deals with — a contractor, a supplier, a council, a client company (0082). One row however many people work there.", "uuid", "Primary key.", "Read by every active user; users create and edit; admins delete — and the FKs from record_parties refuse a delete while history exists.", "created"),
+  e("companies.company_name", "Name", "The legal or common name.", "text", "Not null, not blank. Unique on lower(trim(name)).", "—", "created"),
+  e("companies.company_trading_name", "Trading name", "The name on the ute, when it differs.", "text", "Nullable.", "—", "created"),
+  e("companies.company_abn", "ABN", "Australian Business Number, eleven digits, digits only — the app may show it spaced. Unique where present.", "text", "Nullable. CHECK: ^[0-9]{11}$. Partial unique index.", "The Xero connector will match on it.", "created"),
+  e("companies.company_address_id", "Address", "Where they are, as an addresses row — the same table a project's address lives in.", "uuid", "Nullable. FK → addresses.", "—", "created"),
+  e("companies.company_notes", "Notes", "Free text about the company.", "text", "Nullable.", "—", "created"),
+  e("companies.company_source", "Source", "Where the row came from: app, import, email, form, api, sitebook.", "text", "Not null, default app. CHECK.", "—", "created"),
+  e("companies.company_is_active", "Active", "Retired companies keep their rows and history.", "boolean", "Not null, default true.", "—", "created"),
+  e("companies.company_approved_at", "Signed off", "When a manager approved it (Amber, 2 Sep: users create, managers sign off). Null means usable but awaiting sign-off. A manager creating a company approves it by existing.", "timestamptz", "Nullable. CHECK: set together with approved_by.", "Only manager and above may change the pair (guard_party_approval).", "created"),
+  e("companies.company_approved_by", "Signed off by", "The manager, stamped from the session — never typed.", "uuid", "Nullable. FK → profiles.", "—", "created"),
+
+  e("contacts.contact_id", "Contact", "A person outside Lofty — a purchaser, a tradesperson, a council officer (0082). Names only: emails and phones are rows in contact_methods, classifications in contact_classifications, employment in company_contacts, what they do on a record in record_parties.", "uuid", "Primary key.", "Read by every active user; users create and edit; admins delete, refused while history exists.", "created"),
+  e("contacts.contact_first_name", "First name", "Required — the one thing always known.", "text", "Not null, not blank.", "—", "created"),
+  e("contacts.contact_last_name", "Last name", "Optional: a tradesperson known only as Bob is still a contact.", "text", "Nullable.", "—", "created"),
+  e("contacts.contact_full_name", "Full name", "Generated from the two parts, so it cannot drift.", "text", "Generated, stored. Trigram-indexed for search.", "—", "created"),
+  e("contacts.contact_preferred_name", "Preferred name", "What they like to be called. Null means use the first name.", "text", "Nullable.", "—", "created"),
+  e("contacts.contact_address_id", "Address", "Where they live or work, as an addresses row.", "uuid", "Nullable. FK → addresses.", "—", "created"),
+  e("contacts.contact_notes", "Notes", "Free text about the person.", "text", "Nullable.", "—", "created"),
+  e("contacts.contact_profile_id", "Login", "The whole provision for a contractor portal: the profile this person will sign in with, when that is built. Null for everyone today.", "uuid", "Nullable, unique. FK → profiles.", "—", "created"),
+  e("contacts.contact_source", "Source", "Where the row came from: app, import, email, form, api, sitebook.", "text", "Not null, default app. CHECK.", "—", "created"),
+  e("contacts.contact_is_active", "Active", "Retired contacts keep their rows and history.", "boolean", "Not null, default true.", "—", "created"),
+  e("contacts.contact_approved_at", "Signed off", "When a manager approved the contact. Null means usable but awaiting sign-off.", "timestamptz", "Nullable. CHECK: set together with approved_by.", "Only manager and above may change the pair.", "created"),
+  e("contacts.contact_approved_by", "Signed off by", "The manager, stamped from the session.", "uuid", "Nullable. FK → profiles.", "—", "created"),
+
+  e("contact_methods.contact_method_id", "Contact method", "One way to reach a contact or a company — email, phone, mobile, other — as rows, because people have several (0082).", "uuid", "Primary key.", "Read by every active user; users write.", "created"),
+  e("contact_methods.contact_id", "Contact", "Whose it is, when a person's.", "uuid", "Nullable. FK → contacts ON DELETE CASCADE. CHECK: exactly one of contact_id, company_id.", "—", "created"),
+  e("contact_methods.company_id", "Company", "Whose it is, when a company's.", "uuid", "Nullable. FK → companies ON DELETE CASCADE.", "—", "created"),
+  e("contact_methods.contact_method_kind", "Kind", "email, phone, mobile or other.", "text", "Not null. CHECK.", "—", "created"),
+  e("contact_methods.contact_method_value", "Value", "The address or number. Emails are checked for an @ and stored lower-case.", "text", "Not null, not blank. CHECK on emails.", "Indexed on lower(value) for search.", "created"),
+  e("contact_methods.contact_method_label", "Label", "work, home, after hours…", "text", "Nullable.", "—", "created"),
+  e("contact_methods.contact_method_is_primary", "Primary", "The one a notification goes to. One primary per kind per party — a partial unique index refuses a second.", "boolean", "Not null, default false.", "—", "created"),
+  e("contact_methods.contact_method_is_verified", "Verified", "Whether the address has been confirmed (a bounce-free send, a reply). For the notification worker.", "boolean", "Not null, default false.", "—", "created"),
+
+  e("contact_classifications.contact_id", "Contact", "Which contact carries the classification (0082).", "uuid", "Primary key with classification_id. FK → contacts ON DELETE CASCADE.", "Several rows per contact: a client who is also a contractor.", "created"),
+  e("contact_classifications.classification_id", "Classification", "Which one.", "text", "Primary key with contact_id. FK → classifications.", "—", "created"),
+  e("company_classifications.company_id", "Company", "Which company carries the classification (0082).", "uuid", "Primary key with classification_id. FK → companies ON DELETE CASCADE.", "—", "created"),
+  e("company_classifications.classification_id", "Classification", "Which one.", "text", "Primary key with company_id. FK → classifications.", "—", "created"),
+
+  e("company_contacts.company_contact_id", "Employment", "A person at a company, over time, with the job role they hold THERE (0082) — Bob Marsh is a fencer at Bob's Fencing and was a labourer at Wandi Plumbing.", "uuid", "Primary key.", "Read by every active user; users write.", "created"),
+  e("company_contacts.company_id", "Company", "Where.", "uuid", "Not null. FK → companies.", "—", "created"),
+  e("company_contacts.contact_id", "Contact", "Who.", "uuid", "Not null. FK → contacts.", "—", "created"),
+  e("company_contacts.company_contact_job_role", "Job role", "What they do at that company — the role Amber asked to record, kept here because it differs per company.", "text", "Nullable.", "Shown beside the person in the Contacts list.", "created"),
+  e("company_contacts.company_contact_is_primary", "Primary", "The company shown beside the person when they have several.", "boolean", "Not null, default false.", "—", "created"),
+  e("company_contacts.company_contact_started_on", "Started", "When they started there, if known.", "date", "Nullable.", "—", "created"),
+  e("company_contacts.company_contact_ended_on", "Ended", "When they left. Null is current; one current row per pair (partial unique index). Ending keeps the history.", "date", "Nullable. CHECK ≥ started.", "—", "created"),
+
+  e("record_parties.record_party_id", "Party on a record", "Who, from outside Lofty, is on a project, a job or a process run, and as what (0082): Priya Nair, purchaser, 1042-01; Okafor Electrical, electrician, the 2nd Fix run.", "uuid", "Primary key.", "Read by every active user; users write. The maintenance batch adds maintenance_request_id to the arc.", "created"),
+  e("record_parties.project_id", "Project", "The record, when a project.", "integer", "Nullable. FK → projects ON DELETE CASCADE. CHECK: exactly one of project_id, job_id, process_run_id.", "—", "created"),
+  e("record_parties.job_id", "Job", "The record, when a job.", "text", "Nullable. FK → jobs ON DELETE CASCADE.", "—", "created"),
+  e("record_parties.process_run_id", "Process run", "The record, when a run — the plumber on THIS job's plumbing, which is what the maintenance categories read.", "uuid", "Nullable. FK → process_runs ON DELETE CASCADE.", "—", "created"),
+  e("record_parties.contact_id", "Contact", "The person, if a person is named.", "uuid", "Nullable. FK → contacts (no cascade: refuses the contact's deletion while this exists). CHECK: at least one of contact_id, company_id.", "—", "created"),
+  e("record_parties.company_id", "Company", "The company, if one is named — alone, or with the person acting for it.", "uuid", "Nullable. FK → companies (no cascade).", "—", "created"),
+  e("record_parties.party_role_id", "Role", "What they are doing here.", "text", "Not null. FK → party_roles.", "A trigger refuses a person-only role on a company and vice versa.", "created"),
+  e("record_parties.record_party_engaged_by_company_id", "Engaged by", "Who brought them onto this record — a sub-contract is a fact about the engagement, not about the company.", "uuid", "Nullable. FK → companies.", "—", "created"),
+  e("record_parties.record_party_is_primary", "Primary", "The main one of several in the same role.", "boolean", "Not null, default false.", "—", "created"),
+  e("record_parties.record_party_started_on", "From", "When the engagement began.", "date", "Not null, default today.", "—", "created"),
+  e("record_parties.record_party_ended_on", "To", "When it ended. Null is current — and the same party in the same role on the same record is unique while current. Ending is how a party is removed.", "date", "Nullable. CHECK ≥ started.", "—", "created"),
+  e("record_parties.record_party_note", "Note", "Why, or anything else worth a line.", "text", "Nullable.", "—", "created"),
+
+  e("record_staff_roles.record_staff_role_id", "Staff role on a record", "Which Lofty person holds which SiteBook project role on which project or job (0082) — SS Atelio Storti on 1507.", "uuid", "Primary key.", "Read by every active user; managers write.", "created"),
+  e("record_staff_roles.project_id", "Project", "The record, when a project.", "integer", "Nullable. FK → projects ON DELETE CASCADE. CHECK: exactly one of project_id, job_id.", "—", "created"),
+  e("record_staff_roles.job_id", "Job", "The record, when a job.", "text", "Nullable. FK → jobs ON DELETE CASCADE.", "—", "created"),
+  e("record_staff_roles.staff_role_id", "Role", "Which role.", "text", "Not null. FK → staff_roles.", "—", "created"),
+  e("record_staff_roles.profile_id", "Person", "Who holds it.", "uuid", "Not null. FK → profiles.", "—", "created"),
+  e("record_staff_roles.record_staff_role_started_on", "From", "When they took it on.", "date", "Not null, default today.", "—", "created"),
+  e("record_staff_roles.record_staff_role_ended_on", "To", "When they handed it over. Null is current; one current row per person, role and record.", "date", "Nullable. CHECK ≥ started.", "—", "created"),
+
+  e("contact_display.contact_company_name", "Company", "The company beside the person — read from the current employment row (company_contacts where nothing has ended), a view and never a copy.", "view", "Null when they are at no company.", "—", "created"),
+  e("contact_display.contact_job_role", "Job role", "Their role at that company.", "view", "—", "—", "created"),
+  e("contact_display.contact_primary_email", "Email", "The primary email of possibly several.", "view", "—", "—", "created"),
+  e("contact_display.contact_primary_phone", "Phone", "The primary mobile, else the primary phone.", "view", "—", "—", "created"),
+  e("contact_display.contact_classification_ids", "Classifications", "Every classification the contact carries, in picker order.", "view", "—", "—", "created"),
+  e("contact_display.contact_open_parties", "On records", "How many records they are currently on.", "view", "—", "—", "created"),
+  e("company_display.company_primary_email", "Email", "The primary email of possibly several.", "view", "—", "—", "created"),
+  e("company_display.company_primary_phone", "Phone", "The primary phone.", "view", "—", "—", "created"),
+  e("company_display.company_classification_ids", "Classifications", "Every classification the company carries.", "view", "—", "—", "created"),
+  e("company_display.company_people_count", "People", "How many people currently work there.", "view", "—", "—", "created"),
+  e("company_display.company_open_parties", "On records", "How many records the company is on, as the party or as the one who engaged the party.", "view", "—", "—", "created"),
+  e("record_party_display.record_job_id", "Job", "The job a party is ultimately on — its own, or its process run's — so a job's drawer lists the trades on its runs too.", "view", "—", "—", "created"),
+  e("record_party_display.record_project_id", "Project", "The project, the same way.", "view", "—", "—", "created"),
+  e("record_party_display.process_name", "Process", "For a party on a run, which process.", "view", "—", "—", "created"),
+
+  // ---------------------------------------------------------- notifications (0083)
+  e("notification_types.notification_type_id", "Notification type", "What the app can tell somebody (0083): task_assigned, task_at_risk, task_overdue, process_at_risk, process_overdue, mention, stage_changed, working_drawings_changed, party_awaiting_sign_off, property_pushed. The slugs triggers and the scan name.", "text", "Primary key, a slug.", "Read by every active user; admins edit the defaults.", "created"),
+  e("notification_types.notification_type_name", "Name", "The words in settings and the inbox.", "text", "Not null, unique.", "—", "created"),
+  e("notification_types.notification_type_description", "Description", "When it fires, for the settings screen.", "text", "Nullable.", "—", "created"),
+  e("notification_types.notification_type_default_channels", "Default channels", "Which of in_app, email, teams, sms a person gets until they choose (Amber's defaults: assignments, mentions and arrivals in-app and email; overdue and at-risk the same; stage moves in-app). A text array.", "text", "Not null (text[]). CHECK: a subset of the four.", "—", "created"),
+  e("notification_types.notification_type_default_timing", "Default timing", "immediate, or digest — once a day at the person's digest time (07:30 unless they choose). Overdue and at-risk are digest; assignments, mentions and working drawings immediate (Amber, 2 Sep).", "text", "Not null. CHECK.", "—", "created"),
+  e("notification_types.notification_type_position", "Order", "Where in the settings list.", "integer", "Not null, default 0 (smallint).", "—", "created"),
+  e("notification_types.notification_type_is_active", "Active", "A retired type fires nothing.", "boolean", "Not null, default true.", "—", "created"),
+
+  e("notification_rules.notification_rule_id", "Notification rule", "Who hears a type (0083, Amber: \"who they go to\"): the assignee, the owning team, the engaged teams, the watchers, the managers, the mentioned person, or a named team or person.", "uuid", "Primary key.", "Read by every active user; admins edit.", "created"),
+  e("notification_rules.notification_type_id", "Type", "Which type the rule is for.", "text", "Not null. FK → notification_types ON DELETE CASCADE.", "—", "created"),
+  e("notification_rules.notification_rule_audience", "Audience", "assignee · owning_team · engaged_teams · watchers · managers · mentioned · specific_team · specific_person. Managers are the owning team's members at manager or above, else every manager.", "text", "Not null. CHECK.", "—", "created"),
+  e("notification_rules.team_id", "Team", "For specific_team.", "text", "Nullable. FK → teams. CHECK: set when the audience is specific_team.", "—", "created"),
+  e("notification_rules.profile_id", "Person", "For specific_person.", "uuid", "Nullable. FK → profiles.", "—", "created"),
+  e("notification_rules.notification_rule_after_days", "After days", "Escalation: fire only once the thing has been overdue this many days — \"overdue 5 days → managers\".", "integer", "Not null, default 0 (smallint). CHECK ≥ 0.", "—", "created"),
+  e("notification_rules.notification_rule_is_active", "Active", "A paused rule fires nothing.", "boolean", "Not null, default true.", "—", "created"),
+
+  e("notification_preferences.profile_id", "Person", "Whose choice (0083, Amber: \"selected in user settings\"). One row per person, type and channel; no row means the type's default.", "uuid", "Primary key with type and channel. FK → profiles ON DELETE CASCADE.", "Own rows only by RLS.", "created"),
+  e("notification_preferences.notification_type_id", "Type", "Which type.", "text", "Primary key part. FK → notification_types.", "—", "created"),
+  e("notification_preferences.notification_preference_channel", "Channel", "in_app, email, teams or sms.", "text", "Primary key part. CHECK.", "—", "created"),
+  e("notification_preferences.notification_preference_is_enabled", "On", "Whether this channel is on for this type.", "boolean", "Not null, default true.", "—", "created"),
+  e("notification_preferences.notification_preference_timing", "Timing", "immediate or digest; null means the type's default.", "text", "Nullable. CHECK.", "—", "created"),
+  e("notification_preferences.notification_preference_digest_time", "Digest time", "When the daily digest comes, Adelaide time; null means 07:30. A time of day.", "text", "Nullable (time).", "—", "created"),
+
+  e("record_watchers.record_watcher_id", "Watch", "\"Follow this job\" (0083): a person on a record, an audience the rules can name.", "uuid", "Primary key.", "Own rows only; every active user reads who watches.", "created"),
+  e("record_watchers.profile_id", "Person", "Who watches.", "uuid", "Not null. FK → profiles ON DELETE CASCADE. Unique with the record.", "—", "created"),
+  e("record_watchers.project_id", "Project", "The record, when a project.", "integer", "Nullable. FK → projects ON DELETE CASCADE. CHECK: exactly one of project_id, job_id.", "—", "created"),
+  e("record_watchers.job_id", "Job", "The record, when a job.", "text", "Nullable. FK → jobs ON DELETE CASCADE.", "—", "created"),
+
+  e("notifications.notification_id", "Notification", "One thing said to one person (0083) — the inbox. Written only by private.notify(), from triggers and the 15-minute scan; a person reads and marks read their own.", "bigint", "Primary key, identity.", "No client insert; own rows only.", "created"),
+  e("notifications.profile_id", "Person", "Whose inbox.", "uuid", "Not null. FK → profiles ON DELETE CASCADE. Indexed newest-first and by unread.", "—", "created"),
+  e("notifications.notification_type_id", "Type", "What kind of thing was said.", "text", "Not null. FK → notification_types.", "—", "created"),
+  e("notifications.project_id", "Project", "The record it points at, when a project. No FK: the inbox outlives the record.", "integer", "Nullable.", "—", "created"),
+  e("notifications.job_id", "Job", "The record it points at, when a job.", "text", "Nullable.", "—", "created"),
+  e("notifications.task_id", "Task", "The task, when about one.", "uuid", "Nullable.", "—", "created"),
+  e("notifications.process_run_id", "Process run", "The run, when about one.", "uuid", "Nullable.", "—", "created"),
+  e("notifications.comment_id", "Comment", "The comment, for a mention.", "uuid", "Nullable.", "—", "created"),
+  e("notifications.notification_title", "Title", "The line in the bell — \"Frame inspection is overdue\".", "text", "Not null.", "—", "created"),
+  e("notifications.notification_body", "Body", "The sentence under it, with the record and the date.", "text", "Nullable.", "—", "created"),
+  e("notifications.notification_href", "Link", "Where clicking goes, as an app path.", "text", "Nullable.", "—", "created"),
+  e("notifications.notification_dedupe_key", "Dedupe key", "One per person per thing said: task_overdue:<task>:<date>, so a daily scan writes a new row tomorrow and never a repeat today.", "text", "Not null. Unique with profile_id.", "—", "created"),
+  e("notifications.notification_read_at", "Read", "When the person read it. Null is the bell's badge.", "timestamptz", "Nullable.", "mark_my_notifications_read() sets it for the caller's own rows.", "created"),
+
+  e("notification_deliveries.notification_delivery_id", "Delivery", "One channel's send of one notification (0083) — the outbox. in_app is sent as written; email, teams and sms wait for the worker (supabase/functions/deliver-notifications).", "bigint", "Primary key, identity.", "The person reads their own; admins read all; the worker writes through two service-role RPCs.", "created"),
+  e("notification_deliveries.notification_id", "Notification", "Which notification.", "bigint", "Not null. FK → notifications ON DELETE CASCADE.", "—", "created"),
+  e("notification_deliveries.notification_delivery_channel", "Channel", "in_app, email, teams or sms.", "text", "Not null. CHECK.", "—", "created"),
+  e("notification_deliveries.notification_delivery_status", "Status", "queued (send now) · held (a digest, until next_attempt_at) · sending (claimed) · sent · failed (after five tries) · skipped.", "text", "Not null, default queued. CHECK.", "Partial index on queued and held by next_attempt_at.", "created"),
+  e("notification_deliveries.notification_delivery_address", "Address", "The email or account the send goes to, resolved when the row was written.", "text", "Nullable.", "—", "created"),
+  e("notification_deliveries.notification_delivery_attempts", "Attempts", "How many times the worker has tried.", "integer", "Not null, default 0 (smallint).", "Backoff 5, 25, 125 minutes; failed after five.", "created"),
+  e("notification_deliveries.notification_delivery_next_attempt_at", "Next attempt", "When it is next due — now for immediate, the digest time for held, later after a failure.", "timestamptz", "Not null, default now().", "—", "created"),
+  e("notification_deliveries.notification_delivery_sent_at", "Sent", "When it went.", "timestamptz", "Nullable.", "—", "created"),
+  e("notification_deliveries.notification_delivery_external_id", "Provider id", "Graph's request or message id, the receipt.", "text", "Nullable.", "—", "created"),
+  e("notification_deliveries.notification_delivery_error", "Error", "The last failure, in the provider's words.", "text", "Nullable.", "—", "created"),
+
+  // ------------------------------------------------------ stage_completion (0081)
+  e("stage_completion.stage", "Stage", "One row per record and lifecycle stage: the active processes of that stage against the record's latest run of each.", "view", "—", "Read by the board, the drawer and the report so they count the same way.", "created"),
+  e("stage_completion.processes_open", "Open processes", "Processes with no run yet, or whose latest run is neither complete nor not applicable.", "view", "—", "Zero means the stage is complete.", "created"),
+  e("stage_completion.milestones_passed", "Milestones passed", "Of the stage's milestone processes, how many have a complete or not-applicable latest run. A count beside a total — never a percentage (24 Aug).", "view", "—", "—", "created"),
+  e("stage_completion.stage_is_complete", "Stage complete", "True when nothing in the stage is open. Informational: a person moves the lifecycle (no auto-advance, 24 Aug).", "view", "—", "—", "created"),
+
+  // ---------------------------------------------------------- maintenance (0084)
+  e("maintenance_settings.maintenance_setting_id", "Settings row", "The one row (0084). A CHECK pins the key to 1 so a second row cannot exist.", "integer", "Primary key, smallint, CHECK = 1.", "Everyone reads; managers edit.", "created"),
+  e("maintenance_settings.maintenance_setting_warranty_months", "Warranty months", "How long after handover a job is in warranty (Amber, 2 Sep: \"3 months is standard\"). Default 3; job_warranty derives the end date from it.", "integer", "smallint. Not null, default 3. CHECK > 0.", "Read by job_warranty and maintenance_request_display.", "created"),
+  e("maintenance_settings.maintenance_setting_offer_response_hours", "Hours to answer an offer", "How long a contractor has to answer an offer before maintenance_scan() tells the owner (default 48).", "integer", "smallint. Not null, default 48. CHECK > 0.", "Read by the scan and quoted in the offer email.", "created"),
+  e("maintenance_settings.maintenance_setting_reminder_days_before", "Reminder days before a visit", "How many days before a scheduled visit the reminders go \u2014 to the owner in-app and to the homeowner by email (default 1).", "integer", "smallint. Not null, default 1. CHECK >= 0.", "Read by maintenance_scan().", "created"),
+  e("maintenance_settings.maintenance_setting_intake_mailbox", "Intake mailbox", "The address homeowners write to \u2014 what the maintenance-inbound function reads. Null until Amber names it.", "text", "Nullable.", "Shown in Setup \u2192 Maintenance; nothing is invented for it.", "created"),
+  e("maintenance_settings.maintenance_setting_accept_link_days", "Accept link lives (days)", "How long a contractor's accept link works before it expires (default 14).", "integer", "smallint. Not null, default 14. CHECK > 0.", "Sets maintenance_assignment_token_expires_at at offer time.", "created"),
+  e("maintenance_settings.maintenance_setting_updated_at", "Updated", "When the row was last changed.", "timestamptz", "Not null, default now(). moddatetime trigger.", "\u2014", "created"),
+  e("maintenance_settings.maintenance_setting_updated_by", "Updated by", "Who changed it.", "uuid", "Nullable. FK \u2192 profiles.", "\u2014", "created"),
+  e("maintenance_categories.maintenance_category_id", "Category", "A trade and its clock (0084) \u2014 the slug. Empty on purpose: Amber said the categories come from the contractors on the jobs and the SLAs are hers to set in the app.", "text", "Primary key. CHECK: slug shape.", "Everyone reads; managers edit in Setup \u2192 Maintenance.", "created"),
+  e("maintenance_categories.maintenance_category_name", "Name", "What the category is called on screen.", "text", "Not null, unique. CHECK not blank.", "\u2014", "created"),
+  e("maintenance_categories.party_role_id", "Trade (party role)", "The party role that did this work on site \u2014 so the default repairer of an item in this category is that party on the job's construction runs (Amber, answer 3).", "text", "Nullable. FK \u2192 party_roles ON UPDATE CASCADE.", "Read by maintenance_item_display as maintenance_item_original_trade.", "created"),
+  e("maintenance_categories.team_id", "Lofty team", "Which team owns requests in this category.", "text", "Nullable. FK \u2192 teams ON UPDATE CASCADE.", "\u2014", "created"),
+  e("maintenance_categories.maintenance_category_sla_days", "SLA days", "How many days from report to due for this category. Null means no SLA \u2014 a real state, shown as such.", "integer", "smallint. Nullable. CHECK >= 0.", "guard_maintenance_request() sets due from it when nobody typed one.", "created"),
+  e("maintenance_categories.maintenance_category_at_risk_lead_days", "At-risk lead", "How many days before due a request in this category reads at risk (Amber: \"7 days, at 5 days at risk\" \u2192 SLA 7, lead 2).", "integer", "smallint. Nullable. CHECK >= 0 and, when both are set, lead <= SLA (maintenance_categories_lead_within_sla, proved biting).", "Read by maintenance_request_display for health.", "created"),
+  e("maintenance_categories.maintenance_category_position", "Order", "Where it sits in the list.", "integer", "smallint. Not null, default 0.", "\u2014", "created"),
+  e("maintenance_categories.maintenance_category_is_active", "Active", "Retiring a category is a flag; requests keep their history.", "boolean", "Not null, default true.", "\u2014", "created"),
+  e("maintenance_categories.maintenance_category_created_at", "Created", "\u2014", "timestamptz", "Not null, default now().", "\u2014", "created"),
+  e("maintenance_categories.maintenance_category_created_by", "Created by", "\u2014", "uuid", "Nullable. FK \u2192 profiles. Stamped by trigger.", "\u2014", "created"),
+  e("maintenance_categories.maintenance_category_updated_at", "Updated", "\u2014", "timestamptz", "Not null, default now(). moddatetime trigger.", "\u2014", "created"),
+  e("maintenance_categories.maintenance_category_updated_by", "Updated by", "\u2014", "uuid", "Nullable. FK \u2192 profiles.", "\u2014", "created"),
+  e("jobs.job_maintenance_seq_high_water", "Maintenance sequence high-water", "The highest maintenance request sequence ever handed out on this job (0084) \u2014 the counter behind 1042-01-M3. Never goes down, so a deleted request's number is never reused.", "integer", "smallint. Not null, default 0.", "Bumped by assign_maintenance_request_number() under the job row's lock.", "created"),
+  e("maintenance_requests.maintenance_request_id", "Request", "The ticket (0084): one per thing a homeowner reported on a handed-over job, however it arrived.", "uuid", "Primary key.", "Everyone active reads; users create and update; admins delete.", "created"),
+  e("maintenance_requests.job_id", "Job", "Which job the request is about. Always a job \u2014 maintenance is per house.", "text", "Not null. FK \u2192 jobs ON UPDATE CASCADE.", "\u2014", "created"),
+  e("maintenance_requests.maintenance_request_sequence", "Sequence", "The n in <job>-Mn, handed out by trigger from the job's high-water mark.", "integer", "smallint. Set by trigger.", "\u2014", "created"),
+  e("maintenance_requests.maintenance_request_number", "Number", "1042-01-M3 (Amber, answer 9: \"yes\"). Stamped at insert and never regenerated \u2014 it goes in emails.", "text", "Unique. Set by trigger.", "How inbound mail is matched to its request.", "created"),
+  e("maintenance_requests.maintenance_request_source", "Source", "How it arrived: email, phone, form, portal, api, staff (Amber: \"manual email or phone call and forms. Think of every option\").", "text", "Not null, default staff. CHECK on the six.", "\u2014", "created"),
+  e("maintenance_requests.maintenance_request_reported_by_contact_id", "Reported by", "The homeowner (or whoever rang) as a contact \u2014 so their email and phone come from contact_methods and the closing mail has somewhere to go.", "uuid", "Nullable. FK \u2192 contacts.", "Inbound mail is matched to its sender through this.", "created"),
+  e("maintenance_requests.maintenance_request_reported_at", "Reported", "When it was reported \u2014 the start of the SLA clock, and what the warranty flag compares with handover.", "timestamptz", "Not null, default now().", "\u2014", "created"),
+  e("maintenance_requests.maintenance_request_summary", "Summary", "One line: what is wrong.", "text", "Not null. CHECK not blank (proved biting).", "\u2014", "created"),
+  e("maintenance_requests.maintenance_request_description", "Description", "The longer account \u2014 the email body, the notes from the call.", "text", "Nullable.", "\u2014", "created"),
+  e("maintenance_requests.maintenance_request_priority", "Priority", "urgent, high, normal, low.", "text", "Not null, default normal. CHECK.", "\u2014", "created"),
+  e("maintenance_requests.maintenance_request_status", "Status", "new \u2192 triaged \u2192 in_progress / waiting_on_contractor / waiting_on_client \u2192 completed \u2192 closed, or rejected. Closing is refused by trigger while an item is open (Amber, answer 2: Completed \u2192 Closed).", "text", "Not null, default new. CHECK on the eight. CHECK: closed or rejected exactly when closed_at is set.", "A reply to a closed request reopens it to in_progress.", "created"),
+  e("maintenance_requests.maintenance_category_id", "Category", "The trade, which sets the SLA.", "text", "Nullable. FK \u2192 maintenance_categories ON UPDATE CASCADE.", "\u2014", "created"),
+  e("maintenance_requests.maintenance_request_due_on", "Due", "Reported + the category's SLA days, set by trigger unless somebody typed a date. Null means no SLA.", "date", "Nullable.", "Health is derived from it in the display view.", "created"),
+  e("maintenance_requests.maintenance_request_owner_profile_id", "Owner", "The Lofty person driving the request \u2014 the assignee the notification rules mean.", "uuid", "Nullable. FK \u2192 profiles.", "\u2014", "created"),
+  e("maintenance_requests.maintenance_request_closed_at", "Closed", "Stamped by trigger when the status becomes closed or rejected; cleared when it reopens.", "timestamptz", "Nullable, paired with status by CHECK.", "\u2014", "created"),
+  e("maintenance_requests.maintenance_request_closed_by", "Closed by", "Who closed it.", "uuid", "Nullable. FK \u2192 profiles. Stamped by trigger.", "\u2014", "created"),
+  e("maintenance_requests.maintenance_request_closed_reason", "Closed reason", "Why \u2014 quoted in the homeowner's closing email.", "text", "Nullable.", "\u2014", "created"),
+  e("maintenance_requests.maintenance_request_external_ref", "External reference", "A SiteBook or other system's id for the same request, for the sync batch.", "text", "Nullable.", "\u2014", "created"),
+  e("maintenance_requests.maintenance_request_created_at", "Created", "\u2014", "timestamptz", "Not null, default now().", "\u2014", "created"),
+  e("maintenance_requests.maintenance_request_created_by", "Created by", "\u2014", "uuid", "Nullable. FK \u2192 profiles. Stamped by trigger.", "\u2014", "created"),
+  e("maintenance_requests.maintenance_request_updated_at", "Updated", "\u2014", "timestamptz", "Not null, default now(). moddatetime trigger.", "\u2014", "created"),
+  e("maintenance_requests.maintenance_request_updated_by", "Updated by", "\u2014", "uuid", "Nullable. FK \u2192 profiles.", "\u2014", "created"),
+  e("maintenance_items.maintenance_item_id", "Item", "One defect, one trade (0084): the lines inside a request \u2014 \"leaking ensuite tap, cracked laundry tile\" is one email and two items.", "uuid", "Primary key.", "Users write.", "created"),
+  e("maintenance_items.maintenance_request_id", "Request", "Which request.", "uuid", "Not null. FK \u2192 maintenance_requests ON DELETE CASCADE.", "\u2014", "created"),
+  e("maintenance_items.maintenance_item_position", "Order", "Where it sits in the request.", "integer", "smallint. Not null, default 0.", "\u2014", "created"),
+  e("maintenance_items.maintenance_item_description", "Description", "What is wrong.", "text", "Not null. CHECK not blank.", "\u2014", "created"),
+  e("maintenance_items.maintenance_item_location", "Location", "Where in the house \u2014 ensuite, laundry, garage.", "text", "Nullable.", "\u2014", "created"),
+  e("maintenance_items.maintenance_category_id", "Category", "The trade for this item; the default repairer is that party on the job.", "text", "Nullable. FK \u2192 maintenance_categories ON UPDATE CASCADE.", "\u2014", "created"),
+  e("maintenance_items.maintenance_item_status", "Status", "open \u2192 assigned \u2192 scheduled \u2192 done, or not_applicable. Follows the item's assignment by trigger.", "text", "Not null, default open. CHECK on the five. CHECK: done exactly when completed_at is set.", "\u2014", "created"),
+  e("maintenance_items.maintenance_item_is_warranty", "Warranty item", "Whether Lofty covers it. Null means not yet decided \u2014 not \"no\".", "boolean", "Nullable.", "\u2014", "created"),
+  e("maintenance_items.maintenance_item_cost", "Cost", "What the repair cost, if known.", "numeric", "numeric(12,2). Nullable. CHECK >= 0.", "\u2014", "created"),
+  e("maintenance_items.maintenance_item_completed_at", "Done", "Stamped by trigger when the status becomes done; cleared if it is reopened.", "timestamptz", "Nullable, paired with status by CHECK.", "\u2014", "created"),
+  e("maintenance_items.maintenance_item_completed_by", "Done by", "Who marked it done.", "uuid", "Nullable. FK \u2192 profiles. Stamped by trigger.", "\u2014", "created"),
+  e("maintenance_items.maintenance_item_created_at", "Created", "\u2014", "timestamptz", "Not null, default now().", "\u2014", "created"),
+  e("maintenance_items.maintenance_item_created_by", "Created by", "\u2014", "uuid", "Nullable. FK \u2192 profiles.", "\u2014", "created"),
+  e("maintenance_items.maintenance_item_updated_at", "Updated", "\u2014", "timestamptz", "Not null, default now(). moddatetime trigger.", "\u2014", "created"),
+  e("maintenance_items.maintenance_item_updated_by", "Updated by", "\u2014", "uuid", "Nullable. FK \u2192 profiles.", "\u2014", "created"),
+  e("maintenance_assignments.maintenance_assignment_id", "Offer", "An offer of one item to one contractor (0084). A decline keeps its row; the next offer is a new one.", "uuid", "Primary key.", "Users write; offer_maintenance_item() is the usual way.", "created"),
+  e("maintenance_assignments.maintenance_item_id", "Item", "Which item.", "uuid", "Not null. FK \u2192 maintenance_items ON DELETE CASCADE. Partial unique: one offer per item while offered, accepted or scheduled (proved biting).", "\u2014", "created"),
+  e("maintenance_assignments.company_id", "Company", "The contractor's company.", "uuid", "Nullable. FK \u2192 companies. CHECK: company or contact (maintenance_assignments_names_somebody, proved biting).", "\u2014", "created"),
+  e("maintenance_assignments.contact_id", "Person", "The contractor as a person, when known.", "uuid", "Nullable. FK \u2192 contacts.", "\u2014", "created"),
+  e("maintenance_assignments.maintenance_assignment_status", "Status", "offered \u2192 accepted \u2192 scheduled \u2192 done, or declined / cancelled. The item follows it by trigger.", "text", "Not null, default offered. CHECK on the six.", "\u2014", "created"),
+  e("maintenance_assignments.maintenance_assignment_offered_at", "Offered", "When the offer went \u2014 what the unanswered-offer scan measures from.", "timestamptz", "Not null, default now().", "\u2014", "created"),
+  e("maintenance_assignments.maintenance_assignment_responded_at", "Answered", "When the contractor answered, by link or by phone.", "timestamptz", "Nullable.", "\u2014", "created"),
+  e("maintenance_assignments.maintenance_assignment_scheduled_for", "Scheduled for", "The visit time the contractor gave.", "timestamptz", "Nullable.", "maintenance_scan() sends the day-before reminders from it.", "created"),
+  e("maintenance_assignments.maintenance_assignment_note", "Note", "Lofty's note to the contractor, and their reply.", "text", "Nullable.", "\u2014", "created"),
+  e("maintenance_assignments.maintenance_assignment_token_hash", "Accept link (hash)", "The sha256 of the accept-link token. The token itself is never stored here; it is returned once to the caller and parked for the worker. Nulled when the link is used.", "text", "Nullable. Partial index.", "answer_maintenance_offer() looks the link up by this.", "created"),
+  e("maintenance_assignments.maintenance_assignment_token_expires_at", "Link expires", "When the accept link stops working (settings' accept_link_days after the offer).", "timestamptz", "Nullable.", "\u2014", "created"),
+  e("maintenance_assignments.maintenance_assignment_created_at", "Created", "\u2014", "timestamptz", "Not null, default now().", "\u2014", "created"),
+  e("maintenance_assignments.maintenance_assignment_created_by", "Created by", "\u2014", "uuid", "Nullable. FK \u2192 profiles.", "\u2014", "created"),
+  e("maintenance_assignments.maintenance_assignment_updated_at", "Updated", "\u2014", "timestamptz", "Not null, default now(). moddatetime trigger.", "\u2014", "created"),
+  e("maintenance_assignments.maintenance_assignment_updated_by", "Updated by", "\u2014", "uuid", "Nullable. FK \u2192 profiles.", "\u2014", "created"),
+  e("maintenance_messages.maintenance_message_id", "Message", "One entry in a request's thread (0084): what came in, what went out, what was said on the phone.", "uuid", "Primary key.", "Users write notes; triggers and RPCs write the rest.", "created"),
+  e("maintenance_messages.maintenance_request_id", "Request", "Which request's thread.", "uuid", "Not null. FK \u2192 maintenance_requests ON DELETE CASCADE.", "\u2014", "created"),
+  e("maintenance_messages.maintenance_assignment_id", "Offer", "The offer this message is about, when it is about one.", "uuid", "Nullable. FK \u2192 maintenance_assignments ON DELETE SET NULL.", "\u2014", "created"),
+  e("maintenance_messages.maintenance_message_direction", "Direction", "in (from outside), out (Lofty's, sent by the worker), note (said on the phone, decided in the office).", "text", "Not null. CHECK.", "\u2014", "created"),
+  e("maintenance_messages.maintenance_message_channel", "Channel", "email, sms, phone, form, portal, app.", "text", "Not null. CHECK.", "\u2014", "created"),
+  e("maintenance_messages.maintenance_message_from_contact_id", "From (contact)", "The outside sender, when matched to a contact.", "uuid", "Nullable. FK \u2192 contacts.", "\u2014", "created"),
+  e("maintenance_messages.maintenance_message_from_profile_id", "From (staff)", "The Lofty person who wrote a note.", "uuid", "Nullable. FK \u2192 profiles.", "\u2014", "created"),
+  e("maintenance_messages.maintenance_message_to_address", "To", "The address an outgoing message goes to, or an incoming one came from.", "text", "Nullable.", "\u2014", "created"),
+  e("maintenance_messages.maintenance_message_subject", "Subject", "The email subject.", "text", "Nullable.", "\u2014", "created"),
+  e("maintenance_messages.maintenance_message_body", "Body", "The words. An outgoing offer carries {{ACCEPT_LINK}} until the worker fills it.", "text", "Not null.", "\u2014", "created"),
+  e("maintenance_messages.maintenance_message_status", "Status", "received (came in) \u00b7 queued (for the worker) \u00b7 sending \u00b7 sent \u00b7 failed (after five tries) \u00b7 noted.", "text", "Not null, default received. CHECK. Partial index on queued outgoing by next_attempt_at.", "\u2014", "created"),
+  e("maintenance_messages.maintenance_message_attempts", "Attempts", "How many times the worker has tried to send it.", "integer", "smallint. Not null, default 0.", "Backoff 5, 25, 125 minutes.", "created"),
+  e("maintenance_messages.maintenance_message_next_attempt_at", "Next attempt", "When the worker should next try.", "timestamptz", "Not null, default now().", "\u2014", "created"),
+  e("maintenance_messages.maintenance_message_external_id", "External id", "Graph's message id \u2014 unique, so inbound mail is matched once and a reminder is queued once.", "text", "Nullable, unique.", "receive_maintenance_email() is idempotent on it.", "created"),
+  e("maintenance_messages.maintenance_message_error", "Error", "The last send failure, in the provider's words.", "text", "Nullable.", "\u2014", "created"),
+  e("maintenance_messages.maintenance_message_at", "When", "When it was sent, received or noted.", "timestamptz", "Not null, default now().", "\u2014", "created"),
+  e("maintenance_messages.maintenance_message_created_by", "Recorded by", "Who wrote the row, when a person did.", "uuid", "Nullable. FK \u2192 profiles. Stamped by trigger.", "\u2014", "created"),
+  e("maintenance_message_secrets.maintenance_message_id", "Message", "The queued offer email the token belongs to (0084).", "uuid", "Primary key. FK \u2192 maintenance_messages ON DELETE CASCADE.", "Service role only: RLS on, no policies, revoked from the API roles. Not audited.", "created"),
+  e("maintenance_message_secrets.maintenance_message_secret_token", "Token", "The accept-link token, held until the worker fills the link and sends; deleted on send.", "text", "Not null.", "Written only through private.park_maintenance_message_secret(); the RLS probe shows a user sees none.", "created"),
+  e("maintenance_message_secrets.maintenance_message_secret_created_at", "Parked", "\u2014", "timestamptz", "Not null, default now().", "\u2014", "created"),
+  e("record_parties.maintenance_request_id", "Maintenance request", "The record, when a maintenance request (0084) \u2014 the homeowner and the trades on it are parties like any other.", "uuid", "Nullable. FK \u2192 maintenance_requests ON DELETE CASCADE. Part of the exactly-one-record CHECK and the one-current unique index.", "\u2014", "created"),
+  e("document_links.maintenance_request_id", "Maintenance request", "The parent, when a photo or report belongs to a maintenance request (0084).", "uuid", "Nullable. FK \u2192 maintenance_requests ON DELETE CASCADE. Part of the exactly-one-parent CHECK.", "\u2014", "created"),
+
+  // ------------------------------------------------------ job_warranty (0084)
+  e("job_warranty.job_id", "Job", "One row per job.", "view", "\u2014", "Read by the job drawer's maintenance panel.", "created"),
+  e("job_warranty.job_handover_at", "Handed over", "The completion of the job's 7 - Handover run (latest attempt). Null until it completes \u2014 nobody types it.", "view", "\u2014", "\u2014", "created"),
+  e("job_warranty.job_warranty_ends_on", "Warranty ends", "Handover + maintenance_settings.warranty_months.", "view", "\u2014", "\u2014", "created"),
+  e("job_warranty.job_is_in_warranty", "In warranty", "Handed over, and today is not past the end.", "view", "\u2014", "\u2014", "created"),
+
+  // ------------------------------------------- maintenance_request_display (0084)
+  e("maintenance_request_display.maintenance_request_health", "Health", "no_sla \u00b7 on_track \u00b7 at_risk \u00b7 overdue \u00b7 complete \u00b7 closed, computed from today, due and the category's lead \u2014 the way process_run_display does it. Nothing stored.", "view", "\u2014", "The Maintenance tab's colour and word; maintenance_scan() reads it for the SLA notifications.", "created"),
+  e("maintenance_request_display.maintenance_request_at_risk_on", "At risk on", "Due \u2212 the category's lead.", "view", "\u2014", "\u2014", "created"),
+  e("maintenance_request_display.maintenance_request_is_warranty", "Warranty", "Reported on or before the job's warranty end.", "view", "\u2014", "\u2014", "created"),
+  e("maintenance_request_display.maintenance_request_reported_by_email", "Reporter's email", "The reporter's primary email from contact_methods.", "view", "\u2014", "\u2014", "created"),
+  e("maintenance_request_display.maintenance_request_reported_by_phone", "Reporter's phone", "Mobile first, then phone.", "view", "\u2014", "\u2014", "created"),
+  e("maintenance_request_display.maintenance_request_items_total", "Items", "How many items the request has.", "view", "\u2014", "Shown as done / total \u2014 a count, never a percentage.", "created"),
+  e("maintenance_request_display.maintenance_request_items_done", "Items done", "Done or not applicable.", "view", "\u2014", "\u2014", "created"),
+  e("maintenance_request_display.maintenance_request_offers_open", "Offers awaiting answer", "Offers still in offered.", "view", "\u2014", "\u2014", "created"),
+  e("maintenance_request_display.maintenance_request_next_visit", "Next visit", "The earliest scheduled visit still ahead.", "view", "\u2014", "\u2014", "created"),
+
+  // ---------------------------------------------- maintenance_item_display (0084)
+  e("maintenance_item_display.maintenance_item_original_trade", "Original trade", "Who did this trade on the job during construction, from record_parties on the job and its runs in the category's party role \u2014 the default repairer (Amber, answer 3).", "view", "\u2014", "Shown beside the Offer button so the right contractor is one click.", "created"),
+  e("maintenance_item_display.maintenance_assignment_status", "Current offer", "The item's current (or last) offer and its contractor, flattened onto the item.", "view", "\u2014", "\u2014", "created"),
 
   // ----------------------------------------------------- pipeline_stages (SLA)
   // The lifecycle's lookup (0029, reseeded 0035 and 0045). Only its two SLA columns are
@@ -1124,7 +1437,7 @@ export const DICTIONARY: DictionaryEntry[] = [
 
   // ------------------------------------------------------ user_preferences (0050)
   e("user_preferences.profile_id", "Whose preferences", "The person these belong to — and the key, so there is exactly one row each and no way to end up with two disagreeing about where somebody lands.", "uuid", "Primary key. FK → profiles(profile_id) ON DELETE CASCADE.", "Owner-only by RLS. Deliberately its own table rather than a column on profiles: authenticated holds UPDATE on every profiles column including profile_permission, so a self-row policy there would also open the permission ladder.", "created"),
-  e("user_preferences.user_preferences_payload", "Preferences", "The bag: landing page, default jobs view, and whatever joins them. Roams with the profile (Amber's Q9), so the site laptop opens the same app as the office one.", "jsonb", "Not null, default {}. CHECK: must be a JSON object.", "One bag rather than a column per preference — preferences are open-ended and a column each means a migration each. The app validates on read and falls back to the default for anything it does not recognise, so an unknown key is inert. localStorage keeps a copy for the first render, before the profile has loaded.", "created"),
+  e("user_preferences.user_preference_payload", "Preferences", "The bag: landing page, default jobs view, and whatever joins them. Roams with the profile (Amber's Q9), so the site laptop opens the same app as the office one.", "jsonb", "Not null, default {}. CHECK: must be a JSON object. Renamed from the plural user_preferences_payload in 0080.", "One bag rather than a column per preference — preferences are open-ended and a column each means a migration each. The app validates on read and falls back to the default for anything it does not recognise, so an unknown key is inert. localStorage keeps a copy for the first render, before the profile has loaded.", "created"),
 
   // ---------------------------------------------------------------- feedback (0052)
   e("feedback.feedback_id", "Report", "One bug or idea somebody sent from the footer (Amber, 28 Aug: \"this way I can track what needs to be implemented\").", "uuid", "Primary key, default gen_random_uuid().", "The widest write in the schema and one of its narrowest reads: anyone active may insert, only admin and above may select. The policies are split for exactly that, rather than one for-all.", "created"),
@@ -1230,7 +1543,7 @@ export const TABLE_DESCRIPTIONS: Record<string, string> = {
   activity:
     "The concept spec's one-table feed — events and comments together, because the UI interleaves them. The built schema answers the same need with two tables, comments and activity_events, interleaved on read; these entries are kept as the shape that was proposed before that split.",
   activity_audit:
-    "The forensic log. A trigger writes one row for every insert, update and delete on the tracked tables, whole rows as jsonb — which is where stage history lives now that job_stages is gone. Built outside the numbered migrations, and admin-only until 0058 gave every active user the projects and jobs slice of it: the job drawer's Activity panel and a project's Project activity read it directly, diffing old_row against new_row and naming the columns that moved. Updates where nothing but a touch column changed are dropped on the way out, or the feed would be three quarters \"job_updated_at changed\".",
+    "The change log. Since 0080 a trigger writes one row for every insert, update and delete on every table in public except the six that are themselves logs — whole rows before and after as jsonb, with the person, the job and the project extracted at write time so a record's history is an index lookup across tasks, process runs, property values, comments and the record itself. Readable by every active user except restricted property values, internal comments and the two personal tables; admins read all. The job drawer's Activity panel and a project's Project activity read it directly, diffing before against after and naming the columns that moved; touches where nothing but an updated-at stamp changed are dropped on the way out. Also the change feed the sync cursors will read, with activity_audit_origin as the loop guard.",
   activity_events:
     "The readable feed — \"moved this to Construction\" as a kind plus its nouns, rendered into a sentence by the app rather than stored as one. Append-only: triggers write it, nobody edits it, and neither it nor activity_audit can be derived from the other.",
   address_history:
@@ -1339,6 +1652,74 @@ export const TABLE_DESCRIPTIONS: Record<string, string> = {
     "Free labels for a board — \"Council hold\", \"Design variation\" — the same shape as teams and for the same reason: the list is data, it will change, and a retired tag must leave the pickers without breaking the records that carry it.",
   task_dependencies:
     "The edges between tasks — which one waits for which, with the lag carried on the edge because Lofty's process map puts its SLAs on the arrows, not the steps. Triggers refuse cycles and refuse edges between tasks on different records.",
+  classifications:
+    "What a contact or company IS to Lofty — client, contractor, supplier, consultant, authority, other (0082). A lookup managers edit; applied many-to-one through contact_classifications and company_classifications because a client can also be a contractor.",
+  party_roles:
+    "What an external party is doing on a record — purchaser, contractor, certifier, council… (0082). A lookup, so a role is never spelled four ways; a trigger keeps person-only roles off companies.",
+  staff_roles:
+    "SiteBook's project roles as Lofty runs them — SS, CM, CA, CMA, SET, AC, SEL, DFT, SCH, WM, SA (0082). Held on a project or job through record_staff_roles.",
+  companies:
+    "An organisation Lofty deals with (0082): name, trading name, an eleven-digit ABN, an address row. People are contacts joined through company_contacts; reach it through contact_methods; classified through company_classifications; signed off by a manager after a user creates it. The 21 August decision against external parties, reversed: maintenance made them first-class.",
+  contacts:
+    "A person outside Lofty (0082): names, notes, an address row, and contact_profile_id as the whole provision for a future contractor login. Everything else is rows in its own table — emails and phones, classifications, employment, what they do on a record — which is why the Contacts list is a view.",
+  contact_methods:
+    "How to reach a contact or a company (0082): email, phone, mobile, other, as rows because people have several, with one primary per kind so a notification has one definite address. Exclusive arc — a method belongs to a contact or a company, never both.",
+  contact_classifications:
+    "Which classifications a contact carries — several at once (0082).",
+  company_classifications:
+    "Which classifications a company carries — a plumbing company that is a contractor and a supplier (0082).",
+  company_contacts:
+    "A person at a company, over time, with the job role they hold there (0082). Ending a row keeps the history; one current row per pair. The company beside a person in the Contacts list is read from here.",
+  record_parties:
+    "Who, from outside Lofty, is on a project, a job or a process run, and as what (0082). A contact and/or a company in a party role; engaged_by names a sub-contract. Ending a row keeps the history and is how a party is removed — the FKs refuse a contact or company delete while one exists. A party on a construction run is what the maintenance categories will read: who did the plumbing here.",
+  record_staff_roles:
+    "Which Lofty person holds which SiteBook project role on which project or job (0082). Ending a row keeps the history.",
+  contact_display:
+    "A contact as the Contacts list reads them (0082): the person, primary email and phone, their current company and role there, classifications, how many records they are on. Derived from the normalised tables, never stored.",
+  company_display:
+    "A company as the Contacts list reads it (0082): name, ABN, primary email and phone, classifications, how many people work there and how many records it is on.",
+  record_party_display:
+    "A party on a record with its names resolved (0082): who, which company, which role, engaged by whom, and for a run-level party which process and which job that run is on.",
+  notification_types:
+    "What the app can tell somebody (0083) and the channels and timing a person gets until they choose: assignments, mentions and working-drawings changes immediate; overdue and at-risk in the 07:30 digest (Amber, 2 Sep). Admins edit.",
+  notification_rules:
+    "Who hears each type (0083, Amber: \"who they go to\"): assignee, owning team, engaged teams, watchers, managers, the mentioned person, or a named team or person — with after_days for escalation. Admins edit.",
+  notification_preferences:
+    "How each person hears each type on each channel (0083): on or off, immediate or digest, digest time. One row per person, type and channel; a table rather than the jsonb bag 0050 planned, so the worker can read it. Own rows only.",
+  record_watchers:
+    "Follow this job or project (0083): an audience the rules can name. Own rows only.",
+  notifications:
+    "The inbox (0083): one row per person per thing said, with the record and where to click; read_at is the bell. Written only by private.notify() from triggers and the 15-minute scan, deduped per person and key so a daily scan never repeats itself.",
+  notification_deliveries:
+    "The outbox (0083): one row per channel per notification. in_app sent as written; email, teams and sms queued or held for the digest time, claimed by the worker with for update skip locked, retried with backoff, failed after five. SMS rows wait for a provider.",
+  task_checklist_items:
+    "Tick boxes under a task (0081): text, order, who ticked it when. Not a task — no assignee, due date, status or dependencies — so a task with twelve lines is one task, not thirteen. Copied from the template line's checklist when a run is instantiated.",
+  process_task_checklist_items:
+    "The tick boxes a template line hands a job (0081), written by managers in Setup → Processes and copied by instantiate_process_tasks().",
+  task_display:
+    "A task with its names, counts and derived dates (0081): due (typed, or start + expected days), at-risk (due − lead) and health, computed from today the way process_run_display does. Nothing here is stored — re-time a task and it re-dates.",
+  stage_completion:
+    "Per record and lifecycle stage (0081): how many active processes, how many still open, how many milestones and how many passed. Complete when nothing is open. Counts, never a percentage.",
+  maintenance_settings:
+    "One row (0084): the warranty months after handover (Amber: 3 standard), the hours a contractor has to answer an offer, the day-before reminder, how long an accept link lives, the intake mailbox. Managers edit; everyone reads. A CHECK keeps it to one row.",
+  maintenance_categories:
+    "A trade and its clock (0084): the party role that did this work on site — so the default repairer is that party on the job — the SLA days, the at-risk lead and the Lofty team. Empty on purpose: the categories come from the contractors on the jobs and the SLAs are Amber's to set in the app.",
+  maintenance_requests:
+    "The ticket (0084): one per thing a homeowner reported on a handed-over job, however it arrived — email, phone, form, portal, API or staff. Numbered <job>-M<n> by trigger under the job's lock; due from the category's SLA; closing refused while an item is open; a reply to a closed request reopens it.",
+  maintenance_items:
+    "The defects inside a request (0084) — one line per trade, so \"leaking tap, cracked tile\" is one email and two items. Assigned through offers; done is stamped with who and when; not applicable is a real answer.",
+  maintenance_assignments:
+    "An offer of one item to one contractor (0084): offered → accepted → scheduled → done, or declined / cancelled. One open offer per item; a decline keeps its row. The accept link is a token: only its hash lives here, it expires, and using it is audited with origin accept_link (Amber: \"yes but needs to be logged\").",
+  maintenance_messages:
+    "The thread on a request (0084): what came in (matched to its request by the number in the subject, else the sender, else a new request), what went out (the offer with its link, the reminder, the closing mail — queued here and sent by the worker), and what was said on the phone. Graph's message id is unique so mail is matched once.",
+  maintenance_message_secrets:
+    "The accept-link token behind a queued offer email (0084), parked for the worker to fill the link from and deleted when the mail is sent. Service role only — RLS on with no policies, revoked from the API roles, written through one narrow definer. Not audited: a log of secrets is a second copy of them.",
+  job_warranty:
+    "When each job was handed over — the completion of its 7 - Handover run — and when its warranty ends, handover plus the settings' months (0084). Derived; nobody types the end date.",
+  maintenance_request_display:
+    "A request as the Maintenance tab reads it (0084): the job's address, who reported it and how to reach them, the owner, the category and its clock, the warranty flag, item and offer counts, the next visit, and health derived from today.",
+  maintenance_item_display:
+    "An item with its current offer and its contractor named (0084), and — from the parties on the job's construction runs — who did that trade originally, which is the default repairer.",
   tasks:
     "One thing to be done. A checklist item instantiated from a template and a task somebody typed live in the same table, because they differ only by origin; completion is a timestamp with deliberately no boolean beside it, and the external flag keeps council's statutory 28 days off Design's overdue report.",
   teams:

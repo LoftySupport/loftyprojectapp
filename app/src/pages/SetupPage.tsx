@@ -10,6 +10,9 @@ import { FeedbackList } from "./FeedbackList";
 import { PermissionsPage } from "./PermissionsPage";
 import { PropertiesSetupPage } from "./PropertiesSetupPage";
 import { ProcessesSetupPage } from "./ProcessesSetupPage";
+import { ContactLookupsPage } from "./ContactLookupsPage";
+import { NotificationsSetupPage } from "./NotificationsSetupPage";
+import { MaintenanceSetupPage } from "./MaintenanceSetupPage";
 import { WiringPage } from "./WiringPage";
 import "../components/ui.css";
 
@@ -45,6 +48,9 @@ import "../components/ui.css";
 const SECTIONS = [
   { slug: "properties",  label: "Properties",  adminOnly: false },
   { slug: "processes",   label: "Processes",   adminOnly: false },
+  { slug: "contacts",    label: "Contacts",    adminOnly: false },
+  { slug: "notifications", label: "Notifications", adminOnly: false },
+  { slug: "maintenance", label: "Maintenance", adminOnly: false },
   { slug: "permissions", label: "Permissions", adminOnly: false },
   { slug: "dictionary",  label: "Dictionary",  adminOnly: false },
   { slug: "wiring",      label: "Wiring",      adminOnly: false },
@@ -83,6 +89,9 @@ export function SetupPage() {
       <div style={{ marginTop: "var(--space-16)" }}>
         {section === "properties"  && <PropertiesSetupPage />}
         {section === "processes"   && <ProcessesSetupPage />}
+        {section === "contacts"    && <ContactLookupsPage />}
+        {section === "notifications" && <NotificationsSetupPage />}
+        {section === "maintenance" && <MaintenanceSetupPage />}
         {/* Moved off Admin. Admin is about people; a permission model is configuration,
             which is what this screen is for. */}
         {section === "permissions" && <PermissionsPage />}

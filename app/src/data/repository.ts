@@ -33,6 +33,9 @@ import type {
   TaskEntry,
   NewTask,
   TaskPatch,
+  TaskChecklistItem,
+  ProcessTaskChecklistItem,
+  StageCompletion,
   PropertyDef,
   PropertyDefPatch,
   PropertyOption,
@@ -62,7 +65,33 @@ import type {
   TemplateMilestone,
   TemplatePhase,
   SavedViewBoard,
-  UserSavedView
+  UserSavedView,
+  Classification,
+  PartyRole,
+  StaffRole,
+  Company,
+  NewCompany,
+  CompanyPatch,
+  Contact,
+  NewContact,
+  ContactPatch,
+  ContactMethod,
+  NewContactMethod,
+  CompanyContact,
+  RecordParty,
+  NewRecordParty,
+  RecordStaffRole,
+  PartyTarget,
+  Uuid,
+  NotificationType,
+  NotificationRule,
+  NewNotificationRule,
+  NotificationPreference,
+  Notification,
+  RecordWatch,
+  JobWarranty, MaintenanceAssignmentStatus, MaintenanceCategory, MaintenanceItem, MaintenanceItemPatch, MaintenanceMessage, MaintenanceMessageChannel,
+  MaintenanceOffer, MaintenanceOutboxStat, MaintenanceRequest, MaintenanceRequestPatch, MaintenanceSettings, NewMaintenanceRequest,
+  DeliveryStat,
 } from "./types";
 
 /**
@@ -368,6 +397,106 @@ export interface Repository {
   /** Remove one. Admin-only by policy; sub-tasks go with it (ON DELETE CASCADE). */
   deleteTask(id: string): Promise<void>;
 
+  // ---- checklists under tasks, and on template lines (0081) -----------------
+  /** The tick boxes under every task on one record, in order. */
+  listTaskChecklist(opts: { jobId?: string; projectId?: number }): Promise<TaskChecklistItem[]>;
+  addTaskChecklistItem(taskId: string, text: string): Promise<TaskChecklistItem>;
+  /** Ticking is `isDone`; the database stamps who and when, and clears both on untick. */
+  updateTaskChecklistItem(id: string, patch: { text?: string; isDone?: boolean; position?: number }): Promise<TaskChecklistItem>;
+  deleteTaskChecklistItem(id: string): Promise<void>;
+  listProcessTaskChecklist(processId: string): Promise<ProcessTaskChecklistItem[]>;
+  addProcessTaskChecklistItem(processTaskId: string, text: string): Promise<ProcessTaskChecklistItem>;
+  updateProcessTaskChecklistItem(id: string, patch: { text?: string; position?: number }): Promise<ProcessTaskChecklistItem>;
+  deleteProcessTaskChecklistItem(id: string): Promise<void>;
+  /** Stage completion for one record, or for every record when no target is given. */
+  listStageCompletion(target?: RecordTarget): Promise<StageCompletion[]>;
+
+  // ---- parties (0082): contacts, companies, roles ---------------------------
+  listClassifications(): Promise<Classification[]>;
+  saveClassification(row: Classification): Promise<Classification>;
+  listPartyRoles(): Promise<PartyRole[]>;
+  savePartyRole(row: PartyRole): Promise<PartyRole>;
+  listStaffRoles(): Promise<StaffRole[]>;
+  saveStaffRole(row: StaffRole): Promise<StaffRole>;
+  /** Every contact, with their company beside them; `search` narrows by name, email or phone. */
+  listContacts(opts?: { search?: string; includeInactive?: boolean }): Promise<Contact[]>;
+  getContact(id: string): Promise<Contact | null>;
+  /** User and above. Created unapproved unless the creator is a manager or above. */
+  createContact(input: NewContact): Promise<Contact>;
+  updateContact(id: string, patch: ContactPatch): Promise<Contact>;
+  /** Manager and above; the guard refuses anyone else and stamps who. */
+  approveContact(id: string, approved: boolean): Promise<Contact>;
+  setContactClassifications(id: string, classificationIds: string[]): Promise<void>;
+  listCompanies(opts?: { search?: string; includeInactive?: boolean }): Promise<Company[]>;
+  getCompany(id: string): Promise<Company | null>;
+  createCompany(input: NewCompany): Promise<Company>;
+  updateCompany(id: string, patch: CompanyPatch): Promise<Company>;
+  approveCompany(id: string, approved: boolean): Promise<Company>;
+  setCompanyClassifications(id: string, classificationIds: string[]): Promise<void>;
+  listContactMethods(party: { contactId?: string; companyId?: string }): Promise<ContactMethod[]>;
+  addContactMethod(input: NewContactMethod): Promise<ContactMethod>;
+  updateContactMethod(id: string, patch: { value?: string; label?: string | null; isPrimary?: boolean; isVerified?: boolean }): Promise<ContactMethod>;
+  deleteContactMethod(id: string): Promise<void>;
+  /** Employment rows for a company or a person, current first. */
+  listCompanyContacts(party: { contactId?: string; companyId?: string }): Promise<CompanyContact[]>;
+  addCompanyContact(input: { companyId: string; contactId: string; jobRole?: string | null; isPrimary?: boolean; startedOn?: string | null }): Promise<CompanyContact>;
+  updateCompanyContact(id: string, patch: { jobRole?: string | null; isPrimary?: boolean; endedOn?: string | null }): Promise<CompanyContact>;
+  /** Parties on a record — a job's include those on its process runs. */
+  listRecordParties(target: PartyTarget | { contactId: string } | { companyId: string }): Promise<RecordParty[]>;
+  addRecordParty(input: NewRecordParty): Promise<RecordParty>;
+  updateRecordParty(id: string, patch: { roleId?: string; engagedByCompanyId?: Uuid | null; isPrimary?: boolean; note?: string | null; endedOn?: string | null }): Promise<RecordParty>;
+  deleteRecordParty(id: string): Promise<void>;
+  listRecordStaffRoles(target: { projectId?: number; jobId?: string }): Promise<RecordStaffRole[]>;
+  addRecordStaffRole(input: { projectId?: number; jobId?: string; roleId: string; profileId: string }): Promise<RecordStaffRole>;
+  endRecordStaffRole(id: string, endedOn: string): Promise<RecordStaffRole>;
+
+  // ---- notifications (0083) ------------------------------------------------
+  listNotificationTypes(): Promise<NotificationType[]>;
+  saveNotificationType(row: NotificationType): Promise<NotificationType>;
+  listNotificationRules(): Promise<NotificationRule[]>;
+  addNotificationRule(input: NewNotificationRule): Promise<NotificationRule>;
+  updateNotificationRule(id: string, patch: { afterDays?: number; isActive?: boolean }): Promise<NotificationRule>;
+  deleteNotificationRule(id: string): Promise<void>;
+  listMyNotificationPreferences(): Promise<NotificationPreference[]>;
+  saveMyNotificationPreference(pref: NotificationPreference): Promise<void>;
+  /** The inbox, newest first. */
+  listMyNotifications(opts?: { unreadOnly?: boolean; limit?: number }): Promise<Notification[]>;
+  markNotificationsRead(ids?: number[]): Promise<number>;
+  listMyWatches(): Promise<RecordWatch[]>;
+  watchRecord(target: { projectId?: number; jobId?: string }): Promise<void>;
+  unwatchRecord(target: { projectId?: number; jobId?: string }): Promise<void>;
+  /** Admin: what the outbox holds, per channel and status. */
+  listDeliveryStats(): Promise<DeliveryStat[]>;
+
+  // ---- maintenance (0084) ----------------------------------------------------
+  getMaintenanceSettings(): Promise<MaintenanceSettings>;
+  /** Manager and above; the policy refuses anyone else. */
+  saveMaintenanceSettings(patch: Partial<Omit<MaintenanceSettings, "updatedAt">>): Promise<MaintenanceSettings>;
+  listMaintenanceCategories(opts?: { includeInactive?: boolean }): Promise<MaintenanceCategory[]>;
+  /** Manager and above. Upsert on the slug. */
+  saveMaintenanceCategory(row: MaintenanceCategory): Promise<MaintenanceCategory>;
+  /** Requests from maintenance_request_display. `queue` open means not closed or rejected. */
+  listMaintenanceRequests(opts?: { jobId?: string; queue?: "open" | "closed" | "all"; search?: string; limit?: number }): Promise<MaintenanceRequest[]>;
+  getMaintenanceRequest(id: string): Promise<MaintenanceRequest | null>;
+  /** User and above. The number is stamped by trigger; due comes from the category. */
+  createMaintenanceRequest(input: NewMaintenanceRequest): Promise<MaintenanceRequest>;
+  /** A status of closed is refused by the database while an item is open. */
+  updateMaintenanceRequest(id: string, patch: MaintenanceRequestPatch): Promise<MaintenanceRequest>;
+  listMaintenanceItems(requestId: string): Promise<MaintenanceItem[]>;
+  addMaintenanceItem(input: { requestId: string; description: string; location?: string | null; categoryId?: string | null }): Promise<MaintenanceItem>;
+  updateMaintenanceItem(id: string, patch: MaintenanceItemPatch): Promise<MaintenanceItem>;
+  deleteMaintenanceItem(id: string): Promise<void>;
+  /** Offer an item to a company and/or a person: writes the assignment, queues the email, returns the token once. */
+  offerMaintenanceItem(input: { itemId: string; companyId?: string | null; contactId?: string | null; note?: string | null }): Promise<MaintenanceOffer>;
+  /** Staff recording an answer given by phone, a visit time, or a cancel. */
+  updateMaintenanceAssignment(id: string, patch: { status?: MaintenanceAssignmentStatus; scheduledFor?: string | null; note?: string | null }): Promise<void>;
+  listMaintenanceMessages(requestId: string): Promise<MaintenanceMessage[]>;
+  /** A note on the thread — what was said on the phone, what was decided. */
+  addMaintenanceNote(input: { requestId: string; body: string; channel?: MaintenanceMessageChannel; assignmentId?: string | null }): Promise<MaintenanceMessage>;
+  getJobWarranty(jobId: string): Promise<JobWarranty | null>;
+  /** What the thread's outbox holds, per status. */
+  listMaintenanceOutboxStats(): Promise<MaintenanceOutboxStat[]>;
+
   // ---- the tracker: bugs, requests, votes (0052, 0060–0063) ----------------
   /**
    * Send a bug or a feature request. Anyone active may — the widest write in the app —
@@ -627,6 +756,79 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "createTask",
   "updateTask",
   "deleteTask",
+  "listTaskChecklist",
+  "addTaskChecklistItem",
+  "updateTaskChecklistItem",
+  "deleteTaskChecklistItem",
+  "listProcessTaskChecklist",
+  "addProcessTaskChecklistItem",
+  "updateProcessTaskChecklistItem",
+  "deleteProcessTaskChecklistItem",
+  "listStageCompletion",
+  "listClassifications",
+  "saveClassification",
+  "listPartyRoles",
+  "savePartyRole",
+  "listStaffRoles",
+  "saveStaffRole",
+  "listContacts",
+  "getContact",
+  "createContact",
+  "updateContact",
+  "approveContact",
+  "setContactClassifications",
+  "listCompanies",
+  "getCompany",
+  "createCompany",
+  "updateCompany",
+  "approveCompany",
+  "setCompanyClassifications",
+  "listContactMethods",
+  "addContactMethod",
+  "updateContactMethod",
+  "deleteContactMethod",
+  "listCompanyContacts",
+  "addCompanyContact",
+  "updateCompanyContact",
+  "listRecordParties",
+  "addRecordParty",
+  "updateRecordParty",
+  "deleteRecordParty",
+  "listRecordStaffRoles",
+  "addRecordStaffRole",
+  "endRecordStaffRole",
+  "listNotificationTypes",
+  "saveNotificationType",
+  "listNotificationRules",
+  "addNotificationRule",
+  "updateNotificationRule",
+  "deleteNotificationRule",
+  "listMyNotificationPreferences",
+  "saveMyNotificationPreference",
+  "listMyNotifications",
+  "markNotificationsRead",
+  "listMyWatches",
+  "watchRecord",
+  "unwatchRecord",
+  "listDeliveryStats",
+  "getMaintenanceSettings",
+  "saveMaintenanceSettings",
+  "listMaintenanceCategories",
+  "saveMaintenanceCategory",
+  "listMaintenanceRequests",
+  "getMaintenanceRequest",
+  "createMaintenanceRequest",
+  "updateMaintenanceRequest",
+  "listMaintenanceItems",
+  "addMaintenanceItem",
+  "updateMaintenanceItem",
+  "deleteMaintenanceItem",
+  "offerMaintenanceItem",
+  "updateMaintenanceAssignment",
+  "listMaintenanceMessages",
+  "addMaintenanceNote",
+  "getJobWarranty",
+  "listMaintenanceOutboxStats",
   "submitFeedback",
   "listFeedback",
   "setFeedbackStage",
@@ -735,7 +937,80 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   listJobStageHistory: "activity_audit",
   listMyMentions: "comment_mentions",
   markMentionRead: "comment_mentions",
-  listTasks: "tasks",
+  listTasks: "task_display",
+  listTaskChecklist: "task_checklist_items",
+  addTaskChecklistItem: "task_checklist_items",
+  updateTaskChecklistItem: "task_checklist_items",
+  deleteTaskChecklistItem: "task_checklist_items",
+  listProcessTaskChecklist: "process_task_checklist_items",
+  addProcessTaskChecklistItem: "process_task_checklist_items",
+  updateProcessTaskChecklistItem: "process_task_checklist_items",
+  deleteProcessTaskChecklistItem: "process_task_checklist_items",
+  listStageCompletion: "stage_completion",
+  listClassifications: "classifications",
+  saveClassification: "classifications",
+  listPartyRoles: "party_roles",
+  savePartyRole: "party_roles",
+  listStaffRoles: "staff_roles",
+  saveStaffRole: "staff_roles",
+  listContacts: "contact_display",
+  getContact: "contact_display",
+  createContact: "contacts",
+  updateContact: "contacts",
+  approveContact: "contacts",
+  setContactClassifications: "contact_classifications",
+  listCompanies: "company_display",
+  getCompany: "company_display",
+  createCompany: "companies",
+  updateCompany: "companies",
+  approveCompany: "companies",
+  setCompanyClassifications: "company_classifications",
+  listContactMethods: "contact_methods",
+  addContactMethod: "contact_methods",
+  updateContactMethod: "contact_methods",
+  deleteContactMethod: "contact_methods",
+  listCompanyContacts: "company_contacts",
+  addCompanyContact: "company_contacts",
+  updateCompanyContact: "company_contacts",
+  listRecordParties: "record_party_display",
+  addRecordParty: "record_parties",
+  updateRecordParty: "record_parties",
+  deleteRecordParty: "record_parties",
+  listRecordStaffRoles: "record_staff_roles",
+  addRecordStaffRole: "record_staff_roles",
+  endRecordStaffRole: "record_staff_roles",
+  listNotificationTypes: "notification_types",
+  saveNotificationType: "notification_types",
+  listNotificationRules: "notification_rules",
+  addNotificationRule: "notification_rules",
+  updateNotificationRule: "notification_rules",
+  deleteNotificationRule: "notification_rules",
+  listMyNotificationPreferences: "notification_preferences",
+  saveMyNotificationPreference: "notification_preferences",
+  listMyNotifications: "notifications",
+  markNotificationsRead: "notifications",
+  listMyWatches: "record_watchers",
+  watchRecord: "record_watchers",
+  unwatchRecord: "record_watchers",
+  listDeliveryStats: "notification_deliveries",
+  getMaintenanceSettings: "maintenance_settings",
+  saveMaintenanceSettings: "maintenance_settings",
+  listMaintenanceCategories: "maintenance_categories",
+  saveMaintenanceCategory: "maintenance_categories",
+  listMaintenanceRequests: "maintenance_request_display",
+  getMaintenanceRequest: "maintenance_request_display",
+  createMaintenanceRequest: "maintenance_requests",
+  updateMaintenanceRequest: "maintenance_requests",
+  listMaintenanceItems: "maintenance_item_display",
+  addMaintenanceItem: "maintenance_items",
+  updateMaintenanceItem: "maintenance_items",
+  deleteMaintenanceItem: "maintenance_items",
+  offerMaintenanceItem: "maintenance_assignments + maintenance_messages",
+  updateMaintenanceAssignment: "maintenance_assignments",
+  listMaintenanceMessages: "maintenance_messages",
+  addMaintenanceNote: "maintenance_messages",
+  getJobWarranty: "job_warranty",
+  listMaintenanceOutboxStats: "maintenance_messages",
   createTask: "tasks",
   updateTask: "tasks",
   deleteTask: "tasks",

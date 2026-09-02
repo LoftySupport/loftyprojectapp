@@ -32,7 +32,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 # watched to FAIL. A check nobody has seen fail is not evidence of anything.
 # Both halves of the Supabase repository: the property-value and process methods (0077,
 # 0078) live in their own module and issue embeds of their own.
-REPO="${LOFTY_REPO_FILE:-$HERE/../../src/data/supabaseRepository.ts $HERE/../../src/data/supabasePropertyProcessRepository.ts}"
+REPO="${LOFTY_REPO_FILE:-$HERE/../../src/data/supabaseRepository.ts $HERE/../../src/data/supabasePropertyProcessRepository.ts $HERE/../../src/data/supabasePartyRepository.ts $HERE/../../src/data/supabaseNotificationRepository.ts $HERE/../../src/data/supabaseMaintenanceRepository.ts}"
 PORT="${LOFTY_PG_PORT:-5433}"
 HOST="${LOFTY_PG_HOST:-/var/tmp}"
 PSQL="psql -h $HOST -p $PORT -U postgres -d lofty_verify -tAq"

@@ -141,3 +141,66 @@
 /* An inline link with a tap target a thumb can hit — 24px minimum, without breaking the
    sentence it sits in. */
 .tap-link { display: inline-block; min-height: 24px; line-height: 24px; padding: 0 2px; }
+
+/* ---- tasks: sub-tasks and checklists (0081) ---------------------------------- */
+.task-list li.is-child { padding-left: 28px; }
+.task-list li.is-child .task-name::before { content: "↳ "; color: var(--secondary-text-color); }
+.task-checklist { flex: 1 0 100%; list-style: none; margin: var(--space-4) 0 0 28px; padding: 0; }
+.task-checklist li {
+  display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap;
+  padding: 2px 0; border: 0; min-height: 28px;
+}
+.task-checklist input[type="checkbox"] { width: 16px; height: 16px; margin: 0 2px; }
+.task-checklist .is-ticked { text-decoration: line-through; color: var(--secondary-text-color); }
+.task-checklist .task-line-remove { margin-left: auto; }
+.task-add-line { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; margin: var(--space-4) 0 0 28px; flex: 1 0 100%; }
+.task-add-line .pf-input { width: min(320px, 100%); }
+.task-sub-composer { flex: 1 0 100%; display: flex; gap: var(--space-8); align-items: center; flex-wrap: wrap; padding-left: 28px; }
+.task-sub-composer .pf-input { width: min(320px, 100%); }
+.task-days { width: 72px; }
+.health.is-no_due_date, .health.is-cancelled { background: var(--allgrey-background-color); color: var(--secondary-text-color); }
+.health.is-done { background: var(--positive-color-selected); color: var(--positive-ink); }
+
+/* ---- parties on a record (0082) ---------------------------------------------- */
+.party-list { list-style: none; margin: 0; padding: 0; }
+.party-row { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; padding: var(--space-4) 0; border-top: 1px dashed var(--layout-border-color); min-height: 32px; }
+.party-row:first-child { border-top: 0; }
+.party-role { font: var(--font-text3-bold); color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: 0.04em; flex: 0 0 120px; }
+.party-who { flex: 1 1 200px; min-width: 0; }
+.party-reach { display: flex; gap: var(--space-12); flex-wrap: wrap; font: var(--font-text3-normal); }
+.party-add { display: flex; gap: var(--space-8); flex-wrap: wrap; align-items: center; margin-top: var(--space-8); }
+.party-add > div { flex: 1 1 180px; min-width: 160px; }
+.party-compact { margin-top: var(--space-8); }
+.link-button { background: none; border: 0; padding: 0; color: var(--primary-color); font: inherit; cursor: pointer; text-decoration: underline; }
+.link-button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+
+/* ---- the Contacts screen ------------------------------------------------------ */
+.contacts-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-16); }
+/* A grid item's minimum is its content's, and the content is a max-content table: without
+   this the track grows past the phone and the page scrolls sideways (measured: 61px on a
+   390px phone). The table scrolls inside its own wrapper instead. */
+.contacts-grid > * { min-width: 0; }
+@media (min-width: 960px) { .contacts-grid.has-detail { grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr); align-items: start; } }
+.contact-row { cursor: pointer; }
+.contact-row.is-selected td { background: var(--primary-selected-color); }
+.contact-classes { display: inline-flex; gap: var(--space-4); flex-wrap: wrap; }
+.contact-detail .field-row { padding: var(--space-8) 0; }
+.method-list { list-style: none; margin: 0; padding: 0; }
+.method-list li { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; padding: var(--space-4) 0; border-top: 1px dashed var(--layout-border-color); min-height: 32px; }
+.method-list li:first-child { border-top: 0; }
+.method-kind { font: var(--font-text3-bold); color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: 0.04em; flex: 0 0 64px; }
+.approval-chip { display: inline-block; font: var(--font-text3-bold); font-size: 11px; padding: 0 var(--space-8); border-radius: 9px; line-height: 18px; background: var(--warning-color-selected); color: var(--warning-ink); white-space: nowrap; }
+.approval-chip.is-approved { background: var(--positive-color-selected); color: var(--positive-ink); }
+
+/* Maintenance (0084): the thread and the items on a request, and the once-only token box. */
+.maint-thread { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-8); }
+.maint-msg { padding: var(--space-8) var(--space-12); border-radius: var(--border-radius-medium); background: var(--allgrey-background-color); border-left: 3px solid var(--ui-border-color); }
+.maint-msg.is-in  { border-left-color: var(--primary-color); }
+.maint-msg.is-out { border-left-color: var(--positive-color); }
+.maint-msg.is-note { background: transparent; border-left-style: dashed; }
+.maint-msg-head { display: flex; flex-wrap: wrap; gap: var(--space-8); align-items: center; font: var(--font-text3-normal); margin-bottom: var(--space-4); }
+.maint-item { padding: var(--space-8) 0; border-top: 1px solid var(--ui-border-color); display: flex; flex-direction: column; gap: var(--space-4); }
+.maint-item:first-of-type { border-top: 0; }
+.maint-item-head { display: flex; gap: var(--space-8); align-items: flex-start; flex-wrap: wrap; }
+.token-box { border: 1px solid var(--warning-color); background: var(--warning-color-selected); border-radius: var(--border-radius-medium); padding: var(--space-8) var(--space-12); display: flex; flex-direction: column; gap: var(--space-4); }
+.token-link { display: block; font-size: 12px; word-break: break-all; user-select: all; }

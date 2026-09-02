@@ -533,4 +533,68 @@ BEGIN
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  self-added vote)', SQLERRM; END;
 
   DELETE FROM feedback WHERE feedback_title = '__constraint_probe__';
+
+  -- 0081: a lead longer than the duration would flag a task at risk before it started.
+  BEGIN
+    INSERT INTO tasks (job_id, task_name, task_expected_days, task_at_risk_lead_days)
+    VALUES ('1106-002', 'constraint probe 0081', 7, 9);
+    RAISE WARNING 'FAIL: a 9-day at-risk lead on a 7-day task was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  tasks_at_risk_lead_within_duration rejected lead 9 on 7 days';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  tasks_at_risk_lead_within_duration rejected lead 9 on 7 days)', SQLERRM; END;
+
+  -- 0081: a checklist line with no words is not a line.
+  BEGIN
+    INSERT INTO task_checklist_items (task_id, task_checklist_item_text)
+    SELECT task_id, '  ' FROM tasks WHERE job_id = '1106-002' LIMIT 1;
+    IF NOT FOUND THEN RAISE NOTICE 'note: no task on 1106-002 to hang a blank checklist line on'; ELSE
+    RAISE WARNING 'FAIL: a blank checklist line was accepted'; END IF;
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  task_checklist_items_text_is_not_blank rejected a blank line';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  task_checklist_items_text_is_not_blank rejected a blank line)', SQLERRM; END;
+
+  -- 0082: an ABN is eleven digits, an email has an @, a party names somebody, one primary email per person.
+  BEGIN
+    INSERT INTO companies (company_name, company_abn) VALUES ('Constraint probe co 0082', '12345');
+    RAISE WARNING 'FAIL: a five-digit ABN was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  companies_abn_is_eleven_digits rejected 12345';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  companies_abn_is_eleven_digits rejected 12345)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO record_parties (job_id, party_role_id) VALUES ('1106-002', 'contractor');
+    RAISE WARNING 'FAIL: a party naming nobody was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  record_parties_names_somebody rejected a party with no contact and no company';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  record_parties_names_somebody rejected it)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO contact_methods (contact_method_kind, contact_method_value) VALUES ('email', 'nobody@example.com');
+    RAISE WARNING 'FAIL: a contact method with no party was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  contact_methods_one_party rejected a method belonging to nobody';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  contact_methods_one_party rejected it)', SQLERRM; END;
+
+  -- 0084: one settings row; a lead longer than the SLA would flag a request at risk on arrival;
+  -- a request needs words; an offer names somebody. The CHECKs fire before the FK triggers,
+  -- so a made-up item id still proves the CHECK and not the key.
+  BEGIN
+    INSERT INTO maintenance_settings (maintenance_setting_id) VALUES (2);
+    RAISE WARNING 'FAIL: a second maintenance_settings row was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  maintenance_settings_is_one_row rejected a second row';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  maintenance_settings_is_one_row)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO maintenance_categories (maintenance_category_id, maintenance_category_name, maintenance_category_sla_days, maintenance_category_at_risk_lead_days)
+    VALUES ('constraint_probe_0084', 'Constraint probe', 3, 5);
+    RAISE WARNING 'FAIL: a 5-day at-risk lead on a 3-day SLA was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  maintenance_categories_lead_within_sla rejected lead 5 on 3 days';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  maintenance_categories_lead_within_sla)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO maintenance_requests (job_id, maintenance_request_summary) VALUES ('1106-002', '   ');
+    RAISE WARNING 'FAIL: a maintenance request with a blank summary was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  maintenance_requests_summary_is_not_blank rejected a blank summary';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  maintenance_requests_summary_is_not_blank)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO maintenance_assignments (maintenance_item_id) VALUES (gen_random_uuid());
+    RAISE WARNING 'FAIL: an offer naming no company and no contact was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  maintenance_assignments_names_somebody rejected an offer to nobody';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  maintenance_assignments_names_somebody)', SQLERRM; END;
 END $$;

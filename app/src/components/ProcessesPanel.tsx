@@ -8,6 +8,7 @@ import {
   type Process, type ProcessRun, type ProcessRunStatus, type PropertyScope, type RecordTarget, type TeamId
 } from "../data/types";
 import { PropertySlots } from "./PropertySlots";
+import { PartiesPanel } from "./PartiesPanel";
 import { Select } from "./Select";
 import "./ui.css";
 import "./processes.css";
@@ -279,6 +280,9 @@ export function ProcessesPanel({
                             This process collects no properties yet — a manager can attach some in Setup → Processes.
                           </Text>
                         )}
+                        {/* Who did this process here — the plumber on the plumbing run — which is
+                            what the maintenance categories will read (Amber, answer 3). */}
+                        {run && <PartiesPanel target={{ processRunId: run.id }} compact reloadKey={localReload + reloadKey} />}
                         {p.description && <Text type="text3" color="secondary" element="p" ellipsis={false}>{p.description}</Text>}
                       </div>
                     )}

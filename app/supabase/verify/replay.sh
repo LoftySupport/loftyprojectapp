@@ -22,7 +22,9 @@ PSQL="psql -h $HOST -p $PORT -U postgres -q -v ON_ERROR_STOP=1"
 $PSQL -c "drop database if exists lofty_verify;" -c "create database lofty_verify;" >/dev/null 2>&1 || {
   echo "Could not reach postgres at $HOST:$PORT — start one first."; exit 1; }
 $PSQL -d lofty_verify -f "$HERE/supabase-shim.sql" >/dev/null 2>&1
-$PSQL -d lofty_verify -c "create extension if not exists pgcrypto; create extension if not exists pg_trgm;" >/dev/null 2>&1
+# pgcrypto is preinstalled in `extensions` on Supabase (0084 calls extensions.digest); pg_trgm
+# starts in public because 0002 is the migration that moves it.
+$PSQL -d lofty_verify -c "create extension if not exists pgcrypto schema extensions; create extension if not exists pg_trgm;" >/dev/null 2>&1
 
 cd "$HERE/../migrations" || exit 1
 for f in $(ls *.sql | sort); do

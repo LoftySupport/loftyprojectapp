@@ -16,13 +16,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 50 changes since then —
-- Added: The platform-layer design — contacts and companies, maintenance, notifications, a readable change history, two-way sync — recorded in schema-plan.md ahead of the build
-- Changed: The properties and processes screens after a design pass — palette-consistent health colours, keyboard-reachable report links, a two-step delete
-- Added: The Impeccable design skill, installed for the repo
-- Changed: The fourth lifecycle phase is Maintenance — handover is the last process of Construction
-- Added: Properties record values on jobs and projects, with per-property security levels, team and person access, and an opt-in restricted flag
-- …and 45 more.
+Unreleased: 62 changes since then —
+- Added: Maintenance — a tab for what homeowners report after handover: requests numbered on the job, items per trade, offers to contractors with an accept link, the thread, SLA health and warranty
+- Added: Setup → Maintenance — the warranty period, offer and reminder clocks, and the trades with their SLAs
+- Added: Notifications — assigned, mentioned, at risk, overdue, stage moved, working drawings changed — in the bell, by email and Teams, immediate or in a daily digest, chosen per person in Settings
+- Added: Setup → Notifications — who hears what, with escalation after days late
+- Added: Contacts — people and companies outside Lofty, classified, with the company beside each person, how to reach them, and what they are doing on each job, project and process
+- …and 57 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

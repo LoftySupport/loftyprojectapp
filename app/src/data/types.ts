@@ -1207,6 +1207,12 @@ export interface Task {
   processRunId: Uuid | null;
   /** The template line it was copied from, or null. */
   processTaskId: Uuid | null;
+  /** When work began (0081) — stamped on the first move off "to do", editable after. */
+  startedAt: IsoDateTime | null;
+  /** How long it should take from its start; null is "no agreed duration", not zero. */
+  expectedDays: number | null;
+  /** Days before due that it reads at risk. Never longer than expectedDays (CHECK). */
+  atRiskLeadDays: number | null;
   createdAt: IsoDateTime;
   createdBy: Uuid | null;
   updatedAt: IsoDateTime;
@@ -1245,6 +1251,58 @@ export const isTaskLive = (s: TaskStatus): boolean => s !== "done" && s !== "can
 export interface TaskEntry extends Task {
   assigneeName: string | null;
   completedByName: string | null;
+  /** Typed due date, or start + expected days when nobody typed one (task_display). */
+  dueEffective: IsoDate | null;
+  atRiskDate: IsoDate | null;
+  health: TaskHealth;
+  checklistTotal: number;
+  checklistDone: number;
+  subtaskTotal: number;
+  subtaskDone: number;
+}
+
+/** What `task_display` derives from today against the two dates. Never stored. */
+export type TaskHealth = "no_due_date" | "on_track" | "at_risk" | "overdue" | "done" | "cancelled";
+export const TASK_HEALTH_LABELS: Record<TaskHealth, string> = {
+  no_due_date: "No due date",
+  on_track: "On track",
+  at_risk: "At risk",
+  overdue: "Overdue",
+  done: "Done",
+  cancelled: "Cancelled"
+};
+
+/** One tick box under a task (0081). */
+export interface TaskChecklistItem {
+  id: Uuid;
+  taskId: Uuid;
+  position: number;
+  text: string;
+  isDone: boolean;
+  doneAt: IsoDateTime | null;
+  doneBy: Uuid | null;
+  doneByName: string | null;
+}
+
+/** One tick box on a template line, copied to every run's task (0081). */
+export interface ProcessTaskChecklistItem {
+  id: Uuid;
+  processTaskId: Uuid;
+  position: number;
+  text: string;
+}
+
+/** Stage completion as the database counts it (0081): counts, never a percentage. */
+export interface StageCompletion {
+  jobId: string | null;
+  projectId: number | null;
+  stage: string;
+  isCurrent: boolean;
+  processesTotal: number;
+  processesOpen: number;
+  milestonesTotal: number;
+  milestonesPassed: number;
+  isComplete: boolean;
 }
 
 /**
@@ -1265,6 +1323,8 @@ export interface NewTask {
   dueDate?: IsoDate | null;
   isExternal?: boolean;
   parentTaskId?: Uuid | null;
+  expectedDays?: number | null;
+  atRiskLeadDays?: number | null;
 }
 
 /** What an edit may move. Completion rides `status` and nothing else. */
@@ -1277,6 +1337,10 @@ export interface TaskPatch {
   dueDate?: IsoDate | null;
   isExternal?: boolean;
   position?: number;
+  startedAt?: IsoDateTime | null;
+  expectedDays?: number | null;
+  atRiskLeadDays?: number | null;
+  parentTaskId?: Uuid | null;
 }
 
 /**
@@ -2211,4 +2275,505 @@ export interface NewJob {
   address?: NewAddress;
   stage?: StageName;
   status?: RecordStatus;
+}
+
+// ---------------------------------------------------------------------------
+// Parties (0082): contacts, companies, classifications, employment, roles on records
+// ---------------------------------------------------------------------------
+
+/** A lookup row shared by classifications, party roles and staff roles. */
+export interface Classification {
+  id: string;
+  name: string;
+  appliesTo: "contact" | "company" | "both";
+  position: number;
+  isActive: boolean;
+}
+export interface PartyRole {
+  id: string;
+  name: string;
+  appliesTo: "contact" | "company" | "both";
+  position: number;
+  isActive: boolean;
+}
+export interface StaffRole {
+  id: string;
+  abbreviation: string;
+  name: string;
+  position: number;
+  isActive: boolean;
+}
+
+export const PARTY_SOURCES = ["app", "import", "email", "form", "api", "sitebook"] as const;
+export type PartySource = (typeof PARTY_SOURCES)[number];
+
+/** A company as the Contacts list reads it (company_display). */
+export interface Company {
+  id: Uuid;
+  name: string;
+  tradingName: string | null;
+  abn: string | null;
+  addressId: Uuid | null;
+  address: string | null;
+  notes: string | null;
+  source: PartySource;
+  isActive: boolean;
+  /** Null until a manager signs it off (Amber, 2 Sep). Usable meanwhile, flagged. */
+  approvedAt: IsoDateTime | null;
+  approvedBy: Uuid | null;
+  primaryEmail: string | null;
+  primaryPhone: string | null;
+  classificationIds: string[];
+  peopleCount: number;
+  openParties: number;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+export interface NewCompany {
+  name: string;
+  tradingName?: string | null;
+  abn?: string | null;
+  notes?: string | null;
+  classificationIds?: string[];
+  email?: string | null;
+  phone?: string | null;
+}
+export interface CompanyPatch {
+  name?: string;
+  tradingName?: string | null;
+  abn?: string | null;
+  addressId?: Uuid | null;
+  notes?: string | null;
+  isActive?: boolean;
+}
+
+/** A person as the Contacts list reads them (contact_display): with their company beside them. */
+export interface Contact {
+  id: Uuid;
+  firstName: string;
+  lastName: string | null;
+  fullName: string;
+  preferredName: string | null;
+  addressId: Uuid | null;
+  address: string | null;
+  notes: string | null;
+  /** The future login. Null for everyone today. */
+  profileId: Uuid | null;
+  source: PartySource;
+  isActive: boolean;
+  approvedAt: IsoDateTime | null;
+  approvedBy: Uuid | null;
+  primaryEmail: string | null;
+  primaryPhone: string | null;
+  /** Current employment, if any — read from company_contacts where nothing has ended. */
+  companyId: Uuid | null;
+  companyName: string | null;
+  jobRole: string | null;
+  classificationIds: string[];
+  openParties: number;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+export interface NewContact {
+  firstName: string;
+  lastName?: string | null;
+  preferredName?: string | null;
+  notes?: string | null;
+  classificationIds?: string[];
+  email?: string | null;
+  phone?: string | null;
+  /** Put them at a company straight away, with the role they hold there. */
+  companyId?: Uuid | null;
+  jobRole?: string | null;
+}
+export interface ContactPatch {
+  firstName?: string;
+  lastName?: string | null;
+  preferredName?: string | null;
+  addressId?: Uuid | null;
+  notes?: string | null;
+  isActive?: boolean;
+}
+
+export const CONTACT_METHOD_KINDS = ["email", "phone", "mobile", "other"] as const;
+export type ContactMethodKind = (typeof CONTACT_METHOD_KINDS)[number];
+export const CONTACT_METHOD_LABELS: Record<ContactMethodKind, string> = {
+  email: "Email", phone: "Phone", mobile: "Mobile", other: "Other"
+};
+
+/** One way to reach a contact or a company. Exactly one of the two ids is set. */
+export interface ContactMethod {
+  id: Uuid;
+  contactId: Uuid | null;
+  companyId: Uuid | null;
+  kind: ContactMethodKind;
+  value: string;
+  label: string | null;
+  isPrimary: boolean;
+  isVerified: boolean;
+}
+export interface NewContactMethod {
+  contactId?: Uuid | null;
+  companyId?: Uuid | null;
+  kind: ContactMethodKind;
+  value: string;
+  label?: string | null;
+  isPrimary?: boolean;
+}
+
+/** A person at a company, over time, with the role they hold there. */
+export interface CompanyContact {
+  id: Uuid;
+  companyId: Uuid;
+  companyName: string;
+  contactId: Uuid;
+  contactName: string;
+  jobRole: string | null;
+  isPrimary: boolean;
+  startedOn: IsoDate | null;
+  endedOn: IsoDate | null;
+}
+
+/** A party on a record, names resolved (record_party_display). */
+export interface RecordParty {
+  id: Uuid;
+  projectId: number | null;
+  jobId: string | null;
+  processRunId: Uuid | null;
+  /** The job a run-level party is ultimately on, so a drawer can list them. */
+  recordJobId: string | null;
+  recordProjectId: number | null;
+  contactId: Uuid | null;
+  contactName: string | null;
+  companyId: Uuid | null;
+  companyName: string | null;
+  roleId: string;
+  roleName: string;
+  engagedByCompanyId: Uuid | null;
+  engagedByCompanyName: string | null;
+  isPrimary: boolean;
+  startedOn: IsoDate;
+  endedOn: IsoDate | null;
+  note: string | null;
+  processName: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
+}
+export interface NewRecordParty {
+  projectId?: number;
+  jobId?: string;
+  processRunId?: Uuid;
+  contactId?: Uuid | null;
+  companyId?: Uuid | null;
+  roleId: string;
+  engagedByCompanyId?: Uuid | null;
+  isPrimary?: boolean;
+  note?: string | null;
+}
+
+/** A Lofty person holding a SiteBook project role on a project or job. */
+export interface RecordStaffRole {
+  id: Uuid;
+  projectId: number | null;
+  jobId: string | null;
+  roleId: string;
+  roleAbbreviation: string;
+  roleName: string;
+  profileId: Uuid;
+  profileName: string;
+  startedOn: IsoDate;
+  endedOn: IsoDate | null;
+}
+
+/** Which record a party or a role hangs off. Exactly one. */
+export type PartyTarget = { projectId: number } | { jobId: string } | { processRunId: Uuid };
+
+// ---------------------------------------------------------------------------
+// Notifications (0083)
+// ---------------------------------------------------------------------------
+export const NOTIFICATION_CHANNELS = ["in_app", "email", "teams", "sms"] as const;
+export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
+export const NOTIFICATION_CHANNEL_LABELS: Record<NotificationChannel, string> = {
+  in_app: "In-app", email: "Email", teams: "Teams", sms: "SMS"
+};
+export type NotificationTiming = "immediate" | "digest";
+
+export interface NotificationType {
+  id: string;
+  name: string;
+  description: string | null;
+  defaultChannels: NotificationChannel[];
+  defaultTiming: NotificationTiming;
+  position: number;
+  isActive: boolean;
+}
+
+export const NOTIFICATION_AUDIENCES = ["assignee", "owning_team", "engaged_teams", "watchers", "managers", "mentioned", "specific_team", "specific_person"] as const;
+export type NotificationAudience = (typeof NOTIFICATION_AUDIENCES)[number];
+export const NOTIFICATION_AUDIENCE_LABELS: Record<NotificationAudience, string> = {
+  assignee: "The assignee",
+  owning_team: "The owning team",
+  engaged_teams: "The engaged teams",
+  watchers: "Whoever watches the record",
+  managers: "The managers",
+  mentioned: "The person mentioned",
+  specific_team: "A named team",
+  specific_person: "A named person"
+};
+
+export interface NotificationRule {
+  id: Uuid;
+  typeId: string;
+  audience: NotificationAudience;
+  teamId: TeamId | null;
+  profileId: Uuid | null;
+  afterDays: number;
+  isActive: boolean;
+}
+export interface NewNotificationRule {
+  typeId: string;
+  audience: NotificationAudience;
+  teamId?: TeamId | null;
+  profileId?: Uuid | null;
+  afterDays?: number;
+}
+
+/** One person's choice for one type on one channel. Absent means the type's default. */
+export interface NotificationPreference {
+  typeId: string;
+  channel: NotificationChannel;
+  isEnabled: boolean;
+  timing: NotificationTiming | null;
+  digestTime: string | null;
+}
+
+export interface Notification {
+  id: number;
+  typeId: string;
+  projectId: number | null;
+  jobId: string | null;
+  taskId: Uuid | null;
+  processRunId: Uuid | null;
+  commentId: Uuid | null;
+  title: string;
+  body: string | null;
+  href: string | null;
+  createdAt: IsoDateTime;
+  readAt: IsoDateTime | null;
+}
+
+export interface RecordWatch {
+  id: Uuid;
+  projectId: number | null;
+  jobId: string | null;
+}
+
+/** What the outbox looks like from Setup: counts per channel and status. */
+export interface DeliveryStat {
+  channel: NotificationChannel;
+  status: string;
+  count: number;
+  lastSentAt: IsoDateTime | null;
+}
+
+// ---------------------------------------------------------------------------
+// Maintenance (0084)
+// ---------------------------------------------------------------------------
+export const MAINTENANCE_SOURCES = ["email", "phone", "form", "portal", "api", "staff"] as const;
+export type MaintenanceSource = (typeof MAINTENANCE_SOURCES)[number];
+export const MAINTENANCE_SOURCE_LABELS: Record<MaintenanceSource, string> = {
+  email: "Email", phone: "Phone call", form: "Web form", portal: "Portal", api: "API", staff: "Logged by staff"
+};
+export const MAINTENANCE_STATUSES = ["new", "triaged", "in_progress", "waiting_on_contractor", "waiting_on_client", "completed", "closed", "rejected"] as const;
+export type MaintenanceStatus = (typeof MAINTENANCE_STATUSES)[number];
+export const MAINTENANCE_STATUS_LABELS: Record<MaintenanceStatus, string> = {
+  new: "New", triaged: "Triaged", in_progress: "In progress", waiting_on_contractor: "Waiting on contractor",
+  waiting_on_client: "Waiting on client", completed: "Completed", closed: "Closed", rejected: "Rejected"
+};
+export const MAINTENANCE_PRIORITIES = ["urgent", "high", "normal", "low"] as const;
+export type MaintenancePriority = (typeof MAINTENANCE_PRIORITIES)[number];
+export const MAINTENANCE_PRIORITY_LABELS: Record<MaintenancePriority, string> = { urgent: "Urgent", high: "High", normal: "Normal", low: "Low" };
+export type MaintenanceHealth = "no_sla" | "on_track" | "at_risk" | "overdue" | "complete" | "closed";
+export const MAINTENANCE_HEALTH_LABELS: Record<MaintenanceHealth, string> = {
+  no_sla: "No SLA", on_track: "On track", at_risk: "At risk", overdue: "Over SLA", complete: "Complete", closed: "Closed"
+};
+export const MAINTENANCE_ITEM_STATUSES = ["open", "assigned", "scheduled", "done", "not_applicable"] as const;
+export type MaintenanceItemStatus = (typeof MAINTENANCE_ITEM_STATUSES)[number];
+export const MAINTENANCE_ITEM_STATUS_LABELS: Record<MaintenanceItemStatus, string> = {
+  open: "Open", assigned: "Assigned", scheduled: "Scheduled", done: "Done", not_applicable: "Not applicable"
+};
+export const MAINTENANCE_ASSIGNMENT_STATUSES = ["offered", "accepted", "declined", "scheduled", "done", "cancelled"] as const;
+export type MaintenanceAssignmentStatus = (typeof MAINTENANCE_ASSIGNMENT_STATUSES)[number];
+export const MAINTENANCE_ASSIGNMENT_STATUS_LABELS: Record<MaintenanceAssignmentStatus, string> = {
+  offered: "Offered — awaiting answer", accepted: "Accepted", declined: "Declined", scheduled: "Scheduled", done: "Done", cancelled: "Cancelled"
+};
+export type MaintenanceMessageDirection = "in" | "out" | "note";
+export type MaintenanceMessageChannel = "email" | "sms" | "phone" | "form" | "portal" | "app";
+export type MaintenanceMessageStatus = "received" | "queued" | "sending" | "sent" | "failed" | "noted";
+
+/** The one row of maintenance_settings. Managers edit; everyone reads. */
+export interface MaintenanceSettings {
+  warrantyMonths: number;
+  offerResponseHours: number;
+  reminderDaysBefore: number;
+  acceptLinkDays: number;
+  intakeMailbox: string | null;
+  updatedAt: IsoDateTime;
+}
+
+/** A trade and its clock (0084). Empty until Amber writes them. */
+export interface MaintenanceCategory {
+  id: string;
+  name: string;
+  partyRoleId: string | null;
+  teamId: TeamId | null;
+  slaDays: number | null;
+  atRiskLeadDays: number | null;
+  position: number;
+  isActive: boolean;
+}
+
+/** A request as maintenance_request_display reads it. */
+export interface MaintenanceRequest {
+  id: Uuid;
+  jobId: string;
+  projectId: number;
+  number: string;
+  sequence: number;
+  source: MaintenanceSource;
+  reportedByContactId: Uuid | null;
+  reportedByName: string | null;
+  reportedByEmail: string | null;
+  reportedByPhone: string | null;
+  reportedAt: IsoDateTime;
+  summary: string;
+  description: string | null;
+  priority: MaintenancePriority;
+  status: MaintenanceStatus;
+  categoryId: string | null;
+  categoryName: string | null;
+  dueOn: IsoDate | null;
+  atRiskOn: IsoDate | null;
+  health: MaintenanceHealth;
+  ownerProfileId: Uuid | null;
+  ownerName: string | null;
+  closedAt: IsoDateTime | null;
+  closedReason: string | null;
+  externalRef: string | null;
+  jobAddress: string;
+  jobSuburb: string | null;
+  handoverAt: IsoDateTime | null;
+  warrantyEndsOn: IsoDate | null;
+  isWarranty: boolean;
+  itemsTotal: number;
+  itemsDone: number;
+  offersOpen: number;
+  nextVisit: IsoDateTime | null;
+  messagesTotal: number;
+  lastMessageAt: IsoDateTime | null;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+export interface NewMaintenanceRequest {
+  jobId: string;
+  summary: string;
+  source: MaintenanceSource;
+  description?: string | null;
+  priority?: MaintenancePriority;
+  reportedByContactId?: Uuid | null;
+  reportedAt?: IsoDateTime | null;
+  categoryId?: string | null;
+  ownerProfileId?: Uuid | null;
+}
+export interface MaintenanceRequestPatch {
+  summary?: string;
+  description?: string | null;
+  priority?: MaintenancePriority;
+  status?: MaintenanceStatus;
+  categoryId?: string | null;
+  dueOn?: IsoDate | null;
+  ownerProfileId?: Uuid | null;
+  reportedByContactId?: Uuid | null;
+  closedReason?: string | null;
+  externalRef?: string | null;
+}
+
+/** An item with its current offer, as maintenance_item_display reads it. */
+export interface MaintenanceItem {
+  id: Uuid;
+  requestId: Uuid;
+  position: number;
+  description: string;
+  location: string | null;
+  categoryId: string | null;
+  categoryName: string | null;
+  partyRoleId: string | null;
+  status: MaintenanceItemStatus;
+  isWarranty: boolean | null;
+  cost: number | null;
+  completedAt: IsoDateTime | null;
+  completedByName: string | null;
+  /** Who did this trade on the job during construction — the default repairer (Amber, answer 3). */
+  originalTrade: string | null;
+  assignment: MaintenanceAssignment | null;
+}
+export interface MaintenanceAssignment {
+  id: Uuid;
+  status: MaintenanceAssignmentStatus;
+  companyId: Uuid | null;
+  companyName: string | null;
+  contactId: Uuid | null;
+  contactName: string | null;
+  offeredAt: IsoDateTime;
+  respondedAt: IsoDateTime | null;
+  scheduledFor: IsoDateTime | null;
+  note: string | null;
+}
+export interface MaintenanceItemPatch {
+  description?: string;
+  location?: string | null;
+  categoryId?: string | null;
+  status?: MaintenanceItemStatus;
+  isWarranty?: boolean | null;
+  cost?: number | null;
+  position?: number;
+}
+/** What offer_maintenance_item() hands back: the token exactly once. */
+export interface MaintenanceOffer {
+  assignmentId: Uuid;
+  /** Shown once and never stored in the clear; the link is built from it on the spot. */
+  acceptToken: string;
+  sentTo: string | null;
+}
+
+export interface MaintenanceMessage {
+  id: Uuid;
+  requestId: Uuid;
+  assignmentId: Uuid | null;
+  direction: MaintenanceMessageDirection;
+  channel: MaintenanceMessageChannel;
+  fromContactId: Uuid | null;
+  fromProfileId: Uuid | null;
+  toAddress: string | null;
+  subject: string | null;
+  body: string;
+  status: MaintenanceMessageStatus;
+  attempts: number;
+  error: string | null;
+  at: IsoDateTime;
+}
+
+/** The warranty line on a job: handover and when the period ends. Derived, never typed. */
+export interface JobWarranty {
+  jobId: string;
+  handoverAt: IsoDateTime | null;
+  warrantyEndsOn: IsoDate | null;
+  isInWarranty: boolean;
+}
+
+/** What the thread's outbox holds, per status — the Setup → Maintenance panel. */
+export interface MaintenanceOutboxStat {
+  status: MaintenanceMessageStatus;
+  count: number;
+  lastAt: IsoDateTime | null;
 }

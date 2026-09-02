@@ -5,8 +5,7 @@ import {
 } from "@vibe/core";
 import {
   Announcement, Doc, Home, Menu, NavigationChevronLeft, NavigationChevronRight,
-  Person, SettingsKnobs
-} from "@vibe/icons";
+  Person, SettingsKnobs, Group, Broom } from "@vibe/icons";
 import { HouseChart, HousePin, Houses } from "../theme/houseIcons";
 import { initialsOf, useAuth } from "../data/AuthProvider";
 import { useSearch } from "../data/SearchProvider";
@@ -36,7 +35,11 @@ const PAGES = [
   { to: "/dashboard", label: "Dashboard", icon: Home, end: true },
   { to: "/projects", label: "Projects", icon: Houses },
   { to: "/jobs", label: "Jobs", icon: HousePin },
+  // Its own tab, not a report filter (Amber, 1 Sep: "a separate tab for maintenance as this
+  // will have a lot of automation and needs a quick access").
+  { to: "/maintenance", label: "Maintenance", icon: Broom },
   { to: "/reports", label: "Reports", icon: HouseChart },
+  { to: "/contacts", label: "Contacts", icon: Group },
   // Was "Templates". The page shows the processes inside each phase since 0078, and
   // processes is the word Lofty uses (Amber, 1 Sep).
   { to: "/processes", label: "Processes", icon: Doc },

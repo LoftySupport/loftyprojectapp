@@ -1292,6 +1292,138 @@ reasoning, ahead of six migration batches (`0080`–`0085`), one pull request ea
 - **Not yet answered** (asked, dismissed): which external platforms first. The design
   assumes SharePoint and Outlook/Teams and says so.
 
+### Amber's answers, 2 September — and what arrived with them
+
+1. **Sync order:** SharePoint and Outlook/Teams first, **then Xero, then SiteBook.**
+2. **Warranty:** 3 months after handover is standard; a job moves Completed → Closed at 12
+   months (the archive rule 0045 already runs).
+3. **Maintenance categories and SLAs:** SLAs editable in the app. The categories are not a
+   hand-typed list — they **pull from the contractors assigned during construction**, so
+   the app knows who did what on site and therefore who repairs it. Each job carries
+   **purchase orders**, referenced there too. A contractor is on many jobs at once; a job has
+   many contractors. → `record_parties` on construction process runs is the source of
+   "who did the plumbing on 1042-01"; a maintenance item's default assignee is that party.
+   Cost centres (Amber's 438-row `Cost_Centre.xlsx`, codes like 200.01 *Plumber - Underfloor*)
+   are the trade vocabulary; products (`Products.xlsx`, 50 rows keyed cost-centre.item with a
+   supplier, unit, GST and price valid-from) are the price book behind a purchase order.
+   Both become tables in the Xero batch; the maintenance category references a cost centre.
+4. **History readable by everyone**, for everything, except restricted fields. Built in
+   `0080`; the only other rows withheld are internal comments and the two personal tables.
+5. **Contacts created by users and above, with manager sign-off** → a contact or company
+   carries `_approved_at` / `_approved_by`; unapproved ones are usable but flagged, and the
+   manager's queue is a notification.
+6. **Notification defaults:** assignments, mentions and maintenance arrivals immediate;
+   overdue and at-risk in a 07:30 digest; **and any change to working drawings immediate.**
+7. **SMS:** later. Nothing else waits on it.
+8. **Contractor accept links without a login: yes, and logged** — the acceptance is an
+   audited write with `activity_audit_origin = 'accept_link'` and the assignment id.
+9. **Request number** `1042-01-M3`: yes. Job sequences are three digits (`1106-002`), so the
+   number reads `1106-002-M3`.
+
+Also asked: email, phone, address and ABN on contacts and companies (→ `contact_methods`,
+`company_address_id`, `company_abn`); a `sitebook_id` property on jobs (a job-level text
+property, and the value the SiteBook connector will treat as its external id); the audit
+visible read-only to everyone (`0080`); tasks and sub-tasks built (`0081`).
+
+**What arrived with the answers.** `Lofty_Jobs_Grouped_by_Project.xlsx` — 801 job rows
+across 121 projects with old job numbers, agreement type, stage, address, client type,
+client names, CMA, sales consultant, site manager: **this is the Phase B import data.**
+`Project_Schedule_1.xlsx` — the 57 pre-construction steps with team, days and predecessors
+by ID, which settles the seven predecessor names the workbook could not and gives the
+durations Amber was asked for. `Sitebook_Schedule_09.07.xlsx` — per-job trade bookings and
+per-trade supplier quotes: the contractor list, and the shape of purchase orders. SiteBook
+screenshots — **project roles** (SS Site Supervisor, CM, CA, CMA, SET, AC, SEL, DFT, SCH, WM,
+SA; personnel per project; a "show in contractor portal" flag) → `staff_roles` and
+`record_staff_roles` join the parties batch; the **contract** step (start date, amount ex
+and inc GST, build days, claim payment terms, delays) → the Xero batch. And a reading rule:
+**"retail" as a job type means residential with an external client; "development" is
+still residential.**
+
+### Built so far
+
+- **`0080` — the audit tables join the convention, and every table joins the audit.**
+  The three renames; the allowlist gone from `log_activity_audit()`; the trigger on every
+  non-log table (39 of 45) with behaviour.sql §39 asserting the set stays complete and
+  every column stays `tablename_attribute`; four columns extracted at write time
+  (`activity_audit_profile_id`, `_job_id`, `_project_id`, `_origin`, backfilled); the read
+  policy Amber asked for; the login trigger rewritten for the names (behaviour §35 proves
+  sign-in end to end). The Activity panel on a job or project now reads one indexed query
+  across every table and names tasks, process runs, property values and comments. Proved:
+  the RLS probes were watched failing against a permissive policy (3 locked-property rows
+  and 7 preference rows visible) before they passed.
+
+- **`0081` — tasks grow checklists and time; a job learns its SiteBook id.** `task_started_at`,
+  `task_expected_days`, `task_at_risk_lead_days` (lead ≤ duration, CHECKed); `task_checklist_items`
+  and `process_task_checklist_items`, copied by `instantiate_process_tasks()` along with expected
+  days — the item 0078 left undone; `task_display` deriving due, at-risk and health the way
+  `process_run_display` does; `stage_completion` counting milestones and open processes per
+  record and stage; `sitebook_id` seeded as a job-level text property. The tasks panel shows
+  sub-tasks, checklists, health as a word and the two numbers per task; the Setup → Processes
+  list shows each process's duration and at-risk lead as a column.
+- **`0082` — parties.** `classifications`, `party_roles`, `staff_roles` (SiteBook's eleven,
+  seeded), `companies` (ABN eleven digits, address row), `contacts` (`contact_profile_id` for the
+  future login), `contact_methods` (one primary per kind per party), the two classification
+  junctions, `company_contacts` (job role lives here), `record_parties` (project / job / process
+  run; contact and/or company; role; `engaged_by`; ended, never deleted), `record_staff_roles`;
+  three display views; `guard_party_approval()` — users create unapproved, managers sign off
+  and are stamped, a manager's own creation approves by existing. The Contacts screen (people
+  with their company beside them, companies, detail with methods, classifications, employment,
+  the records they are on, sign-off), parties on the job drawer and project page and inside
+  each process run, SiteBook project roles on the project, and a Setup → Contacts section for
+  the three lookups. The 21 August decision is superseded, with the reason kept.
+
+- **`0083` — notifications: who hears what, on which channel, when.** `notification_types`
+  (ten, seeded with Amber's defaults: assignments, mentions, working drawings and sign-off
+  arrivals immediate; overdue and at-risk in the 07:30 digest), `notification_rules` (the
+  "who": assignee, owning team, engaged teams, watchers, managers, the mentioned person, a
+  named team or person, with `after_days` so overdue-5-days reaches the managers),
+  `notification_preferences` (a table, not 0050's jsonb bag: one row per person, type and
+  channel), `record_watchers`, `notifications` (the inbox, deduped per person and key),
+  `notification_deliveries` (the outbox: in_app sent as written, email and Teams queued or
+  held for the digest time, SMS written and waiting for a provider). `private.notify()` writes;
+  `private.notification_recipients()` resolves audiences; `notify_scan()` runs every 15
+  minutes by pg_cron over `task_display` and `process_run_display`; triggers fire on
+  assignment, mention, stage move, a working-drawings run or property, and a party awaiting
+  sign-off. The worker is `supabase/functions/deliver-notifications` (Microsoft Graph; claims
+  with skip locked, groups per person, backs off, fails after five) with its deploy steps in
+  its README — **not deployed from here**: it needs the Entra app registration and secrets.
+  The bell reads the inbox; Settings has the per-type, per-channel matrix with digest time;
+  Setup → Notifications edits types and rules and shows the outbox; Watch on jobs and projects.
+
+- **`0084` — maintenance: one table for every way a request arrives.** `maintenance_settings`
+  (one row, CHECKed to one: warranty months 3, hours to answer an offer 48, reminder the day
+  before, accept link 14 days, the intake mailbox — null until Amber names it),
+  `maintenance_categories` (a trade and its clock: the party role that did the work on site,
+  SLA days, at-risk lead ≤ SLA, the Lofty team; **empty on purpose**), `maintenance_requests`
+  (numbered `<job>-M<n>` by trigger from a high-water mark on the job; source email / phone /
+  form / portal / api / staff; due from the category's SLA unless typed; closing refused while
+  an item is open; a reply reopens), `maintenance_items` (one defect, one trade; done stamped),
+  `maintenance_assignments` (an offer to a contractor: one open per item; the accept link's
+  token stored only as a sha256, expiring, spent on use, and the use audited with origin
+  `accept_link`), `maintenance_messages` (the thread: in, out, note; the outgoing rows are an
+  outbox the same worker drains), `maintenance_message_secrets` (the token parked for the
+  worker, service-role only, deleted on send — the RLS probe found the first version, where
+  the caller-run offer could not write it, and a one-insert definer in `private` fixed it).
+  `record_parties` and `document_links` gain `maintenance_request_id` in their arcs. Views:
+  `job_warranty` (handover = the completed 7 - Handover run, end = handover + settings' months;
+  nobody types it), `maintenance_request_display` (address, reporter and how to reach them,
+  owner, category clock, warranty flag, counts, next visit, health no_sla · on_track · at_risk
+  · overdue · complete · closed), `maintenance_item_display` (the current offer and, from the
+  job's parties in the category's role, who did that trade originally — the default repairer).
+  Automation: a new request notifies the Maintenance team; `offer_maintenance_item()` queues the
+  email with the link and returns the token once; `maintenance_scan()` every 15 minutes —
+  unanswered offers, at-risk and over-SLA requests (escalating to the managers after 3 days),
+  visits tomorrow with the homeowner's reminder; `receive_maintenance_email()` matches inbound
+  mail by number, then sender, else opens a request on the purchaser's job, and refuses the
+  rest for a person. Three Edge Functions: `maintenance-accept` (the contractor's page, no
+  login), `maintenance-inbound` (the mailbox's POST), and the delivery worker extended to the
+  thread — **written, not deployed**. The app: a Maintenance tab (queue worst-first, the
+  request with its items, offers, thread and close), Setup → Maintenance (settings, trades,
+  the thread's outbox), a maintenance panel with the warranty line on every job drawer.
+  Proved: behaviour §43 (warranty from the run; M1/M2 numbering; due, at-risk and health from
+  the category; the scan does not repeat and does escalate; mail matched by sender; a
+  stranger's mail refused), four constraint probes, eleven RLS probes — each watched failing.
+
 ### Naming, measured rather than asserted
 
 All 79 migrations replayed into a local Postgres; every column in `public` checked against
