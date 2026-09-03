@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- The jobs import takes Amber's decisions — every job in Acquisition & Development unless the sheet says cancelling, the owning team from the named person when they are a user in one team, shared old numbers carried by no job
 - PRODUCT.md records who the app is for, the phone-width drawer as the primary reading surface, and Vibe-with-Lofty-colours as the binding visual constraint
 - The live database is at 0085 — Maintenance, Contacts and notifications tables exist, and the Maintenance tab loads
 - Phase B — the old system's 801 job rows are staged verbatim in the database, with a load that builds the projects and jobs from them and an unload that takes exactly that back out
@@ -74,6 +75,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- The app is Lofty Hub — in the browser tab, on sign-in and on the legal page
 - Setup → Processes and Setup → Properties open the selected record in a panel beside the list, everything editable there — nothing behind a More or Order toggle
 - Updates → Merged from the build reads merged pull requests from LoftySupport/loftyprojectapp, where the repository lives now
 - The decision against external parties is reversed — maintenance makes them first-class
