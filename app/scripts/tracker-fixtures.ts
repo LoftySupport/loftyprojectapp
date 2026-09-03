@@ -1,6 +1,6 @@
 import { createStubRepository as createEmptyRepository } from "../src/data/stubRepository";
 import type { Repository } from "../src/data/repository";
-import type { FeedbackItem, RoadmapPhase } from "../src/data/types";
+import type { FeedbackItem, Job, Process, ProcessRun, Project, RoadmapPhase } from "../src/data/types";
 
 /**
  * The tracker, with something in it — for the responsive sweep only.
@@ -118,10 +118,124 @@ const REQUESTS: FeedbackItem[] = STAGES.flatMap((stage, si) =>
   }))
 );
 
+/**
+ * A stage's processes and a few jobs standing in them, so the BOARD can be laid out.
+ *
+ * Same reason as the tracker fixtures above: `/jobs` swept green while drawing "No jobs
+ * yet", so the columns, the cards, the selection checkbox and the drag affordances were
+ * never measured at any width. Amber reported two of those as broken on 3 September.
+ *
+ * Jobs spread across the pipeline on purpose — one with nothing recorded, one mid-stage,
+ * one with work running ahead of an unfinished earlier process — because those are the
+ * three the board draws differently.
+ */
+const FIXTURE_STAGE = "Pre-construction";
+const FIXTURE_PROCESSES: Process[] = [
+  ["fixture_survey", "FIXTURE Site survey", "Stage 1", 1],
+  ["fixture_concept", "FIXTURE Concept plan", "Stage 1", 2],
+  ["fixture_pwa", "FIXTURE PWA", "Stage 2", 3],
+  ["fixture_drawings", "FIXTURE Working drawings", "Stage 2", 4]
+].map(([key, name, group, position], i) => ({
+  id: `fixture-process-${i + 1}`,
+  key: key as string,
+  name: name as string,
+  stageName: FIXTURE_STAGE,
+  stageGroup: group as string | null,
+  scope: "job",
+  owningTeam: "design",
+  expectedDays: (i + 1) * 3,
+  atRiskLeadDays: null,
+  isMilestone: i === 3,
+  isExternal: false,
+  position: position as number,
+  isActive: true,
+  description: null,
+  automation: null,
+  sharepointFolder: null,
+  importRef: null,
+  updatedAt: ISO(2026, 9, 1),
+  updatedBy: null
+}));
+
+const FIXTURE_PROJECT: Project = {
+  id: 9001,
+  name: "FIXTURE Corner Street",
+  type: null,
+  stage: FIXTURE_STAGE,
+  status: "active",
+  owningTeam: "design",
+  jobCount: 3,
+  createdAt: ISO(2026, 8, 1),
+  createdBy: null,
+  updatedAt: ISO(2026, 9, 1),
+  updatedBy: null
+} as unknown as Project;
+
+const FIXTURE_JOBS: Job[] = ["9001-01", "9001-02", "9001-03"].map((id, i) => ({
+  id,
+  jobNumberOld: null,
+  titleType: null,
+  projectId: 9001,
+  stage: FIXTURE_STAGE,
+  owningTeam: "design",
+  status: "active",
+  currentAddress: `${28 + i} FIXTURE Corner Street, Adelaide SA 5000`,
+  originalAddress: null,
+  projectCurrentAddress: "FIXTURE Corner Street, Adelaide SA 5000",
+  stageEnteredAt: ISO(2026, 8, 20 + i),
+  createdAt: ISO(2026, 8, 1),
+  createdBy: null,
+  updatedAt: ISO(2026, 9, 1),
+  updatedBy: null
+} as unknown as Job));
+
+/** -01 has nothing recorded, -02 is mid-stage, -03 has work ahead of an open process. */
+const FIXTURE_RUNS: ProcessRun[] = [
+  ["9001-02", 0, "complete"],
+  ["9001-02", 1, "in_progress"],
+  ["9001-03", 0, "in_progress"],
+  ["9001-03", 3, "in_progress"]
+].map(([jobId, pi, status], i) => {
+  const p = FIXTURE_PROCESSES[pi as number];
+  return {
+    id: `fixture-run-${i + 1}`,
+    processId: p.id,
+    processKey: p.key,
+    processName: p.name,
+    stageName: p.stageName,
+    stageGroup: p.stageGroup,
+    scope: "job",
+    owningTeam: p.owningTeam,
+    isMilestone: p.isMilestone,
+    isExternal: false,
+    expectedDays: p.expectedDays,
+    atRiskLeadDays: null,
+    position: p.position,
+    jobId: jobId as string,
+    projectId: null,
+    recordProjectId: 9001,
+    attempt: 1,
+    status,
+    waitingOn: null,
+    startedAt: ISO(2026, 8, 25),
+    completedAt: status === "complete" ? ISO(2026, 8, 28) : null,
+    completedById: null,
+    note: null,
+    dueDate: null,
+    atRiskDate: null,
+    health: "on_track",
+    daysTaken: null
+  } as unknown as ProcessRun;
+});
+
 export function createStubRepository(): Repository {
   const empty = createEmptyRepository();
   return {
     ...empty,
+    async listProcesses() { return FIXTURE_PROCESSES; },
+    async listProjects() { return [FIXTURE_PROJECT]; },
+    async listJobs() { return FIXTURE_JOBS; },
+    async listProcessRuns() { return FIXTURE_RUNS; },
     async listFeedback(kind?: "bug" | "idea") {
       return kind ? REQUESTS.filter(r => r.kind === kind) : REQUESTS;
     },

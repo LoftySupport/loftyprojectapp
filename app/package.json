@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "dictionary": "node scripts/generate-dictionary.mjs",
     "responsive": "node scripts/responsive.mjs",
-    "check:pipeline": "node scripts/check-pipeline.mjs"
+    "check:pipeline": "node scripts/check-pipeline.mjs",
+    "check:process-move": "node scripts/check-process-move.mjs"
   },
   "dependencies": {
     "@supabase/server": "^1.5.2",

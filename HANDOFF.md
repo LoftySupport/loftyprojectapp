@@ -25,6 +25,29 @@ Last updated: 2026-09-03.
 
 ---
 
+## Two rules Amber corrected on 3 September, and what they changed
+
+**"a process might not be complete before moving onto the next stage."** `pipelinePosition.ts`
+read a job's place as *the first process it has not finished*. That is wrong about how a
+build runs: the frame goes up while the drawings are still being marked up. It now reads
+*the furthest process anybody has recorded against*, so a job with Working Drawings under
+way says Working Drawings even with Concept Plan still open. An unfinished process behind
+it is a separate and real fact — outstanding, not a contradiction — and the drawer shows
+each run's own status.
+
+That correction also removed a field: `processMove.ts` had a "does the target need
+starting?" flag, and under the new rule it is always true, because a process carrying a
+run is by definition at or behind the job. A field that is always true is a field that
+will one day be believed, so it is gone.
+
+**"it can only go backwards if there is a Variation … an IAF is filled out and variation
+raised (and reason listed)."** This is what `0031` was built for, and its header says the
+same from the other side: rewinding is coherent INSIDE a phase, on a variation, and never
+across phases. **`variations` is not wired into the app at all** — the table has existed
+since 0031 and nothing reads or writes it. So a backwards drag is refused *in those words*,
+naming the IAF and the variation as the route. Wiring the table is the next change, and it
+is a PR of its own by the one-table rule.
+
 ## The interface must-haves, and where they are not met yet
 
 Amber, 3 September, gave two rules as **must-haves**. Both are written up in full in
