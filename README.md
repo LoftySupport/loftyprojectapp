@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 97 changes since then —
+Unreleased: 98 changes since then —
 - Added: Group the projects board by where its jobs are — a project appears in every stage or process its jobs have reached, carrying just those jobs
+- Changed: Every dropdown narrows as you type and lists its options alphabetically, except where the order is the information — and a process can be filed straight into a pipeline when it is created
 - Fixed: The jobs board offers only the processes of the stage you have filtered to, and says the right thing when a process belongs to a stage the job has already left
 - Fixed: The jobs board no longer scrolls sideways on a phone
 - Added: Drag a job between columns on the board — by lifecycle stage or by the processes inside a stage — and pick several to move at once from either view
-- Fixed: Setup → Processes no longer scrolls sideways on a tablet or a small phone
-- …and 92 more.
+- …and 93 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
