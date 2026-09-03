@@ -300,12 +300,17 @@
 .toolbar > .toolbar-control { flex: 0 1 220px; min-width: 180px; }
 .toolbar > .toolbar-search { flex: 0 1 260px; }
 
-@media (max-width: 900px) {
+/* 1120px, not 900: at 1024 the six fixed columns plus the row's four controls came to
+   1106px and the page scrolled sideways by 82. The sweep only caught it once the
+   fixtures gave this route rows to lay out — before that it measured an empty state. */
+@media (max-width: 1120px) {
   /* Narrow: the name and its actions are what you came for; the rest wraps under it,
      each value carrying the heading it lost when the header row went away. */
   .pipe-head { display: none; }
   .pipe-row { grid-template-columns: 48px minmax(0, 1fr); row-gap: var(--space-4); }
-  .pipe-row > .row-actions { grid-column: 2; justify-content: flex-start; }
+  /* Wrapping, because at 320 the four controls came to 336px. A row's actions folding
+     onto a second line is the narrow layout working; a page that scrolls sideways is not. */
+  .pipe-row > .row-actions { grid-column: 2; justify-content: flex-start; flex-wrap: wrap; }
   .pipe-row > .muted, .pipe-row > .pipe-col-days { grid-column: 2; text-align: left; }
   .pipe-row > [data-label]::before {
     content: attr(data-label) ": ";
