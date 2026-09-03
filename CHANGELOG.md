@@ -15,6 +15,7 @@ says shipped and what the app shows people cannot use different words for it.
 ### Added
 
 - The live database is at 0085 — Maintenance, Contacts and notifications tables exist, and the Maintenance tab loads
+- Phase B — the old system's 801 job rows are staged verbatim in the database, with a load that builds the projects and jobs from them and an unload that takes exactly that back out
 - Setup → Processes edits the tick-box lines of a template task, and every task shows its team, days, parent and order at once
 - Maintenance — a tab for what homeowners report after handover: requests numbered on the job, items per trade, offers to contractors with an accept link, the thread, SLA health and warranty
 - Setup → Maintenance — the warranty period, offer and reminder clocks, and the trades with their SLAs
