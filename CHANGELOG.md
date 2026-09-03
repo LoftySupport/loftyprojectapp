@@ -61,6 +61,7 @@ says shipped and what the app shows people cannot use different words for it.
 ### Fixed
 
 - The schema checks no longer assume the database is empty, so real data cannot make them fail for the wrong reason
+- Properties that showed only the tail of their name — three different rows all called "Ordered" — now read in full, with the team that owns them and a date field instead of "format not set"
 - Setup → Properties showed nothing at all; one missing database column had been stopping the whole page from loading
 - Maintenance due dates, warranty, health and daily reminders all work on the Adelaide calendar day — a request no longer turns overdue at 09:30 in the morning
 - A project with no target date reads "Not set" on its card, in the table and on its page — no column token

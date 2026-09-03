@@ -16,13 +16,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 78 changes since then —
+Unreleased: 79 changes since then —
 - Added: The 110 projects from Amber's workbook, each with the number of sites it will hold — no jobs yet
 - Fixed: The schema checks no longer assume the database is empty, so real data cannot make them fail for the wrong reason
+- Fixed: Properties that showed only the tail of their name — three different rows all called "Ordered" — now read in full, with the team that owns them and a date field instead of "format not set"
 - Added: 121 new properties from Amber's workbook, including the whole Construction stage — Footings through Handover
 - Fixed: Setup → Properties showed nothing at all; one missing database column had been stopping the whole page from loading
-- Changed: The app is Lofty Hub — in the browser tab, on sign-in and on the legal page
-- …and 73 more.
+- …and 74 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
