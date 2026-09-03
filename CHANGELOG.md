@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- PRODUCT.md records who the app is for, the phone-width drawer as the primary reading surface, and Vibe-with-Lofty-colours as the binding visual constraint
 - Setup → Processes edits the tick-box lines of a template task, and every task shows its team, days, parent and order at once
 - Maintenance — a tab for what homeowners report after handover: requests numbered on the job, items per trade, offers to contractors with an accept link, the thread, SLA health and warranty
 - Setup → Maintenance — the warranty period, offer and reminder clocks, and the trades with their SLAs
