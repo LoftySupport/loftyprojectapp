@@ -1061,11 +1061,11 @@ values ('probe_margin',    'Probe margin',    'job', 'Pre-construction', 'curren
        ('probe_pour',      'Probe pour date', 'job', 'Construction',     'date',     false),
        ('probe_team_only', 'Probe team only', 'job', 'Construction',     'text',     false);
 insert into property_values (property_def_key, property_def_format, job_id, property_value_number)
-select 'probe_margin', 'currency', job_id, 12345 from jobs where job_id like '1106-%' order by job_id limit 1;
+select 'probe_margin', 'currency', job_id, 12345 from jobs where job_id like '9106-%' order by job_id limit 1;
 insert into property_values (property_def_key, property_def_format, job_id, property_value_date)
-select 'probe_pour', 'date', job_id, date '2026-09-01' from jobs where job_id like '1106-%' order by job_id limit 1;
+select 'probe_pour', 'date', job_id, date '2026-09-01' from jobs where job_id like '9106-%' order by job_id limit 1;
 insert into property_values (property_def_key, property_def_format, job_id, property_value_text)
-select 'probe_team_only', 'text', job_id, 'finance only' from jobs where job_id like '1106-%' order by job_id limit 1;
+select 'probe_team_only', 'text', job_id, 'finance only' from jobs where job_id like '9106-%' order by job_id limit 1;
 insert into property_access (property_def_key, team_id) values ('probe_team_only', 'finance');
 
 update profiles set profile_permission = 'user' where profile_email = 'behaviour-test@lofty.com.au';
@@ -1094,7 +1094,7 @@ begin
 
   -- Recording is at the user rung on an open property; clearing is manager's, and RLS on
   -- DELETE filters rather than raising, so the count is the assertion.
-  select job_id into other_job from jobs where job_id like '1106-%' order by job_id desc limit 1;
+  select job_id into other_job from jobs where job_id like '9106-%' order by job_id desc limit 1;
   begin
     insert into property_values (property_def_key, property_def_format, job_id, property_value_date)
     values ('probe_pour', 'date', other_job, current_date);
@@ -1279,14 +1279,14 @@ reset role;
 -- audit row is not, and the open one is; the personal tables' rows are not.
 \echo '--- the audit is readable by a user, except restricted values and personal tables (0080) ---'
 reset request.jwt.claim.sub;
-insert into tasks (job_id, task_name) values ('1106-002', 'rls probe task 0080');
+insert into tasks (job_id, task_name) values ('9106-002', 'rls probe task 0080');
 update tasks set task_status = 'in_progress' where task_name = 'rls probe task 0080';
 -- A restricted property NOBODY has been granted — probe_margin was opened to design above,
 -- and the test person is in design, so it can no longer stand for "locked".
 insert into property_defs (property_def_key, property_def_label, property_def_scope, property_def_stage, property_def_format, property_def_restricted)
 values ('probe_locked_0080', 'Probe locked', 'job', 'Pre-construction', 'text', true);
 insert into property_values (property_def_key, property_def_format, job_id, property_value_text)
-values ('probe_locked_0080', 'text', '1106-002', 'secret');
+values ('probe_locked_0080', 'text', '9106-002', 'secret');
 insert into user_preferences (profile_id, user_preference_payload)
 select profile_id, '{"probe":"0080"}'::jsonb from profiles where profile_email = 'behaviour-test@lofty.com.au'
 on conflict (profile_id) do update set user_preference_payload = excluded.user_preference_payload;
@@ -1296,7 +1296,7 @@ do $$
 declare n integer;
 begin
   select count(*) into n from activity_audit
-   where activity_audit_table = 'tasks' and activity_audit_job_id = '1106-002'
+   where activity_audit_table = 'tasks' and activity_audit_job_id = '9106-002'
      and activity_audit_new_row ->> 'task_name' = 'rls probe task 0080';
   if n >= 2 then raise notice 'ok  a user reads the audit rows of a task on a job (% rows)', n;
   else raise warning 'FAIL: a user saw % audit rows for a task change, expected at least 2', n; end if;
@@ -1340,7 +1340,7 @@ delete from property_value_history where property_def_key = 'probe_locked_0080';
 -- ---------------------------------------------------------------- checklists (0081)
 \echo '--- a user ticks a checklist line; a user cannot write a template line (0081) ---'
 reset request.jwt.claim.sub;
-insert into tasks (job_id, task_name) values ('1106-002', 'rls probe task 0081');
+insert into tasks (job_id, task_name) values ('9106-002', 'rls probe task 0081');
 set role authenticated;
 set request.jwt.claim.sub = :'uid';
 do $$
@@ -1369,9 +1369,9 @@ begin
   exception when insufficient_privilege then raise notice 'ok  template checklist lines refuse a write below manager';
     when others then raise warning 'FAIL: unexpected on template checklist (%)', sqlerrm; end;
 
-  select count(*) into n from stage_completion where job_id = '1106-002';
+  select count(*) into n from stage_completion where job_id = '9106-002';
   if n >= 1 then raise notice 'ok  a user reads stage_completion for a job (% stage rows)', n;
-  else raise warning 'FAIL: a user saw no stage_completion rows for 1106-002'; end if;
+  else raise warning 'FAIL: a user saw no stage_completion rows for 9106-002'; end if;
 end $$;
 reset role;
 reset request.jwt.claim.sub;
@@ -1393,7 +1393,7 @@ begin
     insert into contact_methods (contact_id, contact_method_kind, contact_method_value, contact_method_is_primary) values (ct, 'mobile', '0400 111 222', true);
     insert into contact_classifications (contact_id, classification_id) values (ct, 'contractor');
     insert into company_contacts (company_id, contact_id, company_contact_job_role) values (co, ct, 'Fencer');
-    insert into record_parties (job_id, contact_id, company_id, party_role_id) values ('1106-002', ct, co, 'contractor');
+    insert into record_parties (job_id, contact_id, company_id, party_role_id) values ('9106-002', ct, co, 'contractor');
     select count(*) into n from contact_display where contact_id = ct and contact_approved_at is null and contact_company_name = 'RLS Fencing 0082';
     if n = 1 then raise notice 'ok  a user creates a contact at a company, reaches, classifies and places them — unapproved';
     else raise warning 'FAIL: the user''s contact did not come back unapproved with its company (% rows)', n; end if;
@@ -1412,7 +1412,7 @@ begin
     when others then raise warning 'FAIL: unexpected on party_roles (%)', sqlerrm; end;
 
   begin
-    insert into record_staff_roles (job_id, staff_role_id, profile_id) values ('1106-002', 'site_supervisor', (select current_profile_id()));
+    insert into record_staff_roles (job_id, staff_role_id, profile_id) values ('9106-002', 'site_supervisor', (select current_profile_id()));
     raise warning 'FAIL: a user assigned a staff role';
   exception when insufficient_privilege then raise notice 'ok  record_staff_roles refuse a write below manager';
     when others then raise warning 'FAIL: unexpected on record_staff_roles (%)', sqlerrm; end;
@@ -1445,7 +1445,7 @@ end $$;
 reset role;
 reset request.jwt.claim.sub;
 update profiles set profile_permission = 'user' where profile_email = 'behaviour-test@lofty.com.au';
-delete from record_parties where job_id = '1106-002' and contact_id in (select contact_id from contacts where contact_last_name = 'Fencer 0082');
+delete from record_parties where job_id = '9106-002' and contact_id in (select contact_id from contacts where contact_last_name = 'Fencer 0082');
 delete from company_contacts where contact_id in (select contact_id from contacts where contact_last_name = 'Fencer 0082');
 delete from contacts where contact_last_name = 'Fencer 0082';
 delete from companies where company_name in ('RLS Fencing 0082', 'RLS Managers Co 0082');
@@ -1454,9 +1454,9 @@ delete from companies where company_name in ('RLS Fencing 0082', 'RLS Managers C
 \echo '--- a user reads only their own inbox, sets their own preferences, cannot write the inbox or the rules (0083) ---'
 reset request.jwt.claim.sub;
 insert into tasks (job_id, task_name, task_assignee_id)
-select '1106-002', 'rls probe 0083', profile_id from profiles where profile_email = 'behaviour-test@lofty.com.au';
+select '9106-002', 'rls probe 0083', profile_id from profiles where profile_email = 'behaviour-test@lofty.com.au';
 insert into tasks (job_id, task_name, task_assignee_id)
-select '1106-002', 'rls probe 0083 other', profile_id from profiles where profile_email <> 'behaviour-test@lofty.com.au' and profile_is_active limit 1;
+select '9106-002', 'rls probe 0083 other', profile_id from profiles where profile_email <> 'behaviour-test@lofty.com.au' and profile_is_active limit 1;
 set role authenticated;
 set request.jwt.claim.sub = :'uid';
 do $$
@@ -1498,7 +1498,7 @@ begin
     when others then raise warning 'FAIL: unexpected on rules (%)', sqlerrm; end;
 
   begin
-    insert into record_watchers (profile_id, job_id) values ((select current_profile_id()), '1106-002');
+    insert into record_watchers (profile_id, job_id) values ((select current_profile_id()), '9106-002');
     raise notice 'ok  a user watches a job';
   exception when others then raise warning 'FAIL: unexpected watching (%)', sqlerrm; end;
 
@@ -1510,7 +1510,7 @@ begin
 end $$;
 reset role;
 reset request.jwt.claim.sub;
-delete from record_watchers where job_id = '1106-002';
+delete from record_watchers where job_id = '9106-002';
 delete from notification_preferences where notification_type_id = 'task_overdue';
 delete from tasks where task_name like 'rls probe 0083%';
 delete from notifications where notification_title like '%rls probe 0083%';
@@ -1538,8 +1538,8 @@ begin
     when others then raise warning 'FAIL: unexpected on categories (%)', sqlerrm; end;
 
   insert into maintenance_requests (job_id, maintenance_request_source, maintenance_request_summary)
-  values ('1106-002', 'phone', 'rls probe 0084') returning maintenance_request_id, maintenance_request_number into req, req_no;
-  if req_no ~ '^1106-002-M[0-9]+$' then raise notice 'ok  a user logs a request and it is numbered on the job (%)', req_no;
+  values ('9106-002', 'phone', 'rls probe 0084') returning maintenance_request_id, maintenance_request_number into req, req_no;
+  if req_no ~ '^9106-002-M[0-9]+$' then raise notice 'ok  a user logs a request and it is numbered on the job (%)', req_no;
   else raise warning 'FAIL: the request was numbered %', req_no; end if;
 
   insert into maintenance_items (maintenance_request_id, maintenance_item_description) values (req, 'rls probe item') returning maintenance_item_id into item;
@@ -1592,10 +1592,10 @@ end $$;
 reset role;
 reset request.jwt.claim.sub;
 update profiles set profile_permission = 'user' where profile_email = 'behaviour-test@lofty.com.au';
-delete from maintenance_requests where job_id = '1106-002';
+delete from maintenance_requests where job_id = '9106-002';
 delete from maintenance_categories where maintenance_category_id = 'rls_probe_0084';
 delete from companies where company_name = 'RLS probe trade 0084';
-delete from notifications where notification_type_id like 'maintenance_%' and job_id = '1106-002';
+delete from notifications where notification_type_id like 'maintenance_%' and job_id = '9106-002';
 
 -- Left as found.
 reset request.jwt.claim.sub;
