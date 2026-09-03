@@ -14,6 +14,9 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Setup → Processes is a pipeline — groups and processes drag into order, each process numbered by its place in the flow through its build lifecycle stage
+- Processes show when they were last updated, by whom, and which fields changed
+- Processes filter and sort by team, build lifecycle stage and group, with edit and delete on the list and the milestone flag in a column of its own
 - The jobs import takes Amber's decisions — every job in Acquisition & Development unless the sheet says cancelling, the owning team from the named person when they are a user in one team, shared old numbers carried by no job
 - PRODUCT.md records who the app is for, the phone-width drawer as the primary reading surface, and Vibe-with-Lofty-colours as the binding visual constraint
 - The live database is at 0085 — Maintenance, Contacts and notifications tables exist, and the Maintenance tab loads
@@ -58,6 +61,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- A process can collect job and project properties together — 9 attachments that were configured but invisible now show
 - Setup → Properties showed nothing at all; one missing database column had been stopping the whole page from loading
 - Maintenance due dates, warranty, health and daily reminders all work on the Adelaide calendar day — a request no longer turns overdue at 09:30 in the morning
 - A project with no target date reads "Not set" on its card, in the table and on its page — no column token
@@ -76,6 +80,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- A process opens in the same slideout as every other record, and expands to full screen
 - The app is Lofty Hub — in the browser tab, on sign-in and on the legal page
 - Setup → Processes and Setup → Properties open the selected record in a panel beside the list, everything editable there — nothing behind a More or Order toggle
 - Updates → Merged from the build reads merged pull requests from LoftySupport/loftyprojectapp, where the repository lives now
@@ -96,5 +101,6 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Removed
 
+- Notifications is no longer a Setup tab; your own channels stay in User settings and the audience rules moved under Automations
 - Processes is no longer a destination in the main navigation — it is part of Setup; /processes and /templates forward there
 - The tracker's gantt and calendar

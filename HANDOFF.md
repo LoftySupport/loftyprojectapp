@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 75 changes since then —
-- Fixed: Setup → Properties showed nothing at all; one missing database column had been stopping the whole page from loading
-- Changed: The app is Lofty Hub — in the browser tab, on sign-in and on the legal page
-- Added: The jobs import takes Amber's decisions — every job in Acquisition & Development unless the sheet says cancelling, the owning team from the named person when they are a user in one team, shared old numbers carried by no job
-- Added: PRODUCT.md records who the app is for, the phone-width drawer as the primary reading surface, and Vibe-with-Lofty-colours as the binding visual constraint
-- Fixed: Maintenance due dates, warranty, health and daily reminders all work on the Adelaide calendar day — a request no longer turns overdue at 09:30 in the morning
-- …and 70 more.
+Unreleased: 81 changes since then —
+- Added: Setup → Processes is a pipeline — groups and processes drag into order, each process numbered by its place in the flow through its build lifecycle stage
+- Added: Processes show when they were last updated, by whom, and which fields changed
+- Added: Processes filter and sort by team, build lifecycle stage and group, with edit and delete on the list and the milestone flag in a column of its own
+- Fixed: A process can collect job and project properties together — 9 attachments that were configured but invisible now show
+- Changed: A process opens in the same slideout as every other record, and expands to full screen
+- …and 76 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
