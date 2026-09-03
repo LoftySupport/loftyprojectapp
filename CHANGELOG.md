@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- PRODUCT.md records who the app is for, the phone-width drawer as the primary reading surface, and Vibe-with-Lofty-colours as the binding visual constraint
 - The live database is at 0085 — Maintenance, Contacts and notifications tables exist, and the Maintenance tab loads
 - Phase B — the old system's 801 job rows are staged verbatim in the database, with a load that builds the projects and jobs from them and an unload that takes exactly that back out
 - Setup → Processes edits the tick-box lines of a template task, and every task shows its team, days, parent and order at once
