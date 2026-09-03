@@ -16,13 +16,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 83 changes since then —
+Unreleased: 85 changes since then —
+- Added: The 110 projects from Amber's workbook, each with the number of sites it will hold — no jobs yet
+- Fixed: The schema checks no longer assume the database is empty, so real data cannot make them fail for the wrong reason
 - Fixed: Properties that showed only the tail of their name — three different rows all called "Ordered" — now read in full, with the team that owns them and a date field instead of "format not set"
 - Added: Setup → Processes is a pipeline — groups and processes drag into order, each process numbered by its place in the flow through its build lifecycle stage
 - Added: Processes show when they were last updated, by whom, and which fields changed
-- Added: Processes filter and sort by team, build lifecycle stage and group, with edit and delete on the list and the milestone flag in a column of its own
-- Fixed: A process can collect job and project properties together — 9 attachments that were configured but invisible now show
-- …and 78 more.
+- …and 80 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
