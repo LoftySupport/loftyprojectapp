@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 91 changes since then —
+Unreleased: 93 changes since then —
+- Fixed: Setup → Processes no longer scrolls sideways on a tablet or a small phone
+- Changed: Setup → Processes is now a pipeline you drag, with the name editable in place and a process added straight into its stage
 - Added: See what each job is up to — group the board by Process, or drill into a stage to get its processes as columns with every job in the one it has reached
 - Added: An "Up to" column on the jobs table, in pipeline order
 - Added: npm run check:pipeline proves the rule that decides where a job sits
-- Changed: Every record — a contact, a maintenance request, a property, a project — now opens in the same slide-out panel, which expands to full width and can be dragged wider
-- Changed: Updates moved from the sidebar to the footer
-- …and 86 more.
+- …and 88 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -27,9 +27,28 @@ Last updated: 2026-09-03.
 
 ## The interface must-haves, and where they are not met yet
 
-Amber, 3 September, gave two rules as **must-haves**. Both are written up in full in
-[PRODUCT.md](PRODUCT.md) under *Interface Must-Haves*; this is the state of play against
-them, so a gap is a listed item rather than something the next person discovers.
+Amber, 3 September, gave three rules as **must-haves**. All three are written up in full
+in [PRODUCT.md](PRODUCT.md) under *Interface Must-Haves*; this is the state of play
+against them, so a gap is a listed item rather than something the next person discovers.
+
+### What has an order is dragged into it — DONE on Processes, and only there
+
+Setup → Processes is now an ordered list you rearrange rather than a table you read down —
+the shape of the four screenshots Amber sent as a *"ui and ux reference"*: a card per
+lifecycle stage, its processes as rows with a drag handle, a name box you type into, and
+Edit properties / Delete at the end of each. `+ Add a process to <stage>` opens
+the drawer with that stage already chosen. The dense table is still one click away under
+**Table**, which is where sorting lives.
+
+The same treatment is not yet on the other ordered lists — the properties a process
+collects, and process checklist templates. They reorder, but through arrows rather than a
+drag, and their rows are table cells rather than editable boxes.
+
+The rules behind a move now live in `app/src/data/pipelineOrder.ts` rather than inside the
+page component, and `npm run check:pipeline-order` runs 24 cases through them. Four
+breakages were watched reporting before the cases were trusted; a fifth breakage passed
+and the case it should have caught was rewritten, which is recorded in the script's
+header.
 
 ### Every record opens in the slideout — DONE
 
