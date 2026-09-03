@@ -51,7 +51,7 @@ export function LegalPage({ kind }: { kind: "privacy" | "terms" }) {
           {isPrivacy ? "Privacy Policy" : "Terms of Use"}
         </Heading>
         <Text type="text2" color="secondary" ellipsis={false}>
-          Lofty Project Management App
+          Lofty Hub
         </Text>
 
         <div className="legal-pending" role="note">

@@ -1,4 +1,4 @@
-# Lofty Job Oversight Board
+# Lofty Hub
 
 The V0 build of Lofty's job pipeline board: React, Vibe and Supabase.
 
@@ -16,13 +16,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 72 changes since then —
+Unreleased: 74 changes since then —
+- Changed: The app is Lofty Hub — in the browser tab, on sign-in and on the legal page
+- Added: The jobs import takes Amber's decisions — every job in Acquisition & Development unless the sheet says cancelling, the owning team from the named person when they are a user in one team, shared old numbers carried by no job
 - Added: PRODUCT.md records who the app is for, the phone-width drawer as the primary reading surface, and Vibe-with-Lofty-colours as the binding visual constraint
 - Fixed: Maintenance due dates, warranty, health and daily reminders all work on the Adelaide calendar day — a request no longer turns overdue at 09:30 in the morning
 - Added: The live database is at 0085 — Maintenance, Contacts and notifications tables exist, and the Maintenance tab loads
-- Added: Phase B — the old system's 801 job rows are staged verbatim in the database, with a load that builds the projects and jobs from them and an unload that takes exactly that back out
-- Fixed: A project with no target date reads "Not set" on its card, in the table and on its page — no column token
-- …and 67 more.
+- …and 69 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

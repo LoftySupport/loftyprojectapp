@@ -24,7 +24,7 @@ Homeowners and contractors are parties on records and receive email from the app
 
 ## Product Purpose
 
-The Lofty job oversight board: one place that holds every project and every job Lofty
+**Lofty Hub** (Amber, 3 September: *"call it lofty hub"*): one place that holds every project and every job Lofty
 Building Group has, where each job is in its seven-position lifecycle, who owns it, what
 has happened to it and what is due. It replaces a spreadsheet-and-memory system (the old
 job numbers the import carries) with a record that is the same on every screen and
@@ -63,7 +63,8 @@ claim that every number on it traces to a row somebody can open.
   monday.com's **Vibe** components (`@vibe/core`, `@vibe/icons`), with Lofty's colours in
   Vibe's primary and brand slots. Vibe's tokens for spacing, radius, type and motion are
   the system; Lofty supplies the two hero colours and the accessible siblings and inks
-  Vibe does not ship. Recorded here as a constraint; the visual record is `DESIGN.md`.
+  Vibe does not ship. Recorded here as a constraint; the visual record is `DESIGN.md`, which Amber is
+  producing herself in Claude Design (3 September) — it is not generated from this file.
 - **Mobile is a width, not a separate app.** Amber: *"for job information and readability
   it should look good from the slideout sidebar and be easy to read and scan. if a job
   details can be seen on that sidebar level which is similar to mobile phone width or found
@@ -82,7 +83,7 @@ claim that every number on it traces to a row somebody can open.
 
 ## Brand Commitments
 
-- Name: **Lofty Building Group**; the app is "the Lofty project app" or "the board".
+- Name: **Lofty Building Group**; the app is **Lofty Hub**, "the hub" or "the board".
 - Colours: Lofty green `#005058` and Lofty orange `#f47e63` are the identity. The orange is
   a logo and decorative colour only (2.6:1 on white); anything carrying text or meaning
   uses its darker sibling `#b8482a`.

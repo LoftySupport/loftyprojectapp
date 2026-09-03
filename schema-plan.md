@@ -1635,6 +1635,34 @@ collided — found by the load refusing it, not by reading the sheet — and the
 to the job's own sequence (`1597 · job 009`) for that one row. Both are Amber's to look at in
 the source; the staging row keeps what the sheet said either way.
 
+### 3 September — the decisions, and what the load does with them
+
+Amber, in two messages: *"project numbers can start at whatever you recommend. job numbers
+number be three digits. people are users and users are in teams. if in doubt ask a question.
+cancelling moves to lifecycle stage cancelled and onhold or in doubt leave in aqueiosint and
+development. ignore the seven old job numbers"* — and, asked which named person's team owns
+a job and what to do for the rows naming nobody: *"all jobs imported should just be
+aquistion and development if in doubt. ignore ben.. if he isn't in the app assign to
+aquisitions and development."*
+
+| | Decided | In the load (`0088`) |
+| --- | --- | --- |
+| **Project numbers** | start where recommended, keep the nine hand-made projects | `p_project_base => 1011`; workbook 1001 → 1011, 1121 → 1131 |
+| **Job numbers** | three digits | already the schema's rule (0075); the sheet's `02` becomes `002` |
+| **Owning team** | *people are users and users are in teams; if in doubt A&D* | `private.import_team_for_person()`: the sales consultant the row names, matched by first name and surname initial to one active user in exactly one team → that team; anyone else, anyone in several teams, and the 209 rows naming nobody → Acquisition & Development. On the real rows: Paul (12) → Pre-construction Admin, Gary P (3) → Lofty General, 781 → A&D |
+| **Stage** | everything in A&D; *cancelling* → Cancelled; on hold and in doubt stay | `p_stage_map => {"cancelling": "Cancelled"}`, else `p_stage`. 39 jobs land in Cancelled, 757 in A&D. The status word still becomes the job status through `p_status_map` (cancelled, on_hold); "in doubt" stays on_track with the word on its row |
+| **Shared old numbers** | *ignore the seven* | `p_shared_old_numbers => 'omit'`: those jobs carry no old number; the staging row keeps it, so nothing is lost and a later decision can still label them |
+
+The rule about people needed the lookup to be its own function so the verify suite could
+ask it questions by name: `"Paul"` → Paul's team, `"paul ferka"` → the same, `"Michael B"`
+→ the fallback, blank → the fallback. Olivia is in one team on the replay and three on the
+live database; both answer Acquisition & Development, because that is her one team and also
+the fallback — the one case where being in doubt costs nothing.
+
+**Not decided by this, on purpose:** the CMAs (Marie, Masha, Amy) and the site managers
+the sheet also names. They are not users of the app, so under Amber's rule they cannot own
+a job; they are Phase C parties, read from the verbatim row when parties are imported.
+
 ### Proved, on the replay
 
 `verify/behaviour.sql` §44 loads the real 801 rows with placeholder decisions and the base
