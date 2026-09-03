@@ -12,10 +12,12 @@
     "responsive": "node scripts/responsive.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.111.0",
-    "@vibe/core": "^4.5.3",
+    "@supabase/server": "^1.5.2",
+    "@supabase/ssr": "^0.12.5",
+    "@supabase/supabase-js": "^2.114.0",
+    "@vibe/core": "^4.5.30",
     "@vibe/icons": "^4.1.0",
-    "@vibe/tooltip": "4.0.6",
+    "@vibe/tooltip": "^3.1.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.2"
