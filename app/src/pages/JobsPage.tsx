@@ -32,6 +32,8 @@ import { usePermission } from "../data/PermissionProvider";
 import type { LatestUpdate, StageName, TeamId } from "../data/types";
 import { accentStyle, columnAccent } from "../theme/accents";
 import { NOTHING_RECORDED, currentProcessName, pipelineColumns, processColumnOf } from "../data/pipelinePosition";
+import { planProcessDrop, refusalText, type DropPlan } from "../data/processMove";
+import { MoveProcessDialog } from "../components/MoveProcessDialog";
 import { readPrefs } from "../data/preferences";
 import { Token } from "../components/Token";
 import { Toolbar } from "../components/Toolbar";
@@ -96,9 +98,62 @@ export function JobsPage() {
    * column never accepts the drop, so the browser shows not-allowed instead of letting
    * the card land and bounce back with an error.
    */
-  const dragEnabled = grouping === "Stage" && can("manager");
+  /**
+   * Two groupings carry an order a drop can honour, and they are the two Amber drags in:
+   * **Stage** moves the job along the lifecycle, **Process** moves it along the run
+   * inside its stage. Everything else — Team, Status, Project, Team member — is a label
+   * rather than a sequence, and dropping a card on a label has no write behind it.
+   *
+   * It used to be Stage alone, so drilling into a stage (which opens Process since #21)
+   * left every card inert with nothing on screen saying why. That was the bug.
+   */
+  const dragGrouping = grouping === "Stage" || grouping === "Process";
+  const dragEnabled = dragGrouping && can("manager");
   const [dragged, setDragged] = useState<BoardJob | null>(null);
+  /**
+   * Whether this column will take the card currently in the air. Answered DURING the
+   * drag, so an illegal drop is refused before it lands and the browser shows
+   * not-allowed rather than letting the card fall and bounce back with an error.
+   *
+   * Forwards only, in both groupings — Amber kept that rule when asked. The Nothing
+   * recorded column is never a target: it is the absence of a record, and you cannot
+   * move a job INTO having nothing recorded.
+   */
+  /**
+   * Why this column will not take that card, in a sentence.
+   *
+   * Amber, 3 September, on going back: *"it can only go backwards if there is a Variation
+   * where a variation is required and an 'Internal Amendment Form' (IAF) is filled out
+   * and variation raised (and reason listed)"*. So a refusal names the route rather than
+   * saying no — and for the lifecycle it says the thing `0031` decided: a job does not
+   * rewind out of Construction, the work lives on the variation while the job stays put.
+   */
+  const whyNot = (job: BoardJob, columnKey: string): string => {
+    if (grouping === "Stage") {
+      if (columnKey === job.stage) return `${job.jobNumber} is already in ${columnKey}.`;
+      return `A job does not move back from ${job.stage} to ${columnKey}. Going back needs a variation — `
+        + "an IAF filled out and the variation raised with its reason — and the job stays where it is "
+        + "while that work runs. Raising one from here is not built yet.";
+    }
+    if (columnKey === NOTHING_RECORDED) {
+      return `"${NOTHING_RECORDED}" is the absence of a record, not a place to put a job.`;
+    }
+    const out = planProcessDrop(job, columnKey, processes);
+    return out.ok ? "" : refusalText(out.refusal);
+  };
+
+  const acceptsDrop = (columnKey: string): boolean => {
+    if (!dragEnabled || !dragged) return false;
+    if (grouping === "Stage") return isForwardMove(dragged.stage, columnKey);
+    if (columnKey === NOTHING_RECORDED) return false;
+    return planProcessDrop(dragged, columnKey, processes).ok;
+  };
   const [pendingMove, setPendingMove] = useState<{ job: BoardJob; to: StageName } | null>(null);
+  /** A drop or a bulk action waiting on the catch-up confirmation. */
+  const [pendingProcess, setPendingProcess] =
+    useState<{ jobs: BoardJob[]; to: string; plans: Map<string, DropPlan> } | null>(null);
+  /** Why the last drop was refused — printed where it happened rather than swallowed. */
+  const [refused, setRefused] = useState<string | null>(null);
 
   const { jobNumber } = useParams();
   const navigate = useNavigate();
@@ -219,6 +274,92 @@ export function JobsPage() {
     else setBulkNote({ ok: null, err: `${summary} · ${failures.length} refused: ${failures[0]}` });
   }
 
+  /**
+   * Plan a move onto a process column for one job or a selection, and open the
+   * confirmation — or say why not a single one of them can go.
+   *
+   * A mixed selection is normal and is not an error: some jobs are already past the
+   * target, some are in another stage. Those are dropped from the batch and counted, the
+   * same way the bulk stage move counts what it leaves alone.
+   */
+  function askProcessMove(jobs: BoardJob[], to: string) {
+    const plans = new Map<string, DropPlan>();
+    const refusals: string[] = [];
+    for (const j of jobs) {
+      const out = planProcessDrop(j, to, processes);
+      if (out.ok) plans.set(j.jobNumber, out.plan);
+      else refusals.push(refusalText(out.refusal));
+    }
+    if (plans.size === 0) {
+      // Every one refused. Print the first reason rather than a generic "cannot": the
+      // reasons are written to be read, and a selection usually fails for one of them.
+      setRefused(refusals[0] ?? `Nothing to move to ${to}.`);
+      return;
+    }
+    setRefused(null);
+    setPendingProcess({ jobs: jobs.filter(j => plans.has(j.jobNumber)), to, plans });
+  }
+
+  /**
+   * Write the move. `alsoComplete` is the answer to the dialog's question — with it, the
+   * processes before the target are completed so the job reads where it was put; without
+   * it, only the target starts and the card may stay where it was, honestly.
+   *
+   * A run that already exists is updated rather than started again: starting one is a new
+   * ATTEMPT (0078), and a second attempt is a real thing that means "we did this twice".
+   * So the runs are read per job first, and the id decides which call to make.
+   */
+  async function applyProcessMove(alsoComplete: boolean) {
+    const pending = pendingProcess;
+    if (!pending) return;
+    const { jobs, to, plans } = pending;
+    setPendingProcess(null);
+    const skipped = selectedJobs.length > 0 && jobs.length < selectedJobs.length
+      ? selectedJobs.length - jobs.length
+      : 0;
+    await bulkApply(`moved to ${to}`, jobs, async j => {
+      const plan = plans.get(j.jobNumber);
+      if (!plan) return;
+      const runs = await repo.listProcessRuns({ jobId: j.jobNumber });
+      const latest = new Map<string, { id: string; attempt: number }>();
+      for (const r of runs) {
+        const seen = latest.get(r.processId);
+        if (!seen || r.attempt > seen.attempt) latest.set(r.processId, { id: r.id, attempt: r.attempt });
+      }
+      const set = async (processId: string, status: "complete" | "in_progress") => {
+        const existing = latest.get(processId);
+        if (existing) await repo.updateProcessRun(existing.id, { status });
+        else await repo.startProcessRun({ jobId: j.jobNumber }, processId, status);
+      };
+      // The move: the target starts, and the board reads the furthest recorded process,
+      // so the card lands where it was dropped. The completions are the optional tidy-up.
+      if (alsoComplete) for (const p of plan.outstanding) await set(p.id, "complete");
+      await set(plan.target.id, "in_progress");
+    }, skipped);
+    clearSelection();
+  }
+
+  /**
+   * Which stages the Process columns are drawn from.
+   *
+   * The saved view's stages, NARROWED by the Stage filter when one is set. Amber, 3
+   * September, filtered the board to Pre-construction and still got Acquisition &
+   * Development's PWA as a column — then a refusal when she dropped a job on it. A board
+   * narrowed to one stage should not offer another stage's processes as places to put a
+   * card: the filter said which stage she was working in, and the columns ignored it.
+   *
+   * The Stage filter is a job filter everywhere else, so this is the one place it also
+   * decides what is on screen to drop onto. Unset, nothing changes.
+   */
+  const columnStages = useMemo(() => {
+    const picked = filters.filter(f => f.field === "Stage" && f.value).map(f => String(f.value));
+    const kept = picked.filter(s => viewStages.includes(s));
+    return kept.length > 0 ? kept : viewStages;
+  }, [filters, viewStages]);
+
+  /** The processes of the stages in view, in run order — the "Up to…" options. */
+  const processPipeline = useMemo(() => pipelineColumns(processes, columnStages), [processes, columnStages]);
+
   // Jobs a bulk stage move would actually touch — already at or past the target,
   // cancelled or archived stay put, the same rule a project cascade follows (0046).
   const bulkMovable = useMemo(
@@ -251,7 +392,7 @@ export function JobsPage() {
       // Lifecycle stage order, then position within the stage — Amber's sentence, as an
       // array. "Nothing recorded" leads, because a job nobody has recorded against is at
       // the head of the stage's work, not partway through it.
-      : grouping === "Process" ? [NOTHING_RECORDED, ...pipelineColumns(processes, viewStages)]
+      : grouping === "Process" ? [NOTHING_RECORDED, ...pipelineColumns(processes, columnStages)]
       : [...new Set(rows.map(keyOf))];
 
     // No row may fall outside the columns. Every other grouping either lists its own
@@ -262,7 +403,7 @@ export function JobsPage() {
     const strays = [...new Set(rows.map(keyOf))].filter(k => !order.includes(k));
 
     return [...order, ...strays].map(key => ({ key, jobs: rows.filter(j => keyOf(j) === key) }));
-  }, [grouping, rows, viewStages, teamNames, processes]);
+  }, [grouping, rows, viewStages, columnStages, teamNames, processes]);
 
   /**
    * Table sorting (G12) — the SortableTable idiom the Admin tables already use, applied
@@ -282,7 +423,7 @@ export function JobsPage() {
   // The flat pipeline, for the "Up to" column's sort: alphabetical would put Working
   // Drawings before the Site Survey that precedes it, which is the lifecycle backwards —
   // the same reasoning the Stage column already sorts on its index rather than its name.
-  const pipelineOrder = useMemo(() => pipelineColumns(processes, viewStages), [processes, viewStages]);
+  const pipelineOrder = useMemo(() => pipelineColumns(processes, columnStages), [processes, columnStages]);
 
   const jobColumnDefs = useMemo<ColumnDef<BoardJob>[]>(() => [
     // The job number cannot be turned off. A table of jobs with no job number in it is
@@ -452,11 +593,27 @@ export function JobsPage() {
 
       {noMatches && <NoResults noun="jobs" />}
 
-      {/* The drag hint, from the prototype's view header — shown only when dragging is
-          actually possible, so it never promises what the rung below manager lacks. */}
-      {view === "Board" && dragEnabled && !loading && all.length > 0 && (
+      {/* The drag hint, from the prototype's view header. It used to appear only when
+          dragging was possible and say nothing otherwise, so a board of inert cards
+          looked broken rather than grouped by something a drop cannot write to. It now
+          says which of the two it is — Amber reported the silence, not the rule. */}
+      {view === "Board" && !loading && all.length > 0 && can("manager") && (
         <div className="drag-hint">
-          <Text type="text3" color="secondary">Drag cards between columns to move a job</Text>
+          <Text type="text3" color="secondary" ellipsis={false} element="p">
+            {dragEnabled
+              ? grouping === "Stage"
+                ? "Drag cards between columns to move a job forwards through the lifecycle"
+                : "Drag cards between columns to move a job forwards through this stage's processes"
+              : `Grouped by ${grouping}, so cards do not drag — ${grouping === "None" ? "there is one column" : "these columns are a label, not an order"}. Group by Stage or Process to move jobs.`}
+          </Text>
+        </div>
+      )}
+
+      {/* Why the last drop bounced. On the board rather than in a toast: it belongs
+          where the card landed, and it clears itself the moment anything else happens. */}
+      {refused && view === "Board" && (
+        <div className="drag-hint">
+          <Problem>{refused}</Problem>
         </div>
       )}
 
@@ -467,18 +624,36 @@ export function JobsPage() {
               className="board-column"
               key={g.key}
               style={accentStyle(columnAccent(grouping, g.key, gi))}
+              /**
+               * Why the refusal is explained on ENTER rather than on drop.
+               *
+               * A column that will not take a card has to refuse the drop, and the only
+               * way to refuse one is to leave `dropEffect` at "none" — at which point
+               * Chromium fires no `drop` event at all, so there is nothing to explain
+               * itself on release. That silence is what Amber reported: a card that will
+               * not land and a board that says nothing about why.
+               *
+               * So the reason arrives the moment the card is over the column, while there
+               * is still time to put it somewhere else, and the cursor stays honest.
+               */
+              onDragEnter={() => {
+                if (!dragEnabled || !dragged) return;
+                setRefused(acceptsDrop(g.key) ? null : whyNot(dragged, g.key));
+              }}
               onDragOver={e => {
-                if (dragEnabled && dragged && isForwardMove(dragged.stage, g.key)) {
-                  e.preventDefault();
-                  e.dataTransfer.dropEffect = "move";
-                }
+                if (!dragEnabled || !dragged) return;
+                if (!acceptsDrop(g.key)) return;   // no preventDefault: the drop is refused
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
               }}
               onDrop={e => {
-                if (dragEnabled && dragged && isForwardMove(dragged.stage, g.key)) {
-                  e.preventDefault();
-                  setPendingMove({ job: dragged, to: g.key as StageName });
-                }
+                const job = dragged;
                 setDragged(null);
+                if (!job || !dragEnabled || !acceptsDrop(g.key)) return;
+                e.preventDefault();
+                setRefused(null);
+                if (grouping === "Stage") setPendingMove({ job, to: g.key as StageName });
+                else askProcessMove([job], g.key);
               }}
             >
               <div className="board-column-head">
@@ -530,16 +705,31 @@ export function JobsPage() {
                 g.jobs.map(j => (
                   <div
                     key={j.jobNumber}
-                    className={dragEnabled ? "board-card-draggable" : undefined}
+                    className={`board-card-wrap${dragEnabled ? " board-card-draggable" : ""}${selected.has(j.jobNumber) ? " is-picked" : ""}`}
                     draggable={dragEnabled}
                     onDragStart={e => {
                       setDragged(j);
+                      setRefused(null);
                       e.dataTransfer.effectAllowed = "move";
                       // Some browsers refuse to start a drag with no data at all.
                       e.dataTransfer.setData("text/plain", j.jobNumber);
                     }}
                     onDragEnd={() => setDragged(null)}
                   >
+                    {/* Selection lived only in the table, so "multiselect and update the
+                        stage" was impossible on the board — Amber's second report. The
+                        same `selected` set backs both views, so a selection survives
+                        switching between them. */}
+                    {can("user") && (
+                      <label className="board-card-pick">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(j.jobNumber)}
+                          onChange={() => toggleOne(j.jobNumber)}
+                          aria-label={`Select job ${j.jobNumber}`}
+                        />
+                      </label>
+                    )}
                     <JobCard
                       jobNumber={j.jobNumber}
                       stageName={j.stage}
@@ -559,9 +749,10 @@ export function JobsPage() {
         </Board>
       )}
 
-      {view === "Table" && !noMatches && !loading && all.length > 0 && (
-        <>
-          {can("user") && selected.size > 0 && (
+      {/* The bulk bar belongs to the selection, not to one view of it. It was inside the
+          table branch, so selecting cards on the board — once that was possible — would
+          have had nowhere to act. */}
+      {!noMatches && !loading && all.length > 0 && can("user") && selected.size > 0 && (
             <div className="bulk-bar" role="region" aria-label="Bulk edit">
               <Text type="text2" weight="medium">
                 {selected.size} selected
@@ -578,6 +769,18 @@ export function JobsPage() {
                     options={LINEAR_STAGES.map(s => ({ value: s, label: s }))}
                     value={null}
                     onChange={v => setBulkStage(v as StageName)}
+                  />
+                )}
+                {/* "or by process or pipelien" — the other half of Amber's report. The
+                    options are the processes of the stages in view, in the order a job
+                    runs them, so this list reads the same way the board's columns do. */}
+                {can("manager") && processPipeline.length > 0 && (
+                  <Select
+                    aria-label="Set what the selected jobs are up to"
+                    placeholder="Up to…"
+                    options={processPipeline.map(n => ({ value: n, label: n }))}
+                    value={null}
+                    onChange={v => { if (v) askProcessMove(selectedJobs, v); }}
                   />
                 )}
                 <Select
@@ -608,8 +811,12 @@ export function JobsPage() {
               {bulkBusy && <Text type="text3" color="secondary">Saving…</Text>}
               {bulkNote.ok && <Result>{bulkNote.ok}</Result>}
               {bulkNote.err && <Problem>{bulkNote.err}</Problem>}
+              {refused && view === "Table" && <Problem>{refused}</Problem>}
             </div>
-          )}
+      )}
+
+      {view === "Table" && !noMatches && !loading && all.length > 0 && (
+        <>
           <div className="panel data-table-wrap">
           <table className="data-table">
             <thead>
@@ -712,6 +919,23 @@ export function JobsPage() {
           note={JOB_MOVE_NOTE}
           onClose={() => setPendingMove(null)}
           onMoved={() => setReloadKey(k => k + 1)}
+        />
+      )}
+
+      {pendingProcess && (
+        <MoveProcessDialog
+          subject={pendingProcess.jobs.length === 1
+            ? pendingProcess.jobs[0].jobNumber
+            : `${pendingProcess.jobs.length} jobs`}
+          count={pendingProcess.jobs.length}
+          target={pendingProcess.to}
+          // The names to complete, across the batch — a job already past one of them
+          // does not put it on the list twice, and a job that needs none adds nothing.
+          completes={[...new Set(
+            pendingProcess.jobs.flatMap(j => (pendingProcess.plans.get(j.jobNumber)?.outstanding ?? []).map(p => p.name))
+          )]}
+          onConfirm={applyProcessMove}
+          onClose={() => setPendingProcess(null)}
         />
       )}
 

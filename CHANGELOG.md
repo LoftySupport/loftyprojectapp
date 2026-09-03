@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Drag a job between columns on the board — by lifecycle stage or by the processes inside a stage — and pick several to move at once from either view
 - See what each job is up to — group the board by Process, or drill into a stage to get its processes as columns with every job in the one it has reached
 - An "Up to" column on the jobs table, in pipeline order
 - npm run check:pipeline proves the rule that decides where a job sits
@@ -67,6 +68,8 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- The jobs board offers only the processes of the stage you have filtered to, and says the right thing when a process belongs to a stage the job has already left
+- The jobs board no longer scrolls sideways on a phone
 - Setup → Processes no longer scrolls sideways on a tablet or a small phone
 - The schema checks no longer assume the database is empty, so real data cannot make them fail for the wrong reason
 - Properties that showed only the tail of their name — three different rows all called "Ordered" — now read in full, with the team that owns them and a date field instead of "format not set"

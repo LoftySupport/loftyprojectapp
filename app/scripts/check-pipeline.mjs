@@ -19,6 +19,8 @@
  *     returned "Invoice" instead of "Concept Plan"
  *   - the pipeline sorted by name instead of position         → columns came out
  *     "Concept Plan · Invoice · Site Survey" and "waiting is still open" broke with it
+ *   - the furthest-recorded rule reverted to first-unfinished  → "work started further on
+ *     wins" returned "Invoice" instead of "Site Survey"
  *
  * Run it with `npm run check:pipeline`. It loads the real module through Vite rather than
  * re-implementing it in JavaScript, because a check that carries its own copy of the
@@ -63,7 +65,17 @@ const cases = [
   ["every process behind it holds at the last one until the lifecycle moves",
    job("Pre-construction", [["invoice", "complete"], ["concept_plan", "complete"], ["site_survey", "complete"]]), "Site Survey"],
   ["a stage with no job-level processes has nothing to be up to",
-   job("Cancelled", [["invoice", "complete"]]), null]
+   job("Cancelled", [["invoice", "complete"]]), null],
+
+  // Amber, 3 September: "note a process might not be complete before moving onto the
+  // next stage". Work runs ahead of its paperwork, and the board must say where the job
+  // IS rather than where its records are tidy. These three are that correction.
+  ["work started further on wins, even with an earlier process still open",
+   job("Pre-construction", [["invoice", "in_progress"], ["site_survey", "in_progress"]]), "Site Survey"],
+  ["an unfinished process behind it does not drag it back",
+   job("Pre-construction", [["invoice", "waiting"], ["concept_plan", "complete"]]), "Site Survey"],
+  ["and the furthest one finished still moves it on to the next",
+   job("Pre-construction", [["concept_plan", "complete"]]), "Site Survey"]
 ];
 
 let failed = 0;

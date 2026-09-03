@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 94 changes since then —
-- Changed: Every dropdown narrows as you type and lists its options alphabetically, except where the order is the information — and a process can be filed straight into a pipeline when it is created
+Unreleased: 96 changes since then —
+- Fixed: The jobs board offers only the processes of the stage you have filtered to, and says the right thing when a process belongs to a stage the job has already left
+- Fixed: The jobs board no longer scrolls sideways on a phone
+- Added: Drag a job between columns on the board — by lifecycle stage or by the processes inside a stage — and pick several to move at once from either view
 - Fixed: Setup → Processes no longer scrolls sideways on a tablet or a small phone
 - Changed: Setup → Processes is now a pipeline you drag, with the name editable in place and a process added straight into its stage
-- Added: See what each job is up to — group the board by Process, or drill into a stage to get its processes as columns with every job in the one it has reached
-- Added: An "Up to" column on the jobs table, in pipeline order
-- …and 89 more.
+- …and 91 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -24,6 +24,47 @@ are in.
 Last updated: 2026-09-03.
 
 ---
+
+## One sweep failure left, and it is not this branch's
+
+The board fixtures make `/jobs` drawable for the responsive sweep for the first time, and
+it caught the drag hint running off a phone — fixed. They also make **`/setup/processes`**
+drawable, and it scrolls sideways at every width: 856px at 320, 396px at 1024. That is the
+**old eleven-column table**, untouched here; hiding the table in the DOM drops the document
+back to 320, so it is the table and nothing else.
+
+**PR #22 replaces that whole screen** with the pipeline editor, and that branch's sweep
+passes 115 of 115 with its own process fixtures. So the fix exists, in the branch that owns
+the screen. Porting it here would mean carrying an entire second PR and guaranteeing a
+conflict, so this branch leaves it red and says so rather than papering over it. When #22
+lands, that route is the pipeline editor and the failure goes with the table.
+
+Two theories were tried and neither held: the Setup tab strip (Vibe's own wrapper already
+scrolls) and `min-width: 0` on `.data-table-wrap` (no effect). Both were reverted rather
+than left in place with a comment claiming a fix they did not make.
+
+## Two rules Amber corrected on 3 September, and what they changed
+
+**"a process might not be complete before moving onto the next stage."** `pipelinePosition.ts`
+read a job's place as *the first process it has not finished*. That is wrong about how a
+build runs: the frame goes up while the drawings are still being marked up. It now reads
+*the furthest process anybody has recorded against*, so a job with Working Drawings under
+way says Working Drawings even with Concept Plan still open. An unfinished process behind
+it is a separate and real fact — outstanding, not a contradiction — and the drawer shows
+each run's own status.
+
+That correction also removed a field: `processMove.ts` had a "does the target need
+starting?" flag, and under the new rule it is always true, because a process carrying a
+run is by definition at or behind the job. A field that is always true is a field that
+will one day be believed, so it is gone.
+
+**"it can only go backwards if there is a Variation … an IAF is filled out and variation
+raised (and reason listed)."** This is what `0031` was built for, and its header says the
+same from the other side: rewinding is coherent INSIDE a phase, on a variation, and never
+across phases. **`variations` is not wired into the app at all** — the table has existed
+since 0031 and nothing reads or writes it. So a backwards drag is refused *in those words*,
+naming the IAF and the variation as the route. Wiring the table is the next change, and it
+is a PR of its own by the one-table rule.
 
 ## The interface must-haves, and where they are not met yet
 

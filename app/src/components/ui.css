@@ -417,6 +417,9 @@
 
 /* ---- tables -------------------------------------------------------------- */
 .data-table-wrap { overflow-x: auto; }
+/* The board's drag hint is a sentence, not a label: it wraps rather than running off. */
+.drag-hint { max-width: 100%; }
+.drag-hint p { margin: 0; }
 /* `width: max-content` with a 100% floor, not a flat 100%: at 100% the table is squeezed
    into the panel whatever it holds, and the day somebody turns on four more columns
    (which they now can) the address column is 70px wide and "28 Corner Street, Wandi WA
@@ -853,7 +856,10 @@
   border-radius: var(--border-radius-medium);
 }
 .bulk-actions { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; }
-.bulk-actions > * { min-width: 150px; }
+/* Bounded: Vibe's Dropdown is block-level, so these stacked into four full-width bars
+   under the board instead of sitting in a row (visible the moment the bulk bar started
+   serving the board as well as the table). */
+.bulk-actions > * { flex: 0 1 190px; min-width: 150px; }
 /* Native checkboxes, on brand and at a real target size. */
 .bulk-col { width: 36px; }
 .bulk-col input[type="checkbox"] {
@@ -2217,3 +2223,39 @@ code { overflow-wrap: anywhere; }
   font: var(--font-text2-normal); color: var(--primary-color); cursor: pointer;
 }
 .dr-clear:hover { text-decoration: underline; }
+
+/* ---------------------------------------------------------- picking cards on the board
+   Selection used to live only in the table, so a board card had no way to be chosen and
+   the bulk bar had nothing to act on there (Amber, 3 Sep). The checkbox sits over the
+   card's top-left corner rather than inside JobCard, because the card is also a link and
+   a control inside a link is a click people lose. */
+.board-card-wrap { position: relative; }
+.board-card-pick {
+  position: absolute;
+  top: var(--space-8);
+  /* Right, not left: the job number lives in the card's top-left and a checkbox over it
+     hid the first characters — "9001-01" read as "01-01", which is another job's number. */
+  right: var(--space-8);
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: var(--primary-background-color);
+  box-shadow: 0 0 0 1px var(--layout-border-color);
+  cursor: pointer;
+  /* Out of the way until it is wanted: a column of permanent checkboxes competes with
+     the job numbers for the eye. Focus and a made selection both keep it visible. */
+  opacity: 0;
+  transition: opacity .12s ease-out;
+}
+.board-card-wrap:hover .board-card-pick,
+.board-card-wrap.is-picked .board-card-pick,
+.board-card-pick:focus-within { opacity: 1; }
+.board-card-wrap.is-picked { outline: 2px solid var(--primary-color); border-radius: 8px; }
+.board-card-pick input { margin: 0; cursor: pointer; }
+@media (hover: none) {
+  /* No hover to reveal it on a phone, so it stays. */
+  .board-card-pick { opacity: 1; }
+}
