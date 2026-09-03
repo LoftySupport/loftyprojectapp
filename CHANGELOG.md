@@ -68,6 +68,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- The jobs board offers only the processes of the stage you have filtered to, and says the right thing when a process belongs to a stage the job has already left
 - The jobs board no longer scrolls sideways on a phone
 - Setup → Processes no longer scrolls sideways on a tablet or a small phone
 - The schema checks no longer assume the database is empty, so real data cannot make them fail for the wrong reason
