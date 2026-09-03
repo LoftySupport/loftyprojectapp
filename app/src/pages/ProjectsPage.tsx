@@ -8,6 +8,7 @@ import {
   jobMatchesQuery, matchedOnPreviousAddress, projectMatchesQuery, useSearch
 } from "../data/SearchProvider";
 import { useBoardParams } from "../data/useBoardParams";
+import { NOTHING_RECORDED, pipelineColumns, processColumnOf } from "../data/pipelinePosition";
 import { PROJECT_VIEWS, savedViewBySlug, stagesInView, type SavedView } from "../data/savedViews";
 import { PROCESS_HEALTH_FILTER_OPTIONS, RECORDED_FILTER_OPTIONS, activeFilterCount, projectMatchesFilters, statusOptions } from "../data/filtering";
 import { LoadProblem, NoResults, NothingYet, PreviousAddressNote } from "../components/SearchNotices";
@@ -244,6 +245,48 @@ export function ProjectsPage() {
    * here would quietly overrule them.
    */
   const projectGroups = useMemo(() => {
+    /**
+     * WHERE ITS JOBS ARE — a project in several columns at once.
+     *
+     * Amber, 3 September: *"projects need to be able to have the same dropdown in
+     * pipeline view so you can see what projects are in what stage of preconstrujction
+     * etc… if jobs are in multijple stages then you show the project card multple times
+     * and the jobs split to the different stages"*.
+     *
+     * This is a DIFFERENT question from the Stage grouping above it, which is why it is a
+     * different grouping rather than a redefinition. "Stage" asks where the PROJECT is —
+     * `projects.project_stage`, a column somebody sets and that 0046 moves with its jobs.
+     * "Job stage" asks where its WORK is, and the honest answer to that is often several
+     * places at once: eleven jobs on 1042 can be spread across three phases, and no single
+     * column can say so.
+     *
+     * So a project appears once per column its jobs reach, carrying only the jobs that put
+     * it there. Every other grouping on this board still puts a project in exactly one
+     * column; these two are the exception, and the card says "4 of 11 jobs here" so a
+     * slice is never mistaken for the whole.
+     */
+    const byJobs = grouping === "Job stage" || grouping === "Job process";
+    if (byJobs) {
+      const columnOf = (j: BoardProject["jobs"][number]) =>
+        grouping === "Job stage" ? j.stage : processColumnOf(j, processes);
+      const order = grouping === "Job stage"
+        ? viewStages
+        : [NOTHING_RECORDED, ...pipelineColumns(processes, viewStages)];
+
+      const seen = new Set(rows.flatMap(p => p.jobs.map(columnOf)));
+      // A stray key keeps its jobs rather than dropping them — the same guard the jobs
+      // board carries, for the same reason: a column built from a lookup can miss a value
+      // the rows actually hold, and losing a job is worse than an unexpected heading.
+      const columns = [...order.filter(k => seen.has(k)), ...[...seen].filter(k => !order.includes(k))];
+
+      return columns.map(key => ({
+        key,
+        projects: rows
+          .map(p => ({ ...p, jobs: p.jobs.filter(j => columnOf(j) === key), ofTotal: p.jobs.length }))
+          .filter(p => p.jobs.length > 0)
+      }));
+    }
+
     const keyOf = (p: BoardProject) =>
       grouping === "None" ? ""
       : grouping === "Type" ? (p.projectType ? PROJECT_TYPE_LABELS[p.projectType] : "No type set")
@@ -263,8 +306,11 @@ export function ProjectsPage() {
       : grouping === "Status" ? RECORD_STATUSES.map(st => RECORD_STATUS_LABELS[st])
       : [...new Set(rows.map(keyOf))];
 
-    return order.map(key => ({ key, projects: rows.filter(p => keyOf(p) === key) }));
-  }, [grouping, rows, viewStages]);
+    return order.map(key => ({
+      key,
+      projects: rows.filter(p => keyOf(p) === key).map(p => ({ ...p, ofTotal: p.jobs.length }))
+    }));
+  }, [grouping, rows, viewStages, processes]);
 
   const narrowed = terms.length > 0 || activeFilterCount(filters) > 0;
   const noMatches = narrowed && rows.length === 0;
@@ -405,7 +451,7 @@ export function ProjectsPage() {
         views={["Board", "Table", "Gantt"]}
         view={view}
         onViewChange={setView}
-        groupings={["None", "Stage", "Type", "Status"]}
+        groupings={["None", "Stage", "Job stage", "Job process", "Type", "Status"]}
         grouping={grouping}
         onGroupingChange={setGrouping}
         filters={filters}
@@ -503,6 +549,7 @@ export function ProjectsPage() {
                     projectType={p.projectType}
                     targetCompletion={p.targetCompletion}
                     status={p.status}
+                    ofTotal={p.ofTotal}
                     onOpen={() => openOne(p)}
                   />
                 ))

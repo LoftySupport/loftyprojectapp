@@ -192,11 +192,23 @@ export function ProjectCard({
   projectType,
   targetCompletion,
   status = "on_track",
+  ofTotal,
   onOpen
 }: {
   projectNumber: string;
   /** The project's jobs, each with its own lot address for the list at the foot. */
   jobs: { jobNumber: string; address: string | null; stage?: string }[];
+  /**
+   * How many jobs the project has in total, when this card is showing only SOME of them.
+   *
+   * Amber, 3 September: on a pipeline board a project appears in every column its jobs
+   * occupy, "and the jobs split to the different stages". So the same project is drawn
+   * three times with three different slices — and the progress bar below, which counts
+   * completed jobs out of the ones it was handed, would then read "0 of 4 completed" on a
+   * card for a project that is 9 of 11 done. That is not a smaller truth, it is a wrong
+   * one, so a sliced card says what it is showing instead of computing a rate from it.
+   */
+  ofTotal?: number;
   /** The project's current address — null for a project that has none yet. */
   address?: string | null;
   suburb?: string | null;
@@ -235,7 +247,13 @@ export function ProjectCard({
       {/* Progress (G26), derived from the one real per-job fact the card holds:
           how many of the project's jobs have reached Completed or beyond. The
           prototype's task-based progress joins when tasks are wired. */}
-      {jobs.length > 0 && (() => {
+      {ofTotal != null && ofTotal !== jobs.length ? (
+        <div className="card-progress">
+          <Text type="text3" color="secondary">
+            {jobs.length} of {ofTotal} job{ofTotal === 1 ? "" : "s"} here
+          </Text>
+        </div>
+      ) : jobs.length > 0 && (() => {
         const done = jobs.filter(j => j.stage === "Completed" || j.stage === "Closed").length;
         return (
           <div className="card-progress">
@@ -250,7 +268,12 @@ export function ProjectCard({
       })()}
 
       <dl className="card-meta">
-        <dt><Text type="text3" color="secondary">Stage</Text></dt>
+        {/* "Project stage" on a sliced card, because the column heading beside it is a
+            different fact: 9001 sits in Pre-construction while one of its jobs is in
+            Construction, and both lines are true. Naming which is which is the whole
+            point of the grouping — a bare "Stage" next to a Construction heading reads
+            as a contradiction. */}
+        <dt><Text type="text3" color="secondary">{ofTotal != null && ofTotal !== jobs.length ? "Project stage" : "Stage"}</Text></dt>
         <dd><Text type="text3">{stage}</Text></dd>
         <dt><Text type="text3" color="secondary">Suburb</Text></dt>
         <dd>
@@ -282,7 +305,12 @@ export function ProjectCard({
       <div className="card-divider" />
 
       <Text type="text3" color="secondary">
-        {jobs.length} job{jobs.length === 1 ? "" : "s"} on this project
+        {/* "on this project" is only true when the card holds the whole project. On a
+            pipeline board it holds one column's worth, and the same sentence would have
+            claimed a project with eleven jobs had two. */}
+        {ofTotal != null && ofTotal !== jobs.length
+          ? `${jobs.length} of this project's ${ofTotal} jobs`
+          : `${jobs.length} job${jobs.length === 1 ? "" : "s"} on this project`}
       </Text>
       <div className="stack-tight">
         {/* Each job's own lot address, resolved — a wall of thirty tokens on a
