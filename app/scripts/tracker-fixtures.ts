@@ -185,12 +185,13 @@ const FIXTURE_PROJECT: Project = {
   updatedBy: null
 } as unknown as Project;
 
+const JOB_STAGES = [FIXTURE_STAGE, FIXTURE_STAGE, "Construction"];
 const FIXTURE_JOBS: Job[] = ["9001-01", "9001-02", "9001-03"].map((id, i) => ({
   id,
   jobNumberOld: null,
   titleType: null,
   projectId: 9001,
-  stage: FIXTURE_STAGE,
+  stage: JOB_STAGES[i],
   owningTeam: "design",
   status: "active",
   currentAddress: `${28 + i} FIXTURE Corner Street, Adelaide SA 5000`,

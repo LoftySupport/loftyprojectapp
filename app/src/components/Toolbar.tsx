@@ -26,6 +26,11 @@ export type View = (typeof VIEWS)[number];
  */
 export const GROUPINGS = [
   "None", "Stage", "Project", "Team", "Team member", "Status",
+  // Projects only, and the one pair that puts a record in MORE THAN ONE column: a
+  // project appears wherever its jobs are, carrying the jobs that put it there.
+  // Amber, 3 Sep: "if jobs are in multijple stages then you show the project card
+  // multple times and the jobs split to the different stages".
+  "Job stage", "Job process",
   // Jobs only. The columns become the processes of the stages in view, in the order a
   // job passes through them — Amber, 3 Sep: "it moves through the process in lifecycle
   // stage order, then process stage order". See data/pipelinePosition.ts.

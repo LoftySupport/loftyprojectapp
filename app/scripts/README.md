@@ -38,3 +38,17 @@ It also cannot check what needs data. The stub repository returns no projects an
 jobs, so the board columns and the job drawer are measured by their CSS rather than by
 being looked at. Re-run this against a database with the Phase B import loaded and the
 board becomes a real assertion rather than an arithmetic one.
+
+## `npm run typecheck`, and the one that looked like it
+
+`tsc -b`. Use this, not `npx tsc --noEmit`.
+
+The root `tsconfig.json` is a solution file — `"files": []` with references to
+`tsconfig.app.json` and `tsconfig.node.json` — so a bare `tsc --noEmit` resolves it,
+finds nothing to check, and exits 0. It reports a clean typecheck on a file with
+undefined identifiers in it. `tsc -b` follows the references and checks the app, which is
+why `build` has always run it and why this script exists: so "run the typecheck" cannot
+land on the version that checks nothing.
+
+Found on 3 September, by a change that referenced three functions it had not imported and
+sailed through `tsc --noEmit`. `npm run build` caught it, as it had been doing all along.
