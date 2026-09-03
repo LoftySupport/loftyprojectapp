@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 96 changes since then —
+Unreleased: 97 changes since then —
+- Added: Group the projects board by where its jobs are — a project appears in every stage or process its jobs have reached, carrying just those jobs
 - Fixed: The jobs board offers only the processes of the stage you have filtered to, and says the right thing when a process belongs to a stage the job has already left
 - Fixed: The jobs board no longer scrolls sideways on a phone
 - Added: Drag a job between columns on the board — by lifecycle stage or by the processes inside a stage — and pick several to move at once from either view
 - Fixed: Setup → Processes no longer scrolls sideways on a tablet or a small phone
-- Changed: Setup → Processes is now a pipeline you drag, with the name editable in place and a process added straight into its stage
-- …and 91 more.
+- …and 92 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
