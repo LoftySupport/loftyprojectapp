@@ -68,6 +68,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- The jobs board no longer scrolls sideways on a phone
 - The schema checks no longer assume the database is empty, so real data cannot make them fail for the wrong reason
 - Properties that showed only the tail of their name — three different rows all called "Ordered" — now read in full, with the team that owns them and a date field instead of "format not set"
 - A process can collect job and project properties together — 9 attachments that were configured but invisible now show
