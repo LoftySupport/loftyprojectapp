@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 90 changes since then —
+Unreleased: 93 changes since then —
 - Fixed: Setup → Processes no longer scrolls sideways on a tablet or a small phone
 - Changed: Setup → Processes is now a pipeline you drag, with the name editable in place and a process added straight into its stage
-- Changed: Every record — a contact, a maintenance request, a property, a project — now opens in the same slide-out panel, which expands to full width and can be dragged wider
-- Changed: Updates moved from the sidebar to the footer
-- Added: PRODUCT.md records the interface must-haves every screen has to meet, and HANDOFF.md lists the tables that do not meet the sorting one yet
-- …and 85 more.
+- Added: See what each job is up to — group the board by Process, or drill into a stage to get its processes as columns with every job in the one it has reached
+- Added: An "Up to" column on the jobs table, in pipeline order
+- Added: npm run check:pipeline proves the rule that decides where a job sits
+- …and 88 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

@@ -14,6 +14,9 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- See what each job is up to — group the board by Process, or drill into a stage to get its processes as columns with every job in the one it has reached
+- An "Up to" column on the jobs table, in pipeline order
+- npm run check:pipeline proves the rule that decides where a job sits
 - PRODUCT.md records the interface must-haves every screen has to meet, and HANDOFF.md lists the tables that do not meet the sorting one yet
 - The 110 projects from Amber's workbook, each with the number of sites it will hold — no jobs yet
 - Setup → Processes is a pipeline — groups and processes drag into order, each process numbered by its place in the flow through its build lifecycle stage
