@@ -16,13 +16,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 81 changes since then —
+Unreleased: 83 changes since then —
+- Fixed: Properties that showed only the tail of their name — three different rows all called "Ordered" — now read in full, with the team that owns them and a date field instead of "format not set"
 - Added: Setup → Processes is a pipeline — groups and processes drag into order, each process numbered by its place in the flow through its build lifecycle stage
 - Added: Processes show when they were last updated, by whom, and which fields changed
 - Added: Processes filter and sort by team, build lifecycle stage and group, with edit and delete on the list and the milestone flag in a column of its own
 - Fixed: A process can collect job and project properties together — 9 attachments that were configured but invisible now show
-- Changed: A process opens in the same slideout as every other record, and expands to full screen
-- …and 76 more.
+- …and 78 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

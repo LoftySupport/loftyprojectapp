@@ -17,6 +17,7 @@ says shipped and what the app shows people cannot use different words for it.
 - Setup → Processes is a pipeline — groups and processes drag into order, each process numbered by its place in the flow through its build lifecycle stage
 - Processes show when they were last updated, by whom, and which fields changed
 - Processes filter and sort by team, build lifecycle stage and group, with edit and delete on the list and the milestone flag in a column of its own
+- 121 new properties from Amber's workbook, including the whole Construction stage — Footings through Handover
 - The jobs import takes Amber's decisions — every job in Acquisition & Development unless the sheet says cancelling, the owning team from the named person when they are a user in one team, shared old numbers carried by no job
 - PRODUCT.md records who the app is for, the phone-width drawer as the primary reading surface, and Vibe-with-Lofty-colours as the binding visual constraint
 - The live database is at 0085 — Maintenance, Contacts and notifications tables exist, and the Maintenance tab loads
@@ -61,6 +62,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- Properties that showed only the tail of their name — three different rows all called "Ordered" — now read in full, with the team that owns them and a date field instead of "format not set"
 - A process can collect job and project properties together — 9 attachments that were configured but invisible now show
 - Setup → Properties showed nothing at all; one missing database column had been stopping the whole page from loading
 - Maintenance due dates, warranty, health and daily reminders all work on the Adelaide calendar day — a request no longer turns overdue at 09:30 in the morning
