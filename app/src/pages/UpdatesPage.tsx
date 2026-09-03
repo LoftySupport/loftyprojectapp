@@ -255,6 +255,9 @@ function Requests() {
             real answer rather than a missing one. */}
         <div className="select-wrap">
           <Select
+            /* Two standing answers first, then the phases in their own order — sorting
+               would put "Any phase" among the phase names and Phase two above Phase one. */
+            ordered
             options={[
               { value: "all", label: "Any phase" },
               { value: "none", label: "Not planned yet" },
@@ -855,6 +858,7 @@ function RequestPanel({
                 : "Which phase this is planned into."}
             >
               <Select
+                ordered
                 options={phases.map(p => ({ value: p.id, label: p.name }))}
                 value={item.roadmapPhaseId}
                 clearable

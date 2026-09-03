@@ -28,6 +28,17 @@ type SelectProps = {
   "aria-label": string;
   size?: "small" | "medium" | "large";
   className?: string;
+  /**
+   * Keep the caller's order instead of sorting the labels.
+   *
+   * Amber, 3 September: *"in all drop downs you should have them in alphabetical order
+   * (unless they staged order)"*. The exception is the point — a lifecycle picker that
+   * offers Acquisition & Development, Cancelled, Closed, Completed, Construction is
+   * alphabetical and useless, because the order IS the information. So sorting is the
+   * default and this opts out, one flag at the few call sites where sequence means
+   * something: the lifecycle, a stage's run of processes, a roadmap's phases.
+   */
+  ordered?: boolean;
 } & (
   | {
       /** Only for controls that can genuinely hold nothing — a filter, not a view. */
@@ -48,9 +59,20 @@ export function Select({
   "aria-label": ariaLabel,
   size = "small",
   clearable = false,
-  className
+  className,
+  ordered = false
 }: SelectProps) {
-  const items = options.map(o => ({ value: o.value, label: o.label }));
+  /**
+   * Alphabetical unless the caller says the order carries meaning.
+   *
+   * `numeric` matters more than it looks: without it "Stage 10" sorts between "Stage 1"
+   * and "Stage 2", which is exactly the list this app is full of. `localeCompare` with
+   * numeric collation puts them in the order a person would write them.
+   */
+  const items = (ordered
+    ? options
+    : [...options].sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: "base" }))
+  ).map(o => ({ value: o.value, label: o.label }));
   const selected = items.find(o => o.value === value) ?? null;
 
   return (
@@ -60,6 +82,17 @@ export function Select({
       placeholder={placeholder}
       clearable={clearable}
       aria-label={ariaLabel}
+      /**
+       * Type to narrow the list, as the suburb field does — Amber asked for the same
+       * behaviour everywhere: *"you should be able to type into the field to see the
+       * options and select (like you can with suburubs in creating an address)"*.
+       *
+       * Unlike SuburbField this stays a Dropdown rather than becoming a text box: a
+       * suburb has to be typeable because a locality missing from a July dataset is a
+       * real place, whereas a team, a stage or a process is a closed set and typing one
+       * that is not on the list is a mistake, not a new fact.
+       */
+      searchable
       options={items as never}
       /**
        * `null`, not `undefined`, when nothing is selected.

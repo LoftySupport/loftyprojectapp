@@ -574,6 +574,7 @@ export function JobsPage() {
                   <Select
                     aria-label="Move the selected jobs to a later phase"
                     placeholder="Move to…"
+                    ordered
                     options={LINEAR_STAGES.map(s => ({ value: s, label: s }))}
                     value={null}
                     onChange={v => setBulkStage(v as StageName)}

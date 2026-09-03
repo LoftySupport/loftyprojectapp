@@ -10,6 +10,7 @@ import { Select } from "../components/Select";
 import { SidePanel } from "../components/SidePanel";
 import { SortHeader, sortRows, type SortState } from "../components/SortableTable";
 import { BlurText, NumberInput } from "../components/InlineInputs";
+import { GroupPicker } from "../components/GroupPicker";
 import {
   NO_GROUP, groupLabel, moveGroup, moveProcess, ordersToWrite, spliceGroup, spliceProcess, stageOrder
 } from "../data/pipelineOrder";
@@ -125,6 +126,28 @@ export function ProcessesSetupPage() {
     allTasks.forEach(t => m.set(t.processId, (m.get(t.processId) ?? 0) + 1));
     return m;
   }, [allTasks]);
+  /**
+   * The groups on offer when a process is filed into one: the blocks that already exist
+   * in ITS stage first, then every other block name in use.
+   *
+   * Both halves matter. A process being added to Pre-construction almost always belongs
+   * to one of Pre-construction's own blocks, so those come first; but the vocabulary is
+   * shared across stages — "Stage 1", "Variation" — and offering the rest is what keeps
+   * a new stage's blocks named like every other stage's instead of freshly invented.
+   */
+  const groupsForStage = useMemo(() => {
+    const inStage = (stage: string) => [...new Set(
+      processes.filter(p => p.stageName === stage && p.stageGroup).map(p => p.stageGroup as string)
+    )].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    return (stage: string) => {
+      const mine = inStage(stage);
+      const rest = [...new Set(processes.map(p => p.stageGroup).filter((g): g is string => Boolean(g)))]
+        .filter(g => !mine.includes(g))
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      return [...mine, ...rest];
+    };
+  }, [processes]);
+
   const groupNames = useMemo(
     () => [...new Set(processes.map(p => groupLabel(p.stageGroup)))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
     [processes]
@@ -358,7 +381,8 @@ export function ProcessesSetupPage() {
               onAskDelete={setConfirmDelete}
               onDelete={remove}
               onRename={rename}
-              onAdd={stage => setParam({ new: "1", process: null, newStage: stage })}
+              onAdd={(stage, group) =>
+                setParam({ new: "1", process: null, newStage: stage, newGroup: group ?? null })}
             />
           ))}
           {pipeline.length === 0 && (
@@ -415,8 +439,10 @@ export function ProcessesSetupPage() {
           stageNames={stages}
           teams={teams}
           stage={params.get("newStage")}
-          onCancel={() => setParam({ new: null, newStage: null })}
-          onCreated={p => { bump(); setParam({ new: null, newStage: null, process: p.id }); }}
+          group={params.get("newGroup")}
+          groupsFor={groupsForStage}
+          onCancel={() => setParam({ new: null, newStage: null, newGroup: null })}
+          onCreated={p => { bump(); setParam({ new: null, newStage: null, newGroup: null, process: p.id }); }}
         />
       )}
       {!creating && selected && (
@@ -428,6 +454,7 @@ export function ProcessesSetupPage() {
             deps={deps}
             teams={teams}
             stageNames={stages}
+            groupsFor={groupsForStage}
             canEdit={canEdit}
             onChanged={bump}
             onError={setError}
@@ -482,7 +509,7 @@ function PipelineStageCard({
   onAskDelete: (id: string | null) => void;
   onDelete: (p: Process) => void;
   onRename: (p: Process, name: string) => void;
-  onAdd: (stage: string) => void;
+  onAdd: (stage: string, group?: string | null) => void;
 }) {
   return (
     <section className="panel pipe">
@@ -514,6 +541,12 @@ function PipelineStageCard({
             <Text type="text3" color="secondary" element="span">
               runs {b.list[0].n}–{b.list[b.list.length - 1].n}
             </Text>
+            {canEdit && (
+              <Button size="xs" kind="tertiary" onClick={() => onAdd(stage, b.group)}
+                aria-label={`Add a process to ${b.group}`}>
+                + Add
+              </Button>
+            )}
             {canEdit && (
               <span className="pipeline-group-moves">
                 <Button size="xs" kind="tertiary" aria-label={`Move group ${b.group} earlier`}
@@ -709,17 +742,21 @@ function ProcessRow({
 }
 
 // ------------------------------------------------------------------ new process
-function NewProcessPanel({ stageNames, teams, stage, onCancel, onCreated }: {
+function NewProcessPanel({ stageNames, teams, stage, group, groupsFor, onCancel, onCreated }: {
   stageNames: string[];
   teams: readonly Team[];
   /** The stage its "+ Add a process" was clicked in, so the picker opens on that one. */
   stage?: string | null;
+  /** And the block, when the add came from one — "added into that pipeline". */
+  group?: string | null;
+  groupsFor: (stage: string) => string[];
   onCancel: () => void;
   onCreated: (p: Process) => void;
 }) {
   const repo = useRepository();
   const [draft, setDraft] = useState<NewProcess>({
-    key: "", name: "", stageName: stage ?? WORKING_STAGES[1], scope: "job"
+    key: "", name: "", stageName: stage ?? WORKING_STAGES[1], scope: "job",
+    stageGroup: group ?? null
   });
   const [keyTouched, setKeyTouched] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -756,8 +793,19 @@ function NewProcessPanel({ stageNames, teams, stage, onCancel, onCreated }: {
             onChange={v => { setKeyTouched(true); setDraft({ ...draft, key: v }); }} />
         </Field>
         <Field label="Lifecycle stage" required>
-          <Select aria-label="Lifecycle stage" options={stageNames.map(s => ({ value: s, label: s }))}
+          <Select ordered aria-label="Lifecycle stage" options={stageNames.map(s => ({ value: s, label: s }))}
             value={draft.stageName} onChange={v => setDraft({ ...draft, stageName: v })} />
+        </Field>
+        {/* Amber, 3 Sep: "when adding a process to a group it can [be] selected from that
+            pipeline [and] added into that pipeline". It was not on this panel at all, so a
+            new process could only be filed into a block by saving it and reopening it. */}
+        <Field label="Group / pipeline" hint="the block it runs in inside the stage">
+          <GroupPicker
+            value={draft.stageGroup ?? null}
+            groups={groupsFor(draft.stageName)}
+            noneLabel="Not in a group"
+            onChange={g => setDraft({ ...draft, stageGroup: g })}
+          />
         </Field>
         <Field label="Appears on" required hint="the project's drawer, or each job's — it does not limit which properties the process can collect">
           <Select aria-label="Appears on" options={PROPERTY_SCOPES.map(s => ({ value: s, label: s }))}
@@ -774,12 +822,14 @@ function NewProcessPanel({ stageNames, teams, stage, onCancel, onCreated }: {
 }
 
 // -------------------------------------------------------------------- the editor
-function ProcessEditor({ process: p, all, deps, teams, stageNames, canEdit, onChanged, onError, onDeleted }: {
+function ProcessEditor({ process: p, all, deps, teams, stageNames, groupsFor, canEdit, onChanged, onError, onDeleted }: {
   process: Process;
   all: Process[];
   deps: ProcessDependency[];
   teams: readonly Team[];
   stageNames: string[];
+  /** The blocks on offer for a stage — its own first, then the shared vocabulary. */
+  groupsFor: (stage: string) => string[];
   canEdit: boolean;
   onChanged: () => void;
   onError: (e: string | null) => void;
@@ -832,11 +882,20 @@ function ProcessEditor({ process: p, all, deps, teams, stageNames, canEdit, onCh
           </Field>
           <Field label="Lifecycle stage" required>
             {canEdit ? (
-              <Select aria-label="Lifecycle stage" options={stageNames.map(s => ({ value: s, label: s }))} value={p.stageName} onChange={v => patch({ stageName: v })} />
+              <Select ordered aria-label="Lifecycle stage" options={stageNames.map(s => ({ value: s, label: s }))} value={p.stageName} onChange={v => patch({ stageName: v })} />
             ) : <Text type="text2">{p.stageName}</Text>}
           </Field>
           <Field label="Group / pipeline" hint="the block it runs in inside the stage — Stage 1, Stage 2, Variation. Reorder the blocks on the list">
-            <BlurText value={p.stageGroup ?? ""} disabled={!canEdit || saving} label="Group" onCommit={v => patch({ stageGroup: v.trim() || null })} plain />
+            {canEdit
+              ? (
+                <GroupPicker
+                  value={p.stageGroup}
+                  groups={groupsFor(p.stageName)}
+                  noneLabel={NO_GROUP}
+                  onChange={g => patch({ stageGroup: g })}
+                />
+              )
+              : <BlurText value={p.stageGroup ?? ""} disabled label="Group" onCommit={() => {}} plain />}
           </Field>
           {/*
             Was "Runs on", and read as though it also decided which properties the process

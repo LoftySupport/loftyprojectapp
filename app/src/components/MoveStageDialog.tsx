@@ -235,7 +235,7 @@ export function MoveStageControl({
       <Select
         aria-label={`Move ${subject} to a later phase`}
         placeholder="Move to…"
-        options={ahead.map(s => ({ value: s, label: s }))}
+        ordered options={ahead.map(s => ({ value: s, label: s }))}
         value={null}
         onChange={v => open("Move", v as StageName)}
       />

@@ -162,6 +162,7 @@ function Row({
       </td>
       <td>
         <Select
+          ordered
           options={phases.map(p => ({ value: p.id, label: p.name }))}
           value={item.roadmapPhaseId}
           clearable
