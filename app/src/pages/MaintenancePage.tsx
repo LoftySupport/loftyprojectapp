@@ -5,6 +5,7 @@ import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { useAuth } from "../data/AuthProvider";
 import { supabaseUrl } from "../data/supabaseEnv";
+import { SidePanel } from "../components/SidePanel";
 import { Field, Problem } from "../components/Form";
 import { Select } from "../components/Select";
 import { LoadProblem } from "../components/SearchNotices";
@@ -75,7 +76,6 @@ export function MaintenancePage() {
     setParams(next, { replace: true });
   };
 
-  const hasDetail = Boolean(selected || creating);
 
   return (
     <>
@@ -108,8 +108,11 @@ export function MaintenancePage() {
 
       {error && <LoadProblem error={error} />}
 
-      <div className={`contacts-grid${hasDetail ? " has-detail" : ""}`}>
-        <section className="panel">
+      {/* Full width, with the request opening over it in the shared slideout — the same
+          change, for the same reason, as Contacts and Setup → Properties (Amber, 3 Sep:
+          "ensure all pages open items in the slideout side bar (can expand to full
+          width) and is width adjustable"). A detail column has none of those three. */}
+      <section className="panel">
           <div className="data-table-wrap">
             <table className="data-table">
               <thead>
@@ -142,17 +145,27 @@ export function MaintenancePage() {
               </Text>
             )}
           </div>
-        </section>
+      </section>
 
-        {creating && <NewRequest jobId={jobFilter} onDone={id => { bump(); setParam({ new: null, request: id }); }} onCancel={() => setParam({ new: null })} />}
-        {selected && !creating && <RequestDetail id={selected} onChanged={bump} onClose={() => setParam({ request: null })} />}
-      </div>
+      {creating && (
+        <SidePanel open title="New maintenance request" onClose={() => setParam({ new: null })}>
+          <NewRequest jobId={jobFilter} onDone={id => { bump(); setParam({ new: null, request: id }); }} />
+        </SidePanel>
+      )}
+      {/* The number and the summary come from the row that was clicked, so the head says
+          which request is opening before the detail's own fetch lands. */}
+      {selected && !creating && (
+        <SidePanel open onClose={() => setParam({ request: null })}
+          title={(() => { const r = rows.find(x => x.id === selected); return r ? `${r.number} · ${r.summary}` : "Request"; })()}>
+          <RequestDetail id={selected} onChanged={bump} />
+        </SidePanel>
+      )}
     </>
   );
 }
 
 // -----------------------------------------------------------------------------------------
-function NewRequest({ jobId, onDone, onCancel }: { jobId: string | null; onDone: (id: string) => void; onCancel: () => void }) {
+function NewRequest({ jobId, onDone }: { jobId: string | null; onDone: (id: string) => void }) {
   const repo = useRepository();
   const { data: jobs } = useQuery(r => r.listJobs(), []);
   const { data: contacts } = useQuery(r => r.listContacts(), []);
@@ -180,11 +193,7 @@ function NewRequest({ jobId, onDone, onCancel }: { jobId: string | null; onDone:
   };
 
   return (
-    <section className="panel">
-      <div className="panel-head">
-        <Text type="text2" weight="bold">New maintenance request</Text>
-        <Button size="xs" kind="tertiary" onClick={onCancel}>Cancel</Button>
-      </div>
+    <div className="stack">
       <Text type="text3" color="secondary" ellipsis={false} element="p">
         Logged by hand — a call, a walk-in, an email you are copying in. The number is given on save; the due date comes from the trade's SLA.
       </Text>
@@ -218,12 +227,12 @@ function NewRequest({ jobId, onDone, onCancel }: { jobId: string | null; onDone:
       <div className="field-inline" style={{ justifyContent: "flex-end" }}>
         <Button size="small" disabled={busy || !job || !summary.trim()} onClick={submit}>Log request</Button>
       </div>
-    </section>
+    </div>
   );
 }
 
 // -----------------------------------------------------------------------------------------
-function RequestDetail({ id, onChanged, onClose }: { id: string; onChanged: () => void; onClose: () => void }) {
+function RequestDetail({ id, onChanged }: { id: string; onChanged: () => void }) {
   const repo = useRepository();
   const { can } = usePermission();
   const canWrite = can("user");
@@ -255,15 +264,11 @@ function RequestDetail({ id, onChanged, onClose }: { id: string; onChanged: () =
     <div className="stack">
       <section className="panel">
         <div className="panel-head">
-          <div>
-            <Text type="text2" weight="bold">{r.number} · {r.summary}</Text>
-            <div className="slot-sub">
-              <Link to={`/jobs/${r.jobId}`}>{r.jobId}</Link> · {r.jobAddress} · reported {new Date(r.reportedAt).toLocaleDateString()} by {MAINTENANCE_SOURCE_LABELS[r.source].toLowerCase()}
-            </div>
+          <div className="slot-sub">
+            <Link to={`/jobs/${r.jobId}`}>{r.jobId}</Link> · {r.jobAddress} · reported {new Date(r.reportedAt).toLocaleDateString()} by {MAINTENANCE_SOURCE_LABELS[r.source].toLowerCase()}
           </div>
           <div className="panel-actions">
             <span className={`health is-${r.health}`}>{MAINTENANCE_HEALTH_LABELS[r.health]}</span>
-            <Button size="xs" kind="tertiary" onClick={onClose} aria-label="Close this request panel">×</Button>
           </div>
         </div>
         {problem && <Problem>{problem}</Problem>}

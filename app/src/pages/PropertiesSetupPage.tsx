@@ -4,6 +4,7 @@ import { Button, Checkbox, Text, TextField } from "@vibe/core";
 import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { useProcessProperties, useProcesses, usePropertyDefs, usePropertyOptions, useStages, useTeams } from "../data/useLookups";
+import { SidePanel } from "../components/SidePanel";
 import { Field, Problem } from "../components/Form";
 import { Select } from "../components/Select";
 import { BlurText, NumberInput } from "../components/InlineInputs";
@@ -111,7 +112,6 @@ export function PropertiesSetupPage() {
   const selected = propertyDefs.find(d => d.key === selectedKey) ?? null;
   const unknownCount = propertyDefs.filter(d => d.isActive && d.format === "unknown").length;
   const restrictedCount = propertyDefs.filter(d => d.restricted).length;
-  const hasDetail = Boolean(selected || creating);
   const activeProfiles = useMemo(() => profiles.filter(p => p.active).map(p => ({ id: p.id, name: p.fullName })), [profiles]);
 
   async function patch(key: string, change: PropertyDefPatch) {
@@ -148,8 +148,11 @@ export function PropertiesSetupPage() {
         {canEdit && <Button size="small" onClick={() => setParam({ new: "1", property: null })}>+ Add property</Button>}
       </div>
 
-      <div className={`contacts-grid${hasDetail ? " has-detail" : ""}`}>
-        <section className="panel">
+      {/* Full width, with the property opening over it in the shared slideout — the
+          same change, for the same reason, as Contacts and Maintenance (Amber, 3 Sep:
+          "ensure all pages open items in the slideout side bar (can expand to full
+          width) and is width adjustable"). */}
+      <section className="panel">
           {propertyDefs.length === 0 && (
             <div className="search-note">
               <Text type="text3" ellipsis={false}>
@@ -192,19 +195,22 @@ export function PropertiesSetupPage() {
               <Text type="text2" color="secondary" element="p" ellipsis={false}>Nothing matches — clear the search or the filters.</Text>
             )}
           </div>
-        </section>
+      </section>
 
-        {creating && canEdit && (
+      {creating && canEdit && (
+        <SidePanel open title="New property" onClose={() => setParam({ new: null })}>
           <NewPropertyForm stageNames={stages} teams={teams} onCancel={() => setParam({ new: null })} onCreated={key => { bump(); select(key); }} />
-        )}
-        {!creating && selected && (
+        </SidePanel>
+      )}
+      {!creating && selected && (
+        <SidePanel open title={selected.label} onClose={() => select(null)}>
           <PropertyDetail key={selected.key} def={selected} grants={grantsByKey.get(selected.key) ?? []} options={optionsByProperty.get(selected.key) ?? []}
             processNames={(processesByProperty.get(selected.key) ?? []).map(pp => processById.get(pp.processId)?.name).filter((n): n is string => Boolean(n))}
             stageNames={stages} teams={teams} profiles={activeProfiles}
             onPatch={change => patch(selected.key, change)} onChanged={bump} onError={setError}
-            onClose={() => select(null)} onDeleted={() => { bump(); select(null); }} />
-        )}
-      </div>
+            onDeleted={() => { bump(); select(null); }} />
+        </SidePanel>
+      )}
     </>
   );
 }
@@ -237,11 +243,7 @@ function NewPropertyForm({ stageNames, teams, onCancel, onCreated }: {
   }
 
   return (
-    <section className="panel contact-detail" aria-label="New property">
-      <div className="panel-head">
-        <Text type="text2" weight="bold">New property</Text>
-        <Button size="small" kind="tertiary" onClick={onCancel}>Cancel</Button>
-      </div>
+    <div className="stack" aria-label="New property">
       {error && <Problem>{error}</Problem>}
       <div className="create-form">
         <Field label="Label" required>
@@ -282,16 +284,16 @@ function NewPropertyForm({ stageNames, teams, onCancel, onCreated }: {
         <Button size="small" onClick={save} disabled={saving || !valid}>{saving ? "Saving…" : "Add property"}</Button>
         <Button size="small" kind="tertiary" onClick={onCancel}>Cancel</Button>
       </div>
-    </section>
+    </div>
   );
 }
 
 // ------------------------------------------------------------------ the detail
-function PropertyDetail({ def: d, grants, options, processNames, stageNames, teams, profiles, onPatch, onChanged, onError, onClose, onDeleted }: {
+function PropertyDetail({ def: d, grants, options, processNames, stageNames, teams, profiles, onPatch, onChanged, onError, onDeleted }: {
   def: PropertyDef; grants: PropertyAccess[]; options: PropertyOption[]; processNames: string[];
   stageNames: string[]; teams: readonly Team[]; profiles: { id: string; name: string }[];
   onPatch: (change: PropertyDefPatch) => Promise<void>; onChanged: () => void; onError: (e: string | null) => void;
-  onClose: () => void; onDeleted: () => void;
+  onDeleted: () => void;
 }) {
   const repo = useRepository();
   const { can } = usePermission();
@@ -325,16 +327,14 @@ function PropertyDetail({ def: d, grants, options, processNames, stageNames, tea
 
   return (
     <div className="stack" aria-label={`Details of ${d.label}`}>
-      <section className="panel contact-detail">
+      <section className="panel">
+        {/* The name and the × are the slideout's; what stays is the line the head cannot
+            fit — the key, the stage, and which processes collect it. */}
         <div className="panel-head">
-          <div>
-            <Text type="text2" weight="bold">{d.label}</Text>
-            <div className="slot-sub">
-              <code>{d.key}</code> · {d.stageName}{processNames.length > 0 && <> · collected by {processNames.join(", ")}</>}
-              {!d.isActive && <span className="slot-chip">retired</span>}{d.restricted && <span className="slot-chip is-differs">restricted</span>}
-            </div>
+          <div className="slot-sub">
+            <code>{d.key}</code> · {d.stageName}{processNames.length > 0 && <> · collected by {processNames.join(", ")}</>}
+            {!d.isActive && <span className="slot-chip">retired</span>}{d.restricted && <span className="slot-chip is-differs">restricted</span>}
           </div>
-          <Button size="small" kind="tertiary" onClick={onClose} aria-label="Close details">Close</Button>
         </div>
 
         <div className="create-form">

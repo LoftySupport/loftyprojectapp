@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 85 changes since then —
+Unreleased: 88 changes since then —
+- Changed: Every record — a contact, a maintenance request, a property, a project — now opens in the same slide-out panel, which expands to full width and can be dragged wider
+- Changed: Updates moved from the sidebar to the footer
+- Added: PRODUCT.md records the interface must-haves every screen has to meet, and HANDOFF.md lists the tables that do not meet the sorting one yet
 - Added: The 110 projects from Amber's workbook, each with the number of sites it will hold — no jobs yet
 - Fixed: The schema checks no longer assume the database is empty, so real data cannot make them fail for the wrong reason
-- Fixed: Properties that showed only the tail of their name — three different rows all called "Ordered" — now read in full, with the team that owns them and a date field instead of "format not set"
-- Added: Setup → Processes is a pipeline — groups and processes drag into order, each process numbered by its place in the flow through its build lifecycle stage
-- Added: Processes show when they were last updated, by whom, and which fields changed
-- …and 80 more.
+- …and 83 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -22,6 +22,65 @@ described there, because that is the only category of change that gets expensive
 are in.
 
 Last updated: 2026-09-03.
+
+---
+
+## The interface must-haves, and where they are not met yet
+
+Amber, 3 September, gave two rules as **must-haves**. Both are written up in full in
+[PRODUCT.md](PRODUCT.md) under *Interface Must-Haves*; this is the state of play against
+them, so a gap is a listed item rather than something the next person discovers.
+
+### Every record opens in the slideout — DONE
+
+Every screen that opens a record now opens it in `SidePanel`: down the right, expandable
+to full width, width adjustable and remembered, Escape to close.
+
+| screen | was | now |
+| --- | --- | --- |
+| Jobs, Setup → Processes, Updates, Admin | already the slideout | unchanged |
+| Contacts | a detail column beside the list | `SidePanel` |
+| Maintenance | a detail column beside the list | `SidePanel` |
+| Setup → Properties | a detail column beside the list | `SidePanel` |
+| **Projects** | **replaced the whole board with a project page** | `SidePanel` over the board |
+
+Projects was the odd one and the worst of them: a job at `/jobs/1042-01` slid out over its
+board while a project at `/projects/1042` took the screen and grew a "← Projects" back
+button. Same route, same URL, same deep links — the board now stays mounted behind the
+panel, exactly as Jobs already worked.
+
+`.contacts-grid`, the two-column shape all three detail columns used, is **deleted** from
+`processes.css` rather than left available, so the pattern cannot come back by being
+copied off the page next door.
+
+### Every table sorts and filters — PART DONE
+
+Sorting is shared code: `SortHeader` / `useTableSort` / `sortRows` in
+`app/src/components/SortableTable.tsx`, with the column readers for the boards in
+`TableColumns.tsx`. Blanks sort last in both directions.
+
+**Meets it:** Jobs, Projects (both through `TableColumns`), Setup → Processes, Admin,
+Updates.
+
+**Does not yet — sortable headers to add:**
+
+| screen | the columns that should sort | the filters it should carry |
+| --- | --- | --- |
+| Contacts | name, company, role, email, on-how-many | company, classification, team, awaiting sign-off |
+| Maintenance | number, address, reported, trade, owner, health, next visit | trade, status, owner, job, warranty, **reported-date range** |
+| Setup → Properties | label, stage, level, team, format, SLA | stage, level, team, format, restricted |
+| Setup → Maintenance | category, SLA days | — |
+| Setup → Notifications | type | — |
+| Setup → Permissions | permission, capability | — |
+| Setup → Dictionary | name, table, column, status | table, status |
+| Setup → Wiring | method, table, wired | wired / not wired |
+| Updates → Bugs / Ideas (`FeedbackList`) | title, stage, votes, comments, reported | stage, kind, reporter |
+| Reports | whatever each report's table holds | the report's own controls |
+
+The date-range picker is the one piece with no shared component yet: Jobs and Projects
+have a range control in their filter bar, and the tables above would each need it wired
+to their own date column. That is the next thing to build for this must-have, not a
+per-page reinvention.
 
 ---
 

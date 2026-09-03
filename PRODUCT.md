@@ -81,6 +81,75 @@ claim that every number on it traces to a row somebody can open.
 - **Undecided:** which Vibe accessibility rules, beyond contrast, the app commits to (see
   Accessibility); how the import maps a named person to an owning team.
 
+## Interface Must-Haves
+
+Amber, 3 September, gave these as **must-haves** rather than preferences. They are here
+because a rule that lives only in a pull request gets re-litigated on the next screen;
+`DESIGN.md` is Amber's visual record and does not repeat them.
+
+Both are checkable by looking at a screen. Neither is satisfied by "most pages do this".
+
+### 1. Every table sorts and filters
+
+> *"all pages with tables have sortable and filterable columns, with appropriate filters
+> (e.g. for anything job/project/process related it must have team, team member, stage,
+> search by job#/project #) date picker) and for other areas simialr options"*
+
+A table of more than a handful of rows is a list somebody is looking for one thing in.
+Forty-seven rows with no way to order or narrow them is a screen that answers "what
+exists" and never "where is mine".
+
+**Every column that carries a comparable value sorts.** `SortHeader` and `useTableSort`
+in `app/src/components/SortableTable.tsx` are the implementation; blanks sort last in
+both directions, because reversing a sort should not fill the top of the screen with the
+rows carrying no answer.
+
+**The filters are the ones that match what the table holds.** For anything about jobs,
+projects or processes that is at minimum:
+
+| filter | why it is on the list |
+| --- | --- |
+| **Team** | the owning team is how work is divided, so it is how a list gets narrowed |
+| **Team member** | "what is mine" is the most-asked question of any list |
+| **Build lifecycle stage** | the stage is the phase of the work; a list across all seven is rarely the question |
+| **Search by job # / project #** | the number is what people say out loud and write on contracts |
+| **Date range** | a date picker, not two typed dates — due, started, completed, whichever the table carries |
+
+Elsewhere the same rule with the columns that screen actually has: Contacts filters by
+company, role and team; Maintenance by category, status and the job it sits on;
+Properties by stage, scope and team. "Similar options" means the equivalents, not fewer.
+
+**A filter that hides rows must say so**, and a sort that reorders a grouped or nested
+list must say what it did to the grouping — Setup → Processes turns dragging off and
+says why when a column sort replaces its pipeline order.
+
+### 2. Every record opens in the slideout
+
+> *"ensure all pages open items in the slideout side bar (can expand to full width) and is
+> width adjustable"*
+
+One shell, everywhere: `app/src/components/SidePanel.tsx`. Clicking a row opens the
+record down the right, over a list that stays readable behind it. Three things come with
+it and none of them is optional:
+
+- **Expands to full width.** `ExpandButton` / `usePanelExpand` — the same control in every
+  panel, hidden below 560px where a panel and the window are the same size anyway.
+- **Width adjustable.** `useResizablePanel` gives the grab edge, and the width is
+  remembered, so the panel is the width that person chose and not the width it shipped as.
+- **Escape closes it, and the selection rides the URL** so a record can be linked to and
+  survives a refresh.
+
+The pattern this replaces is a detail column sitting beside the list — it looks similar
+and is not the same thing: it halves the list, it cannot expand, and it cannot be dragged
+wider. That shape was `.contacts-grid` in `processes.css`; it has been **deleted** rather
+than left available, so the older pattern cannot come back by being copied from the page
+next door. A project used to be worse than a column — it replaced the whole board — and
+now opens in the same panel as everything else.
+
+This is the phone-width rule from *Capabilities and Constraints* said as a mechanism:
+the drawer at its slide-out width IS the phone layout, so a record that is unreadable in
+the panel is unreadable on a phone.
+
 ## Brand Commitments
 
 - Name: **Lofty Building Group**; the app is **Lofty Hub**, "the hub" or "the board".

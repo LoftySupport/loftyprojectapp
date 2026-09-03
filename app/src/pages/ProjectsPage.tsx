@@ -29,6 +29,7 @@ import {
 import { MoveStageControl, PROJECT_MOVE_NOTE } from "../components/MoveStageDialog";
 import { daysSince } from "../data/boardModel";
 import { Token } from "../components/Token";
+import { SidePanel } from "../components/SidePanel";
 import { Toolbar } from "../components/Toolbar";
 import { accentStyle, columnAccent } from "../theme/accents";
 import { Select, toOptions } from "../components/Select";
@@ -284,9 +285,10 @@ export function ProjectsPage() {
     }
   };
 
-  // The split dialog is rendered in both branches. It lives at page level so the New
-  // project dialog can hand straight to it, and the detail view returns early — so
-  // mounting it only in the list branch means the button on a project opens nothing.
+  // At page level so the New project dialog can hand straight to it. It used to be
+  // mounted in two branches, because opening a project returned early and replaced the
+  // whole page; the project now opens in a slideout OVER the board, so there is one
+  // branch and one mount.
   const splitDialog = (
     <SplitProjectDialog
       show={splitting !== null}
@@ -300,39 +302,55 @@ export function ProjectsPage() {
     />
   );
 
-  if (open) {
-    return (
-      <>
-        {splitDialog}
-        <ProjectDetail
-          key={open.projectId}
-          project={open}
-          onBack={() => navigate(`/projects${search}`)}
-          onChanged={refresh}
-          onSplit={() =>
-            setSplitting({
-              id: open.projectId,
-              // The proposed count, less what is already there — asking for four when
-              // four exist is almost never what somebody means on a second visit.
-              count: open.proposedDwellings != null
-                ? Math.max(1, open.proposedDwellings - open.jobs.length)
-                : null,
-              // The intended mix, so each row starts as the right kind of lot. Sent
-              // whole rather than reduced by what exists: which of the six are already
-              // created is not knowable from the counts alone.
-              community: open.communityTitleLots,
-              torrens: open.torrensTitleLots,
-              // Counted from the jobs already on the project rather than read from their
-              // addresses, which are not wired yet. Pre-filled and editable, not stored.
-              nextLot: open.jobs.length + 1
-            })
-          }
-        />
-      </>
-    );
-  }
-  /** Same guard as Jobs: only redirect once there is a list to have missed it in. */
-  if (projectNumber && all.length > 0) return <Navigate to={`/projects${search}`} replace />;
+  // A project's slideout, built here so the board below stays mounted and readable
+  // behind it (Amber, 3 Sep: "ensure all pages open items in the slideout side bar (can
+  // expand to full width) and is width adjustable").
+  //
+  // This USED TO BE AN EARLY RETURN that replaced the whole page with a project view.
+  // That made a project the one record in the app that behaved differently from every
+  // other: a job at /jobs/1042-01 slides out over its board, and a project at
+  // /projects/1042 took the screen. Same shell now, so the same three things come with
+  // it — expand to full width, a grab edge that remembers its width, and Escape.
+  const projectPanel = open && (
+    <SidePanel
+      open
+      title={open.currentAddress ?? `Project ${open.projectNumber}`}
+      onClose={() => navigate(`/projects${search}`)}
+    >
+      <ProjectDetail
+        key={open.projectId}
+        project={open}
+        onChanged={refresh}
+        onSplit={() =>
+          setSplitting({
+            id: open.projectId,
+            // The proposed count, less what is already there — asking for four when
+            // four exist is almost never what somebody means on a second visit.
+            count: open.proposedDwellings != null
+              ? Math.max(1, open.proposedDwellings - open.jobs.length)
+              : null,
+            // The intended mix, so each row starts as the right kind of lot. Sent
+            // whole rather than reduced by what exists: which of the six are already
+            // created is not knowable from the counts alone.
+            community: open.communityTitleLots,
+            torrens: open.torrensTitleLots,
+            // Counted from the jobs already on the project rather than read from their
+            // addresses, which are not wired yet. Pre-filled and editable, not stored.
+            nextLot: open.jobs.length + 1
+          })
+        }
+      />
+    </SidePanel>
+  );
+
+  /**
+   * Same guard as Jobs: only redirect once there is a list to have missed it in.
+   *
+   * `!open` is load-bearing now. It used to sit after the early return, so reaching it
+   * at all meant the number had matched nothing; with the board and the panel rendering
+   * together, a found project would otherwise be redirected away from itself.
+   */
+  if (!open && projectNumber && all.length > 0) return <Navigate to={`/projects${search}`} replace />;
 
   return (
     <>
@@ -422,6 +440,8 @@ export function ProjectsPage() {
       />
 
       {splitDialog}
+      {/* Over the board, the way the job drawer is — the board stays mounted behind it. */}
+      {projectPanel}
 
       {stale && <PreviousAddressNote />}
 
@@ -598,12 +618,10 @@ function WhoHoldsIt({ project, onChanged, onError }: {
 
 function ProjectDetail({
   project,
-  onBack,
   onSplit,
   onChanged
 }: {
   project: BoardProject;
-  onBack: () => void;
   onSplit: () => void;
   onChanged: () => void;
 }) {
@@ -698,16 +716,13 @@ function ProjectDetail({
 
   return (
     <>
-      <div className="page-head page-head-row">
-        <div>
-          <Button kind="tertiary" size="small" onClick={onBack}>← Projects</Button>
-          <Heading type="h2" weight="bold">
-            {project.currentAddress ?? <Token>project_display.current_address</Token>}
-          </Heading>
-          <Text type="text2" color="secondary">
-            Project {project.projectNumber} · {project.jobs.length} jobs
-          </Text>
-        </div>
+      {/* No page head: the slideout carries the address and the ×, and "← Projects" was
+          the back button of a page that no longer exists — closing the panel IS going
+          back. What stays is the pair the head cannot fit. */}
+      <div className="panel-head">
+        <Text type="text2" color="secondary" element="div">
+          Project {project.projectNumber} · {project.jobs.length} job{project.jobs.length === 1 ? "" : "s"}
+        </Text>
         <StatusPill status={project.status} />
       </div>
 

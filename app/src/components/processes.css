@@ -174,13 +174,16 @@
 .link-button { background: none; border: 0; padding: 0; color: var(--primary-color); font: inherit; cursor: pointer; text-decoration: underline; }
 .link-button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
 
-/* ---- the Contacts screen ------------------------------------------------------ */
-.contacts-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-16); }
-/* A grid item's minimum is its content's, and the content is a max-content table: without
-   this the track grows past the phone and the page scrolls sideways (measured: 61px on a
-   390px phone). The table scrolls inside its own wrapper instead. */
-.contacts-grid > * { min-width: 0; }
-@media (min-width: 960px) { .contacts-grid.has-detail { grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr); align-items: start; } }
+/* ---- record rows in a list -----------------------------------------------------
+   `.contacts-grid` lived here: a two-column layout that put the record in a panel BESIDE
+   the list. It is gone, and deliberately not kept "in case" — Amber, 3 September:
+   "ensure all pages open items in the slideout side bar (can expand to full width) and is
+   width adjustable", and a column beside the list can do none of the three. Every list
+   that opened a record that way — Contacts, Maintenance, Setup → Properties — now opens
+   it in `SidePanel`, the same shell as Jobs, Projects and Setup → Processes.
+
+   The row styles below stay: they are how a list says which row is open, whichever way
+   the record then opens. */
 .contact-row { cursor: pointer; }
 .contact-row.is-selected td { background: var(--primary-selected-color); }
 .contact-classes { display: inline-flex; gap: var(--space-4); flex-wrap: wrap; }

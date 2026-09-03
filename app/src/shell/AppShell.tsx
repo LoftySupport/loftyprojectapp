@@ -4,7 +4,7 @@ import {
   Avatar, Dialog, DialogContentContainer, Text, TextField
 } from "@vibe/core";
 import {
-  Announcement, Home, Menu, NavigationChevronLeft, NavigationChevronRight,
+  Home, Menu, NavigationChevronLeft, NavigationChevronRight,
   Person, SettingsKnobs, Group, Broom } from "@vibe/icons";
 import { HouseChart, HousePin, Houses } from "../theme/houseIcons";
 import { initialsOf, useAuth } from "../data/AuthProvider";
@@ -44,9 +44,12 @@ const PAGES = [
   // are part of setup only"). It was Templates, then Processes, as a destination beside
   // the work; it is configuration, so it lives at Setup → Processes and /processes
   // forwards there for the bookmarks that still carry it.
-  // The tracker (0060–0063). In the main nav rather than in Setup, because it is for
-  // everybody: Setup is configuration and this is "what is happening with the app".
-  { to: "/updates", label: "Updates", icon: Announcement },
+  // Updates (the tracker, 0060–0063) is NOT here. It was, on the reasoning that it is for
+  // everybody where Setup is configuration — but "for everybody" is not the same as "a
+  // destination beside the work", and Amber, 3 September: "remove 'updates' from sidebar
+  // navigation as this in the footer". It is where the queue, the roadmap and the
+  // changelog live, which is a thing you go to when you want it rather than a place you
+  // work, so it sits with Privacy, Terms and Support at the bottom of every screen.
   { to: "/admin", label: "Admin", icon: Person },
   // Setup replaced Dictionary and Wiring as separate destinations: configuration was
   // sitting at the same rank as the work.
@@ -372,6 +375,10 @@ export function AppShell() {
               {/* Privacy and Terms sit OUTSIDE the auth gate deliberately: a policy nobody
                   can read without signing in is not published. Support is Lofty's own
                   portal, hence a full URL and rel="noreferrer". */}
+              {/* Updates came out of the sidebar to here (Amber, 3 Sep): the queue, the
+                  roadmap and the changelog are a thing you go and read, not a place you
+                  work. First in the row because it is the one that changes. */}
+              <NavLink to="/updates">Updates</NavLink>
               <NavLink to="/privacy">Privacy Policy</NavLink>
               <NavLink to="/terms">Terms</NavLink>
               <a href="https://app.lofty.com.au" target="_blank" rel="noreferrer noopener">
