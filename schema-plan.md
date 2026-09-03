@@ -1673,6 +1673,36 @@ row's old number; the workbook's `1004-02` (Lot 2) is `2004-002` with old number
 words say; then `unimport_spine()` removes 116 and 796 and clears every stamp. Rolled back —
 the replay does not keep the workbook loaded.
 
+### 3 September — the workbook holds seven of the nine hand-made projects
+
+The staged rows went to the live database and match the replay exactly (801 rows,
+md5 `851f4495f40477395daf0f9d8a536a7d`); `0088` applied there and its proof passed against
+the real people table — Paul Ferka is in one team, so "Paul" resolves to it, and Olivia
+Sinderberry is in three, so she falls to the fallback, which is the rule working, not
+failing. Then the load stopped on its first insert and rolled back whole:
+
+```
+duplicate key value violates unique constraint "jobs_job_number_old_key"
+DETAIL: Key (job_number_old)=(1216 - D3) already exists.
+```
+
+Base 1011 was chosen so the nine hand-made projects keep their numbers. What nobody
+checked is whether the workbook *also* contains those sites. It contains seven of them —
+1002, 1003, 1004, 1005, 1006, 1009 and 1010 are the same addresses as workbook projects
+1120, 1121, 1119, 1118, 1117, 1112 and 1005. Two collide on the old job number
+(`1216 - D1/D2/D3` and `2347/2348/2349`), which is the only reason the load stopped rather
+than quietly making a second copy of all seven.
+
+The unique key on `job_number_old` earned its place here: it is the one constraint that
+noticed. Five of the seven carry no old number the app already holds, and nothing else in
+the schema would have objected to the same house existing twice.
+
+**Not decided.** Whether the workbook or the app is the record for those seven sites is
+Amber's call, and the load waits on it; the three ways are set out in
+`app/supabase/import/README.md` → *What stopped the live load*. Worth knowing while
+deciding: between them the seven hold two comments ("Job cancelled", "here is a test
+update") and nothing else — no tasks, parties, documents, property values or process runs.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

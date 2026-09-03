@@ -61,6 +61,54 @@ carries none.
 addresses, and the projects the audit shows the import inserted — and clears the stamps.
 The staging rows stay; Phase C reads them again for property values.
 
+## What stopped the live load, 3 September
+
+The staging rows are on the live database and byte-identical to the replay (801 rows,
+md5 `851f4495f40477395daf0f9d8a536a7d`), `0088` is applied, and its proof passed there.
+The load itself has **not** run. It stopped on its first write, and rolled back whole:
+
+```
+duplicate key value violates unique constraint "jobs_job_number_old_key"
+DETAIL: Key (job_number_old)=(1216 - D3) already exists.
+```
+
+The workbook holds seven of the nine hand-made projects again. They were entered in the
+app before the workbook was grouped, and base 1011 was chosen to keep their numbers — but
+nobody checked whether the sheet also contained them. It does:
+
+| in the app | site | its jobs | in the workbook | its jobs | would land as |
+| --- | --- | --- | --- | --- | --- |
+| 1002 | 14 Brodie Road, Reynella | 3 | 1120 | 3 | 1129 |
+| 1003 | 2A Launceston Ave, Warradale | 3 | 1121 | 3 | 1130 |
+| 1004 | 27 Howard Street, Windsor Gardens | 4 | 1119 | 4 | 1128 |
+| 1005 | 9 Riders Street, Seacombe Gardens | 4 | 1118 | 3 | 1127 |
+| 1006 | 83A Awoonga Road, Hope Valley | 30 | 1117 | 30 | 1126 |
+| 1009 | 3 Ross Street, Brighton | 3 | 1112 | 3 | 1121 |
+| 1010 | 30 Luprena Avenue, Ingle Farm | 3 | 1005 | 3 | 1014 |
+
+Project 1007 (2007 St Clair Ave, 16 jobs) and the empty 1008 are **not** in the workbook.
+
+Two of the seven collide on the old job number — the app already carries `1216 - D1/D2/D3`
+and `2347/2348/2349` — and that unique key is what stopped the load. The other five would
+have gone in quietly as a second copy of the same site.
+
+What the seven hold, beyond the jobs themselves: two comments (*"Job cancelled"* on 1010,
+*"here is a test update"* on job 1002-001). No tasks, parties, staff roles, documents,
+property values, process runs, variations or maintenance requests.
+
+**This is Amber's decision, and the load waits on it.** Three ways:
+
+1. **The workbook is the record.** Delete the seven hand-made projects, then load all 801
+   rows: 116 projects, 796 jobs, one source for every site. Costs the two test comments
+   and 50 hand-entered jobs that the sheet also holds.
+2. **The app is the record for those seven.** Load everything except their rows: 109
+   projects and about 747 jobs. Nothing is deleted; the seven staging groups stay unloaded
+   for Phase C to read, and `import_spine()` gains a "skip these workbook projects"
+   parameter.
+3. **Keep both.** Load all 801 rows and let the seven sites exist twice, which needs the
+   six colliding old numbers changed by hand first. Not recommended: nothing downstream
+   would know which copy is the real one.
+
 The migration is 1.2 MB. That is 801 rows × 194 columns of source kept verbatim, and it is
 the record of what was imported; nothing is trimmed to make the file smaller.
 
