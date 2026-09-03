@@ -64,6 +64,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- Setup → Processes no longer scrolls sideways on a tablet or a small phone
 - The schema checks no longer assume the database is empty, so real data cannot make them fail for the wrong reason
 - Properties that showed only the tail of their name — three different rows all called "Ordered" — now read in full, with the team that owns them and a date field instead of "format not set"
 - A process can collect job and project properties together — 9 attachments that were configured but invisible now show
@@ -85,6 +86,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- Setup → Processes is now a pipeline you drag, with the name editable in place and a process added straight into its stage
 - Every record — a contact, a maintenance request, a property, a project — now opens in the same slide-out panel, which expands to full width and can be dragged wider
 - Updates moved from the sidebar to the footer
 - A process opens in the same slideout as every other record, and expands to full screen

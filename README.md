@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 88 changes since then —
+Unreleased: 90 changes since then —
+- Fixed: Setup → Processes no longer scrolls sideways on a tablet or a small phone
+- Changed: Setup → Processes is now a pipeline you drag, with the name editable in place and a process added straight into its stage
 - Changed: Every record — a contact, a maintenance request, a property, a project — now opens in the same slide-out panel, which expands to full width and can be dragged wider
 - Changed: Updates moved from the sidebar to the footer
 - Added: PRODUCT.md records the interface must-haves every screen has to meet, and HANDOFF.md lists the tables that do not meet the sorting one yet
-- Added: The 110 projects from Amber's workbook, each with the number of sites it will hold — no jobs yet
-- Fixed: The schema checks no longer assume the database is empty, so real data cannot make them fail for the wrong reason
-- …and 83 more.
+- …and 85 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
