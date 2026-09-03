@@ -1,9 +1,8 @@
 /**
  * The drag rules of Setup → Processes, checked without a browser or a database.
  *
- * Amber, 3 Sep, with four screenshots of HubSpot's deal-pipeline settings: the processes
- * of a lifecycle stage should be a short ordered list you drag, rename in place and add
- * to. What that list writes is `process_position`, and `pipelinePosition.ts` sorts the
+ * Amber, 3 Sep, with four screenshots sent as a "ui and ux reference": the processes of a
+ * lifecycle stage should be a short ordered list you drag, rename in place and add to. What that list writes is `process_position`, and `pipelinePosition.ts` sorts the
  * jobs board on exactly that column — so a bug in the maths below is a bug in what every
  * job looks like it is up to.
  *

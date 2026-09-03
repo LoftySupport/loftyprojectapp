@@ -33,9 +33,10 @@ against them, so a gap is a listed item rather than something the next person di
 
 ### What has an order is dragged into it — DONE on Processes, and only there
 
-Setup → Processes is now shaped like the HubSpot pipeline settings Amber sent: a card per
-lifecycle stage, its processes as ordered rows with a drag handle, a name box you type
-into, and Edit properties / Delete at the end of each. `+ Add a process to <stage>` opens
+Setup → Processes is now an ordered list you rearrange rather than a table you read down —
+the shape of the four screenshots Amber sent as a *"ui and ux reference"*: a card per
+lifecycle stage, its processes as rows with a drag handle, a name box you type into, and
+Edit properties / Delete at the end of each. `+ Add a process to <stage>` opens
 the drawer with that stage already chosen. The dense table is still one click away under
 **Table**, which is where sorting lives.
 

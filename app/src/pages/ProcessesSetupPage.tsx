@@ -251,7 +251,7 @@ export function ProcessesSetupPage() {
   }
 
   /**
-   * Rename in place, the way HubSpot renames a stage: type in the box, leave it, one
+   * Rename in place: type in the box, leave it, one
    * write. A blank is refused rather than saved — an unnamed process is a row nobody can
    * find again, and the box puts the old name straight back so nothing is lost to a
    * stray keystroke.
@@ -441,18 +441,16 @@ export function ProcessesSetupPage() {
 
 // ------------------------------------------------------------ the pipeline editor
 /**
- * One lifecycle stage, drawn as HubSpot draws a pipeline (Amber, 3 Sep, with four
- * screenshots of the deal-pipeline settings): a card per pipeline, its stages as a
- * short ordered list of rows, each row a drag handle, a name you type straight into,
- * and the two actions — edit, delete — at the end of it.
+ * One lifecycle stage, drawn as an ordered list you rearrange rather than a table you
+ * read down: a drag handle, the run number, the name in a box you type straight into,
+ * and the row's own actions — edit, delete — at the end of it.
  *
- * THE MAPPING, BECAUSE IT IS NOT THE OBVIOUS ONE
- *
- *   HubSpot's *pipeline* is this app's **lifecycle stage**, and HubSpot's *stages* are
- *   this app's **processes** — they are the columns a record moves through, which is
- *   exactly what the jobs board draws from `process_position`. Reading it the other way
- *   round (lifecycle stages as the draggable list) would put Cancelled and Closed into a
- *   run they are deliberately outside of.
+ * The shape comes from four screenshots Amber sent on 3 Sep, and she was explicit about
+ * how to read them: *"Note these are looking at the ui and ux reference not using
+ * deals"*. So what is borrowed is the INTERACTION — rows with handles, names edited in
+ * place, an add row at the foot, per-row settings — and not somebody else's object
+ * model. What is in the list here is this app's own: the processes of a lifecycle stage,
+ * in the order a job runs them.
  *
  * The dense table is still here, one click away, because Amber asked for sortable and
  * filterable columns on the same screen and a pipeline sorted by team is not a pipeline.
@@ -542,8 +540,8 @@ function PipelineStageCard({
                   {n}
                 </span>
 
-                {/* The name is a box you type in, as it is in HubSpot's stage list. One
-                    edit is one write: BlurText commits on blur or Enter, never per key. */}
+                {/* The name is a box you type in, not a cell you click through to.
+                    One edit is one write: BlurText commits on blur or Enter, never per key. */}
                 <span className="pipe-name">
                   <BlurText
                     value={p.name}

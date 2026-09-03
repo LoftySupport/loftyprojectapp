@@ -10,8 +10,9 @@ import type { Process } from "./types";
  *   more like a pipeline as each process has an number and they should be able to be
  *   dragged and dropped in order"*
  *
- * — and, on 3 Sep with four HubSpot screenshots, that the screen should look like a deal
- * pipeline's settings: a short ordered list you drag, rename in place, and add to.
+ * — and, on 3 Sep with four screenshots sent as a *"ui and ux reference"*, that the
+ * screen should be a short ordered list you drag, rename in place and add to, rather
+ * than a table with a handle hidden in one of its cells.
  *
  * This lived inside the page component, which meant the rules below could only be proved
  * by dragging things in a browser against a database. They decide what a job's board

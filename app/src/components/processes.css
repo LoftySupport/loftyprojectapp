@@ -228,10 +228,10 @@
 .data-table tr.confirm-row > td { background: var(--negative-color-selected); }
 
 /* --------------------------------------------------------------- the pipeline editor
-   A lifecycle stage drawn the way HubSpot draws a pipeline (Amber, 3 Sep, with the deal
-   pipeline screenshots): rows rather than a data table, because these are things you
-   rearrange and type into, not cells you compare down a column. The table view keeps
-   `.data-table` and its sortable headers for the comparing. */
+   Rows rather than a data table, because these are things you rearrange and type into,
+   not cells you compare down a column — the shape of the four screenshots Amber sent on
+   3 Sep as a "ui and ux reference". The table view keeps `.data-table` and its sortable
+   headers for the comparing. */
 .pipe { margin-top: var(--space-12); }
 .pipe-head,
 .pipe-row {
@@ -275,9 +275,9 @@
 .pipe-row.is-retired .pipe-name .pf-input { color: var(--secondary-text-color); }
 .pipe-row.is-drop, .pipe-group.is-drop { box-shadow: inset 0 2px 0 0 var(--primary-color); }
 .pipe-name { display: flex; align-items: center; gap: var(--space-8); min-width: 0; }
-/* One width for every name box, chips after it — a column of boxes that all start and
-   end in the same place is the thing HubSpot's stage list gets right, and a box that
-   shrinks because its row happens to carry a "milestone" chip loses it. */
+/* One width for every name box, chips after it. A column of boxes that all start and end
+   in the same place reads as one editable list; a box that shrinks because its row
+   happens to carry a "milestone" chip loses that. */
 .pipe-name .pf-input { flex: 0 1 300px; min-width: 0; }
 .pipe-confirm { padding: var(--space-8) var(--space-12); border-top: 1px solid var(--layout-border-color); }
 .pipe-add {
