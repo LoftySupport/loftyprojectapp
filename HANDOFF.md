@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 69 changes since then —
+Unreleased: 70 changes since then —
 - Added: PRODUCT.md records who the app is for, the phone-width drawer as the primary reading surface, and Vibe-with-Lofty-colours as the binding visual constraint
+- Added: Phase B — the old system's 801 job rows are staged verbatim in the database, with a load that builds the projects and jobs from them and an unload that takes exactly that back out
 - Fixed: A project with no target date reads "Not set" on its card, in the table and on its page — no column token
 - Changed: Setup → Processes and Setup → Properties open the selected record in a panel beside the list, everything editable there — nothing behind a More or Order toggle
 - Added: Setup → Processes edits the tick-box lines of a template task, and every task shows its team, days, parent and order at once
-- Removed: Processes is no longer a destination in the main navigation — it is part of Setup; /processes and /templates forward there
-- …and 64 more.
+- …and 65 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
