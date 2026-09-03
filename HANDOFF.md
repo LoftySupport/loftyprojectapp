@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 93 changes since then —
+Unreleased: 95 changes since then —
 - Fixed: The jobs board no longer scrolls sideways on a phone
 - Added: Drag a job between columns on the board — by lifecycle stage or by the processes inside a stage — and pick several to move at once from either view
+- Fixed: Setup → Processes no longer scrolls sideways on a tablet or a small phone
+- Changed: Setup → Processes is now a pipeline you drag, with the name editable in place and a process added straight into its stage
 - Added: See what each job is up to — group the board by Process, or drill into a stage to get its processes as columns with every job in the one it has reached
-- Added: An "Up to" column on the jobs table, in pipeline order
-- Added: npm run check:pipeline proves the rule that decides where a job sits
-- …and 88 more.
+- …and 90 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
