@@ -1157,7 +1157,7 @@ update profiles set profile_permission = 'manager' where profile_email = 'behavi
 set role authenticated;
 set request.jwt.claim.sub = :'uid';
 do $$
-declare n integer;
+declare n integer; stamped_by uuid;
 begin
   select count(*) into n from property_values where property_def_key = 'probe_team_only';
   if n = 1 then raise notice 'ok  a manager sees an unrestricted value whatever team holds it';
@@ -1202,6 +1202,23 @@ begin
     values ('probe_manager_process', 'Manager''s process', 'Construction', 'job');
     raise notice 'ok  a manager defines a process';
   exception when others then raise warning 'FAIL: a manager could not define a process (%)', sqlerrm; end;
+
+  -- 0091: the POSITIVE half of stamp_updated_by, which the migration's own proof block
+  -- cannot reach — current_profile_id() resolves auth.uid(), and a migration has no JWT.
+  -- Here there is one: this whole block runs as `authenticated` with the test person's
+  -- sub set, so an edit made here is an edit made by a real signed-in manager, and the
+  -- name Setup → Processes prints comes from this column.
+  begin
+    update processes set process_expected_days = 12 where process_key = 'probe_manager_process';
+    select process_updated_by into stamped_by from processes where process_key = 'probe_manager_process';
+    if stamped_by is null then
+      raise warning 'FAIL: a manager edited a process and process_updated_by stayed null';
+    elsif stamped_by <> current_profile_id() then
+      raise warning 'FAIL: process_updated_by named % rather than the manager who edited it', stamped_by;
+    else
+      raise notice 'ok  a manager''s edit stamps process_updated_by with that manager';
+    end if;
+  exception when others then raise warning 'FAIL: unexpected stamping a process editor (%)', sqlerrm; end;
 end $$;
 reset role;
 

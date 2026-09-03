@@ -50,6 +50,7 @@ import type {
   NewProcess,
   ProcessPatch,
   ProcessDependency,
+  ProcessHistoryEntry,
   ProcessProperty,
   ProcessTask,
   NewProcessTask,
@@ -688,6 +689,22 @@ export interface Repository {
   updateProcess(id: string, patch: ProcessPatch): Promise<Process>;
   /** Refused by the database once the process has been run — retire it instead. */
   deleteProcess(id: string): Promise<void>;
+  /**
+   * Write a new order for a set of processes — what a drag and drop saves.
+   *
+   * Amber, 3 Sep: the groups "need to be able to be sorted and have processes nested
+   * beneath them and be in order as this defines how the job moves through a build cycle
+   * stage". Position and group are the only two things a drag may change, so they are the
+   * only two this sends; a process's name and duration cannot move as a side effect.
+   */
+  reorderProcesses(orders: { id: string; stageGroup: string | null; position: number }[]): Promise<void>;
+  /**
+   * One process's history, newest first — what changed, when, and by whom.
+   *
+   * Read from `activity_audit`, so it is the record rather than a reconstruction. Capped
+   * at the last 50 writes: the panel is a history, not an export.
+   */
+  listProcessHistory(processId: string): Promise<ProcessHistoryEntry[]>;
   listProcessDependencies(): Promise<ProcessDependency[]>;
   /** Replace what one process waits on. The database refuses a cycle. */
   setProcessDependencies(processId: string, dependsOn: { processId: string; lagDays: number }[]): Promise<ProcessDependency[]>;
@@ -877,6 +894,8 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "createProcess",
   "updateProcess",
   "deleteProcess",
+  "reorderProcesses",
+  "listProcessHistory",
   "listProcessDependencies",
   "setProcessDependencies",
   "listProcessProperties",
@@ -1063,6 +1082,8 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   createProcess: "processes",
   updateProcess: "processes",
   deleteProcess: "processes",
+  reorderProcesses: "processes",
+  listProcessHistory: "activity_audit",
   listProcessDependencies: "process_dependencies",
   setProcessDependencies: "process_dependencies",
   listProcessProperties: "process_properties",

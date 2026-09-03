@@ -1866,6 +1866,37 @@ export interface Process {
   /** The subfolder inside the record's SharePoint folder — a name, not a URL. */
   sharepointFolder: string | null;
   importRef: string | null;
+  /**
+   * When this process was last changed, and by whom (Amber, 3 Sep: processes "need to show
+   * in processes when they were last updated and by who and what happened").
+   *
+   * The name, not the id, because an id is nobody's answer to "who changed this".
+   *
+   * Written by `processes_stamp_updated_by` (0091). Nothing had ever written an
+   * `updated_by` on any table before that — the column existed and was null everywhere —
+   * so this would have printed a blank for a row three people edited this morning.
+   *
+   * Still null in two honest cases: a row nobody has edited since it was seeded, and a
+   * write made by a script or the service role, which has no person behind it. Both read
+   * as "no author recorded" rather than being attributed to whoever ran the import.
+   */
+  updatedAt: string;
+  updatedBy: string | null;
+}
+
+/**
+ * One line of a process's history — what changed, when, and who did it.
+ *
+ * Read from `activity_audit`, which has stamped every write since 0001, so this is the
+ * record rather than a reconstruction. `changes` names only the columns that actually
+ * differ between the old row and the new one: an update that touched one field should read
+ * as one field, not as eighteen columns rewritten.
+ */
+export interface ProcessHistoryEntry {
+  at: string;
+  by: string | null;
+  operation: "INSERT" | "UPDATE" | "DELETE";
+  changes: { field: string; from: string | null; to: string | null }[];
 }
 
 export interface NewProcess {

@@ -204,3 +204,22 @@
 .maint-item-head { display: flex; gap: var(--space-8); align-items: flex-start; flex-wrap: wrap; }
 .token-box { border: 1px solid var(--warning-color); background: var(--warning-color-selected); border-radius: var(--border-radius-medium); padding: var(--space-8) var(--space-12); display: flex; flex-direction: column; gap: var(--space-4); }
 .token-link { display: block; font-size: 12px; word-break: break-all; user-select: all; }
+
+/* ---------------------------------------------------------------- the pipeline
+   Setup → Processes is a pipeline, not a flat table: a stage holds groups, a group
+   holds numbered processes, and both can be dragged into a different order (Amber,
+   3 Sep). These rows live inside the same `.data-table` as everything else, so the
+   nesting is drawn with an indent and a left rule rather than a second table. */
+.pipeline-group td { background: var(--allgrey-background-color); border-top: 1px solid var(--layout-border-color); }
+.pipeline-group[draggable="true"] { cursor: grab; }
+.pipeline-group-head { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; }
+.pipeline-group-moves { display: inline-flex; gap: var(--space-4); margin-left: auto; }
+/* The grip is decorative — every drag here also has an up/down button beside it, because
+   a reorder that only works with a mouse is a reorder half the office cannot do. */
+.drag-dots { color: var(--secondary-text-color); cursor: grab; user-select: none; margin-right: var(--space-4); }
+.data-table tr.is-nested > td:first-child { padding-left: var(--space-16); border-left: 3px solid var(--layout-border-color); }
+.data-table tr.is-nested[draggable="true"] { cursor: grab; }
+/* Where the dragged thing would land. A line above rather than a filled row: the row
+   under the cursor is the neighbour, not the destination. */
+.data-table tr.is-drop > td { box-shadow: inset 0 2px 0 0 var(--primary-color); }
+.data-table tr.confirm-row > td { background: var(--negative-color-selected); }

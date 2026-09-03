@@ -435,6 +435,8 @@ export function createStubRepository(): Repository {
     async createProcess(): Promise<never> { throw new Error("Defining a process needs Supabase."); },
     async updateProcess(): Promise<never> { throw new Error("Editing a process needs Supabase."); },
     async deleteProcess(): Promise<never> { throw new Error("Removing a process needs Supabase."); },
+    async reorderProcesses(): Promise<never> { throw new Error("Reordering the pipeline needs Supabase."); },
+    async listProcessHistory() { return []; },
     async listProcessDependencies() { return []; },
     async setProcessDependencies(): Promise<never> { throw new Error("Editing process dependencies needs Supabase."); },
     async listProcessProperties() { return []; },

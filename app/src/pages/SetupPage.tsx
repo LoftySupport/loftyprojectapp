@@ -49,7 +49,6 @@ const SECTIONS = [
   { slug: "properties",  label: "Properties",  adminOnly: false },
   { slug: "processes",   label: "Processes",   adminOnly: false },
   { slug: "contacts",    label: "Contacts",    adminOnly: false },
-  { slug: "notifications", label: "Notifications", adminOnly: false },
   { slug: "maintenance", label: "Maintenance", adminOnly: false },
   { slug: "permissions", label: "Permissions", adminOnly: false },
   { slug: "dictionary",  label: "Dictionary",  adminOnly: false },
@@ -71,6 +70,20 @@ export function SetupPage() {
   // a reasonable thing to type, and it should land somewhere. A section this person may
   // not see takes the same path — landing on Properties beats an error for a tab that,
   // to them, does not exist.
+  /**
+   * Notifications was a tab of its own, and Amber, 3 Sep: "notificatiosn are already
+   * under user settings so it is doubling up having it in setup". It was — from the
+   * outside. Both screens are a table of notification types with switches beside them,
+   * and reading them side by side does not tell you that one is your channels and the
+   * other is everyone's audiences.
+   *
+   * So the tab is gone. What is genuinely NOT in user settings — who hears each type,
+   * whether a type fires at all, and the outbox — is not deleted with it: it is an
+   * automation ("overdue 5 days → the managers"), so it moved to the Automations tab
+   * beside the SLAs that decide when overdue starts. This redirect keeps every link to
+   * the old tab, and Updates' own links to it, landing on that.
+   */
+  if (section === "notifications") return <Navigate to="/setup/automations" replace />;
   if (index === -1) return <Navigate to="/setup/properties" replace />;
 
   return (
@@ -90,7 +103,6 @@ export function SetupPage() {
         {section === "properties"  && <PropertiesSetupPage />}
         {section === "processes"   && <ProcessesSetupPage />}
         {section === "contacts"    && <ContactLookupsPage />}
-        {section === "notifications" && <NotificationsSetupPage />}
         {section === "maintenance" && <MaintenanceSetupPage />}
         {/* Moved off Admin. Admin is about people; a permission model is configuration,
             which is what this screen is for. */}
@@ -231,6 +243,19 @@ function Automations() {
         {saving && <Text type="text3" color="secondary">Saving…</Text>}
         {problem && <Problem>{problem}</Problem>}
       </section>
+
+      {/*
+        Who hears what, moved off its own tab (see the redirect above). It sits under the
+        SLAs on purpose: an SLA decides when something is late, and these rules decide who
+        finds out — the same sentence, read twice.
+      */}
+      <div style={{ marginTop: "var(--space-16)" }}>
+        <div className="panel-head">
+          <Text type="text2" weight="bold">Notifications</Text>
+          <Text type="text3" color="secondary">who hears what — your own channels are in User settings</Text>
+        </div>
+        <NotificationsSetupPage />
+      </div>
 
       {/* Automations proper are still half-present in the schema — `property_defs.automation`
           names one per field — but nothing defines or runs them. The tab keeps saying so
