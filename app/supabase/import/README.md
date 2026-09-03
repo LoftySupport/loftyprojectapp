@@ -35,11 +35,27 @@ addresses, projects and jobs — with the original beside anything it normalised
   community* is not the same statement as *torrens*;
 - five rows with no address at all are staged with a `skip_reason` and make no job.
 
-It does **not** load anything. `import_spine()` does, and takes the four decisions the
-sheet cannot make — owning team, lifecycle stage, numbering base, what *Cancelling* /
-*On Hold* / *In Doubt* mean as a status — as parameters with no defaults. Seven old numbers
-are shared by several rows; the load refuses them until told the rule
-(`p_disambiguate_old_numbers => true` appends the sheet's lot label: `1288 · Lot 1`).
+It does **not** load anything. `import_spine()` does, and takes the decisions the sheet
+cannot make as parameters with no defaults. Amber made them on 2–3 September (`0088`,
+and `schema-plan.md` → *3 September — the decisions*); the live call is:
+
+```sql
+select * from import_spine(
+  'Lofty_Jobs_Grouped_by_Project.xlsx · project import',
+  'acquisition_development',            -- the team when the named person is not a user in one team
+  'Acquisition & Development',          -- the stage, unless the stage map says otherwise
+  1011,                                 -- workbook 1001 → 1011; the nine hand-made projects stay
+  '{"cancelling": "cancelled", "on hold": "on_hold"}',   -- the status word → job status
+  '{"cancelling": "Cancelled"}',        -- the status word → lifecycle stage
+  'S · Sales Consultant',               -- the sheet column naming the person whose team owns the job
+  'omit');                              -- shared old numbers: carried by no job, kept on the row
+```
+
+`private.import_team_for_person()` is the team rule on its own: the one active user whose
+first name and surname initial match, when they are in exactly one team; otherwise the
+fallback. Seven old numbers are shared by several rows; `'refuse'` (the default) stops the
+load and names them, `'label'` appends the sheet's lot label (`1288 · Lot 1`), `'omit'`
+carries none.
 
 `unimport_spine()` removes exactly what a load made — jobs and their children, their
 addresses, and the projects the audit shows the import inserted — and clears the stamps.

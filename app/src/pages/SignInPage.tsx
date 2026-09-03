@@ -25,7 +25,7 @@ export function SignInPage() {
       <div className="signin-card">
         <img src="/lofty_logo_orange.png" alt="Lofty" className="signin-logo" />
 
-        <Heading type="h2" weight="bold">Job Oversight Board</Heading>
+        <Heading type="h2" weight="bold">Lofty Hub</Heading>
         <Text type="text2" color="secondary" ellipsis={false}>
           Sign in with your Lofty Microsoft account to continue.
         </Text>

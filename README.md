@@ -1,4 +1,4 @@
-# Lofty Job Oversight Board
+# Lofty Hub
 
 The V0 build of Lofty's job pipeline board: React, Vibe and Supabase.
 

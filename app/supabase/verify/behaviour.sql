@@ -850,10 +850,12 @@ delete from process_runs where job_id = '1106-002' and process_id = (select proc
 -- ============================================================================
 -- 44. The staged workbook (0087) loads through import_spine() and unloads without a trace.
 --
--- Not a fixture: the real 801 rows, against candidate decisions (the team and stage are
--- placeholders here — the live load takes Amber's). The numbering base is shifted to 2001
--- because this database already has a project 1106 from §6, which is exactly the collision
--- the base exists for. Rolled back at the end: the workbook is not loaded on the replay.
+-- Not a fixture: the real 801 rows, with Amber's decisions (0088): every job in Acquisition
+-- & Development unless the sheet says "cancelling" (→ Cancelled); the owning team from the
+-- named sales consultant when they are a user in one team, else A&D; shared old numbers
+-- carried by no job. The numbering base is shifted to 2001 because this database already
+-- has a project 1106 from §6, which is exactly the collision the base exists for (the live
+-- load uses 1011). Rolled back at the end: the workbook is not loaded on the replay.
 -- ============================================================================
 \echo '--- 44. the staged workbook loads (796 jobs, 116 projects, 5 skipped), every job traces to its row, and unloads clean'
 begin;
@@ -861,20 +863,43 @@ select case when count(*) = 801 and count(*) filter (where import_staging_job_sp
   then 'ok  801 staging rows from the workbook, 5 with a skip_reason'
   else 'FAIL: ' || count(*) || ' staging rows, ' || count(*) filter (where import_staging_job_spine ? 'skip_reason') || ' skipped' end
 from import_staging_jobs where import_staging_job_source = 'Lofty_Jobs_Grouped_by_Project.xlsx · project import';
-select projects_made as wb_projects, jobs_made as wb_jobs, rows_skipped as wb_skipped
-from import_spine('Lofty_Jobs_Grouped_by_Project.xlsx · project import', 'pre_construction_admin', 'Pre-construction', 2001, '{"cancelling": "cancelled", "on hold": "on_hold"}'::jsonb, true) \gset
+select projects_made as wb_projects, jobs_made as wb_jobs, rows_skipped as wb_skipped, jobs_cancelled as wb_cancelled, teams_from_people as wb_people
+from import_spine('Lofty_Jobs_Grouped_by_Project.xlsx · project import', 'acquisition_development', 'Acquisition & Development', 2001,
+                  '{"cancelling": "cancelled", "on hold": "on_hold"}'::jsonb, '{"cancelling": "Cancelled"}'::jsonb, 'S · Sales Consultant', 'omit') \gset
 select case when :wb_projects = 116 and :wb_jobs = 796 and :wb_skipped = 5
   then 'ok  the load made 116 projects and 796 jobs and skipped 5 rows'
   else 'FAIL: the load made ' || :wb_projects || ' projects, ' || :wb_jobs || ' jobs, skipped ' || :wb_skipped end;
--- Every staged row that carries a spine has a job, and the job carries the row's old number.
-select case when count(*) = 0 then 'ok  every spine row has its job, and the job carries the old number'
-  else 'FAIL: ' || count(*) || ' spine rows without a matching job or old number' end
+-- The team rule on the real names: Paul (12 rows, Pre-construction Admin) and Gary P (3, Lofty
+-- General) are users in one team; Brenton G and Mitch G are A&D anyway; Olivia, Michael B and
+-- the 209 blank rows fall back. So 15 jobs left the fallback team.
+select case when :wb_people = 15
+       and (select count(*) from jobs where project_id between 2001 and 2121 and job_owning_team = 'pre_construction_admin') = 12
+       and (select count(*) from jobs where project_id between 2001 and 2121 and job_owning_team = 'lofty_general') = 3
+       and (select count(*) from jobs where project_id between 2001 and 2121 and job_owning_team = 'acquisition_development') = 781
+  then 'ok  15 jobs took the named person''s team (12 Paul → Pre-construction Admin, 3 Gary → Lofty General); 781 are Acquisition & Development'
+  else 'FAIL: ' || :wb_people || ' from people; PCA ' || (select count(*) from jobs where project_id between 2001 and 2121 and job_owning_team = 'pre_construction_admin')
+       || ', LG ' || (select count(*) from jobs where project_id between 2001 and 2121 and job_owning_team = 'lofty_general')
+       || ', A&D ' || (select count(*) from jobs where project_id between 2001 and 2121 and job_owning_team = 'acquisition_development') end;
+-- The stage rule: 39 "cancelling" rows are Cancelled jobs; every other job is in A&D.
+select case when :wb_cancelled = 39
+       and count(*) filter (where job_stage = 'Cancelled') = 39
+       and count(*) filter (where job_stage = 'Acquisition & Development') = 757
+  then 'ok  39 jobs landed in Cancelled and 757 in Acquisition & Development'
+  else 'FAIL: ' || count(*) filter (where job_stage = 'Cancelled') || ' Cancelled, ' || count(*) filter (where job_stage = 'Acquisition & Development') || ' A&D' end
+from jobs where project_id between 2001 and 2121;
+-- Every staged row that carries a spine has a job; an unshared old number is on the job, a
+-- shared one is on no job ("ignore the seven old job numbers") and still on the row.
+select case when count(*) = 0 then 'ok  every spine row has its job; unshared old numbers carried, shared ones omitted'
+  else 'FAIL: ' || count(*) || ' spine rows without a matching job, or with the wrong old number' end
 from import_staging_jobs s left join jobs j on j.job_id = s.import_staging_job_job_id
 where s.import_staging_job_source = 'Lofty_Jobs_Grouped_by_Project.xlsx · project import'
   and not (s.import_staging_job_spine ? 'skip_reason')
-  and (j.job_id is null or (s.import_staging_job_number_old is not null and j.job_number_old not like s.import_staging_job_number_old || '%'));
--- Lot order: the workbook's 1004-02 (Lot 2) is job 2004-002, and the shared old number 1288 carries its lot.
-select case when job_number_old = '1288 · Lot 2' then 'ok  1004-02 became 2004-002 with old number 1288 · Lot 2'
+  and (j.job_id is null
+       or (coalesce((s.import_staging_job_spine ->> 'old_number_shared')::boolean, false) and j.job_number_old is not null)
+       or (not coalesce((s.import_staging_job_spine ->> 'old_number_shared')::boolean, false) and j.job_number_old is distinct from s.import_staging_job_number_old));
+-- Lot order: the workbook's 1004-02 (Lot 2) is job 2004-002; its old number 1288 is shared, so the job carries none.
+select case when job_number_old is null and (select import_staging_job_number_old from import_staging_jobs where import_staging_job_job_id = '2004-002') = '1288'
+  then 'ok  1004-02 became 2004-002, carrying no old number while its row still says 1288'
   else 'FAIL: 2004-002 carries old number ' || coalesce(job_number_old, 'null') end
 from jobs where job_id = '2004-002';
 -- Every insert is logged as an import, so the way back can tell its projects from anybody else's.
