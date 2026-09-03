@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-689 properties across 96 tables.
+699 properties across 97 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 640 | In the migration and the types |
+| Created | 650 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -364,6 +364,23 @@ Parked, deliberately. Health is calculated, not set — is it on schedule, over 
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `health_statuses.id` | Health status | PARKED — deliberately not built yet. Health is calculated, not set: is it on schedule, is it over budget, has an issue been raised. The inputs are still to be decided, and inventing a column before they are known would bake in the wrong answer. Distinct from status, which is what a person sets. | `text` | — | Not in the schema. Awaiting the list of inputs it is calculated from. | Will be derived, not stored — no column until the calculation is settled. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
+
+## `import_staging_jobs`
+
+Phase B (0086): every row of the old system's job list, verbatim as jsonb, beside what the generator decided it means for the spine. import_spine() creates the addresses, projects and jobs from the spine layer and stamps job_id back; unimport_spine() removes exactly what it made. Phase C reads the same rows again for property values. Admins read; nothing writes from the app.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `import_staging_jobs.import_staging_job_id` | Staging row | One row per row of the old system's job list (Phase B, 0086). | `bigint` | — | Primary key, identity. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `import_staging_jobs.import_staging_job_source` | Source | Which file and sheet the row came from — "Lofty_Jobs_Grouped_by_Project.xlsx · project import". | `text` | — | Not null, not blank. Unique with source_row. | import_spine() and unimport_spine() take it as their argument. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `import_staging_jobs.import_staging_job_source_row` | Sheet row | The row's position under the sheet's header (1 = the first data row), so a question can go back to the sheet. | `integer` | — | Not null, > 0. Unique with source. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `import_staging_jobs.import_staging_job_number_old` | Old job number | The old system's job number as the sheet gives it — 1288, or 1339 - D1. Null on the five rows that have none. | `text` | — | Nullable. Indexed where present. | Becomes jobs.job_number_old on load — with the sheet's lot label appended when several rows share one and the caller agreed the rule. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `import_staging_jobs.import_staging_job_row` | The sheet row | The row verbatim, keyed "<column letter> · <header>" because the sheet repeats headers. Dates as ISO strings. Never edited — the record of what was imported, and what Phase C reads for property values. | `jsonb` | — | Not null; CHECK it is an object. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `import_staging_jobs.import_staging_job_spine` | The spine reading | What the generator decided the row means for addresses, projects and jobs — project number, sequence, address parts, postcode and council looked up, respellings with the original beside them — and skip_reason where it refused. | `jsonb` | — | Not null; CHECK it is an object. | Read by import_spine(). The keys are documented in generate-jobs-import.py. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `import_staging_jobs.import_staging_job_loaded_at` | Loaded | When import_spine() made the job from this row. Cleared by unimport_spine(); left standing when the job is deleted any other way. | `timestamptz` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `import_staging_jobs.import_staging_job_job_id` | Job | The job made from this row. Null until loaded and again after unimport; null with a loaded_at means the job was deleted by hand since. | `text` | — | Nullable. FK → jobs ON UPDATE CASCADE ON DELETE SET NULL. | The trace from sheet row to job and back. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `import_staging_jobs.import_staging_job_address_id` | Job address | The address import_spine() made for the job, so unimport_spine() can remove exactly that one. | `uuid` | — | Nullable. FK → addresses ON DELETE SET NULL. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `import_staging_jobs.import_staging_job_created_at` | Staged | — | `timestamptz` | — | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `job_address_search`
 

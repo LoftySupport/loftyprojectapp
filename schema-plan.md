@@ -1561,6 +1561,90 @@ which digest, and the digest time. 7. SMS provider. 8. Contractor accept links w
 login (recommended yes). 9. Request numbering, `1042-01-M3` or company-wide. With 1, 4 and 5
 answered, `0080`–`0082` can be built at once.
 
+## 2 September — Phase B: what the workbook forces
+
+Amber, the morning the app went live: *"the jobs and projects that were attached earlier
+have not been added."* The attachment is `Lofty_Jobs_Grouped_by_Project.xlsx`, found in her
+Drive and checked in as `app/supabase/import/lofty-jobs-grouped-by-project-2026-08-31.xlsx`.
+Its Method tab says how it was built: the old system's CERTIFICATION tab, 801 job rows,
+grouped into 121 projects by site address (normalised, then a 90 % match only when the
+street numbers agree), numbered 1001–1121 in order of first appearance, sequences `01, 02…`
+inside each project in row order, and the old job number kept beside every row. Five rows
+with no address became single-job projects; a Review tab lists them and eight near-misses
+for a person to check.
+
+So the two hard parts *Loading jobs before properties exist* named — reconstructing
+projects, and sequencing by lot — have been done by Amber in the sheet. What is left is
+staging the rows so nothing is lost, building the spine from them through the ordinary
+tables and triggers, and being able to take it back out. `0086` is that, and `0087` is the
+generated staging load. The design decisions, in the order they were forced:
+
+- **Two jsonb layers on the staging row, not one.** The sheet row verbatim (194 columns,
+  keyed by column letter because the headers repeat), and beside it what the generator read
+  into it for the spine, with the original next to anything it changed. Phase C reads the
+  first for property values; the load reads the second. A single "cleaned" document would
+  have been the seed file that says one thing while the sheet says another.
+- **The load goes through `jobs` and `projects` like any other insert.** `assign_job_sequence`
+  pads the sheet's `02` to `002`, `bump_project_no_seq` follows an explicit project number,
+  the audit logs every row with `activity_audit_origin = 'import'`, the stage guard and the
+  address guard bite exactly as they would on a hand-made job. The import earns no exemptions
+  from the rules that make the rest of the schema trustworthy.
+- **The way back is an audited fact, not a heuristic.** `unimport_spine()` deletes the jobs
+  its stamps name, the addresses it recorded, and only those projects whose INSERT the audit
+  shows as origin `import` and that have no jobs left. A project somebody made by hand under
+  a colliding number survives — proved in the migration by planting one.
+- **Job sequence follows the sheet's sequence, not the row order.** The proof block loads
+  two rows out of order and checks Lot 1 became `-001`.
+- **The lot is read wherever the sheet put it.** `Lot 12` in the lot column is the
+  address's lot number; `Res 3` is the address's second line (a residence is not a lot);
+  project 1024's twenty rows carry the lot only in the site cell — `Res 1 , Lot 311 (portion
+  of lot 232) Dankie Rd` — so it is read from there, with the bracketed parent lot removed
+  first. Before that fix the generator skipped all twenty as "no number, no lot", which is
+  the honest failure and the reason the report is printed before anything is written.
+- **Postcode and council are lookups, never typed.** The postcode from the SA list (every
+  workbook suburb has exactly one); the council from the same `saSuburbs.ts` the create form
+  uses, none for Dernancourt because the app treats it as ambiguous. A suburb the list does
+  not know is a skip, not a nearest match — one spelling, `Mitchel Park`, is an explicit alias
+  recorded on the row.
+- **`project_type` is `residential` throughout.** Amber's rule: *retail* means residential
+  with an external client, *development* is residential. The client type (Retail 101,
+  Developer 396, blank 304) is kept for Phase C — it is a party or a property, not the kind
+  of project.
+- **`OTR - Community Title = Yes` → `title_type community`; `No` → nothing.** Not community
+  is not the same statement as torrens.
+
+### What the load will not decide
+
+Four parameters with no defaults; `import_spine()` refuses to run without them.
+
+| | The sheet says | The decision |
+| --- | --- | --- |
+| **Project numbers** | 1001–1121 | The live database already holds 1002–1010 with 66 jobs, made by hand 25–31 Aug — and 1010 *is* the workbook's 1005 (30 Luprena Avenue, old numbers `1216 - D1…D3`). Keep the sheet's numbers and remove the nine, or shift the import to start at 1011? `p_project_base` takes either; the verify probe exercises the shift |
+| **Owning team** | people — CMA Marie/Masha/Amy, sales consultants, site managers | `jobs.job_owning_team` is not null. Which team holds an imported job? `p_owning_team` |
+| **Lifecycle stage** | nothing; the rows are the pre-construction sheet | `p_stage` — Pre-construction, presumably, but presumed is not decided |
+| **Status words** | `Cancelling` 39 · `On Hold` 20 · `In Doubt` 5 · `-` or blank the rest | `p_status_map`, e.g. `{"cancelling": "cancelled", "on hold": "on_hold"}`; null leaves every job `on_track` and keeps the word in the row |
+
+And one rule to agree: **seven old numbers are shared by several rows** (1288 ×3, 1382 ×3,
+1399 ×3, 1516 ×2, 1528 ×3, 1597 ×9, 1920 ×2) and `jobs.job_number_old` is unique. The load
+refuses them until `p_disambiguate_old_numbers => true`, which appends the sheet's lot label
+— `1288 · Lot 1` — the way Amber's own hand-entered `1216 - D1` already reads. Two of the
+seven (1516, 1920) are shared *across* projects, which reads like a data error in the source
+rather than a shared site; they are flagged in the generator's report. And project 1025
+labels two of its nine rows `Res 8` (1025-08 and 1025-09), so the lot label alone still
+collided — found by the load refusing it, not by reading the sheet — and the rule falls back
+to the job's own sequence (`1597 · job 009`) for that one row. Both are Amber's to look at in
+the source; the staging row keeps what the sheet said either way.
+
+### Proved, on the replay
+
+`verify/behaviour.sql` §44 loads the real 801 rows with placeholder decisions and the base
+shifted to 2001 (the replay already has a project 1106 from §6 — the collision the base is
+for): 116 projects, 796 jobs, 5 skipped; every spine row has its job and the job carries the
+row's old number; the workbook's `1004-02` (Lot 2) is `2004-002` with old number
+`1288 · Lot 2`; 116 project inserts logged as `import`; 39 cancelled and 20 on hold as the
+words say; then `unimport_spine()` removes 116 and 796 and clears every stamp. Rolled back —
+the replay does not keep the workbook loaded.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

@@ -1517,7 +1517,19 @@ export const DICTIONARY: DictionaryEntry[] = [
     "How wide the grant reaches — none, own, team, team_hierarchy, all. There is no 'division' scope: divisions were a prototype invention, not a Lofty concept.",
     "text", "Not null, CHECK against the scope list.",
     "Each value maps to an RLS predicate. 'team' and 'team_hierarchy' both read profiles.teams, which is an array — the predicate is an overlap test, not a join, since 0022.",
-    "to_do", PROPOSED)
+    "to_do", PROPOSED),
+
+  // ------------------------------------------------------ import_staging_jobs (0086)
+  e("import_staging_jobs.import_staging_job_id", "Staging row", "One row per row of the old system's job list (Phase B, 0086).", "bigint", "Primary key, identity.", "—", "created"),
+  e("import_staging_jobs.import_staging_job_source", "Source", "Which file and sheet the row came from — \"Lofty_Jobs_Grouped_by_Project.xlsx · project import\".", "text", "Not null, not blank. Unique with source_row.", "import_spine() and unimport_spine() take it as their argument.", "created"),
+  e("import_staging_jobs.import_staging_job_source_row", "Sheet row", "The row's position under the sheet's header (1 = the first data row), so a question can go back to the sheet.", "integer", "Not null, > 0. Unique with source.", "—", "created"),
+  e("import_staging_jobs.import_staging_job_number_old", "Old job number", "The old system's job number as the sheet gives it — 1288, or 1339 - D1. Null on the five rows that have none.", "text", "Nullable. Indexed where present.", "Becomes jobs.job_number_old on load — with the sheet's lot label appended when several rows share one and the caller agreed the rule.", "created"),
+  e("import_staging_jobs.import_staging_job_row", "The sheet row", "The row verbatim, keyed \"<column letter> · <header>\" because the sheet repeats headers. Dates as ISO strings. Never edited — the record of what was imported, and what Phase C reads for property values.", "jsonb", "Not null; CHECK it is an object.", "—", "created"),
+  e("import_staging_jobs.import_staging_job_spine", "The spine reading", "What the generator decided the row means for addresses, projects and jobs — project number, sequence, address parts, postcode and council looked up, respellings with the original beside them — and skip_reason where it refused.", "jsonb", "Not null; CHECK it is an object.", "Read by import_spine(). The keys are documented in generate-jobs-import.py.", "created"),
+  e("import_staging_jobs.import_staging_job_loaded_at", "Loaded", "When import_spine() made the job from this row. Cleared by unimport_spine(); left standing when the job is deleted any other way.", "timestamptz", "Nullable.", "—", "created"),
+  e("import_staging_jobs.import_staging_job_job_id", "Job", "The job made from this row. Null until loaded and again after unimport; null with a loaded_at means the job was deleted by hand since.", "text", "Nullable. FK → jobs ON UPDATE CASCADE ON DELETE SET NULL.", "The trace from sheet row to job and back.", "created"),
+  e("import_staging_jobs.import_staging_job_address_id", "Job address", "The address import_spine() made for the job, so unimport_spine() can remove exactly that one.", "uuid", "Nullable. FK → addresses ON DELETE SET NULL.", "—", "created"),
+  e("import_staging_jobs.import_staging_job_created_at", "Staged", "—", "timestamptz", "Not null, default now().", "—", "created")
 ];
 
 // ---------------------------------------------------------------- derived views
@@ -1712,6 +1724,8 @@ export const TABLE_DESCRIPTIONS: Record<string, string> = {
     "An offer of one item to one contractor (0084): offered → accepted → scheduled → done, or declined / cancelled. One open offer per item; a decline keeps its row. The accept link is a token: only its hash lives here, it expires, and using it is audited with origin accept_link (Amber: \"yes but needs to be logged\").",
   maintenance_messages:
     "The thread on a request (0084): what came in (matched to its request by the number in the subject, else the sender, else a new request), what went out (the offer with its link, the reminder, the closing mail — queued here and sent by the worker), and what was said on the phone. Graph's message id is unique so mail is matched once.",
+  import_staging_jobs:
+    "Phase B (0086): every row of the old system's job list, verbatim as jsonb, beside what the generator decided it means for the spine. import_spine() creates the addresses, projects and jobs from the spine layer and stamps job_id back; unimport_spine() removes exactly what it made. Phase C reads the same rows again for property values. Admins read; nothing writes from the app.",
   maintenance_message_secrets:
     "The accept-link token behind a queued offer email (0084), parked for the worker to fill the link from and deleted when the mail is sent. Service role only — RLS on with no policies, revoked from the API roles, written through one narrow definer. Not audited: a log of secrets is a second copy of them.",
   job_warranty:
