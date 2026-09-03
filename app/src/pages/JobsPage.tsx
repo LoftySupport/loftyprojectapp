@@ -581,7 +581,7 @@ export function JobsPage() {
           says which of the two it is — Amber reported the silence, not the rule. */}
       {view === "Board" && !loading && all.length > 0 && can("manager") && (
         <div className="drag-hint">
-          <Text type="text3" color="secondary">
+          <Text type="text3" color="secondary" ellipsis={false} element="p">
             {dragEnabled
               ? grouping === "Stage"
                 ? "Drag cards between columns to move a job forwards through the lifecycle"

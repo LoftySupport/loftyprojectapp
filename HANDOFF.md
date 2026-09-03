@@ -25,6 +25,24 @@ Last updated: 2026-09-03.
 
 ---
 
+## One sweep failure left, and it is not this branch's
+
+The board fixtures make `/jobs` drawable for the responsive sweep for the first time, and
+it caught the drag hint running off a phone — fixed. They also make **`/setup/processes`**
+drawable, and it scrolls sideways at every width: 856px at 320, 396px at 1024. That is the
+**old eleven-column table**, untouched here; hiding the table in the DOM drops the document
+back to 320, so it is the table and nothing else.
+
+**PR #22 replaces that whole screen** with the pipeline editor, and that branch's sweep
+passes 115 of 115 with its own process fixtures. So the fix exists, in the branch that owns
+the screen. Porting it here would mean carrying an entire second PR and guaranteeing a
+conflict, so this branch leaves it red and says so rather than papering over it. When #22
+lands, that route is the pipeline editor and the failure goes with the table.
+
+Two theories were tried and neither held: the Setup tab strip (Vibe's own wrapper already
+scrolls) and `min-width: 0` on `.data-table-wrap` (no effect). Both were reverted rather
+than left in place with a comment claiming a fix they did not make.
+
 ## Two rules Amber corrected on 3 September, and what they changed
 
 **"a process might not be complete before moving onto the next stage."** `pipelinePosition.ts`

@@ -417,6 +417,9 @@
 
 /* ---- tables -------------------------------------------------------------- */
 .data-table-wrap { overflow-x: auto; }
+/* The board's drag hint is a sentence, not a label: it wraps rather than running off. */
+.drag-hint { max-width: 100%; }
+.drag-hint p { margin: 0; }
 /* `width: max-content` with a 100% floor, not a flat 100%: at 100% the table is squeezed
    into the panel whatever it holds, and the day somebody turns on four more columns
    (which they now can) the address column is 70px wide and "28 Corner Street, Wandi WA
