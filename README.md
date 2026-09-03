@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 88 changes since then —
+Unreleased: 91 changes since then —
+- Added: See what each job is up to — group the board by Process, or drill into a stage to get its processes as columns with every job in the one it has reached
+- Added: An "Up to" column on the jobs table, in pipeline order
+- Added: npm run check:pipeline proves the rule that decides where a job sits
 - Changed: Every record — a contact, a maintenance request, a property, a project — now opens in the same slide-out panel, which expands to full width and can be dragged wider
 - Changed: Updates moved from the sidebar to the footer
-- Added: PRODUCT.md records the interface must-haves every screen has to meet, and HANDOFF.md lists the tables that do not meet the sorting one yet
-- Added: The 110 projects from Amber's workbook, each with the number of sites it will hold — no jobs yet
-- Fixed: The schema checks no longer assume the database is empty, so real data cannot make them fail for the wrong reason
-- …and 83 more.
+- …and 86 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

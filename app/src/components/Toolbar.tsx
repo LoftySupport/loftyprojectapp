@@ -26,6 +26,10 @@ export type View = (typeof VIEWS)[number];
  */
 export const GROUPINGS = [
   "None", "Stage", "Project", "Team", "Team member", "Status",
+  // Jobs only. The columns become the processes of the stages in view, in the order a
+  // job passes through them — Amber, 3 Sep: "it moves through the process in lifecycle
+  // stage order, then process stage order". See data/pipelinePosition.ts.
+  "Process",
   // Projects only — the jobs board never offers it, because a job's type is its
   // project's and grouping by it would just be grouping by project one level up.
   "Type"
