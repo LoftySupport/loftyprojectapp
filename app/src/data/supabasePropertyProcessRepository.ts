@@ -7,6 +7,7 @@ import type {
   NewPropertyAccess,
   Process,
   ProcessDependency,
+  ProcessHistoryEntry,
   ProcessPatch,
   ProcessProperty,
   ProcessRun,
@@ -49,7 +50,7 @@ type PropertyProcessMethods = Pick<Repository,
   | "listPropertyOptions" | "savePropertyOption" | "deletePropertyOption"
   | "listPropertyValues" | "setPropertyValue" | "clearPropertyValue" | "listPropertyValueHistory"
   | "pushProjectProperties"
-  | "listProcesses" | "createProcess" | "updateProcess" | "deleteProcess"
+  | "listProcesses" | "createProcess" | "updateProcess" | "deleteProcess" | "reorderProcesses" | "listProcessHistory"
   | "listProcessDependencies" | "setProcessDependencies"
   | "listProcessProperties" | "setProcessProperties"
   | "listProcessTasks" | "createProcessTask" | "updateProcessTask" | "deleteProcessTask"
@@ -273,6 +274,101 @@ export function propertyProcessMethods(client: SupabaseClient): PropertyProcessM
       const { data, error } = await client.from("processes").delete().eq("process_id", id).select("process_id");
       if (error) throw error;
       if (!data?.length) throw new Error("The process was not removed — it no longer exists, or you do not have permission.");
+    },
+
+    /**
+     * Write a new order for a set of processes — the drag-and-drop save.
+     *
+     * Amber, 3 Sep: the groups "need to be able to be sorted and have processes nested
+     * beneath them and be in order as this defines how the job moves through a build cycle
+     * stage… they should be able to be dragged and dropped in order to create a flow".
+     *
+     * One update per row rather than an upsert of the whole table: an upsert would need
+     * every NOT NULL column of every row restated, and getting one of them wrong would
+     * rewrite a name or a duration as a side effect of a drag. Position and group are the
+     * only two things a drag may change, so they are the only two it sends.
+     *
+     * The writes run in sequence, not in parallel: `position` has no unique constraint, so
+     * the order they land in does not matter for correctness, but a hundred parallel
+     * requests against one table is a thundering herd for no gain.
+     */
+    async reorderProcesses(orders: { id: string; stageGroup: string | null; position: number }[]): Promise<void> {
+      for (const o of orders) {
+        const { data, error } = await client.from("processes")
+          .update({ process_position: o.position, process_stage_group: o.stageGroup })
+          .eq("process_id", o.id).select("process_id");
+        if (error) throw error;
+        if (!data?.length) {
+          throw new Error("The order was not saved — one of those processes no longer exists, or you do not have permission.");
+        }
+      }
+    },
+
+    /**
+     * One process's history: what changed, when, and who by.
+     *
+     * `activity_audit` has no column holding the row's own id — it holds the whole old and
+     * new row as jsonb — so the filter reaches into the payload. That cannot use an index,
+     * which is why this is read for ONE process on demand rather than for the whole list.
+     *
+     * The author is looked up in a second query rather than embedded: `activity_audit` has
+     * no foreign keys at all (it is a log, and a log that cascades is not a log), so
+     * PostgREST has no relationship to embed through. The same reason `listActivity` reads
+     * `activity_audit_profile_id` and resolves the name separately.
+     *
+     * The diff is computed here because both rows are already in hand and a jsonb
+     * difference in Postgres is a lateral join for what a loop does in a line. The columns
+     * the audit quartet writes on every update are left out of it: "updated at changed" is
+     * true of every change and tells nobody anything.
+     */
+    async listProcessHistory(processId: string): Promise<ProcessHistoryEntry[]> {
+      const NOISE = new Set([
+        "process_id", "process_updated_at", "process_updated_by",
+        "process_created_at", "process_created_by"
+      ]);
+      const { data, error } = await client.from("activity_audit")
+        .select("activity_audit_at, activity_audit_operation, activity_audit_old_row, activity_audit_new_row, activity_audit_profile_id")
+        .eq("activity_audit_table", "processes")
+        .or(`activity_audit_new_row->>process_id.eq.${processId},activity_audit_old_row->>process_id.eq.${processId}`)
+        .order("activity_audit_at", { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      type Row = {
+        activity_audit_at: string;
+        activity_audit_operation: ProcessHistoryEntry["operation"];
+        activity_audit_old_row: Record<string, unknown> | null;
+        activity_audit_new_row: Record<string, unknown> | null;
+        activity_audit_profile_id: string | null;
+      };
+      const rows = (data ?? []) as unknown as Row[];
+
+      const ids = [...new Set(rows.map(r => r.activity_audit_profile_id).filter((x): x is string => x != null))];
+      const names = new Map<string, string>();
+      if (ids.length) {
+        const who = await client.from("profiles").select("profile_id, profile_full_name").in("profile_id", ids);
+        if (who.error) throw who.error;
+        (who.data as { profile_id: string; profile_full_name: string | null }[])
+          .forEach(p => { if (p.profile_full_name) names.set(p.profile_id, p.profile_full_name); });
+      }
+
+      const show = (v: unknown) => (v == null || v === "" ? null : String(v));
+      return rows.map(r => {
+        const before = r.activity_audit_old_row ?? {};
+        const after = r.activity_audit_new_row ?? {};
+        const fields = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter(k => !NOISE.has(k));
+        return {
+          at: r.activity_audit_at,
+          by: r.activity_audit_profile_id ? names.get(r.activity_audit_profile_id) ?? null : null,
+          operation: r.activity_audit_operation,
+          changes: fields
+            .filter(k => show(before[k]) !== show(after[k]))
+            .map(k => ({
+              field: k.replace(/^process_/, "").replace(/_/g, " "),
+              from: show(before[k]),
+              to: show(after[k])
+            }))
+        };
+      });
     },
 
     async listProcessDependencies(): Promise<ProcessDependency[]> {
@@ -532,8 +628,11 @@ type HistoryRow = {
   by: { profile_full_name: string | null } | null;
 };
 
+// The embed names its foreign key. `processes` has two columns pointing at `profiles`
+// — created_by and updated_by from the audit quartet — and PostgREST refuses to guess
+// between them (PGRST201), so an unqualified `profiles(...)` embed fails the whole read.
 const PROCESS_COLUMNS =
-  "process_id, process_key, process_name, process_stage, process_stage_group, process_scope, process_owning_team, process_expected_days, process_at_risk_lead_days, process_is_milestone, process_is_external, process_position, process_is_active, process_description, process_automation, process_sharepoint_folder, process_import_ref";
+  "process_id, process_key, process_name, process_stage, process_stage_group, process_scope, process_owning_team, process_expected_days, process_at_risk_lead_days, process_is_milestone, process_is_external, process_position, process_is_active, process_description, process_automation, process_sharepoint_folder, process_import_ref, process_updated_at, profiles!processes_process_updated_by_fkey(profile_full_name)";
 type ProcessRow = {
   process_id: string; process_key: string; process_name: string; process_stage: string;
   process_stage_group: string | null; process_scope: Process["scope"]; process_owning_team: string | null;
@@ -541,6 +640,8 @@ type ProcessRow = {
   process_is_milestone: boolean; process_is_external: boolean; process_position: number;
   process_is_active: boolean; process_description: string | null; process_automation: string | null;
   process_sharepoint_folder: string | null; process_import_ref: string | null;
+  process_updated_at: string;
+  profiles: { profile_full_name: string | null } | null;
 };
 const toProcess = (r: ProcessRow): Process => ({
   id: r.process_id, key: r.process_key, name: r.process_name, stageName: r.process_stage,
@@ -548,7 +649,8 @@ const toProcess = (r: ProcessRow): Process => ({
   expectedDays: r.process_expected_days, atRiskLeadDays: r.process_at_risk_lead_days,
   isMilestone: r.process_is_milestone, isExternal: r.process_is_external, position: r.process_position,
   isActive: r.process_is_active, description: r.process_description, automation: r.process_automation,
-  sharepointFolder: r.process_sharepoint_folder, importRef: r.process_import_ref
+  sharepointFolder: r.process_sharepoint_folder, importRef: r.process_import_ref,
+  updatedAt: r.process_updated_at, updatedBy: r.profiles?.profile_full_name ?? null
 });
 const processRow = (p: Partial<NewProcess>): Record<string, unknown> => {
   const row: Record<string, unknown> = {};

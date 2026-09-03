@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 79 changes since then —
+Unreleased: 85 changes since then —
 - Added: The 110 projects from Amber's workbook, each with the number of sites it will hold — no jobs yet
 - Fixed: The schema checks no longer assume the database is empty, so real data cannot make them fail for the wrong reason
 - Fixed: Properties that showed only the tail of their name — three different rows all called "Ordered" — now read in full, with the team that owns them and a date field instead of "format not set"
-- Added: 121 new properties from Amber's workbook, including the whole Construction stage — Footings through Handover
-- Fixed: Setup → Properties showed nothing at all; one missing database column had been stopping the whole page from loading
-- …and 74 more.
+- Added: Setup → Processes is a pipeline — groups and processes drag into order, each process numbered by its place in the flow through its build lifecycle stage
+- Added: Processes show when they were last updated, by whom, and which fields changed
+- …and 80 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -21,7 +21,70 @@ Next job: [Phase B, the import](#next-phase-b-the-import)** — and before it, t
 described there, because that is the only category of change that gets expensive once 200 jobs
 are in.
 
-Last updated: 2026-09-02.
+Last updated: 2026-09-03.
+
+---
+
+## Session of 2026-09-03 — Setup → Processes becomes a pipeline
+
+Amber, in one message: Processes *"doesn't have an edit or delete button on there and if it
+is a milestone / these coilumns also need to be filterable and sortable by teams, Build
+Lifecycle Stage, Group/Pipeline / the Groups need to be able to be sorted and have processes
+nested beneath them and be in ordered as this defines how the job moves through a build cycle
+stage, so it is more like a pipeline as each process has an number and they should be able to
+be dragged and dropped in order… processes will often include job and project properties, so
+it isn't either/or and that needs to be removed. / clikc on a process should have hte same
+sidebar slideout like all other records with ability to open it in full screen. / they also
+need to show in processes when they were last updated and by who and what happened"* — and,
+separately, *"notificatiosn are already under user settings so it is doubling up having it in
+setup"*.
+
+### What the page is now
+
+A stage holds groups, a group holds numbered processes, and the number is the process's place
+in the flow through that stage — one sequence 1..n across the whole stage, not restarting per
+group. Groups and processes both drag, and both have up/down buttons beside the grip, because
+a reorder that only works with a mouse is a reorder half the office cannot do.
+
+**No schema change was needed for the ordering.** `process_position` already means "order
+within the stage"; a group's place in the stage IS the position of its first process, and
+every reorder renumbers the stage so the blocks stay contiguous. That was worth choosing over
+a `stage_group_position` column: the number on screen and the number in the column can never
+disagree.
+
+A reorder is expressed against the stage's **full** list, not what is on screen. Filtering to
+one team and dragging would otherwise shove every hidden process to the end of the stage.
+
+Sorting by a column switches to a flat table with dragging off, and says so — a pipeline
+sorted by team is not a pipeline.
+
+### The one thing that did need a migration: `0091`
+
+"Who last updated this" had no answer anywhere in the schema. Every table carries the audit
+quartet, `0023` wrote a trigger for `created_by`, and **nothing had ever written an
+`updated_by` on any table** — the column was null on all 49 processes on the live database,
+checked before the trigger was written. `0091` adds `stamp_updated_by()` (parameterised on the
+column name, like `stamp_created_by`, so any table can adopt it in one line) and puts it on
+`processes`. It overwrites on every write, and writes NULL when the writer is a script rather
+than a person: a machine write is not support editing a process.
+
+Applied live on 3 September. Its four assertions were each watched failing first — trigger
+dropped, overwrite weakened to fill-only-when-null, `moddatetime` removed, audit trigger
+disabled — and the positive half (a signed-in manager's edit names that manager) lives in
+`verify/rls.sql`, which has an auth identity a migration does not.
+
+### Still Amber's call
+
+- **`ProcessesPanel.tsx:101` still filters processes by `p.scope === scope`.** The either/or
+  is gone from the *properties* a process collects — that was the defect, and 9 attachments on
+  the live database were configured but invisible because of it. What remains is which drawer a
+  process appears on, which 49 processes rely on; changing it would move 16 processes off
+  project drawers unasked. The field is relabelled "Appears on" and says what it does and does
+  not decide. Say the word if a process should show on both.
+- **Setup → Notifications is gone as a tab**, and `/setup/notifications` redirects. The half
+  that genuinely was NOT in user settings — who hears each type, whether a type fires, and the
+  outbox — moved under Setup → Automations rather than being deleted with the duplicate. If
+  that should go too, it is one line.
 
 ---
 

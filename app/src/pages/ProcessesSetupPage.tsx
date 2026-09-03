@@ -7,10 +7,12 @@ import { usePermission } from "../data/PermissionProvider";
 import { useProcessProperties, useProcesses, usePropertyDefs, useStages, useTeams } from "../data/useLookups";
 import { Field, Problem } from "../components/Form";
 import { Select } from "../components/Select";
+import { SidePanel } from "../components/SidePanel";
+import { SortHeader, sortRows, type SortState } from "../components/SortableTable";
 import { BlurText, NumberInput } from "../components/InlineInputs";
 import {
   PROPERTY_SCOPES, WORKING_STAGES, teamName,
-  type NewProcess, type Process, type ProcessDependency, type ProcessPatch, type ProcessTask,
+  type NewProcess, type Process, type ProcessDependency, type ProcessHistoryEntry, type ProcessPatch, type ProcessTask,
   type ProcessTaskChecklistItem, type ProcessTaskDependency, type PropertyScope, type Team, type TeamId
 } from "../data/types";
 import "../components/ui.css";
@@ -25,28 +27,77 @@ import "../components/processes.css";
  * or in conjunction with that process, are also editable in the app by managers, admin
  * and super admin."
  *
- * Amber, 2 Sep: "the processes and properties should follow correct format and be easy
- * to edit, not in a drop down but always show in a sidebar like elsewhere in the app."
+ * Amber, 3 Sep, on what this page was still missing:
  *
- * So this is the same shape as Contacts and Maintenance: the LIST on the left is a table,
- * one row per process grouped by stage, and the SELECTED process opens in a panel beside
- * it (under it on a phone) with everything about it editable in place — its facts, what it
- * WAITS ON and what it LEADS TO, the PROPERTIES it collects, and its CHECKLIST with every
- * template task's team, days, parent, order and tick-box lines all shown, none of them
- * behind a toggle. The selection rides the URL (`?process=…`) so a process can be linked
- * to and survives a refresh, the way a contact or a maintenance request does.
+ *   "doesn't have an edit or delete button on there and if it is a milestone / these
+ *   coilumns also need to be filterable and sortable by teams, Build Lifecycle Stage,
+ *   Group/Pipeline / the Groups need to be able to be sorted and have processes nested
+ *   beneath them and be in ordered as this defines how the job moves through a build
+ *   cycle stage, so it is more like a pipeline as each process has an number and they
+ *   should be able to be dragged and dropped in order to create a flow of processes that
+ *   go through a stage to move a job through the construction or preconstruction stage.
+ *   … clikc on a process should have hte same sidebar slideout like all other records
+ *   with ability to open it in full screen. … they also need to show in processes when
+ *   they were last updated and by who and what happened"
  *
- * Every save goes through the seam one field at a time, and the database is the judge:
- * a cycle, a lead longer than the duration, a key that is not a slug all come back as
- * the sentence Postgres wrote. Below manager the page is the same page, read-only.
+ * So the list is A PIPELINE, not a table of rows that happen to share a stage. A stage
+ * holds groups, a group holds processes, and the number beside each process is its place
+ * in the run through that stage — one sequence, 1..n, across the whole stage rather than
+ * restarting per group, because that is the order a job actually moves in.
+ *
+ * WHY THE NUMBER IS DERIVED AND NOT A SECOND COLUMN
+ *
+ *   `process_position` already exists and already means "order within the stage". Groups
+ *   need no position of their own: a group's place in the stage IS the position of its
+ *   first process, and every reorder renumbers the whole stage 1..n so the blocks stay
+ *   contiguous. That keeps a schema change out of a screen change, and it means the
+ *   number on screen and the number in the column can never disagree.
+ *
+ * WHY A REORDER READS THE WHOLE STAGE AND NOT WHAT IS ON SCREEN
+ *
+ *   The filters are the point of the filters. If dragging renumbered only the visible
+ *   rows, filtering to one team and moving a process would silently shove every hidden
+ *   process to the end of the stage. So a move is expressed against the stage's FULL
+ *   list — filtered-out rows keep their places — and only the rows whose number or group
+ *   actually changed are written.
+ *
+ * Sorting by a column is a different question ("which of these is oldest?") and gets a
+ * different answer: a flat table in that order, with dragging off, because a pipeline
+ * sorted by team is not a pipeline.
  */
 
 const slugify = (label: string) =>
   label.toLowerCase().replace(/\b1st\b/g, "first").replace(/\b2nd\b/g, "second").replace(/\b3rd\b/g, "third")
     .replace(/^\s*\d+\s*-\s*/, "").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").replace(/^[0-9]/, "p_$&");
 
+/** The group heading a process with no group sits under. A label for a blank, not a value. */
+const NO_GROUP = "Not in a group";
+const groupLabel = (g: string | null) => g ?? NO_GROUP;
+
+const whenText = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+
+type Col = "pipeline" | "name" | "group" | "stage" | "team" | "milestone" | "days" | "updated";
+
+/**
+ * The stage's canonical order: groups as contiguous blocks in the order their first
+ * process falls, each block in position order. Two processes with the same position fall
+ * back to their names so the order is stable rather than whatever the array arrived in.
+ */
+function stageOrder(list: Process[]): Process[] {
+  const sorted = [...list].sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
+  const seen: string[] = [];
+  const blocks = new Map<string, Process[]>();
+  for (const p of sorted) {
+    const k = groupLabel(p.stageGroup);
+    if (!blocks.has(k)) { blocks.set(k, []); seen.push(k); }
+    blocks.get(k)!.push(p);
+  }
+  return seen.flatMap(k => blocks.get(k)!);
+}
+
 export function ProcessesSetupPage() {
   const [params, setParams] = useSearchParams();
+  const repo = useRepository();
   const { can } = usePermission();
   const canEdit = can("manager");
   const [reload, setReload] = useState(0);
@@ -62,9 +113,15 @@ export function ProcessesSetupPage() {
   const selectedId = params.get("process");
   const creating = params.get("new") === "1";
   const [stageFilter, setStageFilter] = useState<string | null>(null);
+  const [teamFilter, setTeamFilter] = useState<string | null>(null);
+  const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [showRetired, setShowRetired] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sort, setSort] = useState<SortState<Col>>({ key: "pipeline", direction: "asc" });
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [dragging, setDragging] = useState<{ kind: "process" | "group"; id: string; stage: string } | null>(null);
+  const [dropOn, setDropOn] = useState<string | null>(null);
 
   const setParam = (patch: Record<string, string | null>) => {
     const next = new URLSearchParams(params);
@@ -74,25 +131,202 @@ export function ProcessesSetupPage() {
   const select = (id: string | null) => setParam({ process: id, new: null });
 
   const selected = processes.find(p => p.id === selectedId) ?? null;
-  const stages = stageNames.length ? stageNames : [...new Set(processes.map(p => p.stageName))];
+  // Memoised because the pipeline is built from it: a fresh array every render would
+  // rebuild every stage block on every keystroke in the search box.
+  const stages = useMemo(
+    () => (stageNames.length ? stageNames : [...new Set(processes.map(p => p.stageName))]),
+    [stageNames, processes]
+  );
   const tasksByProcess = useMemo(() => {
     const m = new Map<string, number>();
     allTasks.forEach(t => m.set(t.processId, (m.get(t.processId) ?? 0) + 1));
     return m;
   }, [allTasks]);
-
-  const terms = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const shown = processes.filter(p =>
-    (showRetired || p.isActive || p.id === selectedId)
-    && (!stageFilter || p.stageName === stageFilter)
-    && terms.every(t => `${p.name} ${p.key} ${p.stageGroup ?? ""} ${p.owningTeam ? teamName(p.owningTeam, teams) : ""}`.toLowerCase().includes(t))
+  const groupNames = useMemo(
+    () => [...new Set(processes.map(p => groupLabel(p.stageGroup)))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
+    [processes]
   );
-  const groups = stages
-    .map(stage => ({ stage, list: shown.filter(p => p.stageName === stage).sort((a, b) => a.position - b.position || a.name.localeCompare(b.name)) }))
-    .filter(g => g.list.length > 0);
+
+  const shown = useMemo(() => {
+    const terms = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    return processes.filter(p =>
+      (showRetired || p.isActive || p.id === selectedId)
+      && (!stageFilter || p.stageName === stageFilter)
+      && (!teamFilter || p.owningTeam === teamFilter)
+      && (!groupFilter || groupLabel(p.stageGroup) === groupFilter)
+      && terms.every(t => `${p.name} ${p.key} ${p.stageGroup ?? ""} ${p.owningTeam ? teamName(p.owningTeam, teams) : ""}`.toLowerCase().includes(t))
+    );
+  }, [processes, search, showRetired, selectedId, stageFilter, teamFilter, groupFilter, teams]);
+  const visible = useMemo(() => new Set(shown.map(p => p.id)), [shown]);
+
+  /** What each sortable column compares on. `pipeline` is the stage's own numbering. */
+  const columns = useMemo(() => ({
+    pipeline: (p: Process) => p.position,
+    name: (p: Process) => p.name,
+    group: (p: Process) => p.stageGroup,
+    stage: (p: Process) => stages.indexOf(p.stageName),
+    team: (p: Process) => (p.owningTeam ? teamName(p.owningTeam, teams) : null),
+    milestone: (p: Process) => p.isMilestone,
+    days: (p: Process) => p.expectedDays,
+    updated: (p: Process) => p.updatedAt
+  }), [stages, teams]);
+
+  /** Click a header: the same column reverses, a new column starts ascending. */
+  const toggleSort = (k: Col) =>
+    setSort(s => (s.key === k ? { key: k, direction: s.direction === "asc" ? "desc" : "asc" } : { key: k, direction: "asc" }));
+
+  const pipelineView = sort.key === "pipeline";
+  const flat = useMemo(() => (pipelineView ? [] : sortRows(shown, columns, sort)), [pipelineView, shown, columns, sort]);
+
+  /**
+   * The pipeline, as stage → group → processes, with the stage's running number attached.
+   * Built from the FULL stage list so the numbers on screen are the numbers in the column
+   * even when a filter is hiding rows between them, then narrowed to what is shown.
+   */
+  const pipeline = useMemo(() => stages.map(stage => {
+    const ordered = stageOrder(processes.filter(p => p.stageName === stage));
+    const blocks: { group: string; list: { p: Process; n: number }[] }[] = [];
+    ordered.forEach((p, i) => {
+      const g = groupLabel(p.stageGroup);
+      const last = blocks[blocks.length - 1];
+      const row = { p, n: i + 1 };
+      if (last && last.group === g) last.list.push(row);
+      else blocks.push({ group: g, list: [row] });
+    });
+    const kept = blocks
+      .map(b => ({ ...b, list: b.list.filter(r => visible.has(r.p.id)) }))
+      .filter(b => b.list.length > 0);
+    return { stage, blocks: kept, count: kept.reduce((n, b) => n + b.list.length, 0) };
+  }).filter(s => s.count > 0), [stages, processes, visible]);
+
+  /**
+   * One move, expressed as "rewrite this stage's order". `mutate` gets the stage's whole
+   * list in its canonical order and returns the order it should be in; only the rows whose
+   * number or group changed are written, so a nudge is two writes and not forty-nine.
+   */
+  async function reorder(stage: string, mutate: (arr: Process[]) => Process[]) {
+    const before = stageOrder(processes.filter(p => p.stageName === stage));
+    const was = new Map(before.map(p => [p.id, { position: p.position, group: p.stageGroup ?? null }]));
+    const orders = mutate(before)
+      .map((p, i) => ({ id: p.id, stageGroup: p.stageGroup ?? null, position: i + 1 }))
+      .filter(o => {
+        const b = was.get(o.id);
+        return !b || b.position !== o.position || b.group !== o.stageGroup;
+      });
+    if (orders.length === 0) return;
+    setError(null);
+    try { await repo.reorderProcesses(orders); bump(); }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  }
+
+  /** Lift one process out and drop it at `index`, taking `group` with it. */
+  const spliceProcess = (arr: Process[], id: string, index: number, group: string | null) => {
+    const from = arr.findIndex(p => p.id === id);
+    if (from === -1) return arr;
+    const out = arr.slice();
+    const [moved] = out.splice(from, 1);
+    const at = from < index ? index - 1 : index;
+    out.splice(at, 0, { ...moved, stageGroup: group });
+    return out;
+  };
+
+  /** Lift a whole group block out and drop it in front of the block at `index`. */
+  const spliceGroup = (arr: Process[], group: string, index: number) => {
+    const block = arr.filter(p => groupLabel(p.stageGroup) === group);
+    if (block.length === 0) return arr;
+    const rest = arr.filter(p => groupLabel(p.stageGroup) !== group);
+    const removedBefore = arr.slice(0, index).filter(p => groupLabel(p.stageGroup) === group).length;
+    const out = rest.slice();
+    out.splice(index - removedBefore, 0, ...block);
+    return out;
+  };
+
+  const moveProcessBy = (stage: string, id: string, dir: -1 | 1) =>
+    reorder(stage, arr => {
+      const i = arr.findIndex(p => p.id === id);
+      const j = i + dir;
+      if (i === -1 || j < 0 || j >= arr.length) return arr;
+      // Stepping past a group boundary joins the group you stepped into — which is what
+      // moving a process down out of "Stage 1" and into "Stage 2" is asking to do.
+      return spliceProcess(arr, id, dir === -1 ? j : j + 1, arr[j].stageGroup ?? null);
+    });
+
+  const moveGroupBy = (stage: string, group: string, dir: -1 | 1) =>
+    reorder(stage, arr => {
+      const order = [...new Set(arr.map(p => groupLabel(p.stageGroup)))];
+      const i = order.indexOf(group);
+      const j = i + dir;
+      if (i === -1 || j < 0 || j >= order.length) return arr;
+      const target = dir === -1
+        ? arr.findIndex(p => groupLabel(p.stageGroup) === order[j])
+        : arr.map(p => groupLabel(p.stageGroup)).lastIndexOf(order[j]) + 1;
+      return spliceGroup(arr, group, target);
+    });
+
+  const onDropProcess = (stage: string, targetId: string) => {
+    const d = dragging;
+    setDragging(null); setDropOn(null);
+    if (!d || d.stage !== stage) return;
+    if (d.kind === "process") {
+      if (d.id === targetId) return;
+      void reorder(stage, arr => {
+        const to = arr.findIndex(p => p.id === targetId);
+        if (to === -1) return arr;
+        return spliceProcess(arr, d.id, to, arr[to].stageGroup ?? null);
+      });
+    } else {
+      void reorder(stage, arr => {
+        const to = arr.findIndex(p => p.id === targetId);
+        if (to === -1) return arr;
+        return spliceGroup(arr, d.id, to);
+      });
+    }
+  };
+
+  const onDropGroup = (stage: string, group: string) => {
+    const d = dragging;
+    setDragging(null); setDropOn(null);
+    if (!d || d.stage !== stage) return;
+    if (d.kind === "group") {
+      if (d.id === group) return;
+      void reorder(stage, arr => spliceGroup(arr, d.id, arr.findIndex(p => groupLabel(p.stageGroup) === group)));
+    } else {
+      // Dropped on a heading: joins that group, at the top of it.
+      void reorder(stage, arr => {
+        const to = arr.findIndex(p => groupLabel(p.stageGroup) === group);
+        if (to === -1) return arr;
+        const target = arr[to];
+        return spliceProcess(arr, d.id, to, target.stageGroup ?? null);
+      });
+    }
+  };
+
+  async function remove(p: Process) {
+    setError(null);
+    try {
+      await repo.deleteProcess(p.id);
+      setConfirmDelete(null);
+      if (p.id === selectedId) select(null);
+      bump();
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); setConfirmDelete(null); }
+  }
 
   const active = processes.filter(p => p.isActive).length;
-  const hasDetail = Boolean(selected || creating);
+  const dragProps = (kind: "process" | "group", id: string, stage: string) =>
+    canEdit && pipelineView
+      ? {
+        draggable: true,
+        onDragStart: (e: React.DragEvent) => { e.stopPropagation(); setDragging({ kind, id, stage }); e.dataTransfer.effectAllowed = "move"; },
+        onDragEnd: () => { setDragging(null); setDropOn(null); },
+        onDragOver: (e: React.DragEvent) => {
+          if (!dragging || dragging.stage !== stage) return;
+          e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDropOn(id);
+        },
+        onDragLeave: () => setDropOn(d => (d === id ? null : d))
+      }
+      : {};
+
+  const columnsCount = 11;
 
   return (
     <>
@@ -102,73 +336,121 @@ export function ProcessesSetupPage() {
       </div>
       <Text type="text2" color="secondary" ellipsis={false}>
         A process is a piece of work inside a lifecycle stage — <strong>Concept Plan</strong>,
-        <strong> Working Drawings</strong>, <strong>1 - Footings</strong>. Each says which stage
-        it belongs to, whether it runs on the project or on each job, who does it, how long it
-        should take, what it waits on and what it leads to, which properties it collects, and
-        the checklist it hands a job. Pick one and it opens beside the list.
+        <strong> Working Drawings</strong>, <strong>1 - Footings</strong>. Inside a stage they run in
+        order: the number beside each one is its place in the flow that moves a job through the stage,
+        and the groups are the blocks that flow is made of. Drag a process, or a whole group, to change
+        that order. Click one to open it.
       </Text>
 
       {error && <Problem>{error}</Problem>}
 
       <div className="toolbar" style={{ marginTop: "var(--space-12)" }}>
-        <Select aria-label="Filter by stage" clearable placeholder="All stages" options={stages.map(s => ({ value: s, label: s }))}
+        <Select aria-label="Filter by lifecycle stage" clearable placeholder="All stages" options={stages.map(s => ({ value: s, label: s }))}
           value={stageFilter} onChange={setStageFilter} />
+        <Select aria-label="Filter by team" clearable placeholder="All teams"
+          options={teams.filter(t => t.isActive || processes.some(p => p.owningTeam === t.id)).map(t => ({ value: t.id, label: t.name }))}
+          value={teamFilter} onChange={setTeamFilter} />
+        <Select aria-label="Filter by group" clearable placeholder="All groups" options={groupNames.map(g => ({ value: g, label: g }))}
+          value={groupFilter} onChange={setGroupFilter} />
         <TextField size="small" id="procs-search" inputAriaLabel="Search processes" placeholder="Search…" value={search} onChange={setSearch} />
         <Checkbox label="Show retired" checked={showRetired} onChange={() => setShowRetired(v => !v)} />
+        {!pipelineView && (
+          <Button size="small" kind="tertiary" onClick={() => setSort({ key: "pipeline", direction: "asc" })}>Back to pipeline order</Button>
+        )}
         {canEdit && <Button size="small" onClick={() => setParam({ new: "1", process: null })}>+ New process</Button>}
       </div>
 
-      <div className={`contacts-grid${hasDetail ? " has-detail" : ""}`}>
-        <section className="panel">
-          <div className="data-table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr><th>Process</th><th>Group</th><th>Runs on</th><th>Team</th><th className="num">Days</th><th className="num">At risk</th><th className="num">Properties</th><th className="num">Checklist</th></tr>
-              </thead>
-              {groups.map(g => (
-                <tbody className="group" key={g.stage}>
-                  <tr className="group-head"><th colSpan={8} scope="colgroup">{g.stage} · {g.list.length}</th></tr>
-                  {g.list.map(p => (
-                    <tr key={p.id} className={`contact-row${p.id === selectedId ? " is-selected" : ""}`} onClick={() => select(p.id)} aria-current={p.id === selectedId ? "true" : undefined}>
-                      <td>
-                        <button type="button" className="link-button tap-link" onClick={e => { e.stopPropagation(); select(p.id); }}>
-                          <strong>{p.name}</strong>
-                        </button>
-                        {p.isMilestone && <span className="slot-chip">milestone</span>}
-                        {p.isExternal && <span className="slot-chip">external</span>}
-                        {!p.isActive && <span className="slot-chip">retired</span>}
-                      </td>
-                      <td className="muted">{p.stageGroup ?? "—"}</td>
-                      <td className="muted">{p.scope === "project" ? "project" : "each job"}</td>
-                      <td className="muted">{p.owningTeam ? teamName(p.owningTeam, teams) : "—"}</td>
-                      {/* Blank stays blank: no duration is not zero days (Amber, 2 Sep, on the at-risk column). */}
-                      <td className="num">{p.expectedDays ?? <span className="muted">—</span>}</td>
-                      <td className="num">{p.atRiskLeadDays != null ? `${p.atRiskLeadDays}d before` : <span className="muted">—</span>}</td>
-                      <td className="num">{(propsByProcess.get(p.id) ?? []).length || <span className="muted">—</span>}</td>
-                      <td className="num">{tasksByProcess.get(p.id) || <span className="muted">—</span>}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              ))}
-            </table>
-            {processes.length === 0 && (
-              <Text type="text2" color="secondary" element="p" ellipsis={false}>No processes defined yet.</Text>
-            )}
-            {processes.length > 0 && shown.length === 0 && (
-              <Text type="text2" color="secondary" element="p" ellipsis={false}>Nothing matches — clear the search or the stage filter.</Text>
-            )}
-          </div>
-        </section>
+      {!pipelineView && (
+        <Text type="text3" color="secondary" ellipsis={false} element="p" style={{ marginTop: "var(--space-4)" }}>
+          Sorted by a column, so this is a flat list and dragging is off — a pipeline sorted by team is
+          not a pipeline. Go back to pipeline order to change what runs when.
+        </Text>
+      )}
 
-        {creating && canEdit && (
-          <NewProcessForm
-            stageNames={stages}
-            teams={teams}
-            onCancel={() => setParam({ new: null })}
-            onCreated={p => { bump(); select(p.id); }}
-          />
-        )}
-        {!creating && selected && (
+      <section className="panel" style={{ marginTop: "var(--space-12)" }}>
+        <div className="data-table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <SortHeader<Col> column="pipeline" label="#" sort={sort} onSort={toggleSort} className="num" />
+                <SortHeader<Col> column="name" label="Process" sort={sort} onSort={toggleSort} />
+                <SortHeader<Col> column="group" label="Group / pipeline" sort={sort} onSort={toggleSort} />
+                <SortHeader<Col> column="stage" label="Build lifecycle stage" sort={sort} onSort={toggleSort} />
+                <SortHeader<Col> column="team" label="Team" sort={sort} onSort={toggleSort} />
+                <SortHeader<Col> column="milestone" label="Milestone" sort={sort} onSort={toggleSort} />
+                <SortHeader<Col> column="days" label="Days" sort={sort} onSort={toggleSort} className="num" />
+                <th className="num" scope="col">Properties</th>
+                <th className="num" scope="col">Checklist</th>
+                <SortHeader<Col> column="updated" label="Last updated" sort={sort} onSort={toggleSort} />
+                <th scope="col"><span className="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+
+            {pipelineView ? pipeline.map(s => (
+              <tbody className="group" key={s.stage}>
+                <tr className="group-head">
+                  <th colSpan={columnsCount} scope="colgroup">{s.stage} · {s.count}</th>
+                </tr>
+                {s.blocks.map((b, bi) => (
+                  <PipelineBlock
+                    key={`${s.stage}:${b.group}:${bi}`}
+                    stage={s.stage}
+                    block={b}
+                    canEdit={canEdit}
+                    canMoveUp={bi > 0}
+                    canMoveDown={bi < s.blocks.length - 1}
+                    dropOn={dropOn}
+                    dragging={dragging}
+                    dragProps={dragProps}
+                    onDropGroup={onDropGroup}
+                    onDropProcess={onDropProcess}
+                    onMoveGroup={dir => moveGroupBy(s.stage, b.group, dir)}
+                    onMoveProcess={(id, dir) => moveProcessBy(s.stage, id, dir)}
+                    teams={teams}
+                    propertyCount={id => (propsByProcess.get(id) ?? []).length}
+                    taskCount={id => tasksByProcess.get(id) ?? 0}
+                    selectedId={selectedId}
+                    onSelect={select}
+                    confirmDelete={confirmDelete}
+                    onAskDelete={setConfirmDelete}
+                    onDelete={remove}
+                    columnsCount={columnsCount}
+                  />
+                ))}
+              </tbody>
+            )) : (
+              <tbody>
+                {flat.map(p => (
+                  <ProcessRow
+                    key={p.id} p={p} n={p.position} teams={teams}
+                    properties={(propsByProcess.get(p.id) ?? []).length} tasks={tasksByProcess.get(p.id) ?? 0}
+                    showStage canEdit={canEdit} selected={p.id === selectedId} onSelect={select}
+                    confirming={confirmDelete === p.id} onAskDelete={setConfirmDelete} onDelete={remove}
+                    columnsCount={columnsCount}
+                  />
+                ))}
+              </tbody>
+            )}
+          </table>
+          {processes.length === 0 && (
+            <Text type="text2" color="secondary" element="p" ellipsis={false}>No processes defined yet.</Text>
+          )}
+          {processes.length > 0 && shown.length === 0 && (
+            <Text type="text2" color="secondary" element="p" ellipsis={false}>Nothing matches — clear the search or the filters.</Text>
+          )}
+        </div>
+      </section>
+
+      {creating && canEdit && (
+        <NewProcessPanel
+          stageNames={stages}
+          teams={teams}
+          onCancel={() => setParam({ new: null })}
+          onCreated={p => { bump(); select(p.id); }}
+        />
+      )}
+      {!creating && selected && (
+        <SidePanel open title={selected.name} onClose={() => select(null)}>
           <ProcessEditor
             key={selected.id}
             process={selected}
@@ -179,17 +461,184 @@ export function ProcessesSetupPage() {
             canEdit={canEdit}
             onChanged={bump}
             onError={setError}
-            onClose={() => select(null)}
             onDeleted={() => { bump(); select(null); }}
           />
-        )}
-      </div>
+        </SidePanel>
+      )}
+    </>
+  );
+}
+
+// -------------------------------------------------------------------- the pipeline
+function PipelineBlock({
+  stage, block, canEdit, canMoveUp, canMoveDown, dropOn, dragging, dragProps, onDropGroup, onDropProcess,
+  onMoveGroup, onMoveProcess, teams, propertyCount, taskCount, selectedId, onSelect, confirmDelete, onAskDelete, onDelete, columnsCount
+}: {
+  stage: string;
+  block: { group: string; list: { p: Process; n: number }[] };
+  canEdit: boolean;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  dropOn: string | null;
+  dragging: { kind: "process" | "group"; id: string; stage: string } | null;
+  dragProps: (kind: "process" | "group", id: string, stage: string) => Record<string, unknown>;
+  onDropGroup: (stage: string, group: string) => void;
+  onDropProcess: (stage: string, targetId: string) => void;
+  onMoveGroup: (dir: -1 | 1) => void;
+  onMoveProcess: (id: string, dir: -1 | 1) => void;
+  teams: readonly Team[];
+  propertyCount: (id: string) => number;
+  taskCount: (id: string) => number;
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+  confirmDelete: string | null;
+  onAskDelete: (id: string | null) => void;
+  onDelete: (p: Process) => void;
+  columnsCount: number;
+}) {
+  return (
+    <>
+      <tr
+        className={`pipeline-group${dropOn === block.group && dragging ? " is-drop" : ""}`}
+        {...dragProps("group", block.group, stage)}
+        onDrop={e => { e.preventDefault(); onDropGroup(stage, block.group); }}
+      >
+        <td colSpan={columnsCount}>
+          <div className="pipeline-group-head">
+            {canEdit && <span className="drag-dots" aria-hidden title="Drag to reorder this group">⠿</span>}
+            <Text type="text2" weight="bold" element="span">{block.group}</Text>
+            <Text type="text3" color="secondary" element="span">
+              {block.list.length} process{block.list.length === 1 ? "" : "es"} · runs {block.list[0].n}–{block.list[block.list.length - 1].n}
+            </Text>
+            {canEdit && (
+              <span className="pipeline-group-moves">
+                <Button size="xs" kind="tertiary" aria-label={`Move group ${block.group} earlier`} disabled={!canMoveUp} onClick={() => onMoveGroup(-1)}>
+                  <MoveArrowUp size={16} aria-hidden />
+                </Button>
+                <Button size="xs" kind="tertiary" aria-label={`Move group ${block.group} later`} disabled={!canMoveDown} onClick={() => onMoveGroup(1)}>
+                  <MoveArrowDown size={16} aria-hidden />
+                </Button>
+              </span>
+            )}
+          </div>
+        </td>
+      </tr>
+      {block.list.map(({ p, n }) => (
+        <ProcessRow
+          key={p.id} p={p} n={n} teams={teams} nested
+          properties={propertyCount(p.id)} tasks={taskCount(p.id)}
+          canEdit={canEdit} selected={p.id === selectedId} onSelect={onSelect}
+          confirming={confirmDelete === p.id} onAskDelete={onAskDelete} onDelete={onDelete}
+          dropping={dropOn === p.id && Boolean(dragging)}
+          rowProps={{
+            ...dragProps("process", p.id, stage),
+            onDrop: (e: React.DragEvent) => { e.preventDefault(); onDropProcess(stage, p.id); }
+          }}
+          onMove={dir => onMoveProcess(p.id, dir)}
+          columnsCount={columnsCount}
+        />
+      ))}
+    </>
+  );
+}
+
+function ProcessRow({
+  p, n, teams, properties, tasks, canEdit, selected, onSelect, confirming, onAskDelete, onDelete,
+  nested, showStage, dropping, rowProps, onMove, columnsCount
+}: {
+  p: Process;
+  n: number;
+  teams: readonly Team[];
+  properties: number;
+  tasks: number;
+  canEdit: boolean;
+  selected: boolean;
+  onSelect: (id: string | null) => void;
+  confirming: boolean;
+  onAskDelete: (id: string | null) => void;
+  onDelete: (p: Process) => void;
+  nested?: boolean;
+  showStage?: boolean;
+  dropping?: boolean;
+  rowProps?: Record<string, unknown>;
+  onMove?: (dir: -1 | 1) => void;
+  columnsCount: number;
+}) {
+  return (
+    <>
+      <tr
+        className={`contact-row${selected ? " is-selected" : ""}${nested ? " is-nested" : ""}${dropping ? " is-drop" : ""}`}
+        onClick={() => onSelect(p.id)}
+        aria-current={selected ? "true" : undefined}
+        {...rowProps}
+      >
+        <td className="num">
+          {canEdit && nested && <span className="drag-dots" aria-hidden title="Drag to reorder">⠿</span>}
+          {n}
+        </td>
+        <td>
+          <button type="button" className="link-button tap-link" onClick={e => { e.stopPropagation(); onSelect(p.id); }}>
+            <strong>{p.name}</strong>
+          </button>
+          {p.isExternal && <span className="slot-chip">external</span>}
+          {!p.isActive && <span className="slot-chip">retired</span>}
+        </td>
+        <td className="muted">{p.stageGroup ?? NO_GROUP}</td>
+        <td className="muted">{showStage ? p.stageName : <span className="muted">{p.stageName}</span>}</td>
+        <td className="muted">{p.owningTeam ? teamName(p.owningTeam, teams) : "—"}</td>
+        {/* Amber asked to see "if it is a milestone" from the list, so it is a column of its
+            own rather than a chip that only appears when true — a blank cell in a column
+            called Milestone answers the question; a missing chip only fails to raise it. */}
+        <td>{p.isMilestone ? <span className="slot-chip is-current">milestone</span> : <span className="muted">—</span>}</td>
+        {/* Blank stays blank: no duration is not zero days (Amber, 2 Sep, on the at-risk column). */}
+        <td className="num">{p.expectedDays ?? <span className="muted">—</span>}</td>
+        <td className="num">{properties || <span className="muted">—</span>}</td>
+        <td className="num">{tasks || <span className="muted">—</span>}</td>
+        <td className="muted">
+          {/* 0091 stamps the editor on every write, and writes null when the writer was a
+              script rather than a person. Null is said as null: attributing a migration to
+              whoever ran it would put a name on screen that did not do the thing. */}
+          {whenText(p.updatedAt)}
+          <span className="slot-sub">{p.updatedBy ?? "no author recorded"}</span>
+        </td>
+        <td onClick={e => e.stopPropagation()}>
+          <div className="row-actions">
+            {canEdit && onMove && (
+              <>
+                <Button size="xs" kind="tertiary" aria-label={`Move ${p.name} earlier`} onClick={() => onMove(-1)}>
+                  <MoveArrowUp size={16} aria-hidden />
+                </Button>
+                <Button size="xs" kind="tertiary" aria-label={`Move ${p.name} later`} onClick={() => onMove(1)}>
+                  <MoveArrowDown size={16} aria-hidden />
+                </Button>
+              </>
+            )}
+            <Button size="xs" kind="tertiary" onClick={() => onSelect(p.id)}>{canEdit ? "Edit" : "Open"}</Button>
+            {canEdit && <Button size="xs" kind="tertiary" onClick={() => onAskDelete(p.id)}>Delete</Button>}
+          </div>
+        </td>
+      </tr>
+      {confirming && (
+        /* Two clicks, the second one named: retiring keeps the history, this does not. */
+        <tr className="confirm-row">
+          <td colSpan={columnsCount}>
+            <div className="field-inline" role="alert" onClick={e => e.stopPropagation()}>
+              <Text type="text2" element="span" ellipsis={false}>
+                Delete <strong>{p.name}</strong> for good? Its checklist and its place in the order go with it.
+                A process that has run on a record is refused — retire it instead.
+              </Text>
+              <Button size="small" color="negative" onClick={() => onDelete(p)}>Delete for good</Button>
+              <Button size="small" kind="tertiary" onClick={() => onAskDelete(null)}>Keep it</Button>
+            </div>
+          </td>
+        </tr>
+      )}
     </>
   );
 }
 
 // ------------------------------------------------------------------ new process
-function NewProcessForm({ stageNames, teams, onCancel, onCreated }: {
+function NewProcessPanel({ stageNames, teams, onCancel, onCreated }: {
   stageNames: string[];
   teams: readonly Team[];
   onCancel: () => void;
@@ -210,11 +659,17 @@ function NewProcessForm({ stageNames, teams, onCancel, onCreated }: {
   }
 
   return (
-    <section className="panel contact-detail" aria-label="New process">
-      <div className="panel-head">
-        <Text type="text2" weight="bold">New process</Text>
-        <Button size="small" kind="tertiary" onClick={onCancel}>Cancel</Button>
-      </div>
+    <SidePanel
+      open
+      title="New process"
+      onClose={onCancel}
+      footer={
+        <div className="field-inline">
+          <Button size="small" onClick={save} disabled={saving || !valid}>{saving ? "Saving…" : "Add process"}</Button>
+          <Button size="small" kind="tertiary" onClick={onCancel}>Cancel</Button>
+        </div>
+      }
+    >
       {error && <Problem>{error}</Problem>}
       <div className="create-form">
         <Field label="Name" required>
@@ -229,8 +684,8 @@ function NewProcessForm({ stageNames, teams, onCancel, onCreated }: {
           <Select aria-label="Lifecycle stage" options={stageNames.map(s => ({ value: s, label: s }))}
             value={draft.stageName} onChange={v => setDraft({ ...draft, stageName: v })} />
         </Field>
-        <Field label="Runs on" required hint="the project as a whole, or each job">
-          <Select aria-label="Runs on" options={PROPERTY_SCOPES.map(s => ({ value: s, label: s }))}
+        <Field label="Appears on" required hint="the project's drawer, or each job's — it does not limit which properties the process can collect">
+          <Select aria-label="Appears on" options={PROPERTY_SCOPES.map(s => ({ value: s, label: s }))}
             value={draft.scope} onChange={v => setDraft({ ...draft, scope: v as PropertyScope })} />
         </Field>
         <Field label="Team" hint="who does the work — leave blank if nobody is named">
@@ -239,16 +694,12 @@ function NewProcessForm({ stageNames, teams, onCancel, onCreated }: {
             value={draft.owningTeam ?? null} onChange={v => setDraft({ ...draft, owningTeam: v as TeamId | null })} />
         </Field>
       </div>
-      <div className="field-inline" style={{ marginTop: "var(--space-8)" }}>
-        <Button size="small" onClick={save} disabled={saving || !valid}>{saving ? "Saving…" : "Add process"}</Button>
-        <Button size="small" kind="tertiary" onClick={onCancel}>Cancel</Button>
-      </div>
-    </section>
+    </SidePanel>
   );
 }
 
 // -------------------------------------------------------------------- the editor
-function ProcessEditor({ process: p, all, deps, teams, stageNames, canEdit, onChanged, onError, onClose, onDeleted }: {
+function ProcessEditor({ process: p, all, deps, teams, stageNames, canEdit, onChanged, onError, onDeleted }: {
   process: Process;
   all: Process[];
   deps: ProcessDependency[];
@@ -257,17 +708,17 @@ function ProcessEditor({ process: p, all, deps, teams, stageNames, canEdit, onCh
   canEdit: boolean;
   onChanged: () => void;
   onError: (e: string | null) => void;
-  onClose: () => void;
   onDeleted: () => void;
 }) {
   const repo = useRepository();
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
 
   async function patch(change: ProcessPatch) {
-    setSaving(true); onError(null);
+    setSaving(true); setProblem(null); onError(null);
     try { await repo.updateProcess(p.id, change); onChanged(); }
-    catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+    catch (e) { setProblem(e instanceof Error ? e.message : String(e)); }
     finally { setSaving(false); }
   }
 
@@ -278,14 +729,18 @@ function ProcessEditor({ process: p, all, deps, teams, stageNames, canEdit, onCh
 
   return (
     <div className="stack" aria-label={`Details of ${p.name}`}>
-      <section className="panel contact-detail">
+      {problem && <Problem>{problem}</Problem>}
+      <section className="panel">
         <div className="panel-head">
           <div>
-            <Text type="text2" weight="bold">{p.name}</Text>
             <div className="slot-sub">
-              <code>{p.key}</code> · {p.stageName}{p.importRef && <> · from {p.importRef}</>}
+              <code>{p.key}</code> · {p.stageName}{p.stageGroup && <> · {p.stageGroup}</>}{p.importRef && <> · from {p.importRef}</>}
+              {p.isMilestone && <span className="slot-chip is-current">milestone</span>}
               {!p.isActive && <span className="slot-chip">retired</span>}
             </div>
+            <Text type="text3" color="secondary" element="div" ellipsis={false}>
+              Last updated {whenText(p.updatedAt)} · {p.updatedBy ?? "no author recorded"}
+            </Text>
           </div>
           <div className="panel-actions">
             {canEdit && (
@@ -293,7 +748,6 @@ function ProcessEditor({ process: p, all, deps, teams, stageNames, canEdit, onCh
                 {p.isActive ? "Retire" : "Restore"}
               </Button>
             )}
-            <Button size="small" kind="tertiary" onClick={onClose} aria-label="Close details">Close</Button>
           </div>
         </div>
 
@@ -306,12 +760,19 @@ function ProcessEditor({ process: p, all, deps, teams, stageNames, canEdit, onCh
               <Select aria-label="Lifecycle stage" options={stageNames.map(s => ({ value: s, label: s }))} value={p.stageName} onChange={v => patch({ stageName: v })} />
             ) : <Text type="text2">{p.stageName}</Text>}
           </Field>
-          <Field label="Stage group" hint="a heading inside the stage — Stage 1, Stage 2, Variation">
-            <BlurText value={p.stageGroup ?? ""} disabled={!canEdit || saving} label="Stage group" onCommit={v => patch({ stageGroup: v.trim() || null })} plain />
+          <Field label="Group / pipeline" hint="the block it runs in inside the stage — Stage 1, Stage 2, Variation. Reorder the blocks on the list">
+            <BlurText value={p.stageGroup ?? ""} disabled={!canEdit || saving} label="Group" onCommit={v => patch({ stageGroup: v.trim() || null })} plain />
           </Field>
-          <Field label="Runs on" required>
+          {/*
+            Was "Runs on", and read as though it also decided which properties the process
+            could collect. Amber, 3 Sep: "processes will often include job and project
+            properties, so it isn't either/or and that needs to be removed." The restriction
+            is gone — a process collects properties of both scopes — and this field now says
+            only what it actually decides, which is whose drawer the process appears in.
+          */}
+          <Field label="Appears on" required hint="the project's drawer, or each job's. It does not limit which properties the process collects">
             {canEdit ? (
-              <Select aria-label="Runs on" options={PROPERTY_SCOPES.map(s => ({ value: s, label: s }))} value={p.scope} onChange={v => patch({ scope: v as PropertyScope })} />
+              <Select aria-label="Appears on" options={PROPERTY_SCOPES.map(s => ({ value: s, label: s }))} value={p.scope} onChange={v => patch({ scope: v as PropertyScope })} />
             ) : <Text type="text2">{p.scope}</Text>}
           </Field>
           <Field label="Team" hint="who does the work">
@@ -331,8 +792,8 @@ function ProcessEditor({ process: p, all, deps, teams, stageNames, canEdit, onCh
           <Field label="External" hint="council, SA Water, a consultant — late is not the team's fault">
             <Checkbox label="Waits on somebody outside Lofty" checked={p.isExternal} disabled={!canEdit || saving} onChange={() => patch({ isExternal: !p.isExternal })} />
           </Field>
-          <Field label="Position" hint="order within the stage">
-            <NumberInput value={p.position} disabled={!canEdit || saving} label="Position" onCommit={v => patch({ position: v ?? 0 })} />
+          <Field label="Number in the stage" hint="its place in the flow. Dragging on the list renumbers the whole stage; this sets one">
+            <NumberInput value={p.position} disabled={!canEdit || saving} label="Number in the stage" onCommit={v => patch({ position: v ?? 0 })} />
           </Field>
           <Field label="Description">
             <BlurText value={p.description ?? ""} disabled={!canEdit || saving} label="Description" onCommit={v => patch({ description: v.trim() || null })} wide plain />
@@ -346,9 +807,10 @@ function ProcessEditor({ process: p, all, deps, teams, stageNames, canEdit, onCh
         </div>
       </section>
 
-      <DependenciesEditor process={p} all={all} waitsOn={waitsOn} leadsTo={leadsTo} byId={byId} canEdit={canEdit} onChanged={onChanged} onError={onError} />
-      <PropertiesEditor process={p} canEdit={canEdit} onChanged={onChanged} onError={onError} />
-      <ChecklistEditor process={p} teams={teams} canEdit={canEdit} onError={onError} />
+      <DependenciesEditor process={p} all={all} waitsOn={waitsOn} leadsTo={leadsTo} byId={byId} canEdit={canEdit} onChanged={onChanged} onError={setProblem} />
+      <PropertiesEditor process={p} canEdit={canEdit} onChanged={onChanged} onError={setProblem} />
+      <ChecklistEditor process={p} teams={teams} canEdit={canEdit} onError={setProblem} />
+      <ProcessHistory process={p} />
 
       {canEdit && (
         <section className="panel">
@@ -364,9 +826,9 @@ function ProcessEditor({ process: p, all, deps, teams, stageNames, canEdit, onCh
             <div className="field-inline" role="alert">
               <Text type="text2" element="span" ellipsis={false}>Delete <strong>{p.name}</strong> for good?</Text>
               <Button size="small" color="negative" onClick={async () => {
-                onError(null);
+                setProblem(null);
                 try { await repo.deleteProcess(p.id); onDeleted(); }
-                catch (e) { onError(e instanceof Error ? e.message : String(e)); setConfirmDelete(false); }
+                catch (e) { setProblem(e instanceof Error ? e.message : String(e)); setConfirmDelete(false); }
               }}>Delete for good</Button>
               <Button size="small" kind="tertiary" onClick={() => setConfirmDelete(false)}>Keep it</Button>
             </div>
@@ -374,6 +836,77 @@ function ProcessEditor({ process: p, all, deps, teams, stageNames, canEdit, onCh
         </section>
       )}
     </div>
+  );
+}
+
+// ----------------------------------------------------------------------- history
+/**
+ * What happened to this process, when, and who did it (Amber, 3 Sep: processes "need to
+ * show in processes when they were last updated and by who and what happened").
+ *
+ * "What happened" is the field-by-field diff, not the word "updated": knowing that
+ * somebody touched a row is not knowing that the expected days went from 10 to 25. The
+ * rows come from `activity_audit`, which every active person may read, so this shows the
+ * same thing to everybody — the audit trail is not a manager's private view.
+ */
+const FIELD_LABELS: Record<string, string> = {
+  process_name: "Name",
+  process_key: "Key",
+  process_stage_name: "Lifecycle stage",
+  process_stage_group: "Group",
+  process_scope: "Appears on",
+  process_owning_team: "Team",
+  process_expected_days: "Expected days",
+  process_at_risk_lead_days: "At-risk lead",
+  process_is_milestone: "Milestone",
+  process_is_external: "External",
+  process_position: "Number in the stage",
+  process_is_active: "Active",
+  process_description: "Description",
+  process_automation: "Automation",
+  process_sharepoint_folder: "SharePoint subfolder"
+};
+const fieldLabel = (f: string) =>
+  FIELD_LABELS[f] ?? f.replace(/^process_/, "").replace(/_/g, " ").replace(/^./, c => c.toUpperCase());
+
+function ProcessHistory({ process: p }: { process: Process }) {
+  const { data: history } = useQuery<ProcessHistoryEntry[]>(r => r.listProcessHistory(p.id), [], [p.id, p.updatedAt]);
+
+  return (
+    <section className="panel">
+      <div className="panel-head">
+        <Text type="text2" weight="bold">History</Text>
+        <Text type="text3" color="secondary">what changed, when, and who changed it</Text>
+      </div>
+      {history.length === 0 ? (
+        <Text type="text3" color="secondary" ellipsis={false}>
+          Nothing recorded. A row shows history from the first time it is edited; a seeded row has none yet.
+        </Text>
+      ) : (
+        <ul className="slot-history-list">
+          {history.map((h, i) => (
+            <li key={`${h.at}:${i}`} style={{ flexDirection: "column", alignItems: "stretch", gap: 2 }}>
+              <Text type="text3" color="secondary" element="div">
+                {new Date(h.at).toLocaleString()} · {h.by ?? "someone whose profile is gone"}
+                {h.operation === "INSERT" && " · created"}
+                {h.operation === "DELETE" && " · deleted"}
+              </Text>
+              {h.changes.length === 0 && h.operation === "UPDATE" && (
+                <Text type="text3" color="secondary" element="div" ellipsis={false}>Saved with no field changed.</Text>
+              )}
+              {h.changes.map(c => (
+                <Text type="text3" element="div" key={c.field} ellipsis={false}>
+                  <strong>{fieldLabel(c.field)}</strong>{" "}
+                  {/* An emptied field is shown as the word, not as nothing: "Team → " reads
+                      as a rendering bug, "Team → cleared" reads as what happened. */}
+                  {c.from == null || c.from === "" ? <em>blank</em> : c.from} → {c.to == null || c.to === "" ? <em>cleared</em> : c.to}
+                </Text>
+              ))}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -446,6 +979,8 @@ function PropertiesEditor({ process: p, canEdit, onChanged, onError }: {
   const mine = useMemo(() => (fresh.length ? fresh : Array.from(byProcess.values()).flat()).filter(pp => pp.processId === p.id).sort((a, b) => a.position - b.position), [fresh, byProcess, p.id]);
   const defByKey = new Map(propertyDefs.map(d => [d.key, d]));
   const [adding, setAdding] = useState<string | null>(null);
+  // Both scopes, deliberately: a process asks for what it asks for, and 0079 already has
+  // job properties attached to project processes and the other way round (Amber, 3 Sep).
   const candidates = propertyDefs.filter(d => d.isActive && !mine.some(pp => pp.propertyKey === d.key))
     .sort((a, b) => (a.stageName === p.stageName ? 0 : 1) - (b.stageName === p.stageName ? 0 : 1) || a.label.localeCompare(b.label));
 
@@ -461,12 +996,16 @@ function PropertiesEditor({ process: p, canEdit, onChanged, onError }: {
     [next[i], next[j]] = [next[j], next[i]];
     write(next);
   };
+  const jobCount = mine.filter(pp => defByKey.get(pp.propertyKey)?.scope === "job").length;
+  const projectCount = mine.filter(pp => defByKey.get(pp.propertyKey)?.scope === "project").length;
 
   return (
     <section className="panel">
       <div className="panel-head">
         <Text type="text2" weight="bold">Properties collected ({mine.length})</Text>
-        <Text type="text3" color="secondary">in the order the process asks for them</Text>
+        <Text type="text3" color="secondary">
+          {jobCount && projectCount ? `${jobCount} job · ${projectCount} project` : "in the order the process asks for them"}
+        </Text>
       </div>
       {mine.length === 0 && <Text type="text3" color="secondary" ellipsis={false}>This process collects no properties yet.</Text>}
       <ul className="dep-list">
@@ -501,13 +1040,14 @@ function PropertiesEditor({ process: p, canEdit, onChanged, onError }: {
       {canEdit && (
         <div className="field-inline" style={{ marginTop: "var(--space-8)", flexWrap: "wrap" }}>
           <Select aria-label="Add a property this process collects" clearable placeholder="Add a property…"
-            options={candidates.map(d => ({ value: d.key, label: `${d.label} — ${d.stageName}${d.scope === "project" ? " (project)" : ""}` }))}
+            options={candidates.map(d => ({ value: d.key, label: `${d.label} — ${d.stageName} (${d.scope})` }))}
             value={adding} onChange={v => setAdding(v)} />
           <Button size="small" disabled={!adding} onClick={() => { if (adding) { write([...current, { propertyKey: adding, required: false }]); setAdding(null); } }}>Add</Button>
         </div>
       )}
       <Text type="text3" color="secondary" ellipsis={false} element="p" style={{ marginTop: "var(--space-8)" }}>
-        Define new properties, their formats and who may see them in the Properties tab.
+        Job and project properties both — a process asks for whichever it needs. Define new properties,
+        their formats and who may see them in the Properties tab.
       </Text>
     </section>
   );

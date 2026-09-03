@@ -13,7 +13,12 @@ import "../components/ui.css";
 import "../components/processes.css";
 
 /**
- * Setup → Notifications (0083): who hears what, and the defaults everyone starts from.
+ * Who hears what, and the defaults everyone starts from (0083).
+ *
+ * It had a Setup tab of its own until Amber, 3 Sep: "notificatiosn are already under user
+ * settings so it is doubling up having it in setup". It now sits under Setup → Automations,
+ * because a rule that says "overdue 5 days → the managers" is an automation. Your OWN
+ * channels and digest time remain in User settings, which is the half she was looking at.
  *
  * Amber: "notifications on incomplete tasks and who they go to need to be added". The
  * rules are the "who": per type, an audience — the assignee, the owning team, the engaged

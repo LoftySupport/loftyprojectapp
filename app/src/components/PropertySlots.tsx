@@ -84,14 +84,35 @@ export function PropertySlots({
   // A retired definition still shows while a value is recorded in it — hiding the row
   // would hide the value, and the value is the fact.
   const recordedKeys = useMemo(() => new Set(values.map(v => v.propertyKey)), [values]);
+  /**
+   * WHEN A PROCESS ASKS, THE PROCESS'S OWN LIST IS THE ANSWER — BOTH SCOPES
+   *
+   * Amber, 3 September: *"processes will often include job and project properties, so it
+   * isn't either/or and that needs to be removed."*
+   *
+   * This used to start from `slotsFor(scope)` in every case, so a process rendered on a job
+   * could only ever show its job-scoped properties. That was not a cosmetic filter: on the
+   * live database it hid nine property attachments somebody had already configured — one
+   * project property on a job-scoped process, and eight job properties on project-scoped
+   * ones. They were set up, saved, and invisible.
+   *
+   * So when a `processId` is given, the process's own list decides, whatever each property's
+   * scope says. The value still comes from the right record: `PropertyField` reads a
+   * project-scoped property through to the project and marks it "from project", which is
+   * the behaviour a job showing its project's answer already had.
+   *
+   * Without a `processId` this is a record's own panel — "Job properties", "Project
+   * properties" — and there the scope IS the question being asked, so it still filters.
+   */
   const defs = useMemo(() => {
-    const live = slotsFor(scope);
-    const retiredWithValues = propertyDefs.filter(d => d.scope === scope && !d.isActive && recordedKeys.has(d.key));
+    const forProcess = processId != null;
+    const keys = forProcess ? new Set((byProcess.get(processId) ?? []).map(pp => pp.propertyKey)) : null;
+    const live = forProcess ? propertyDefs.filter(d => d.isActive) : slotsFor(scope);
+    const retiredWithValues = propertyDefs.filter(
+      d => !d.isActive && recordedKeys.has(d.key) && (forProcess || d.scope === scope)
+    );
     let all = [...live, ...retiredWithValues].filter(d => access(d.key).canRead);
-    if (processId) {
-      const keys = new Set((byProcess.get(processId) ?? []).map(pp => pp.propertyKey));
-      all = all.filter(d => keys.has(d.key));
-    }
+    if (keys) all = all.filter(d => keys.has(d.key));
     return all;
   }, [slotsFor, scope, propertyDefs, recordedKeys, access, processId, byProcess]);
 
