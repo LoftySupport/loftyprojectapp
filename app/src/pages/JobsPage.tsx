@@ -31,6 +31,7 @@ import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import type { LatestUpdate, StageName, TeamId } from "../data/types";
 import { accentStyle, columnAccent } from "../theme/accents";
+import { NOTHING_RECORDED, currentProcessName, pipelineColumns, processColumnOf } from "../data/pipelinePosition";
 import { readPrefs } from "../data/preferences";
 import { Token } from "../components/Token";
 import { Toolbar } from "../components/Toolbar";
@@ -235,6 +236,9 @@ export function JobsPage() {
       : grouping === "Project" ? j.projectNumber
       : grouping === "Team" ? j.team
       : grouping === "Status" ? RECORD_STATUS_LABELS[j.status]
+      // Derived, never stored: the first process of the job's stage that is not behind
+      // it, or "Nothing recorded". pipelinePosition.ts carries the rule and the reason.
+      : grouping === "Process" ? processColumnOf(j, processes)
       // The assignee resolves to a real name now (boardModel). A job with nobody on it
       // groups under its own honest heading rather than under a token.
       : j.assigneeName ?? "Unassigned";
@@ -244,10 +248,21 @@ export function JobsPage() {
       : grouping === "Stage" ? viewStages
       : grouping === "Team" ? teamNames
       : grouping === "Status" ? RECORD_STATUSES.map(s => RECORD_STATUS_LABELS[s])
+      // Lifecycle stage order, then position within the stage — Amber's sentence, as an
+      // array. "Nothing recorded" leads, because a job nobody has recorded against is at
+      // the head of the stage's work, not partway through it.
+      : grouping === "Process" ? [NOTHING_RECORDED, ...pipelineColumns(processes, viewStages)]
       : [...new Set(rows.map(keyOf))];
 
-    return order.map(key => ({ key, jobs: rows.filter(j => keyOf(j) === key) }));
-  }, [grouping, rows, viewStages, teamNames]);
+    // No row may fall outside the columns. Every other grouping either lists its own
+    // domain (the stages, the teams) or derives the order from the rows themselves; the
+    // pipeline is built from the process table, so a job whose stage the saved view does
+    // not admit would have a key with no column and would simply not be drawn. Appending
+    // the strays keeps the board honest about how many jobs it is showing.
+    const strays = [...new Set(rows.map(keyOf))].filter(k => !order.includes(k));
+
+    return [...order, ...strays].map(key => ({ key, jobs: rows.filter(j => keyOf(j) === key) }));
+  }, [grouping, rows, viewStages, teamNames, processes]);
 
   /**
    * Table sorting (G12) — the SortableTable idiom the Admin tables already use, applied
@@ -264,6 +279,11 @@ export function JobsPage() {
    * to be sortable and able to be drag and dropped and re ordred, or add and remove
    * columns"*): reordering is reordering this list, hiding one is dropping it.
    */
+  // The flat pipeline, for the "Up to" column's sort: alphabetical would put Working
+  // Drawings before the Site Survey that precedes it, which is the lifecycle backwards —
+  // the same reasoning the Stage column already sorts on its index rather than its name.
+  const pipelineOrder = useMemo(() => pipelineColumns(processes, viewStages), [processes, viewStages]);
+
   const jobColumnDefs = useMemo<ColumnDef<BoardJob>[]>(() => [
     // The job number cannot be turned off. A table of jobs with no job number in it is
     // a table nobody can act on; everything else is somebody's call.
@@ -294,11 +314,21 @@ export function JobsPage() {
     // for the person who does want it, which is what the picker is for.
     { key: "createdBy", label: "Created by", offByDefault: true, className: "muted",
       sort: j => j.createdBy ?? null, cell: j => j.createdBy ?? "—" },
+    // Same rule as the board's Process columns — one helper, so a job cannot be in the
+    // "Working Drawings" column and read "Selections" here. Null is said as null: most
+    // of these jobs were worked before the app existed, and an empty run list means the
+    // app was not there, not that the job has done nothing.
+    { key: "process", label: "Up to",
+      sort: j => { const n = currentProcessName(j, processes); return n === null ? null : pipelineOrder.indexOf(n); },
+      cell: j => {
+        const name = currentProcessName(j, processes);
+        return name ?? <span className="muted">Nothing recorded</span>;
+      } },
     { key: "days", label: "Days in stage", className: "num",
       sort: j => j.daysInStage, cell: j => j.daysInStage },
     { key: "status", label: "Status", sort: j => RECORD_STATUS_LABELS[j.status],
       cell: j => <StatusPill status={j.status} /> }
-  ], [viewStages]);
+  ], [viewStages, processes, pipelineOrder]);
 
   const jobLayout = useColumnLayout("jobs", jobColumnDefs);
 
@@ -383,7 +413,7 @@ export function JobsPage() {
       <Toolbar
         view={view}
         onViewChange={setView}
-        groupings={["None", "Stage", "Project", "Team", "Team member", "Status"]}
+        groupings={["None", "Stage", "Project", "Team", "Team member", "Status", "Process"]}
         grouping={grouping}
         onGroupingChange={setGrouping}
         filters={filters}
@@ -452,18 +482,24 @@ export function JobsPage() {
               }}
             >
               <div className="board-column-head">
-                {/* Drill-down (G8), as navigation rather than a page of its own: the
-                    prototype's drill-down asked "who holds what inside this phase",
-                    and the board already answers that — filtered to the phase,
-                    regrouped by team, in the URL like everything else. */}
+                {/* Drill-down (G8), as navigation rather than a page of its own: filter
+                    to the stage, regroup, and put both in the URL like everything else.
+                    
+                    It regrouped by TEAM, which answered "who holds what inside this
+                    phase". Amber asked for the other question — "how do i see the
+                    processes in the jobs view, eg what process a job is up to" — and
+                    showed the prototype's answer: drilling into a stage turned the
+                    columns into that stage's steps, with each job in the one it had
+                    reached. That is what this does now, for every stage rather than the
+                    one the prototype hardcoded. Team is still a click away in Group by. */}
                 {grouping === "Stage" ? (
                   <button
                     type="button"
                     className="board-col-drill"
-                    title={`Open ${g.key} grouped by team`}
+                    title={`Open ${g.key} as its processes, each job in the one it is up to`}
                     onClick={() =>
                       setMany({
-                        grouping: "Team",
+                        grouping: "Process",
                         filters: [...filters.filter(f => f.field !== "Stage"), { field: "Stage", value: g.key }]
                       })
                     }
