@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 69 changes since then —
+Unreleased: 71 changes since then —
+- Fixed: Maintenance due dates, warranty, health and daily reminders all work on the Adelaide calendar day — a request no longer turns overdue at 09:30 in the morning
+- Added: The live database is at 0085 — Maintenance, Contacts and notifications tables exist, and the Maintenance tab loads
 - Added: Phase B — the old system's 801 job rows are staged verbatim in the database, with a load that builds the projects and jobs from them and an unload that takes exactly that back out
 - Fixed: A project with no target date reads "Not set" on its card, in the table and on its page — no column token
 - Changed: Setup → Processes and Setup → Properties open the selected record in a panel beside the list, everything editable there — nothing behind a More or Order toggle
-- Added: Setup → Processes edits the tick-box lines of a template task, and every task shows its team, days, parent and order at once
-- Removed: Processes is no longer a destination in the main navigation — it is part of Setup; /processes and /templates forward there
-- …and 64 more.
+- …and 66 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -36,20 +36,27 @@ are not a page on the sidebar, they are part of setup only."*
 
 ### The Maintenance tab says "table does not exist" because the database is at 0079
 
-Checked against the live project rather than assumed: `list_migrations` ends at
-`0079_the_workbook_of_1_september`. The deployed bundle reads `maintenance_requests`,
+Checked against the live project rather than assumed: `list_migrations` ended at
+`0079_the_workbook_of_1_september` while the deployed bundle reads `maintenance_requests`,
 `contacts`, `notifications` and the renamed audit columns, all of which arrive with
-`0080`–`0084`. The migrations replay clean here (65 constraint checks, RLS holding) and
-were **about to be applied through the Supabase connector — which is authorised and
-answers — when the session's permission mode refused the write** to production. So they
-are still not applied, and that is the first thing to do, in this order, in the dashboard
-SQL editor or from a session allowed to write:
+`0080`–`0084`.
 
-`0080` → `0081` → `0082` → `0083` → `0084` → `0085`
+**Applied, later the same evening, through the Supabase connector:** `0080` → `0081` →
+`0082` → `0083` went in cleanly. **`0084` refused itself once** — its proof block raised
+*"due was not set from the category's 5 days"* and the whole migration rolled back, so the
+live database sat at `0083` with nothing half-applied. The cause was the clock, not the
+schema: the guard stores the due date as the Adelaide calendar day plus the SLA, and the
+proof compared it with `current_date`, which on a UTC server is *yesterday* in Adelaide
+until 09:30 each morning. The apply ran at 07:00 Adelaide. The local replay had passed
+only because it ran earlier in the day; run again at the same hour it failed identically,
+which is the failure the fix was proved against.
 
-Each file is idempotent and carries its own proof block, which raises rather than
-leaving a half-applied schema behind. After `0084`, Maintenance loads; `0085` is the one-row
-correction to Ben Johnson's address.
+The fix (`claude/0084-adelaide-dates`) puts every "today" in `0084` on the Adelaide date —
+the proof, and also `job_is_in_warranty`, the `overdue`/`at_risk` health, the days-late
+count and the once-a-day notification keys, which had the same mix and would have flipped
+overdue at 09:30 local rather than midnight. `0084` was then applied live from the
+corrected file, and `0085` after it. `list_migrations` now ends at `0085`; Maintenance has
+its tables and its views. Nothing in `0080`–`0085` was ever applied twice.
 
 ### The four app changes
 
@@ -73,39 +80,16 @@ correction to Ben Johnson's address.
   the same facts are the Setup list. The responsive sweep lost the route and is green at
   115 combinations.
 
-### The import — found, profiled, tooled, proved on the replay, waiting on four answers
+### The import — found, profiled, tooled, and waiting on four answers
 
 The workbooks were not in the repository; they are in Amber's Google Drive, and the
 connector could read them: `Lofty_Jobs_Grouped_by_Project.xlsx` (801 rows, 121 projects
 numbered 1001–1121, sequences `01`…), `Estimating & Scheduling Jobs to Site Tracker.xlsx`
 and `Sitebook Schedule 09.07.xlsx`. The first is the Phase B source and is checked in as
-`app/supabase/import/lofty-jobs-grouped-by-project-2026-08-31.xlsx`.
-
-**`0086` and `0087` are written and green on the replay; nothing is loaded anywhere.**
-
-- `0086` — `import_staging_jobs` (the sheet row verbatim as jsonb, and beside it the
-  generator's reading of it for the spine), `import_spine()` and `unimport_spine()`. The
-  load goes through `jobs` and `projects` like any other insert, so the sequence trigger,
-  the address guard and the audit all bite; every row is logged with
-  `activity_audit_origin = 'import'`, which is what lets the way back tell its projects from
-  a hand-made one under the same number. Proved in the migration: a load without its
-  decisions is refused, a shared old number is refused until the rule is agreed, two rows out
-  of lot order become `-001` and `-002` the right way round, and unimport leaves nothing
-  while a planted hand-made project survives.
-- `0087` — generated by `app/supabase/import/generate-jobs-import.py`: 801 staging rows,
-  796 with a spine across 116 projects, 5 with a `skip_reason` (no address in the source).
-  1.2 MB, because the source is kept whole. The rules and every respelling are in the
-  script's header and the migration's; `--report` prints them without writing.
-- `verify/behaviour.sql` §44 loads the real rows with placeholder decisions and the numbering
-  shifted to 2001 (the replay already has a project 1106): 116 projects, 796 jobs, every job
-  traceable to its row and carrying its old number, 39 cancelled and 20 on hold as the
-  sheet's words say — then unloads and finds nothing left. It found two things reading the
-  sheet did not: project 1024's twenty rows carry their lot only in the site cell, and
-  project 1025 labels two rows `Res 8`. Both are in `schema-plan.md`, *Phase B — what the
-  workbook forces*, with the design.
-
-The live load is one call once the four answers below are in — and it needs the same
-write permission `0080`–`0085` do.
+`app/supabase/import/lofty-jobs-grouped-by-project-2026-08-31.xlsx`. What profiling it
+found, and what the import cannot decide for itself, is under *What needs Amber* below and,
+in full, in `schema-plan.md`, *Phase B — what the workbook forces* (the import branch,
+`0086`–`0087`).
 
 ### What needs Amber
 

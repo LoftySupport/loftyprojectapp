@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- The live database is at 0085 — Maintenance, Contacts and notifications tables exist, and the Maintenance tab loads
 - Phase B — the old system's 801 job rows are staged verbatim in the database, with a load that builds the projects and jobs from them and an unload that takes exactly that back out
 - Setup → Processes edits the tick-box lines of a template task, and every task shows its team, days, parent and order at once
 - Maintenance — a tab for what homeowners report after handover: requests numbered on the job, items per trade, offers to contractors with an accept link, the thread, SLA health and warranty
@@ -55,6 +56,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- Maintenance due dates, warranty, health and daily reminders all work on the Adelaide calendar day — a request no longer turns overdue at 09:30 in the morning
 - A project with no target date reads "Not set" on its card, in the table and on its page — no column token
 - Ben Johnson's email address is ben@lofty.com.au — it had been seeded at a domain Lofty does not use
 - The changelog on Updates reads this repository's merged pull requests, not the old repository's
