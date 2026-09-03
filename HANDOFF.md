@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 76 changes since then —
+Unreleased: 77 changes since then —
+- Fixed: Properties that showed only the tail of their name — three different rows all called "Ordered" — now read in full, with the team that owns them and a date field instead of "format not set"
 - Added: 121 new properties from Amber's workbook, including the whole Construction stage — Footings through Handover
 - Fixed: Setup → Properties showed nothing at all; one missing database column had been stopping the whole page from loading
 - Changed: The app is Lofty Hub — in the browser tab, on sign-in and on the legal page
 - Added: The jobs import takes Amber's decisions — every job in Acquisition & Development unless the sheet says cancelling, the owning team from the named person when they are a user in one team, shared old numbers carried by no job
-- Added: PRODUCT.md records who the app is for, the phone-width drawer as the primary reading surface, and Vibe-with-Lofty-colours as the binding visual constraint
-- …and 71 more.
+- …and 72 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
