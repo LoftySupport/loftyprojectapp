@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- PRODUCT.md records the interface must-haves every screen has to meet, and HANDOFF.md lists the tables that do not meet the sorting one yet
 - The 110 projects from Amber's workbook, each with the number of sites it will hold — no jobs yet
 - Setup → Processes is a pipeline — groups and processes drag into order, each process numbered by its place in the flow through its build lifecycle stage
 - Processes show when they were last updated, by whom, and which fields changed
@@ -84,6 +85,8 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- Every record — a contact, a maintenance request, a property, a project — now opens in the same slide-out panel, which expands to full width and can be dragged wider
+- Updates moved from the sidebar to the footer
 - A process opens in the same slideout as every other record, and expands to full screen
 - The app is Lofty Hub — in the browser tab, on sign-in and on the legal page
 - Setup → Processes and Setup → Properties open the selected record in a panel beside the list, everything editable there — nothing behind a More or Order toggle
