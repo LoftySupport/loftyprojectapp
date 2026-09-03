@@ -4,6 +4,7 @@ import { Button, Checkbox, Heading, Tab, TabList, Text, TextField } from "@vibe/
 import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { Field, Problem } from "../components/Form";
+import { SidePanel } from "../components/SidePanel";
 import { Select } from "../components/Select";
 import {
   CONTACT_METHOD_KINDS, CONTACT_METHOD_LABELS,
@@ -56,8 +57,6 @@ export function ContactsPage() {
     setParams(next, { replace: true });
   };
 
-  const hasDetail = Boolean(selectedPerson || selectedCompany || creating);
-
   return (
     <>
       <div className="page-head page-head-row">
@@ -81,8 +80,16 @@ export function ContactsPage() {
         {can("user") && <Button size="small" onClick={() => { setCreating(true); select("person", null); }}>{tab === 1 ? "+ New company" : "+ New person"}</Button>}
       </div>
 
-      <div className={`contacts-grid${hasDetail ? " has-detail" : ""}`}>
-        <section className="panel">
+      {/*
+        The list is full width, and the record opens over it in the shared slideout.
+        This was `contacts-grid has-detail` — a detail column beside the list — which
+        Amber, 3 September, ruled out for every page: "ensure all pages open items in the
+        slideout side bar (can expand to full width) and is width adjustable". A column
+        cannot do any of those three: it halves the list, it has no expand and no grab
+        edge. SidePanel has all three and is the same panel Jobs, Projects and Processes
+        already use, so the record reads the same everywhere.
+      */}
+      <section className="panel">
           {tab === 0 ? (
             <div className="data-table-wrap">
               <table className="data-table">
@@ -143,19 +150,28 @@ export function ContactsPage() {
               )}
             </div>
           )}
-        </section>
+      </section>
 
-        {creating && (
+      {creating && (
+        <SidePanel open title={tab === 1 ? "New company" : "New person"} onClose={() => setCreating(false)}>
           <NewPartyForm kind={tab === 1 ? "company" : "person"} companies={companies}
             onDone={(kind, id) => { setCreating(false); bump(); select(kind, id); }} onCancel={() => setCreating(false)} />
-        )}
-        {!creating && selectedPerson && (
-          <ContactDetail id={selectedPerson} companies={companies} onChanged={bump} onClose={() => select("person", null)} />
-        )}
-        {!creating && selectedCompany && (
-          <CompanyDetail id={selectedCompany} onChanged={bump} onClose={() => select("company", null)} />
-        )}
-      </div>
+        </SidePanel>
+      )}
+      {/* The name comes from the row that was clicked, not from the detail's own fetch:
+          the panel head must say whose record is opening before the round trip lands. */}
+      {!creating && selectedPerson && (
+        <SidePanel open onClose={() => select("person", null)}
+          title={contacts.find(c => c.id === selectedPerson)?.fullName ?? "Person"}>
+          <ContactDetail id={selectedPerson} companies={companies} onChanged={bump} />
+        </SidePanel>
+      )}
+      {!creating && selectedCompany && (
+        <SidePanel open onClose={() => select("company", null)}
+          title={companies.find(c => c.id === selectedCompany)?.name ?? "Company"}>
+          <CompanyDetail id={selectedCompany} onChanged={bump} />
+        </SidePanel>
+      )}
     </>
   );
 }
@@ -194,8 +210,7 @@ function NewPartyForm({ kind, companies, onDone, onCancel }: {
   }
 
   return (
-    <section className="panel contact-detail">
-      <div className="panel-head"><Text type="text2" weight="bold">{kind === "person" ? "New person" : "New company"}</Text></div>
+    <div className="stack">
       {problem && <Problem>{problem}</Problem>}
       <div className="create-form">
         {kind === "person" ? (<>
@@ -226,7 +241,7 @@ function NewPartyForm({ kind, companies, onDone, onCancel }: {
         <Button size="small" onClick={save} disabled={saving || !valid}>{saving ? "Saving…" : kind === "person" ? "Add person" : "Add company"}</Button>
         <Button size="small" kind="tertiary" onClick={onCancel}>Cancel</Button>
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -314,7 +329,7 @@ function PartiesList({ parties, title }: { parties: RecordParty[]; title: string
   );
 }
 
-function ContactDetail({ id, companies, onChanged, onClose }: { id: string; companies: Company[]; onChanged: () => void; onClose: () => void }) {
+function ContactDetail({ id, companies, onChanged }: { id: string; companies: Company[]; onChanged: () => void }) {
   const repo = useRepository();
   const { can } = usePermission();
   const [reload, setReload] = useState(0);
@@ -335,18 +350,14 @@ function ContactDetail({ id, companies, onChanged, onClose }: { id: string; comp
     setProblem(null);
     try { await fn(); bump(); } catch (e) { setProblem(e instanceof Error ? e.message : String(e)); }
   }
-  if (!contact) return <section className="panel contact-detail"><Text type="text3" color="secondary">Loading…</Text></section>;
+  if (!contact) return <Text type="text3" color="secondary">Loading…</Text>;
   const applicable = classifications.filter(c => c.isActive && c.appliesTo !== "company");
 
   return (
-    <section className="panel contact-detail" aria-label={`Details of ${contact.fullName}`}>
-      <div className="panel-head">
-        <div>
-          <Text type="text2" weight="bold">{contact.fullName}</Text>
-          <div className="slot-sub">{[contact.jobRole, contact.companyName].filter(Boolean).join(" at ") || "no company"}</div>
-        </div>
-        <Button size="small" kind="tertiary" onClick={onClose} aria-label="Close details">Close</Button>
-      </div>
+    /* A body, not a panel: SidePanel is the panel, and it carries the name and the ×.
+       What stays is the sub-line, which the head cannot fit — the role and the company. */
+    <div className="stack" aria-label={`Details of ${contact.fullName}`}>
+      <div className="slot-sub">{[contact.jobRole, contact.companyName].filter(Boolean).join(" at ") || "no company"}</div>
       {problem && <Problem>{problem}</Problem>}
       <Approval approvedAt={contact.approvedAt} onApprove={v => run(() => repo.approveContact(id, v))} />
 
@@ -409,11 +420,11 @@ function ContactDetail({ id, companies, onChanged, onClose }: { id: string; comp
           </div>
         )}
       </div>
-    </section>
+    </div>
   );
 }
 
-function CompanyDetail({ id, onChanged, onClose }: { id: string; onChanged: () => void; onClose: () => void }) {
+function CompanyDetail({ id, onChanged }: { id: string; onChanged: () => void }) {
   const repo = useRepository();
   const { can } = usePermission();
   const [reload, setReload] = useState(0);
@@ -430,18 +441,12 @@ function CompanyDetail({ id, onChanged, onClose }: { id: string; onChanged: () =
     try { await fn(); bump(); } catch (e) { setProblem(e instanceof Error ? e.message : String(e)); }
   }
   const current = useMemo(() => people.filter(p => !p.endedOn), [people]);
-  if (!company) return <section className="panel contact-detail"><Text type="text3" color="secondary">Loading…</Text></section>;
+  if (!company) return <Text type="text3" color="secondary">Loading…</Text>;
   const applicable = classifications.filter(c => c.isActive && c.appliesTo !== "contact");
 
   return (
-    <section className="panel contact-detail" aria-label={`Details of ${company.name}`}>
-      <div className="panel-head">
-        <div>
-          <Text type="text2" weight="bold">{company.name}</Text>
-          <div className="slot-sub">{[company.tradingName ? `t/a ${company.tradingName}` : null, company.abn ? `ABN ${fmtAbn(company.abn)}` : null].filter(Boolean).join(" · ") || "no ABN recorded"}</div>
-        </div>
-        <Button size="small" kind="tertiary" onClick={onClose} aria-label="Close details">Close</Button>
-      </div>
+    <div className="stack" aria-label={`Details of ${company.name}`}>
+      <div className="slot-sub">{[company.tradingName ? `t/a ${company.tradingName}` : null, company.abn ? `ABN ${fmtAbn(company.abn)}` : null].filter(Boolean).join(" · ") || "no ABN recorded"}</div>
       {problem && <Problem>{problem}</Problem>}
       <Approval approvedAt={company.approvedAt} onApprove={v => run(() => repo.approveCompany(id, v))} />
 
@@ -488,6 +493,6 @@ function CompanyDetail({ id, onChanged, onClose }: { id: string; onChanged: () =
           </div>
         )}
       </div>
-    </section>
+    </div>
   );
 }

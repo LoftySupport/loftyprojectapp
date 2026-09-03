@@ -2,11 +2,13 @@
 
 The V0 build of Lofty's job pipeline board: React, Vibe and Supabase.
 
-**Connected, and mostly empty.** 57 of the 67 repository methods read Supabase — projects,
-jobs, profiles, teams, the pipeline stages and the tracker are live queries. There are
-**no projects and no jobs yet**; the import is Phase B, so those boards show a designed
-empty state rather than data. (Setup → Wiring counts this rather than repeating it: the
-numbers here are a snapshot and that screen is generated.)
+**Connected, and carrying real data since 3 September.** Most repository methods read
+Supabase — projects, jobs, profiles, teams, the pipeline stages, properties, processes
+and the tracker are live queries. The database holds **117 projects, 66 jobs, 270
+property definitions and 49 processes**; the 110 projects Amber sent on 3 September are in
+with the number of sites each will hold, and their jobs are deliberately not created yet.
+(Setup → Wiring counts the wiring rather than repeating it here: these numbers are a
+snapshot and that screen is generated.)
 
 Values whose table is not built yet still render as a `{{table.column}}` token, so an
 unbound field is visible rather than silently blank. Two things are genuinely not built —
@@ -28,8 +30,9 @@ Unreleased: 85 changes since then —
 <!-- /generated:shipped -->
 
 Everything anyone has asked for, where it has got to and what has shipped is in the app
-under **Updates** — the queue, the roadmap and the changelog, readable by everybody
-signed in. In this repository the same three live in [ROADMAP.md](ROADMAP.md) and
+under **Updates**, reached from the footer — the queue, the roadmap and the changelog,
+readable by everybody signed in. It sits in the footer rather than the sidebar (Amber,
+3 September) because the sidebar is for the work. In this repository the same three live in [ROADMAP.md](ROADMAP.md) and
 [CHANGELOG.md](CHANGELOG.md), both kept current from commit trailers by
 `node scripts/changelog.mjs`.
 
@@ -72,9 +75,10 @@ the accurate one.
 | File | What it is |
 | --- | --- |
 | **`HANDOFF.md`** | **Start here.** State of play, what is next, and when to change what |
+| **`PRODUCT.md`** | Who the app is for, what binds it, and the **interface must-haves** every screen has to meet |
 | **`schema-plan.md`** | The current design and the record of how it was decided. Phase A is built; Phase C waits on the business decisions at its end |
 | `data-dictionary.md` | Every property: Lofty name, definition, type, rules, relationships, status. Generated — see below |
-| `app/supabase/migrations/` | 33 files, `0001`–`0033`. The database is the authority; these rebuild it |
+| `app/supabase/migrations/` | `0001`–`0093`. The database is the authority; these rebuild it |
 | `app/supabase/verify/check.sh` | Replays every migration into a throwaway database and proves the schema *behaves* — constraints bite, RLS holds, embeds resolve, seeds agree |
 | `supabase-schema.md` | **Superseded** — carries a banner saying so. Kept for its reasoning, not its schema |
 | `concept-spec.md` | The original data-architecture write-up |
@@ -139,6 +143,30 @@ places where Vibe's own defaults fail (see `HANDOFF.md`).
 `.mcp.json` wires the [Vibe MCP server](https://vibe.monday.com/?path=/docs/mcp--docs)
 into the repo, so an MCP-capable editor can query component APIs, tokens and
 accessibility requirements while working on the UI.
+
+## Interface must-haves
+
+Two rules bind every screen, given by Amber on 3 September as must-haves rather than
+preferences. Both are written up in full, with the mechanisms and the reasoning, under
+**Interface Must-Haves** in [PRODUCT.md](PRODUCT.md).
+
+**1. Every table sorts and filters.** Every column carrying a comparable value sorts
+(`app/src/components/SortableTable.tsx`; blanks sort last in both directions). Every table
+about jobs, projects or processes carries at minimum: **team**, **team member**, **build
+lifecycle stage**, **search by job # / project #**, and a **date-range picker**.
+Elsewhere, the equivalents for the columns that screen actually has — "similar options"
+means the same job done with that table's own fields, not fewer of them.
+
+**2. Every record opens in the slideout.** One shell —
+`app/src/components/SidePanel.tsx` — down the right, over a list that stays readable.
+It **expands to full width** (`PanelExpand`), it is **width adjustable and remembers the
+width** (`useResizablePanel`), Escape closes it, and the selection rides the URL so a
+record can be linked to. A detail column beside the list is not this: it halves
+the list, cannot expand and cannot be dragged. That shape (`.contacts-grid`) has been
+deleted rather than left available to copy.
+
+Where a screen does not meet these yet, it is listed in [HANDOFF.md](HANDOFF.md) rather
+than left to be discovered.
 
 ## Views
 
