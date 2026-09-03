@@ -776,6 +776,10 @@ export function JobsPage() {
                     runs them, so this list reads the same way the board's columns do. */}
                 {can("manager") && processPipeline.length > 0 && (
                   <Select
+                    /* The stage's run of processes, in the order a job passes through
+                       them — the one list on this board where A–Z would be actively
+                       wrong, since it is the sequence that says what "up to" means. */
+                    ordered
                     aria-label="Set what the selected jobs are up to"
                     placeholder="Up to…"
                     options={processPipeline.map(n => ({ value: n, label: n }))}
