@@ -119,22 +119,31 @@ const REQUESTS: FeedbackItem[] = STAGES.flatMap((stage, si) =>
 );
 
 /**
- * A stage's processes and a few jobs standing in them, so the BOARD can be laid out.
+ * A stage's worth of processes, and a few jobs standing in them.
  *
- * Same reason as the tracker fixtures above: `/jobs` swept green while drawing "No jobs
- * yet", so the columns, the cards, the selection checkbox and the drag affordances were
- * never measured at any width. Amber reported two of those as broken on 3 September.
+ * Same reason as the tracker fixtures above, for two routes at once. `/setup/processes`
+ * rendered one line of "No processes defined yet" and `/jobs` rendered "No jobs yet", so
+ * the pipeline editor, the board's columns, its cards and its drag affordances were never
+ * laid out by the check that exists to lay things out. Amber reported faults in both.
  *
- * Jobs spread across the pipeline on purpose — one with nothing recorded, one mid-stage,
- * one with work running ahead of an unfinished earlier process — because those are the
- * three the board draws differently.
+ * One list, not two: the processes below stress the SETUP layout (a name long enough to
+ * set a row's intrinsic width, a retired row, a milestone, an external, one with no team
+ * and no duration) and the jobs hang off the same rows so the BOARD has real columns to
+ * draw. Two parallel fixture sets would drift, and the drift would be invisible.
+ *
+ * The jobs are spread on purpose — one with nothing recorded, one mid-stage, one with
+ * work running ahead of an unfinished earlier process — because those are the three the
+ * board draws differently.
  */
 const FIXTURE_STAGE = "Pre-construction";
-const FIXTURE_PROCESSES: Process[] = [
-  ["fixture_survey", "FIXTURE Site survey", "Stage 1", 1],
+const PROCESSES: Process[] = [
+  ["fixture_survey", "FIXTURE Site survey and a name long enough to set the row's intrinsic width", "Stage 1", 1],
   ["fixture_concept", "FIXTURE Concept plan", "Stage 1", 2],
-  ["fixture_pwa", "FIXTURE PWA", "Stage 2", 3],
-  ["fixture_drawings", "FIXTURE Working drawings", "Stage 2", 4]
+  ["fixture_pwa", "FIXTURE PWA", "Stage 1", 3],
+  ["fixture_drawings", "FIXTURE Working drawings", "Stage 2", 4],
+  ["fixture_eer", "FIXTURE Preliminary EER", "Stage 2", 5],
+  ["fixture_contract", "FIXTURE Contract issued", "Stage 2", 6],
+  ["fixture_retired", "FIXTURE A retired process", null, 7]
 ].map(([key, name, group, position], i) => ({
   id: `fixture-process-${i + 1}`,
   key: key as string,
@@ -142,19 +151,21 @@ const FIXTURE_PROCESSES: Process[] = [
   stageName: FIXTURE_STAGE,
   stageGroup: group as string | null,
   scope: "job",
-  owningTeam: "design",
-  expectedDays: (i + 1) * 3,
+  owningTeam: i === 2 ? null : "design",
+  expectedDays: i === 2 ? null : (i + 1) * 3,
   atRiskLeadDays: null,
   isMilestone: i === 3,
-  isExternal: false,
+  isExternal: i === 4,
   position: position as number,
-  isActive: true,
+  isActive: i !== 6,
   description: null,
   automation: null,
   sharepointFolder: null,
   importRef: null,
   updatedAt: ISO(2026, 9, 1),
-  updatedBy: null
+  // Main's set stamped an editor on the first row so Setup → Processes measures a real
+  // "last updated by" cell rather than the em dash every other row draws.
+  updatedBy: i === 0 ? "Fixture Person" : null
 }));
 
 const FIXTURE_PROJECT: Project = {
@@ -196,7 +207,7 @@ const FIXTURE_RUNS: ProcessRun[] = [
   ["9001-03", 0, "in_progress"],
   ["9001-03", 3, "in_progress"]
 ].map(([jobId, pi, status], i) => {
-  const p = FIXTURE_PROCESSES[pi as number];
+  const p = PROCESSES[pi as number];
   return {
     id: `fixture-run-${i + 1}`,
     processId: p.id,
@@ -232,7 +243,7 @@ export function createStubRepository(): Repository {
   const empty = createEmptyRepository();
   return {
     ...empty,
-    async listProcesses() { return FIXTURE_PROCESSES; },
+    async listProcesses() { return PROCESSES; },
     async listProjects() { return [FIXTURE_PROJECT]; },
     async listJobs() { return FIXTURE_JOBS; },
     async listProcessRuns() { return FIXTURE_RUNS; },
@@ -241,6 +252,9 @@ export function createStubRepository(): Repository {
     },
     async listRoadmapPhases() {
       return PHASES;
+    },
+    async listProcesses() {
+      return PROCESSES;
     }
   };
 }

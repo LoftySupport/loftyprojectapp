@@ -11,6 +11,9 @@ import { SidePanel } from "../components/SidePanel";
 import { SortHeader, sortRows, type SortState } from "../components/SortableTable";
 import { BlurText, NumberInput } from "../components/InlineInputs";
 import {
+  NO_GROUP, groupLabel, moveGroup, moveProcess, ordersToWrite, spliceGroup, spliceProcess, stageOrder
+} from "../data/pipelineOrder";
+import {
   PROPERTY_SCOPES, WORKING_STAGES, teamName,
   type NewProcess, type Process, type ProcessDependency, type ProcessHistoryEntry, type ProcessPatch, type ProcessTask,
   type ProcessTaskChecklistItem, type ProcessTaskDependency, type PropertyScope, type Team, type TeamId
@@ -71,29 +74,9 @@ const slugify = (label: string) =>
     .replace(/^\s*\d+\s*-\s*/, "").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").replace(/^[0-9]/, "p_$&");
 
 /** The group heading a process with no group sits under. A label for a blank, not a value. */
-const NO_GROUP = "Not in a group";
-const groupLabel = (g: string | null) => g ?? NO_GROUP;
-
 const whenText = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 
 type Col = "pipeline" | "name" | "group" | "stage" | "team" | "milestone" | "days" | "updated";
-
-/**
- * The stage's canonical order: groups as contiguous blocks in the order their first
- * process falls, each block in position order. Two processes with the same position fall
- * back to their names so the order is stable rather than whatever the array arrived in.
- */
-function stageOrder(list: Process[]): Process[] {
-  const sorted = [...list].sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
-  const seen: string[] = [];
-  const blocks = new Map<string, Process[]>();
-  for (const p of sorted) {
-    const k = groupLabel(p.stageGroup);
-    if (!blocks.has(k)) { blocks.set(k, []); seen.push(k); }
-    blocks.get(k)!.push(p);
-  }
-  return seen.flatMap(k => blocks.get(k)!);
-}
 
 export function ProcessesSetupPage() {
   const [params, setParams] = useSearchParams();
@@ -206,62 +189,18 @@ export function ProcessesSetupPage() {
    */
   async function reorder(stage: string, mutate: (arr: Process[]) => Process[]) {
     const before = stageOrder(processes.filter(p => p.stageName === stage));
-    const was = new Map(before.map(p => [p.id, { position: p.position, group: p.stageGroup ?? null }]));
-    const orders = mutate(before)
-      .map((p, i) => ({ id: p.id, stageGroup: p.stageGroup ?? null, position: i + 1 }))
-      .filter(o => {
-        const b = was.get(o.id);
-        return !b || b.position !== o.position || b.group !== o.stageGroup;
-      });
+    const orders = ordersToWrite(before, mutate(before));
     if (orders.length === 0) return;
     setError(null);
     try { await repo.reorderProcesses(orders); bump(); }
     catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }
 
-  /** Lift one process out and drop it at `index`, taking `group` with it. */
-  const spliceProcess = (arr: Process[], id: string, index: number, group: string | null) => {
-    const from = arr.findIndex(p => p.id === id);
-    if (from === -1) return arr;
-    const out = arr.slice();
-    const [moved] = out.splice(from, 1);
-    const at = from < index ? index - 1 : index;
-    out.splice(at, 0, { ...moved, stageGroup: group });
-    return out;
-  };
-
-  /** Lift a whole group block out and drop it in front of the block at `index`. */
-  const spliceGroup = (arr: Process[], group: string, index: number) => {
-    const block = arr.filter(p => groupLabel(p.stageGroup) === group);
-    if (block.length === 0) return arr;
-    const rest = arr.filter(p => groupLabel(p.stageGroup) !== group);
-    const removedBefore = arr.slice(0, index).filter(p => groupLabel(p.stageGroup) === group).length;
-    const out = rest.slice();
-    out.splice(index - removedBefore, 0, ...block);
-    return out;
-  };
-
   const moveProcessBy = (stage: string, id: string, dir: -1 | 1) =>
-    reorder(stage, arr => {
-      const i = arr.findIndex(p => p.id === id);
-      const j = i + dir;
-      if (i === -1 || j < 0 || j >= arr.length) return arr;
-      // Stepping past a group boundary joins the group you stepped into — which is what
-      // moving a process down out of "Stage 1" and into "Stage 2" is asking to do.
-      return spliceProcess(arr, id, dir === -1 ? j : j + 1, arr[j].stageGroup ?? null);
-    });
+    reorder(stage, arr => moveProcess(arr, id, dir));
 
   const moveGroupBy = (stage: string, group: string, dir: -1 | 1) =>
-    reorder(stage, arr => {
-      const order = [...new Set(arr.map(p => groupLabel(p.stageGroup)))];
-      const i = order.indexOf(group);
-      const j = i + dir;
-      if (i === -1 || j < 0 || j >= order.length) return arr;
-      const target = dir === -1
-        ? arr.findIndex(p => groupLabel(p.stageGroup) === order[j])
-        : arr.map(p => groupLabel(p.stageGroup)).lastIndexOf(order[j]) + 1;
-      return spliceGroup(arr, group, target);
-    });
+    reorder(stage, arr => moveGroup(arr, group, dir));
 
   const onDropProcess = (stage: string, targetId: string) => {
     const d = dragging;
@@ -311,6 +250,20 @@ export function ProcessesSetupPage() {
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); setConfirmDelete(null); }
   }
 
+  /**
+   * Rename in place: type in the box, leave it, one
+   * write. A blank is refused rather than saved — an unnamed process is a row nobody can
+   * find again, and the box puts the old name straight back so nothing is lost to a
+   * stray keystroke.
+   */
+  async function rename(p: Process, name: string) {
+    const next = name.trim();
+    if (next === "" || next === p.name) { bump(); return; }
+    setError(null);
+    try { await repo.updateProcess(p.id, { name: next }); bump(); }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)); bump(); }
+  }
+
   const active = processes.filter(p => p.isActive).length;
   const dragProps = (kind: "process" | "group", id: string, stage: string) =>
     canEdit && pipelineView
@@ -345,18 +298,31 @@ export function ProcessesSetupPage() {
       {error && <Problem>{error}</Problem>}
 
       <div className="toolbar" style={{ marginTop: "var(--space-12)" }}>
-        <Select aria-label="Filter by lifecycle stage" clearable placeholder="All stages" options={stages.map(s => ({ value: s, label: s }))}
-          value={stageFilter} onChange={setStageFilter} />
-        <Select aria-label="Filter by team" clearable placeholder="All teams"
-          options={teams.filter(t => t.isActive || processes.some(p => p.owningTeam === t.id)).map(t => ({ value: t.id, label: t.name }))}
-          value={teamFilter} onChange={setTeamFilter} />
-        <Select aria-label="Filter by group" clearable placeholder="All groups" options={groupNames.map(g => ({ value: g, label: g }))}
-          value={groupFilter} onChange={setGroupFilter} />
-        <TextField size="small" id="procs-search" inputAriaLabel="Search processes" placeholder="Search…" value={search} onChange={setSearch} />
+        <span className="toolbar-control">
+          <Select aria-label="Filter by lifecycle stage" clearable placeholder="All stages" options={stages.map(s => ({ value: s, label: s }))}
+            value={stageFilter} onChange={setStageFilter} />
+        </span>
+        <span className="toolbar-control">
+          <Select aria-label="Filter by team" clearable placeholder="All teams"
+            options={teams.filter(t => t.isActive || processes.some(p => p.owningTeam === t.id)).map(t => ({ value: t.id, label: t.name }))}
+            value={teamFilter} onChange={setTeamFilter} />
+        </span>
+        <span className="toolbar-control">
+          <Select aria-label="Filter by group" clearable placeholder="All groups" options={groupNames.map(g => ({ value: g, label: g }))}
+            value={groupFilter} onChange={setGroupFilter} />
+        </span>
+        <span className="toolbar-search"><TextField size="small" id="procs-search" inputAriaLabel="Search processes" placeholder="Search…" value={search} onChange={setSearch} /></span>
         <Checkbox label="Show retired" checked={showRetired} onChange={() => setShowRetired(v => !v)} />
-        {!pipelineView && (
-          <Button size="small" kind="tertiary" onClick={() => setSort({ key: "pipeline", direction: "asc" })}>Back to pipeline order</Button>
-        )}
+        {/* Two views of the same rows, named rather than implied: the pipeline is the
+            order a job moves in, the table is every column sortable and filterable.
+            Clicking a sort header still lands in the table — this only makes the way
+            back, and the fact that there IS a way back, visible before you need it. */}
+        <span className="view-switch" role="group" aria-label="View">
+          <Button size="small" kind={pipelineView ? "primary" : "tertiary"} aria-pressed={pipelineView}
+            onClick={() => setSort({ key: "pipeline", direction: "asc" })}>Pipeline</Button>
+          <Button size="small" kind={pipelineView ? "tertiary" : "primary"} aria-pressed={!pipelineView}
+            onClick={() => setSort(s => (s.key === "pipeline" ? { key: "name", direction: "asc" } : s))}>Table</Button>
+        </span>
         {canEdit && <Button size="small" onClick={() => setParam({ new: "1", process: null })}>+ New process</Button>}
       </div>
 
@@ -367,58 +333,61 @@ export function ProcessesSetupPage() {
         </Text>
       )}
 
-      <section className="panel" style={{ marginTop: "var(--space-12)" }}>
-        <div className="data-table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <SortHeader<Col> column="pipeline" label="#" sort={sort} onSort={toggleSort} className="num" />
-                <SortHeader<Col> column="name" label="Process" sort={sort} onSort={toggleSort} />
-                <SortHeader<Col> column="group" label="Group / pipeline" sort={sort} onSort={toggleSort} />
-                <SortHeader<Col> column="stage" label="Build lifecycle stage" sort={sort} onSort={toggleSort} />
-                <SortHeader<Col> column="team" label="Team" sort={sort} onSort={toggleSort} />
-                <SortHeader<Col> column="milestone" label="Milestone" sort={sort} onSort={toggleSort} />
-                <SortHeader<Col> column="days" label="Days" sort={sort} onSort={toggleSort} className="num" />
-                <th className="num" scope="col">Properties</th>
-                <th className="num" scope="col">Checklist</th>
-                <SortHeader<Col> column="updated" label="Last updated" sort={sort} onSort={toggleSort} />
-                <th scope="col"><span className="sr-only">Actions</span></th>
-              </tr>
-            </thead>
-
-            {pipelineView ? pipeline.map(s => (
-              <tbody className="group" key={s.stage}>
-                <tr className="group-head">
-                  <th colSpan={columnsCount} scope="colgroup">{s.stage} · {s.count}</th>
+      {pipelineView ? (
+        <>
+          {pipeline.map(s => (
+            <PipelineStageCard
+              key={s.stage}
+              stage={s.stage}
+              blocks={s.blocks}
+              count={s.count}
+              canEdit={canEdit}
+              dropOn={dropOn}
+              dragging={dragging}
+              dragProps={dragProps}
+              onDropGroup={onDropGroup}
+              onDropProcess={onDropProcess}
+              onMoveGroup={(group, dir) => moveGroupBy(s.stage, group, dir)}
+              onMoveProcess={(id, dir) => moveProcessBy(s.stage, id, dir)}
+              teams={teams}
+              propertyCount={id => (propsByProcess.get(id) ?? []).length}
+              taskCount={id => tasksByProcess.get(id) ?? 0}
+              selectedId={selectedId}
+              onSelect={select}
+              confirmDelete={confirmDelete}
+              onAskDelete={setConfirmDelete}
+              onDelete={remove}
+              onRename={rename}
+              onAdd={stage => setParam({ new: "1", process: null, newStage: stage })}
+            />
+          ))}
+          {pipeline.length === 0 && (
+            <section className="panel" style={{ marginTop: "var(--space-12)" }}>
+              <Text type="text2" color="secondary" element="p" ellipsis={false}>
+                {processes.length === 0 ? "No processes defined yet." : "Nothing matches — clear the search or the filters."}
+              </Text>
+            </section>
+          )}
+        </>
+      ) : (
+        <section className="panel" style={{ marginTop: "var(--space-12)" }}>
+          <div className="data-table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <SortHeader<Col> column="pipeline" label="#" sort={sort} onSort={toggleSort} className="num" />
+                  <SortHeader<Col> column="name" label="Process" sort={sort} onSort={toggleSort} />
+                  <SortHeader<Col> column="group" label="Group / pipeline" sort={sort} onSort={toggleSort} />
+                  <SortHeader<Col> column="stage" label="Build lifecycle stage" sort={sort} onSort={toggleSort} />
+                  <SortHeader<Col> column="team" label="Team" sort={sort} onSort={toggleSort} />
+                  <SortHeader<Col> column="milestone" label="Milestone" sort={sort} onSort={toggleSort} />
+                  <SortHeader<Col> column="days" label="Days" sort={sort} onSort={toggleSort} className="num" />
+                  <th className="num" scope="col">Properties</th>
+                  <th className="num" scope="col">Checklist</th>
+                  <SortHeader<Col> column="updated" label="Last updated" sort={sort} onSort={toggleSort} />
+                  <th scope="col"><span className="sr-only">Actions</span></th>
                 </tr>
-                {s.blocks.map((b, bi) => (
-                  <PipelineBlock
-                    key={`${s.stage}:${b.group}:${bi}`}
-                    stage={s.stage}
-                    block={b}
-                    canEdit={canEdit}
-                    canMoveUp={bi > 0}
-                    canMoveDown={bi < s.blocks.length - 1}
-                    dropOn={dropOn}
-                    dragging={dragging}
-                    dragProps={dragProps}
-                    onDropGroup={onDropGroup}
-                    onDropProcess={onDropProcess}
-                    onMoveGroup={dir => moveGroupBy(s.stage, b.group, dir)}
-                    onMoveProcess={(id, dir) => moveProcessBy(s.stage, id, dir)}
-                    teams={teams}
-                    propertyCount={id => (propsByProcess.get(id) ?? []).length}
-                    taskCount={id => tasksByProcess.get(id) ?? 0}
-                    selectedId={selectedId}
-                    onSelect={select}
-                    confirmDelete={confirmDelete}
-                    onAskDelete={setConfirmDelete}
-                    onDelete={remove}
-                    columnsCount={columnsCount}
-                  />
-                ))}
-              </tbody>
-            )) : (
+              </thead>
               <tbody>
                 {flat.map(p => (
                   <ProcessRow
@@ -430,23 +399,24 @@ export function ProcessesSetupPage() {
                   />
                 ))}
               </tbody>
+            </table>
+            {processes.length === 0 && (
+              <Text type="text2" color="secondary" element="p" ellipsis={false}>No processes defined yet.</Text>
             )}
-          </table>
-          {processes.length === 0 && (
-            <Text type="text2" color="secondary" element="p" ellipsis={false}>No processes defined yet.</Text>
-          )}
-          {processes.length > 0 && shown.length === 0 && (
-            <Text type="text2" color="secondary" element="p" ellipsis={false}>Nothing matches — clear the search or the filters.</Text>
-          )}
-        </div>
-      </section>
+            {processes.length > 0 && shown.length === 0 && (
+              <Text type="text2" color="secondary" element="p" ellipsis={false}>Nothing matches — clear the search or the filters.</Text>
+            )}
+          </div>
+        </section>
+      )}
 
       {creating && canEdit && (
         <NewProcessPanel
           stageNames={stages}
           teams={teams}
-          onCancel={() => setParam({ new: null })}
-          onCreated={p => { bump(); select(p.id); }}
+          stage={params.get("newStage")}
+          onCancel={() => setParam({ new: null, newStage: null })}
+          onCreated={p => { bump(); setParam({ new: null, newStage: null, process: p.id }); }}
         />
       )}
       {!creating && selected && (
@@ -469,22 +439,39 @@ export function ProcessesSetupPage() {
   );
 }
 
-// -------------------------------------------------------------------- the pipeline
-function PipelineBlock({
-  stage, block, canEdit, canMoveUp, canMoveDown, dropOn, dragging, dragProps, onDropGroup, onDropProcess,
-  onMoveGroup, onMoveProcess, teams, propertyCount, taskCount, selectedId, onSelect, confirmDelete, onAskDelete, onDelete, columnsCount
+// ------------------------------------------------------------ the pipeline editor
+/**
+ * One lifecycle stage, drawn as an ordered list you rearrange rather than a table you
+ * read down: a drag handle, the run number, the name in a box you type straight into,
+ * and the row's own actions — edit, delete — at the end of it.
+ *
+ * The shape comes from four screenshots Amber sent on 3 Sep, and she was explicit about
+ * how to read them: *"Note these are looking at the ui and ux reference not using
+ * deals"*. So what is borrowed is the INTERACTION — rows with handles, names edited in
+ * place, an add row at the foot, per-row settings — and not somebody else's object
+ * model. What is in the list here is this app's own: the processes of a lifecycle stage,
+ * in the order a job runs them.
+ *
+ * The dense table is still here, one click away, because Amber asked for sortable and
+ * filterable columns on the same screen and a pipeline sorted by team is not a pipeline.
+ * This view answers "what order does a job go through this stage in"; that one answers
+ * "which of these is oldest, and who owns it".
+ */
+function PipelineStageCard({
+  stage, blocks, count, canEdit, dropOn, dragging, dragProps, onDropGroup, onDropProcess,
+  onMoveGroup, onMoveProcess, teams, propertyCount, taskCount, selectedId, onSelect,
+  confirmDelete, onAskDelete, onDelete, onRename, onAdd
 }: {
   stage: string;
-  block: { group: string; list: { p: Process; n: number }[] };
+  blocks: { group: string; list: { p: Process; n: number }[] }[];
+  count: number;
   canEdit: boolean;
-  canMoveUp: boolean;
-  canMoveDown: boolean;
   dropOn: string | null;
   dragging: { kind: "process" | "group"; id: string; stage: string } | null;
   dragProps: (kind: "process" | "group", id: string, stage: string) => Record<string, unknown>;
   onDropGroup: (stage: string, group: string) => void;
   onDropProcess: (stage: string, targetId: string) => void;
-  onMoveGroup: (dir: -1 | 1) => void;
+  onMoveGroup: (group: string, dir: -1 | 1) => void;
   onMoveProcess: (id: string, dir: -1 | 1) => void;
   teams: readonly Team[];
   propertyCount: (id: string) => number;
@@ -494,51 +481,135 @@ function PipelineBlock({
   confirmDelete: string | null;
   onAskDelete: (id: string | null) => void;
   onDelete: (p: Process) => void;
-  columnsCount: number;
+  onRename: (p: Process, name: string) => void;
+  onAdd: (stage: string) => void;
 }) {
   return (
-    <>
-      <tr
-        className={`pipeline-group${dropOn === block.group && dragging ? " is-drop" : ""}`}
-        {...dragProps("group", block.group, stage)}
-        onDrop={e => { e.preventDefault(); onDropGroup(stage, block.group); }}
-      >
-        <td colSpan={columnsCount}>
-          <div className="pipeline-group-head">
+    <section className="panel pipe">
+      <div className="panel-head">
+        <Text type="text2" weight="bold">{stage}</Text>
+        <Text type="text3" color="secondary">
+          {count} process{count === 1 ? "" : "es"} · a job runs them top to bottom
+        </Text>
+      </div>
+
+      <div className="pipe-head" aria-hidden>
+        <span className="pipe-col-run">#</span>
+        <span>Process name</span>
+        <span>Team</span>
+        <span className="pipe-col-days">Days</span>
+        <span>Collects</span>
+        <span />
+      </div>
+
+      {blocks.map((b, bi) => (
+        <div className="pipe-block" key={`${stage}:${b.group}:${bi}`}>
+          <div
+            className={`pipe-group${dropOn === b.group && dragging ? " is-drop" : ""}`}
+            {...dragProps("group", b.group, stage)}
+            onDrop={e => { e.preventDefault(); onDropGroup(stage, b.group); }}
+          >
             {canEdit && <span className="drag-dots" aria-hidden title="Drag to reorder this group">⠿</span>}
-            <Text type="text2" weight="bold" element="span">{block.group}</Text>
+            <Text type="text2" weight="bold" element="span">{b.group}</Text>
             <Text type="text3" color="secondary" element="span">
-              {block.list.length} process{block.list.length === 1 ? "" : "es"} · runs {block.list[0].n}–{block.list[block.list.length - 1].n}
+              runs {b.list[0].n}–{b.list[b.list.length - 1].n}
             </Text>
             {canEdit && (
               <span className="pipeline-group-moves">
-                <Button size="xs" kind="tertiary" aria-label={`Move group ${block.group} earlier`} disabled={!canMoveUp} onClick={() => onMoveGroup(-1)}>
+                <Button size="xs" kind="tertiary" aria-label={`Move group ${b.group} earlier`}
+                  disabled={bi === 0} onClick={() => onMoveGroup(b.group, -1)}>
                   <MoveArrowUp size={16} aria-hidden />
                 </Button>
-                <Button size="xs" kind="tertiary" aria-label={`Move group ${block.group} later`} disabled={!canMoveDown} onClick={() => onMoveGroup(1)}>
+                <Button size="xs" kind="tertiary" aria-label={`Move group ${b.group} later`}
+                  disabled={bi === blocks.length - 1} onClick={() => onMoveGroup(b.group, 1)}>
                   <MoveArrowDown size={16} aria-hidden />
                 </Button>
               </span>
             )}
           </div>
-        </td>
-      </tr>
-      {block.list.map(({ p, n }) => (
-        <ProcessRow
-          key={p.id} p={p} n={n} teams={teams} nested
-          properties={propertyCount(p.id)} tasks={taskCount(p.id)}
-          canEdit={canEdit} selected={p.id === selectedId} onSelect={onSelect}
-          confirming={confirmDelete === p.id} onAskDelete={onAskDelete} onDelete={onDelete}
-          dropping={dropOn === p.id && Boolean(dragging)}
-          rowProps={{
-            ...dragProps("process", p.id, stage),
-            onDrop: (e: React.DragEvent) => { e.preventDefault(); onDropProcess(stage, p.id); }
-          }}
-          onMove={dir => onMoveProcess(p.id, dir)}
-          columnsCount={columnsCount}
-        />
+
+          {b.list.map(({ p, n }) => (
+            <div key={p.id}>
+              <div
+                className={`pipe-row${p.id === selectedId ? " is-selected" : ""}${dropOn === p.id && dragging ? " is-drop" : ""}${p.isActive ? "" : " is-retired"}`}
+                {...dragProps("process", p.id, stage)}
+                onDrop={e => { e.preventDefault(); onDropProcess(stage, p.id); }}
+              >
+                <span className="pipe-col-run">
+                  {canEdit && <span className="drag-dots" aria-hidden title="Drag to reorder">⠿</span>}
+                  {n}
+                </span>
+
+                {/* The name is a box you type in, not a cell you click through to.
+                    One edit is one write: BlurText commits on blur or Enter, never per key. */}
+                <span className="pipe-name">
+                  <BlurText
+                    value={p.name}
+                    label={`Name of process ${n} in ${stage}`}
+                    disabled={!canEdit}
+                    plain={!canEdit}
+                    onCommit={v => onRename(p, v)}
+                  />
+                  {p.isMilestone && <span className="slot-chip is-current">milestone</span>}
+                  {p.isExternal && <span className="slot-chip">external</span>}
+                  {!p.isActive && <span className="slot-chip">retired</span>}
+                </span>
+
+                {/* The labels are for the narrow layout, where the cells stack under the
+                    name and a bare "3" beside a bare em dash says nothing at all. CSS
+                    draws them from `data-label`; the wide layout has real headers. */}
+                <span className="muted" data-label="Team">{p.owningTeam ? teamName(p.owningTeam, teams) : "—"}</span>
+                {/* Blank stays blank: no agreed duration is not zero days. */}
+                <span className="pipe-col-days muted" data-label="Days">{p.expectedDays ?? "—"}</span>
+                <span className="muted" data-label="Collects">
+                  {propertyCount(p.id) || taskCount(p.id)
+                    ? [
+                      propertyCount(p.id) ? `${propertyCount(p.id)} propert${propertyCount(p.id) === 1 ? "y" : "ies"}` : null,
+                      taskCount(p.id) ? `${taskCount(p.id)} checklist` : null
+                    ].filter(Boolean).join(" · ")
+                    : "—"}
+                </span>
+
+                <span className="row-actions">
+                  {canEdit && (
+                    <>
+                      <Button size="xs" kind="tertiary" aria-label={`Move ${p.name} earlier`} onClick={() => onMoveProcess(p.id, -1)}>
+                        <MoveArrowUp size={16} aria-hidden />
+                      </Button>
+                      <Button size="xs" kind="tertiary" aria-label={`Move ${p.name} later`} onClick={() => onMoveProcess(p.id, 1)}>
+                        <MoveArrowDown size={16} aria-hidden />
+                      </Button>
+                    </>
+                  )}
+                  <Button size="xs" kind="tertiary" onClick={() => onSelect(p.id)}>
+                    {canEdit ? "Edit properties" : "Open"}
+                  </Button>
+                  {canEdit && <Button size="xs" kind="tertiary" onClick={() => onAskDelete(p.id)}>Delete</Button>}
+                </span>
+              </div>
+
+              {confirmDelete === p.id && (
+                /* Two clicks, the second one named: retiring keeps the history, this does not. */
+                <div className="pipe-confirm field-inline" role="alert">
+                  <Text type="text2" element="span" ellipsis={false}>
+                    Delete <strong>{p.name}</strong> for good? Its checklist and its place in the order go with it.
+                    A process that has run on a record is refused — retire it instead.
+                  </Text>
+                  <Button size="small" color="negative" onClick={() => onDelete(p)}>Delete for good</Button>
+                  <Button size="small" kind="tertiary" onClick={() => onAskDelete(null)}>Keep it</Button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       ))}
-    </>
+
+      {canEdit && (
+        <button type="button" className="pipe-add" onClick={() => onAdd(stage)}>
+          + Add a process to {stage}
+        </button>
+      )}
+    </section>
   );
 }
 
@@ -638,14 +709,18 @@ function ProcessRow({
 }
 
 // ------------------------------------------------------------------ new process
-function NewProcessPanel({ stageNames, teams, onCancel, onCreated }: {
+function NewProcessPanel({ stageNames, teams, stage, onCancel, onCreated }: {
   stageNames: string[];
   teams: readonly Team[];
+  /** The stage its "+ Add a process" was clicked in, so the picker opens on that one. */
+  stage?: string | null;
   onCancel: () => void;
   onCreated: (p: Process) => void;
 }) {
   const repo = useRepository();
-  const [draft, setDraft] = useState<NewProcess>({ key: "", name: "", stageName: WORKING_STAGES[1], scope: "job" });
+  const [draft, setDraft] = useState<NewProcess>({
+    key: "", name: "", stageName: stage ?? WORKING_STAGES[1], scope: "job"
+  });
   const [keyTouched, setKeyTouched] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
