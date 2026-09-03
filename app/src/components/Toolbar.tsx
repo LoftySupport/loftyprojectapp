@@ -100,6 +100,7 @@ export function Toolbar({
           <span className="toolbar-label" id="tb-view">View</span>
           <Select
             className="toolbar-control"
+            ordered
             aria-label="View"
             options={toOptions(views)}
             value={view}
@@ -113,6 +114,9 @@ export function Toolbar({
           <span className="toolbar-label">Group</span>
           <Select
             className="toolbar-control"
+            /* None, Stage, Project, Team, Team member, Status, Process — authored in
+               the order people reach for them, with the two commonest first. */
+            ordered
             aria-label="Group by"
             options={toOptions(groupings)}
             value={grouping}
@@ -149,6 +153,11 @@ export function Toolbar({
             <Select
               className="toolbar-control"
               clearable
+              /* Stage, Process and Process health are sequences — the lifecycle, a
+                 stage's run, and on-track → at-risk → overdue. Alphabetical would put
+                 Cancelled second and "at risk" before "on track", which reads as noise.
+                 Every other field is a set of names and sorts. */
+              ordered={f.field === "Stage" || f.field === "Process" || f.field === "Process health"}
               aria-label={`Filter by ${f.field}`}
               placeholder={`${f.field}: Any`}
               options={optionsFor(f.field)}
