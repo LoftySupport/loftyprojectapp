@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- The 110 projects from Amber's workbook, each with the number of sites it will hold — no jobs yet
 - 121 new properties from Amber's workbook, including the whole Construction stage — Footings through Handover
 - The jobs import takes Amber's decisions — every job in Acquisition & Development unless the sheet says cancelling, the owning team from the named person when they are a user in one team, shared old numbers carried by no job
 - PRODUCT.md records who the app is for, the phone-width drawer as the primary reading surface, and Vibe-with-Lofty-colours as the binding visual constraint
@@ -59,6 +60,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- The schema checks no longer assume the database is empty, so real data cannot make them fail for the wrong reason
 - Properties that showed only the tail of their name — three different rows all called "Ordered" — now read in full, with the team that owns them and a date field instead of "format not set"
 - Setup → Properties showed nothing at all; one missing database column had been stopping the whole page from loading
 - Maintenance due dates, warranty, health and daily reminders all work on the Adelaide calendar day — a request no longer turns overdue at 09:30 in the morning

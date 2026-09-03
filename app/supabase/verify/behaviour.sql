@@ -5,62 +5,83 @@ values ('Behaviour','Test','behaviour-test@lofty.com.au','admin')
 on conflict (profile_email) do nothing;
 
 -- an address
+--
+-- EVERY `from addresses` below names it. They used to say bare `from addresses`, which
+-- worked only because this file ran against a database where this was the ONLY address —
+-- an assumption nothing stated and nothing checked. 0093 loads 110 project addresses from
+-- Amber's workbook, five of which are a suburb with no street number, and the bare selects
+-- promptly tried to hang two jobs off one of those and hit
+-- guard_job_address_is_a_street: "a job needs a street address with a number, not a
+-- locality". The guard was right; the fixture was the thing that was wrong.
 insert into addresses (address_lot_number, address_street_1, address_suburb,
                        address_postcode, address_council, address_created_by)
 select 'Lot 3','Corner Street','Golden Grove','5125','City of Tea Tree Gully', profile_id from profiles where profile_email='behaviour-test@lofty.com.au';
 
 \echo '--- 1. consolidated address includes lot number and postcode'
-select address_consolidated from addresses;
+select address_consolidated from addresses where address_street_1 = 'Corner Street';
 
-\echo '--- 2. project_id starts at 1000 and IS the key'
+\echo '--- 2. project_id is a four-digit number and IS the key'
+--
+-- CAPTURED, not assumed to be 1000. This said `1000` in eight places and worked only
+-- because the projects table was empty when it ran — 0093 loads 110 of Amber's projects
+-- from the identity sequence, so the first number this fixture gets is well past 1000 and
+-- every literal below it was wrong. The number the database actually assigned is the only
+-- number this file is entitled to use.
 insert into projects (project_original_address_id, project_current_address_id, project_type, project_created_by)
-select address_id, address_id, 'residential', (select profile_id from profiles where profile_email='behaviour-test@lofty.com.au') from addresses;
-select project_id, project_status, project_proposed_dwellings from projects;
+select address_id, address_id, 'residential', (select profile_id from profiles where profile_email='behaviour-test@lofty.com.au') from addresses where address_street_1 = 'Corner Street'
+returning project_id as proj \gset
+select project_id, project_status, project_proposed_dwellings from projects where project_id = :proj;
 
 \echo '--- 3. default_current_address filled the pair from one side'
 insert into projects (project_original_address_id, project_type, project_created_by)
-select address_id, 'development', (select profile_id from profiles where profile_email='behaviour-test@lofty.com.au') from addresses;
+select address_id, 'development', (select profile_id from profiles where profile_email='behaviour-test@lofty.com.au') from addresses where address_street_1 = 'Corner Street'
+returning project_id as proj_pair \gset
+-- The fixture's own two rows. It used to print every project on the table, which was two
+-- lines when the table was empty and 111 once 0093 loaded Amber's — and a check whose
+-- output nobody will read is a check nobody will notice failing.
 select project_id, (project_original_address_id = project_current_address_id) as pair_matches
-from projects order by project_id;
+from projects where project_id in (:proj, :proj_pair) order by project_id;
 
-\echo '--- 4. job_id is stamped 1000-001, 1000-002 and the FK IS the project number'
+\echo '--- 4. job_id is stamped <project>-001, -002 and the FK IS the project number'
 insert into jobs (project_id, job_original_address_id, job_current_address_id, job_owning_team, job_created_by)
-select 1000, address_id, address_id, 'design', (select profile_id from profiles where profile_email='behaviour-test@lofty.com.au') from addresses;
+select :proj, address_id, address_id, 'design', (select profile_id from profiles where profile_email='behaviour-test@lofty.com.au') from addresses where address_street_1 = 'Corner Street';
 insert into jobs (project_id, job_original_address_id, job_current_address_id, job_owning_team, job_created_by)
-select 1000, address_id, address_id, 'design', (select profile_id from profiles where profile_email='behaviour-test@lofty.com.au') from addresses;
-select job_id, project_id, job_sequence, job_owning_team, job_stage from jobs order by job_id;
+select :proj, address_id, address_id, 'design', (select profile_id from profiles where profile_email='behaviour-test@lofty.com.au') from addresses where address_street_1 = 'Corner Street';
+select job_id, project_id, job_sequence, job_owning_team, job_stage from jobs where project_id = :proj order by job_id;
 
-\echo '--- 5. gaps are permanent: delete 1000-001, next job is 1000-003 not 1000-002'
-delete from jobs where job_id = '1000-001';
+\echo '--- 5. gaps are permanent: delete -001, next job is -003 not -002'
+delete from jobs where job_id = :'proj' || '-001';
 insert into jobs (project_id, job_original_address_id, job_current_address_id, job_owning_team, job_created_by)
-select 1000, address_id, address_id, 'design', (select profile_id from profiles where profile_email='behaviour-test@lofty.com.au') from addresses;
-select job_id from jobs order by job_id;
+select :proj, address_id, address_id, 'design', (select profile_id from profiles where profile_email='behaviour-test@lofty.com.au') from addresses where address_street_1 = 'Corner Street';
+select job_id from jobs where project_id = :proj order by job_id;
 
-\echo '--- 6. RENUMBER: 1000 -> 1106. on update cascade moves the FK, resync moves job_id'
-update projects set project_id = 1106 where project_id = 1000;
+\echo '--- 6. RENUMBER to 9106. on update cascade moves the FK, resync moves job_id'
+-- 9106 rather than the 1106 this used: 1106 is inside the band the identity sequence
+-- hands out, and 0093 now owns it. A fixture number has to be one no data will ever take.
+update projects set project_id = 9106 where project_id = :proj;
 select job_id, project_id from jobs order by job_id;
 
 \echo '--- 7. bump_project_no_seq: next generated number is above the hand-set one'
 insert into projects (project_original_address_id, project_type, project_created_by)
-select address_id, 'development', (select profile_id from profiles where profile_email='behaviour-test@lofty.com.au') from addresses;
+select address_id, 'development', (select profile_id from profiles where profile_email='behaviour-test@lofty.com.au') from addresses where address_street_1 = 'Corner Street';
 select max(project_id) as next_number from projects;
 
 \echo '--- 8. moddatetime maintains the prefixed updated_at column'
 -- Compared against its own previous value, not against created_at: step 6's renumber
 -- already fired this trigger through the cascade, so created_at is not a live baseline.
-select max(job_updated_at) as before_update from jobs where job_id like '1106-%' \gset
-update jobs set job_status = 'at_risk' where job_id like '1106-%';
+select max(job_updated_at) as before_update from jobs where job_id like '9106-%' \gset
+update jobs set job_status = 'at_risk' where job_id like '9106-%';
 select bool_and(job_updated_at > :'before_update'::timestamptz) as touched_on_update
-from jobs where job_id like '1106-%';
+from jobs where job_id like '9106-%';
 
 \echo '--- 9. job_engaged_teams accepts real teams'
-update jobs set job_engaged_teams = array['design','estimating'] where job_id like '1106-%';
+update jobs set job_engaged_teams = array['design','estimating'] where job_id like '9106-%';
 select job_id, job_engaged_teams from jobs order by job_id limit 1;
 
 \echo '--- 10. address_history follows the new key types'
 insert into address_history (address_history_project_id, address_history_address_id,
   address_history_role, address_history_valid_from, address_history_valid_to)
-select 1106, address_id, 'current', now() - interval '1 day', now() from addresses;
+select 9106, address_id, 'current', now() - interval '1 day', now() from addresses where address_street_1 = 'Corner Street';
 select address_history_project_id, address_history_role from address_history;
 
 \echo '--- 11. views read'
@@ -93,12 +114,12 @@ where child.pipeline_key = 'preconstruction';
 
 \echo '--- 14. ONE job sits in TWO pipelines at once, with no contradiction'
 insert into job_pipeline_positions (job_id, pipeline_id, pipeline_stage_id)
-select '1106-002', p.pipeline_id, ps.pipeline_stage_id
+select '9106-002', p.pipeline_id, ps.pipeline_stage_id
 from pipelines p join pipeline_stages ps using (pipeline_id)
 where p.pipeline_key = 'build_lifecycle' and ps.pipeline_stage_name = 'Pre-construction';
 
 insert into job_pipeline_positions (job_id, pipeline_id, pipeline_stage_id)
-select '1106-002', p.pipeline_id, ps.pipeline_stage_id
+select '9106-002', p.pipeline_id, ps.pipeline_stage_id
 from pipelines p join pipeline_stages ps using (pipeline_id)
 where p.pipeline_key = 'preconstruction' and ps.pipeline_stage_name = 'Working Drawings';
 
@@ -106,59 +127,59 @@ select p.pipeline_name, ps.pipeline_stage_name, jpp.job_pipeline_position_state
 from job_pipeline_positions jpp
 join pipelines p using (pipeline_id)
 join pipeline_stages ps on ps.pipeline_stage_id = jpp.pipeline_stage_id
-where jpp.job_id = '1106-002' order by p.pipeline_position, p.pipeline_name;
+where jpp.job_id = '9106-002' order by p.pipeline_position, p.pipeline_name;
 
 \echo '--- 15. moving a stage writes history and resets the clock; a state change does not'
 update job_pipeline_positions set pipeline_stage_id = (
   select ps.pipeline_stage_id from pipeline_stages ps join pipelines p using (pipeline_id)
   where p.pipeline_key = 'preconstruction' and ps.pipeline_stage_name = 'Development Approval')
-where job_id = '1106-002'
+where job_id = '9106-002'
   and pipeline_id = (select pipeline_id from pipelines where pipeline_key = 'preconstruction');
 
-select count(*) as stage_events_logged from job_stage_events where job_id = '1106-002';
+select count(*) as stage_events_logged from job_stage_events where job_id = '9106-002';
 select coalesce(f.pipeline_stage_name,'(none)') as moved_from, t.pipeline_stage_name as moved_to
 from job_stage_events e
 left join pipeline_stages f on f.pipeline_stage_id = e.job_stage_event_from_stage_id
 join pipeline_stages t on t.pipeline_stage_id = e.job_stage_event_to_stage_id
-where e.job_id = '1106-002' order by e.job_stage_event_id;
+where e.job_id = '9106-002' order by e.job_stage_event_id;
 
 \echo '--- 16. blocked is a state: the job keeps its real stage'
 update job_pipeline_positions
    set job_pipeline_position_state = 'waiting', job_pipeline_position_waiting_on = 'estimating'
- where job_id = '1106-002'
+ where job_id = '9106-002'
    and pipeline_id = (select pipeline_id from pipelines where pipeline_key = 'preconstruction');
 select ps.pipeline_stage_name as still_at, jpp.job_pipeline_position_state, jpp.job_pipeline_position_waiting_on
 from job_pipeline_positions jpp join pipeline_stages ps on ps.pipeline_stage_id = jpp.pipeline_stage_id
-where jpp.job_id = '1106-002'
+where jpp.job_id = '9106-002'
   and jpp.pipeline_id = (select pipeline_id from pipelines where pipeline_key = 'preconstruction');
-select (select count(*) from job_stage_events where job_id='1106-002') as events_unchanged_by_state_move;
+select (select count(*) from job_stage_events where job_id='9106-002') as events_unchanged_by_state_move;
 
 \echo '--- 17. deleting the HIGHEST job does not reissue its number'
-select job_id as highest from jobs where project_id = 1106 order by job_id desc limit 1 \gset
+select job_id as highest from jobs where project_id = 9106 order by job_id desc limit 1 \gset
 delete from jobs where job_id = :'highest';
 insert into jobs (project_id, job_original_address_id, job_current_address_id, job_owning_team, job_created_by)
-select 1106, address_id, address_id, 'design',
+select 9106, address_id, address_id, 'design',
        (select profile_id from profiles where profile_email='behaviour-test@lofty.com.au')
-from addresses;
-select :'highest' as deleted, (select max(job_id) from jobs where project_id=1106) as next_issued,
-       (select max(job_id) from jobs where project_id=1106) <> :'highest' as number_not_reused;
+from addresses where address_street_1 = 'Corner Street';
+select :'highest' as deleted, (select max(job_id) from jobs where project_id=9106) as next_issued,
+       (select max(job_id) from jobs where project_id=9106) <> :'highest' as number_not_reused;
 
 \echo '--- 18. renaming a team slug reaches job_engaged_teams too'
-update jobs set job_engaged_teams = array['design','estimating'] where project_id = 1106;
+update jobs set job_engaged_teams = array['design','estimating'] where project_id = 9106;
 update teams set team_id = 'design_team' where team_id = 'design';
-select job_id, job_engaged_teams from jobs where project_id = 1106 order by job_id limit 1;
+select job_id, job_engaged_teams from jobs where project_id = 9106 order by job_id limit 1;
 -- and the job is still editable afterwards, which is the part that actually bites
-update jobs set job_status = 'on_track' where project_id = 1106;
+update jobs set job_status = 'on_track' where project_id = 9106;
 select 'job still editable after the rename' as check;
 update teams set team_id = 'design' where team_id = 'design_team';
 
 \echo '--- 19. the array is normalised: duplicates and nulls do not survive'
-update jobs set job_engaged_teams = array['estimating','design','estimating'] where project_id = 1106;
-select distinct job_engaged_teams as sorted_and_deduplicated from jobs where project_id = 1106;
+update jobs set job_engaged_teams = array['estimating','design','estimating'] where project_id = 9106;
+select distinct job_engaged_teams as sorted_and_deduplicated from jobs where project_id = 9106;
 
 \echo '--- 20. tasks: a fan-out, and what is ready to start'
 insert into tasks (job_id, task_name, task_owning_team, task_position)
-select '1106-002', n, 'design', r::smallint
+select '9106-002', n, 'design', r::smallint
 from (values ('Contract Deposit Paid',1),('Order Soil Test',2),('Order Prelim FCR',3),
              ('Working Drawings',4),('Released to Construction',5)) v(n,r);
 
@@ -166,29 +187,29 @@ from (values ('Contract Deposit Paid',1),('Order Soil Test',2),('Order Prelim FC
 insert into task_dependencies (task_id, depends_on_task_id, task_dependency_lag_days)
 select t.task_id, d.task_id, 14
 from tasks t, tasks d
-where t.job_id='1106-002' and d.job_id='1106-002'
+where t.job_id='9106-002' and d.job_id='9106-002'
   and d.task_name='Contract Deposit Paid'
   and t.task_name in ('Order Soil Test','Order Prelim FCR','Working Drawings');
 
 insert into task_dependencies (task_id, depends_on_task_id)
 select t.task_id, d.task_id
 from tasks t, tasks d
-where t.job_id='1106-002' and d.job_id='1106-002'
+where t.job_id='9106-002' and d.job_id='9106-002'
   and t.task_name='Released to Construction'
   and d.task_name in ('Order Soil Test','Order Prelim FCR','Working Drawings');
 
-select task_name as ready_now from tasks_ready where job_id='1106-002' order by task_name;
+select task_name as ready_now from tasks_ready where job_id='9106-002' order by task_name;
 
 -- A task on a DIFFERENT job, so the cross-record dependency probe in constraints.sql has
 -- something real to aim at. Without it that insert matches no rows, does nothing, raises
 -- nothing, and reports the guard as broken.
 insert into tasks (job_id, task_name, task_owning_team)
-select max(job_id), 'A task on another job', 'design' from jobs where project_id=1106
-  and job_id <> '1106-002';
+select max(job_id), 'A task on another job', 'design' from jobs where project_id=9106
+  and job_id <> '9106-002';
 
 \echo '--- 21. finishing the root releases exactly the three that waited on it'
-update tasks set task_status='done' where job_id='1106-002' and task_name='Contract Deposit Paid';
-select task_name as ready_now from tasks_ready where job_id='1106-002' order by task_name;
+update tasks set task_status='done' where job_id='9106-002' and task_name='Contract Deposit Paid';
+select task_name as ready_now from tasks_ready where job_id='9106-002' order by task_name;
 
 \echo '--- 22. completion is stamped by the database, and reopening clears it'
 -- has_person is false here and that is correct: this runs as postgres with no JWT, so
@@ -196,79 +217,79 @@ select task_name as ready_now from tasks_ready where job_id='1106-002' order by 
 -- the database fills in whether or not it knows who did it.
 select task_name, task_completed_at is not null as has_time,
        task_completed_by is not null as has_person_no_jwt_so_false
-from tasks where job_id='1106-002' and task_name='Contract Deposit Paid';
-update tasks set task_status='open' where job_id='1106-002' and task_name='Contract Deposit Paid';
+from tasks where job_id='9106-002' and task_name='Contract Deposit Paid';
+update tasks set task_status='open' where job_id='9106-002' and task_name='Contract Deposit Paid';
 select task_name, task_completed_at is null as time_cleared
-from tasks where job_id='1106-002' and task_name='Contract Deposit Paid';
+from tasks where job_id='9106-002' and task_name='Contract Deposit Paid';
 
 \echo '--- 23. a cancelled predecessor does not freeze what is behind it'
-update tasks set task_status='done' where job_id='1106-002' and task_name='Contract Deposit Paid';
-update tasks set task_status='cancelled' where job_id='1106-002' and task_name='Order Prelim FCR';
-update tasks set task_status='done' where job_id='1106-002'
+update tasks set task_status='done' where job_id='9106-002' and task_name='Contract Deposit Paid';
+update tasks set task_status='cancelled' where job_id='9106-002' and task_name='Order Prelim FCR';
+update tasks set task_status='done' where job_id='9106-002'
   and task_name in ('Order Soil Test','Working Drawings');
-select task_name as ready_now from tasks_ready where job_id='1106-002' order by task_name;
+select task_name as ready_now from tasks_ready where job_id='9106-002' order by task_name;
 
 \echo '--- 24. THREE variations on one job at once, each with its own team'
 insert into variations (job_id, variation_title, variation_reason, variation_origin,
                         variation_status, variation_current_team)
-values ('1106-002','Tiles unavailable','Supplier discontinued the range','supplier',
+values ('9106-002','Tiles unavailable','Supplier discontinued the range','supplier',
         'with_us','selections'),
-       ('1106-002','Client wants a wider driveway','Requested at the site walk','client',
+       ('9106-002','Client wants a wider driveway','Requested at the site walk','client',
         'waiting_on_client','estimating'),
-       ('1106-002','Beam size correction','Engineer revised the span','consultant',
+       ('9106-002','Beam size correction','Engineer revised the span','consultant',
         'with_us','design');
 select variation_number, variation_current_team, variation_status, variation_origin
-from variations where job_id='1106-002' order by variation_sequence;
+from variations where job_id='9106-002' order by variation_sequence;
 
 \echo '--- 25. the job badge is derived, so it cannot go stale'
 select variations_open, variations_with_client, variations_completed
-from job_variation_summary where job_id='1106-002';
+from job_variation_summary where job_id='9106-002';
 
 \echo '--- 26. a deleted variation number is never reissued'
-delete from variations where variation_number='1106-002-V3';
-insert into variations (job_id, variation_title) values ('1106-002','Raised after the delete');
+delete from variations where variation_number='9106-002-V3';
+insert into variations (job_id, variation_title) values ('9106-002','Raised after the delete');
 select variation_number as next_issued from variations
-where job_id='1106-002' order by variation_sequence desc limit 1;
+where job_id='9106-002' order by variation_sequence desc limit 1;
 
 \echo '--- 27. REWORK: the variation reopens finished work, and it is counted'
 -- Contract Deposit Paid and Working Drawings are done from step 23.
 insert into variation_reopened_tasks (variation_id, task_id)
 select v.variation_id, t.task_id
 from variations v, tasks t
-where v.variation_number='1106-002-V1' and t.job_id='1106-002'
+where v.variation_number='9106-002-V1' and t.job_id='9106-002'
   and t.task_name in ('Contract Deposit Paid','Working Drawings','Order Soil Test');
 
 select variation_number, tasks_reopened, tasks_that_were_finished
-from variation_rework where variation_number='1106-002-V1';
+from variation_rework where variation_number='9106-002-V1';
 
 \echo '--- 28. the snapshot survives the task being reopened afterwards'
 update tasks set task_status='open'
- where job_id='1106-002' and task_name in ('Contract Deposit Paid','Working Drawings');
+ where job_id='9106-002' and task_name in ('Contract Deposit Paid','Working Drawings');
 select 'task completed_at now cleared: ' ||
-       (select count(*) from tasks where job_id='1106-002'
+       (select count(*) from tasks where job_id='9106-002'
          and task_name='Working Drawings' and task_completed_at is null)::text;
 select variation_number, tasks_that_were_finished as still_counted_as_rework
-from variation_rework where variation_number='1106-002-V1';
+from variation_rework where variation_number='9106-002-V1';
 
 \echo '--- 29. approving a variation stamps it and it lands in the cost'
 update variations set variation_status='completed', variation_cost=4250.00,
        variation_days_impact=7
- where variation_number='1106-002-V1';
+ where variation_number='9106-002-V1';
 select variation_approved_at is not null as stamped,
        variation_cost, variation_days_impact
-from variations where variation_number='1106-002-V1';
+from variations where variation_number='9106-002-V1';
 select variations_open, variations_approved_cost, variations_approved_days
-from job_variation_summary where job_id='1106-002';
+from job_variation_summary where job_id='9106-002';
 
 \echo '--- 30. ONE document, attached to the project AND both its jobs'
 insert into documents (document_name, document_category, document_storage_path)
-values ('Soil report — bore logs','report','projects/1106/soil-report.pdf');
+values ('Soil report — bore logs','report','projects/9106/soil-report.pdf');
 
 insert into document_links (document_id, project_id)
-select document_id, 1106 from documents where document_name like 'Soil report%';
+select document_id, 9106 from documents where document_name like 'Soil report%';
 insert into document_links (document_id, job_id)
 select d.document_id, j.job_id from documents d, jobs j
-where d.document_name like 'Soil report%' and j.project_id = 1106;
+where d.document_name like 'Soil report%' and j.project_id = 9106;
 
 select d.document_name,
        count(*) filter (where l.project_id is not null) as on_projects,
@@ -284,22 +305,22 @@ select 'Working drawing rev B','drawing', document_id from documents where docum
 select document_name from documents_current where document_category='drawing';
 
 \echo '--- 32. a comment records that it was edited, but only when the body changes'
-insert into comments (job_id, comment_body) values ('1106-002','Client asked about the tiles today.');
-select comment_edited_at is null as not_edited_yet from comments where job_id='1106-002';
-update comments set comment_body='Client asked about the tiles this morning.' where job_id='1106-002';
-select comment_edited_at is not null as marked_edited from comments where job_id='1106-002';
+insert into comments (job_id, comment_body) values ('9106-002','Client asked about the tiles today.');
+select comment_edited_at is null as not_edited_yet from comments where job_id='9106-002';
+update comments set comment_body='Client asked about the tiles this morning.' where job_id='9106-002';
+select comment_edited_at is not null as marked_edited from comments where job_id='9106-002';
 
 \echo '--- 33. tags, and the same tag twice is a double-click not a fact'
 insert into tags (tag_id, tag_name, tag_colour) values ('urgent','Urgent','#d9534f');
-insert into taggings (tag_id, job_id) values ('urgent','1106-002');
+insert into taggings (tag_id, job_id) values ('urgent','9106-002');
 select t.tag_name, count(*) as times_applied from taggings tg join tags t using (tag_id)
-where tg.job_id='1106-002' group by t.tag_name;
+where tg.job_id='9106-002' group by t.tag_name;
 
 \echo '--- 34. the job timeline reads comments and events as one stream'
 insert into activity_events (job_id, activity_event_kind, activity_event_detail)
-values ('1106-002','stage_changed','{"from":"Working Drawings","to":"Development Approval"}');
+values ('9106-002','stage_changed','{"from":"Working Drawings","to":"Development Approval"}');
 select entry_kind, entry_text, entry_was_edited from job_timeline
-where job_id='1106-002' order by entry_at;
+where job_id='9106-002' order by entry_at;
 
 \echo '--- 35. SIGNING IN: both auth.users triggers, end to end'
 -- This is the check that was missing. Sign-in was broken for an hour after the rename
@@ -597,14 +618,14 @@ from (
 
 -- A task's change lands with the job it is on AND that job's project, resolved through the
 -- task, so a project's history includes work on its jobs.
-insert into tasks (job_id, task_name) values ('1106-002', 'behaviour probe task 0080');
+insert into tasks (job_id, task_name) values ('9106-002', 'behaviour probe task 0080');
 update tasks set task_status = 'in_progress' where task_name = 'behaviour probe task 0080';
 select case when count(*) = 1
-  then 'ok  a task update is audited with activity_audit_job_id 1106-002 and its project 1106'
+  then 'ok  a task update is audited with activity_audit_job_id 9106-002 and its project 9106'
   else 'FAIL: expected 1 audited task update carrying job and project, found ' || count(*) end
 from activity_audit
 where activity_audit_table = 'tasks' and activity_audit_operation = 'UPDATE'
-  and activity_audit_job_id = '1106-002' and activity_audit_project_id = 1106
+  and activity_audit_job_id = '9106-002' and activity_audit_project_id = 9106
   and activity_audit_new_row ->> 'task_name' = 'behaviour probe task 0080';
 
 -- A property value recorded on a job is audited the same way — the row carries job_id
@@ -620,7 +641,7 @@ delete from tasks where task_name = 'behaviour probe task 0080';
 -- ============================================================================
 \echo '--- 40. task_display derives due and health; instantiation copies days and checklist lines; stage_completion counts'
 insert into tasks (job_id, task_name, task_expected_days, task_at_risk_lead_days)
-values ('1106-002', 'behaviour probe 0081', 7, 2);
+values ('9106-002', 'behaviour probe 0081', 7, 2);
 update tasks set task_status = 'in_progress' where task_name = 'behaviour probe 0081';
 update tasks set task_started_at = now() - interval '5 days' where task_name = 'behaviour probe 0081';
 select case when task_health = 'at_risk' and task_due_effective = current_date + 2
@@ -649,7 +670,7 @@ select process_id, 'probe template task', 4 from processes where process_key = '
 insert into process_task_checklist_items (process_task_id, process_task_checklist_item_text)
 select process_task_id, 'probe template line' from process_tasks where process_task_name = 'probe template task';
 insert into process_runs (process_id, job_id, process_run_status)
-select process_id, '1106-002', 'in_progress' from processes where process_key = 'behaviour_probe_0081';
+select process_id, '9106-002', 'in_progress' from processes where process_key = 'behaviour_probe_0081';
 select instantiate_process_tasks(process_run_id) as made
 from process_runs r join processes p using (process_id) where p.process_key = 'behaviour_probe_0081';
 select case when t.task_expected_days = 4 and d.task_checklist_total = 1
@@ -658,11 +679,11 @@ select case when t.task_expected_days = 4 and d.task_checklist_total = 1
 from tasks t join task_display d using (task_id)
 where t.task_name = 'probe template task';
 
--- stage_completion: the probe process is open on 1106-002's Construction stage.
+-- stage_completion: the probe process is open on 9106-002's Construction stage.
 select case when processes_open >= 1 and processes_total >= processes_open
-  then 'ok  stage_completion sees the open probe process on 1106-002 / Construction (' || processes_open || ' of ' || processes_total || ' open)'
+  then 'ok  stage_completion sees the open probe process on 9106-002 / Construction (' || processes_open || ' of ' || processes_total || ' open)'
   else 'FAIL: stage_completion reads ' || processes_open || ' open of ' || processes_total end
-from stage_completion where job_id = '1106-002' and stage = 'Construction';
+from stage_completion where job_id = '9106-002' and stage = 'Construction';
 
 select case when exists (select 1 from property_defs where property_def_key = 'sitebook_id' and property_def_scope = 'job')
   then 'ok  sitebook_id is a job-level property definition'
@@ -704,19 +725,19 @@ select case when contact_company_name is null
   else 'FAIL: an ended employment still shows ' || contact_company_name end
 from contact_display where contact_last_name = 'Plumber 0082';
 
--- A party on a process run of 1106-002 lists under the job.
+-- A party on a process run of 9106-002 lists under the job.
 insert into processes (process_key, process_name, process_stage, process_scope, process_position)
 values ('behaviour_probe_0082', 'Behaviour probe 0082', 'Construction', 'job', 998) on conflict (process_key) do nothing;
 insert into process_runs (process_id, job_id, process_run_status)
-select process_id, '1106-002', 'in_progress' from processes where process_key = 'behaviour_probe_0082';
+select process_id, '9106-002', 'in_progress' from processes where process_key = 'behaviour_probe_0082';
 insert into record_parties (process_run_id, company_id, party_role_id)
 select r.process_run_id, co.company_id, 'contractor'
   from process_runs r join processes p using (process_id), companies co
  where p.process_key = 'behaviour_probe_0082' and co.company_name = 'Behaviour Plumbing 0082';
 select case when count(*) = 1
-  then 'ok  a party on a process run surfaces on its job (record_job_id 1106-002, process named)'
-  else 'FAIL: expected 1 run-level party under 1106-002, found ' || count(*) end
-from record_party_display where record_job_id = '1106-002' and process_name = 'Behaviour probe 0082';
+  then 'ok  a party on a process run surfaces on its job (record_job_id 9106-002, process named)'
+  else 'FAIL: expected 1 run-level party under 9106-002, found ' || count(*) end
+from record_party_display where record_job_id = '9106-002' and process_name = 'Behaviour probe 0082';
 
 -- Deleting a company that is a party is refused: end the party instead.
 do $$
@@ -741,7 +762,7 @@ delete from companies where company_name = 'Behaviour Plumbing 0082';
 -- ============================================================================
 \echo '--- 42. a task assignment notifies its assignee once, in-app sent and email queued; the scan does not repeat itself'
 insert into tasks (job_id, task_name, task_assignee_id)
-select '1106-002', 'behaviour probe 0083', profile_id from profiles where profile_email = 'behaviour-test@lofty.com.au';
+select '9106-002', 'behaviour probe 0083', profile_id from profiles where profile_email = 'behaviour-test@lofty.com.au';
 select case when count(*) = 1 then 'ok  one task_assigned notification for the assignee'
   else 'FAIL: ' || count(*) || ' task_assigned notifications' end
 from notifications n join tasks t using (task_id) where t.task_name = 'behaviour probe 0083' and n.notification_type_id = 'task_assigned';
@@ -771,11 +792,11 @@ delete from tasks where task_name = 'behaviour probe 0083';
 \echo '--- 43. maintenance: warranty from the handover run; a number per job; due and health from the category; the scan does not repeat; mail nobody can match is refused'
 -- Handover completed 40 days ago: inside the settings'' three months.
 insert into process_runs (process_id, job_id, process_run_status, process_run_completed_at)
-select process_id, '1106-002', 'complete', now() - interval '40 days' from processes where process_key = 'handover';
+select process_id, '9106-002', 'complete', now() - interval '40 days' from processes where process_key = 'handover';
 select case when job_is_in_warranty and job_warranty_ends_on = ((now() - interval '40 days')::date + interval '3 months')::date
   then 'ok  job_warranty: handed over 40 days ago, in warranty until handover + 3 months'
   else 'FAIL: job_warranty said in_warranty=' || job_is_in_warranty || ' ends ' || job_warranty_ends_on end
-from job_warranty where job_id = '1106-002';
+from job_warranty where job_id = '9106-002';
 
 insert into maintenance_categories (maintenance_category_id, maintenance_category_name, party_role_id, maintenance_category_sla_days, maintenance_category_at_risk_lead_days)
 values ('probe_tiling_0084', 'Probe tiling', 'contractor', 7, 2);
@@ -785,50 +806,50 @@ select contact_id, 'email', 'reporter0084@example.com', true from contacts where
 -- Reported 6 days ago on a 7-day SLA with a 2-day lead: due tomorrow, at risk since yesterday.
 insert into maintenance_requests (job_id, maintenance_request_source, maintenance_request_reported_by_contact_id, maintenance_request_reported_at,
                                   maintenance_request_summary, maintenance_category_id, maintenance_request_owner_profile_id)
-select '1106-002', 'email', contact_id, now() - interval '6 days', 'behaviour probe 0084 cracked tile', 'probe_tiling_0084',
+select '9106-002', 'email', contact_id, now() - interval '6 days', 'behaviour probe 0084 cracked tile', 'probe_tiling_0084',
        (select profile_id from profiles where profile_email = 'behaviour-test@lofty.com.au')
   from contacts where contact_last_name = 'Reporter 0084';
 -- Reported 10 days ago: three days over.
 insert into maintenance_requests (job_id, maintenance_request_source, maintenance_request_reported_at, maintenance_request_summary, maintenance_category_id, maintenance_request_owner_profile_id)
-values ('1106-002', 'phone', now() - interval '10 days', 'behaviour probe 0084 loose grout', 'probe_tiling_0084',
+values ('9106-002', 'phone', now() - interval '10 days', 'behaviour probe 0084 loose grout', 'probe_tiling_0084',
         (select profile_id from profiles where profile_email = 'behaviour-test@lofty.com.au'));
-select case when string_agg(maintenance_request_number, ',' order by maintenance_request_number) = '1106-002-M1,1106-002-M2'
-  then 'ok  requests numbered 1106-002-M1 and 1106-002-M2'
+select case when string_agg(maintenance_request_number, ',' order by maintenance_request_number) = '9106-002-M1,9106-002-M2'
+  then 'ok  requests numbered 9106-002-M1 and 9106-002-M2'
   else 'FAIL: numbered ' || string_agg(maintenance_request_number, ',' order by maintenance_request_number) end
-from maintenance_requests where job_id = '1106-002';
+from maintenance_requests where job_id = '9106-002';
 select case when maintenance_request_due_on = (maintenance_request_reported_at at time zone 'Australia/Adelaide')::date + 7
              and maintenance_request_at_risk_on = maintenance_request_due_on - 2
              and maintenance_request_health = 'at_risk' and maintenance_request_is_warranty
   then 'ok  M1: due = reported + 7, at risk = due − 2, health at_risk, inside warranty'
   else 'FAIL: M1 due ' || maintenance_request_due_on || ' at-risk ' || maintenance_request_at_risk_on || ' health ' || maintenance_request_health || ' warranty ' || maintenance_request_is_warranty end
-from maintenance_request_display where maintenance_request_number = '1106-002-M1';
+from maintenance_request_display where maintenance_request_number = '9106-002-M1';
 select case when maintenance_request_health = 'overdue' then 'ok  M2: three days over its SLA reads overdue'
   else 'FAIL: M2 health ' || maintenance_request_health end
-from maintenance_request_display where maintenance_request_number = '1106-002-M2';
+from maintenance_request_display where maintenance_request_number = '9106-002-M2';
 select case when maintenance_request_reported_by_email = 'reporter0084@example.com' then 'ok  the reporter''s email is resolved from contact_methods'
   else 'FAIL: reporter email ' || coalesce(maintenance_request_reported_by_email, 'null') end
-from maintenance_request_display where maintenance_request_number = '1106-002-M1';
+from maintenance_request_display where maintenance_request_number = '9106-002-M1';
 
 select maintenance_scan() as first_maintenance_scan \gset
 select maintenance_scan() as second_maintenance_scan \gset
 select case when count(*) = 2 then 'ok  two scans, one maintenance_sla_breach row per request for the owner — the dedupe key holds for the day'
   else 'FAIL: ' || count(*) || ' maintenance_sla_breach rows for the owner after two scans' end
 from notifications n join profiles p on p.profile_id = n.profile_id
-where n.notification_type_id = 'maintenance_sla_breach' and n.job_id = '1106-002' and p.profile_email = 'behaviour-test@lofty.com.au';
+where n.notification_type_id = 'maintenance_sla_breach' and n.job_id = '9106-002' and p.profile_email = 'behaviour-test@lofty.com.au';
 -- Three days over passes the managers'' after_days of 3: a manager who is NOT the owner hears
 -- about M2 (the owner is an admin here and would hear as owner regardless — counting them
 -- would prove nothing), and nobody but the owner hears about M1, one day short of the lead.
-select case when count(*) filter (where n.notification_title like '1106-002-M2%') >= 1
-             and count(*) filter (where n.notification_title like '1106-002-M1%') = 0
+select case when count(*) filter (where n.notification_title like '9106-002-M2%') >= 1
+             and count(*) filter (where n.notification_title like '9106-002-M1%') = 0
   then 'ok  three days over escalates to the managers (after_days 3); at risk stays with the owner'
-  else 'FAIL: managers other than the owner heard about M2 ' || count(*) filter (where n.notification_title like '1106-002-M2%')
-       || ' times and about M1 ' || count(*) filter (where n.notification_title like '1106-002-M1%') || ' times' end
+  else 'FAIL: managers other than the owner heard about M2 ' || count(*) filter (where n.notification_title like '9106-002-M2%')
+       || ' times and about M1 ' || count(*) filter (where n.notification_title like '9106-002-M1%') || ' times' end
 from notifications n join profiles p on p.profile_id = n.profile_id
-where n.notification_type_id = 'maintenance_sla_breach' and n.job_id = '1106-002'
+where n.notification_type_id = 'maintenance_sla_breach' and n.job_id = '9106-002'
   and p.profile_permission >= 'manager' and p.profile_email <> 'behaviour-test@lofty.com.au';
 
 -- Inbound mail: the sender''s open request is found without a number; a stranger with no number is refused.
-select case when matched_by = 'sender' and maintenance_request_number = '1106-002-M1' then 'ok  mail from the reporter with no number lands on their open request'
+select case when matched_by = 'sender' and maintenance_request_number = '9106-002-M1' then 'ok  mail from the reporter with no number lands on their open request'
   else 'FAIL: matched_by ' || coalesce(matched_by, 'null') || ' on ' || coalesce(maintenance_request_number, 'null') end
 from receive_maintenance_email('graph-in-0084-a', 'reporter0084@example.com', 'the tile again', 'still cracked');
 do $$
@@ -841,11 +862,11 @@ exception when others then
 end $$;
 
 -- Left as found.
-delete from maintenance_requests where job_id = '1106-002';
-delete from notifications where notification_type_id like 'maintenance_%' and job_id = '1106-002';
+delete from maintenance_requests where job_id = '9106-002';
+delete from notifications where notification_type_id like 'maintenance_%' and job_id = '9106-002';
 delete from maintenance_categories where maintenance_category_id = 'probe_tiling_0084';
 delete from contacts where contact_last_name = 'Reporter 0084';
-delete from process_runs where job_id = '1106-002' and process_id = (select process_id from processes where process_key = 'handover');
+delete from process_runs where job_id = '9106-002' and process_id = (select process_id from processes where process_key = 'handover');
 
 -- ============================================================================
 -- 44. The staged workbook (0087) loads through import_spine() and unloads without a trace.
@@ -854,7 +875,7 @@ delete from process_runs where job_id = '1106-002' and process_id = (select proc
 -- & Development unless the sheet says "cancelling" (→ Cancelled); the owning team from the
 -- named sales consultant when they are a user in one team, else A&D; shared old numbers
 -- carried by no job. The numbering base is shifted to 2001 because this database already
--- has a project 1106 from §6, which is exactly the collision the base exists for (the live
+-- has a project 9106 from §6, which is exactly the collision the base exists for (the live
 -- load uses 1011). Rolled back at the end: the workbook is not loaded on the replay.
 -- ============================================================================
 \echo '--- 44. the staged workbook loads (796 jobs, 116 projects, 5 skipped), every job traces to its row, and unloads clean'
