@@ -89,6 +89,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- Every dropdown narrows as you type and lists its options alphabetically, except where the order is the information — and a process can be filed straight into a pipeline when it is created
 - Setup → Processes is now a pipeline you drag, with the name editable in place and a process added straight into its stage
 - Every record — a contact, a maintenance request, a property, a project — now opens in the same slide-out panel, which expands to full width and can be dragged wider
 - Updates moved from the sidebar to the footer
