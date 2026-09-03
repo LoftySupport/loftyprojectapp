@@ -846,3 +846,53 @@ delete from notifications where notification_type_id like 'maintenance_%' and jo
 delete from maintenance_categories where maintenance_category_id = 'probe_tiling_0084';
 delete from contacts where contact_last_name = 'Reporter 0084';
 delete from process_runs where job_id = '1106-002' and process_id = (select process_id from processes where process_key = 'handover');
+
+-- ============================================================================
+-- 44. The staged workbook (0087) loads through import_spine() and unloads without a trace.
+--
+-- Not a fixture: the real 801 rows, against candidate decisions (the team and stage are
+-- placeholders here — the live load takes Amber's). The numbering base is shifted to 2001
+-- because this database already has a project 1106 from §6, which is exactly the collision
+-- the base exists for. Rolled back at the end: the workbook is not loaded on the replay.
+-- ============================================================================
+\echo '--- 44. the staged workbook loads (796 jobs, 116 projects, 5 skipped), every job traces to its row, and unloads clean'
+begin;
+select case when count(*) = 801 and count(*) filter (where import_staging_job_spine ? 'skip_reason') = 5
+  then 'ok  801 staging rows from the workbook, 5 with a skip_reason'
+  else 'FAIL: ' || count(*) || ' staging rows, ' || count(*) filter (where import_staging_job_spine ? 'skip_reason') || ' skipped' end
+from import_staging_jobs where import_staging_job_source = 'Lofty_Jobs_Grouped_by_Project.xlsx · project import';
+select projects_made as wb_projects, jobs_made as wb_jobs, rows_skipped as wb_skipped
+from import_spine('Lofty_Jobs_Grouped_by_Project.xlsx · project import', 'pre_construction_admin', 'Pre-construction', 2001, '{"cancelling": "cancelled", "on hold": "on_hold"}'::jsonb, true) \gset
+select case when :wb_projects = 116 and :wb_jobs = 796 and :wb_skipped = 5
+  then 'ok  the load made 116 projects and 796 jobs and skipped 5 rows'
+  else 'FAIL: the load made ' || :wb_projects || ' projects, ' || :wb_jobs || ' jobs, skipped ' || :wb_skipped end;
+-- Every staged row that carries a spine has a job, and the job carries the row's old number.
+select case when count(*) = 0 then 'ok  every spine row has its job, and the job carries the old number'
+  else 'FAIL: ' || count(*) || ' spine rows without a matching job or old number' end
+from import_staging_jobs s left join jobs j on j.job_id = s.import_staging_job_job_id
+where s.import_staging_job_source = 'Lofty_Jobs_Grouped_by_Project.xlsx · project import'
+  and not (s.import_staging_job_spine ? 'skip_reason')
+  and (j.job_id is null or (s.import_staging_job_number_old is not null and j.job_number_old not like s.import_staging_job_number_old || '%'));
+-- Lot order: the workbook's 1004-02 (Lot 2) is job 2004-002, and the shared old number 1288 carries its lot.
+select case when job_number_old = '1288 · Lot 2' then 'ok  1004-02 became 2004-002 with old number 1288 · Lot 2'
+  else 'FAIL: 2004-002 carries old number ' || coalesce(job_number_old, 'null') end
+from jobs where job_id = '2004-002';
+-- Every insert is logged as an import, so the way back can tell its projects from anybody else's.
+select case when count(*) = 116 then 'ok  116 project inserts logged with origin import'
+  else 'FAIL: ' || count(*) || ' project inserts logged with origin import' end
+from activity_audit where activity_audit_table = 'projects' and activity_audit_operation = 'INSERT' and activity_audit_origin = 'import'
+  and activity_audit_project_id between 2001 and 2121;
+-- The status words followed the map; the rest stayed on_track.
+select case when count(*) filter (where job_status = 'cancelled') = 39 and count(*) filter (where job_status = 'on_hold') = 20
+  then 'ok  39 jobs cancelled and 20 on hold, as the sheet''s words say'
+  else 'FAIL: ' || count(*) filter (where job_status = 'cancelled') || ' cancelled, ' || count(*) filter (where job_status = 'on_hold') || ' on hold' end
+from jobs where project_id between 2001 and 2121;
+select projects_removed as un_projects, jobs_removed as un_jobs from unimport_spine('Lofty_Jobs_Grouped_by_Project.xlsx · project import') \gset
+select case when :un_projects = 116 and :un_jobs = 796
+       and not exists (select 1 from projects where project_id between 2001 and 2121)
+       and not exists (select 1 from import_staging_jobs where import_staging_job_loaded_at is not null)
+  then 'ok  unimport removed 116 projects and 796 jobs and cleared every stamp'
+  else 'FAIL: unimport removed ' || :un_projects || ' projects and ' || :un_jobs || ' jobs; '
+       || (select count(*) from projects where project_id between 2001 and 2121) || ' projects and '
+       || (select count(*) from import_staging_jobs where import_staging_job_loaded_at is not null) || ' stamps remain' end;
+rollback;
