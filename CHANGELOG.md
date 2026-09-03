@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Drag a job between columns on the board — by lifecycle stage or by the processes inside a stage — and pick several to move at once from either view
 - See what each job is up to — group the board by Process, or drill into a stage to get its processes as columns with every job in the one it has reached
 - An "Up to" column on the jobs table, in pipeline order
 - npm run check:pipeline proves the rule that decides where a job sits

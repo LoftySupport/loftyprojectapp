@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 91 changes since then —
+Unreleased: 92 changes since then —
+- Added: Drag a job between columns on the board — by lifecycle stage or by the processes inside a stage — and pick several to move at once from either view
 - Added: See what each job is up to — group the board by Process, or drill into a stage to get its processes as columns with every job in the one it has reached
 - Added: An "Up to" column on the jobs table, in pipeline order
 - Added: npm run check:pipeline proves the rule that decides where a job sits
 - Changed: Every record — a contact, a maintenance request, a property, a project — now opens in the same slide-out panel, which expands to full width and can be dragged wider
-- Changed: Updates moved from the sidebar to the footer
-- …and 86 more.
+- …and 87 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
