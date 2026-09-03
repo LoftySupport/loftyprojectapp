@@ -68,14 +68,35 @@ export function currentProcessName(job: BoardJob, processes: Process[]): string 
   // evidence about a stage it has left.
   if (!pipeline.some(p => runByKey.has(p.key))) return null;
 
-  const at = pipeline.find(p => {
-    const run = runByKey.get(p.key);
-    return !run || (run.status !== "complete" && run.status !== "not_applicable");
-  });
-  // Every process in the stage is behind it: the job is through the stage's work and
-  // waiting on somebody to move the lifecycle, which the drawer already says. The last
-  // process is where it stands until then.
-  return (at ?? pipeline[pipeline.length - 1]).name;
+  /**
+   * WHERE THE JOB IS, NOT WHERE ITS PAPERWORK IS COMPLETE
+   *
+   * This first asked "which is the first process that is not finished", and Amber
+   * corrected it on 3 September: *"note a process might not be complete before moving
+   * onto the next stage"*. Work runs ahead of its paperwork all the time — the frame is
+   * up while the drawings are still being marked up — and under the old rule a job with
+   * Working Drawings under way still read as sitting at Concept Plan, because Concept
+   * Plan had never been closed off.
+   *
+   * So the furthest process anybody has recorded anything against is where the job IS.
+   * An unfinished process behind it is a real and separate fact — it is outstanding, not
+   * a contradiction — and it belongs in the drawer's list, which shows every run's own
+   * status, rather than in the answer to "where is this job".
+   */
+  const lastTouched = pipeline.reduce((found, p, i) => (runByKey.has(p.key) ? i : found), -1);
+  const behind = (i: number) => {
+    const run = runByKey.get(pipeline[i].key);
+    return run != null && (run.status === "complete" || run.status === "not_applicable");
+  };
+
+  // The furthest one is still open — that is the answer, whatever is unfinished behind it.
+  if (!behind(lastTouched)) return pipeline[lastTouched].name;
+
+  // It is finished, so the job has moved past it: the next process not already behind it.
+  const next = pipeline.findIndex((_, i) => i > lastTouched && !behind(i));
+  // None left. The job is through the stage's work and waiting on somebody to move the
+  // lifecycle, which the drawer already says; the last process is where it stands.
+  return (next === -1 ? pipeline[pipeline.length - 1] : pipeline[next]).name;
 }
 
 /** The board column a job belongs in, with the honest heading for "nothing recorded". */
