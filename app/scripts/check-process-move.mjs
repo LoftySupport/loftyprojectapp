@@ -96,10 +96,27 @@ console.log("\nrefusals, each with a reason to print");
   is("naming both ends and the route", refusalText(back.refusal),
     "Concept Plan runs before PWA. Going back needs a variation — an IAF filled out and the variation raised with its reason. Raising one from here is not built yet.");
   const other = planProcessDrop(j, "1 - Footings", PROCESSES);
-  is("a process from another stage is refused", other.ok, false);
+  is("a process from a stage AHEAD is refused", other.ok, false);
   is("without throwing", other.threw ?? null, null);
-  is("and points at the stage move", other.refusal && refusalText(other.refusal),
-    "That process belongs to Construction; this job is in Pre-construction. Move its stage first.");
+  is("and points at the stage move",
+    other.refusal && refusalText(other.refusal).includes("Move the job's stage first"), true);
+  is("and does not send you to the drawer for a stage still ahead",
+    refusalText(other.refusal).includes("drawer"), false);
+
+  // Amber, 3 September, with a screenshot: PWA is filed under Acquisition & Development
+  // and her jobs are in Pre-construction, so the refusal told her to "move its stage
+  // first" — which would have meant dragging 50 jobs backwards to record a process they
+  // had passed. A process behind the job needs the opposite advice.
+  const behindJob = planProcessDrop(
+    job([run("site_survey", "complete")]),
+    "Land Acquisition",
+    [...PROCESSES, proc("land_acq", "Land Acquisition", 1, "Acquisition & Development")]
+  );
+  is("a process from a stage the job has LEFT is refused too", behindJob.ok, false);
+  is("and is marked as passed rather than ahead", behindJob.refusal.passed, true);
+  is("so the advice is the drawer, not a stage move",
+    refusalText(behindJob.refusal).includes("Record it in the job's drawer"), true);
+  is("and it never tells you to move the stage", refusalText(behindJob.refusal).includes("Move the job's stage"), false);
   const bare = planProcessDrop(job([], "Maintenance"), "PWA", PROCESSES);
   is("a stage with no processes is refused", bare.ok, false);
   is("without pretending there is a pipeline", refusalText(bare.refusal),
@@ -129,4 +146,4 @@ console.log("\na run on the target means the job is already there or past it");
 
 await server.close();
 if (failures) { console.error(`\nTHE DROP PLAN IS WRONG (${failures} failed)\n`); process.exit(1); }
-console.log("\nTHE DROP PLAN HOLDS (17 checks)\n");
+console.log("\nTHE DROP PLAN HOLDS (22 checks)\n");

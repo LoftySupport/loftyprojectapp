@@ -339,8 +339,26 @@ export function JobsPage() {
     clearSelection();
   }
 
+  /**
+   * Which stages the Process columns are drawn from.
+   *
+   * The saved view's stages, NARROWED by the Stage filter when one is set. Amber, 3
+   * September, filtered the board to Pre-construction and still got Acquisition &
+   * Development's PWA as a column — then a refusal when she dropped a job on it. A board
+   * narrowed to one stage should not offer another stage's processes as places to put a
+   * card: the filter said which stage she was working in, and the columns ignored it.
+   *
+   * The Stage filter is a job filter everywhere else, so this is the one place it also
+   * decides what is on screen to drop onto. Unset, nothing changes.
+   */
+  const columnStages = useMemo(() => {
+    const picked = filters.filter(f => f.field === "Stage" && f.value).map(f => String(f.value));
+    const kept = picked.filter(s => viewStages.includes(s));
+    return kept.length > 0 ? kept : viewStages;
+  }, [filters, viewStages]);
+
   /** The processes of the stages in view, in run order — the "Up to…" options. */
-  const processPipeline = useMemo(() => pipelineColumns(processes, viewStages), [processes, viewStages]);
+  const processPipeline = useMemo(() => pipelineColumns(processes, columnStages), [processes, columnStages]);
 
   // Jobs a bulk stage move would actually touch — already at or past the target,
   // cancelled or archived stay put, the same rule a project cascade follows (0046).
@@ -374,7 +392,7 @@ export function JobsPage() {
       // Lifecycle stage order, then position within the stage — Amber's sentence, as an
       // array. "Nothing recorded" leads, because a job nobody has recorded against is at
       // the head of the stage's work, not partway through it.
-      : grouping === "Process" ? [NOTHING_RECORDED, ...pipelineColumns(processes, viewStages)]
+      : grouping === "Process" ? [NOTHING_RECORDED, ...pipelineColumns(processes, columnStages)]
       : [...new Set(rows.map(keyOf))];
 
     // No row may fall outside the columns. Every other grouping either lists its own
@@ -385,7 +403,7 @@ export function JobsPage() {
     const strays = [...new Set(rows.map(keyOf))].filter(k => !order.includes(k));
 
     return [...order, ...strays].map(key => ({ key, jobs: rows.filter(j => keyOf(j) === key) }));
-  }, [grouping, rows, viewStages, teamNames, processes]);
+  }, [grouping, rows, viewStages, columnStages, teamNames, processes]);
 
   /**
    * Table sorting (G12) — the SortableTable idiom the Admin tables already use, applied
@@ -405,7 +423,7 @@ export function JobsPage() {
   // The flat pipeline, for the "Up to" column's sort: alphabetical would put Working
   // Drawings before the Site Survey that precedes it, which is the lifecycle backwards —
   // the same reasoning the Stage column already sorts on its index rather than its name.
-  const pipelineOrder = useMemo(() => pipelineColumns(processes, viewStages), [processes, viewStages]);
+  const pipelineOrder = useMemo(() => pipelineColumns(processes, columnStages), [processes, columnStages]);
 
   const jobColumnDefs = useMemo<ColumnDef<BoardJob>[]>(() => [
     // The job number cannot be turned off. A table of jobs with no job number in it is

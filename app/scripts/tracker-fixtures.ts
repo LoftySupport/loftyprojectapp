@@ -143,12 +143,15 @@ const PROCESSES: Process[] = [
   ["fixture_drawings", "FIXTURE Working drawings", "Stage 2", 4],
   ["fixture_eer", "FIXTURE Preliminary EER", "Stage 2", 5],
   ["fixture_contract", "FIXTURE Contract issued", "Stage 2", 6],
-  ["fixture_retired", "FIXTURE A retired process", null, 7]
-].map(([key, name, group, position], i) => ({
+  ["fixture_retired", "FIXTURE A retired process", null, 7],
+  // In a stage the fixture jobs have already left — Amber's 3 September screenshot, where
+  // PWA sat under Acquisition & Development while every job was in Pre-construction.
+  ["fixture_acq", "FIXTURE Land acquisition", "Stage 1", 1, "Acquisition & Development"]
+].map(([key, name, group, position, stage], i) => ({
   id: `fixture-process-${i + 1}`,
   key: key as string,
   name: name as string,
-  stageName: FIXTURE_STAGE,
+  stageName: (stage as string | undefined) ?? FIXTURE_STAGE,
   stageGroup: group as string | null,
   scope: "job",
   owningTeam: i === 2 ? null : "design",
@@ -252,9 +255,6 @@ export function createStubRepository(): Repository {
     },
     async listRoadmapPhases() {
       return PHASES;
-    },
-    async listProcesses() {
-      return PROCESSES;
     }
   };
 }

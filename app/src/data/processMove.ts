@@ -1,6 +1,6 @@
 import { stagePipeline, currentProcessName } from "./pipelinePosition";
 import type { BoardJob } from "./boardModel";
-import type { Process, ProcessRunStatus } from "./types";
+import { STAGE_NAMES, type Process, type ProcessRunStatus, type StageName } from "./types";
 
 /**
  * What dropping a job onto a process column would actually write.
@@ -51,7 +51,14 @@ import type { Process, ProcessRunStatus } from "./types";
 
 export type DropRefusal =
   | { kind: "no-pipeline"; stage: string }
-  | { kind: "other-stage"; stage: string; processStage: string }
+  /**
+   * `passed` is the difference between two situations that look identical and need
+   * opposite advice. Amber hit the second on 3 September: PWA is filed under
+   * Acquisition & Development, her jobs are in Pre-construction, and the refusal told
+   * her to "move its stage first" — which would have meant moving 50 jobs BACKWARDS to
+   * record a process they never recorded on the way through.
+   */
+  | { kind: "other-stage"; stage: string; processStage: string; passed: boolean }
   | { kind: "needs-variation"; from: string; to: string }
   | { kind: "already-there"; at: string };
 
@@ -96,9 +103,17 @@ export function planProcessDrop(job: BoardJob, processName: string, processes: P
     // lifecycle move, which is its own act with its own confirmation, so this refuses
     // rather than quietly doing two things at once.
     const elsewhere = processes.find(p => p.name === processName && p.isActive);
+    const processStage = elsewhere?.stageName ?? "another stage";
+    const at = (s: string) => STAGE_NAMES.indexOf(s as StageName);
     return {
       ok: false,
-      refusal: { kind: "other-stage", stage: job.stage, processStage: elsewhere?.stageName ?? "another stage" }
+      refusal: {
+        kind: "other-stage",
+        stage: job.stage,
+        processStage,
+        // Both must be known stages to compare; an unknown one is not claimed as passed.
+        passed: at(processStage) !== -1 && at(job.stage) !== -1 && at(processStage) < at(job.stage)
+      }
     };
   }
 
@@ -127,7 +142,15 @@ export function refusalText(r: DropRefusal): string {
     case "no-pipeline":
       return `${r.stage} has no processes yet, so there is nothing to move through.`;
     case "other-stage":
-      return `That process belongs to ${r.processStage}; this job is in ${r.stage}. Move its stage first.`;
+      return r.passed
+        // The job is PAST that stage. Telling it to move its stage would mean moving
+        // backwards, which is the opposite of what recording an outstanding process needs.
+        ? `That process belongs to ${r.processStage}, which this job has already left — `
+          + "so it cannot be reached from this board, which only draws the stage the job is in. "
+          + "Record it in the job's drawer, where every stage is listed. If it belongs to "
+          + `${r.stage} instead, move it there in Setup → Processes and it becomes a column here.`
+        : `That process belongs to ${r.processStage}; this job is in ${r.stage}, which comes before it. `
+          + "Move the job's stage first, then drop it on the process.";
     case "needs-variation":
       return `${r.to} runs before ${r.from}. Going back needs a variation — an IAF filled out and the variation raised with its reason. Raising one from here is not built yet.`;
     case "already-there":
