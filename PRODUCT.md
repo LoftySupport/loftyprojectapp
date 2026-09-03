@@ -150,6 +150,35 @@ This is the phone-width rule from *Capabilities and Constraints* said as a mecha
 the drawer at its slide-out width IS the phone layout, so a record that is unreadable in
 the panel is unreadable on a phone.
 
+### 3. What has an order is dragged into it
+
+> *"Preferably like how HubSpot allows you to drag and drop pipeline stages in a pipeline
+> e as the ui"* — Amber, 3 September, with four screenshots of HubSpot's deal-pipeline
+> settings
+
+Where rows carry an order that means something — the processes a job runs through, the
+properties a process collects, a group's place inside a stage — that order is changed by
+**dragging the row**, in a list shaped like the thing it describes: a handle, the name in
+a box you type straight into, and the row's own actions at the end of it.
+
+Three things travel with the pattern, and the HubSpot screens have all three:
+
+- **A keyboard way to do the same move.** Up and down buttons on every draggable row.
+  Drag-and-drop alone is a control some people cannot use.
+- **The number on screen is the number in the column.** `process_position` is renumbered
+  1..n across the whole stage on every move — never per visible row, or a filter plus a
+  drag silently sends everything hidden to the end.
+- **Sorting is a different question and gets a different answer.** A pipeline sorted by
+  team is not a pipeline, so sorting switches to the flat table view, where dragging is
+  off and every column sorts. Setup → Processes names both views rather than implying them.
+
+The mapping is worth stating because it is not the obvious one: HubSpot's *pipeline* is
+this app's **lifecycle stage**, and HubSpot's *stages* are this app's **processes**. The
+lifecycle itself — Acquisition & Development through Cancelled — is not a draggable list:
+its order is a CHECK constraint on `jobs.job_stage`, a `LINEAR_STAGES` constant, and a
+forwards-only rule that Cancelled sits outside of. Reordering it is a schema change with
+a business decision inside it, not a drag.
+
 ## Brand Commitments
 
 - Name: **Lofty Building Group**; the app is **Lofty Hub**, "the hub" or "the board".

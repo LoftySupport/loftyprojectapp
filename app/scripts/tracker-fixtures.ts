@@ -1,6 +1,6 @@
 import { createStubRepository as createEmptyRepository } from "../src/data/stubRepository";
 import type { Repository } from "../src/data/repository";
-import type { FeedbackItem, RoadmapPhase } from "../src/data/types";
+import type { FeedbackItem, Process, RoadmapPhase } from "../src/data/types";
 
 /**
  * The tracker, with something in it — for the responsive sweep only.
@@ -118,6 +118,50 @@ const REQUESTS: FeedbackItem[] = STAGES.flatMap((stage, si) =>
   }))
 );
 
+/**
+ * A stage's worth of processes, so Setup → Processes draws its pipeline.
+ *
+ * `/setup/processes` was already in the sweep and had the same problem the tracker
+ * routes had: with no processes it rendered one line of "No processes defined yet", so
+ * the pipeline editor Amber asked for — rows with a drag handle, a name box and two
+ * actions, at every width — was never once laid out by the check that exists to lay
+ * things out.
+ *
+ * Two groups so a block boundary is drawn, one long name because that is what sets a
+ * row's intrinsic width, one retired and one milestone so both chips are on screen, and
+ * one process with no team and no duration so the em dashes are measured too.
+ */
+const FIXTURE_STAGE = "Pre-construction";
+const PROCESSES: Process[] = [
+  ["fixture_survey", "FIXTURE Site survey and a name long enough to set the row's intrinsic width", "Stage 1", 1],
+  ["fixture_concept", "FIXTURE Concept plan", "Stage 1", 2],
+  ["fixture_pwa", "FIXTURE PWA", "Stage 1", 3],
+  ["fixture_drawings", "FIXTURE Working drawings", "Stage 2", 4],
+  ["fixture_eer", "FIXTURE Preliminary EER", "Stage 2", 5],
+  ["fixture_contract", "FIXTURE Contract issued", "Stage 2", 6],
+  ["fixture_retired", "FIXTURE A retired process", null, 7]
+].map(([key, name, group, position], i) => ({
+  id: `fixture-process-${i + 1}`,
+  key: key as string,
+  name: name as string,
+  stageName: FIXTURE_STAGE,
+  stageGroup: group as string | null,
+  scope: "job",
+  owningTeam: i === 2 ? null : "design",
+  expectedDays: i === 2 ? null : (i + 1) * 3,
+  atRiskLeadDays: null,
+  isMilestone: i === 3,
+  isExternal: i === 4,
+  position: position as number,
+  isActive: i !== 6,
+  description: null,
+  automation: null,
+  sharepointFolder: null,
+  importRef: null,
+  updatedAt: ISO(2026, 9, 1),
+  updatedBy: i === 0 ? "Fixture Person" : null
+}));
+
 export function createStubRepository(): Repository {
   const empty = createEmptyRepository();
   return {
@@ -127,6 +171,9 @@ export function createStubRepository(): Repository {
     },
     async listRoadmapPhases() {
       return PHASES;
+    },
+    async listProcesses() {
+      return PROCESSES;
     }
   };
 }

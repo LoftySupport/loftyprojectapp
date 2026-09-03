@@ -226,3 +226,90 @@
    under the cursor is the neighbour, not the destination. */
 .data-table tr.is-drop > td { box-shadow: inset 0 2px 0 0 var(--primary-color); }
 .data-table tr.confirm-row > td { background: var(--negative-color-selected); }
+
+/* --------------------------------------------------------------- the pipeline editor
+   A lifecycle stage drawn the way HubSpot draws a pipeline (Amber, 3 Sep, with the deal
+   pipeline screenshots): rows rather than a data table, because these are things you
+   rearrange and type into, not cells you compare down a column. The table view keeps
+   `.data-table` and its sortable headers for the comparing. */
+.pipe { margin-top: var(--space-12); }
+.pipe-head,
+.pipe-row {
+  display: grid;
+  /* Fixed-width flanks, flexible middle. The last two columns were `auto` and the
+     header's empty cells measured narrower than the rows' buttons, so the fr columns
+     resolved differently above and below the rule: the headings sat over the wrong
+     values. A grid that has to line up cannot have content-sized columns in it. */
+  grid-template-columns: 56px minmax(180px, 1fr) 110px 56px 140px 236px;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12);
+}
+/* Column headings, quieter than the rows they sit over. Not `.data-table thead`: this
+   is a list of editable rows, and a heavy header bar over a column of input boxes reads
+   as a table you can sort, which this one is not — the Table view is. */
+.pipe-head {
+  border-bottom: 1px solid var(--layout-border-color);
+  color: var(--secondary-text-color);
+  font: var(--font-text3-normal);
+}
+.pipe-col-run { display: flex; align-items: center; gap: var(--space-4); }
+.pipe-col-days { text-align: right; }
+.pipe-block + .pipe-block { margin-top: var(--space-8); }
+.pipe-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex-wrap: wrap;
+  padding: var(--space-8) var(--space-12);
+  background: var(--allgrey-background-color);
+  border-top: 1px solid var(--layout-border-color);
+}
+.pipe-group[draggable="true"] { cursor: grab; }
+.pipe-row { border-top: 1px solid var(--layout-border-color); }
+.pipe-row[draggable="true"] { cursor: grab; }
+.pipe-row:hover { background: var(--primary-background-hover-color); }
+.pipe-row.is-selected { background: var(--primary-selected-color); }
+/* Retired rows stay legible — greyed, never hidden: a retired process is still part of
+   the history of every job that ran it. */
+.pipe-row.is-retired .pipe-name .pf-input { color: var(--secondary-text-color); }
+.pipe-row.is-drop, .pipe-group.is-drop { box-shadow: inset 0 2px 0 0 var(--primary-color); }
+.pipe-name { display: flex; align-items: center; gap: var(--space-8); min-width: 0; }
+/* One width for every name box, chips after it — a column of boxes that all start and
+   end in the same place is the thing HubSpot's stage list gets right, and a box that
+   shrinks because its row happens to carry a "milestone" chip loses it. */
+.pipe-name .pf-input { flex: 0 1 300px; min-width: 0; }
+.pipe-confirm { padding: var(--space-8) var(--space-12); border-top: 1px solid var(--layout-border-color); }
+.pipe-add {
+  display: block;
+  width: 100%;
+  padding: var(--space-12);
+  border: 0;
+  border-top: 1px solid var(--layout-border-color);
+  background: none;
+  color: var(--link-color);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pipe-add:hover { background: var(--primary-background-hover-color); }
+.view-switch { display: inline-flex; gap: var(--space-4); }
+/* Vibe's Dropdown is block-level, so a bare Select in a wrapping flex toolbar takes the
+   whole row: three filters became three full-width bars stacked above the list. Bound
+   them and they sit on one line, which is what a filter bar is for. */
+.toolbar > .toolbar-control { flex: 0 1 220px; min-width: 180px; }
+.toolbar > .toolbar-search { flex: 0 1 260px; }
+
+@media (max-width: 900px) {
+  /* Narrow: the name and its actions are what you came for; the rest wraps under it,
+     each value carrying the heading it lost when the header row went away. */
+  .pipe-head { display: none; }
+  .pipe-row { grid-template-columns: 48px minmax(0, 1fr); row-gap: var(--space-4); }
+  .pipe-row > .row-actions { grid-column: 2; justify-content: flex-start; }
+  .pipe-row > .muted, .pipe-row > .pipe-col-days { grid-column: 2; text-align: left; }
+  .pipe-row > [data-label]::before {
+    content: attr(data-label) ": ";
+    color: var(--secondary-text-color);
+  }
+  .pipe-name .pf-input { flex: 1 1 auto; }
+}
