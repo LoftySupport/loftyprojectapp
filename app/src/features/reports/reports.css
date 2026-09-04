@@ -1,0 +1,94 @@
+/*
+ * The builder's stylesheet: Tailwind's utilities, and the handful of rules preflight
+ * would otherwise have provided.
+ *
+ * Imported by the Template Builder screen, so nothing loads it on a page with no report
+ * builder on it.
+ *
+ * Everything here is scoped to `.nokey`, which both of the module's portalled roots
+ * carry — the builder shell and the preview overlay. That scoping is the point: these
+ * are resets, and unscoped they would reach every Vibe component in the app.
+ */
+
+/* No `@tailwind base`: preflight is off (see tailwind.config.js), so that directive
+   would emit only Tailwind's own custom properties, which nothing here reads.
+   `components` is empty — the module ships no `@layer components` — but is kept so the
+   emitted order is Tailwind's own and a future `@apply` lands where it expects to. */
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * ─── The reset, and why every selector is wrapped in :where() ────────────────
+ *
+ * These rules have to LOSE to a Tailwind utility. `.nokey h1` is a class plus an
+ * element — specificity (0,1,1) — and `.text-2xl` is one class, (0,1,0), so written
+ * plainly this reset beats every utility that sets the same property. The first version
+ * of this file was written plainly, and in the browser the document title rendered at
+ * body size and body weight, and every palette card came out flush with no border and no
+ * padding, because `font-size`, `font-weight`, `padding`, `border-width` and `background`
+ * are exactly the properties both sides set.
+ *
+ * `@layer base` does not fix it. Tailwind v3's `@layer` is a build-time ordering hint,
+ * not a real CSS cascade layer — the output is sorted, the specificity is unchanged, and
+ * the same rules kept winning. (Confirmed rather than assumed: `border-color` from
+ * `.nokey *` at (0,1,0) correctly lost to `.border-[#00393f]` on source order, while
+ * everything at (0,1,1) won.)
+ *
+ * `:where()` contributes zero specificity, so `:where(.nokey) :where(h1)` is (0,0,0):
+ * it applies to anything no utility has an opinion about and yields the moment one does.
+ * Preflight has the same job and solves it the same way, with bare element selectors.
+ */
+
+/*
+ * Borders are the ones that are invisible until they are wrong, and there are two of
+ * them. In Tailwind, `border` sets a WIDTH and nothing else: the style and the colour
+ * both come from preflight's global `* { border-width: 0; border-style: solid;
+ * border-color: <default> }`.
+ *
+ * Without that rule the browser's own defaults apply — `border-style: none` and
+ * `border-color: currentColor` — and `border-style: none` makes a border of any width
+ * draw nothing at all. Watched: every palette card and the document's title rule
+ * rendered with `.border` and `.border-b-2` applied and a computed border width of 0px,
+ * because the style was still `none`. Three declarations, exactly as preflight has them.
+ */
+:where(.nokey) :where(*, *::before, *::after) {
+  border-width: 0;
+  border-style: solid;
+  border-color: #e5e7eb;
+}
+
+/*
+ * Preflight also normalises the elements the module's classes assume have been
+ * normalised: headings and paragraphs with no browser margin or size of their own, form
+ * controls inheriting the page's font, bare buttons.
+ *
+ * Not here: `box-sizing: border-box`, which `theme/tokens.css` already sets globally for
+ * Vibe, and a font stack — these should inherit the app's Figtree from `body`.
+ */
+:where(.nokey) :where(h1, h2, h3, h4, p) {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+:where(.nokey) :where(button, input, select, textarea) {
+  font: inherit;
+  color: inherit;
+  margin: 0;
+}
+
+:where(.nokey) :where(button) {
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+/* No `border: 0` here. The shorthand would set `border-style: none` as well as the
+   width, which is the declaration that made `.border` on the palette cards draw
+   nothing — the universal rule above already zeroes the width and keeps the style. */
+
+/* The rich-text editor and the `list` block are the two places a real list renders, and
+   both want the browser's bullets back rather than preflight's blank slate. */
+:where(.nokey) :where(ul, ol) {
+  margin: 0;
+  padding-left: 1.25rem;
+}

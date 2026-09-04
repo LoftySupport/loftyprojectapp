@@ -1509,6 +1509,23 @@ export const DICTIONARY: DictionaryEntry[] = [
   e("saved_views.saved_view_shared_with_team", "Shared with", "The team this view is handed to, or null for private — the default (0051, Amber: \"team views matter\"). A shared view is readable by everyone in that team and editable only by whoever made it.", "text", "Nullable. FK → teams(team_id).", "The read and write policies are separate for exactly this: a widened for-all policy would have let anybody in the team delete the owner's view. Two people may still both call a view \"Site this week\" — the tab row carries whose it is rather than the constraint forbidding it.", "created"),
   e("saved_views.saved_view_query", "The view itself", "The board's query string without the leading ?, stored verbatim — view mode, grouping, filters, saved-view slice, exactly as the address bar holds them.", "text", "Not null.", "The URL is already the app's serialisation of \"what am I looking at\"; a second schema for the same fact could only disagree with it. Unknown keys fall back harmlessly on read, exactly as a pasted link does.", "created"),
 
+  // ------------------------------------------------ report templates (0094)
+  e("report_templates.report_template_id", "Report template",
+    "One layout built in Tools → Template Builder: an ordered list of blocks, the page setup and the theme it prints in. Company-wide, not per person and not per project.",
+    "uuid", "Primary key, default gen_random_uuid().",
+    "Readable by every active user; manager and above writes, admin and above deletes. Nothing references it — a template is used by being opened, not by being pointed at.",
+    "created"),
+  e("report_templates.report_template_name", "Name",
+    "What the template is called — \"Monthly leadership summary\". Unique across the company, because everybody picks from one list and two rows with the same name is a coin-toss every time.",
+    "text", "Not null. CHECK: not blank after trimming. UNIQUE.",
+    "The unique violation is caught in the repository and turned into a sentence naming the clash — the constraint message would otherwise go on screen verbatim.",
+    "created"),
+  e("report_templates.report_template_layout", "The layout",
+    "The whole builder state as one document: { widgets: [{ id, kind, options }], page: { pageSize, orientation }, theme }. A block holds the QUESTION — \"the jobs table grouped by stage\" — and never the answer, so a template opened in March renders March's jobs.",
+    "jsonb", "Not null, default {\"widgets\": []}. CHECK: widgets is a JSON array.",
+    "One column rather than a report_template_blocks table: nothing joins to a block, nothing filters by one, and the builder rewrites the whole list on every autosave. The CHECK is the shape only — a block's `kind` is registered in the app's widget adapter, so a constraint listing the kinds would need a migration for every new block. coalesce() inside it is load-bearing: jsonb_typeof of a missing key is NULL, and a CHECK reads NULL as a pass, so `= 'array'` alone accepted a layout with no widgets key at all.",
+    "created"),
+
   // ------------------------------------------------------- templates and perms
   e("template_phases.expected_days", "Expected days", "How long a phase should take. What the Gantt measures actual time in stage against.", "integer", "Nullable.", "Keyed by template plus the stage enum; the owning team is a team enum value. Neither is an FK.", "to_do", PROPOSED),
   e("template_milestones.label", "Milestone", "One thing a phase expects done before handover. Instantiated per job as job_milestones. Renamed from template_checkpoints (Amber, 26 Aug) — Lofty's word is milestones, and nothing was built under the old name.", "text", "Not null.", "Copied to job_milestones.label when a job is created from a template.", "to_do", PROPOSED),
@@ -1552,6 +1569,8 @@ export const DICTIONARY_TABLES: string[] = [...new Set(DICTIONARY.map(d => d.tab
  * everywhere else.
  */
 export const TABLE_DESCRIPTIONS: Record<string, string> = {
+  report_templates:
+    "A report layout built in Tools → Template Builder (0094): the blocks, the page setup and the theme, in one jsonb column. Blocks hold references to the app's data rather than copies of it, so a template renders current jobs whenever it is opened — which is the whole reason it is a template and not a saved document. Company-wide: everybody reads, manager and above writes, admin and above deletes.",
   activity:
     "The concept spec's one-table feed — events and comments together, because the UI interleaves them. The built schema answers the same need with two tables, comments and activity_events, interleaved on read; these entries are kept as the shape that was proposed before that split.",
   activity_audit:

@@ -2808,3 +2808,56 @@ export interface MaintenanceOutboxStat {
   count: number;
   lastAt: IsoDateTime | null;
 }
+
+// ---------------------------------------------------------------------------
+// Report templates (0094) — Tools → Template Builder
+// ---------------------------------------------------------------------------
+
+/**
+ * One block in a report template.
+ *
+ * `kind` names a widget registered in `features/reports/adapters/lofty/widgets.js`, and
+ * `options` is that widget's own settings. Neither is typed here on purpose: a block type
+ * is registered in the app, not in the database, and a union listing them would have to
+ * be edited every time somebody adds a block — the coupling the single jsonb column
+ * exists to avoid.
+ *
+ * `options` holds the QUESTION ("group the jobs by stage"), never the ANSWER. Nothing
+ * here ever contains a job, a project or a number: those are read live whenever the
+ * template is opened. A template that stored its rows would be a fossil that still
+ * looked current.
+ */
+export interface ReportTemplateBlock {
+  id: string;
+  kind: string;
+  options: Record<string, unknown>;
+}
+
+/** The builder's whole layout, as it is stored in `report_template_layout`. */
+export interface ReportTemplateLayout {
+  widgets: ReportTemplateBlock[];
+  page?: { pageSize?: string; orientation?: string };
+  /** Which theme it prints in — a key from the theme set the builder is given. */
+  theme?: string;
+}
+
+/**
+ * A report template: a layout somebody built, shared by the whole company.
+ *
+ * `createdBy` and `updatedBy` are ids rather than names, and deliberately: the screens
+ * that show them already hold `listProfiles()`, and an embed of `profiles` from here
+ * would be ambiguous — the audit quartet gives this table two foreign keys to `profiles`,
+ * which is the PGRST201 shape `verify/embeds.sh` exists to catch.
+ */
+export interface ReportTemplate {
+  id: Uuid;
+  name: string;
+  layout: ReportTemplateLayout;
+  createdAt: IsoDateTime;
+  createdBy: Uuid | null;
+  updatedAt: IsoDateTime;
+  updatedBy: Uuid | null;
+}
+
+/** An empty layout — what a new template starts as, and what the CHECK requires. */
+export const EMPTY_REPORT_TEMPLATE_LAYOUT: ReportTemplateLayout = { widgets: [] };

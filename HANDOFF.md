@@ -25,6 +25,82 @@ Last updated: 2026-09-04.
 
 ---
 
+## Session of 2026-09-04 — Tools, and the report Template Builder
+
+Amber: *"add in the report builder module from amberbeaumont/modules to a new section in
+the app called tools"*, under a sidebar page **Tools** with a **Template Builder** tab —
+"there will be multiple built in the future".
+
+**The section.** `/tools/:section`, one tab, built as a TabList from the start because the
+second tab is then one line rather than a change of every URL. Tools is a third kind of
+destination: Projects, Jobs, Maintenance, Reports and Contacts are the work, Setup is how
+the app is wired, and this is what you *use* to make something.
+
+**The module is vendored, not installed.** `app/src/features/reports/` holds
+`packages/report-builder/src` from `amberbeaumont/modules` at 1.0.0, with the Lofty
+adapters beside it. `app/src/features/reports/README.md` lists every deviation and how to
+re-sync — read that before touching anything under `core/` or `components/`.
+
+**One new table, `report_templates` (0094).** Reasoning in `schema-plan.md` → *4 September*.
+A template holds the question ("the jobs table grouped by stage"), never the answer, so
+one built in September renders March's jobs in March. Everything goes through the
+repository seam; no component here holds a Supabase client.
+
+**Nine blocks**, in four palette groups: headline numbers, a chart, the jobs table, the
+jobs board, needs-attention, the projects table, one named project, team workload, people,
+and process health. Every one returns a callout rather than an empty grid when it has
+nothing, which matters right now because Phase B has not run and every block is in that
+state.
+
+### Tailwind is in the build, and only for this folder
+
+The module ships Tailwind classes; the app is Vibe and its own CSS. Rather than restyle
+two thousand lines and own a merge on every re-sync, `tailwind.config.js` scans
+`src/features/reports/**` and nothing else, with `preflight: false` so no global reset
+lands on Vibe. What preflight would have provided is in
+`src/features/reports/reports.css`, scoped to `.nokey` — the class both of the module's
+portalled roots carry — and every selector is wrapped in `:where()`.
+
+That last part is the bit worth remembering. Written plainly, `.nokey h1` is (0,1,1) and
+beats `.text-2xl` at (0,1,0), so the reset won every argument: the document title rendered
+at body size and every palette card came out flush with no border. `@layer base` does not
+fix it — Tailwind v3's `@layer` is a build-time ordering hint, not a real cascade layer.
+`:where()` contributes zero specificity, which is how preflight itself stays out of the
+way. Borders needed `border-style: solid` in the same rule for the same reason: Tailwind's
+`border` sets a width only, and the browser's default style of `none` draws nothing.
+
+### What was checked
+
+- `npm run check:report-widgets` — 62 assertions in plain Node, no browser: every block
+  resolves against a full and an empty context, empty data is a sentence not an empty
+  grid, **every resolver reads `ctx` rather than a copy**, author prompts vanish in an
+  export, a dead reference asks to be re-picked, and an average over no jobs is an em dash
+  rather than zero. Each one watched failing under a deliberate mutation.
+- `app/supabase/verify/check.sh` — green. Three new constraint probes, a behaviour check
+  for the touch trigger, and RLS probes for read/write/delete on the new table, each
+  watched failing with the matching policy widened.
+- `npm run responsive` — 120 of 120, `/tools/template-builder` included.
+- The builder driven in Chromium: palette, drag chrome, settings panel, seeded draft,
+  Preview & Export, and the Lofty theme with the wordmark on the document.
+
+### Still open
+
+- **Nobody has opened this against the real database.** The store is proved through the
+  repository seam and the policies are proved in `verify/`, but no template has been saved
+  from a browser to Supabase. First thing to do with a real session.
+- **Who may build a template** is a guess: manager to write, admin to delete. Amber's call;
+  one word in two policies either way.
+- **Every block is in its empty state until Phase B lands.** That is correct, not broken,
+  and the copy says so — but the shapes worth looking at after the import are the grouped
+  jobs table and the stage board.
+- **No share links.** Deliberate: an anonymous read path around RLS is the one part of
+  that module with real security consequences, and nothing has asked for it.
+- **Word export pulls a 380 kB chunk** the first time somebody clicks it. `docx` is a new
+  dependency, imported dynamically so it stays out of the main bundle — the app's own
+  Excel/Word/PDF writers are untouched and still hand-written.
+
+---
+
 ## Session of 2026-09-04 — every view downloads, as Excel, Word or PDF
 
 Amber, 3 Sep, in one line: *"can you add an export to excel, pdf download for all views

@@ -11,8 +11,11 @@ import { notificationMethods } from "./supabaseNotificationRepository";
 import { maintenanceMethods } from "./supabaseMaintenanceRepository";
 import { MAX_SPLIT, OPENING_TEAM, teamSlug } from "./types";
 import { projectDisplayName } from "./types";
+import { EMPTY_REPORT_TEMPLATE_LAYOUT } from "./types";
 import type {
   ActivityEntry,
+  ReportTemplate,
+  ReportTemplateLayout,
   AddressHistoryEntry,
   CloneOptions,
   CommentEntry,
@@ -123,7 +126,8 @@ const WIRED: RepositoryMethod[] = [
   "listDictionaryOverrides", "saveDictionaryOverride",
   "listClassifications", "saveClassification", "listPartyRoles", "savePartyRole", "listStaffRoles", "saveStaffRole", "listContacts", "getContact", "createContact", "updateContact", "approveContact", "setContactClassifications", "listCompanies", "getCompany", "createCompany", "updateCompany", "approveCompany", "setCompanyClassifications", "listContactMethods", "addContactMethod", "updateContactMethod", "deleteContactMethod", "listCompanyContacts", "addCompanyContact", "updateCompanyContact", "listRecordParties", "addRecordParty", "updateRecordParty", "deleteRecordParty", "listRecordStaffRoles", "addRecordStaffRole", "endRecordStaffRole", "listTaskChecklist", "addTaskChecklistItem", "updateTaskChecklistItem", "deleteTaskChecklistItem", "listProcessTaskChecklist", "addProcessTaskChecklistItem", "updateProcessTaskChecklistItem", "deleteProcessTaskChecklistItem", "listStageCompletion",
   "listNotificationTypes", "saveNotificationType", "listNotificationRules", "addNotificationRule", "updateNotificationRule", "deleteNotificationRule", "listMyNotificationPreferences", "saveMyNotificationPreference", "listMyNotifications", "markNotificationsRead", "listMyWatches", "watchRecord", "unwatchRecord", "listDeliveryStats",
-  "getMaintenanceSettings", "saveMaintenanceSettings", "listMaintenanceCategories", "saveMaintenanceCategory", "listMaintenanceRequests", "getMaintenanceRequest", "createMaintenanceRequest", "updateMaintenanceRequest", "listMaintenanceItems", "addMaintenanceItem", "updateMaintenanceItem", "deleteMaintenanceItem", "offerMaintenanceItem", "updateMaintenanceAssignment", "listMaintenanceMessages", "addMaintenanceNote", "getJobWarranty", "listMaintenanceOutboxStats"
+  "getMaintenanceSettings", "saveMaintenanceSettings", "listMaintenanceCategories", "saveMaintenanceCategory", "listMaintenanceRequests", "getMaintenanceRequest", "createMaintenanceRequest", "updateMaintenanceRequest", "listMaintenanceItems", "addMaintenanceItem", "updateMaintenanceItem", "deleteMaintenanceItem", "offerMaintenanceItem", "updateMaintenanceAssignment", "listMaintenanceMessages", "addMaintenanceNote", "getJobWarranty", "listMaintenanceOutboxStats",
+  "listReportTemplates", "getReportTemplate", "createReportTemplate", "updateReportTemplate", "deleteReportTemplate"
 ];
 
 /**
@@ -3143,6 +3147,85 @@ export function createSupabaseRepository(): Repository {
       return toDictOverride(data as unknown as DictOverrideRow);
     },
 
+    // ---- report templates (0094) --------------------------------------------
+    //
+    // No `profiles` embed on any of these, deliberately: the audit quartet gives this
+    // table two foreign keys to `profiles`, and an unqualified embed of an ambiguous
+    // table is the PGRST201 that took sign-in down (verify/embeds.sh, 0080). The ids come
+    // back and the screens resolve them against the profile list they already hold.
+
+    async listReportTemplates(): Promise<ReportTemplate[]> {
+      const { data, error } = await client
+        .from("report_templates")
+        .select(REPORT_TEMPLATE_COLUMNS)
+        .order("report_template_updated_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map(r => toReportTemplate(r as unknown as ReportTemplateRow));
+    },
+
+    async getReportTemplate(id: string): Promise<ReportTemplate | null> {
+      const { data, error } = await client
+        .from("report_templates")
+        .select(REPORT_TEMPLATE_COLUMNS)
+        .eq("report_template_id", id)
+        .maybeSingle();
+      if (error) throw error;
+      return data ? toReportTemplate(data as unknown as ReportTemplateRow) : null;
+    },
+
+    async createReportTemplate(input): Promise<ReportTemplate> {
+      const { data, error } = await client
+        .from("report_templates")
+        .insert({
+          report_template_name: input.name,
+          report_template_layout: input.layout ?? EMPTY_REPORT_TEMPLATE_LAYOUT
+        })
+        .select(REPORT_TEMPLATE_COLUMNS)
+        .single();
+      if (error) throw reportTemplateError(error, input.name);
+      return toReportTemplate(data as unknown as ReportTemplateRow);
+    },
+
+    // Partial, and it has to be: the builder debounces the name and the layout onto
+    // separate saves, so sending both here would blank whichever the caller did not have.
+    async updateReportTemplate(id, patch): Promise<ReportTemplate> {
+      const payload: Record<string, unknown> = {};
+      if (patch.name !== undefined) payload.report_template_name = patch.name;
+      if (patch.layout !== undefined) payload.report_template_layout = patch.layout;
+      // Nothing to write is not an error and not a no-op response — the caller expects a
+      // row back, so read the current one rather than sending an empty UPDATE, which
+      // PostgREST answers with a 400.
+      if (!Object.keys(payload).length) {
+        const current = await repo.getReportTemplate(id);
+        if (!current) throw new Error("That template no longer exists.");
+        return current;
+      }
+      const { data, error } = await client
+        .from("report_templates")
+        .update(payload)
+        .eq("report_template_id", id)
+        .select(REPORT_TEMPLATE_COLUMNS);
+      if (error) throw reportTemplateError(error, patch.name);
+      // RLS turns a refused update into zero rows, not an error. Saying so is the whole
+      // difference between "your autosave is being dropped" and a silent data loss.
+      if (!data?.length) {
+        throw new Error("That template was not saved — it no longer exists, or you do not have permission to edit templates.");
+      }
+      return toReportTemplate(data[0] as unknown as ReportTemplateRow);
+    },
+
+    async deleteReportTemplate(id: string): Promise<void> {
+      const { data, error } = await client
+        .from("report_templates")
+        .delete()
+        .eq("report_template_id", id)
+        .select("report_template_id");
+      if (error) throw error;
+      if (!data?.length) {
+        throw new Error("That template was not removed — it no longer exists, or you do not have permission.");
+      }
+    },
+
     async deletePropertyDef(key: string): Promise<void> {
       const { data, error } = await client
         .from("property_defs")
@@ -3341,3 +3424,57 @@ function toJob(r: JobRow): Job {
   };
 }
 
+
+// ------------------------------------------------------- report templates (0094)
+
+const REPORT_TEMPLATE_COLUMNS =
+  "report_template_id, report_template_name, report_template_layout, report_template_created_at, report_template_created_by, report_template_updated_at, report_template_updated_by";
+
+type ReportTemplateRow = {
+  report_template_id: string;
+  report_template_name: string;
+  report_template_layout: ReportTemplateLayout | null;
+  report_template_created_at: string;
+  report_template_created_by: string | null;
+  report_template_updated_at: string;
+  report_template_updated_by: string | null;
+};
+
+function toReportTemplate(r: ReportTemplateRow): ReportTemplate {
+  return {
+    id: r.report_template_id,
+    name: r.report_template_name,
+    // The column is NOT NULL with a CHECK that `widgets` is an array, so this coalesce is
+    // for the type rather than for the data — but it is the one place a malformed row
+    // would reach `layout.widgets.map()` and blank the screen, so it stays.
+    layout: r.report_template_layout ?? { ...EMPTY_REPORT_TEMPLATE_LAYOUT },
+    createdAt: r.report_template_created_at,
+    createdBy: r.report_template_created_by,
+    updatedAt: r.report_template_updated_at,
+    updatedBy: r.report_template_updated_by
+  };
+}
+
+/**
+ * Postgres errors a person can act on.
+ *
+ * `ReportSharePanel` and the builder show `error.message` verbatim, so "duplicate key
+ * value violates unique constraint \"report_templates_one_name\"" would go on screen as
+ * it stands. Two of the three constraints on this table are reachable by typing.
+ */
+function reportTemplateError(error: { code?: string; message: string }, name?: string): Error {
+  if (error.code === "23505") {
+    return new Error(
+      name
+        ? `There is already a template called "${name}". Templates share one list, so the name has to be unique.`
+        : "There is already a template with that name."
+    );
+  }
+  if (error.code === "23514") {
+    return new Error("A template needs a name that is not blank.");
+  }
+  if (error.code === "42501") {
+    return new Error("You do not have permission to change report templates.");
+  }
+  return new Error(error.message);
+}

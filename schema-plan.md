@@ -1703,6 +1703,50 @@ Amber's call, and the load waits on it; the three ways are set out in
 deciding: between them the seven hold two comments ("Job cancelled", "here is a test
 update") and nothing else — no tasks, parties, documents, property values or process runs.
 
+## 4 September — Tools, and one table for the report builder
+
+Amber: *"add in the report builder module from amberbeaumont/modules to a new section in
+the app called tools"*, shown as a sidebar page **Tools** with a **Template Builder** tab.
+The module is a drag-and-drop report builder; the schema question it asks is where a
+built layout is kept.
+
+**`report_templates` (0094), one table, one jsonb column.** A row is one report layout:
+an ordered list of blocks, the page setup, and the theme it prints in.
+
+**Why not a `report_template_blocks` child table.** Because a block holds a *reference*,
+never a copy: what is stored is "the jobs table grouped by stage", and the jobs are read
+out of the app every time the template is opened. Nothing joins to a block, nothing
+filters by one, and the builder rewrites the whole list on every autosave — a child table
+would be a delete-and-reinsert on every debounce. It would also make adding a block type
+a migration, which is the coupling `0077` and `0078` spent two batches removing elsewhere.
+
+The cost is stated rather than hidden: Postgres cannot see inside the layout. The one
+thing it *can* check is the shape the builder needs, so it does —
+`coalesce(jsonb_typeof(layout -> 'widgets'), 'missing') = 'array'`. The `coalesce` is
+load-bearing and was found by watching the constraint fail to bite: `jsonb_typeof` of a
+missing key is NULL, a CHECK reads NULL as a pass, and `= 'array'` alone accepted
+`{"page": {...}}` — precisely the row that opens the builder as a blank screen.
+
+**No `scope_id`.** The module's own schema scopes a report to a workspace or a customer.
+At Lofty a template is company-wide the way a process definition is; one scoped to a
+project would have to be copied to be used on the next, which is the opposite of a
+template. The name is therefore unique across the company, for the same reason
+`saved_views` names are unique per person per board.
+
+**No `share_token`, no `password_hash`.** Public share links are the half of that module
+with real security consequences — an anonymous read path around RLS, served by an edge
+function with a service-role key. Nothing has asked for one. The builder feature-detects
+the store's share methods and hides the panel when they are absent, so not wiring it
+costs nothing and leaves the door open: two columns, an edge function and a public route
+whenever it is wanted.
+
+**Open, and Amber's to settle: who may build a template.** The policies say read for
+every active user, write for manager and above, delete for admin and above. That middle
+line is a guess at a rule nobody has stated. It sits between "move a job" (`user`) and
+"add or rename a team" (`admin`) on the ladder the app already has, and the reasoning is
+that one person's edit changes the report everybody else sends. If the answer is
+"anybody", it is one word in two policies.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

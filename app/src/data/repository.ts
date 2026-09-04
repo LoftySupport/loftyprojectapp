@@ -3,6 +3,8 @@ import type {
   ActivityEntry,
   AddressHistoryEntry,
   CloneOptions,
+  ReportTemplate,
+  ReportTemplateLayout,
   CommentEntry,
   FeedbackItem,
   FeedbackKind,
@@ -725,6 +727,27 @@ export interface Repository {
   deleteProcessRun(id: string): Promise<void>;
   /** Copy the process's checklist onto the run's record, once. Returns how many tasks were made. */
   instantiateProcessTasks(runId: string): Promise<number>;
+
+  // ---- report templates (0094) -----------------------------------------------
+  /**
+   * The layouts built in Tools → Template Builder, newest change first.
+   *
+   * Company-wide, not per person and not per project: a template scoped to one project
+   * would have to be copied to be used on the next, which is the opposite of a template.
+   * Everyone active reads them; the policies decide who may write.
+   */
+  listReportTemplates(): Promise<ReportTemplate[]>;
+  getReportTemplate(id: string): Promise<ReportTemplate | null>;
+  /** Manager and above; the policy refuses anyone else. */
+  createReportTemplate(input: { name: string; layout?: ReportTemplateLayout }): Promise<ReportTemplate>;
+  /**
+   * A PARTIAL update, and it has to be: the builder autosaves the name and the layout
+   * independently, so a write that sent both every time would blank whichever one the
+   * caller did not have.
+   */
+  updateReportTemplate(id: string, patch: { name?: string; layout?: ReportTemplateLayout }): Promise<ReportTemplate>;
+  /** Admin and above — an edit is recoverable by editing back, a delete is not. */
+  deleteReportTemplate(id: string): Promise<void>;
 }
 
 export type RepositoryMethod = Exclude<keyof Repository, "name" | "wired">;
@@ -910,7 +933,12 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "startProcessRun",
   "updateProcessRun",
   "deleteProcessRun",
-  "instantiateProcessTasks"
+  "instantiateProcessTasks",
+  "listReportTemplates",
+  "getReportTemplate",
+  "createReportTemplate",
+  "updateReportTemplate",
+  "deleteReportTemplate"
 ];
 
 /** Human labels for the wiring checklist on the Status page. */
@@ -1098,5 +1126,10 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   startProcessRun: "process_runs",
   updateProcessRun: "process_runs",
   deleteProcessRun: "process_runs",
-  instantiateProcessTasks: "instantiate_process_tasks()"
+  instantiateProcessTasks: "instantiate_process_tasks()",
+  listReportTemplates: "report_templates",
+  getReportTemplate: "report_templates",
+  createReportTemplate: "report_templates",
+  updateReportTemplate: "report_templates",
+  deleteReportTemplate: "report_templates"
 };

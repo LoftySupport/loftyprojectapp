@@ -5,7 +5,7 @@ import {
 } from "@vibe/core";
 import {
   Home, Menu, NavigationChevronLeft, NavigationChevronRight,
-  Person, SettingsKnobs, Group, Broom } from "@vibe/icons";
+  Person, SettingsKnobs, Group, Broom, Apps } from "@vibe/icons";
 import { HouseChart, HousePin, Houses } from "../theme/houseIcons";
 import { initialsOf, useAuth } from "../data/AuthProvider";
 import { useSearch } from "../data/SearchProvider";
@@ -40,6 +40,11 @@ const PAGES = [
   { to: "/maintenance", label: "Maintenance", icon: Broom },
   { to: "/reports", label: "Reports", icon: HouseChart },
   { to: "/contacts", label: "Contacts", icon: Group },
+  // Tools is the third kind of destination. Projects, Jobs, Maintenance, Reports and
+  // Contacts are the work; Setup is how the app is wired; this is what you use to make
+  // something — the report Template Builder today, more later. Apps rather than a
+  // spanner: it is a set of things you open, which is what the section is.
+  { to: "/tools", label: "Tools", icon: Apps },
   // Processes is NOT here (Amber, 2 Sep: "processes are not a page on the sidebar, they
   // are part of setup only"). It was Templates, then Processes, as a destination beside
   // the work; it is configuration, so it lives at Setup → Processes and /processes
