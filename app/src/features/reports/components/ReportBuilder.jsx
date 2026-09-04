@@ -359,6 +359,23 @@ export default function ReportBuilder({
     return saved && (themes[saved] || BUILT_IN_THEMES[saved]) ? saved : DEFAULT_THEME_KEY;
   });
   const activeTheme = useMemo(() => resolveTheme(themeKey, themes), [themeKey, themes]);
+
+  /**
+   * How wide the page on screen is, in px, from the paper it is set to.
+   *
+   * INTEGRATION EDIT. The canvas was `max-w-3xl` — a fixed 768px whatever the page setup
+   * said — so choosing Landscape changed the export and left the thing you were looking
+   * at portrait. Amber: *"when set to landscape the page doesn't display landscape"*.
+   *
+   * The scale is pinned to A4 portrait = 768px, which is exactly what `max-w-3xl` gave,
+   * so the default view is unchanged to the pixel and only the other combinations move.
+   */
+  const pageWidth = useMemo(() => {
+    const MM = { a4: [210, 297], letter: [216, 279] };
+    const [shortSide, longSide] = MM[page.pageSize] || MM.a4;
+    const acrossMm = page.orientation === 'landscape' ? longSide : shortSide;
+    return Math.round(acrossMm * (768 / 210));
+  }, [page.pageSize, page.orientation]);
   const [selectedId, setSelectedId] = useState(null);
   const [preview, setPreview] = useState(null); // compiled report model
   const [saveState, setSaveState] = useState('saved'); // saved | dirty | saving | error
@@ -543,6 +560,27 @@ export default function ReportBuilder({
         >
           <IconPlus /> Add block
         </button>
+        {/* INTEGRATION EDIT (see features/reports/README.md). The theme lived only in
+            Preview & Export, so you chose how the document looked after you had finished
+            writing it, and the page you wrote on was never the page you sent. Amber, 4
+            September: *"you should be able to choose the theme from the builder page
+            (works on preview and export), not just on the preview and export"*.
+
+            It is the same `themeKey` the overlay already reads and writes back through
+            onThemeChange, so the two controls are one setting and cannot disagree. */}
+        <label className="flex items-center gap-1 text-xs shrink-0">
+          <span className="text-white/50 hidden lg:inline">Theme</span>
+          <select
+            value={themeKey}
+            onChange={e => setThemeKey(e.target.value)}
+            className="text-xs bg-white/15 border border-white/20 rounded-lg px-2 py-1.5 text-white focus:outline-none [&>option]:text-[#00393f]"
+            title="How this document looks, on screen and in every export"
+          >
+            {Object.entries(themes).map(([key, t]) => (
+              <option key={key} value={key}>{t?.label || key}</option>
+            ))}
+          </select>
+        </label>
         {/* Page setup — paper size + orientation, saved with the report */}
         <label className="flex items-center gap-1 text-xs shrink-0">
           <span className="text-white/50 hidden lg:inline">Page</span>
@@ -550,7 +588,7 @@ export default function ReportBuilder({
             value={page.pageSize}
             onChange={e => setPage(p => ({ ...p, pageSize: e.target.value }))}
             className="text-xs bg-white/15 border border-white/20 rounded-lg px-2 py-1.5 text-white focus:outline-none [&>option]:text-[#00393f]"
-            title="Paper size for print / Save PDF / Word"
+            title="Paper size — on screen here, and in print, PDF and Word"
           >
             <option value="a4">A4</option>
             <option value="letter">Letter</option>
@@ -559,7 +597,7 @@ export default function ReportBuilder({
             value={page.orientation}
             onChange={e => setPage(p => ({ ...p, orientation: e.target.value }))}
             className="text-xs bg-white/15 border border-white/20 rounded-lg px-2 py-1.5 text-white focus:outline-none [&>option]:text-[#00393f]"
-            title="Page orientation for print / Save PDF / Word"
+            title="Page orientation — on screen here, and in print, PDF and Word"
           >
             <option value="portrait">Portrait</option>
             <option value="landscape">Landscape</option>
@@ -647,7 +685,8 @@ export default function ReportBuilder({
           <main className="flex-1 overflow-y-auto overscroll-contain" onClick={() => setSelectedId(null)}>
             <div
               ref={setDocRef}
-              className={`bg-white max-w-3xl mx-auto my-6 px-8 py-10 rounded-xl border shadow-sm min-h-[70%] transition-colors ${isOverDoc && activeDrag?.kind ? 'border-[#00393f] border-dashed' : 'border-neutral-200'}`}
+              style={{ maxWidth: pageWidth }}
+              className={`bg-white w-full mx-auto my-6 px-8 py-10 rounded-xl border shadow-sm min-h-[70%] transition-all ${isOverDoc && activeDrag?.kind ? 'border-[#00393f] border-dashed' : 'border-neutral-200'}`}
             >
               <h1 className="text-2xl font-bold text-[#00393f] leading-tight border-b-2 border-[#00393f] pb-4 mb-6">{title || 'Untitled report'}</h1>
               {widgets.length === 0 ? (
