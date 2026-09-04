@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 119 changes since then —
-- Added: Documents can be sent outside Lofty as a share link — a page a client opens with no login, with an optional password and a link that expires
-- Added: A shared link shows the document as it was when it was sent, and says so, rather than re-reading Lofty every time it is opened
-- Added: Real page-load timings are collected from Vercel deployments, grouped by page rather than by individual job or project
-- Fixed: The version in the footer names the commit it was built from on Vercel as well as Netlify, instead of reading "local" on a real deployment
-- Changed: Documents built in the Template Builder now carry Lofty's house document format — the same wordmark, colours, section rule and font as every other export
-- …and 114 more.
+Unreleased: 125 changes since then —
+- Changed: Setup is now Settings, and managers and above can open it — properties, processes, contacts, maintenance, the stage SLAs and the notification rules
+- Changed: Admin has moved off the sidebar to a cog in the top bar, and appears only for admins and super admins
+- Changed: Users, teams, permissions, the dictionary, the wiring, the bug and idea queues, the roadmap and the changelog are all now under the cog
+- Added: Managers can set how long a stage should take and who hears when it is overdue, without being able to rename or reorder the stages themselves
+- Added: Typing the address of a page above your permission level now says which level it needs and what yours is, instead of showing an empty screen
+- …and 120 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
