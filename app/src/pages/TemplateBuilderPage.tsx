@@ -29,6 +29,7 @@ import {
   createReportEngine,
   createReportRegistry,
   createThemeSet,
+  resolveTheme,
   helpers
 } from "../features/reports/index.js";
 import "../features/reports/reports.css";
@@ -191,7 +192,53 @@ export function TemplateBuilderPage() {
   );
   ctxRef.current = ctx;
 
-  const documentStore = useMemo(() => createDocumentStore(repo), [repo]);
+  /**
+   * Compile a stored document into the snapshot a share link serves.
+   *
+   * This is what makes a shared link safe to hand a client: it runs HERE, in the signed-in
+   * person's browser, so every block resolves through the ctx their own RLS produced. The
+   * endpoint that serves the link never queries anything, so it has no filter to forget
+   * (0095).
+   *
+   * `forExport` is implied by engine.compile, which is the same call Preview & Export
+   * makes — so a half-finished block renders as nothing rather than as an instruction to
+   * its author, and the client never reads "pick a project for this block".
+   *
+   * The theme is RESOLVED into the snapshot rather than named by key. A sent document
+   * should not restyle itself six weeks later because the brand palette moved.
+   */
+  const compileForShare = useCallback(
+    async (raw: unknown) => {
+      const doc = raw as ReportDocument;
+      const docSubject = doc.jobId
+        ? { type: "job" as const, id: doc.jobId }
+        : doc.projectId
+          ? { type: "project" as const, id: doc.projectId }
+          : null;
+      const compileCtx = { ...(ctx as object), subject: docSubject };
+      // Same ref swap Preview uses: a Library-section block expands through ctxRef, so it
+      // has to see this document's subject too or a nested property block renders blank.
+      ctxRef.current = compileCtx;
+      try {
+        return {
+          report: engine.compile(
+            { title: doc.title },
+            (doc.layout?.widgets ?? []) as ReportWidget[],
+            compileCtx
+          ),
+          theme: resolveTheme(doc.layout?.theme ?? LOFTY_THEME.key, themes)
+        };
+      } finally {
+        ctxRef.current = ctx;
+      }
+    },
+    [ctx]
+  );
+
+  const documentStore = useMemo(
+    () => createDocumentStore(repo, {}, { compile: compileForShare }),
+    [repo, compileForShare]
+  );
   const templateStore = useMemo(() => createLibraryStore(repo, "template"), [repo]);
   const sectionStore = useMemo(() => createLibraryStore(repo, "section"), [repo]);
   const storeFor = (t: OpenTarget) =>
@@ -610,6 +657,11 @@ export function TemplateBuilderPage() {
           // Only from a document, and it means "propose this layout as a template".
           // From a library entry it would be a template saved as a template.
           canSaveTemplate={open.lane === "document"}
+          // The module defaults to /reports/shared, which this app already uses for the
+          // signed-in Reports page. BASE_URL rather than a literal, for the reason
+          // App.tsx gives: `base` in vite.config.ts stays the one place the app's
+          // location is decided.
+          shareUrlBase={`${window.location.origin}${import.meta.env.BASE_URL}shared`}
           onClose={() => { setOpen(null); bump(); }}
           onSaved={(row: ReportStoreRow) =>
             setOpen(cur => (cur ? { ...cur, row } as OpenTarget : cur))}

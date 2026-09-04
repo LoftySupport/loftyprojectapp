@@ -17,19 +17,33 @@
 // store matches what is open. That is the whole reason the module's contract is a store
 // rather than a table name.
 //
-// WHAT IS NOT IMPLEMENTED, AND WHY THAT IS THE INTERFACE WORKING
+// FEATURE DETECTION IS REAL HERE, NOT DECORATIVE
 //
-//   createShareLink / deleteShareLink / fetchShared — absent, so the builder's Share
-//   panel is hidden. Reading a document by token means answering somebody with no
-//   session, which cannot go through RLS; it needs the `report-share` endpoint, and that
-//   is written but not deployed. The moment it is, these three methods are the whole of
-//   the wiring and no component changes.
+//   The builder shows its Share panel only when the store has BOTH createShareLink and
+//   deleteShareLink. So they are attached only when this store was given a `compile`
+//   function — because without one there is nothing to snapshot, and a Share button that
+//   appears and then apologises is worse than no Share button.
 //
-// The builder feature-detects every optional method rather than assuming it, so an
-// absence hides a control instead of breaking one.
+//   The library store never gets them: you share a document you sent, not a template
+//   somebody might start from.
 
 import { EMPTY_REPORT_TEMPLATE_LAYOUT } from '../../../../data/types';
+import { hashSharePassword } from '../../../../data/sharePassword';
 import { LOFTY_THEME } from './theme.js';
+
+/**
+ * How long a share link lives.
+ *
+ * The database makes an expiry mandatory — a link nobody revokes is a link still open in
+ * two years — and the module's Share panel does not ask for one, so the number is decided
+ * here. Thirty days is long enough for a client to read a progress report and come back
+ * to it, and short enough that a link forgotten in an email thread stops working before
+ * the job it describes is finished.
+ *
+ * It is NOT hidden: the panel prints the date beside the link, and re-sharing makes a new
+ * one. Change it here and nowhere else.
+ */
+const SHARE_DAYS = 30;
 
 /**
  * A stored row as the builder wants it.
@@ -138,8 +152,13 @@ export function createLibraryStore(repo, kind = 'template') {
  * @param {object} repo
  * @param {object} [subject] what a NEW document is about — { jobId } or { projectId }.
  *   Only used by create(); an existing document carries its own.
+ * @param {object} [opts]
+ * @param {(doc: object) => Promise<object>} [opts.compile] turn a stored document into the
+ *   compiled snapshot a share link serves. Omit it and the store has no share methods at
+ *   all, so the builder hides the Share panel rather than offering a button that fails.
  */
-export function createDocumentStore(repo, subject = {}) {
+export function createDocumentStore(repo, subject = {}, { compile } = {}) {
+  const shareMethods = buildShareMethods(repo, compile);
   return {
     async list() {
       return (await repo.listReportDocuments()).map(documentToRow);
@@ -173,6 +192,8 @@ export function createDocumentStore(repo, subject = {}) {
       return { ok: true };
     },
 
+    ...shareMethods,
+
     /**
      * "Save as template" — the builder's own button, and it lands exactly where Amber
      * asked it to: *"any user and above can create a template but a manager and above
@@ -194,6 +215,56 @@ export function createDocumentStore(repo, subject = {}) {
         name,
         layout: withTheme({ widgets: data?.widgets || [] })
       });
+    }
+  };
+}
+
+/**
+ * The two share methods, built only when the screen can compile a document.
+ *
+ * Split out so the object above reads as one thing: `...shareMethods` either adds both or
+ * adds neither, which is exactly the condition the builder checks.
+ */
+function buildShareMethods(repo, compile) {
+  if (typeof compile !== 'function') return {};
+  return {
+    /**
+     * Make a share link — a URL a client opens with no Lofty login.
+     *
+     * THE COMPILE HAPPENS HERE, IN THE BROWSER, AND THAT IS THE SECURITY DESIGN.
+     *
+     * `compile` is handed in by the screen because it needs the widget registry and the
+     * ctx, which this store has no business holding. It runs under the signed-in person's
+     * own session, so the document it produces contains only what their own RLS let them
+     * read — no margin they cannot see, no job they are not on. The endpoint that serves
+     * the link then has nothing to query and nothing to filter, which is the class of bug
+     * it removes rather than guards against.
+     *
+     * The module's panel passes `undefined` for the password when the box is unticked and
+     * a string when it is ticked. `null` is sent in the first case so that re-sharing a
+     * link whose box is unticked actually clears the old password rather than silently
+     * keeping it.
+     */
+    async createShareLink(id, password) {
+      const current = await repo.getReportDocument(id);
+      if (!current) throw new Error('That document no longer exists.');
+
+      const snapshot = await compile(current);
+      if (!snapshot?.report?.sections) {
+        // The database refuses this too, but failing here names the actual problem
+        // instead of surfacing a constraint violation to somebody clicking Share.
+        throw new Error('That document could not be prepared for sharing.');
+      }
+
+      const expiresAt = new Date(Date.now() + SHARE_DAYS * 86_400_000).toISOString();
+      const passwordHash = password ? await hashSharePassword(password) : null;
+
+      return documentToRow(await repo.shareReportDocument(id, { expiresAt, snapshot, passwordHash }));
+    },
+
+    /** Revoke it. The snapshot stays behind, so what was sent is still answerable. */
+    async deleteShareLink(id) {
+      return documentToRow(await repo.unshareReportDocument(id));
     }
   };
 }

@@ -7,6 +7,23 @@ do $$ begin if not exists (select 1 from pg_roles where rolname='authenticator')
 do $$ begin if not exists (select 1 from pg_roles where rolname='supabase_auth_admin') then create role supabase_auth_admin nologin; end if; end $$;
 grant anon, authenticated, service_role to authenticator;
 
+-- What Supabase actually does about table privileges, and the timing matters.
+--
+-- Supabase sets DEFAULT PRIVILEGES, so the grant lands as each table is created. The
+-- harness used to stand in for that with a blanket `grant … on all tables` in rls.sql,
+-- AFTER the migrations had run — which quietly re-granted anything a migration had
+-- deliberately revoked. 0095 revokes column access to the share snapshot and the password
+-- hash, and the probe for it read both columns straight back until this moved here.
+--
+-- A test harness that is more permissive than production does not just miss a bug, it
+-- manufactures a passing result for one.
+alter default privileges in schema public
+  grant select, insert, update, delete on tables to authenticated;
+alter default privileges in schema public
+  grant select on tables to anon;
+alter default privileges in schema public
+  grant usage, select on sequences to authenticated, anon;
+
 create schema if not exists auth authorization postgres;
 create schema if not exists extensions authorization postgres;
 

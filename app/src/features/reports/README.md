@@ -22,7 +22,7 @@ thing missing is a widget, and widgets live in `adapters/lofty/widgets.js`.
 ## What was changed on the way in, and why
 
 Everything below is a deviation from the module as published. Anyone re-syncing from
-`modules` has to re-apply these four, so they are listed rather than remembered.
+`modules` has to re-apply these six, so they are listed rather than remembered.
 
 1. **The brand chrome was recoloured.** Six hexes across `components/`, a straight
    substitution:
@@ -71,6 +71,12 @@ Everything below is a deviation from the module as published. Anyone re-syncing 
    module's built-ins. That is the module's own inconsistency and is left alone; under
    `house` all three renderers agree.
 
+6. **The Share panel says two more things.** The module's copy was "Anyone with this link
+   can view the compiled report", which leaves out both things somebody sending one to a
+   client needs to know: it stops working on a date, and it does not update. Both are
+   Lofty's design rather than the module's — the expiry is a database constraint, the
+   snapshot is `0095` — but the place a person needs to be told is the panel.
+
 ## The three adapter files
 
 Everything Lofty-specific is here and nowhere else.
@@ -111,15 +117,37 @@ so the two cannot drift apart again.
 `theme/tokens.css`. A document and the tool that made it may look different; a document
 and another document may not.
 
-## What is not wired, and what that costs
+## Sending a document outside Lofty
 
-- **Public share links.** The store implements none of the three share methods, so the
-  builder hides its Share panel. The columns exist (`0094`) and the endpoint is written
-  (`app/supabase/functions/report-share/`) and **not deployed** — read that folder's
-  README before switching it on, because two things in it are deliberately left empty so
-  an accidental deploy achieves nothing. Sending a document out today means exporting it.
-- **`SharedReportPage.jsx`** is not vendored, for the same reason — there is no public
-  route to render it on yet.
+Two ways, and they produce the same document because they compile the same way.
+
+**Preview & Export** — print, PDF, Word, Markdown, HTML.
+
+**Share** — a link a client opens with no login, at `/shared/:token`. What makes it safe
+to hand out is that it is a **snapshot**: when the author clicks Share, the document is
+compiled once, in their browser, under their own session and therefore their own RLS, and
+that compiled model is stored (`0095`). The endpoint returns it verbatim.
+
+So the endpoint has no query to scope wrongly, and nothing an author could not see can be
+in what a client receives. The trade is that a shared link does not update, which is what
+sending a document has always meant — the Share panel and the shared page both say so.
+
+| Piece | Where |
+| --- | --- |
+| The panel | the module's own `ReportSharePanel`, shown because the store has both share methods |
+| The two store methods | `adapters/lofty/store.js` → `buildShareMethods` |
+| The compile | `pages/TemplateBuilderPage.tsx` → `compileForShare`, because it needs the registry and the ctx |
+| The password | `data/sharePassword.ts` derives, `functions/report-share/verify.ts` checks |
+| The public page | `pages/SharedDocumentPage.tsx`, outside `RequireAuth` and outside `AppShell` |
+| The endpoint | `supabase/functions/report-share/` — read its README before deploying |
+
+**The endpoint still has to be deployed and given `SHARE_ALLOWED_ORIGINS`.** Until then it
+refuses everything, so the Share panel produces a link that will not open.
+
+**`SharedReportPage.jsx` is still not vendored.** It resolves widgets against a ctx it
+fetches, which is the design this integration deliberately does not use;
+`SharedDocumentPage.tsx` renders the stored snapshot instead and is about a third the
+size.
 
 ## Re-syncing from `modules`
 

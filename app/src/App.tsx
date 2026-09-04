@@ -8,6 +8,7 @@ import { LegalPage } from "./pages/LegalPage";
 import { NotSetUpPage } from "./pages/NotSetUpPage";
 import { DemoGatePage } from "./pages/DemoGatePage";
 import { ReportPage } from "./pages/ReportPage";
+import { SharedDocumentPage } from "./pages/SharedDocumentPage";
 import { SignInPage } from "./pages/SignInPage";
 import { DataProvider } from "./data/DataProvider";
 import { PermissionProvider } from "./data/PermissionProvider";
@@ -247,6 +248,14 @@ export default function App() {
                 without an account has not been published. */}
             <Route path="privacy" element={<LegalPage kind="privacy" />} />
             <Route path="terms" element={<LegalPage kind="terms" />} />
+            {/* The one route that renders to somebody with no Lofty account. Outside
+                RequireAuth because that is the whole point of a share link, and outside
+                AppShell because a client should get the document and not our navigation.
+
+                It reads nothing through the repository — see the file. Everything it
+                shows comes from the report-share endpoint, which returns one stored
+                snapshot: no jobs, no properties, no people, nothing to scope wrongly. */}
+            <Route path="shared/:token" element={<SharedDocumentPage />} />
             {/* Outside RequireAuth on purpose — see RequireSignedIn. This is the one
                 page a held account may open. */}
             <Route element={<RequireSignedIn />}>

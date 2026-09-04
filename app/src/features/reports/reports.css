@@ -92,3 +92,65 @@
   margin: 0;
   padding-left: 1.25rem;
 }
+
+/* ─────────────────────────────────────────── the public shared-document page
+
+   A client's whole experience of Lofty is this one page, so it is a sheet of paper on a
+   plain ground and nothing else — no navigation, no branding chrome, no footer links.
+   The document brings its own wordmark and its own colours from the snapshot's theme.
+
+   `.nokey` is applied by ReportDocument itself, so the preflight substitute above already
+   covers everything inside the sheet. These rules are only the page around it. */
+.shared-doc {
+  min-height: 100vh;
+  background: #f5f6f8;
+  padding: clamp(16px, 4vw, 48px) clamp(12px, 4vw, 32px);
+  box-sizing: border-box;
+}
+
+.shared-doc-centred {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.shared-doc-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(320px, 100%);
+  margin-top: 8px;
+  text-align: left;
+}
+
+/* The sheet. `max-width` in ch rather than px so it tracks the document's own measure,
+   and the shadow is the only ornament on the page. */
+.shared-doc-sheet {
+  max-width: 900px;
+  margin: 0 auto;
+  background: #ffffff;
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(65, 64, 66, 0.08), 0 8px 24px rgba(65, 64, 66, 0.08);
+  padding: clamp(20px, 5vw, 56px);
+  overflow-x: auto;
+}
+
+.shared-doc-foot {
+  max-width: 900px;
+  margin: 18px auto 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #67666a;
+  text-align: center;
+}
+
+/* Printing a shared document is a thing a client will do, and the ground and the shadow
+   are ink they did not ask for. */
+@media print {
+  .shared-doc { background: #ffffff; padding: 0; }
+  .shared-doc-sheet { box-shadow: none; border-radius: 0; padding: 0; max-width: none; }
+  .shared-doc-foot { color: #8a898d; }
+}

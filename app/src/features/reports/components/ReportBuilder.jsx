@@ -244,7 +244,26 @@ export function ReportSharePanel({ report: initialReport, store, onUpdate, onClo
       <div className="p-4 space-y-4 flex-1">
         {rep.shareToken ? (
           <>
-            <p className="text-xs text-[#898A8D]">Anyone with this link can view the compiled report.</p>
+            {/* INTEGRATION EDIT (see features/reports/README.md). The module said only
+                "anyone with this link can view the compiled report", which leaves out the
+                two things somebody sending one to a client needs to know: it stops
+                working, and it does not update. Both are Lofty's design rather than the
+                module's — the expiry is a database constraint and the snapshot is 0095 —
+                but the place a person needs to be told is here. */}
+            <p className="text-xs text-[#898A8D]">
+              Anyone with this link can view the document. It shows the numbers as they
+              were when you made the link and does not update — re-share to send newer
+              ones.
+              {rep.shareExpiresAt && (
+                <> The link stops working on{' '}
+                  <strong className="text-[#00393f]">
+                    {new Date(rep.shareExpiresAt).toLocaleDateString(undefined, {
+                      day: 'numeric', month: 'long', year: 'numeric',
+                    })}
+                  </strong>.
+                </>
+              )}
+            </p>
             <div className="flex gap-2">
               <input
                 readOnly

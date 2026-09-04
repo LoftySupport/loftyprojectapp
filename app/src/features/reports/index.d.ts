@@ -268,7 +268,16 @@ export const LOFTY_THEME_SPECS: Record<string, ReportTheme>;
 export function createLibraryStore(repo: unknown, kind?: "template" | "section"): ReportStore;
 export function createDocumentStore(
   repo: unknown,
-  subject?: { jobId?: string | null; projectId?: number | null }
+  subject?: { jobId?: string | null; projectId?: number | null },
+  opts?: {
+    /**
+     * Compile a stored document into the snapshot a share link serves. Supplying it is
+     * what adds `createShareLink` and `deleteShareLink` to the returned store, and the
+     * builder shows its Share panel only when both are present — so omitting this hides
+     * the button rather than offering one that fails.
+     */
+    compile?: (doc: unknown) => Promise<{ report: CompiledReport; theme?: unknown }>;
+  }
 ): ReportStore;
 
 export type { ReactNode };
