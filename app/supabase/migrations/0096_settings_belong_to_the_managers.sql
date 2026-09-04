@@ -129,74 +129,72 @@ comment on table notification_rules is
   'Who hears a notification type, and after how long. A manager''s to set (0096) — it sits on Settings → Automations beside the SLA that decides when overdue starts. Reading stays open: what will happen to you is not a secret.';
 
 -- ---------------------------------------------------------------------- proof
--- Watched biting, both ways, as `authenticated` at manager — the level the whole
--- migration is about. The RLS-level probes live in verify/rls.sql where the harness runs
--- them on every check; this block is the one that proves the policy and the trigger the
--- moment the migration applies, because a migration whose own claim is only tested
--- somewhere else is a claim nobody has watched.
+-- WHAT THIS BLOCK MAY AND MAY NOT ASSERT, because the first version got it wrong.
+--
+-- It used to sign in as a manager and try the writes: insert an `auth.users` row and a
+-- `profiles` row, set request.jwt.claim.sub, set an SLA, be refused a rename. That works
+-- perfectly on verify/'s throwaway replay database and is the wrong thing to run on the
+-- live one — **it is the only migration in this set that would ever have written to
+-- `auth.users`**, production carries `trg_login_activity_auth_users` on that table (0008,
+-- which is why no migration here can create it), and the audit trail would record a
+-- person who never existed being created and deleted. A proof that dirties production to
+-- prove something about a test database is not a proof, it is a side effect.
+--
+-- The guard also cannot be exercised from here on principle: it returns early when
+-- `auth.uid()` is null, which is exactly what a migration is. Reaching it needs a signed-in
+-- identity, and the only honest ways to get one are to invent a person or to impersonate a
+-- real employee.
+--
+-- So the behaviour is proved where the harness already builds a test identity for every
+-- policy in the app — `verify/rls.sql`, manager block, probes 4, 5 and 6 — and all three
+-- were watched failing before they were kept: drop the trigger and the rename goes
+-- through, drop either policy and the write it allows stops. What is left here is the
+-- structural half: that the four objects this migration is made of exist, named as the
+-- rest of the file names them. Cheap, and it catches a rename or a botched replay.
 do $$
 declare
-  probe_uid uuid := gen_random_uuid();
-  probe_profile uuid;
-  stage uuid;
-  before_days smallint;
+  missing text[] := '{}';
 begin
-  insert into auth.users (id, email) values (probe_uid, '0096-probe@lofty.com.au');
-  insert into profiles (profile_email, profile_first_name, profile_last_name,
-                        profile_permission, profile_auth_user_id)
-  values ('0096-probe@lofty.com.au', 'Sla', 'Probe', 'manager', probe_uid)
-  returning profile_id into probe_profile;
+  if not exists (
+    select 1 from pg_policies
+     where schemaname = 'public' and tablename = 'pipeline_stages'
+       and policyname = 'managers set stage slas' and cmd = 'UPDATE'
+  ) then missing := missing || 'policy "managers set stage slas" on pipeline_stages'::text; end if;
 
-  select ps.pipeline_stage_id, ps.pipeline_stage_expected_days into stage, before_days
-  from pipeline_stages ps
-  join pipelines p using (pipeline_id)
-  where p.pipeline_key = 'build_lifecycle'
-  order by ps.pipeline_stage_position
-  limit 1;
+  if not exists (
+    select 1 from pg_trigger
+     where tgrelid = 'public.pipeline_stages'::regclass
+       and tgname = 'pipeline_stages_guard_shape'
+       and not tgisinternal
+  ) then missing := missing || 'trigger pipeline_stages_guard_shape'::text; end if;
 
-  set local role authenticated;
-  perform set_config('request.jwt.claim.sub', probe_uid::text, true);
+  if not exists (select 1 from pg_proc where proname = 'guard_stage_shape_change')
+  then missing := missing || 'function guard_stage_shape_change()'::text; end if;
 
-  -- The SLA goes through.
-  update pipeline_stages set pipeline_stage_expected_days = 21
-   where pipeline_stage_id = stage;
-  if not found then
-    raise exception 'a manager could not set an SLA — the policy is missing';
+  -- Both halves of the notification move, and the absence of what they replaced: a
+  -- replay that created the manager policy without dropping the admin one would leave
+  -- the floor where it was and read as a pass.
+  if not exists (
+    select 1 from pg_policies
+     where schemaname = 'public' and tablename = 'notification_types'
+       and policyname = 'managers write notification types'
+  ) then missing := missing || 'policy "managers write notification types"'::text; end if;
+
+  if not exists (
+    select 1 from pg_policies
+     where schemaname = 'public' and tablename = 'notification_rules'
+       and policyname = 'managers write notification rules'
+  ) then missing := missing || 'policy "managers write notification rules"'::text; end if;
+
+  if exists (
+    select 1 from pg_policies
+     where schemaname = 'public'
+       and policyname in ('admins write notification types', 'admins write notification rules')
+  ) then missing := missing || 'the admin-era notification policies are still there'::text; end if;
+
+  if array_length(missing, 1) is not null then
+    raise exception '0096 did not finish: % missing', array_to_string(missing, '; ');
   end if;
 
-  -- The shape does not.
-  begin
-    update pipeline_stages set pipeline_stage_name = pipeline_stage_name || ' (renamed)'
-     where pipeline_stage_id = stage;
-    raise exception 'a manager renamed a stage';
-  exception
-    when insufficient_privilege then null;
-  end;
-
-  -- Neither does adding one: the manager policy is FOR UPDATE, and insert stays 0029's.
-  begin
-    insert into pipeline_stages (pipeline_id, pipeline_stage_name, pipeline_stage_position)
-    values ((select pipeline_id from pipelines where pipeline_key = 'build_lifecycle'),
-            '__0096_probe__', 98);
-    raise exception 'a manager added a stage';
-  exception
-    when insufficient_privilege then null;
-  end;
-
-  -- And the rules a manager is now meant to write.
-  insert into notification_rules (notification_type_id, notification_rule_audience)
-  values ('task_overdue', 'managers');
-
-  reset role;
-  perform set_config('request.jwt.claim.sub', '', true);
-
-  -- Left exactly as found, plus the policies and the trigger.
-  delete from notification_rules
-   where notification_type_id = 'task_overdue' and notification_rule_audience = 'managers';
-  update pipeline_stages set pipeline_stage_expected_days = before_days
-   where pipeline_stage_id = stage;
-  delete from profiles where profile_id = probe_profile;
-  delete from auth.users where id = probe_uid;
-
-  raise notice 'ok  a manager sets an SLA and a notification rule, and still cannot rename or add a stage';
+  raise notice 'ok  0096: the SLA policy, the shape guard and the manager notification policies are in place';
 end $$;
