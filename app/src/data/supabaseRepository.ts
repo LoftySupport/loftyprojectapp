@@ -5,6 +5,7 @@ import type { DictionaryOverride } from "./dictionary";
 import {
   changesBetween, headline, idsIn, recordLink, type NameLookup, type SubjectNames } from "./auditNarrative";
 import { createStubRepository } from "./stubRepository";
+import { newShareToken } from "./sharePassword";
 import { propertyProcessMethods } from "./supabasePropertyProcessRepository";
 import { partyMethods } from "./supabasePartyRepository";
 import { notificationMethods } from "./supabaseNotificationRepository";
@@ -15,6 +16,7 @@ import { EMPTY_REPORT_TEMPLATE_LAYOUT } from "./types";
 import type {
   ActivityEntry,
   NewReportDocument,
+  NewReportDocumentShare,
   NewReportTemplate,
   ReportDocument,
   ReportTemplate,
@@ -3344,6 +3346,59 @@ export function createSupabaseRepository(): Repository {
       }
     },
 
+    /**
+     * Make a share link, or replace the one that is there.
+     *
+     * The snapshot arrives already compiled, from the browser, under this person's own
+     * session — which is the whole security design (0095). Nothing is resolved here and
+     * nothing is resolved when the link is opened.
+     *
+     * Passing `passwordHash: null` explicitly clears a password; omitting it keeps
+     * whatever is set, so "regenerate the link" does not silently drop protection.
+     */
+    async shareReportDocument(id: string, input: NewReportDocumentShare): Promise<ReportDocument> {
+      const payload: Record<string, unknown> = {
+        report_document_share_token: newShareToken(),
+        report_document_share_expires_at: input.expiresAt,
+        report_document_share_snapshot: input.snapshot
+      };
+      if (input.passwordHash !== undefined) {
+        payload.report_document_share_password_hash = input.passwordHash;
+      }
+      const { data, error } = await client
+        .from("report_documents")
+        .update(payload)
+        .eq("report_document_id", id)
+        .select(REPORT_DOCUMENT_COLUMNS);
+      if (error) throw error;
+      if (!data?.length) {
+        throw new Error("That link was not created — the document no longer exists, or you do not have permission to change it.");
+      }
+      return toReportDocument(data[0] as unknown as ReportDocumentRow);
+    },
+
+    /**
+     * Revoke the link. The snapshot stays: "what did we send them" is worth more than the
+     * bytes it costs, and 0095's constraint is an implication rather than an equivalence
+     * precisely so that it can.
+     */
+    async unshareReportDocument(id: string): Promise<ReportDocument> {
+      const { data, error } = await client
+        .from("report_documents")
+        .update({
+          report_document_share_token: null,
+          report_document_share_expires_at: null,
+          report_document_share_password_hash: null
+        })
+        .eq("report_document_id", id)
+        .select(REPORT_DOCUMENT_COLUMNS);
+      if (error) throw error;
+      if (!data?.length) {
+        throw new Error("That link was not revoked — the document no longer exists, or you do not have permission to change it.");
+      }
+      return toReportDocument(data[0] as unknown as ReportDocumentRow);
+    },
+
     async deletePropertyDef(key: string): Promise<void> {
       const { data, error } = await client
         .from("property_defs")
@@ -3552,7 +3607,7 @@ const REPORT_TEMPLATE_COLUMNS =
 // adds a column later — `hasSharePassword` below is computed from a boolean the database
 // sends instead. A hash in a browser response is a hash somebody can attack offline.
 const REPORT_DOCUMENT_COLUMNS =
-  "report_document_id, report_document_title, report_document_layout, report_template_id, job_id, project_id, report_document_share_token, report_document_share_expires_at, report_document_created_at, report_document_created_by, report_document_updated_at, report_document_updated_by";
+  "report_document_id, report_document_title, report_document_layout, report_template_id, job_id, project_id, report_document_share_token, report_document_share_expires_at, report_document_has_share_password, report_document_has_share_snapshot, report_document_created_at, report_document_created_by, report_document_updated_at, report_document_updated_by";
 
 type ReportTemplateRow = {
   report_template_id: string;
@@ -3580,6 +3635,11 @@ type ReportDocumentRow = {
   project_id: number | null;
   report_document_share_token: string | null;
   report_document_share_expires_at: string | null;
+  // Generated columns (0095). The hash and the snapshot they derive from are deliberately
+  // NOT in the select list: one is attackable offline, the other is a whole document on
+  // every row of a list nobody is rendering.
+  report_document_has_share_password: boolean;
+  report_document_has_share_snapshot: boolean;
   report_document_created_at: string;
   report_document_created_by: string | null;
   report_document_updated_at: string;
@@ -3618,9 +3678,8 @@ function toReportDocument(r: ReportDocumentRow): ReportDocument {
     projectId: r.project_id,
     shareToken: r.report_document_share_token,
     shareExpiresAt: r.report_document_share_expires_at,
-    // Nothing writes a share yet, so this is false on every row today. It is computed
-    // rather than omitted so the shape does not change when the endpoint is deployed.
-    hasSharePassword: false,
+    hasSharePassword: r.report_document_has_share_password,
+    hasShareSnapshot: r.report_document_has_share_snapshot,
     createdAt: r.report_document_created_at,
     createdBy: r.report_document_created_by,
     updatedAt: r.report_document_updated_at,

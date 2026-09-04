@@ -1797,6 +1797,61 @@ so an accidental deploy achieves nothing.
 **This is the one requirement not delivered live**, and the two questions it waits on are
 Lofty's: which origins may open a link, and what a person outside Lofty may see of a job.
 
+### 4 September, later — the second question answers itself (0095)
+
+Amber's screenshots arrived and named the audience: *"Create a shareable link so clients
+or teammates can view this report without logging in."* A client. Somebody with no account
+at all.
+
+The question above — *what may a person outside Lofty see of a job* — turns out to be the
+wrong question, and answering it as asked is what produces the dangerous endpoint. To
+answer it you build `loadViewerContext()`: a function holding the service role, re-querying
+jobs and properties and people with RLS switched off, filtering each one to the record the
+document is about. Every query in it is one forgotten `.eq()` from returning the whole book
+of work to anybody with a link. The endpoint's own comment said as much before it was
+written.
+
+**So the link does not resolve anything.** When the author clicks Share, the document is
+compiled once — in their browser, under their session, through their RLS — and the
+compiled model is stored in `report_document_share_snapshot`. The endpoint returns it.
+
+| | live resolution | snapshot |
+| --- | --- | --- |
+| What the endpoint queries | jobs, properties, people, teams, with RLS off | one row, by token |
+| Where a leak could come from | any query that forgets its filter | nowhere: there is no query |
+| What strips restricted data | a second copy of the permission rules, in TypeScript | the author's own RLS, already applied |
+| What the client sees in March | whatever is true in March | what was sent in September |
+| What the author saw when sending | approximately this | exactly this |
+
+The cost is real and is stated in three places — the Share panel, the shared page, and
+here: **a shared link does not update.** Re-share to send newer numbers. That is what
+sending a document has always meant, and it is precisely the behaviour of the PDF that
+would otherwise have been attached to the same email.
+
+Three things fell out of it that were not the point but are worth keeping:
+
+- **Column privileges are not row privileges.** RLS chooses rows and says nothing about
+  columns, so any signed-in session could read the password hash and the snapshot off a
+  row it could already see. `0095` revokes `select` on the table and re-grants an explicit
+  column list — an inversion, because a column-level `revoke` does not subtract from a
+  table-level `grant`, and the first version of it was a silent no-op. A column added later
+  is now invisible until somebody grants it, which is the failure worth having.
+- **The verify harness was more permissive than production.** It stood in for Supabase's
+  grants with `grant … on all tables` in `rls.sql`, running *after* the migrations — so it
+  re-granted what `0095` had just revoked, and the probe read both columns straight back.
+  It now uses `alter default privileges` in the shim, the way Supabase does, so the grant
+  lands as each table is created. A harness looser than production does not merely miss a
+  bug; it manufactures a passing result for one.
+- **Where a password is hashed changes what it protects.** The dictionary previously said
+  hashing in the browser protects nothing. That is true at *verification* time, where the
+  hash becomes the password. At *creation* time it is the opposite: the plaintext never
+  leaves the tab that typed it. So the browser derives (PBKDF2-SHA256, 210k rounds) and the
+  endpoint verifies from the plaintext the viewer sends. `npm run check:share-password`
+  imports both real implementations and asserts they agree.
+
+What is left is not a decision: the endpoint has to be **deployed** and given
+`SHARE_ALLOWED_ORIGINS`. Until it is, the Share panel makes a link that will not open.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

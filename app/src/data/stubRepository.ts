@@ -469,6 +469,8 @@ export function createStubRepository(): Repository {
     async getReportDocument() { return null; },
     async createReportDocument(): Promise<never> { throw new Error("Creating a document needs Supabase."); },
     async updateReportDocument(): Promise<never> { throw new Error("Saving a document needs Supabase."); },
-    async deleteReportDocument(): Promise<never> { throw new Error("Removing a document needs Supabase."); }
+    async deleteReportDocument(): Promise<never> { throw new Error("Removing a document needs Supabase."); },
+    async shareReportDocument(): Promise<never> { throw new Error("Creating a share link needs Supabase."); },
+    async unshareReportDocument(): Promise<never> { throw new Error("Revoking a share link needs Supabase."); }
   };
 }

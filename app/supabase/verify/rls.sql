@@ -41,8 +41,12 @@ grant usage on schema public to authenticated, anon;
 -- Supabase also grants the API roles usage on `extensions` (pg_trgm operators in searches,
 -- pgcrypto in offer_maintenance_item run as the caller); the shim has to say so too.
 grant usage on schema extensions to authenticated, anon;
-grant select, insert, update, delete on all tables in schema public to authenticated;
-grant select on all tables in schema public to anon;
+--
+-- The TABLE grants are NOT here any more. They are default privileges in
+-- supabase-shim.sql, which runs before the migrations, so each table gets them as it is
+-- created — the way Supabase does it. Granting on `all tables` from here ran after every
+-- migration and re-granted whatever a migration had revoked on purpose, which made 0095's
+-- column revoke read as broken when it was not. See the note in the shim.
 
 -- Planted as the owner, before any role is assumed: 0064's internal lane can only be
 -- written by an admin, and the probe that matters is whether an ordinary person can READ
@@ -1811,6 +1815,66 @@ begin
   get diagnostics n = row_count;
   if n >= 3 then raise notice 'ok  an admin clears the library';
   else raise warning 'FAIL: an admin deleted % library entries', n; end if;
+end $$;
+reset role;
+reset request.jwt.claim.sub;
+
+\echo '--- sharing: a document leaves Lofty as a snapshot, and two columns never come back ---'
+
+-- Sharing is an UPDATE, so the floor is the one editing already had (0094). What is new
+-- is that the two columns a share writes must not be READABLE by anybody signed in,
+-- whatever their level: 0095 revokes the column grant, because RLS chooses rows and says
+-- nothing about columns. Run as a plain user, which is the weakest thing that can share.
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+do $$
+declare
+  doc uuid;
+  n integer;
+  snap jsonb := '{"report": {"title": "__rls__ progress report", "sections": []}}'::jsonb;
+begin
+  insert into report_documents (report_document_title) values ('__rls__ to share')
+    returning report_document_id into doc;
+
+  update report_documents
+     set report_document_share_token = '__rls__tok',
+         report_document_share_expires_at = now() + interval '30 days',
+         report_document_share_snapshot = snap
+   where report_document_id = doc;
+  select count(*) into n from report_documents
+   where report_document_id = doc and report_document_share_token = '__rls__tok';
+  if n = 1 then raise notice 'ok  a user shares their own document';
+  else raise warning 'FAIL: a user could not share their own document'; end if;
+
+  -- The derived boolean answers what the app asks…
+  select count(*) into n from report_documents
+   where report_document_id = doc and report_document_has_share_snapshot;
+  if n = 1 then raise notice 'ok  the app can tell a document was shared';
+  else raise warning 'FAIL: has_share_snapshot did not report a share'; end if;
+
+  -- …and the columns behind it cannot be read back, by this user or any other.
+  begin
+    perform report_document_share_snapshot from report_documents where report_document_id = doc;
+    raise warning 'FAIL: a signed-in user read the share snapshot';
+  exception when insufficient_privilege then
+    raise notice 'ok  the snapshot is not readable by a signed-in session';
+  end;
+  begin
+    perform report_document_share_password_hash from report_documents where report_document_id = doc;
+    raise warning 'FAIL: a signed-in user read the share password hash';
+  exception when insufficient_privilege then
+    raise notice 'ok  the password hash is not readable by a signed-in session';
+  end;
+
+  -- Revoking keeps the record of what was sent — 0095's constraint is an implication
+  -- rather than an equivalence precisely so that it can.
+  update report_documents
+     set report_document_share_token = null, report_document_share_expires_at = null
+   where report_document_id = doc;
+  select count(*) into n from report_documents
+   where report_document_id = doc and report_document_has_share_snapshot;
+  if n = 1 then raise notice 'ok  revoking a link keeps what was sent';
+  else raise warning 'FAIL: revoking a link discarded the snapshot'; end if;
 end $$;
 reset role;
 reset request.jwt.claim.sub;

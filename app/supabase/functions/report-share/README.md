@@ -1,41 +1,63 @@
-# report-share — NOT DEPLOYED
+# report-share
 
-This endpoint would serve a shared document to somebody with **no Lofty login**. It is
-written, and it is deliberately not deployed. Nothing in the app calls it, and nothing
-writes a share token, so today there is no anonymous path into `report_documents` at all.
+Serves one shared document to somebody with **no Lofty login**.
 
-## Why it cannot be a table read
+## What it returns, and what it cannot return
 
-RLS decides which rows a *signed-in* person sees. A share link is opened by somebody with
-no session, so the only way to serve it through RLS would be to grant `anon` a SELECT
-policy on `report_documents` — which would expose **every other document in the table** to
-anyone holding any link. That is not a policy that can be written narrowly enough: the
-token is in the request, not in the session, so the database cannot key on it safely.
+A stored snapshot and the document's title. That is the whole response.
 
-So it has to be a server endpoint holding the service role, which returns one row and only
-the parts of it a viewer may see.
+It does not read jobs, properties, people, teams or processes — and could not usefully be
+made to. The document was compiled **before it got here**, in the author's browser, under
+the author's session and therefore the author's RLS, and stored on the row (`0095`). This
+function looks the row up by token, checks the expiry and the password, and hands back
+what is stored.
 
-## Before deploying it, decide these
+That is the security design rather than a simplification of it. An earlier draft of this
+file held a `loadViewerContext()` that re-queried the app with the service role — RLS off —
+so that live blocks could resolve for a viewer. Its own comment called it *"the single most
+likely serious bug in an endpoint of this kind"*, because one forgotten `.eq(job_id, …)`
+returns Lofty's whole book of work to anybody with a link. There is now no query here that
+reads anything except the single row asked for.
 
-1. **Which origins may call it.** `ALLOWED_ORIGINS` is empty, and with it empty the
-   function refuses every browser. That is the safe default and it is why the function
-   does nothing useful as it stands.
-2. **What a viewer's context contains.** `loadViewerContext()` is the security-critical
-   part and it currently returns nothing, so a shared document renders its prose and its
-   typed tables and says so for every live block. Filling it in means deciding what a
-   person outside Lofty may see of a job — and every query in it must be filtered to the
-   one record the document is about. A query that forgets its filter returns the whole
-   book of work to anybody with a link.
-3. **Whether links may be passwordless.** The column exists; the app does not offer it yet.
+The cost is stated where a person can see it: a shared link does not update, the Share
+panel says so, and the page itself says so at the bottom. Re-share to send newer numbers.
 
-## Turning it on, once those are answered
+## Deploying it
 
-- `supabase functions deploy report-share`
-- add `createShareLink` / `deleteShareLink` / `fetchShared` to `createDocumentStore` in
-  `app/src/features/reports/adapters/lofty/store.js` — the builder feature-detects them
-  and shows its Share panel the moment all three exist
-- add a public route for `/documents/shared/:token` outside the auth gate, rendering the
-  module's `SharedReportPage` (which this integration currently does not vendor)
+```bash
+supabase functions deploy report-share --no-verify-jwt
+supabase secrets set SHARE_ALLOWED_ORIGINS="https://<the app's domain>"
+```
 
-Nothing in the database changes: `0094` already carries the token, the mandatory expiry
-and the password hash.
+`--no-verify-jwt` is required and is the point: the caller has no account. What stands in
+for a session is the 256-bit token, the mandatory expiry, the origin allowlist and the
+optional password.
+
+**`SHARE_ALLOWED_ORIGINS` is a comma-separated list and there is no default.** With the
+secret unset every request is refused with *"Sharing is not switched on."*, so deploying
+before deciding gets an endpoint that answers nothing. Set it to the origins the app is
+actually served from — during the Netlify → Vercel migration that is both, plus any
+preview URL somebody is testing on.
+
+The origin is checked twice on purpose. CORS headers tell a *browser* not to read a
+response; they do not stop the request being made or answered. So there is also a plain
+refusal in the handler, which is the one that actually refuses.
+
+## Passwords
+
+`verify.ts` holds the check, split out of `index.ts` so it can be tested: `index.ts` calls
+`Deno.serve()` at the top level and imports from an `npm:` specifier, so a Node script
+cannot import it. `npm run check:share-password` imports **this file's** verifier and the
+browser's hasher and asserts they agree — 23 assertions, including that a malformed stored
+value locks the link rather than throwing.
+
+PBKDF2-SHA256 with the iteration count carried inside the stored string, so raising it
+later leaves existing links verifiable. Web Crypto on both sides, no dependency, one
+implementation. The comparison is constant-time; `===` on the digests would leak the
+position of the first wrong byte to anybody timing the endpoint.
+
+## What it deliberately does not distinguish
+
+"No such token" and "revoked" are the same 404 with the same sentence. Telling them apart
+tells somebody probing tokens which half they got right. "Expired" and "needs a password"
+*are* distinguished, because both are things the person holding the link can act on.

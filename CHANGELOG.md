@@ -14,6 +14,8 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Documents can be sent outside Lofty as a share link — a page a client opens with no login, with an optional password and a link that expires
+- A shared link shows the document as it was when it was sent, and says so, rather than re-reading Lofty every time it is opened
 - Real page-load timings are collected from Vercel deployments, grouped by page rather than by individual job or project
 - Documents — make a progress report, a client letter or a maintenance report from a template, and change whatever that one needs without touching the template
 - A template library, with reusable sections that update everywhere when you edit them

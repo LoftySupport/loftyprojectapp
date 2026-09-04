@@ -4,6 +4,7 @@ import type {
   AddressHistoryEntry,
   CloneOptions,
   NewReportDocument,
+  NewReportDocumentShare,
   NewReportTemplate,
   ReportDocument,
   ReportDocumentPatch,
@@ -789,6 +790,16 @@ export interface Repository {
   updateReportDocument(id: string, patch: ReportDocumentPatch): Promise<ReportDocument>;
   /** The author, or admin and above. */
   deleteReportDocument(id: string): Promise<void>;
+  /**
+   * Make or replace a share link — a URL a client opens with no Lofty login.
+   *
+   * The snapshot is compiled by the caller, in the browser, under their own session, so
+   * it holds only what their own RLS let them see. Nothing re-resolves when the link is
+   * opened: a shared link is a sent document, not a live window (0095).
+   */
+  shareReportDocument(id: string, input: NewReportDocumentShare): Promise<ReportDocument>;
+  /** Revoke the link. The snapshot survives, so "what did we send them" does too. */
+  unshareReportDocument(id: string): Promise<ReportDocument>;
 }
 
 export type RepositoryMethod = Exclude<keyof Repository, "name" | "wired">;
@@ -985,7 +996,9 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "getReportDocument",
   "createReportDocument",
   "updateReportDocument",
-  "deleteReportDocument"
+  "deleteReportDocument",
+  "shareReportDocument",
+  "unshareReportDocument"
 ];
 
 /** Human labels for the wiring checklist on the Status page. */
@@ -1184,5 +1197,7 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   getReportDocument: "report_documents",
   createReportDocument: "report_documents",
   updateReportDocument: "report_documents",
-  deleteReportDocument: "report_documents"
+  deleteReportDocument: "report_documents",
+  shareReportDocument: "report_documents",
+  unshareReportDocument: "report_documents"
 };

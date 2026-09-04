@@ -2943,15 +2943,22 @@ export interface ReportDocument {
   jobId: string | null;
   projectId: number | null;
   /**
-   * Sharing. Inert as shipped — nothing writes these, because reading by token needs the
-   * `report-share` endpoint and that is not deployed.
+   * Sharing — a link a client can open with no Lofty login.
    *
    * `hasSharePassword` and never the hash: a hash returned to the browser is a hash
    * somebody can attack offline, and the browser has no use for it either way.
+   *
+   * The expiry is mandatory by constraint. A link nobody revokes is a link that is still
+   * open in two years, so "forever" is unwritable rather than merely discouraged.
    */
   shareToken: string | null;
   shareExpiresAt: IsoDateTime | null;
   hasSharePassword: boolean;
+  /**
+   * Whether a snapshot exists — never the snapshot itself, which is large and which no
+   * screen in the app renders. The shared page fetches it from the endpoint by token.
+   */
+  hasShareSnapshot: boolean;
   createdAt: IsoDateTime;
   createdBy: Uuid | null;
   updatedAt: IsoDateTime;
@@ -2971,4 +2978,40 @@ export interface ReportDocumentPatch {
   layout?: ReportTemplateLayout;
   jobId?: string | null;
   projectId?: number | null;
+}
+
+/**
+ * A document compiled for sending, as it was when the link was made.
+ *
+ * The output of the report module's own `compileReport()` — the same model the PDF, Word,
+ * Markdown and HTML writers all take — plus the theme and page setup needed to paint it
+ * without the app around it.
+ *
+ * It is a SNAPSHOT and not a live view, and that is the security design rather than a
+ * simplification of it. Compiled in the author's browser under their own session, so it
+ * can only contain what their own RLS let them see; served back verbatim, so the endpoint
+ * has no query that could forget its filter and hand somebody the whole book of work.
+ */
+export interface ReportShareSnapshot {
+  report: {
+    title: string;
+    subtitle?: string;
+    meta?: Record<string, unknown>;
+    sections: Array<{ id: string; title: string; blocks: unknown[] }>;
+  };
+  theme?: unknown;
+  page?: { size?: string; orientation?: string };
+}
+
+/**
+ * What creating a share link needs.
+ *
+ * `passwordHash` rather than a password: the browser derives it (PBKDF2-SHA256, in
+ * `data/sharePassword.ts`) so a plaintext password never reaches the database or a log.
+ * The endpoint re-derives from what the viewer types and compares.
+ */
+export interface NewReportDocumentShare {
+  expiresAt: IsoDateTime;
+  snapshot: ReportShareSnapshot;
+  passwordHash?: string | null;
 }

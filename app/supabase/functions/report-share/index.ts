@@ -1,17 +1,18 @@
-// report-share — a shared document, for somebody with no Lofty login.
+// report-share — hand one shared document to somebody with no Lofty login.
 //
-// ⚠️  NOT DEPLOYED, AND NOT CALLED. See README.md beside this file. Two things are
-//     deliberately left empty so that deploying it by accident achieves nothing:
-//     ALLOWED_ORIGINS (so every browser is refused) and loadViewerContext() (so no job
-//     data is returned). Both are decisions for Lofty rather than defaults to guess.
+// WHAT THIS DOES NOT DO, AND WHY THAT IS THE DESIGN
 //
-// WHY THIS EXISTS AT ALL
+//   It does not read jobs. It does not read properties, people, teams or processes. It
+//   holds the service role, so every one of those reads would run with RLS switched off,
+//   and one forgotten filter would hand somebody the whole book of work. The first draft
+//   of this file had a `loadViewerContext()` for exactly that, and its own comment called
+//   it "the single most likely serious bug in an endpoint of this kind".
 //
-//   A share link is opened by somebody with no session, so it cannot go through RLS.
-//   Serving it from the browser would mean granting `anon` a SELECT policy on
-//   report_documents, which exposes every other document in that table to anybody
-//   holding any link. This runs with the service role instead, checks the token, and
-//   returns one row and only the viewer-safe parts of it.
+//   So the document is compiled BEFORE it gets here — in the author's browser, under the
+//   author's session and therefore the author's RLS — and stored as a snapshot (0095).
+//   This function looks up one row by token, checks the expiry and the password, and
+//   returns the snapshot verbatim. There is no query here that could be scoped wrongly,
+//   because there is no query here that reads anything but the one row asked for.
 //
 // Written for Supabase Edge Functions (Deno).
 
@@ -23,13 +24,18 @@ const supabase = createClient(
 );
 
 /**
- * Which origins may call this.
+ * Which origins may call this, as a comma-separated secret rather than a constant.
  *
- * EMPTY ON PURPOSE. With nothing here every browser request is refused, so deploying
- * this function without making a decision gets you an endpoint that answers nothing.
- * A wildcard would be the wrong default for a URL whose whole job is to leave Lofty.
+ * Configuration and not code, because the answer differs per deployment — the Vercel
+ * production domain, the Netlify one while the migration finishes, and a preview URL
+ * somebody is testing on — and none of those should need a commit and a redeploy.
+ *
+ * EMPTY IS STILL THE SAFE DEFAULT. With the secret unset the function refuses every
+ * browser, so deploying it before deciding gets an endpoint that answers nothing. A
+ * wildcard would be the wrong default for a URL whose entire job is to leave Lofty.
  */
-const ALLOWED_ORIGINS: string[] = [];
+const ALLOWED_ORIGINS = (Deno.env.get("SHARE_ALLOWED_ORIGINS") ?? "")
+  .split(",").map((o) => o.trim()).filter(Boolean);
 
 const cors = (origin: string | null): Record<string, string> => ({
   "Access-Control-Allow-Origin": origin && ALLOWED_ORIGINS.includes(origin) ? origin : "null",
@@ -41,33 +47,17 @@ const cors = (origin: string | null): Record<string, string> => ({
 const json = (body: unknown, status: number, headers: Record<string, string>) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { ...headers, "content-type": "application/json" },
+    headers: {
+      ...headers,
+      "content-type": "application/json",
+      // A shared document is somebody's client correspondence. It must not sit in a
+      // shared cache, and it must not be indexed if a link ever reaches a crawler.
+      "cache-control": "no-store",
+      "x-robots-tag": "noindex, nofollow",
+    },
   });
 
-/**
- * The data a shared document's live blocks resolve against.
- *
- * NOT IMPLEMENTED, and this is the security-critical part. Two rules, both load-bearing:
- *
- * 1. SCOPE EVERY QUERY to the one record the document is about. A query that forgets its
- *    filter returns Lofty's whole book of work to anybody holding one link. This is the
- *    single most likely serious bug in an endpoint of this kind.
- *
- * 2. STRIP WHAT A CLIENT MAY NOT SEE. `property_values` includes restricted properties,
- *    margins among them; `profiles` includes people's email addresses. RLS is what
- *    normally removes those, and RLS is exactly what is not running here.
- *
- * Returning an empty context is the honest placeholder: the document's prose and its
- * typed tables render, and every live block says it has nothing to show — which is
- * visibly incomplete rather than quietly wrong.
- */
-async function loadViewerContext(_doc: { job_id: string | null; project_id: number | null }) {
-  return {
-    projects: [], jobs: [], teams: [], stageNames: [], people: [], processes: [],
-    propertyDefs: [], propertyValues: [], propertyOptions: [],
-    sections: [], subject: null,
-  };
-}
+import { verifyPassword } from "./verify.ts";
 
 Deno.serve(async (req) => {
   const origin = req.headers.get("origin");
@@ -75,50 +65,58 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers });
   if (req.method !== "POST") return json({ error: "Method not allowed." }, 405, headers);
 
-  // The refusal that makes an accidental deploy inert.
+  // The refusal that makes a deploy-before-deciding inert.
   if (!ALLOWED_ORIGINS.length) {
     return json({ error: "Sharing is not switched on." }, 503, headers);
   }
+  // CORS headers tell a BROWSER not to read the response; they do not stop the request
+  // being made or answered. So the origin is checked here too, where it actually refuses.
+  if (origin && !ALLOWED_ORIGINS.includes(origin)) {
+    return json({ error: "This link cannot be opened from here." }, 403, headers);
+  }
 
-  let token: string | undefined;
-  let password: string | undefined;
+  let token: unknown;
+  let password: unknown;
   try {
     ({ token, password } = await req.json());
   } catch {
     return json({ error: "That request could not be read." }, 400, headers);
   }
-  if (!token) return json({ error: "This link is not valid." }, 400, headers);
+  if (typeof token !== "string" || !token) {
+    return json({ error: "This link is not valid." }, 400, headers);
+  }
 
   const { data, error } = await supabase
     .from("report_documents")
     .select(
-      "report_document_id, report_document_title, report_document_layout, job_id, project_id, report_document_share_expires_at, report_document_share_password_hash",
+      "report_document_title, report_document_share_snapshot, report_document_share_expires_at, report_document_share_password_hash",
     )
     .eq("report_document_share_token", token)
     .maybeSingle();
 
-  // One sentence for "no such link", "expired" and "wrong password" would be friendlier
-  // and would also tell somebody probing tokens which of the three they hit. It does not.
-  if (error || !data) return json({ error: "This link is not valid." }, 404, headers);
+  // One sentence for "no such link" and "revoked". Telling them apart would tell somebody
+  // probing tokens which of the two they hit, which is the half of the answer they want.
+  if (error || !data || !data.report_document_share_snapshot) {
+    return json({ error: "This link is not valid." }, 404, headers);
+  }
 
   if (new Date(data.report_document_share_expires_at) < new Date()) {
     return json({ error: "This link has expired." }, 410, headers);
   }
 
   if (data.report_document_share_password_hash) {
-    if (!password) return json({ needsPassword: true }, 401, headers);
-    // REPLACE-ME when this is turned on: a real constant-time verify against whatever
-    // hashed it. Refusing outright is the right placeholder — a comparison written in a
-    // hurry here is the bug that makes the password decorative.
-    return json({ error: "Password-protected links are not switched on." }, 503, headers);
+    if (typeof password !== "string" || !password) {
+      return json({ needsPassword: true }, 401, headers);
+    }
+    const ok = await verifyPassword(data.report_document_share_password_hash, password);
+    if (!ok) return json({ needsPassword: true, error: "That password is not right." }, 401, headers);
   }
 
+  // The snapshot, and the title, and nothing else. Not the job id, not the project id,
+  // not who wrote it, not when it was last edited — none of which the page renders and
+  // all of which say something about Lofty to somebody outside it.
   return json({
-    id: data.report_document_id,
     title: data.report_document_title,
-    layout: data.report_document_layout,
-    ctx: await loadViewerContext(data),
-    // Never the hash, never the token, never the expiry — a viewer needs none of them.
-    hasPassword: false,
+    snapshot: data.report_document_share_snapshot,
   }, 200, headers);
 });
