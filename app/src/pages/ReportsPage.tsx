@@ -15,6 +15,7 @@ import { toOptions } from "../components/Select";
 import { PROCESS_HEALTH_FILTER_OPTIONS, RECORDED_FILTER_OPTIONS, jobMatchesFilters } from "../data/filtering";
 import { ProcessReport } from "../components/ProcessReport";
 import { STAGE_ACCENTS } from "../theme/accents";
+import { TemplateBuilderPage } from "./TemplateBuilderPage";
 import "../components/ui.css";
 
 /**
@@ -73,7 +74,21 @@ export function ReportsPage() {
   // The four tabs, named so the export button can say what it downloads. The Processes
   // tab is not here: its report is computed inside `ProcessReport`, and its Export button
   // lives there too, next to the data, so the two cannot drift.
-  const TABS = ["Portfolio overview", "Leadership summary", "Job report", "Processes"];
+  const TABS = ["Portfolio overview", "Leadership summary", "Job report", "Processes", "Custom document"];
+  /**
+   * The last tab is the Document Builder, and it is the SAME component as
+   * Tools → Document Builder, not a copy of it.
+   *
+   * Amber, 4 September: *"also add this custom document builder to report section as
+   * well"*. The four tabs before it are reports Lofty decided on once; this is the one
+   * where somebody builds the report Lofty has not thought of yet, which is why it
+   * belongs beside them and not only under Tools.
+   *
+   * `<TemplateBuilderPage lane="documents" />` — one implementation, so a fix to the
+   * builder is a fix in both places, and the two can never drift into being almost the
+   * same screen.
+   */
+  const BUILDER_TAB = 4;
 
   /**
    * The report as a file. **The tab you are on**, not all of them: the tabs are different
@@ -179,6 +194,12 @@ export function ReportsPage() {
         <Text type="text2" color="secondary">Portfolio health, from the jobs in view.</Text>
       </div>
 
+      {/* NO TOOLBAR ON THE BUILDER TAB.
+          Its filters narrow a set of jobs, its count says how many are in view, and its
+          Export button downloads the tab you are on — three claims that are all false
+          in front of a document builder, which has its own Preview & export and is not
+          looking at a filtered set of anything. */}
+      {tab !== BUILDER_TAB && (
       <Toolbar
         filters={filters}
         onFiltersChange={setFilters}
@@ -196,8 +217,9 @@ export function ReportsPage() {
           ) : undefined
         }
       />
+      )}
 
-      {stale && <PreviousAddressNote />}
+      {stale && tab !== BUILDER_TAB && <PreviousAddressNote />}
 
       {error && <LoadProblem error={error} />}
 
@@ -206,7 +228,10 @@ export function ReportsPage() {
         <Tab>Leadership summary</Tab>
         <Tab>Job report</Tab>
         <Tab>Processes</Tab>
+        <Tab>Custom document</Tab>
       </TabList>
+
+      {tab === BUILDER_TAB && <TemplateBuilderPage lane="documents" />}
 
       {tab === 3 && !noMatches && !loading && all.length > 0 && (
         <div style={{ marginTop: "var(--space-16)" }}>
@@ -214,13 +239,15 @@ export function ReportsPage() {
         </div>
       )}
 
-      {loading && (
+      {loading && tab !== BUILDER_TAB && (
         <div className="panel" style={{ marginTop: "var(--space-16)" }}>
           <Text type="text2" color="secondary">Loading…</Text>
         </div>
       )}
 
-      {!loading && all.length === 0 && (
+      {/* "Nothing to report on yet" is true of the figures and false of the builder —
+          an empty database is exactly when somebody wants to start writing something. */}
+      {!loading && all.length === 0 && tab !== BUILDER_TAB && (
         <div style={{ marginTop: "var(--space-16)" }}>
           <NothingYet
             title="Nothing to report on yet"
@@ -229,7 +256,7 @@ export function ReportsPage() {
         </div>
       )}
 
-      {noMatches && <NoResults noun="jobs" />}
+      {noMatches && tab !== BUILDER_TAB && <NoResults noun="jobs" />}
 
       {tab === 0 && !noMatches && !loading && all.length > 0 && (
         <div className="stack" style={{ marginTop: "var(--space-16)" }}>
