@@ -32,8 +32,10 @@ export default defineConfig({
   //
   // "local" rather than a fake number when building outside Netlify: a version string
   // that looks real and is not is worse than one that admits what it is.
-  // Both hosts' spellings, because the deploy is moving from Netlify to Vercel and for a
-  // while it is on both. Netlify sets COMMIT_REF and CONTEXT; Vercel sets
+  // Both hosts' spellings. Vercel is the host as of 4 September, but `netlify.toml` is
+  // still in the repository, so a Netlify build is still a thing that can happen and a
+  // build identity that only knew one host would be wrong on the other.
+  // Netlify sets COMMIT_REF and CONTEXT; Vercel sets
   // VERCEL_GIT_COMMIT_SHA and VERCEL_ENV. Neither is VITE_-prefixed, so Vite will not
   // expose either on its own — inlining them here is the whole reason this block exists.
   //

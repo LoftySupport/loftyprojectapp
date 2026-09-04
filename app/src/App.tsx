@@ -240,9 +240,10 @@ const RECORD_ROUTES = new Map([
 /**
  * Speed Insights, and only where its endpoint exists.
  *
- * The deploy is on both hosts while the migration finishes. Vercel serves
- * `/_vercel/speed-insights/script.js`; Netlify does not, so mounting this everywhere
- * would put a 404 in the console of every Netlify visitor and collect nothing for it.
+ * Vercel is the host (Amber, 4 September: "it is using vercel now"), and it serves
+ * `/_vercel/speed-insights/script.js`; Netlify does not. The gate stays anyway — the
+ * Netlify configuration is still in the repository, so a build from it is still possible,
+ * and mounting this there would put a 404 in the console and collect nothing for it.
  *
  * The full URL reaches Vercel either way — it is the host, and its access log already
  * has every path — so `route` is about the dashboard being readable, not about holding
