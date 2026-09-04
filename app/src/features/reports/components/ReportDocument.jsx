@@ -14,7 +14,12 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { reportToMarkdown } from '../core/markdown.js';
 import { reportToHtml } from '../core/html.js';
+import QRCode from 'react-qr-code';
+import { QR_LEVEL, QR_QUIET_ZONE, qrMatrix } from '../core/qr.js';
 import { sanitizeHtml } from './RichTextEditor.jsx';
+
+/** On-screen sizes for a QR block, in px. Print and Word use the same three. */
+const QR_SIZES = { small: 90, medium: 140, large: 200 };
 import {
   BUILT_IN_THEMES, DEFAULT_THEME_KEY, resolveTheme, themeToCssVars, logoForSurface, isDarkColour,
 } from '../core/theme.js';
@@ -430,12 +435,59 @@ function Block({ block }) {
           ))}
         </dl>
       );
-    case 'list':
+    case 'list': {
+      // INTEGRATION EDIT — `ordered` added for the table of contents block, where a
+      // numbered list is what a contents page is. Absent it behaves exactly as before.
+      const ListTag = block.ordered ? 'ol' : 'ul';
       return (
-        <ul className="list-disc pl-5 mb-3 space-y-1">
+        <ListTag className={`${block.ordered ? 'list-decimal' : 'list-disc'} pl-5 mb-3 space-y-1`}>
           {block.items.map((i, idx) => <li key={idx} className="text-sm text-[var(--rb-ink)] leading-snug">{i}</li>)}
-        </ul>
+        </ListTag>
       );
+    }
+    case 'qr': {
+      // INTEGRATION EDIT — the QR block (adapters/lofty/widgets.js).
+      //
+      // `react-qr-code` on screen, `core/qr.js` for Word and the HTML download. Both read
+      // `qrcode-generator`, so it is one encoding drawn twice, not two encodings — see the
+      // note at the top of core/qr.js.
+      //
+      // `level` is passed rather than left alone. The component's own default is 'L' and
+      // ours is 'M'; letting it default would put a DIFFERENT code on screen from the one
+      // in the exported document, and both would scan, so nothing would ever report it.
+      //
+      // The white padding is the quiet zone. `react-qr-code` draws the modules and stops
+      // at their edge, and a QR butted up against a coloured background — a themed
+      // section, a callout, a dark print — is a QR that phones refuse.
+      //
+      // Measured in MODULES, not pixels. A fixed 9px looked like a quiet zone and was
+      // under two modules on a dense code and over six on a sparse one, because the
+      // module size depends on how much text is in it. Encoding twice to find out how
+      // many modules there are is the cost of getting it right, and it is a few hundred
+      // microseconds on a string.
+      const px = QR_SIZES[block.size] || QR_SIZES.medium;
+      const modules = qrMatrix(block.text).size;
+      const quiet = Math.ceil((px / modules) * QR_QUIET_ZONE);
+      return (
+        <figure className="mb-3">
+          <div
+            className="inline-block bg-white"
+            style={{ padding: quiet }}
+          >
+            <QRCode
+              value={block.text}
+              level={QR_LEVEL}
+              size={px}
+              style={{ display: 'block', height: px, width: px }}
+              title={block.caption || `QR code for ${block.text}`}
+            />
+          </div>
+          {block.caption && (
+            <figcaption className="text-xs text-[var(--rb-muted)] mt-1.5">{block.caption}</figcaption>
+          )}
+        </figure>
+      );
+    }
     case 'callout': {
       const tones = {
         danger: 'border-[#b3261e] bg-[#b3261e]/10',

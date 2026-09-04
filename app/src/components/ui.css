@@ -156,6 +156,10 @@
 
 /* ---- page furniture ------------------------------------------------------ */
 .page-head { margin-bottom: var(--space-16); }
+/* A page whose tabs sit directly under the heading. Amber, 4 September: "reduce the
+   spacing as we don't need this much room." The default gap is sized for a heading with a
+   sentence under it; without the sentence it reads as a hole. */
+.page-head-tight { margin-bottom: var(--space-8); }
 /* Vibe's Text clips to one line, and a clipping child only shrinks when its flex
    parent is allowed to. Without `min-width: 0` the head claims the full intrinsic
    width of its sentence and pushes the page sideways on a phone. */
@@ -2304,4 +2308,76 @@ code { overflow-wrap: anywhere; }
    title and caption and a button baselined against text sits a few pixels low. */
 .panel-head-actions {
   display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap;
+}
+
+/* ── Get started ──────────────────────────────────────────────────────────
+   The ways into an empty builder, as cards rather than a row of buttons.
+
+   Amber, 4 September, with an annotated screenshot: a GET STARTED heading over
+   three dashed cards. The row of buttons it replaces put "Create New Document",
+   "Start From Scratch" and "Clone Existing" side by side with two dropdowns
+   between them, and which dropdown belonged to which button was a matter of
+   reading the order. A card is the answer to that: one act, its inputs, its
+   button, inside one border.
+
+   Dashed on purpose. A dashed border is the standing convention for "nothing here
+   yet, put something here" — the same reason a drop target is dashed — and these
+   are the controls that make the something. */
+.get-started {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  margin-top: var(--space-12);
+}
+.get-started-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--secondary-text-color);
+}
+/* auto-fit rather than three fixed columns: the library lanes have two cards, not
+   three, and a two-card grid with an empty third column reads as something missing.
+
+   CAPPED AT 340px, though. Left to 1fr the two library cards each took half the page —
+   two slabs with a sentence and a button adrift in them, and nothing to say they were the
+   same kind of thing as the three narrower cards one tab across. A card is the same size
+   wherever it appears; the row just holds fewer of them. */
+.get-started-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 340px));
+  gap: var(--space-12);
+}
+.get-started-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-16);
+  /* 2px, because 1px dashes in this grey were indistinguishable from a solid hairline at
+     the size the cards actually render — the convention only works if it is legible. */
+  border: 2px dashed var(--ui-border-color);
+  border-radius: var(--border-radius-medium);
+  background: var(--allgrey-background-color);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.get-started-card:hover,
+.get-started-card:focus-within {
+  border-color: var(--primary-color);
+  background: var(--primary-background-color);
+}
+.get-started-card-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+/* Pushes the button to the bottom of the tallest card, so the three line up even
+   when one has a dropdown the others do not. */
+.get-started-card-fill { flex: 1 1 auto; }
+.get-started-card-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+@media (max-width: 600px) {
+  .get-started-grid { grid-template-columns: 1fr; }
 }

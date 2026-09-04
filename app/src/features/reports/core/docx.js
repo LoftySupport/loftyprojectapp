@@ -7,6 +7,7 @@
 // different colours from the document its author approved on screen.
 
 import { cellText, stripHtml } from './blocks.js';
+import { qrPng } from './qr.js';
 import { resolveTheme, hexForDocx, logoForSurface } from './theme.js';
 import {
   BorderStyle,
@@ -110,11 +111,59 @@ function keyValuesBlock(items) {
   ]);
 }
 
-function listBlock(items) {
-  return (items || []).map(item =>
+/**
+ * A QR in Word.
+ *
+ * PNG, because a .docx cannot embed an SVG — the same constraint that decided the logo
+ * format. The bytes come from core/qr.js, which encodes the PNG itself rather than going
+ * through a canvas: canvas would tie the Word export to a browser and make the output
+ * depend on where it ran.
+ *
+ * Sized in points from the same three names the screen uses, so a Medium code is the same
+ * size in the document you send as in the one you were looking at.
+ */
+function qrBlock(b, preset) {
+  const px = { small: 90, medium: 140, large: 200 }[b.size] || 140;
+  const out = [];
+  try {
+    out.push(new Paragraph({
+      children: [new ImageRun({
+        data: qrPng(b.text),
+        type: 'png',
+        transformation: { width: px, height: px },
+      })],
+      spacing: { after: b.caption ? 40 : 160 },
+    }));
+  } catch (e) {
+    // A code that cannot be encoded must not take the whole export down with it. The
+    // link is the content; the picture is the convenience.
+    console.warn('A QR code could not be embedded in the .docx:', e?.message || e);
+  }
+  if (b.caption) {
+    out.push(new Paragraph({
+      children: [new TextRun({ text: b.caption, size: 18, color: preset.muted })],
+      spacing: { after: 160 },
+    }));
+  }
+  // Always the URL as well: a printed Word document is the one output where a reader
+  // cannot click, and a code nobody can scan is then a black square.
+  out.push(new Paragraph({
+    children: [new TextRun({ text: b.text, size: 16, color: preset.muted })],
+    spacing: { after: 200 },
+  }));
+  return out;
+}
+
+function listBlock(items, ordered = false) {
+  // Word's real numbering needs a numbering definition on the document, which this
+  // writer deliberately does not carry — so an ordered list is numbered in the text.
+  // It prints identically and survives a copy-paste out of Word, which the automatic
+  // kind does not always do.
+  return (items || []).map((item, n) =>
     new Paragraph({
-      bullet: { level: 0 },
-      children: [new TextRun({ text: String(item ?? '') })],
+      ...(ordered ? {} : { bullet: { level: 0 } }),
+      ...(ordered ? { indent: { left: 360 } } : {}),
+      children: [new TextRun({ text: ordered ? `${n + 1}. ${String(item ?? '')}` : String(item ?? '') })],
     })
   );
 }
@@ -229,7 +278,8 @@ function blockToDocx(b, preset) {
     case 'paragraph':   return [para(b.text)];
     case 'subheading':  return [heading3(b.text)];
     case 'keyValues':   return keyValuesBlock(b.items);
-    case 'list':        return listBlock(b.items);
+    case 'list':        return listBlock(b.items, b.ordered);
+    case 'qr':          return qrBlock(b, preset);
     case 'callout':     return calloutBlock(b);
     case 'table':       return tableBlock(b, preset);
     case 'richText':    return [para(stripHtml(b.html))];

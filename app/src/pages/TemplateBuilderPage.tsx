@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Button, Tab, TabList, Text, TextField } from "@vibe/core";
+import { Button, Text, TextField } from "@vibe/core";
 import { useQuery, useRepository } from "../data/DataProvider";
 import { useAuth } from "../data/AuthProvider";
 import { usePermission } from "../data/PermissionProvider";
@@ -88,7 +88,50 @@ type OpenTarget =
   | { lane: "document"; row: ReportStoreRow; subject: { jobId: string | null; projectId: number | null } }
   | { lane: "library"; row: ReportStoreRow; kind: ReportTemplateKind };
 
-export function TemplateBuilderPage() {
+/**
+ * One way into an empty builder.
+ *
+ * Amber, 4 September, with an annotated screenshot: a GET STARTED heading over dashed
+ * cards, in place of the row of buttons and dropdowns this replaces. That row put three
+ * buttons side by side with two dropdowns between them, and which dropdown belonged to
+ * which button was a matter of reading the order — the dropdown for "Clone Existing" sat
+ * next to "Start From Scratch", which does not take one.
+ *
+ * A card fixes that by enclosure: one act, its inputs and its button inside one border.
+ *
+ * `children` is the fields, `action` the button. They are separate props rather than one
+ * block of children so the button can be pinned to the bottom of the tallest card — the
+ * cards hold different numbers of fields, and buttons at three different heights read as
+ * three unrelated controls rather than three choices.
+ */
+function GetStartedCard(
+  { title, hint, children, action }:
+  {
+    title: string;
+    hint: string;
+    children?: React.ReactNode;
+    action: React.ReactNode;
+  }
+) {
+  return (
+    <div className="get-started-card">
+      <div className="get-started-card-title">
+        <Text type="text2" weight="bold">{title}</Text>
+      </div>
+      <Text type="text3" color="secondary" ellipsis={false}>{hint}</Text>
+      {children && <div className="get-started-card-fields">{children}</div>}
+      <div className="get-started-card-fill" />
+      {action}
+    </div>
+  );
+}
+
+/**
+ * @param lane which of the three the URL is on. It lives in ToolsPage rather than here
+ *   because it is in the path — a link to the Section Library has to be a link somebody
+ *   can send, and a tab held in component state is not one.
+ */
+export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" | "section" }) {
   const repo = useRepository();
   const { can } = usePermission();
   const { profile } = useAuth();
@@ -109,16 +152,6 @@ export function TemplateBuilderPage() {
   const [libName, setLibName] = useState("");
   /** What "Clone" copies from — a document id in the builder lane, a library id otherwise. */
   const [cloneFrom, setCloneFrom] = useState<string | null>(null);
-  /**
-   * Which lane is on screen. Amber, 4 September: *"have the builder and templates in
-   * libraries with tabs"*.
-   *
-   * It replaces two things at once — the two stacked panels, and the Template/Section
-   * dropdown beside the library's name field. The dropdown was a second way of saying
-   * what the tab now says, and two controls for one question is how somebody names a
-   * section and finds it filed as a template.
-   */
-  const [lane, setLane] = useState<"documents" | "template" | "section">("documents");
   const libKind: ReportTemplateKind = lane === "section" ? "section" : "template";
   const [busy, setBusy] = useState(false);
 
@@ -460,27 +493,9 @@ export function TemplateBuilderPage() {
   const pending = ofKind.filter(t => t.approvedAt === null);
   const inLibrary = ofKind.filter(t => t.approvedAt !== null);
 
-  const LANES = [
-    { id: "documents", label: "Document Builder" },
-    { id: "template", label: "Template Library" },
-    { id: "section", label: "Section Library" }
-  ] as const;
-
   return (
     <>
       {problem && <Problem>{problem}</Problem>}
-
-      {/* Three lanes, one on screen at a time. A second TabList under the Tools tabs is
-          deliberate: those choose the tool, these choose what you are working on inside
-          it, and flattening them would put "Sections" beside "Template Builder" as if
-          they were the same kind of choice. */}
-      <TabList
-        activeTabId={LANES.findIndex(l => l.id === lane)}
-        onTabChange={(i: number) => { setLane(LANES[i].id); setCloneFrom(null); }}
-        size="small"
-      >
-        {LANES.map(l => <Tab key={l.id}>{l.label}</Tab>)}
-      </TabList>
 
       {/* ── Documents ───────────────────────────────────────────────────── */}
       {lane === "documents" && (
@@ -498,10 +513,17 @@ export function TemplateBuilderPage() {
         </Text>
 
         {canWrite && (
-          <div className="panel-actions" style={{ marginTop: "var(--space-12)" }}>
-            <span style={{ flex: "0 1 260px", minWidth: 0 }}>
+          <div className="get-started">
+            <span className="get-started-label">Get started</span>
+            {/* ONE NAME FIELD, ABOVE THE THREE, BECAUSE ALL THREE NEED IT.
+                It was inside the first card for a draft, with a line underneath saying
+                the other two used it as well — which is the same "which control belongs
+                to which" problem the cards exist to remove, moved rather than fixed. A
+                field that belongs to all three sits above all three. */}
+            <span style={{ display: "block", maxWidth: 360 }}>
               <TextField
                 id="new-document-title"
+                title="Name"
                 placeholder="Name a new document…"
                 value={docTitle}
                 onChange={setDocTitle}
@@ -509,52 +531,71 @@ export function TemplateBuilderPage() {
                 inputAriaLabel="Title for a new document"
               />
             </span>
-            {/* Three ways to start, because they are three different acts and a single
-                button with a dropdown made the difference invisible. Each one is disabled
-                until it has what it needs, so which are available is itself the answer to
-                "can I clone anything yet". */}
-            <span style={{ flex: "0 1 240px", minWidth: 0 }}>
-              <Select
-                aria-label="Template to start the document from"
-                placeholder={libraryTemplates.length ? "From a template…" : "No templates in the library yet"}
-                options={toOptions(libraryTemplates.map(t => t.name))}
-                value={docFrom ? libraryTemplates.find(t => t.id === docFrom)?.name ?? null : null}
-                onChange={n => setDocFrom(libraryTemplates.find(t => t.name === n)?.id ?? null)}
-              />
-            </span>
-            <Button
-              size="small"
-              onClick={() => createDocument(docFrom)}
-              disabled={!docTitle.trim() || !docFrom || busy}
-            >
-              Create New Document
-            </Button>
-            <Button
-              size="small"
-              kind="secondary"
-              onClick={() => createDocument(null)}
-              disabled={!docTitle.trim() || busy}
-            >
-              Start From Scratch
-            </Button>
+            <div className="get-started-grid">
+              {/* THREE CARDS, BECAUSE THEY ARE THREE DIFFERENT ACTS
+                  and a single button with a dropdown made the difference invisible. Each
+                  is disabled until it has what it needs, so which are available is itself
+                  the answer to "can I clone anything yet". */}
+              <GetStartedCard
+                title="Start From A Template"
+                hint="A layout a manager has signed into the library. You get a copy — changing it never changes the template."
+                action={
+                  <Button
+                    size="small"
+                    onClick={() => createDocument(docFrom)}
+                    disabled={!docTitle.trim() || !docFrom || busy}
+                  >
+                    Create New Document
+                  </Button>
+                }
+              >
+                <Select
+                  aria-label="Template to start the document from"
+                  placeholder={libraryTemplates.length ? "From a template…" : "No templates in the library yet"}
+                  options={toOptions(libraryTemplates.map(t => t.name))}
+                  value={docFrom ? libraryTemplates.find(t => t.id === docFrom)?.name ?? null : null}
+                  onChange={n => setDocFrom(libraryTemplates.find(t => t.name === n)?.id ?? null)}
+                />
+              </GetStartedCard>
 
-            <span style={{ flex: "0 1 240px", minWidth: 0 }}>
-              <Select
-                aria-label="Document to clone"
-                placeholder={documents.length ? "A document to copy…" : "No documents to copy yet"}
-                options={toOptions(documents.map(d => d.title))}
-                value={cloneFrom ? documents.find(d => d.id === cloneFrom)?.title ?? null : null}
-                onChange={n => setCloneFrom(documents.find(d => d.title === n)?.id ?? null)}
+              <GetStartedCard
+                title="Clone An Existing Document"
+                hint="Start from one that has already been sent — last month's progress report, with this month's numbers read fresh."
+                action={
+                  <Button
+                    size="small"
+                    kind="secondary"
+                    onClick={cloneDocument}
+                    disabled={!docTitle.trim() || !cloneFrom || busy}
+                  >
+                    Clone Existing
+                  </Button>
+                }
+              >
+                <Select
+                  aria-label="Document to clone"
+                  placeholder={documents.length ? "A document to copy…" : "No documents to copy yet"}
+                  options={toOptions(documents.map(d => d.title))}
+                  value={cloneFrom ? documents.find(d => d.id === cloneFrom)?.title ?? null : null}
+                  onChange={n => setCloneFrom(documents.find(d => d.title === n)?.id ?? null)}
+                />
+              </GetStartedCard>
+
+              <GetStartedCard
+                title="Start From Scratch"
+                hint="An empty page. Drag blocks in from the palette on the left of the builder."
+                action={
+                  <Button
+                    size="small"
+                    kind="secondary"
+                    onClick={() => createDocument(null)}
+                    disabled={!docTitle.trim() || busy}
+                  >
+                    Start From Scratch
+                  </Button>
+                }
               />
-            </span>
-            <Button
-              size="small"
-              kind="secondary"
-              onClick={cloneDocument}
-              disabled={!docTitle.trim() || !cloneFrom || busy}
-            >
-              Clone Existing
-            </Button>
+            </div>
           </div>
         )}
 
@@ -564,9 +605,11 @@ export function TemplateBuilderPage() {
         ) : documents.length === 0 ? (
           <NothingYet
             title="No documents yet"
+            /* The three cards are directly above this and say all of it. What is left is
+               the one thing they do not: whether the emptiness is yours or everyone's. */
             description={
               canWrite
-                ? "Name one above, then Create New Document from a template, Start From Scratch for a blank page, or Clone Existing to copy one."
+                ? "Use one of the three ways above to make the first one."
                 : "Nobody has made a document yet."
             }
           />
@@ -637,7 +680,9 @@ export function TemplateBuilderPage() {
       <section className="panel">
         <div className="panel-head">
           <Text type="text2" weight="bold">
-            {libKind === "section" ? "Section library" : "Template library"}
+            {/* Capitalised to match the tab that got you here. "Template Library" in the
+                tab and "Template library" in the panel under it reads as two places. */}
+            {libKind === "section" ? "Section Library" : "Template Library"}
           </Text>
           <Text type="text3" color="secondary">
             {canApprove
@@ -663,13 +708,15 @@ export function TemplateBuilderPage() {
         </Text>
 
         {canWrite && (
-          <div className="panel-actions" style={{ marginTop: "var(--space-12)" }}>
+          <div className="get-started">
+            <span className="get-started-label">Get started</span>
             {/* The kind comes from the tab. It used to be a dropdown here as well, which
                 was two controls for one question — and the way somebody names a section,
                 leaves the dropdown on Template, and cannot find it afterwards. */}
-            <span style={{ flex: "0 1 320px", minWidth: 0 }}>
+            <span style={{ display: "block", maxWidth: 360 }}>
               <TextField
                 id="new-library-name"
+                title="Name"
                 placeholder={libKind === "section" ? "Name a new section…" : "Name a new template…"}
                 value={libName}
                 onChange={setLibName}
@@ -677,33 +724,58 @@ export function TemplateBuilderPage() {
                 inputAriaLabel={libKind === "section" ? "Name for a new section" : "Name for a new template"}
               />
             </span>
-            <Button size="small" onClick={createLibraryEntry} disabled={!libName.trim() || busy}>
-              {libKind === "section" ? "Create New Section" : "Create New Template"}
-            </Button>
 
-            <span style={{ flex: "0 1 240px", minWidth: 0 }}>
-              <Select
-                aria-label={libKind === "section" ? "Section to clone" : "Template to clone"}
-                placeholder={
-                  ofKind.length
-                    ? libKind === "section" ? "A section to copy…" : "A template to copy…"
-                    : libKind === "section" ? "Nothing to copy yet" : "Nothing to copy yet"
+            {/* TWO CARDS HERE, NOT THREE.
+                Amber: *"This is the sam for template library and sction library"* — the
+                treatment, which is what the screenshot showed. Not the count: there is no
+                "start from a template" for a template. The two acts that exist are a
+                blank page and a copy, and a third dashed card standing for an act nobody
+                can perform would be decoration. */}
+            <div className="get-started-grid">
+              <GetStartedCard
+                title="Start From Scratch"
+                hint={
+                  libKind === "section"
+                    ? "An empty fragment. Build the blocks a template will drop in — a letterhead, a scope-of-works table, a sign-off."
+                    : "An empty page. Drag blocks in from the palette on the left of the builder."
                 }
-                options={toOptions(ofKind.map(t => t.name))}
-                value={cloneFrom ? ofKind.find(t => t.id === cloneFrom)?.name ?? null : null}
-                onChange={n => setCloneFrom(ofKind.find(t => t.name === n)?.id ?? null)}
+                action={
+                  <Button size="small" onClick={createLibraryEntry} disabled={!libName.trim() || busy}>
+                    {libKind === "section" ? "Create New Section" : "Create New Template"}
+                  </Button>
+                }
               />
-            </span>
-            <Button
-              size="small"
-              kind="secondary"
-              onClick={cloneLibraryEntry}
-              disabled={!libName.trim() || !cloneFrom || busy}
-            >
-              {libKind === "section" ? "Clone Section" : "Clone Template"}
-            </Button>
+
+              <GetStartedCard
+                title={libKind === "section" ? "Clone An Existing Section" : "Clone An Existing Template"}
+                hint="Copy one that already works and change what this one needs. The original is untouched."
+                action={
+                  <Button
+                    size="small"
+                    kind="secondary"
+                    onClick={cloneLibraryEntry}
+                    disabled={!libName.trim() || !cloneFrom || busy}
+                  >
+                    {libKind === "section" ? "Clone Section" : "Clone Template"}
+                  </Button>
+                }
+              >
+                <Select
+                  aria-label={libKind === "section" ? "Section to clone" : "Template to clone"}
+                  placeholder={
+                    ofKind.length
+                      ? libKind === "section" ? "A section to copy…" : "A template to copy…"
+                      : "Nothing to copy yet"
+                  }
+                  options={toOptions(ofKind.map(t => t.name))}
+                  value={cloneFrom ? ofKind.find(t => t.id === cloneFrom)?.name ?? null : null}
+                  onChange={n => setCloneFrom(ofKind.find(t => t.name === n)?.id ?? null)}
+                />
+              </GetStartedCard>
+            </div>
+
             {!canApprove && (
-              <Text type="text3" color="secondary">
+              <Text type="text3" color="secondary" ellipsis={false}>
                 Yours to work on until a manager approves it — nobody else can see it before then.
               </Text>
             )}
@@ -718,8 +790,8 @@ export function TemplateBuilderPage() {
             description={
               canWrite
                 ? libKind === "section"
-                  ? "Name one above and the builder opens on an empty page. A section is a group of blocks a template drops in — a letterhead, a scope-of-works table, a sign-off."
-                  : "Name one above and the builder opens on an empty page — drag blocks in, or start from one of the drafts it offers."
+                  ? "Use one of the two ways above. A section is a group of blocks a template drops in — a letterhead, a scope-of-works table, a sign-off."
+                  : "Use one of the two ways above to make the first one."
                 : "Nothing has been added to the library yet."
             }
           />

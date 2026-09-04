@@ -132,6 +132,54 @@ const byStageOrder = (ctx) => {
 /** The address a job is at, falling back to its project's. Never a placeholder. */
 const jobAddress = (j) => j.currentAddress || j.projectAddress || null;
 
+/**
+ * Narrow a job list to the records a block was pointed at.
+ *
+ * Amber, 4 September: *"i also need to be able to [do] a single job or group of jobs so
+ * the jobs table is good but to select a single job, or multiple jobs or projects"*.
+ *
+ * EMPTY MEANS EVERYTHING, and that is the important half. A block that defaults to "no
+ * jobs" renders nothing until you configure it, so every new block would start as an
+ * empty table — and a report that silently covers nothing looks exactly like a report
+ * that covers everything and found nothing. Empty here means "the whole book of work",
+ * which is what the block did before this setting existed.
+ *
+ * Jobs and projects are OR, not AND: picking job 1042-001 and project 1042 gives you
+ * 1042-001 plus every other job on 1042, which is what somebody assembling a report about
+ * a site means. An AND would return one job and read as a bug.
+ */
+const narrowToPicked = (rows, o) => {
+  const jobIds = Array.isArray(o.jobIds) ? o.jobIds : [];
+  const projectIds = Array.isArray(o.projectIds) ? o.projectIds : [];
+  if (!jobIds.length && !projectIds.length) return rows;
+  const wantedProjects = new Set(projectIds.map(String));
+  const wantedJobs = new Set(jobIds.map(String));
+  return rows.filter(j =>
+    wantedJobs.has(String(j.id ?? j.jobId ?? j.jobNumber)) ||
+    wantedProjects.has(String(j.projectId ?? j.projectNumber))
+  );
+};
+
+/** The pair of pickers that does it, shared so every block offers the same control. */
+const recordPickers = () => ([
+  {
+    key: 'jobIds', type: 'multiselect', label: 'Only these jobs', emptyMeansAll: true,
+    hint: 'Leave empty for every job you can see.',
+    options: (ctx) => jobsOf(ctx).map(j => ({
+      value: String(j.id ?? j.jobId ?? j.jobNumber),
+      label: jobAddress(j) ? `${j.jobNumber} — ${jobAddress(j)}` : String(j.jobNumber)
+    }))
+  },
+  {
+    key: 'projectIds', type: 'multiselect', label: 'Only these projects', emptyMeansAll: true,
+    hint: 'Every job on the project. Combines with the jobs above rather than narrowing them.',
+    options: (ctx) => projectsOf(ctx).map(p => ({
+      value: String(p.id ?? p.projectId ?? p.projectNumber),
+      label: p.currentAddress ? `${p.projectNumber} — ${p.currentAddress}` : String(p.projectNumber)
+    }))
+  }
+]);
+
 const notFinished = (r) => !['completed', 'cancelled', 'archived'].includes(r.status);
 
 // ─── Headline numbers ────────────────────────────────────────────────
@@ -193,6 +241,106 @@ const CHART_METRICS = [
 // ─── The widgets ─────────────────────────────────────────────────────
 
 export const LOFTY_WIDGETS = {
+  // ── A QR code ────────────────────────────────────────────────────────
+  //
+  // Amber, 4 September: "create a QR code? the qr code generator is important".
+  //
+  // The block holds the TEXT and nothing else. Every renderer draws it from the same
+  // matrix (core/qr.js) — SVG on screen, in the HTML download and in print, PNG in Word
+  // — because two encoders would eventually disagree, and a QR that disagrees with
+  // itself scans to the wrong place in one of the four outputs.
+  qrCode: {
+    label: 'QR code',
+    group: 'Text & layout',
+    hint: 'A scannable code for a link: a booking page, a document, a site induction',
+    defaults: () => ({ url: '', caption: '', size: 'medium' }),
+    // THREE SETTINGS, AND THERE WERE FOUR
+    //
+    //   Amber, 4 September: *"i don't need all test options just a basci one will do"*.
+    //   The one that went was an error-correction picker — L/M/Q/H, 7% to 30% — which is
+    //   a real QR parameter and entirely the wrong question to put in front of somebody
+    //   captioning a code on a site induction sheet. It is fixed at M in core/qr.js:
+    //   15% recovery, which survives a scuffed print, and no denser than it needs to be.
+    settings: [
+      {
+        key: 'url', type: 'text', label: 'What it points at',
+        placeholder: 'https://…',
+        hint: 'A link, or any text. Anything a phone camera should be able to read.'
+      },
+      { key: 'caption', type: 'text', label: 'Caption', placeholder: 'Scan to book a site visit' },
+      {
+        key: 'size', type: 'select', label: 'Size', allowEmpty: false,
+        options: [
+          { value: 'small', label: 'Small — 90px' },
+          { value: 'medium', label: 'Medium — 140px' },
+          { value: 'large', label: 'Large — 200px' }
+        ]
+      }
+    ],
+    // The only resolver here that ignores ctx entirely: a QR is made of its own text.
+    resolve: (o, _ctx, h) => {
+      const text = String(o.url || '').trim();
+      if (!text) {
+        return h.forExport ? [] : [helpers.info('Give this code something to point at in its settings.')];
+      }
+      return [{
+        type: 'qr',
+        text,
+        caption: String(o.caption || '').trim() || null,
+        size: ['small', 'medium', 'large'].includes(o.size) ? o.size : 'medium'
+      }];
+    }
+  },
+
+  // ── What is in this document ─────────────────────────────────────────
+  //
+  // Amber, 4 September, asking for "a table of contents".
+  //
+  // It reads the document rather than the app, which makes it the only block here that
+  // does. `ctx.__widgets` is the document's own widget list, put there by compileReport
+  // and by the builder's canvas — see the note in core/widgetEngine.js.
+  //
+  // NO PAGE NUMBERS, and that is not an omission. The page a heading lands on is decided
+  // by the browser's print engine at the moment somebody presses print — it depends on
+  // the paper, the orientation, and how much the data underneath has grown since. A
+  // number written here would be right the day it was made and wrong afterwards, which
+  // is the same failure the whole "blocks hold references, never copies" rule exists to
+  // prevent. A list of headings in order is true whenever it is read.
+  tableOfContents: {
+    label: 'Table of contents',
+    group: 'Text & layout',
+    hint: 'Lists the section headings in this document, in order',
+    defaults: () => ({ title: 'Contents', numbered: true }),
+    settings: [
+      { key: 'title', type: 'text', label: 'Heading', placeholder: 'Contents' },
+      { key: 'numbered', type: 'checkbox', label: 'Number the sections' }
+    ],
+    resolve: (o, ctx, h) => {
+      const all = Array.isArray(ctx.__widgets) ? ctx.__widgets : [];
+      const headings = all
+        .filter(w => w.kind === 'heading')
+        .map(w => String(w.options?.text || '').trim())
+        .filter(Boolean);
+
+      if (!headings.length) {
+        // In a document being written this is worth saying; in one being sent it is
+        // noise, and the same forExport rule every other block here follows applies.
+        return h.forExport ? [] : [helpers.info(
+          'Add some section headings and they will be listed here.'
+        )];
+      }
+
+      const out = [];
+      if (o.title !== '') out.push({ type: 'subheading', text: o.title || 'Contents' });
+      out.push({
+        type: 'list',
+        ordered: !!o.numbered,
+        items: headings
+      });
+      return out;
+    }
+  },
+
   // ── A saved section, dropped in and resolved live ───────────────────
   //
   // Amber, 4 September: "any user and above can create a reusable section in a
@@ -477,16 +625,22 @@ export const LOFTY_WIDGETS = {
       {
         key: 'includeFinished', type: 'checkbox',
         label: 'Include completed, cancelled and archived jobs'
-      }
+      },
+      ...recordPickers()
     ],
     resolve: (o, ctx) => {
-      let rows = jobsOf(ctx);
+      let rows = narrowToPicked(jobsOf(ctx), o);
+      const pickedSomething = (o.jobIds?.length || o.projectIds?.length);
       if (!o.includeFinished) rows = rows.filter(notFinished);
       if (!rows.length) {
+        // Three different nothings, and telling them apart is the difference between
+        // "there is nothing to say" and "you have pointed this block at the wrong record".
         return [helpers.info(
-          jobsOf(ctx).length
-            ? 'Every job you can see is completed, cancelled or archived. Tick "Include completed…" to show them.'
-            : 'No jobs to show yet.'
+          pickedSomething
+            ? 'Nothing to show for the jobs and projects this block is pointed at. They may be completed, or no longer yours to see.'
+            : jobsOf(ctx).length
+              ? 'Every job you can see is completed, cancelled or archived. Tick "Include completed…" to show them.'
+              : 'No jobs to show yet.'
         )];
       }
 
@@ -732,12 +886,27 @@ export const LOFTY_WIDGETS = {
     defaults: () => ({ includeEmpty: false }),
     compactable: true,
     settings: [
-      { key: 'includeEmpty', type: 'checkbox', label: 'Include teams with no jobs' }
+      {
+        key: 'teamIds', type: 'multiselect', label: 'Only these teams', emptyMeansAll: true,
+        hint: 'Leave empty for every active team.',
+        options: (ctx) => activeTeams(ctx).map(t => ({ value: String(t.id), label: t.name }))
+      },
+      { key: 'includeEmpty', type: 'checkbox', label: 'Include teams with no jobs' },
+      ...recordPickers()
     ],
     resolve: (o, ctx) => {
-      const live = jobsOf(ctx).filter(notFinished);
-      const teams = activeTeams(ctx);
-      if (!teams.length) return [helpers.info('No active teams to report on.')];
+      const live = narrowToPicked(jobsOf(ctx), o).filter(notFinished);
+      const wantedTeams = Array.isArray(o.teamIds) && o.teamIds.length
+        ? new Set(o.teamIds.map(String))
+        : null;
+      const teams = activeTeams(ctx).filter(t => !wantedTeams || wantedTeams.has(String(t.id)));
+      if (!teams.length) {
+        return [helpers.info(
+          wantedTeams
+            ? 'The teams this block is pointed at are no longer active.'
+            : 'No active teams to report on.'
+        )];
+      }
 
       const rows = teams
         .map(t => {

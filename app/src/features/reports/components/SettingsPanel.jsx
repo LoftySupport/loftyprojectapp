@@ -8,8 +8,17 @@
 //
 // Field types: text · textarea · number · checkbox · select · multiselect ·
 // richtext · table · custom.
+//
+// INTEGRATION EDIT (see features/reports/README.md). Both pickers narrow as you type
+// once the list is long enough to need it. Amber, 4 September: *"with any of the
+// dropdowns (eg which job) in the record properties it should be able to start typing
+// like the suburb bar in the address and it pulls up the record"*.
+//
+// A native <select> of every job at Lofty is a scroll, not a choice, and it gets worse
+// with every job. The threshold is deliberate: below it a search box is one more thing
+// between you and four options.
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import RichTextEditor from './RichTextEditor.jsx';
 
 const inputCls = 'w-full border border-neutral-200 rounded-lg px-2.5 py-1.5 text-sm text-[#00393f] focus:outline-none focus:border-[#00393f]';
@@ -37,6 +46,11 @@ const resolveOptions = (field, ctx) => {
 
 function MultiSelect({ field, value = [], options, onChange }) {
   const selected = Array.isArray(value) ? value : [];
+  // INTEGRATION EDIT — the same search the single picker gained, for the same reason: a
+  // checkbox list of every job is a scroll. Ticked items stay visible while a filter is
+  // active (the reorder strip above, or the pinned rows below), so narrowing the list
+  // never hides what you have already chosen.
+  const [query, setQuery] = useState('');
   const toggle = (v) => onChange(selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v]);
   const move = (i, dir) => {
     const j = i + dir;
@@ -63,6 +77,15 @@ function MultiSelect({ field, value = [], options, onChange }) {
           </div>
         ) : <p className="text-[11px] text-neutral-400 italic px-1 mb-3">Tick items below to add them here, then reorder.</p>
       )}
+      {options.length >= SEARCH_FROM && (
+        <input
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder={`Search ${String(field.label || 'options').toLowerCase()}…`}
+          className={`${inputCls} mb-1.5`}
+          aria-label={`Search ${field.label}`}
+        />
+      )}
       <div className="space-y-1 border border-neutral-100 rounded-lg p-2 max-h-56 overflow-y-auto">
         {options.length > 4 && (
           <div className="flex items-center gap-2 pb-1 mb-1 border-b border-neutral-100">
@@ -74,7 +97,12 @@ function MultiSelect({ field, value = [], options, onChange }) {
           </div>
         )}
         {options.length === 0 && <p className="text-[11px] text-neutral-400 italic">Nothing to choose from yet.</p>}
-        {options.map(o => (
+        {options.length > 0 && matching(options, query).length === 0 && (
+          <p className="text-[11px] text-neutral-400 italic">Nothing matches “{query}”.</p>
+        )}
+        {/* Anything already ticked stays listed even when the filter excludes it, so
+            narrowing the list can never quietly hide a choice you have made. */}
+        {options.filter(o => matching(options, query).includes(o) || selected.includes(o.value)).map(o => (
           <label key={o.value} className="flex items-center gap-2 text-xs text-[#00393f] cursor-pointer select-none py-0.5">
             <input type="checkbox" checked={selected.includes(o.value)} onChange={() => toggle(o.value)} className="accent-[#00393f]" />
             {o.color && <span className="w-2 h-2 rounded-full shrink-0" style={{ background: o.color }} />}
@@ -135,6 +163,88 @@ function TableEditor({ options, onChange }) {
   );
 }
 
+/**
+ * How many options before a list is worth searching.
+ *
+ * Eight fits in the panel without scrolling, so below this a search box costs a click
+ * and saves nothing. Above it you are scrolling a list of job numbers.
+ */
+const SEARCH_FROM = 8;
+
+const matching = (options, q) => {
+  const needle = q.trim().toLowerCase();
+  if (!needle) return options;
+  return options.filter(o => String(o.label ?? '').toLowerCase().includes(needle));
+};
+
+/**
+ * A single-choice picker you can type into.
+ *
+ * Not a native <select>, because a native select cannot be filtered — its own type-ahead
+ * matches only the START of an option, so "Corner" never finds "1042-001 — 28 Corner
+ * Street". This matches on any part of the label, which is what somebody typing a street
+ * name expects.
+ */
+function SearchSelect({ field, value, options, onChange }) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const closeTimer = useRef(null);
+  const chosen = options.find(o => o.value === value) || null;
+  const shown = matching(options, query);
+
+  // A blur that is really a click on an option must not close the list before the click
+  // lands. Cancelled on focus, so tabbing back in does not lose the list.
+  const closeSoon = () => { closeTimer.current = setTimeout(() => setOpen(false), 120); };
+  const keepOpen = () => { clearTimeout(closeTimer.current); setOpen(true); };
+
+  const pick = (v) => { onChange(v); setQuery(''); setOpen(false); };
+
+  return (
+    <div className="relative">
+      <div className="flex items-center gap-1">
+        <input
+          value={open ? query : (chosen?.label ?? '')}
+          onChange={e => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={keepOpen}
+          onBlur={closeSoon}
+          placeholder={chosen ? chosen.label : (field.emptyLabel || 'Type to search…')}
+          className={inputCls}
+          role="combobox"
+          aria-expanded={open}
+          aria-label={field.label}
+        />
+        {chosen && field.allowEmpty !== false && (
+          <button
+            onMouseDown={e => e.preventDefault()}
+            onClick={() => pick(null)}
+            className="px-1.5 py-1 rounded text-neutral-400 hover:text-red-500 hover:bg-red-50 text-sm leading-none shrink-0"
+            aria-label={`Clear ${field.label}`}
+          >×</button>
+        )}
+      </div>
+      {open && (
+        <ul
+          className="absolute z-20 left-0 right-0 mt-1 max-h-56 overflow-y-auto bg-white border border-neutral-200 rounded-lg shadow-lg py-1"
+          onMouseDown={keepOpen}
+        >
+          {shown.length === 0 ? (
+            <li className="px-2.5 py-1.5 text-[11px] text-neutral-400 italic">Nothing matches “{query}”.</li>
+          ) : shown.map(o => (
+            <li key={o.value}>
+              <button
+                onClick={() => pick(o.value)}
+                className={`w-full text-left px-2.5 py-1.5 text-sm hover:bg-[#f5f6f8] ${o.value === value ? 'font-semibold text-[#00393f]' : 'text-neutral-700'}`}
+              >
+                {o.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // ─── One field ───────────────────────────────────────────────────────
 
 function SettingsField({ field, options, ctx, onSet }) {
@@ -175,6 +285,20 @@ function SettingsField({ field, options, ctx, onSet }) {
         </label>
       );
     case 'select':
+      // Long lists get the searchable picker; short ones keep the native select, which
+      // is lighter, works on a phone's own picker UI, and needs no filtering.
+      if (choices.length >= SEARCH_FROM || field.searchable) {
+        return (
+          <Field label={field.label} hint={field.hint}>
+            <SearchSelect field={field} value={value ?? null} options={choices} onChange={set} />
+            {choices.length === 0 && (
+              <p className="text-[11px] text-amber-600 mt-1 leading-snug">
+                {field.emptyHint || 'Nothing available to pick yet.'}
+              </p>
+            )}
+          </Field>
+        );
+      }
       return (
         <Field label={field.label} hint={field.hint}>
           <select value={value ?? ''} onChange={e => set(e.target.value || null)} className={inputCls}>
