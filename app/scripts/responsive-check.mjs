@@ -28,11 +28,21 @@ const BASE = process.env.RESPONSIVE_BASE ?? "http://127.0.0.1:5200";
 // entirely without a single check noticing.
 const ROUTES = ["/", "/dashboard", "/projects", "/jobs", "/reports", "/setup/properties", "/setup/processes", "/contacts", "/setup/contacts", "/setup/notifications", "/maintenance", "/setup/maintenance",
                 "/admin", "/settings", "/setup", "/setup/dictionary", "/setup/wiring",
-                // Tools. The list of templates, which is the whole of what this route
-                // draws — the builder itself is a portal over the viewport that opens
-                // on a click, so it is not a URL and the sweep cannot reach it. Said
-                // rather than implied, because a green line here would otherwise read
-                // as "the report builder is responsive" and it does not mean that.
+                // Tools. Three lanes, three layouts, and each is its own URL now — a
+                // Get Started grid over a table, with different cards and a different
+                // table in each. Sweeping only one of them measured the other two by
+                // assumption.
+                //
+                // The BUILDER is not here and cannot be: it is a portal over the whole
+                // viewport that opens on a click, so it has no URL for the sweep to
+                // visit. Said rather than implied, because a green line on these three
+                // would otherwise read as "the report builder is responsive", and it
+                // does not mean that.
+                //
+                // The retired slug is swept too. It redirects, and a redirect that broke
+                // would show up here as a route that measures nothing rather than as a
+                // 404 somebody reports.
+                "/tools/document-builder", "/tools/template-library", "/tools/section-library",
                 "/tools/template-builder",
                 // The tracker. All three tabs, because they are three different layouts
                 // sharing one route — a five-column board, a list of dated phases, and a
