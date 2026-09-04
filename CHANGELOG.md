@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Real page-load timings are collected from Vercel deployments, grouped by page rather than by individual job or project
 - Documents — make a progress report, a client letter or a maintenance report from a template, and change whatever that one needs without touching the template
 - A template library, with reusable sections that update everywhere when you edit them
 - Anyone can propose a template or a section; a manager approves it into the library, and until then only its author can see it
