@@ -1,5 +1,5 @@
 import { Navigate, useNavigate, useParams } from "react-router-dom";
-import { Heading, Tab, TabList, Text } from "@vibe/core";
+import { Heading, Tab, TabList } from "@vibe/core";
 import { TemplateBuilderPage } from "./TemplateBuilderPage";
 import "../components/ui.css";
 
@@ -11,17 +11,28 @@ import "../components/ui.css";
  * wired; this is the third kind — a builder, a calculator, a converter, whatever comes
  * next — and none of those fitted either of the other two.
  *
- * One tab today. It is a TabList anyway rather than a bare page, because Amber asked for
- * the section knowing there will be more ("there will be multiple built in the future"),
- * and adding the second tab to a page that already has tabs is one line where retrofitting
- * tabs onto a bare page moves every URL.
+ * ONE ROW OF TABS, NOT TWO
  *
- * The section is in the path — `/tools/template-builder` — for the same reason Setup's
- * is: a link to a particular tab has to be a link somebody can send.
+ *   There used to be a TabList here with a single tab, "Template Builder", sitting
+ *   directly above the builder's own three. Amber, 4 September: *"remove this as it is a
+ *   duplicate"* — and it read as one, because a tab row with one tab in it is not a
+ *   choice, it is a label with a line under it.
+ *
+ *   So the three lanes ARE the sections now. That keeps what the outer row was for: the
+ *   lane is in the path, so a link to the Section Library is a link somebody can send —
+ *   which a tab held in component state would not be.
+ *
+ *   When the second tool arrives it gets its own slugs here and the grouping question can
+ *   be answered then, with two real tools to look at rather than one and a hypothetical.
  */
 const SECTIONS = [
-  { slug: "template-builder", label: "Template Builder" }
+  { slug: "document-builder", label: "Document Builder", lane: "documents" },
+  { slug: "template-library", label: "Template Library", lane: "template" },
+  { slug: "section-library", label: "Section Library", lane: "section" }
 ] as const;
+
+/** Where the old single-tool URL goes. Links to it exist in Teams messages and bookmarks. */
+const RETIRED = new Set(["template-builder"]);
 
 export function ToolsPage() {
   const { section } = useParams();
@@ -29,25 +40,28 @@ export function ToolsPage() {
   const index = SECTIONS.findIndex(s => s.slug === section);
 
   // An unknown or missing section is a redirect, not an error page: /tools on its own is
-  // a reasonable thing to type or to put in the nav, and it should land somewhere.
-  if (index === -1) return <Navigate to={`/tools/${SECTIONS[0].slug}`} replace />;
+  // a reasonable thing to type or to put in the nav, and it should land somewhere. The
+  // retired slug lands in the same place rather than 404ing somebody's bookmark.
+  if (index === -1) {
+    return <Navigate to={`/tools/${SECTIONS[0].slug}`} replace state={{ from: section }} />;
+  }
 
   return (
     <>
-      <div className="page-head">
+      {/* No subtitle. Amber: *"remove sub header as it takes up space and adds no value
+          and reduce the spacing as we don't need this much room"*. The sentence said what
+          Tools is for, which is a thing you read once and then step over every day. */}
+      <div className="page-head page-head-tight">
         <Heading type="h2" weight="bold">Tools</Heading>
-        <Text type="text2" color="secondary">
-          Things you use to make something, rather than records to work on.
-        </Text>
       </div>
 
       <TabList activeTabId={index} onTabChange={i => navigate(`/tools/${SECTIONS[i].slug}`)}>
         {SECTIONS.map(s => <Tab key={s.slug}>{s.label}</Tab>)}
       </TabList>
 
-      <div style={{ marginTop: "var(--space-16)" }}>
-        {section === "template-builder" && <TemplateBuilderPage />}
-      </div>
+      <TemplateBuilderPage lane={SECTIONS[index].lane} />
     </>
   );
 }
+
+export { SECTIONS as TOOLS_SECTIONS, RETIRED as TOOLS_RETIRED_SLUGS };

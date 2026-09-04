@@ -156,6 +156,10 @@
 
 /* ---- page furniture ------------------------------------------------------ */
 .page-head { margin-bottom: var(--space-16); }
+/* A page whose tabs sit directly under the heading. Amber, 4 September: "reduce the
+   spacing as we don't need this much room." The default gap is sized for a heading with a
+   sentence under it; without the sentence it reads as a hole. */
+.page-head-tight { margin-bottom: var(--space-8); }
 /* Vibe's Text clips to one line, and a clipping child only shrinks when its flex
    parent is allowed to. Without `min-width: 0` the head claims the full intrinsic
    width of its sentence and pushes the page sideways on a phone. */

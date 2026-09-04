@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Button, Tab, TabList, Text, TextField } from "@vibe/core";
+import { Button, Text, TextField } from "@vibe/core";
 import { useQuery, useRepository } from "../data/DataProvider";
 import { useAuth } from "../data/AuthProvider";
 import { usePermission } from "../data/PermissionProvider";
@@ -88,7 +88,12 @@ type OpenTarget =
   | { lane: "document"; row: ReportStoreRow; subject: { jobId: string | null; projectId: number | null } }
   | { lane: "library"; row: ReportStoreRow; kind: ReportTemplateKind };
 
-export function TemplateBuilderPage() {
+/**
+ * @param lane which of the three the URL is on. It lives in ToolsPage rather than here
+ *   because it is in the path — a link to the Section Library has to be a link somebody
+ *   can send, and a tab held in component state is not one.
+ */
+export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" | "section" }) {
   const repo = useRepository();
   const { can } = usePermission();
   const { profile } = useAuth();
@@ -109,16 +114,6 @@ export function TemplateBuilderPage() {
   const [libName, setLibName] = useState("");
   /** What "Clone" copies from — a document id in the builder lane, a library id otherwise. */
   const [cloneFrom, setCloneFrom] = useState<string | null>(null);
-  /**
-   * Which lane is on screen. Amber, 4 September: *"have the builder and templates in
-   * libraries with tabs"*.
-   *
-   * It replaces two things at once — the two stacked panels, and the Template/Section
-   * dropdown beside the library's name field. The dropdown was a second way of saying
-   * what the tab now says, and two controls for one question is how somebody names a
-   * section and finds it filed as a template.
-   */
-  const [lane, setLane] = useState<"documents" | "template" | "section">("documents");
   const libKind: ReportTemplateKind = lane === "section" ? "section" : "template";
   const [busy, setBusy] = useState(false);
 
@@ -460,27 +455,9 @@ export function TemplateBuilderPage() {
   const pending = ofKind.filter(t => t.approvedAt === null);
   const inLibrary = ofKind.filter(t => t.approvedAt !== null);
 
-  const LANES = [
-    { id: "documents", label: "Document Builder" },
-    { id: "template", label: "Template Library" },
-    { id: "section", label: "Section Library" }
-  ] as const;
-
   return (
     <>
       {problem && <Problem>{problem}</Problem>}
-
-      {/* Three lanes, one on screen at a time. A second TabList under the Tools tabs is
-          deliberate: those choose the tool, these choose what you are working on inside
-          it, and flattening them would put "Sections" beside "Template Builder" as if
-          they were the same kind of choice. */}
-      <TabList
-        activeTabId={LANES.findIndex(l => l.id === lane)}
-        onTabChange={(i: number) => { setLane(LANES[i].id); setCloneFrom(null); }}
-        size="small"
-      >
-        {LANES.map(l => <Tab key={l.id}>{l.label}</Tab>)}
-      </TabList>
 
       {/* ── Documents ───────────────────────────────────────────────────── */}
       {lane === "documents" && (
