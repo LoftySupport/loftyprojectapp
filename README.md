@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 115 changes since then —
+Unreleased: 116 changes since then —
+- Fixed: The version in the footer names the commit it was built from on Vercel as well as Netlify, instead of reading "local" on a real deployment
 - Changed: Documents built in the Template Builder now carry Lofty's house document format — the same wordmark, colours, section rule and font as every other export
 - Fixed: The row hairline in an exported PDF was one shade off the same line in the Word document
 - Added: Documents — make a progress report, a client letter or a maintenance report from a template, and change whatever that one needs without touching the template
 - Added: A template library, with reusable sections that update everywhere when you edit them
-- Added: Anyone can propose a template or a section; a manager approves it into the library, and until then only its author can see it
-- …and 110 more.
+- …and 111 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
