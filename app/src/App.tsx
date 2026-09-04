@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter, Navigate, NavLink, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { Heading, Loader, Text, ThemeProvider } from "@vibe/core";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import { loftyTheme, type SystemTheme } from "./theme/loftyTheme";
 import { AuthProvider, useAuth } from "./data/AuthProvider";
 import { LegalPage } from "./pages/LegalPage";
@@ -172,6 +173,45 @@ function NotFound() {
   );
 }
 
+/**
+ * The two routes whose second segment is a record rather than a page.
+ *
+ * Speed Insights groups its numbers by the `route` it is given, and given none it groups
+ * by the literal path — so once there are jobs, `/jobs/1042-001` and `/jobs/1042-002`
+ * would be two rows with one sample each, and the dashboard would have nothing to say
+ * about how the Jobs page performs.
+ *
+ * `:section` is deliberately NOT in here. `/tools/template-builder` and `/setup/processes`
+ * are pages from a short fixed list, and seeing them apart is the point.
+ *
+ * A Map rather than an object literal so a path segment called `constructor` is a miss
+ * rather than a hit. It lives beside the routes it mirrors: adding a parameterised route
+ * means editing the block below, and this is the paragraph above it.
+ */
+const RECORD_ROUTES = new Map([
+  ["projects", "/projects/:projectNumber"],
+  ["jobs", "/jobs/:jobNumber"]
+]);
+
+/**
+ * Speed Insights, and only where its endpoint exists.
+ *
+ * The deploy is on both hosts while the migration finishes. Vercel serves
+ * `/_vercel/speed-insights/script.js`; Netlify does not, so mounting this everywhere
+ * would put a 404 in the console of every Netlify visitor and collect nothing for it.
+ *
+ * The full URL reaches Vercel either way — it is the host, and its access log already
+ * has every path — so `route` is about the dashboard being readable, not about holding
+ * anything back.
+ */
+function SpeedInsightsOnVercel() {
+  const { pathname } = useLocation();
+  if (__BUILD_HOST__ !== "vercel") return null;
+  const [, head, tail, ...rest] = pathname.split("/");
+  const grouped = tail && rest.length === 0 ? RECORD_ROUTES.get(head) : undefined;
+  return <SpeedInsights route={grouped ?? pathname} />;
+}
+
 export default function App() {
   const [theme, setTheme] = useState<SystemTheme>(() => {
     const saved = localStorage.getItem(THEME_KEY) as SystemTheme | null;
@@ -198,6 +238,9 @@ export default function App() {
         {/* BASE_URL rather than a literal, so `base` in vite.config.ts stays the one
             place the app's location is decided — the OAuth redirectTo reads it too. */}
         <BrowserRouter basename={import.meta.env.BASE_URL}>
+          {/* Inside the router because it needs the current path; a sibling of <Routes>
+              rather than inside one, so it mounts once and survives navigation. */}
+          <SpeedInsightsOnVercel />
           <Routes>
             <Route path="signin" element={<RedirectIfSignedIn />} />
             {/* Public, and outside RequireAuth on purpose: a policy that cannot be read

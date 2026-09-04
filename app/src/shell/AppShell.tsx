@@ -368,7 +368,7 @@ export function AppShell() {
             <span className="app-foot-name">
               Lofty © {new Date().getFullYear()} Project Management App
               {" "}
-              <span className="app-foot-version" title={`Netlify context: ${__BUILD_CONTEXT__}`}>
+              <span className="app-foot-version" title={`${__BUILD_HOST__} · ${__BUILD_CONTEXT__}`}>
                 v{__BUILD_REF__}
               </span>
             </span>

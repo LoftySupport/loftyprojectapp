@@ -195,6 +195,28 @@ Three ways to resolve it, best first:
 and this repository has none, so it uses the project default — worth setting to 22
 explicitly rather than inheriting whatever the default becomes.
 
+#### Speed Insights
+
+`@vercel/speed-insights` is mounted in `App.tsx`, from the **`/react`** entry point — not
+`/next`, which is what Vercel's own quickstart shows by default. Same trap as the
+environment variables above: the dashboard assumes Next.js, and this is a Vite app.
+
+It is gated on `__BUILD_HOST__`, because the deploy is on both hosts. Vercel serves
+`/_vercel/speed-insights/script.js` and Netlify does not, so an ungated component would
+put a 404 in the console of every Netlify visitor and collect nothing for it. The gate is
+a compile-time constant, so on a Netlify build Rollup removes the component and the import
+with it — the string `_vercel/speed-insights` does not appear in that bundle at all.
+Measured: **2,246,200 bytes on a Vercel build against 2,243,807 on a Netlify one**, so it
+costs 2.4 kB where it is used and nothing where it is not.
+
+The `route` prop groups by `/jobs/:jobNumber` and `/projects/:projectNumber` rather than by
+the literal path, or the dashboard would hold one row per job number and be unable to say
+anything about how the Jobs page performs. `/tools/:section` and `/setup/:section` are
+deliberately left ungrouped — those are pages from a short fixed list, and telling them
+apart is the point. This is about the dashboard being readable, not about withholding
+anything: Speed Insights posts the full `href` regardless, and Vercel is the host, so its
+access log already has every path.
+
 The build identity reads both hosts' variables (`COMMIT_REF`/`CONTEXT` on Netlify,
 `VERCEL_GIT_COMMIT_SHA`/`VERCEL_ENV` on Vercel), so the version in the footer says which
 commit it is on either. See the note in `app/vite.config.ts` for the trap in that: the

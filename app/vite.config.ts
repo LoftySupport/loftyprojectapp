@@ -41,8 +41,21 @@ export default defineConfig({
   // would say "vlocal" on a real deployment, and the version string is there to answer
   // "is what I am looking at the fix?". A build that cannot say which commit it is has
   // lost the only question that footer exists for.
+  //
+  // WHICH host, as well as which context, because "production" is what both of them call
+  // it and the two are not interchangeable to anything downstream. Speed Insights reports
+  // to an endpoint Vercel serves and Netlify does not, so a build that cannot say where it
+  // is running would either miss its own metrics or ask Netlify for a script that 404s.
+  // Each host is read by two signals: the flag it sets (VERCEL=1, NETLIFY=true) and the
+  // git variable already read above, so losing one of them does not make the build
+  // anonymous.
   define: {
     __BUILD_REF__: JSON.stringify(firstSet(process.env.COMMIT_REF, process.env.VERCEL_GIT_COMMIT_SHA).slice(0, 7) || "local"),
-    __BUILD_CONTEXT__: JSON.stringify(firstSet(process.env.CONTEXT, process.env.VERCEL_ENV) || "local")
+    __BUILD_CONTEXT__: JSON.stringify(firstSet(process.env.CONTEXT, process.env.VERCEL_ENV) || "local"),
+    __BUILD_HOST__: JSON.stringify(
+      firstSet(process.env.VERCEL, process.env.VERCEL_ENV) ? "vercel"
+        : firstSet(process.env.NETLIFY, process.env.CONTEXT) ? "netlify"
+        : "local"
+    )
   }
 })
