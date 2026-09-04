@@ -129,19 +129,71 @@ the output directory, sets an empty install command (the real `npm ci` happens i
 `app/`, in `build.sh`), and ports the three routing rules and four headers from
 `netlify.toml`. JSON takes no comments, which is why the reasoning is here.
 
-**Two things have to be done in the Vercel project itself and cannot be done from the
-repository:**
+**Three things have to be done in the Vercel project itself and cannot be done from the
+repository.**
 
-1. **`VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.** Without them the app builds
-   and serves, and every screen runs on the stub repository — real structure, no data —
-   with the sign-in page saying *Not configured*. Note that the Netlify **Supabase
-   extension** wrote a second pair of spellings (`VITE_SUPABASE_DATABASE_URL`,
-   `VITE_SUPABASE_ANON_KEY`) that the app also reads; there is no such extension on
-   Vercel, so the two names above are the ones to set.
-2. **The Node version.** `netlify.toml` pins 22. Vercel takes its version from a root
-   `package.json`'s `engines`, and this repository has none, so it uses the project
-   default — worth setting to 22 explicitly rather than inheriting whatever the default
-   becomes.
+#### 1. The Root Directory must be empty
+
+This is the one that has to be right before anything else can be, because **Vercel reads
+`vercel.json` from the Root Directory** — not from the repository root. Point it at `app`
+and the file above is never opened: no SPA rewrite, so every deep link 404s on refresh; no
+`/binding-template` and no `/prototype.html`; no `/app/*` redirect for old bookmarks; and
+none of the four headers.
+
+**Output Directory is resolved relative to Root Directory too**, which makes the two
+settings easy to get wrong together: Root Directory `app` with Output Directory `app/dist/`
+resolves to `app/app/dist/`, and no build can produce that.
+
+| Setting | Value | Why |
+|---|---|---|
+| Root Directory | *empty* | so `vercel.json` is read, and `build.sh` can reach `supabase-template.html` and `index.html`, which live at the repository root |
+| Framework Preset | Other | the root is not a Vite project — the Vite app is in `app/`, and `vercel.json` declares `"framework": null` to say so |
+| Build Command | `./build.sh` | or leave the override off and let `vercel.json` supply it |
+| Output Directory | `dist` | likewise |
+| Install Command | *empty, override on* | an empty string skips install; the real `npm ci` runs inside `app/` in `build.sh` |
+| Skip deployments when nothing in the root changed | off | with no Root Directory set, everything is the root, so this can only mislead |
+
+The dashboard fields are redundant once Root Directory is empty — `vercel.json` takes
+precedence over all of them. Setting both is not harmful while they agree; it is two
+places to update when they stop agreeing.
+
+#### 2. `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`
+
+Without them the app builds and serves, every screen runs on the stub repository — real
+structure, no data — and the sign-in page says *Not configured*.
+
+**The prefix is the framework's, not Supabase's.** A bundler only exposes to browser code
+the variables carrying its own prefix: Vite reads `VITE_`, Next.js reads `NEXT_PUBLIC_`,
+Create React App read `REACT_APP_`. So the same Supabase integration provisions different
+names depending on which framework it is told it is wiring up — and **on Vercel it assumes
+Next.js**, which produces `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+
+Neither is visible to `import.meta.env`. `app/vite.config.ts` sets no `envPrefix`, so
+Vite's default of `VITE_` applies and a `NEXT_PUBLIC_*` variable is not merely wrong — it
+is absent from the bundle entirely. The build goes green, the site serves, and sign-in
+reports *Not configured* while the Vercel dashboard shows the variables sitting right
+there. That is the same failure the Netlify **Supabase extension** caused with a different
+pair of names (`VITE_SUPABASE_DATABASE_URL`, `VITE_SUPABASE_ANON_KEY`), which is why
+`app/src/data/supabaseEnv.ts` already reads two spellings of each value.
+
+Three ways to resolve it, best first:
+
+1. Tell the integration the framework is **Vite**, and it provisions the `VITE_` names.
+   Nothing in the repository changes and the integration keeps owning the values.
+2. Set the two names by hand in the project's environment variables. Works, but it is a
+   second copy of a value the integration owns, and stale after the next key rotation.
+3. Widen the prefix — `envPrefix: ['VITE_', 'NEXT_PUBLIC_']` in `app/vite.config.ts` — so
+   the integration's own names are read. Note what this means: **every** `NEXT_PUBLIC_*`
+   variable would then be inlined into the JavaScript shipped to the browser. That is
+   tolerable only because the integration prefixes exactly the two values that are safe to
+   publish and never `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_JWT_SECRET`. Do not reach
+   for it as a convenience.
+
+#### 3. The Node version
+
+`netlify.toml` pins 22. Vercel takes its version from a root `package.json`'s `engines`,
+and this repository has none, so it uses the project default — worth setting to 22
+explicitly rather than inheriting whatever the default becomes.
 
 The build identity reads both hosts' variables (`COMMIT_REF`/`CONTEXT` on Netlify,
 `VERCEL_GIT_COMMIT_SHA`/`VERCEL_ENV` on Vercel), so the version in the footer says which
