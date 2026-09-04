@@ -7,7 +7,7 @@ Supabase — projects, jobs, profiles, teams, the pipeline stages, properties, p
 and the tracker are live queries. The database holds **117 projects, 66 jobs, 270
 property definitions and 49 processes**; the 110 projects Amber sent on 3 September are in
 with the number of sites each will hold, and their jobs are deliberately not created yet.
-(Setup → Wiring counts the wiring rather than repeating it here: these numbers are a
+(Admin → Wiring counts the wiring rather than repeating it here: these numbers are a
 snapshot and that screen is generated.)
 
 Values whose table is not built yet still render as a `{{table.column}}` token, so an

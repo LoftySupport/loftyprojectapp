@@ -17,8 +17,10 @@ browse; they look something up and put the phone away.
 
 **Also confirmed:** the office teams the lifecycle stages name — Acquisition & Development,
 Pre-construction Admin, Design, Estimating, Sales Admin, Construction, Maintenance — who
-work at a desk, move jobs between stages, edit processes and properties in Setup, and read
-the boards and reports. Admins configure teams, permissions, and the Setup pages.
+work at a desk, move jobs between stages, and read the boards and reports. **Their
+managers hold Settings** — properties, processes, contacts, maintenance, the stage SLAs
+and the notification rules — which stopped being everybody's on 4 September. Admins
+configure users, teams, permissions, the dictionary and the wiring, behind the header cog.
 Homeowners and contractors are parties on records and receive email from the app
 (maintenance offers, accept links) but do not sign in.
 
@@ -52,7 +54,7 @@ claim that every number on it traces to a row somebody can open.
 - **Where it is used:** the deployed LoftySupport web app, in a desktop browser at a desk
   and in a phone browser on site; Microsoft Entra sign-in; SharePoint folders per job;
   email via Microsoft Graph for maintenance.
-- **Rituals:** Setup → Processes and Properties are edited by managers; the Updates page
+- **Rituals:** Settings → Processes and Properties are edited by managers; the Updates page
   carries the request queue, roadmap and changelog for everyone signed in; the import of
   the old system's 801 jobs is Phase B and has not run.
 - **Adelaide.** Dates are Adelaide calendar days (the server runs in UTC).
@@ -120,7 +122,7 @@ company, role and team; Maintenance by category, status and the job it sits on;
 Properties by stage, scope and team. "Similar options" means the equivalents, not fewer.
 
 **A filter that hides rows must say so**, and a sort that reorders a grouped or nested
-list must say what it did to the grouping — Setup → Processes turns dragging off and
+list must say what it did to the grouping — Settings → Processes turns dragging off and
 says why when a column sort replaces its pipeline order.
 
 ### 2. Every record opens in the slideout
@@ -175,7 +177,7 @@ Three things travel with the pattern and none is optional:
   drag silently sends everything hidden to the end.
 - **Sorting is a different question and gets a different answer.** A pipeline sorted by
   team is not a pipeline, so sorting switches to the flat table view, where dragging is
-  off and every column sorts. Setup → Processes names both views rather than implying them.
+  off and every column sorts. Settings → Processes names both views rather than implying them.
 
 One list is deliberately **not** given this treatment: the build lifecycle itself,
 Acquisition & Development through Cancelled. Its order is a CHECK constraint on
