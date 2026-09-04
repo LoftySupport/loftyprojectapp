@@ -110,11 +110,16 @@ function keyValuesBlock(items) {
   ]);
 }
 
-function listBlock(items) {
-  return (items || []).map(item =>
+function listBlock(items, ordered = false) {
+  // Word's real numbering needs a numbering definition on the document, which this
+  // writer deliberately does not carry — so an ordered list is numbered in the text.
+  // It prints identically and survives a copy-paste out of Word, which the automatic
+  // kind does not always do.
+  return (items || []).map((item, n) =>
     new Paragraph({
-      bullet: { level: 0 },
-      children: [new TextRun({ text: String(item ?? '') })],
+      ...(ordered ? {} : { bullet: { level: 0 } }),
+      ...(ordered ? { indent: { left: 360 } } : {}),
+      children: [new TextRun({ text: ordered ? `${n + 1}. ${String(item ?? '')}` : String(item ?? '') })],
     })
   );
 }
@@ -229,7 +234,7 @@ function blockToDocx(b, preset) {
     case 'paragraph':   return [para(b.text)];
     case 'subheading':  return [heading3(b.text)];
     case 'keyValues':   return keyValuesBlock(b.items);
-    case 'list':        return listBlock(b.items);
+    case 'list':        return listBlock(b.items, b.ordered);
     case 'callout':     return calloutBlock(b);
     case 'table':       return tableBlock(b, preset);
     case 'richText':    return [para(stripHtml(b.html))];

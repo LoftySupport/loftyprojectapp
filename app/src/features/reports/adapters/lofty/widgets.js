@@ -241,6 +241,55 @@ const CHART_METRICS = [
 // ─── The widgets ─────────────────────────────────────────────────────
 
 export const LOFTY_WIDGETS = {
+  // ── What is in this document ─────────────────────────────────────────
+  //
+  // Amber, 4 September, asking for "a table of contents".
+  //
+  // It reads the document rather than the app, which makes it the only block here that
+  // does. `ctx.__widgets` is the document's own widget list, put there by compileReport
+  // and by the builder's canvas — see the note in core/widgetEngine.js.
+  //
+  // NO PAGE NUMBERS, and that is not an omission. The page a heading lands on is decided
+  // by the browser's print engine at the moment somebody presses print — it depends on
+  // the paper, the orientation, and how much the data underneath has grown since. A
+  // number written here would be right the day it was made and wrong afterwards, which
+  // is the same failure the whole "blocks hold references, never copies" rule exists to
+  // prevent. A list of headings in order is true whenever it is read.
+  tableOfContents: {
+    label: 'Table of contents',
+    group: 'Text & layout',
+    hint: 'Lists the section headings in this document, in order',
+    defaults: () => ({ title: 'Contents', numbered: true }),
+    settings: [
+      { key: 'title', type: 'text', label: 'Heading', placeholder: 'Contents' },
+      { key: 'numbered', type: 'checkbox', label: 'Number the sections' }
+    ],
+    resolve: (o, ctx, h) => {
+      const all = Array.isArray(ctx.__widgets) ? ctx.__widgets : [];
+      const headings = all
+        .filter(w => w.kind === 'heading')
+        .map(w => String(w.options?.text || '').trim())
+        .filter(Boolean);
+
+      if (!headings.length) {
+        // In a document being written this is worth saying; in one being sent it is
+        // noise, and the same forExport rule every other block here follows applies.
+        return h.forExport ? [] : [helpers.info(
+          'Add some section headings and they will be listed here.'
+        )];
+      }
+
+      const out = [];
+      if (o.title !== '') out.push({ type: 'subheading', text: o.title || 'Contents' });
+      out.push({
+        type: 'list',
+        ordered: !!o.numbered,
+        items: headings
+      });
+      return out;
+    }
+  },
+
   // ── A saved section, dropped in and resolved live ───────────────────
   //
   // Amber, 4 September: "any user and above can create a reusable section in a

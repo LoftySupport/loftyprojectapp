@@ -26,8 +26,10 @@ export function blockToHtml(b) {
     case 'subheading': return `<h3>${esc(b.text)}</h3>`;
     case 'keyValues':
       return `<dl>${(b.items || []).map(i => `<dt>${esc(i.label)}</dt><dd>${esc(i.value)}</dd>`).join('')}</dl>`;
-    case 'list':
-      return `<ul>${(b.items || []).map(i => `<li>${esc(i)}</li>`).join('')}</ul>`;
+    case 'list': {
+      const tag = b.ordered ? 'ol' : 'ul';
+      return `<${tag}>${(b.items || []).map(i => `<li>${esc(i)}</li>`).join('')}</${tag}>`;
+    }
     case 'callout': {
       const tone = TONE_STYLES[b.tone] || TONE_STYLES.info;
       return `<div class="callout" style="background:${tone.bg};border-left:4px solid ${tone.border};color:${tone.text}">${esc(b.text)}</div>`;

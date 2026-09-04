@@ -163,7 +163,24 @@ const full = {
   projects, jobs, teams, stageNames, people, processes,
   propertyDefs, propertyValues, propertyOptions,
   sections, expandSection,
-  subject: { jobId: "1042-001", projectId: null }
+  subject: { jobId: "1042-001", projectId: null },
+  // The document's own widget list, which compileReport and the builder both supply.
+  // Only `tableOfContents` reads it — it is the one block that describes the DOCUMENT
+  // rather than the app — and without it here the "reads live data" sweep below would
+  // find no difference between a full context and an empty one and report the block as
+  // returning a copy. Watched doing exactly that before this line existed.
+  __widgets: [
+    { id: "h1", kind: "heading", options: { text: "Site" } },
+    { id: "t1", kind: "text", options: { html: "<p>Prose between the headings.</p>" } },
+    // A NON-heading that also carries `options.text`. Without it the "only the headings"
+    // assertion below passes for the wrong reason — a text block has no `text` option, so
+    // it drops out of the contents whether the kind filter is there or not. Watched: with
+    // this line absent, replacing the kind filter with one that keeps everything changed
+    // nothing and the check stayed green.
+    { id: "b1", kind: "button", options: { text: "Book a site visit", url: "https://example.com" } },
+    { id: "h2", kind: "heading", options: { text: "Jobs on this project" } },
+    { id: "h3", kind: "heading", options: { text: "Where things are up to" } }
+  ]
 };
 /** Not an error state: Phase B has not run, so this is the app as it stands today. */
 const empty = {
@@ -342,6 +359,33 @@ console.log("--- a block can be narrowed to particular jobs, projects or teams")
   ok("one team picked returns exactly that team",
     oneTeam.rows.length === 1 && JSON.stringify(oneTeam.rows[0]).includes("Design"),
     JSON.stringify(oneTeam.rows));
+}
+
+// ─── 7c. A table of contents lists the document, not the data ────────
+console.log("--- the table of contents reads the document it is in");
+{
+  const toc = (options = {}) => engine.resolve({ id: "toc", kind: "tableOfContents", options: { title: "Contents", numbered: true, ...options } }, full);
+
+  const blocks = toc();
+  const list = blocks.find(b => b.type === "list");
+  ok("every heading in the document, in order",
+    list && list.items.join("|") === "Site|Jobs on this project|Where things are up to",
+    JSON.stringify(list?.items));
+  ok("and only the headings — text blocks are not sections",
+    list && list.items.length === 3, String(list?.items.length));
+  ok("numbered when asked", list?.ordered === true);
+  ok("and bulleted when not", toc({ numbered: false }).find(b => b.type === "list")?.ordered === false);
+  ok("its own heading is settable", blocks.some(b => b.type === "subheading" && b.text === "Contents"));
+  ok("and can be turned off", !toc({ title: "" }).some(b => b.type === "subheading"));
+
+  // A document with no headings: a prompt while writing, silence when sending. The same
+  // rule every other unfinished block here follows.
+  const noHeadings = { ...full, __widgets: [{ id: "t", kind: "text", options: {} }] };
+  const w = engine.createWidget("tableOfContents", noHeadings);
+  ok("a document with no headings prompts the author",
+    /add some section headings/i.test(textOf(engine.resolve(w, noHeadings, { forExport: false }))));
+  ok("…and says nothing at all in the sent document",
+    engine.resolve(w, noHeadings, { forExport: true }).length === 0);
 }
 
 // ─── 8. A board draws the pipeline, including its empty columns ──────

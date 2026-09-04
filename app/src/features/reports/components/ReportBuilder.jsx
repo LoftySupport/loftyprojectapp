@@ -75,13 +75,17 @@ function Palette({ registry, onAdd }) {
 // ─── Widget preview (memoised — text edits shouldn't re-resolve tables) ──
 
 const WidgetPreview = React.memo(function WidgetPreview({ widget, engine, ctx, theme, onRepick }) {
-  const blocks = useMemo(() => engine.resolve(widget, ctx), [engine, widget, ctx]);
+  // INTEGRATION EDIT — the same `__widgets` compileReport supplies. The canvas resolves
+  // one widget at a time, so without this a table of contents would be empty on screen
+  // and correct in the export, which is the worst of the two.
+  const widgetCtx = useMemo(() => ({ ...ctx, __widgets: allWidgets }), [ctx, allWidgets]);
+  const blocks = useMemo(() => engine.resolve(widget, widgetCtx), [engine, widget, widgetCtx]);
   return <ReportBlocks blocks={blocks} theme={theme} onRepick={onRepick} />;
 });
 
 // ─── Sortable widget row ─────────────────────────────────────────────
 
-function SortableWidget({ widget, engine, ctx, theme, selected, onSelect, onUpdate, onRemove, onMove, isFirst, isLast }) {
+function SortableWidget({ widget, engine, ctx, allWidgets, theme, selected, onSelect, onUpdate, onRemove, onMove, isFirst, isLast }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: widget.id });
   const meta = engine.registry.get(widget.kind) || { label: widget.kind };
   const isHeading = widget.kind === 'heading';
@@ -705,6 +709,7 @@ export default function ReportBuilder({
                         widget={w}
                         engine={engine}
                         ctx={ctx}
+                        allWidgets={widgets}
                         theme={activeTheme}
                         selected={selectedId === w.id}
                         onSelect={setSelectedId}

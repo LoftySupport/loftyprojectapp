@@ -14,7 +14,7 @@ export function blockToMarkdown(b) {
     case 'paragraph': return b.text + '\n';
     case 'subheading': return `### ${b.text}\n`;
     case 'keyValues': return b.items.map(i => `- **${i.label}:** ${i.value}`).join('\n') + '\n';
-    case 'list': return b.items.map(i => `- ${i}`).join('\n') + '\n';
+    case 'list': return b.items.map((i, n) => `${b.ordered ? `${n + 1}.` : '-'} ${i}`).join('\n') + '\n';
     case 'callout': {
       // `label` lets an adapter name what a callout means in its own domain
       // ("High risk", "Pain point"); it falls back to the tone.

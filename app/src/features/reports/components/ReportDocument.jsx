@@ -430,12 +430,16 @@ function Block({ block }) {
           ))}
         </dl>
       );
-    case 'list':
+    case 'list': {
+      // INTEGRATION EDIT — `ordered` added for the table of contents block, where a
+      // numbered list is what a contents page is. Absent it behaves exactly as before.
+      const ListTag = block.ordered ? 'ol' : 'ul';
       return (
-        <ul className="list-disc pl-5 mb-3 space-y-1">
+        <ListTag className={`${block.ordered ? 'list-decimal' : 'list-disc'} pl-5 mb-3 space-y-1`}>
           {block.items.map((i, idx) => <li key={idx} className="text-sm text-[var(--rb-ink)] leading-snug">{i}</li>)}
-        </ul>
+        </ListTag>
       );
+    }
     case 'callout': {
       const tones = {
         danger: 'border-[#b3261e] bg-[#b3261e]/10',
