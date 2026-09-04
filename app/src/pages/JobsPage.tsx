@@ -22,8 +22,10 @@ import { JobDrawer } from "../components/JobDrawer";
 import { JOB_MOVE_NOTE, MoveStageDialog, isForwardMove } from "../components/MoveStageDialog";
 import { sortRows, type SortState } from "../components/SortableTable";
 import {
-  ColumnHeaders, ColumnPicker, useColumnLayout, type ColumnDef
+  ColumnHeaders, ColumnPicker, exportFields, useColumnLayout, type ColumnDef
 } from "../components/TableColumns";
+import { ExportMenu } from "../components/ExportMenu";
+import { tableFromFields, type ExportDocument } from "../data/export";
 import { Board } from "../components/Board";
 import { JobsGantt } from "../components/JobsGantt";
 import { MonthCalendar } from "../components/MonthCalendar";
@@ -35,7 +37,7 @@ import { NOTHING_RECORDED, currentProcessName, pipelineColumns, processColumnOf 
 import { planProcessDrop, refusalText, type DropPlan } from "../data/processMove";
 import { MoveProcessDialog } from "../components/MoveProcessDialog";
 import { readPrefs } from "../data/preferences";
-import { Token } from "../components/Token";
+import { Token, token } from "../components/Token";
 import { Toolbar } from "../components/Toolbar";
 import { Problem, Result } from "../components/Form";
 import { Select, toOptions } from "../components/Select";
@@ -432,29 +434,39 @@ export function JobsPage() {
       sort: j => j.jobNumber,
       // "1042-01" breaking into "1042-" / "01" is unreadable as an identifier, and the
       // identifier is what this column is — hence `nowrap`.
-      cell: j => j.jobNumber },
+      cell: j => j.jobNumber, text: j => j.jobNumber },
+    // Exported as text, not as the number it sorts on: a project number is an
+    // identifier, and 1042 in a spreadsheet column of numbers invites somebody to
+    // average it.
     { key: "project", label: "Project", sort: j => Number(j.projectNumber),
-      cell: j => j.projectNumber },
+      cell: j => j.projectNumber, text: j => j.projectNumber },
     { key: "address", label: "Address", sort: j => j.currentAddress ?? null,
-      cell: j => j.currentAddress ?? <Token>addresses.consolidated_address</Token> },
+      cell: j => j.currentAddress ?? <Token>addresses.consolidated_address</Token>,
+      text: j => j.currentAddress ?? token("addresses.consolidated_address") },
     { key: "type", label: "Type",
       sort: j => (j.projectType ? PROJECT_TYPE_LABELS[j.projectType] : null),
       cell: j => (j.projectType
         ? PROJECT_TYPE_LABELS[j.projectType]
-        : <Token>job_display.project_type</Token>) },
+        : <Token>job_display.project_type</Token>),
+      text: j => (j.projectType
+        ? PROJECT_TYPE_LABELS[j.projectType]
+        : token("job_display.project_type")) },
     // Pipeline position, not the alphabet — "Construction" before "Pre-construction"
     // alphabetically would be the lifecycle backwards.
     { key: "stage", label: "Stage",
       sort: j => { const at = viewStages.indexOf(j.stage); return at === -1 ? null : at; },
-      cell: j => j.stage },
-    { key: "team", label: "Team", sort: j => j.team, cell: j => j.team },
+      cell: j => j.stage, text: j => j.stage },
+    { key: "team", label: "Team", sort: j => j.team, cell: j => j.team, text: j => j.team },
+    // The dash is for the screen only: a blank table cell reads as a rendering fault,
+    // where a blank spreadsheet cell reads as "nobody", which is what it means.
     { key: "assignee", label: "Assigned to", sort: j => j.assigneeName ?? null,
-      cell: j => j.assigneeName ?? "—" },
+      cell: j => j.assigneeName ?? "—", text: j => j.assigneeName ?? null },
     // Off by default since 28 August, when it came off the cards for the same reason:
     // who typed a job in months ago is not what anybody scans a list for. Still here
     // for the person who does want it, which is what the picker is for.
     { key: "createdBy", label: "Created by", offByDefault: true, className: "muted",
-      sort: j => j.createdBy ?? null, cell: j => j.createdBy ?? "—" },
+      sort: j => j.createdBy ?? null, cell: j => j.createdBy ?? "—",
+      text: j => j.createdBy ?? null },
     // Same rule as the board's Process columns — one helper, so a job cannot be in the
     // "Working Drawings" column and read "Selections" here. Null is said as null: most
     // of these jobs were worked before the app existed, and an empty run list means the
@@ -464,11 +476,17 @@ export function JobsPage() {
       cell: j => {
         const name = currentProcessName(j, processes);
         return name ?? <span className="muted">Nothing recorded</span>;
-      } },
+      },
+      // "Nothing recorded" is a real answer here, not an absence — the run list is empty
+      // because the app was not there when the job was worked, which is worth saying in a
+      // file rather than leaving as a blank that reads as "not checked".
+      text: j => currentProcessName(j, processes) ?? "Nothing recorded" },
     { key: "days", label: "Days in stage", className: "num",
-      sort: j => j.daysInStage, cell: j => j.daysInStage },
+      sort: j => j.daysInStage, cell: j => j.daysInStage, text: j => j.daysInStage },
+    // The pill has no text in it at all — this column is the reason `text` is
+    // required rather than derived from the cell.
     { key: "status", label: "Status", sort: j => RECORD_STATUS_LABELS[j.status],
-      cell: j => <StatusPill status={j.status} /> }
+      cell: j => <StatusPill status={j.status} />, text: j => RECORD_STATUS_LABELS[j.status] }
   ], [viewStages, processes, pipelineOrder]);
 
   const jobLayout = useColumnLayout("jobs", jobColumnDefs);
@@ -499,6 +517,48 @@ export function JobsPage() {
     () => (tableSort ? groups.map(g => ({ ...g, jobs: sortRows(g.jobs, jobColumns, tableSort) })) : groups),
     [groups, jobColumns, tableSort]
   );
+
+  /**
+   * The download, built at the click rather than on every render (see `ExportMenu`).
+   *
+   * WHAT IT CONTAINS IS WHAT THE TOOLBAR SAYS IT CONTAINS. `tableGroups` is the sorted,
+   * grouped, filtered, searched set the table renders — not `all`, and not `inView`. The
+   * count line above says "Showing 11 of 200"; a file with 200 rows in it would make
+   * that line a lie in the one direction nobody checks.
+   *
+   * GROUPING BECOMES SHEETS. Grouped by stage, the workbook has a sheet per stage, the
+   * Word document a section per stage, and the PDF a page per stage — the board's own
+   * shape. Empty groups are dropped, following the table rather than the board: a board
+   * column with no cards is somewhere to drag one to, while a sheet with no rows is a tab
+   * somebody opens for nothing.
+   *
+   * Available on every view, not only the table. A board is a set of jobs arranged for
+   * reading, and "the jobs I am looking at, as a spreadsheet" is the same request
+   * whichever arrangement is on screen. The columns are the table's — the ones in the
+   * picker — because those are the only columns anybody has expressed a preference over.
+   */
+  const buildExport = (): ExportDocument => {
+    const fields = exportFields(jobLayout.columns);
+    const parts = [
+      `Showing ${rows.length} of ${inView.length} jobs`,
+      saved.label,
+      grouping !== "None" ? `grouped by ${grouping.toLowerCase()}` : null,
+      activeFilterCount(filters) > 0
+        ? `${activeFilterCount(filters)} filter${activeFilterCount(filters) === 1 ? "" : "s"} set`
+        : null,
+      terms.length > 0 ? `search: ${terms.join(" ")}` : null
+    ].filter(Boolean);
+    return {
+      title: saved.slug === "all" ? "Jobs" : `Jobs · ${saved.label}`,
+      note: parts.join(" · "),
+      tables:
+        grouping === "None"
+          ? [tableFromFields("Jobs", fields, tableGroups.flatMap(g => g.jobs))]
+          : tableGroups
+              .filter(g => g.jobs.length > 0)
+              .map(g => tableFromFields(g.key, fields, g.jobs, `${grouping}: ${g.key}`))
+    };
+  };
 
   /**
    * A number nobody recognises goes back to the board, so a stale link is a board rather
@@ -561,19 +621,27 @@ export function JobsPage() {
         onFiltersChange={setFilters}
         optionsFor={optionsFor}
         count={`Showing ${rows.length} of ${inView.length} jobs`}
-        /* Only on the view that has columns. On the board it would be a control
-           promising something the screen cannot do. */
-        actions={view === "Table" ? (
-          <ColumnPicker
-            title="Columns on the jobs table"
-            all={jobLayout.all}
-            hidden={jobLayout.hidden}
-            onToggle={jobLayout.toggle}
-            onMoveBy={jobLayout.moveBy}
-            onReset={jobLayout.reset}
-            isDefault={jobLayout.isDefault}
-          />
-        ) : undefined}
+        actions={
+          <>
+            {/* Only on the view that has columns. On the board it would be a control
+                promising something the screen cannot do. */}
+            {view === "Table" && (
+              <ColumnPicker
+                title="Columns on the jobs table"
+                all={jobLayout.all}
+                hidden={jobLayout.hidden}
+                onToggle={jobLayout.toggle}
+                onMoveBy={jobLayout.moveBy}
+                onReset={jobLayout.reset}
+                isDefault={jobLayout.isDefault}
+              />
+            )}
+            {/* On every view — see `buildExport`. Disabled while the read is in flight
+                and when there is nothing in view: a file of nothing is not an answer,
+                and the empty state on screen already says so. */}
+            <ExportMenu build={buildExport} disabled={loading || rows.length === 0} />
+          </>
+        }
       />
 
       {stale && <PreviousAddressNote />}

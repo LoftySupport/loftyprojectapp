@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 98 changes since then —
-- Added: Group the projects board by where its jobs are — a project appears in every stage or process its jobs have reached, carrying just those jobs
-- Changed: Every dropdown narrows as you type and lists its options alphabetically, except where the order is the information — and a process can be filed straight into a pipeline when it is created
-- Fixed: The jobs board offers only the processes of the stage you have filtered to, and says the right thing when a process belongs to a stage the job has already left
-- Fixed: The jobs board no longer scrolls sideways on a phone
-- Added: Drag a job between columns on the board — by lifecycle stage or by the processes inside a stage — and pick several to move at once from either view
-- …and 93 more.
+Unreleased: 104 changes since then —
+- Changed: Excel, Word and PDF exports now carry Lofty's house document format — the wordmark, the orange section rule, the grey table header and the "Commercial in confidence" footer
+- Added: The exported PDF and Word document embed the real Lofty wordmark and set the brand's Helvetica
+- Added: Every list and report has an Export menu — download exactly what is on screen as an Excel workbook, a Word document or a PDF
+- Added: A grouped board or table exports one sheet, one Word section and one page per group
+- Added: Downloads name themselves for the screen and the day, so several exports in a folder can be told apart
+- …and 99 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

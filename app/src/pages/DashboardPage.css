@@ -24,7 +24,10 @@
   letter-spacing: var(--letter-spacing-h1);
   color: var(--primary-text-color);
 }
-.pd-centre-title { font: var(--font-text1-medium); color: var(--secondary-text-color); }
+.pd-centre-title {
+  display: flex; align-items: center; gap: var(--space-8); min-width: 0;
+  font: var(--font-text1-medium); color: var(--secondary-text-color);
+}
 .pd-team { display: flex; align-items: center; gap: var(--space-8); }
 .pd-team-label { font: var(--font-text2-normal); color: var(--secondary-text-color); }
 .pd-avatars { display: flex; gap: var(--space-4); }

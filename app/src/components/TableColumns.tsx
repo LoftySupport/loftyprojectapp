@@ -3,6 +3,7 @@ import {
   Button, Modal, ModalBasicLayout, ModalContent, ModalFooter, ModalHeader, Text
 } from "@vibe/core";
 import { SortHeader, type SortState, type SortValue } from "./SortableTable";
+import type { ExportCell, ExportField } from "../data/export";
 import { readPrefs, writePrefs, type ColumnLayout } from "../data/preferences";
 import { useRepository } from "../data/DataProvider";
 import "./ui.css";
@@ -36,6 +37,20 @@ export interface ColumnDef<T> {
   /** What this column sorts on. Omit for a column that does not sort. */
   sort?: (row: T) => SortValue;
   cell: (row: T) => React.ReactNode;
+  /**
+   * The same value as `cell`, as a value rather than as markup — what this column puts
+   * in a downloaded spreadsheet, PDF or Word document.
+   *
+   * REQUIRED, AND THAT IS THE POINT. A cell is a React node: a status pill, a token, a
+   * name with a dash in it for "nobody". There is no honest way to turn one back into a
+   * value — `<StatusPill status="at_risk" />` contains no text at all, so a walk over
+   * its children exports an empty Status column and nobody notices until a report has
+   * gone out. Asking every column to say what it exports turns that into a compile
+   * error. `null` is a genuinely absent value and becomes an empty cell; where the cell
+   * shows a `{{table.column}}` token, this returns the same token text, because unbound
+   * and empty are different facts.
+   */
+  text: (row: T) => ExportCell;
   /** `num` for right-aligned figures, as the table's own CSS already understands. */
   className?: string;
   /**
@@ -45,6 +60,19 @@ export interface ColumnDef<T> {
   fixed?: boolean;
   /** Available, but off until somebody asks for it. */
   offByDefault?: boolean;
+}
+
+/**
+ * The visible columns, as an export's fields — in the order they are on screen, with the
+ * hidden ones already gone. Right-alignment comes from the same `num` class the table
+ * styles itself with, so a figure cannot be right-aligned on screen and left in a file.
+ */
+export function exportFields<T>(columns: ColumnDef<T>[]): ExportField<T>[] {
+  return columns.map(c => ({
+    label: c.label,
+    numeric: c.className?.split(" ").includes("num"),
+    text: c.text
+  }));
 }
 
 /** What gets stored per surface. Both halves are needed, and neither implies the other:

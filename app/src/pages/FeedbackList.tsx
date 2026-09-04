@@ -4,6 +4,8 @@ import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { Select } from "../components/Select";
 import { Problem } from "../components/Form";
+import { ExportMenu } from "../components/ExportMenu";
+import { tableFromFields, type ExportDocument } from "../data/export";
 import { LoadProblem } from "../components/SearchNotices";
 import {
   FEEDBACK_STAGES, FEEDBACK_STAGE_LABELS,
@@ -42,6 +44,44 @@ export function FeedbackList({ kind }: { kind: FeedbackKind }) {
   const [problem, setProblem] = useState<string | null>(null);
   const canMove = can("superadmin");
 
+  /**
+   * Triage as a file.
+   *
+   * The screen puts the title, the detail and the error the app was showing in one cell,
+   * because a person scans down them. A spreadsheet wants them apart — you sort by one
+   * and read the other — so they are three columns here. That is the one place an export
+   * legitimately differs in shape from the table it came from: same values, split where
+   * a cell was doing the work of three.
+   *
+   * The screenshots cannot come along. They are files behind a signed URL, so what goes
+   * in is the count and the sentence the table already shows about where to find them.
+   */
+  const buildExport = (): ExportDocument => ({
+    title: kind === "bug" ? "Bugs" : "Ideas and requests",
+    note: `${items.length} ${items.length === 1 ? "report" : "reports"}`,
+    tables: [
+      tableFromFields<FeedbackItem>(
+        kind === "bug" ? "Bugs" : "Ideas",
+        [
+          { label: "What", text: f => f.title },
+          { label: "Detail", text: f => f.detail ?? null },
+          { label: "Error shown", text: f => f.errorText ?? null },
+          { label: "From", text: f => f.fromName ?? null },
+          { label: "Where", text: f => f.page ?? null },
+          { label: "Votes", numeric: true, text: f => f.voteCount },
+          { label: "Sent", text: f => new Date(f.createdAt).toLocaleDateString() },
+          { label: "Stage", text: f => FEEDBACK_STAGE_LABELS[f.stage] },
+          {
+            label: "Phase",
+            text: f => phases.find(p => p.id === f.roadmapPhaseId)?.name ?? null
+          },
+          { label: "Screenshots", numeric: true, text: f => f.attachments.length }
+        ],
+        items
+      )
+    ]
+  });
+
   const run = async (id: string, work: () => Promise<unknown>) => {
     setSaving(id);
     setProblem(null);
@@ -59,9 +99,12 @@ export function FeedbackList({ kind }: { kind: FeedbackKind }) {
     <section className="panel">
       <div className="panel-head">
         <Text type="text2" weight="bold">{kind === "bug" ? "Bugs" : "Ideas and requests"}</Text>
-        <Text type="text3" color="secondary">
-          {items.length} {items.length === 1 ? "report" : "reports"}
-        </Text>
+        <span className="panel-head-actions">
+          <Text type="text3" color="secondary">
+            {items.length} {items.length === 1 ? "report" : "reports"}
+          </Text>
+          <ExportMenu build={buildExport} disabled={loading || items.length === 0} />
+        </span>
       </div>
       <Text type="text2" color="secondary" ellipsis={false}>
         Sent from the footer by anyone signed in. Everyone can see the queue on Updates;

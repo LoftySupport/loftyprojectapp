@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 98 changes since then —
-- Added: Group the projects board by where its jobs are — a project appears in every stage or process its jobs have reached, carrying just those jobs
-- Changed: Every dropdown narrows as you type and lists its options alphabetically, except where the order is the information — and a process can be filed straight into a pipeline when it is created
-- Fixed: The jobs board offers only the processes of the stage you have filtered to, and says the right thing when a process belongs to a stage the job has already left
-- Fixed: The jobs board no longer scrolls sideways on a phone
-- Added: Drag a job between columns on the board — by lifecycle stage or by the processes inside a stage — and pick several to move at once from either view
-- …and 93 more.
+Unreleased: 104 changes since then —
+- Changed: Excel, Word and PDF exports now carry Lofty's house document format — the wordmark, the orange section rule, the grey table header and the "Commercial in confidence" footer
+- Added: The exported PDF and Word document embed the real Lofty wordmark and set the brand's Helvetica
+- Added: Every list and report has an Export menu — download exactly what is on screen as an Excel workbook, a Word document or a PDF
+- Added: A grouped board or table exports one sheet, one Word section and one page per group
+- Added: Downloads name themselves for the screen and the day, so several exports in a folder can be told apart
+- …and 99 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -21,7 +21,88 @@ Next job: [Phase B, the import](#next-phase-b-the-import)** — and before it, t
 described there, because that is the only category of change that gets expensive once 200 jobs
 are in.
 
-Last updated: 2026-09-03.
+Last updated: 2026-09-04.
+
+---
+
+## Session of 2026-09-04 — every view downloads, as Excel, Word or PDF
+
+Amber, 3 Sep, in one line: *"can you add an export to excel, pdf download for all views
+and reports"* — and Word alongside them, for the report that goes out under a cover note.
+All three writers are in `app/src/data/export/`; the control is one component,
+`ExportMenu`, and it is on Projects, Jobs, Reports (portfolio, leadership, job report **and
+processes**), Updates (tracker, roadmap and changelog), Admin (people and teams), Bugs and
+Ideas, the dashboard's own jobs, and the data dictionary.
+
+### The export is what is on screen, and that had to be decided before anything was built
+
+The rows after the search, the filters and the sort; the columns you have switched on, in
+the order you dragged them. It is a one-line rule and it settles a dozen questions — but
+the reason it is the rule is the failure mode of the other answer: the toolbar says
+"Showing 11 of 200", and a file with 200 rows in it makes that line a lie in the one
+direction nobody thinks to check. The menu says so in its own words.
+
+**Grouping becomes sheets, Word sections and pages.** Grouped by stage, the workbook has a
+sheet per stage, the Word document a section per stage and the PDF a page per stage — the
+board's own shape. The projects *table* exports flat even when the board beside it is
+grouped, because that table renders flat; an export that grouped something the screen had
+not grouped would disagree with the thing it was taken from.
+
+### `ColumnDef.text` is required, and that is the whole design
+
+A cell is a React node. `<StatusPill status="at_risk" />` contains no text at all, so a
+walk over a cell's children exports an empty Status column — and nobody notices until a
+report has gone out. Making every column say what it exports turns that from a bug you find
+later into a compile error you fix now.
+
+`null` is an **empty cell**, not a dash: the screen writes "—" because a blank table cell
+reads as a rendering fault, and a spreadsheet is the opposite, where a dash in a numeric
+column is what stops `SUM` working. Where the screen shows a `{{table.column}}` token the
+file carries the same token — unbound and empty are different facts, the rule the rest of
+the app already follows.
+
+### Written here rather than installed — all three
+
+The libraries each bring a general-purpose document model — a reader, a formula engine, an
+embedded font stack, a paragraph/section builder — for a handful of small XML parts and
+text at coordinates. The Word document is an OOXML package like the spreadsheet, so it
+reuses the same `zip.ts`; the two spreadsheet/Word writers and the PDF are all asserted by
+`npm run export-check`, which re-parses each archive from the bytes, re-computes every
+checksum with Node's `zlib.crc32` rather than the app's own, walks the PDF's xref and the
+Word table's tag balance. Every assertion was watched failing; each carries the mutation
+used.
+
+Three decisions inside the writers are worth keeping:
+
+- **The spreadsheet writes every value as an inline string or a number, never a formula.**
+  A CSV would have got `1042-01` back as "1 Oct 2042", lost the frozen header, and executed
+  any cell somebody had started with `=`. One of these columns is free text typed by
+  forty-seven people. The Word document is the same: values are text in cells, never
+  fields.
+- **The PDF measures its text against the real Helvetica metrics** (`helvetica.ts`), read
+  out of the AFM data rather than remembered. A width table that is close but wrong shows
+  up as columns overlapping on somebody's third page.
+- **A table too wide for A4 is split by column in the PDF, with the first column repeated;
+  the Word document is landscape and lets Word wrap and auto-fit**, which is why the
+  thirteen-column dictionary needs no banding of its own there.
+
+### What is deliberately not exported
+
+The Setup forms and the Wiring page: configuration, not records. The dashboard's hero tile
+and workload figures, which are em dashes waiting on the health calculation — a spreadsheet
+column of dashes claims a figure was computed. And screenshots on a bug report, which live
+behind signed URLs; the file carries the count and says where to look.
+
+### Still open
+
+- **Nobody has opened one of these in Excel or Word on a real machine.** They are proved by
+  a re-parse of the bytes (and the `.docx` is recognised by `file` as a Word 2007+ document
+  with every XML part well-formed), which is a different claim from "Excel and Word on
+  Amber's laptop are happy". First thing to do with a real machine.
+- **The empty tables are the ones that will look wrong first.** With Phase B unimported,
+  most screens have nothing to export and the button is disabled. The shapes to check after
+  the import are the grouped exports on Jobs (a sheet per stage, empty groups dropped) and
+  the job report's four sections.
 
 ---
 

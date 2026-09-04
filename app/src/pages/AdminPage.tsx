@@ -18,6 +18,8 @@ import { useStages, useTeamLabels, useTemplatePhases } from "../data/useLookups"
 import { useBoardRecords } from "../data/boardModel";
 import { useRepository } from "../data/DataProvider";
 import { useToasts } from "../components/Toasts";
+import { ExportMenu } from "../components/ExportMenu";
+import { tableFromFields, type ExportDocument } from "../data/export";
 import "../components/ui.css";
 
 /**
@@ -238,13 +240,51 @@ function Users() {
     <SortHeader column={column} label={label} sort={sort} onSort={toggle} />
   );
 
+  /**
+   * The staff list as a file — the rows in the order and the selection on screen, so a
+   * filtered list of the Estimating team exports as the Estimating team.
+   *
+   * Two columns that are controls on screen become facts here. "Demo" is a checkbox and
+   * exports as held or not; the actions column is buttons and exports as nothing at all,
+   * because a button is not a value. Everything else reads what the cell reads — the
+   * team NAMES rather than their slugs, and "Never" for somebody who has not signed in,
+   * which is the same word the table shows and a different statement from a blank.
+   */
+  const buildExport = (): ExportDocument => ({
+    title: "People",
+    note: filtered ? `Showing ${shown.length} of ${profiles.length} people` : `${profiles.length} people`,
+    tables: [
+      tableFromFields<Profile>(
+        "People",
+        [
+          { label: "Name", text: p => p.fullName },
+          { label: "Job title", text: p => p.jobTitle ?? null },
+          { label: "Email", text: p => p.email },
+          // The address they actually sign in with, when it differs — it is the column
+          // the search already looks at, and the one an admin needs when a sign-in
+          // fails.
+          { label: "Sign-in email", text: p => (p.loginEmail && p.loginEmail !== p.email ? p.loginEmail : null) },
+          { label: "Teams", text: p => labels(p.teams)?.join(", ") ?? null },
+          { label: "Permission", text: p => p.permission },
+          { label: "Status", text: p => profileStatus(p) },
+          { label: "Demo", text: p => (p.isDemo ? "Held at the gate" : null) },
+          { label: "Last login", text: p => (p.lastLoginAt ? new Date(p.lastLoginAt).toLocaleDateString() : "Never") }
+        ],
+        sorted
+      )
+    ]
+  });
+
   return (
     <section className="panel">
       <div className="panel-head">
         <Text type="text2" weight="bold">
           Users{!loading && !error ? ` (${filtered ? `${shown.length} of ${profiles.length}` : profiles.length})` : ""}
         </Text>
-        <Button size="small" onClick={() => setAdding(true)} disabled={!canEdit}>Add user</Button>
+        <span className="panel-head-actions">
+          <ExportMenu build={buildExport} disabled={loading || shown.length === 0} />
+          <Button size="small" onClick={() => setAdding(true)} disabled={!canEdit}>Add user</Button>
+        </span>
       </div>
 
       <Text type="text3" color="secondary" ellipsis={false}>
@@ -568,10 +608,37 @@ function Teams() {
   const { sorted, sort, toggle } = useTableSort(rows, columns, { key: "team" as TeamColumn, direction: "asc" });
   const canEdit = can("admin");
 
+  /**
+   * Teams as a file. "Phases owned" is the column that makes this worth downloading —
+   * it is the only place the phase-to-team map is written down in one list, and it is
+   * the thing somebody reviewing who-does-what actually needs to take away.
+   */
+  const buildExport = (): ExportDocument => ({
+    title: "Teams",
+    note: `${rows.filter(r => r.isActive).length} active of ${rows.length} teams`,
+    tables: [
+      tableFromFields<(typeof rows)[number]>(
+        "Teams",
+        [
+          { label: "Team", text: r => r.team },
+          // Retired is a fact about the team, not a style on its row — on screen it is
+          // a greyed row and the word "retired" after the name.
+          { label: "Retired", text: r => (r.isActive ? null : "retired") },
+          { label: "Phases owned", text: r => r.owned.join(", ") },
+          { label: "Jobs held", numeric: true, text: r => r.held },
+          { label: "Members", numeric: true, text: r => r.members.length },
+          { label: "Member names", text: r => r.members.map(m => m.fullName).join(", ") }
+        ],
+        sorted
+      )
+    ]
+  });
+
   return (
     <section className="panel">
       <div className="panel-head">
         <Text type="text2" weight="bold">Teams ({rows.filter(r => r.isActive).length} active)</Text>
+        <ExportMenu build={buildExport} disabled={rows.length === 0} />
         <Text type="text3" color="secondary">
           Rename freely — the slug underneath never changes, so nothing pointing at a team
           breaks. Retire instead of delete; a team holding jobs must hand them on first.

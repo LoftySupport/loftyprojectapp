@@ -25,11 +25,13 @@ import {
 } from "../data/types";
 import { sortRows, type SortState } from "../components/SortableTable";
 import {
-  ColumnHeaders, ColumnPicker, useColumnLayout, type ColumnDef
+  ColumnHeaders, ColumnPicker, exportFields, useColumnLayout, type ColumnDef
 } from "../components/TableColumns";
+import { ExportMenu } from "../components/ExportMenu";
+import { tableFromFields, type ExportDocument } from "../data/export";
 import { MoveStageControl, PROJECT_MOVE_NOTE } from "../components/MoveStageDialog";
 import { daysSince } from "../data/boardModel";
-import { Token } from "../components/Token";
+import { Token, token } from "../components/Token";
 import { SidePanel } from "../components/SidePanel";
 import { Toolbar } from "../components/Toolbar";
 import { accentStyle, columnAccent } from "../theme/accents";
@@ -171,48 +173,70 @@ export function ProjectsPage() {
    * added to it costs the address room to be read.
    */
   const projectColumnDefs = useMemo<ColumnDef<BoardProject>[]>(() => [
+    // Sorted as a number, exported as text: a project number is an identifier, and a
+    // column of them typed as numbers invites a total at the bottom of it.
     { key: "project", label: "Project", fixed: true, className: "nowrap",
-      sort: p => Number(p.projectNumber), cell: p => p.projectNumber },
+      sort: p => Number(p.projectNumber), cell: p => p.projectNumber,
+      text: p => p.projectNumber },
     { key: "address", label: "Address", sort: p => p.currentAddress ?? null,
-      cell: p => p.currentAddress ?? <Token>project_display.current_address</Token> },
+      cell: p => p.currentAddress ?? <Token>project_display.current_address</Token>,
+      text: p => p.currentAddress ?? token("project_display.current_address") },
     { key: "suburb", label: "Suburb", sort: p => p.suburb ?? null,
-      cell: p => p.suburb ?? <Token>addresses.suburb</Token> },
+      cell: p => p.suburb ?? <Token>addresses.suburb</Token>,
+      text: p => p.suburb ?? token("addresses.suburb") },
     // Pipeline position, not the alphabet — the same call the jobs table makes.
     { key: "stage", label: "Stage",
       sort: p => { const at = viewStages.indexOf(p.stage); return at === -1 ? null : at; },
-      cell: p => p.stage },
+      cell: p => p.stage, text: p => p.stage },
     { key: "type", label: "Type",
       sort: p => (p.projectType ? PROJECT_TYPE_LABELS[p.projectType] : null),
       cell: p => (p.projectType
         ? PROJECT_TYPE_LABELS[p.projectType]
-        : <Token>projects.project_type</Token>) },
+        : <Token>projects.project_type</Token>),
+      text: p => (p.projectType
+        ? PROJECT_TYPE_LABELS[p.projectType]
+        : token("projects.project_type")) },
     { key: "team", label: "Owning team", offByDefault: true,
       sort: p => (p.owningTeam ? teamName(p.owningTeam) : null),
-      cell: p => (p.owningTeam ? teamName(p.owningTeam) : "—") },
+      cell: p => (p.owningTeam ? teamName(p.owningTeam) : "—"),
+      text: p => (p.owningTeam ? teamName(p.owningTeam) : null) },
     { key: "start", label: "Start date", offByDefault: true,
       sort: p => p.startDate ?? null,
-      cell: p => (p.startDate ? new Date(p.startDate).toLocaleDateString() : "—") },
+      // The date as the screen writes it, not the ISO string underneath: a download is
+      // read by a person, and 2026-11-04 in an Australian office is ambiguous in the one
+      // direction that matters.
+      cell: p => (p.startDate ? new Date(p.startDate).toLocaleDateString() : "—"),
+      text: p => (p.startDate ? new Date(p.startDate).toLocaleDateString() : null) },
     // No target date reads "Not set" (Amber, 2 Sep) — the same words the card and the
-    // detail use, so a blank never turns into a column token or an "Invalid Date".
+    // detail use, so a blank never turns into a column token or an "Invalid Date". In a
+    // file that "Not set" is an absent value, so it exports as a blank cell rather than
+    // as the words, which would read as something somebody typed.
     { key: "target", label: "Target completion", sort: p => p.targetCompletion ?? null,
       cell: p => (p.targetCompletion
         ? new Date(p.targetCompletion).toLocaleDateString()
-        : <span className="muted pf-unset">Not set</span>) },
+        : <span className="muted pf-unset">Not set</span>),
+      text: p => (p.targetCompletion ? new Date(p.targetCompletion).toLocaleDateString() : null) },
     // Intended lots, and the split between the two kinds of title (0053). Null on both
     // means nobody has said, which is not the same statement as zero — hence the dash
     // rather than "0 / 0".
     { key: "lots", label: "Lots", offByDefault: true, className: "num",
       sort: p => p.proposedDwellings,
-      cell: p => (p.proposedDwellings == null ? "—" : p.proposedDwellings) },
+      cell: p => (p.proposedDwellings == null ? "—" : p.proposedDwellings),
+      text: p => p.proposedDwellings },
     { key: "split", label: "Community / Torrens", offByDefault: true, className: "num",
       sort: p => p.communityTitleLots,
       cell: p => (p.communityTitleLots == null && p.torrensTitleLots == null
         ? "—"
+        : `${p.communityTitleLots ?? "—"} / ${p.torrensTitleLots ?? "—"}`),
+      // Two numbers in one cell, so it exports as the text it is rather than as a
+      // number — and stays right-aligned, which is what `num` is doing on it.
+      text: p => (p.communityTitleLots == null && p.torrensTitleLots == null
+        ? null
         : `${p.communityTitleLots ?? "—"} / ${p.torrensTitleLots ?? "—"}`) },
     { key: "jobs", label: "Jobs", className: "num",
-      sort: p => p.jobs.length, cell: p => p.jobs.length },
+      sort: p => p.jobs.length, cell: p => p.jobs.length, text: p => p.jobs.length },
     { key: "status", label: "Status", sort: p => RECORD_STATUS_LABELS[p.status],
-      cell: p => <StatusPill status={p.status} /> }
+      cell: p => <StatusPill status={p.status} />, text: p => RECORD_STATUS_LABELS[p.status] }
   ], [viewStages]);
 
   const projectLayout = useColumnLayout("projects", projectColumnDefs);
@@ -311,6 +335,42 @@ export function ProjectsPage() {
       projects: rows.filter(p => keyOf(p) === key).map(p => ({ ...p, ofTotal: p.jobs.length }))
     }));
   }, [grouping, rows, viewStages, processes]);
+
+  /**
+   * The download, built at the click (see `ExportMenu`).
+   *
+   * IT FOLLOWS THE SCREEN, INCLUDING WHERE THE SCREEN IS INCONSISTENT. The projects
+   * table renders one flat list however you have grouped it, while the board and the
+   * gantt put each group in its own column — so the table exports one sheet in the sort
+   * order on screen, and the other two export a sheet per group. That difference is the
+   * app's, not this function's: an export that grouped a table nobody had grouped would
+   * be a file that disagrees with the thing it was taken from, which is the one way an
+   * export can be worse than no export.
+   */
+  const buildExport = (): ExportDocument => {
+    const fields = exportFields(projectLayout.columns);
+    const filtersSet = activeFilterCount(filters);
+    const note = [
+      `Showing ${rows.length} of ${inView.length} projects`,
+      saved.label,
+      grouping !== "None" && view !== "Table" ? `grouped by ${grouping.toLowerCase()}` : null,
+      filtersSet > 0 ? `${filtersSet} filter${filtersSet === 1 ? "" : "s"} set` : null,
+      terms.length > 0 ? `search: ${terms.join(" ")}` : null
+    ]
+      .filter(Boolean)
+      .join(" · ");
+
+    return {
+      title: saved.slug === "all" ? "Projects" : `Projects · ${saved.label}`,
+      note,
+      tables:
+        grouping === "None" || view === "Table"
+          ? [tableFromFields("Projects", fields, view === "Table" ? sortedRows : rows)]
+          : projectGroups
+              .filter(g => g.projects.length > 0)
+              .map(g => tableFromFields(g.key, fields, g.projects, `${grouping}: ${g.key}`))
+    };
+  };
 
   const narrowed = terms.length > 0 || activeFilterCount(filters) > 0;
   const noMatches = narrowed && rows.length === 0;
@@ -472,6 +532,10 @@ export function ProjectsPage() {
                 isDefault={projectLayout.isDefault}
               />
             )}
+            {/* On every view — a board is a set of projects arranged for reading, and
+                "the projects I am looking at, as a spreadsheet" is the same ask
+                whichever arrangement is on screen. */}
+            <ExportMenu build={buildExport} disabled={loading || rows.length === 0} />
             <Button size="small" onClick={() => setCreating(true)}>+ New project</Button>
           </>
         }
