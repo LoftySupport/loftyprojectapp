@@ -287,6 +287,63 @@ console.log("--- completed, cancelled and archived jobs are opt-in");
     `${open[0].rows.length} then ${all[0].rows.length}`);
 }
 
+// ─── 7b. A block can be pointed at particular records ────────────────
+//
+// Amber, 4 September: "to select a single job, or multiple jobs or projects". The rule
+// that matters most is the DEFAULT: empty means everything, because a block that starts
+// as "no records" renders an empty table until it is configured, and a report covering
+// nothing looks exactly like a report covering everything and finding nothing.
+console.log("--- a block can be narrowed to particular jobs, projects or teams");
+{
+  // `.rows ?? []` rather than `.rows`: when a narrowing returns nothing the resolver
+  // returns an info block, not an empty table — so a mutation that over-narrows would
+  // otherwise crash this check instead of failing it, and a crash names the wrong line.
+  const table = (options) => {
+    const block = engine.resolve({ id: "wp", kind: "jobsTable", options: { groupBy: "none", columns: ["address"], ...options } }, full)[0];
+    return { ...block, rows: block?.rows ?? [] };
+  };
+
+  ok("no pickers set means every open job", table({}).rows.length === 2, String(table({}).rows.length));
+
+  const oneJob = table({ jobIds: ["1042-001"] });
+  ok("one job picked returns exactly that job",
+    oneJob.rows.length === 1 && JSON.stringify(oneJob.rows[0]).includes("1042-001"),
+    JSON.stringify(oneJob.rows));
+
+  ok("two jobs picked returns both",
+    table({ jobIds: ["1042-001", "1042-002"] }).rows.length === 2);
+
+  // A finished job stays filtered when it is picked by name, which is the interaction
+  // worth pinning: picking a record is "which", not "regardless of".
+  ok("picking a finished job still respects the finished filter",
+    table({ jobIds: ["1043-001"] }).rows.length === 0);
+  ok("…and returns it once finished jobs are included",
+    table({ jobIds: ["1043-001"], includeFinished: true }).rows.length === 1);
+
+  // 1043-001 is the third fixture job and is finished, so a project pick has to respect
+  // includeFinished exactly as an unpicked table does.
+  const byProject = table({ projectIds: ["1042"] });
+  ok("a project picked returns its open jobs", byProject.rows.length === 2, String(byProject.rows.length));
+
+  // The union, not the intersection. An AND would return one row here and read as a bug.
+  ok("a job and a different project combine rather than narrow",
+    table({ jobIds: ["1043-001"], projectIds: ["1042"], includeFinished: true }).rows.length === 3);
+
+  // Pointing a block at a record that is gone must say so, not render an empty grid and
+  // not claim there are no jobs at all — those are three different situations.
+  const nowhere = engine.resolve({ id: "wp2", kind: "jobsTable", options: { groupBy: "none", columns: ["address"], jobIds: ["9999-999"] } }, full);
+  ok("a block pointed at nothing says what happened rather than drawing an empty table",
+    nowhere[0].type !== "table" && /pointed at/i.test(textOf(nowhere)),
+    textOf(nowhere));
+
+  const teamTable = (options) => engine.resolve({ id: "wt", kind: "teamWorkload", options }, full)[0];
+  ok("team workload covers every team by default", teamTable({}).rows.length >= 2, String(teamTable({}).rows.length));
+  const oneTeam = teamTable({ teamIds: ["design"] });
+  ok("one team picked returns exactly that team",
+    oneTeam.rows.length === 1 && JSON.stringify(oneTeam.rows[0]).includes("Design"),
+    JSON.stringify(oneTeam.rows));
+}
+
 // ─── 8. A board draws the pipeline, including its empty columns ──────
 //
 // Watched: dropping empty columns made a five-stage pipeline render as two, which

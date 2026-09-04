@@ -132,6 +132,54 @@ const byStageOrder = (ctx) => {
 /** The address a job is at, falling back to its project's. Never a placeholder. */
 const jobAddress = (j) => j.currentAddress || j.projectAddress || null;
 
+/**
+ * Narrow a job list to the records a block was pointed at.
+ *
+ * Amber, 4 September: *"i also need to be able to [do] a single job or group of jobs so
+ * the jobs table is good but to select a single job, or multiple jobs or projects"*.
+ *
+ * EMPTY MEANS EVERYTHING, and that is the important half. A block that defaults to "no
+ * jobs" renders nothing until you configure it, so every new block would start as an
+ * empty table — and a report that silently covers nothing looks exactly like a report
+ * that covers everything and found nothing. Empty here means "the whole book of work",
+ * which is what the block did before this setting existed.
+ *
+ * Jobs and projects are OR, not AND: picking job 1042-001 and project 1042 gives you
+ * 1042-001 plus every other job on 1042, which is what somebody assembling a report about
+ * a site means. An AND would return one job and read as a bug.
+ */
+const narrowToPicked = (rows, o) => {
+  const jobIds = Array.isArray(o.jobIds) ? o.jobIds : [];
+  const projectIds = Array.isArray(o.projectIds) ? o.projectIds : [];
+  if (!jobIds.length && !projectIds.length) return rows;
+  const wantedProjects = new Set(projectIds.map(String));
+  const wantedJobs = new Set(jobIds.map(String));
+  return rows.filter(j =>
+    wantedJobs.has(String(j.id ?? j.jobId ?? j.jobNumber)) ||
+    wantedProjects.has(String(j.projectId ?? j.projectNumber))
+  );
+};
+
+/** The pair of pickers that does it, shared so every block offers the same control. */
+const recordPickers = () => ([
+  {
+    key: 'jobIds', type: 'multiselect', label: 'Only these jobs', emptyMeansAll: true,
+    hint: 'Leave empty for every job you can see.',
+    options: (ctx) => jobsOf(ctx).map(j => ({
+      value: String(j.id ?? j.jobId ?? j.jobNumber),
+      label: jobAddress(j) ? `${j.jobNumber} — ${jobAddress(j)}` : String(j.jobNumber)
+    }))
+  },
+  {
+    key: 'projectIds', type: 'multiselect', label: 'Only these projects', emptyMeansAll: true,
+    hint: 'Every job on the project. Combines with the jobs above rather than narrowing them.',
+    options: (ctx) => projectsOf(ctx).map(p => ({
+      value: String(p.id ?? p.projectId ?? p.projectNumber),
+      label: p.currentAddress ? `${p.projectNumber} — ${p.currentAddress}` : String(p.projectNumber)
+    }))
+  }
+]);
+
 const notFinished = (r) => !['completed', 'cancelled', 'archived'].includes(r.status);
 
 // ─── Headline numbers ────────────────────────────────────────────────
@@ -477,16 +525,22 @@ export const LOFTY_WIDGETS = {
       {
         key: 'includeFinished', type: 'checkbox',
         label: 'Include completed, cancelled and archived jobs'
-      }
+      },
+      ...recordPickers()
     ],
     resolve: (o, ctx) => {
-      let rows = jobsOf(ctx);
+      let rows = narrowToPicked(jobsOf(ctx), o);
+      const pickedSomething = (o.jobIds?.length || o.projectIds?.length);
       if (!o.includeFinished) rows = rows.filter(notFinished);
       if (!rows.length) {
+        // Three different nothings, and telling them apart is the difference between
+        // "there is nothing to say" and "you have pointed this block at the wrong record".
         return [helpers.info(
-          jobsOf(ctx).length
-            ? 'Every job you can see is completed, cancelled or archived. Tick "Include completed…" to show them.'
-            : 'No jobs to show yet.'
+          pickedSomething
+            ? 'Nothing to show for the jobs and projects this block is pointed at. They may be completed, or no longer yours to see.'
+            : jobsOf(ctx).length
+              ? 'Every job you can see is completed, cancelled or archived. Tick "Include completed…" to show them.'
+              : 'No jobs to show yet.'
         )];
       }
 
@@ -732,12 +786,27 @@ export const LOFTY_WIDGETS = {
     defaults: () => ({ includeEmpty: false }),
     compactable: true,
     settings: [
-      { key: 'includeEmpty', type: 'checkbox', label: 'Include teams with no jobs' }
+      {
+        key: 'teamIds', type: 'multiselect', label: 'Only these teams', emptyMeansAll: true,
+        hint: 'Leave empty for every active team.',
+        options: (ctx) => activeTeams(ctx).map(t => ({ value: String(t.id), label: t.name }))
+      },
+      { key: 'includeEmpty', type: 'checkbox', label: 'Include teams with no jobs' },
+      ...recordPickers()
     ],
     resolve: (o, ctx) => {
-      const live = jobsOf(ctx).filter(notFinished);
-      const teams = activeTeams(ctx);
-      if (!teams.length) return [helpers.info('No active teams to report on.')];
+      const live = narrowToPicked(jobsOf(ctx), o).filter(notFinished);
+      const wantedTeams = Array.isArray(o.teamIds) && o.teamIds.length
+        ? new Set(o.teamIds.map(String))
+        : null;
+      const teams = activeTeams(ctx).filter(t => !wantedTeams || wantedTeams.has(String(t.id)));
+      if (!teams.length) {
+        return [helpers.info(
+          wantedTeams
+            ? 'The teams this block is pointed at are no longer active.'
+            : 'No active teams to report on.'
+        )];
+      }
 
       const rows = teams
         .map(t => {
