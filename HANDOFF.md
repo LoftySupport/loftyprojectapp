@@ -39,6 +39,13 @@ that went to `modules` is two integration findings written app-agnostically
 projects, and the commit message and PR body were rewritten to strip the references I had
 left in them the first time.
 
+**A readable version with diagrams and screenshots is published at
+<https://claude.ai/code/artifact/8e3edc34-16ff-4bd3-b41e-412778c47968>** — show that one
+to people. It carries the two-table diagram, the permission ladder seen as Ketan and as
+Deanna, the house-format palette, and the three questions still open at the end. It was
+rewritten in place when the spec arrived; the earlier version described a single table
+with a manager-only write floor and no longer exists.
+
 ### Three things, and the second table is the one the spec forces
 
 | | |
