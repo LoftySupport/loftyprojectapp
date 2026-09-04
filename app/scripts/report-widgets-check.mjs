@@ -31,10 +31,13 @@ import { createReportEngine } from "../src/features/reports/core/widgetEngine.js
 import { LOFTY_THEME, LOFTY_THEME_QUIET } from "../src/features/reports/adapters/lofty/theme.js";
 import { HOUSE_COLOURS } from "../src/data/export/houseFormat.ts";
 import { execFileSync } from "node:child_process";
+// Dev-only, and dependency-free itself. It is here to answer the one question none of the
+// assertions below could: not "do the two drawings agree" but "does a phone read it".
+import jsQR from "jsqr";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import QRCode from "react-qr-code";
-import { qrMatrix, qrPng, QR_LEVEL } from "../src/features/reports/core/qr.js";
+import { qrMatrix, qrPng, qrSvg, QR_LEVEL, QR_QUIET_ZONE } from "../src/features/reports/core/qr.js";
 
 let failures = 0;
 const ok = (name, condition, detail = "") => {
@@ -45,6 +48,10 @@ const ok = (name, condition, detail = "") => {
     console.log(`  FAIL ${name}${detail ? ` — ${detail}` : ""}`);
   }
 };
+
+/** The width out of a PNG's IHDR — 8 signature bytes, 4 length, 4 "IHDR", then it. */
+const readPngWidth = (png) =>
+  (png[16] << 24) | (png[17] << 16) | (png[18] << 8) | png[19];
 
 const registry = createReportRegistry({ widgets: LOFTY_WIDGETS, groups: LOFTY_GROUPS });
 const engine = createReportEngine(registry, { seeds: LOFTY_SEEDS });
@@ -647,6 +654,67 @@ console.log("--- the Lofty theme is the house document format, role for role");
     ok(`"${label}" encodes the same on screen as in the export`,
       same && ours === drawn.size && Number(box?.[1]) === mine.size,
       `${mine.size}×${mine.size}, ${ours} dark vs ${drawn.size} drawn`);
+  }
+
+  // DOES IT ACTUALLY SCAN.
+  //
+  // Everything else here proves the two drawings AGREE. Two identical unreadable codes
+  // agree perfectly. The finder patterns could be inverted, the quiet zone missing, the
+  // whole thing mirrored — the matrices would still match module for module and every
+  // assertion above would stay green while nobody's phone could read either one.
+  //
+  // So: decode them. jsQR takes pixels, the same way a camera does.
+  {
+    const decode = (m, { scale = 4, margin = 4 } = {}) => {
+      const side = (m.size + margin * 2) * scale;
+      const px = new Uint8ClampedArray(side * side * 4).fill(255);
+      for (let y = 0; y < side; y++) {
+        for (let x = 0; x < side; x++) {
+          const mx = Math.floor(x / scale) - margin;
+          const my = Math.floor(y / scale) - margin;
+          const dark = mx >= 0 && mx < m.size && my >= 0 && my < m.size && m.at(mx, my);
+          if (!dark) continue;
+          const o = (y * side + x) * 4;
+          px[o] = px[o + 1] = px[o + 2] = 0;
+        }
+      }
+      return jsQR(px, side, side)?.data ?? null;
+    };
+
+    for (const text of cases) {
+      const label = text.length > 30 ? `${text.slice(0, 30)}…` : text;
+      // Broken by inverting the matrix (`!m.at(x, y)`), which leaves every module count
+      // and every agreement check above untouched and returns null here.
+      ok(`"${label}" decodes back to itself`, decode(qrMatrix(text)) === text,
+        String(decode(qrMatrix(text))));
+    }
+
+    // THE QUIET ZONE IS PART OF THE CODE, not padding around it — the specification puts
+    // it at four modules, and a QR butted against a coloured background is one phones
+    // refuse.
+    //
+    // Asserted structurally, and it has to be. The first version claimed a code with NO
+    // quiet zone stops decoding; it failed, and the code was right — jsQR read it
+    // anyway, and reads it at every margin from 0 to 4. A decoder that cannot tell the
+    // difference cannot be the witness. What is ours is what the renderers emit.
+    //
+    // Broken by putting QR_QUIET_ZONE back to the 2 it shipped as.
+    const bare = qrMatrix(cases[0]).size;
+    const svgSide = qrSvg(cases[0]).side;
+    const pngSide = (qrPng(cases[0], { scale: 1 }).length, bare + QR_QUIET_ZONE * 2);
+    ok("both renderers bake in the specified four-module quiet zone",
+      QR_QUIET_ZONE === 4
+      && svgSide === bare + QR_QUIET_ZONE * 2
+      && svgSide === pngSide,
+      `${bare} modules drawn at ${svgSide}`);
+
+    // The PNG's pixel width has to follow the same margin, and it is computed separately
+    // from the SVG's. Broken by leaving qrPng's own `margin` default at 2: the .docx
+    // carried a tighter quiet zone than the screen and nothing else noticed.
+    const scale = 8;
+    ok("and the Word PNG is sized from the same quiet zone",
+      readPngWidth(qrPng(cases[0], { scale })) === (bare + QR_QUIET_ZONE * 2) * scale,
+      `${readPngWidth(qrPng(cases[0], { scale }))}px`);
   }
 
   // WITHOUT THE COMPONENT IN THE ROOM.

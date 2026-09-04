@@ -36,6 +36,19 @@ import qrcode from 'qrcode-generator';
 /** The error correction level, everywhere. See the note on the block's settings. */
 export const QR_LEVEL = 'M';
 
+/**
+ * The quiet zone, in modules.
+ *
+ * FOUR, WHICH IS WHAT THE SPECIFICATION SAYS. It was 2 — a number that came from nowhere
+ * and looked fine, because everything looks fine: a code with no quiet zone at all still
+ * renders as an obviously-a-QR-code and still decodes in `jsqr`, which is tolerant. Real
+ * cameras are not, and the failure lands on somebody holding a phone up to a printed
+ * induction sheet, where nobody is watching a check.
+ *
+ * The white is not decoration around the code. It is part of the code.
+ */
+export const QR_QUIET_ZONE = 4;
+
 // `qrcode-generator` encodes a string as latin1 unless told otherwise, and `react-qr-code`
 // replaces this exact function with this exact body when IT loads. Setting it here too is
 // not redundant: without it, a code containing an accent, a dash Word autocorrected, or an
@@ -68,7 +81,7 @@ export function qrMatrix(text) {
  * `shape-rendering="crispEdges"` because the browser's default antialiasing softens the
  * module edges, and a soft QR is a QR that some phones will not read.
  */
-export function qrSvg(text, { margin = 2 } = {}) {
+export function qrSvg(text, { margin = QR_QUIET_ZONE } = {}) {
   const { size, at } = qrMatrix(text);
   const side = size + margin * 2;
   let d = '';
@@ -151,7 +164,7 @@ function storedZlib(raw) {
  *   page at the size the Word export places it.
  * @returns {Uint8Array}
  */
-export function qrPng(text, { margin = 2, scale = 8 } = {}) {
+export function qrPng(text, { margin = QR_QUIET_ZONE, scale = 8 } = {}) {
   const { size, at } = qrMatrix(text);
   const side = (size + margin * 2) * scale;
 

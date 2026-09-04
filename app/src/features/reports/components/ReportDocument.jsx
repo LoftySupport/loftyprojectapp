@@ -15,7 +15,7 @@ import { createPortal } from 'react-dom';
 import { reportToMarkdown } from '../core/markdown.js';
 import { reportToHtml } from '../core/html.js';
 import QRCode from 'react-qr-code';
-import { QR_LEVEL } from '../core/qr.js';
+import { QR_LEVEL, QR_QUIET_ZONE, qrMatrix } from '../core/qr.js';
 import { sanitizeHtml } from './RichTextEditor.jsx';
 
 /** On-screen sizes for a QR block, in px. Print and Word use the same three. */
@@ -458,14 +458,21 @@ function Block({ block }) {
       //
       // The white padding is the quiet zone. `react-qr-code` draws the modules and stops
       // at their edge, and a QR butted up against a coloured background — a themed
-      // section, a callout, a dark print — is a QR that phones refuse. Four modules'
-      // worth, which is the specified minimum.
+      // section, a callout, a dark print — is a QR that phones refuse.
+      //
+      // Measured in MODULES, not pixels. A fixed 9px looked like a quiet zone and was
+      // under two modules on a dense code and over six on a sparse one, because the
+      // module size depends on how much text is in it. Encoding twice to find out how
+      // many modules there are is the cost of getting it right, and it is a few hundred
+      // microseconds on a string.
       const px = QR_SIZES[block.size] || QR_SIZES.medium;
+      const modules = qrMatrix(block.text).size;
+      const quiet = Math.ceil((px / modules) * QR_QUIET_ZONE);
       return (
         <figure className="mb-3">
           <div
             className="inline-block bg-white"
-            style={{ padding: Math.round(px / 16) }}
+            style={{ padding: quiet }}
           >
             <QRCode
               value={block.text}
