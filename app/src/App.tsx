@@ -16,6 +16,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { JobsPage } from "./pages/JobsPage";
 import { ReportsPage } from "./pages/ReportsPage";
+import { ToolsPage } from "./pages/ToolsPage";
 import { ContactsPage } from "./pages/ContactsPage";
 import { MaintenancePage } from "./pages/MaintenancePage";
 import { AdminPage } from "./pages/AdminPage";
@@ -226,6 +227,11 @@ export default function App() {
               <Route path="jobs/:jobNumber" element={<JobsPage />} />
               <Route path="reports" element={<ReportsPage />} />
               <Route path="contacts" element={<ContactsPage />} />
+              {/* Tools: things you use to make something, as opposed to the records you
+                  work on. One tab today — the report Template Builder — and the section
+                  is in the path so the second one is a route rather than a rewrite. */}
+              <Route path="tools" element={<ToolsPage />} />
+              <Route path="tools/:section" element={<ToolsPage />} />
               <Route path="maintenance" element={<MaintenancePage />} />
               {/* Processes are configuration, not a destination (Amber, 2 Sep: "processes
                   are not a page on the sidebar, they are part of setup only"). The two

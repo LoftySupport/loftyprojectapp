@@ -597,4 +597,27 @@ BEGIN
     RAISE WARNING 'FAIL: an offer naming no company and no contact was accepted';
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  maintenance_assignments_names_somebody rejected an offer to nobody';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  maintenance_assignments_names_somebody)', SQLERRM; END;
+  -- 0094: a template needs a name, and a layout the builder can open. The widgets probe
+  -- is the one that matters: `jsonb_typeof(x -> 'widgets')` on a layout with no widgets
+  -- key is NULL, and a CHECK treats NULL as a pass — the first version of that constraint
+  -- accepted this row, which is the one that opens the builder as a blank screen.
+  BEGIN
+    INSERT INTO report_templates (report_template_name) VALUES ('   ');
+    RAISE WARNING 'FAIL: a blank report template name was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  report_templates_name_is_not_blank rejected a blank name';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  report_templates_name_is_not_blank)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO report_templates (report_template_name, report_template_layout)
+    VALUES ('Constraint probe 0094', '{"widgets": {}}'::jsonb);
+    RAISE WARNING 'FAIL: a layout whose widgets are an object was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  report_templates_layout_has_widgets rejected a non-array widgets key';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  report_templates_layout_has_widgets rejected an object)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO report_templates (report_template_name, report_template_layout)
+    VALUES ('Constraint probe 0094', '{"page": {"pageSize": "a4"}}'::jsonb);
+    RAISE WARNING 'FAIL: a layout with no widgets key was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  report_templates_layout_has_widgets rejected a missing widgets key';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  report_templates_layout_has_widgets rejected a missing key)', SQLERRM; END;
 END $$;

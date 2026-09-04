@@ -14,6 +14,10 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Tools — a new section in the sidebar for the things you use to make something
+- Template Builder — build a report layout by dragging blocks, then print it, save it as a PDF, or download it as Word, Markdown or HTML
+- A report template reads the app every time it is opened, so the same template is always current rather than a snapshot of the day it was written
+- Report templates carry Lofty's colours and wordmark, with a quieter variant for long documents
 - The exported PDF and Word document embed the real Lofty wordmark and set the brand's Helvetica
 - Every list and report has an Export menu — download exactly what is on screen as an Excel workbook, a Word document or a PDF
 - A grouped board or table exports one sheet, one Word section and one page per group

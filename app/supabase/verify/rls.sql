@@ -1620,3 +1620,86 @@ delete from processes where process_key = 'probe_manager_process';
 delete from property_defs where property_def_key in ('probe_margin', 'probe_pour', 'probe_team_only');
 delete from property_value_history where property_def_key in ('probe_margin', 'probe_pour', 'probe_team_only');
 update profiles set profile_permission = 'user' where profile_email = 'behaviour-test@lofty.com.au';
+
+-- =========================================================== report_templates (0094)
+-- A template is company-wide: everybody reads it, a manager writes it, an admin deletes
+-- it. Watched failing before it was watched passing — with "managers write
+-- report_templates" widened to `with check (true)`, the first probe below reported a
+-- `user` writing a template the whole company would then send out.
+\echo '=== report templates: everyone reads, managers write, admins delete ==='
+update profiles set profile_permission = 'user' where profile_email = 'behaviour-test@lofty.com.au';
+-- Planted as the owner, so the read probe has something to find that the reader did not
+-- write themselves.
+insert into report_templates (report_template_name, report_template_layout)
+values ('__rls_probe__ template', '{"widgets": []}'::jsonb);
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+do $$
+declare n integer;
+begin
+  select count(*) into n from report_templates where report_template_name = '__rls_probe__ template';
+  if n = 1 then raise notice 'ok  a user reads a template somebody else built';
+  else raise warning 'FAIL: a user could not read a report template'; end if;
+
+  begin
+    insert into report_templates (report_template_name) values ('__rls_probe__ by a user');
+    raise warning 'FAIL: a user created a company-wide report template';
+  exception when insufficient_privilege then raise notice 'ok  a user cannot create a report template';
+    when others then raise warning 'FAIL: unexpected creating as a user (%)', sqlerrm; end;
+
+  update report_templates set report_template_name = '__rls_probe__ renamed by a user'
+   where report_template_name = '__rls_probe__ template';
+  get diagnostics n = row_count;
+  if n = 0 then raise notice 'ok  a user cannot rename a report template';
+  else raise warning 'FAIL: a user renamed a report template'; end if;
+end $$;
+reset role;
+reset request.jwt.claim.sub;
+
+update profiles set profile_permission = 'manager' where profile_email = 'behaviour-test@lofty.com.au';
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+do $$
+declare n integer;
+begin
+  begin
+    insert into report_templates (report_template_name, report_template_layout)
+    values ('__rls_probe__ by a manager', '{"widgets": []}'::jsonb);
+    raise notice 'ok  a manager creates a report template';
+  exception when others then raise warning 'FAIL: a manager could not create a report template (%)', sqlerrm; end;
+
+  update report_templates
+     set report_template_layout = '{"widgets": [{"id": "w1", "kind": "heading", "options": {}}]}'::jsonb
+   where report_template_name = '__rls_probe__ template';
+  get diagnostics n = row_count;
+  if n = 1 then raise notice 'ok  a manager edits a report template';
+  else raise warning 'FAIL: a manager could not edit a report template'; end if;
+
+  -- Deletion is the tighter half, and separate on purpose: an edit is recoverable by
+  -- editing back, a delete takes the layout with it.
+  delete from report_templates where report_template_name = '__rls_probe__ by a manager';
+  get diagnostics n = row_count;
+  if n = 0 and exists (select 1 from report_templates where report_template_name = '__rls_probe__ by a manager')
+    then raise notice 'ok  a manager cannot delete a report template (the row is still there)';
+  else raise warning 'FAIL: a manager deleted a report template'; end if;
+end $$;
+reset role;
+reset request.jwt.claim.sub;
+
+update profiles set profile_permission = 'admin' where profile_email = 'behaviour-test@lofty.com.au';
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+do $$
+declare n integer;
+begin
+  delete from report_templates where report_template_name like '__rls_probe__%';
+  get diagnostics n = row_count;
+  if n = 2 then raise notice 'ok  an admin deletes report templates';
+  else raise warning 'FAIL: an admin deleted % report templates, expected 2', n; end if;
+end $$;
+reset role;
+reset request.jwt.claim.sub;
+
+-- Left as found.
+delete from report_templates where report_template_name like '__rls_probe__%';
+update profiles set profile_permission = 'user' where profile_email = 'behaviour-test@lofty.com.au';

@@ -451,6 +451,16 @@ export function createStubRepository(): Repository {
     async startProcessRun(): Promise<never> { throw new Error("Starting a process needs Supabase."); },
     async updateProcessRun(): Promise<never> { throw new Error("Updating a process needs Supabase."); },
     async deleteProcessRun(): Promise<never> { throw new Error("Removing a process run needs Supabase."); },
-    async instantiateProcessTasks(): Promise<never> { throw new Error("Creating a process checklist needs Supabase."); }
+    async instantiateProcessTasks(): Promise<never> { throw new Error("Creating a process checklist needs Supabase."); },
+
+    // ---- report templates (0094) ------------------------------------------
+    // Reads answer empty; writes say what they need. A stub that kept templates in
+    // memory would let somebody build one, close the tab and lose it — a fabricated
+    // success, which is the one thing this file exists not to do.
+    async listReportTemplates() { return []; },
+    async getReportTemplate() { return null; },
+    async createReportTemplate(): Promise<never> { throw new Error("Saving a report template needs Supabase."); },
+    async updateReportTemplate(): Promise<never> { throw new Error("Saving a report template needs Supabase."); },
+    async deleteReportTemplate(): Promise<never> { throw new Error("Removing a report template needs Supabase."); }
   };
 }

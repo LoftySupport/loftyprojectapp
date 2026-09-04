@@ -942,3 +942,24 @@ select case when :un_projects = 116 and :un_jobs = 796
        || (select count(*) from projects where project_id between 2001 and 2121) || ' projects and '
        || (select count(*) from import_staging_jobs where import_staging_job_loaded_at is not null) || ' stamps remain' end;
 rollback;
+
+\echo '--- 45. report_templates: the layout round-trips and the touch trigger moves updated_at'
+-- Outside a transaction on purpose, and that IS the check. `extensions.moddatetime`
+-- writes now(), the TRANSACTION timestamp, so the same probe inside a DO block reports
+-- updated_at equal to created_at whether the trigger fired or not — watched, in 0094,
+-- which is why the assertion lives here instead of in the migration.
+insert into report_templates (report_template_name, report_template_layout)
+values ('__behaviour__ leadership summary',
+        '{"widgets": [{"id": "w1", "kind": "heading", "options": {"text": "Summary"}}], "page": {"pageSize": "a4", "orientation": "portrait"}, "theme": "lofty"}'::jsonb);
+update report_templates
+   set report_template_layout = jsonb_set(report_template_layout, '{theme}', '"lofty-quiet"')
+ where report_template_name = '__behaviour__ leadership summary';
+select case
+  when report_template_updated_at > report_template_created_at
+   and report_template_layout -> 'widgets' -> 0 ->> 'kind' = 'heading'
+   and report_template_layout ->> 'theme' = 'lofty-quiet'
+  then 'ok  the layout round-tripped and the update moved report_template_updated_at'
+  else 'FAIL: updated_at ' || report_template_updated_at || ' vs created_at ' || report_template_created_at
+       || ', theme ' || coalesce(report_template_layout ->> 'theme', 'null') end
+from report_templates where report_template_name = '__behaviour__ leadership summary';
+delete from report_templates where report_template_name = '__behaviour__ leadership summary';

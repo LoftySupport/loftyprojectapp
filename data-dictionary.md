@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-699 properties across 97 tables.
+702 properties across 98 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 650 | In the migration and the types |
+| Created | 653 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -1180,6 +1180,16 @@ What actually went out, newest first. Deliberately not the same table as the roa
 | `releases.release_name` | Name | The headline — "the tracker". Empty allowed. | `text` | — | Not null, default ''. | Some releases are a list of fixes and nothing more. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `releases.release_summary` | Summary | A paragraph under the heading. | `text` | — | Not null, default ''. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `releases.release_shipped_on` | Shipped | The day it went out. | `date` | — | Not null, default current_date. | A date and not a timestamp: nobody has asked what hour a release went out, and a timestamptz would make the answer depend on the reader's timezone. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `report_templates`
+
+A report layout built in Tools → Template Builder (0094): the blocks, the page setup and the theme, in one jsonb column. Blocks hold references to the app's data rather than copies of it, so a template renders current jobs whenever it is opened — which is the whole reason it is a template and not a saved document. Company-wide: everybody reads, manager and above writes, admin and above deletes.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `report_templates.report_template_id` | Report template | One layout built in Tools → Template Builder: an ordered list of blocks, the page setup and the theme it prints in. Company-wide, not per person and not per project. | `uuid` | — | Primary key, default gen_random_uuid(). | Readable by every active user; manager and above writes, admin and above deletes. Nothing references it — a template is used by being opened, not by being pointed at. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `report_templates.report_template_name` | Name | What the template is called — "Monthly leadership summary". Unique across the company, because everybody picks from one list and two rows with the same name is a coin-toss every time. | `text` | — | Not null. CHECK: not blank after trimming. UNIQUE. | The unique violation is caught in the repository and turned into a sentence naming the clash — the constraint message would otherwise go on screen verbatim. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `report_templates.report_template_layout` | The layout | The whole builder state as one document: { widgets: [{ id, kind, options }], page: { pageSize, orientation }, theme }. A block holds the QUESTION — "the jobs table grouped by stage" — and never the answer, so a template opened in March renders March's jobs. | `jsonb` | — | Not null, default {"widgets": []}. CHECK: widgets is a JSON array. | One column rather than a report_template_blocks table: nothing joins to a block, nothing filters by one, and the builder rewrites the whole list on every autosave. The CHECK is the shape only — a block's `kind` is registered in the app's widget adapter, so a constraint listing the kinds would need a migration for every new block. coalesce() inside it is load-bearing: jsonb_typeof of a missing key is NULL, and a CHECK reads NULL as a pass, so `= 'array'` alone accepted a layout with no widgets key at all. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `roadmap_phases`
 
