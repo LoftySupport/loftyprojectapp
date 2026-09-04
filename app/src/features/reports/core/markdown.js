@@ -15,6 +15,10 @@ export function blockToMarkdown(b) {
     case 'subheading': return `### ${b.text}\n`;
     case 'keyValues': return b.items.map(i => `- **${i.label}:** ${i.value}`).join('\n') + '\n';
     case 'list': return b.items.map((i, n) => `${b.ordered ? `${n + 1}.` : '-'} ${i}`).join('\n') + '\n';
+    // Markdown has no way to draw a QR that is worth having: a data-URI image would be
+    // tens of kilobytes of base64 in a file whose whole point is being readable as text.
+    // The link it encodes is the useful part, so that is what it becomes.
+    case 'qr': return b.caption ? `[${b.caption}](${b.text})\n` : `<${b.text}>\n`;
     case 'callout': {
       // `label` lets an adapter name what a callout means in its own domain
       // ("High risk", "Pain point"); it falls back to the tone.

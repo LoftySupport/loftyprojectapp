@@ -74,7 +74,7 @@ function Palette({ registry, onAdd }) {
 
 // ─── Widget preview (memoised — text edits shouldn't re-resolve tables) ──
 
-const WidgetPreview = React.memo(function WidgetPreview({ widget, engine, ctx, theme, onRepick }) {
+const WidgetPreview = React.memo(function WidgetPreview({ widget, engine, ctx, allWidgets, theme, onRepick }) {
   // INTEGRATION EDIT — the same `__widgets` compileReport supplies. The canvas resolves
   // one widget at a time, so without this a table of contents would be empty on screen
   // and correct in the export, which is the worst of the two.
@@ -163,7 +163,7 @@ function SortableWidget({ widget, engine, ctx, allWidgets, theme, selected, onSe
           />
         </div>
       ) : (
-        <WidgetPreview widget={widget} engine={engine} ctx={ctx} theme={theme} onRepick={repick} />
+        <WidgetPreview widget={widget} engine={engine} ctx={ctx} allWidgets={allWidgets} theme={theme} onRepick={repick} />
       )}
     </div>
   );

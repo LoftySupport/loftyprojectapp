@@ -6,6 +6,7 @@
 // application's brand without this file being edited.
 
 import { cellText } from './blocks.js';
+import { qrSvg } from './qr.js';
 import { resolveTheme, logoForSurface, isDarkColour } from './theme.js';
 
 // ─── HTML serialiser ─────────────────────────────────────────────────
@@ -29,6 +30,15 @@ export function blockToHtml(b) {
     case 'list': {
       const tag = b.ordered ? 'ol' : 'ul';
       return `<${tag}>${(b.items || []).map(i => `<li>${esc(i)}</li>`).join('')}</${tag}>`;
+    }
+    case 'qr': {
+      // The same SVG the screen draws. A standalone .html has no network, so an inline
+      // SVG is also the only kind of picture that survives being emailed as one file.
+      const px = { small: 90, medium: 140, large: 200 }[b.size] || 140;
+      const { side, body } = qrSvg(b.text);
+      return `<figure style="margin:0 0 12px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${side} ${side}" width="${px}" height="${px}" role="img" aria-label="${esc(b.caption || `QR code for ${b.text}`)}">${body}</svg>${
+        b.caption ? `<figcaption style="font-size:12px;color:#67666a;margin-top:6px">${esc(b.caption)}</figcaption>` : ''
+      }</figure>`;
     }
     case 'callout': {
       const tone = TONE_STYLES[b.tone] || TONE_STYLES.info;

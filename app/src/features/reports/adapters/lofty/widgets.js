@@ -241,6 +241,57 @@ const CHART_METRICS = [
 // ─── The widgets ─────────────────────────────────────────────────────
 
 export const LOFTY_WIDGETS = {
+  // ── A QR code ────────────────────────────────────────────────────────
+  //
+  // Amber, 4 September: "create a QR code? the qr code generator is important".
+  //
+  // The block holds the TEXT and nothing else. Every renderer draws it from the same
+  // matrix (core/qr.js) — SVG on screen, in the HTML download and in print, PNG in Word
+  // — because two encoders would eventually disagree, and a QR that disagrees with
+  // itself scans to the wrong place in one of the four outputs.
+  qrCode: {
+    label: 'QR code',
+    group: 'Text & layout',
+    hint: 'A scannable code for a link: a booking page, a document, a site induction',
+    defaults: () => ({ url: '', caption: '', size: 'medium' }),
+    // THREE SETTINGS, AND THERE WERE FOUR
+    //
+    //   Amber, 4 September: *"i don't need all test options just a basci one will do"*.
+    //   The one that went was an error-correction picker — L/M/Q/H, 7% to 30% — which is
+    //   a real QR parameter and entirely the wrong question to put in front of somebody
+    //   captioning a code on a site induction sheet. It is fixed at M in core/qr.js:
+    //   15% recovery, which survives a scuffed print, and no denser than it needs to be.
+    settings: [
+      {
+        key: 'url', type: 'text', label: 'What it points at',
+        placeholder: 'https://…',
+        hint: 'A link, or any text. Anything a phone camera should be able to read.'
+      },
+      { key: 'caption', type: 'text', label: 'Caption', placeholder: 'Scan to book a site visit' },
+      {
+        key: 'size', type: 'select', label: 'Size', allowEmpty: false,
+        options: [
+          { value: 'small', label: 'Small — 90px' },
+          { value: 'medium', label: 'Medium — 140px' },
+          { value: 'large', label: 'Large — 200px' }
+        ]
+      }
+    ],
+    // The only resolver here that ignores ctx entirely: a QR is made of its own text.
+    resolve: (o, _ctx, h) => {
+      const text = String(o.url || '').trim();
+      if (!text) {
+        return h.forExport ? [] : [helpers.info('Give this code something to point at in its settings.')];
+      }
+      return [{
+        type: 'qr',
+        text,
+        caption: String(o.caption || '').trim() || null,
+        size: ['small', 'medium', 'large'].includes(o.size) ? o.size : 'medium'
+      }];
+    }
+  },
+
   // ── What is in this document ─────────────────────────────────────────
   //
   // Amber, 4 September, asking for "a table of contents".

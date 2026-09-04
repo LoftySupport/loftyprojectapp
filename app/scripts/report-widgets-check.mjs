@@ -30,6 +30,11 @@ import { createReportRegistry } from "../src/features/reports/core/registry.js";
 import { createReportEngine } from "../src/features/reports/core/widgetEngine.js";
 import { LOFTY_THEME, LOFTY_THEME_QUIET } from "../src/features/reports/adapters/lofty/theme.js";
 import { HOUSE_COLOURS } from "../src/data/export/houseFormat.ts";
+import { execFileSync } from "node:child_process";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import QRCode from "react-qr-code";
+import { qrMatrix, qrPng, QR_LEVEL } from "../src/features/reports/core/qr.js";
 
 let failures = 0;
 const ok = (name, condition, detail = "") => {
@@ -235,8 +240,20 @@ currentCtx = full;
 // invisible. Watched: a resolver changed to close over a `const rows = jobs` captured at
 // module load produced byte-identical output for both contexts below, and the assertion
 // reported it.
+//
+// ONE EXEMPTION, AND THE BAR FOR JOINING IT IS HIGH: a block belongs here only if it has
+// no app data to read at all, so there is no copy it could be holding. `qrCode` is made
+// entirely of text its author typed — the same class as the module's own heading and text
+// blocks, which are not in this sweep because they are not Lofty's.
+//
+// A block that reads app data and renders the same against a full and an empty context is
+// the bug this sweep exists for. Adding one here to quieten it would remove the only
+// thing standing between a template and a snapshot.
+const NOTHING_TO_READ = new Set(["qrCode"]);
+
 console.log("--- a resolver reads ctx every time, so the same block renders different data");
 for (const kind of Object.keys(LOFTY_WIDGETS)) {
+  if (NOTHING_TO_READ.has(kind)) continue;
   const widget = engine.createWidget(kind, full);
   currentCtx = full;
   const before = textOf(engine.resolve(widget, full));
@@ -582,6 +599,146 @@ console.log("--- the Lofty theme is the house document format, role for role");
   ok("the document font is Helvetica first, and Arial appears nowhere",
     /^Helvetica\b/.test(LOFTY_THEME.fonts.body) && !/Arial/i.test(LOFTY_THEME.fonts.body),
     LOFTY_THEME.fonts.body);
+}
+
+// ─── 16. The QR on screen is the QR in the exported document ─────────────
+//
+// There are two drawings of every QR: `react-qr-code` puts one on the screen, and
+// core/qr.js writes the other into the .docx and the HTML download. If they ever encode
+// differently, BOTH still look like QR codes and BOTH still scan — they just go to
+// different places, and the one nobody notices is the one that went out to a client.
+// Nothing on screen can catch that. This can.
+{
+  const cases = [
+    "https://lofty.com.au/jobs/1042-001",
+    // A non-ASCII string on purpose. `qrcode-generator` encodes latin1 unless its
+    // `stringToBytes` is replaced, and `react-qr-code` replaces it on the shared module
+    // when the component loads. Before core/qr.js replaced it too, an em dash split the
+    // two encodings in exactly this way — identical for plain URLs, divergent the moment
+    // somebody pasted a caption Word had autocorrected.
+    "Scan for the site induction — 28 Corner Street, Golden Grove",
+    "ok"
+  ];
+
+  for (const text of cases) {
+    const mine = qrMatrix(text);
+    const markup = renderToStaticMarkup(
+      React.createElement(QRCode, { value: text, level: QR_LEVEL, size: 100 })
+    );
+    const box = /viewBox="0 0 (\d+) \d+"/.exec(markup);
+    const dark = /<path d="([^"]*)"[^>]*fill="#000000"/.exec(markup)
+      || /fill="#000000"[^>]*d="([^"]*)"/.exec(markup);
+    const drawn = new Set((dark?.[1].match(/M (\d+) (\d+)/g) || []).map(m => m.slice(2).replace(" ", ",")));
+
+    let ours = 0;
+    let same = true;
+    for (let y = 0; y < mine.size; y++) {
+      for (let x = 0; x < mine.size; x++) {
+        if (!mine.at(x, y)) continue;
+        ours += 1;
+        if (!drawn.has(`${x},${y}`)) same = false;
+      }
+    }
+
+    const label = text.length > 30 ? `${text.slice(0, 30)}…` : text;
+    // Broken by swapping `mine.at(x, y)` for `mine.at(y, x)` — the transpose that
+    // `isDark(row, col)` invites, and which still produces something that looks like a
+    // QR code. It reported: 422 dark modules on both sides, none of them agreeing.
+    ok(`"${label}" encodes the same on screen as in the export`,
+      same && ours === drawn.size && Number(box?.[1]) === mine.size,
+      `${mine.size}×${mine.size}, ${ours} dark vs ${drawn.size} drawn`);
+  }
+
+  // WITHOUT THE COMPONENT IN THE ROOM.
+  //
+  // `qrcode-generator` encodes latin1 by default, and BOTH core/qr.js and
+  // `react-qr-code` replace its `stringToBytes` with a UTF-8 encoder — on the same shared
+  // module object. So inside this process, where the component is imported, deleting the
+  // line in core/qr.js changes nothing and the checks above stay green. That is a check
+  // that cannot fail, which is not a check.
+  //
+  // A child process that imports core/qr.js AND NOTHING ELSE is where the line is load
+  // bearing: the Word export, an HTML render, any future script that wants a QR without
+  // React. Broken by deleting the `qrcode.stringToBytes` line: the em dash encoded as one
+  // latin1 byte instead of three, the code came out 29×29 against the component's 33×33,
+  // and the .docx carried a QR pointing somewhere else.
+  {
+    const text = "Scan for the site induction — 28 Corner Street, Golden Grove";
+    // Every module, not the module COUNT: latin1 turns the em dash into ONE byte instead
+    // of three, and both spellings of this caption still fit a 33×33 code. Comparing the
+    // size would have passed while proving nothing — which is how it was written first,
+    // and the mutation above is what said so.
+    const bits = (m) => {
+      let out = "";
+      for (let y = 0; y < m.size; y++) for (let x = 0; x < m.size; x++) out += m.at(x, y) ? "1" : "0";
+      return out;
+    };
+    const alone = execFileSync(process.execPath, [
+      "--input-type=module", "-e",
+      `import { qrMatrix } from "./src/features/reports/core/qr.js";`
+      + ` const m = qrMatrix(${JSON.stringify(text)});`
+      + ` let o = ""; for (let y = 0; y < m.size; y++) for (let x = 0; x < m.size; x++) o += m.at(x, y) ? "1" : "0";`
+      + ` process.stdout.write(o);`
+    ], { cwd: new URL("..", import.meta.url).pathname, encoding: "utf8" }).trim();
+
+    ok("core/qr.js encodes UTF-8 on its own, without react-qr-code loaded",
+      alone.length > 0 && alone === bits(qrMatrix(text)),
+      `${alone.length} modules alone, ${bits(qrMatrix(text)).length} alongside the component`);
+  }
+
+  // `QR_LEVEL === "M"` on its own would prove nothing, so this proves that PASSING it
+  // matters: `react-qr-code` defaults to 'L', and a component left to default draws a
+  // different, smaller code than the export writes. Both scan. Nobody looks.
+  //
+  // Broken by removing `level` from the <QRCode> call in ReportDocument.jsx — which is
+  // what this stands in for, since the .jsx cannot be imported into a plain-Node check.
+  {
+    const text = "https://lofty.com.au/jobs/1042-001";
+    const drawn = (props) => renderToStaticMarkup(
+      React.createElement(QRCode, { value: text, size: 100, ...props })
+    );
+    // Not the module COUNT — 'L' and 'M' both fit this URL in a 29×29 code, so the two
+    // are the same size and a different pattern. Comparing the size would have passed
+    // while proving nothing, which is how this assertion was written the first time.
+    ok("leaving the component's level to default would draw a different code",
+      QR_LEVEL === "M"
+      && drawn({ level: QR_LEVEL }) !== drawn({})
+      && drawn({ level: "L" }) === drawn({}),
+      `M===default: ${drawn({ level: "M" }) === drawn({})}`);
+  }
+
+  // Word cannot embed an SVG, so the .docx gets a PNG this repo encodes by hand. Broken
+  // by returning the raw pixel bytes without the zlib header: `file` still called it a
+  // PNG, Word showed a red X, and nothing else in the suite noticed.
+  const png = qrPng("https://lofty.com.au/jobs/1042-001");
+  const sig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  ok("the Word copy is a real PNG, 1-bit greyscale",
+    sig.every((b, i) => png[i] === b)
+    && String.fromCharCode(...png.subarray(12, 16)) === "IHDR"
+    && png[24] === 1 && png[25] === 0
+    // 8 signature + (4 length + 4 "IHDR" + 13 data + 4 CRC) + (4 length + 4 "IDAT") = 41,
+    // where the zlib stream starts. 0x78 0x01 is deflate, 32K window, no dictionary.
+    && png[41] === 0x78 && png[42] === 0x01,
+    `${png.length} bytes, depth ${png[24]}, colour ${png[25]}, zlib ${png[41]?.toString(16)}`);
+
+  // A QR is the one block made entirely of its own settings, so an empty one has nothing
+  // to fall back on. Broken by dropping the `forExport` arm: an exported client document
+  // carried "Give this code something to point at in its settings."
+  const empty = LOFTY_WIDGETS.qrCode.resolve({ url: "  " }, {}, { forExport: true });
+  const onscreen = LOFTY_WIDGETS.qrCode.resolve({ url: "  " }, {}, { forExport: false });
+  ok("an unset QR is silent in an export and asks in the builder",
+    empty.length === 0
+    && onscreen.length === 1
+    && onscreen[0].type === "callout"
+    && /point at/.test(onscreen[0].text),
+    `${empty.length} / ${onscreen.map(b => b.type).join(",")}`);
+
+  // Amber asked for a basic block, not a QR specification. Broken by putting the
+  // error-correction picker back: the count went to 4.
+  ok("the QR block asks three questions, not four",
+    LOFTY_WIDGETS.qrCode.settings.length === 3
+    && LOFTY_WIDGETS.qrCode.settings.map(s => s.key).join(",") === "url,caption,size",
+    LOFTY_WIDGETS.qrCode.settings.map(s => s.key).join(","));
 }
 
 console.log(failures === 0
