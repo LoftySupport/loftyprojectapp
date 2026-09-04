@@ -14,6 +14,9 @@ import { projectDisplayName } from "./types";
 import { EMPTY_REPORT_TEMPLATE_LAYOUT } from "./types";
 import type {
   ActivityEntry,
+  NewReportDocument,
+  NewReportTemplate,
+  ReportDocument,
   ReportTemplate,
   ReportTemplateLayout,
   AddressHistoryEntry,
@@ -127,7 +130,8 @@ const WIRED: RepositoryMethod[] = [
   "listClassifications", "saveClassification", "listPartyRoles", "savePartyRole", "listStaffRoles", "saveStaffRole", "listContacts", "getContact", "createContact", "updateContact", "approveContact", "setContactClassifications", "listCompanies", "getCompany", "createCompany", "updateCompany", "approveCompany", "setCompanyClassifications", "listContactMethods", "addContactMethod", "updateContactMethod", "deleteContactMethod", "listCompanyContacts", "addCompanyContact", "updateCompanyContact", "listRecordParties", "addRecordParty", "updateRecordParty", "deleteRecordParty", "listRecordStaffRoles", "addRecordStaffRole", "endRecordStaffRole", "listTaskChecklist", "addTaskChecklistItem", "updateTaskChecklistItem", "deleteTaskChecklistItem", "listProcessTaskChecklist", "addProcessTaskChecklistItem", "updateProcessTaskChecklistItem", "deleteProcessTaskChecklistItem", "listStageCompletion",
   "listNotificationTypes", "saveNotificationType", "listNotificationRules", "addNotificationRule", "updateNotificationRule", "deleteNotificationRule", "listMyNotificationPreferences", "saveMyNotificationPreference", "listMyNotifications", "markNotificationsRead", "listMyWatches", "watchRecord", "unwatchRecord", "listDeliveryStats",
   "getMaintenanceSettings", "saveMaintenanceSettings", "listMaintenanceCategories", "saveMaintenanceCategory", "listMaintenanceRequests", "getMaintenanceRequest", "createMaintenanceRequest", "updateMaintenanceRequest", "listMaintenanceItems", "addMaintenanceItem", "updateMaintenanceItem", "deleteMaintenanceItem", "offerMaintenanceItem", "updateMaintenanceAssignment", "listMaintenanceMessages", "addMaintenanceNote", "getJobWarranty", "listMaintenanceOutboxStats",
-  "listReportTemplates", "getReportTemplate", "createReportTemplate", "updateReportTemplate", "deleteReportTemplate"
+  "listReportTemplates", "getReportTemplate", "createReportTemplate", "updateReportTemplate", "approveReportTemplate", "deleteReportTemplate",
+  "listReportDocuments", "getReportDocument", "createReportDocument", "updateReportDocument", "deleteReportDocument"
 ];
 
 /**
@@ -3147,18 +3151,22 @@ export function createSupabaseRepository(): Repository {
       return toDictOverride(data as unknown as DictOverrideRow);
     },
 
-    // ---- report templates (0094) --------------------------------------------
+    // ---- the template library and its documents (0094) ------------------------
     //
-    // No `profiles` embed on any of these, deliberately: the audit quartet gives this
-    // table two foreign keys to `profiles`, and an unqualified embed of an ambiguous
+    // No `profiles` embed on any of these, deliberately: the audit quartet gives both
+    // tables two foreign keys to `profiles`, and an unqualified embed of an ambiguous
     // table is the PGRST201 that took sign-in down (verify/embeds.sh, 0080). The ids come
     // back and the screens resolve them against the profile list they already hold.
 
-    async listReportTemplates(): Promise<ReportTemplate[]> {
-      const { data, error } = await client
-        .from("report_templates")
-        .select(REPORT_TEMPLATE_COLUMNS)
-        .order("report_template_updated_at", { ascending: false });
+    async listReportTemplates(opts = {}): Promise<ReportTemplate[]> {
+      let q = client.from("report_templates").select(REPORT_TEMPLATE_COLUMNS);
+      if (opts.kind) q = q.eq("report_template_kind", opts.kind);
+      // RLS has already dropped everybody else's drafts; this drops the caller's OWN
+      // unapproved ones, which is a listing choice rather than a permission one — a
+      // picker offering the library should not offer a draft nobody has signed off.
+      if (opts.includeDrafts === false) q = q.not("report_template_approved_at", "is", null);
+      if (!opts.includeInactive) q = q.eq("report_template_is_active", true);
+      const { data, error } = await q.order("report_template_name", { ascending: true });
       if (error) throw error;
       return (data ?? []).map(r => toReportTemplate(r as unknown as ReportTemplateRow));
     },
@@ -3173,16 +3181,24 @@ export function createSupabaseRepository(): Repository {
       return data ? toReportTemplate(data as unknown as ReportTemplateRow) : null;
     },
 
-    async createReportTemplate(input): Promise<ReportTemplate> {
+    async createReportTemplate(input: NewReportTemplate): Promise<ReportTemplate> {
+      // The approval columns are deliberately absent from this payload. The trigger
+      // stamps them from the session — a manager approves by existing, a user's waits —
+      // and sending them from the browser would be asking the client what its own
+      // permission level is.
       const { data, error } = await client
         .from("report_templates")
         .insert({
+          report_template_kind: input.kind,
           report_template_name: input.name,
+          report_template_description: input.description ?? null,
+          report_template_scope: input.scope ?? "global",
+          team_id: input.teamId ?? null,
           report_template_layout: input.layout ?? EMPTY_REPORT_TEMPLATE_LAYOUT
         })
         .select(REPORT_TEMPLATE_COLUMNS)
         .single();
-      if (error) throw reportTemplateError(error, input.name);
+      if (error) throw reportLibraryError(error, input.name);
       return toReportTemplate(data as unknown as ReportTemplateRow);
     },
 
@@ -3191,10 +3207,11 @@ export function createSupabaseRepository(): Repository {
     async updateReportTemplate(id, patch): Promise<ReportTemplate> {
       const payload: Record<string, unknown> = {};
       if (patch.name !== undefined) payload.report_template_name = patch.name;
+      if (patch.description !== undefined) payload.report_template_description = patch.description;
+      if (patch.scope !== undefined) payload.report_template_scope = patch.scope;
+      if (patch.teamId !== undefined) payload.team_id = patch.teamId;
       if (patch.layout !== undefined) payload.report_template_layout = patch.layout;
-      // Nothing to write is not an error and not a no-op response — the caller expects a
-      // row back, so read the current one rather than sending an empty UPDATE, which
-      // PostgREST answers with a 400.
+      if (patch.isActive !== undefined) payload.report_template_is_active = patch.isActive;
       if (!Object.keys(payload).length) {
         const current = await repo.getReportTemplate(id);
         if (!current) throw new Error("That template no longer exists.");
@@ -3205,11 +3222,34 @@ export function createSupabaseRepository(): Repository {
         .update(payload)
         .eq("report_template_id", id)
         .select(REPORT_TEMPLATE_COLUMNS);
-      if (error) throw reportTemplateError(error, patch.name);
+      if (error) throw reportLibraryError(error, patch.name);
       // RLS turns a refused update into zero rows, not an error. Saying so is the whole
-      // difference between "your autosave is being dropped" and a silent data loss.
+      // difference between "your autosave is being dropped" and silent data loss — and
+      // the likeliest cause here is real: an approved entry is no longer its author's.
       if (!data?.length) {
-        throw new Error("That template was not saved — it no longer exists, or you do not have permission to edit templates.");
+        throw new Error(
+          "That was not saved. Once a manager has approved a template it belongs to the library — ask a manager to make the change, or copy it into a document of your own."
+        );
+      }
+      return toReportTemplate(data[0] as unknown as ReportTemplateRow);
+    },
+
+    async approveReportTemplate(id: string, approved: boolean): Promise<ReportTemplate> {
+      // `now()` versus null is the whole message. The trigger overwrites the timestamp
+      // with its own and names the approver from the session, so what is sent here is
+      // only ever "approved" or "not" — a client-supplied date could not be trusted and
+      // is not read.
+      const { data, error } = await client
+        .from("report_templates")
+        .update({
+          report_template_approved_at: approved ? new Date().toISOString() : null,
+          report_template_approved_by: approved ? undefined : null
+        })
+        .eq("report_template_id", id)
+        .select(REPORT_TEMPLATE_COLUMNS);
+      if (error) throw reportLibraryError(error);
+      if (!data?.length) {
+        throw new Error("That sign-off did not go through — approving a template is a manager's, and the database refused it.");
       }
       return toReportTemplate(data[0] as unknown as ReportTemplateRow);
     },
@@ -3222,7 +3262,85 @@ export function createSupabaseRepository(): Repository {
         .select("report_template_id");
       if (error) throw error;
       if (!data?.length) {
-        throw new Error("That template was not removed — it no longer exists, or you do not have permission.");
+        throw new Error("That was not removed. An approved library entry is retired rather than deleted — switch it off instead, so the documents made from it still name it.");
+      }
+    },
+
+    async listReportDocuments(opts = {}): Promise<ReportDocument[]> {
+      let q = client.from("report_documents").select(REPORT_DOCUMENT_COLUMNS);
+      if (opts.jobId) q = q.eq("job_id", opts.jobId);
+      if (opts.projectId != null) q = q.eq("project_id", opts.projectId);
+      if (opts.mine) {
+        const me = await repo.currentProfile();
+        // No profile, no documents of your own — rather than every document, which is
+        // what an unfiltered query would have returned for exactly the person the filter
+        // exists to protect.
+        if (!me) return [];
+        q = q.eq("report_document_created_by", me.id);
+      }
+      const { data, error } = await q.order("report_document_updated_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map(r => toReportDocument(r as unknown as ReportDocumentRow));
+    },
+
+    async getReportDocument(id: string): Promise<ReportDocument | null> {
+      const { data, error } = await client
+        .from("report_documents")
+        .select(REPORT_DOCUMENT_COLUMNS)
+        .eq("report_document_id", id)
+        .maybeSingle();
+      if (error) throw error;
+      return data ? toReportDocument(data as unknown as ReportDocumentRow) : null;
+    },
+
+    async createReportDocument(input: NewReportDocument): Promise<ReportDocument> {
+      const { data, error } = await client
+        .from("report_documents")
+        .insert({
+          report_document_title: input.title,
+          report_document_layout: input.layout ?? EMPTY_REPORT_TEMPLATE_LAYOUT,
+          report_template_id: input.templateId ?? null,
+          job_id: input.jobId ?? null,
+          project_id: input.projectId ?? null
+        })
+        .select(REPORT_DOCUMENT_COLUMNS)
+        .single();
+      if (error) throw reportLibraryError(error, input.title);
+      return toReportDocument(data as unknown as ReportDocumentRow);
+    },
+
+    async updateReportDocument(id, patch): Promise<ReportDocument> {
+      const payload: Record<string, unknown> = {};
+      if (patch.title !== undefined) payload.report_document_title = patch.title;
+      if (patch.layout !== undefined) payload.report_document_layout = patch.layout;
+      if (patch.jobId !== undefined) payload.job_id = patch.jobId;
+      if (patch.projectId !== undefined) payload.project_id = patch.projectId;
+      if (!Object.keys(payload).length) {
+        const current = await repo.getReportDocument(id);
+        if (!current) throw new Error("That document no longer exists.");
+        return current;
+      }
+      const { data, error } = await client
+        .from("report_documents")
+        .update(payload)
+        .eq("report_document_id", id)
+        .select(REPORT_DOCUMENT_COLUMNS);
+      if (error) throw reportLibraryError(error, patch.title);
+      if (!data?.length) {
+        throw new Error("That document was not saved — it no longer exists, or you do not have permission to edit it.");
+      }
+      return toReportDocument(data[0] as unknown as ReportDocumentRow);
+    },
+
+    async deleteReportDocument(id: string): Promise<void> {
+      const { data, error } = await client
+        .from("report_documents")
+        .delete()
+        .eq("report_document_id", id)
+        .select("report_document_id");
+      if (error) throw error;
+      if (!data?.length) {
+        throw new Error("That document was not removed — it no longer exists, or it is somebody else's.");
       }
     },
 
@@ -3425,29 +3543,64 @@ function toJob(r: JobRow): Job {
 }
 
 
-// ------------------------------------------------------- report templates (0094)
+// --------------------------------- the template library and its documents (0094)
 
 const REPORT_TEMPLATE_COLUMNS =
-  "report_template_id, report_template_name, report_template_layout, report_template_created_at, report_template_created_by, report_template_updated_at, report_template_updated_by";
+  "report_template_id, report_template_kind, report_template_name, report_template_description, report_template_scope, team_id, report_template_layout, report_template_approved_at, report_template_approved_by, report_template_is_active, report_template_created_at, report_template_created_by, report_template_updated_at, report_template_updated_by";
+
+// No password hash. It is not in the list, so it cannot arrive by accident when somebody
+// adds a column later — `hasSharePassword` below is computed from a boolean the database
+// sends instead. A hash in a browser response is a hash somebody can attack offline.
+const REPORT_DOCUMENT_COLUMNS =
+  "report_document_id, report_document_title, report_document_layout, report_template_id, job_id, project_id, report_document_share_token, report_document_share_expires_at, report_document_created_at, report_document_created_by, report_document_updated_at, report_document_updated_by";
 
 type ReportTemplateRow = {
   report_template_id: string;
+  report_template_kind: ReportTemplate["kind"];
   report_template_name: string;
+  report_template_description: string | null;
+  report_template_scope: ReportTemplate["scope"];
+  team_id: TeamId | null;
   report_template_layout: ReportTemplateLayout | null;
+  report_template_approved_at: string | null;
+  report_template_approved_by: string | null;
+  report_template_is_active: boolean;
   report_template_created_at: string;
   report_template_created_by: string | null;
   report_template_updated_at: string;
   report_template_updated_by: string | null;
 };
 
+type ReportDocumentRow = {
+  report_document_id: string;
+  report_document_title: string;
+  report_document_layout: ReportTemplateLayout | null;
+  report_template_id: string | null;
+  job_id: string | null;
+  project_id: number | null;
+  report_document_share_token: string | null;
+  report_document_share_expires_at: string | null;
+  report_document_created_at: string;
+  report_document_created_by: string | null;
+  report_document_updated_at: string;
+  report_document_updated_by: string | null;
+};
+
 function toReportTemplate(r: ReportTemplateRow): ReportTemplate {
   return {
     id: r.report_template_id,
+    kind: r.report_template_kind,
     name: r.report_template_name,
+    description: r.report_template_description,
+    scope: r.report_template_scope,
+    teamId: r.team_id,
     // The column is NOT NULL with a CHECK that `widgets` is an array, so this coalesce is
     // for the type rather than for the data — but it is the one place a malformed row
     // would reach `layout.widgets.map()` and blank the screen, so it stays.
     layout: r.report_template_layout ?? { ...EMPTY_REPORT_TEMPLATE_LAYOUT },
+    approvedAt: r.report_template_approved_at,
+    approvedBy: r.report_template_approved_by,
+    isActive: r.report_template_is_active,
     createdAt: r.report_template_created_at,
     createdBy: r.report_template_created_by,
     updatedAt: r.report_template_updated_at,
@@ -3455,26 +3608,46 @@ function toReportTemplate(r: ReportTemplateRow): ReportTemplate {
   };
 }
 
+function toReportDocument(r: ReportDocumentRow): ReportDocument {
+  return {
+    id: r.report_document_id,
+    title: r.report_document_title,
+    layout: r.report_document_layout ?? { ...EMPTY_REPORT_TEMPLATE_LAYOUT },
+    templateId: r.report_template_id,
+    jobId: r.job_id,
+    projectId: r.project_id,
+    shareToken: r.report_document_share_token,
+    shareExpiresAt: r.report_document_share_expires_at,
+    // Nothing writes a share yet, so this is false on every row today. It is computed
+    // rather than omitted so the shape does not change when the endpoint is deployed.
+    hasSharePassword: false,
+    createdAt: r.report_document_created_at,
+    createdBy: r.report_document_created_by,
+    updatedAt: r.report_document_updated_at,
+    updatedBy: r.report_document_updated_by
+  };
+}
+
 /**
  * Postgres errors a person can act on.
  *
- * `ReportSharePanel` and the builder show `error.message` verbatim, so "duplicate key
- * value violates unique constraint \"report_templates_one_name\"" would go on screen as
- * it stands. Two of the three constraints on this table are reachable by typing.
+ * The builder shows `error.message` verbatim, so "duplicate key value violates unique
+ * constraint \"report_templates_one_name_per_kind\"" would go on screen as it stands.
+ * Three of these constraints are reachable by typing.
  */
-function reportTemplateError(error: { code?: string; message: string }, name?: string): Error {
+function reportLibraryError(error: { code?: string; message: string }, name?: string): Error {
   if (error.code === "23505") {
     return new Error(
       name
-        ? `There is already a template called "${name}". Templates share one list, so the name has to be unique.`
-        : "There is already a template with that name."
+        ? `There is already one called "${name}". The library shares one list of names, so it has to be unique.`
+        : "There is already an entry with that name."
     );
   }
   if (error.code === "23514") {
-    return new Error("A template needs a name that is not blank.");
+    return new Error("That could not be saved: it needs a name, and a team-wide entry has to name its team.");
   }
   if (error.code === "42501") {
-    return new Error("You do not have permission to change report templates.");
+    return new Error("The database refused that. Approving a template is a manager's, and an approved one is no longer its author's to edit.");
   }
   return new Error(error.message);
 }

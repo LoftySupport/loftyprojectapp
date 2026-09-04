@@ -3,8 +3,13 @@ import type {
   ActivityEntry,
   AddressHistoryEntry,
   CloneOptions,
+  NewReportDocument,
+  NewReportTemplate,
+  ReportDocument,
+  ReportDocumentPatch,
   ReportTemplate,
-  ReportTemplateLayout,
+  ReportTemplateKind,
+  ReportTemplatePatch,
   CommentEntry,
   FeedbackItem,
   FeedbackKind,
@@ -728,26 +733,62 @@ export interface Repository {
   /** Copy the process's checklist onto the run's record, once. Returns how many tasks were made. */
   instantiateProcessTasks(runId: string): Promise<number>;
 
-  // ---- report templates (0094) -----------------------------------------------
+  // ---- the template library and its documents (0094) -------------------------
   /**
-   * The layouts built in Tools → Template Builder, newest change first.
+   * The library: whole templates and the reusable sections dropped into them.
    *
-   * Company-wide, not per person and not per project: a template scoped to one project
-   * would have to be copied to be used on the next, which is the opposite of a template.
-   * Everyone active reads them; the policies decide who may write.
+   * What comes back is already narrowed by RLS, and the narrowing is the feature —
+   * an entry nobody has signed off is visible only to whoever wrote it, and a
+   * manager-scoped one only from manager up. So "every template" means every template
+   * this person may see, and the screens say so rather than implying a global list.
+   *
+   * `includeDrafts` is a listing choice, not a permission one: false hides the caller's
+   * own unapproved drafts from a picker that is meant to offer the library.
    */
-  listReportTemplates(): Promise<ReportTemplate[]>;
+  listReportTemplates(opts?: {
+    kind?: ReportTemplateKind;
+    includeDrafts?: boolean;
+    includeInactive?: boolean;
+  }): Promise<ReportTemplate[]>;
   getReportTemplate(id: string): Promise<ReportTemplate | null>;
-  /** Manager and above; the policy refuses anyone else. */
-  createReportTemplate(input: { name: string; layout?: ReportTemplateLayout }): Promise<ReportTemplate>;
+  /**
+   * Anyone at `user` and above may write one. It is not in the library until a manager
+   * approves it — and a manager writing one approves it by existing, which the database
+   * decides rather than this method.
+   */
+  createReportTemplate(input: NewReportTemplate): Promise<ReportTemplate>;
   /**
    * A PARTIAL update, and it has to be: the builder autosaves the name and the layout
    * independently, so a write that sent both every time would blank whichever one the
    * caller did not have.
+   *
+   * The policy allows it for the author while it is still a draft, and for manager and
+   * above afterwards — an approved entry belongs to the library, not to whoever wrote it.
    */
-  updateReportTemplate(id: string, patch: { name?: string; layout?: ReportTemplateLayout }): Promise<ReportTemplate>;
-  /** Admin and above — an edit is recoverable by editing back, a delete is not. */
+  updateReportTemplate(id: string, patch: ReportTemplatePatch): Promise<ReportTemplate>;
+  /**
+   * Sign it off, or take the sign-off back. Manager and above; the trigger refuses
+   * anybody else and stamps who from the session rather than trusting an argument.
+   */
+  approveReportTemplate(id: string, approved: boolean): Promise<ReportTemplate>;
+  /** The author may withdraw their own draft; otherwise admin and above. */
   deleteReportTemplate(id: string): Promise<void>;
+
+  /**
+   * The documents made from the library — a progress report, a client letter.
+   *
+   * Filterable by the record a document is about, which is what a job or project screen
+   * would ask for. `mine` narrows to the caller's own, for the "what am I working on"
+   * list.
+   */
+  listReportDocuments(opts?: { jobId?: string; projectId?: number; mine?: boolean }): Promise<ReportDocument[]>;
+  getReportDocument(id: string): Promise<ReportDocument | null>;
+  /** User and above. `templateId` records what it was copied from, for the trail. */
+  createReportDocument(input: NewReportDocument): Promise<ReportDocument>;
+  /** Partial, for the same reason as the template one. */
+  updateReportDocument(id: string, patch: ReportDocumentPatch): Promise<ReportDocument>;
+  /** The author, or admin and above. */
+  deleteReportDocument(id: string): Promise<void>;
 }
 
 export type RepositoryMethod = Exclude<keyof Repository, "name" | "wired">;
@@ -938,7 +979,13 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "getReportTemplate",
   "createReportTemplate",
   "updateReportTemplate",
-  "deleteReportTemplate"
+  "approveReportTemplate",
+  "deleteReportTemplate",
+  "listReportDocuments",
+  "getReportDocument",
+  "createReportDocument",
+  "updateReportDocument",
+  "deleteReportDocument"
 ];
 
 /** Human labels for the wiring checklist on the Status page. */
@@ -1131,5 +1178,11 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   getReportTemplate: "report_templates",
   createReportTemplate: "report_templates",
   updateReportTemplate: "report_templates",
-  deleteReportTemplate: "report_templates"
+  approveReportTemplate: "report_templates",
+  deleteReportTemplate: "report_templates",
+  listReportDocuments: "report_documents",
+  getReportDocument: "report_documents",
+  createReportDocument: "report_documents",
+  updateReportDocument: "report_documents",
+  deleteReportDocument: "report_documents"
 };

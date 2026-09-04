@@ -57,4 +57,4 @@ export { default as RichTextEditor, sanitizeHtml } from './components/RichTextEd
 // brand looks like, and where a template is kept.
 export { LOFTY_WIDGETS, LOFTY_GROUPS, LOFTY_SEEDS } from './adapters/lofty/widgets.js';
 export { LOFTY_THEME, LOFTY_THEME_QUIET, LOFTY_THEME_SPECS } from './adapters/lofty/theme.js';
-export { createRepositoryTemplateStore } from './adapters/lofty/store.js';
+export { createLibraryStore, createDocumentStore } from './adapters/lofty/store.js';

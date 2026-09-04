@@ -597,27 +597,82 @@ BEGIN
     RAISE WARNING 'FAIL: an offer naming no company and no contact was accepted';
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  maintenance_assignments_names_somebody rejected an offer to nobody';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  maintenance_assignments_names_somebody)', SQLERRM; END;
-  -- 0094: a template needs a name, and a layout the builder can open. The widgets probe
-  -- is the one that matters: `jsonb_typeof(x -> 'widgets')` on a layout with no widgets
-  -- key is NULL, and a CHECK treats NULL as a pass — the first version of that constraint
-  -- accepted this row, which is the one that opens the builder as a blank screen.
+  -- 0094: a library entry needs a name, a known kind, a layout the builder can open,
+  -- and a team exactly when it is team-scoped. The widgets probe is the one that matters:
+  -- `jsonb_typeof(x -> 'widgets')` on a layout with no widgets key is NULL, and a CHECK
+  -- treats NULL as a pass — the first version of that constraint accepted this row,
+  -- which is the one that opens the builder as a blank screen.
   BEGIN
     INSERT INTO report_templates (report_template_name) VALUES ('   ');
-    RAISE WARNING 'FAIL: a blank report template name was accepted';
+    RAISE WARNING 'FAIL: a blank library entry name was accepted';
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  report_templates_name_is_not_blank rejected a blank name';
-    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  report_templates_name_is_not_blank)', SQLERRM; END;
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (report_templates_name_is_not_blank)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO report_templates (report_template_name, report_template_kind)
+    VALUES ('Constraint probe 0094', 'fragment');
+    RAISE WARNING 'FAIL: an unknown library entry kind was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  report_templates_kind_is_known rejected "fragment"';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (report_templates_kind_is_known)', SQLERRM; END;
 
   BEGIN
     INSERT INTO report_templates (report_template_name, report_template_layout)
     VALUES ('Constraint probe 0094', '{"widgets": {}}'::jsonb);
     RAISE WARNING 'FAIL: a layout whose widgets are an object was accepted';
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  report_templates_layout_has_widgets rejected a non-array widgets key';
-    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  report_templates_layout_has_widgets rejected an object)', SQLERRM; END;
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (report_templates_layout_has_widgets, object)', SQLERRM; END;
 
   BEGIN
     INSERT INTO report_templates (report_template_name, report_template_layout)
     VALUES ('Constraint probe 0094', '{"page": {"pageSize": "a4"}}'::jsonb);
     RAISE WARNING 'FAIL: a layout with no widgets key was accepted';
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  report_templates_layout_has_widgets rejected a missing widgets key';
-    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  report_templates_layout_has_widgets rejected a missing key)', SQLERRM; END;
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (report_templates_layout_has_widgets, missing)', SQLERRM; END;
+
+  -- A team-scoped entry naming no team is invisible to everybody, which is worse than
+  -- refused; and a global entry carrying a team is a lie about who it is for.
+  BEGIN
+    INSERT INTO report_templates (report_template_name, report_template_scope)
+    VALUES ('Constraint probe 0094', 'team');
+    RAISE WARNING 'FAIL: a team-scoped entry naming no team was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  report_templates_team_scope_names_a_team rejected a team scope with no team';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (team scope, no team)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO report_templates (report_template_name, report_template_scope, team_id)
+    VALUES ('Constraint probe 0094', 'global', 'design');
+    RAISE WARNING 'FAIL: a global entry carrying a team was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  report_templates_team_scope_names_a_team rejected a global entry with a team';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (global scope with a team)', SQLERRM; END;
+
+  -- Half an approval cannot answer "who signed this off".
+  BEGIN
+    INSERT INTO report_templates (report_template_name, report_template_approved_at)
+    VALUES ('Constraint probe 0094', now());
+    RAISE WARNING 'FAIL: an approval with no approver was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  report_templates_approval_is_a_pair rejected a date with no approver';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (approval pair)', SQLERRM; END;
+
+  -- 0094: a document is about at most one record, and a share link always ends.
+  BEGIN
+    INSERT INTO report_documents (report_document_title, job_id, project_id)
+    VALUES ('Constraint probe 0094', '9999-999', 9999);
+    RAISE WARNING 'FAIL: a document about both a job and a project was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  report_documents_is_about_at_most_one_record rejected a document with two parents';
+    WHEN foreign_key_violation THEN RAISE WARNING 'FAIL: the two-parent check did not fire before the foreign keys';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (two parents)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO report_documents (report_document_title, report_document_share_token)
+    VALUES ('Constraint probe 0094', 'tok_constraint_probe');
+    RAISE WARNING 'FAIL: a share token with no expiry was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  report_documents_share_is_a_pair rejected a link that never ends';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (share pair)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO report_documents (report_document_title, report_document_share_password_hash)
+    VALUES ('Constraint probe 0094', 'notahash');
+    RAISE WARNING 'FAIL: a share password with no share was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  report_documents_password_needs_a_share rejected a password protecting nothing';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (password without a share)', SQLERRM; END;
 END $$;

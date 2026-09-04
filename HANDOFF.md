@@ -25,79 +25,83 @@ Last updated: 2026-09-04.
 
 ---
 
-## Session of 2026-09-04 — Tools, and the report Template Builder
+## Session of 2026-09-04 — Tools: the template library and the documents made from it
 
-Amber: *"add in the report builder module from amberbeaumont/modules to a new section in
-the app called tools"*, under a sidebar page **Tools** with a **Template Builder** tab —
-"there will be multiple built in the future".
+Amber asked for the report builder from `amberbeaumont/modules` as a **Tools** section
+with a **Template Builder** tab, then set out what it has to do. The spec is in
+`schema-plan.md` → *4 September*, quoted rather than paraphrased, because it is the
+design.
 
-**The section.** `/tools/:section`, one tab, built as a TabList from the start because the
-second tab is then one line rather than a change of every URL. Tools is a third kind of
-destination: Projects, Jobs, Maintenance, Reports and Contacts are the work, Setup is how
-the app is wired, and this is what you *use* to make something.
+**One correction worth carrying forward: `amberbeaumont/modules` is a generic template
+repo and nothing Lofty goes in it.** Every Lofty requirement lives here. The only change
+that went to `modules` is two integration findings written app-agnostically
+([modules#2](https://github.com/amberbeaumont/modules/pull/2)) — no brand, no jobs, no
+projects, and the commit message and PR body were rewritten to strip the references I had
+left in them the first time.
 
-**The module is vendored, not installed.** `app/src/features/reports/` holds
-`packages/report-builder/src` from `amberbeaumont/modules` at 1.0.0, with the Lofty
-adapters beside it. `app/src/features/reports/README.md` lists every deviation and how to
-re-sync — read that before touching anything under `core/` or `components/`.
+### Three things, and the second table is the one the spec forces
 
-**One new table, `report_templates` (0094).** Reasoning in `schema-plan.md` → *4 September*.
-A template holds the question ("the jobs table grouped by stage"), never the answer, so
-one built in September renders March's jobs in March. Everything goes through the
-repository seam; no component here holds a Supabase client.
+| | |
+|---|---|
+| **Documents** | what somebody made and is sending. Theirs to edit. |
+| **Templates** | the layouts a document starts from. |
+| **Sections** | fragments dropped into a template and resolved live, so fixing one fixes every template using it. |
 
-**Nine blocks**, in four palette groups: headline numbers, a chart, the jobs table, the
-jobs board, needs-attention, the projects table, one named project, team workload, people,
-and process health. Every one returns a callout rather than an empty grid when it has
-nothing, which matters right now because Phase B has not run and every block is in that
-state.
+A document is a **copy**, not a view. Amber: *"a user may take an existing template and
+modify it for a particular instance eg sending a letter and they need to change the
+wording"*. If that edit wrote back to the template, the next person would inherit one
+letter's wording, silently, because the template would still be called what it was called.
 
-### Tailwind is in the build, and only for this folder
+### The sign-off is the gate; the write floor is `user`
 
-The module ships Tailwind classes; the app is Vibe and its own CSS. Rather than restyle
-two thousand lines and own a merge on every re-sync, `tailwind.config.js` scans
-`src/features/reports/**` and nothing else, with `preflight: false` so no global reset
-lands on Vibe. What preflight would have provided is in
-`src/features/reports/reports.css`, scoped to `.nokey` — the class both of the module's
-portalled roots carry — and every selector is wrapped in `:where()`.
+Anyone at `user` and above makes documents and proposes templates and sections. A manager
+signs a proposal into the library. Until then it is the author's draft and **nobody else
+can see it** — the SELECT policy, not the screen. An **approved** entry is no longer its
+author's to edit, and a manager-scoped one is not readable below manager.
 
-That last part is the bit worth remembering. Written plainly, `.nokey h1` is (0,1,1) and
-beats `.text-2xl` at (0,1,0), so the reset won every argument: the document title rendered
-at body size and every palette card came out flush with no border. `@layer base` does not
-fix it — Tailwind v3's `@layer` is a build-time ordering hint, not a real cascade layer.
-`:where()` contributes zero specificity, which is how preflight itself stays out of the
-way. Borders needed `border-style: solid` in the same rule for the same reason: Tailwind's
-`border` sets a width only, and the browser's default style of `none` draws nothing.
+Two independent mechanisms stop a user approving their own template, and I only know that
+because disabling one did not do it: the trigger, and the UPDATE policy's `WITH CHECK`.
+
+### Properties, and sections
+
+`recordProperties` reads `property_values` for the job or project the **document** is
+about, so one template renders 1042-001's properties on 1042-001 and 1043-002's on
+1043-002 with nobody editing it. It formats through `data/propertyFormat.ts` — lifted out
+of `PropertyField.tsx` so there is still one implementation and a report cannot render a
+pour date differently from the drawer.
+
+`librarySection` expands a saved section at render time. Its expander carries a depth
+counter: a section pointing at itself is two clicks to build, and without the counter the
+stack blows and the reader gets "this block failed to render".
 
 ### What was checked
 
-- `npm run check:report-widgets` — 62 assertions in plain Node, no browser: every block
-  resolves against a full and an empty context, empty data is a sentence not an empty
-  grid, **every resolver reads `ctx` rather than a copy**, author prompts vanish in an
-  export, a dead reference asks to be re-picked, and an average over no jobs is an em dash
-  rather than zero. Each one watched failing under a deliberate mutation.
-- `app/supabase/verify/check.sh` — green. Three new constraint probes, a behaviour check
-  for the touch trigger, and RLS probes for read/write/delete on the new table, each
-  watched failing with the matching policy widened.
-- `npm run responsive` — 120 of 120, `/tools/template-builder` included.
-- The builder driven in Chromium: palette, drag chrome, settings panel, seeded draft,
-  Preview & Export, and the Lofty theme with the wordmark on the document.
+- `npm run check:report-widgets` — **80 assertions**, plain Node, no browser. Every block
+  resolves against a full and an empty context; empty data is a sentence; **every
+  resolver reads `ctx` rather than a copy**; properties format the way the drawer formats
+  them; a section inside itself terminates and says why. Each watched failing under a
+  deliberate mutation.
+- `app/supabase/verify/check.sh` — green, **75 constraint checks**. Nineteen RLS probes
+  covering the whole sign-off model, each watched failing with the matching policy or
+  trigger widened.
+- `npm run responsive` 120/120 · build, typecheck, lint clean.
+- Driven in Chromium: the two-panel screen, and the builder with a library section
+  expanding into a properties block resolved against the document's own job.
 
 ### Still open
 
-- **Nobody has opened this against the real database.** The store is proved through the
-  repository seam and the policies are proved in `verify/`, but no template has been saved
-  from a browser to Supabase. First thing to do with a real session.
-- **Who may build a template** is a guess: manager to write, admin to delete. Amber's call;
-  one word in two policies either way.
-- **Every block is in its empty state until Phase B lands.** That is correct, not broken,
-  and the copy says so — but the shapes worth looking at after the import are the grouped
-  jobs table and the stage board.
-- **No share links.** Deliberate: an anonymous read path around RLS is the one part of
-  that module with real security consequences, and nothing has asked for it.
-- **Word export pulls a 380 kB chunk** the first time somebody clicks it. `docx` is a new
-  dependency, imported dynamically so it stays out of the main bundle — the app's own
-  Excel/Word/PDF writers are untouched and still hand-written.
+- **Share links are the one requirement not live.** The columns exist and nothing writes
+  them; `app/supabase/functions/report-share/` is written and **not deployed**, with its
+  allowed origins and its viewer context deliberately empty so an accidental deploy
+  achieves nothing. It waits on two answers that are Lofty's: which origins may open a
+  link, and what somebody outside Lofty may see of a job. Read that folder's README first.
+- **Amber referred to screenshots for the share behaviour and they did not come through.**
+  What is built assumes the module's own Share panel — a revocable link with a mandatory
+  expiry and an optional password.
+- **Nothing has been saved from a browser to the real database.** The stores are proved
+  through the repository seam and the policies are proved in `verify/`; the round trip
+  between them is not.
+- **Every data block is in its empty state until Phase B lands.** Correct, not broken.
 
 ---
 

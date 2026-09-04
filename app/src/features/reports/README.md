@@ -49,23 +49,44 @@ Everything below is a deviation from the module as published. Anyone re-syncing 
    itself. `index.js` does not re-export `reportToDocxBlob` for the same reason.
 
 3. **`SharedReportPage.jsx` was removed**, along with the module's `adapters/supabase/`
-   and `adapters/memory/`. Public share links are not wired (see below) and the store
-   goes through the app's repository, so all three were dead code that referenced ports
-   nothing implements.
+   and `adapters/memory/`. Public share links are not wired (see below) and the stores go
+   through the app's repository, so all three were dead code referencing ports nothing
+   implements.
 
 4. **One line of copy.** The empty document's hint named the entities of the app the
    module was extracted from ("tools tables, boards, team costs, pipelines and canvas
    sketches"). It names Lofty's now.
 
+## The three adapter files
+
+Everything Lofty-specific is here and nowhere else.
+
+| File | What it decides |
+| --- | --- |
+| `adapters/lofty/widgets.js` | The twelve blocks: what is worth reporting on, and how each one renders when it has nothing |
+| `adapters/lofty/theme.js` | The brand, read off `theme/tokens.css` rather than retyped |
+| `adapters/lofty/store.js` | Two stores — the library and the documents — over the repository seam |
+
+Two blocks are worth knowing about because neither is in the module:
+
+- **`recordProperties`** reads `property_values` for the job or project a document is
+  about, through the app's own `formatValue` (`data/propertyFormat.ts`). It is the same
+  formatter the job drawer uses, deliberately — two implementations would eventually
+  render the same pour date two ways.
+- **`librarySection`** expands a saved section, resolved live. The expander lives in
+  `TemplateBuilderPage` because it needs the engine, and it carries a depth counter: a
+  section holding a Library-section block pointing at itself is two clicks to build and,
+  without the counter, a frozen tab.
+
 ## What is not wired, and what that costs
 
-- **Public share links.** The store implements neither `createShareLink` nor
-  `fetchShared`, so the builder hides its Share panel. A share link is an anonymous read
-  path around RLS served by an edge function with a service-role key; RLS is this app's
-  security boundary, and nothing has asked for one. Wiring it later is a migration (two
-  columns), an edge function and a public route — not a rewrite.
-- **"Save as template."** The row already *is* the template, so the button would be two
-  names for one thing. The builder hides it when `saveTemplate` is absent.
+- **Public share links.** The store implements none of the three share methods, so the
+  builder hides its Share panel. The columns exist (`0094`) and the endpoint is written
+  (`app/supabase/functions/report-share/`) and **not deployed** — read that folder's
+  README before switching it on, because two things in it are deliberately left empty so
+  an accidental deploy achieves nothing. Sending a document out today means exporting it.
+- **`SharedReportPage.jsx`** is not vendored, for the same reason — there is no public
+  route to render it on yet.
 
 ## Re-syncing from `modules`
 

@@ -1,94 +1,117 @@
-// store.js — the module's ReportStore, backed by the app's repository seam.
+// store.js — the module's ReportStore contract, twice, over the repository seam.
 //
-// The package ships a Supabase store that takes a client and talks to a table. This app
+// The package ships a Supabase store that takes a client and talks to one table. This app
 // does not let a component hold a Supabase client (CLAUDE.md: "No component imports the
-// Supabase client… everything reads through the repository seam"), so this store takes
-// the repository instead and speaks `report_templates` through it. Same contract, one
-// layer further back — which is also what lets the whole Template Builder screen render
-// against `createStubRepository()` in a build with no backend, where every write says
-// what it needs rather than pretending to succeed.
+// Supabase client… everything reads through the repository seam"), so these take the
+// repository instead. Same contract, one layer further back — which is also what lets the
+// whole screen render against `createStubRepository()` in a build with no backend, where
+// every write says what it needs rather than pretending to succeed.
 //
-// The contract is `docs/CONTRACTS.md` in the module. What is implemented here:
+// TWO STORES, BECAUSE THERE ARE TWO THINGS
 //
-//   list, get, create, save, remove     required — all present
-//   createShareLink, deleteShareLink    NOT implemented, so the Share panel is hidden
-//   fetchShared                         NOT implemented, so there is no public read path
-//   listTemplates, saveTemplate         NOT implemented — see below
+//   the library store    a template or a section: written once, used many times, and in
+//                        the library only once a manager has signed it off
+//   the document store   one thing somebody made and may edit freely
 //
-// The optional methods are feature-detected by the builder rather than assumed, so their
+// The builder does not know the difference and does not need to: it is handed whichever
+// store matches what is open. That is the whole reason the module's contract is a store
+// rather than a table name.
+//
+// WHAT IS NOT IMPLEMENTED, AND WHY THAT IS THE INTERFACE WORKING
+//
+//   createShareLink / deleteShareLink / fetchShared — absent, so the builder's Share
+//   panel is hidden. Reading a document by token means answering somebody with no
+//   session, which cannot go through RLS; it needs the `report-share` endpoint, and that
+//   is written but not deployed. The moment it is, these three methods are the whole of
+//   the wiring and no component changes.
+//
+// The builder feature-detects every optional method rather than assuming it, so an
 // absence hides a control instead of breaking one.
-//
-// WHY "SAVE AS TEMPLATE" IS NOT WIRED
-//
-//   In the module a report is the thing and a template is a reusable copy of its layout.
-//   Here the row IS the template: Tools → Template Builder builds templates, and a
-//   second "save this template as a template" would be two names for one row. The
-//   builder hides the button when `saveTemplate` is absent, so nothing has to be
-//   removed from its UI to say so.
-//
-// WHY THERE ARE NO SHARE LINKS
-//
-//   A share link is an anonymous read path around RLS, served by an edge function with a
-//   service-role key. Nothing has asked for one, and RLS is this app's security boundary
-//   — so the honest position is not to offer it rather than to offer it half-built. The
-//   module's own guidance says the same thing: "Sharing last. It is optional, and it is
-//   the part with real security consequences."
 
 import { EMPTY_REPORT_TEMPLATE_LAYOUT } from '../../../../data/types';
 import { LOFTY_THEME } from './theme.js';
 
 /**
- * A `report_templates` row as the builder wants it.
+ * A stored row as the builder wants it.
  *
  * `title` and `name` are the same string under two names — the module calls it a title,
- * the database calls it a name — and this is the only place that translation happens.
+ * the library calls it a name — and this is the only place that translation happens.
  *
- * `shareToken` and `hasPassword` are reported as absent rather than omitted: the panel
- * that reads them is hidden anyway, and a defined `false` is a clearer statement than an
- * `undefined` that could be read as "not loaded yet".
+ * The theme is defaulted HERE rather than left to the module, whose own default is
+ * `modern`, a black-and-lime theme that is nobody's brand. Anything that already has a
+ * theme keeps it: switching a saved document's look under its author is worse than an
+ * unbranded default.
  */
-const toRow = (t) => ({
+const withTheme = (layout) => ({
+  theme: LOFTY_THEME.key,
+  ...(layout || EMPTY_REPORT_TEMPLATE_LAYOUT)
+});
+
+const templateToRow = (t) => ({
   id: t.id,
   title: t.name,
-  // The theme is defaulted HERE rather than left to the module, whose own default is
-  // `modern` — a black-and-lime theme that is nobody's brand. A template with no theme
-  // recorded is one built before a theme was chosen, and Lofty's is the right answer for
-  // it. Anything that has a theme keeps it: switching a saved report's look under its
-  // author is worse than an unbranded default.
-  layout: { theme: LOFTY_THEME.key, ...(t.layout || EMPTY_REPORT_TEMPLATE_LAYOUT) },
+  layout: withTheme(t.layout),
   scopeId: null,
   shareToken: null,
   hasPassword: false,
   createdAt: t.createdAt,
   updatedAt: t.updatedAt,
-  // Not part of the module's contract; carried through so the list screen can say who
-  // last changed a template that everybody shares.
+  // Not part of the module's contract; carried through so the screen around the builder
+  // can say whose it is, whether it is in the library yet, and who signed it off.
+  kind: t.kind,
+  scope: t.scope,
+  teamId: t.teamId,
+  description: t.description,
+  approvedAt: t.approvedAt,
+  approvedBy: t.approvedBy,
+  isActive: t.isActive,
   createdBy: t.createdBy,
   updatedBy: t.updatedBy
 });
 
+const documentToRow = (d) => ({
+  id: d.id,
+  title: d.title,
+  layout: withTheme(d.layout),
+  scopeId: null,
+  shareToken: d.shareToken,
+  hasPassword: d.hasSharePassword,
+  createdAt: d.createdAt,
+  updatedAt: d.updatedAt,
+  templateId: d.templateId,
+  jobId: d.jobId,
+  projectId: d.projectId,
+  shareExpiresAt: d.shareExpiresAt,
+  createdBy: d.createdBy,
+  updatedBy: d.updatedBy
+});
+
 /**
+ * The library: templates and sections.
+ *
  * @param {object} repo the app repository (`useRepository()`)
+ * @param {'template'|'section'} kind which half of the library this store is over
  */
-export function createRepositoryTemplateStore(repo) {
+export function createLibraryStore(repo, kind = 'template') {
   return {
     async list() {
-      return (await repo.listReportTemplates()).map(toRow);
+      return (await repo.listReportTemplates({ kind })).map(templateToRow);
     },
 
     async get(id) {
       const row = await repo.getReportTemplate(id);
       // The contract says get() throws when the row is missing, and the builder relies
-      // on that: a null here would render an empty document over somebody's deleted
+      // on it: a null here would render an empty document over somebody's deleted
       // template and autosave the emptiness back.
-      if (!row) throw new Error('That template no longer exists.');
-      return toRow(row);
+      if (!row) throw new Error('That is no longer in the library.');
+      return templateToRow(row);
     },
 
-    async create({ title = 'Untitled template', layout = { widgets: [] } } = {}) {
-      return toRow(await repo.createReportTemplate({
+    async create({ title = 'Untitled', layout = { widgets: [] } } = {}) {
+      return templateToRow(await repo.createReportTemplate({
+        kind,
         name: title,
-        layout: { theme: LOFTY_THEME.key, ...layout }
+        layout: withTheme(layout)
       }));
     },
 
@@ -99,12 +122,78 @@ export function createRepositoryTemplateStore(repo) {
       const next = {};
       if (patch.title !== undefined) next.name = patch.title;
       if (patch.layout !== undefined) next.layout = patch.layout;
-      return toRow(await repo.updateReportTemplate(id, next));
+      return templateToRow(await repo.updateReportTemplate(id, next));
     },
 
     async remove(id) {
       await repo.deleteReportTemplate(id);
       return { ok: true };
+    }
+  };
+}
+
+/**
+ * The documents made from the library.
+ *
+ * @param {object} repo
+ * @param {object} [subject] what a NEW document is about — { jobId } or { projectId }.
+ *   Only used by create(); an existing document carries its own.
+ */
+export function createDocumentStore(repo, subject = {}) {
+  return {
+    async list() {
+      return (await repo.listReportDocuments()).map(documentToRow);
+    },
+
+    async get(id) {
+      const row = await repo.getReportDocument(id);
+      if (!row) throw new Error('That document no longer exists.');
+      return documentToRow(row);
+    },
+
+    async create({ title = 'Untitled document', layout = { widgets: [] }, templateId = null } = {}) {
+      return documentToRow(await repo.createReportDocument({
+        title,
+        layout: withTheme(layout),
+        templateId,
+        jobId: subject.jobId ?? null,
+        projectId: subject.projectId ?? null
+      }));
+    },
+
+    async save(id, patch) {
+      const next = {};
+      if (patch.title !== undefined) next.title = patch.title;
+      if (patch.layout !== undefined) next.layout = patch.layout;
+      return documentToRow(await repo.updateReportDocument(id, next));
+    },
+
+    async remove(id) {
+      await repo.deleteReportDocument(id);
+      return { ok: true };
+    },
+
+    /**
+     * "Save as template" — the builder's own button, and it lands exactly where Amber
+     * asked it to: *"any user and above can create a template but a manager and above
+     * must approve it before it is saved as a template in the template library"*.
+     *
+     * So this writes a `report_templates` row and the database decides what happens
+     * next: a manager's proposal is approved by existing, and everybody else's waits
+     * where only they can see it. The builder's own copy already tells the author that
+     * references get re-picked when the layout is reused elsewhere; what it cannot know
+     * is the sign-off, so the screen says that part.
+     *
+     * `engine.remapIds` has already given the widgets fresh ids by the time this is
+     * called, so the new template shares no block id with the document it came from.
+     */
+    async saveTemplate({ name, type = 'template', data }) {
+      const kind = type === 'section' ? 'section' : 'template';
+      return await repo.createReportTemplate({
+        kind,
+        name,
+        layout: withTheme({ widgets: data?.widgets || [] })
+      });
     }
   };
 }

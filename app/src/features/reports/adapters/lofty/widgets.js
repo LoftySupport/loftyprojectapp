@@ -30,9 +30,15 @@ import {
   PROJECT_TYPE_LABELS,
   RECORD_STATUS_LABELS
 } from '../../../../data/types';
+// The app's own formatter, not a second one. A report and the job drawer rendering the
+// same pour date differently is the kind of disagreement nobody notices until a client
+// does — so there is one implementation and both read it.
+import { formatValue, hasValue } from '../../../../data/propertyFormat';
 
 /** Palette order. Core's text blocks land in 'Text & layout'. */
-export const LOFTY_GROUPS = ['Text & layout', 'Portfolio', 'Jobs', 'Projects', 'People'];
+export const LOFTY_GROUPS = [
+  'Text & layout', 'Library', 'Job & project', 'Portfolio', 'Jobs', 'Projects', 'People'
+];
 
 // ─── Reading the context ─────────────────────────────────────────────
 
@@ -41,6 +47,20 @@ const projectsOf = (ctx) => ctx.projects || [];
 const teamsOf = (ctx) => ctx.teams || [];
 const peopleOf = (ctx) => ctx.people || [];
 const stagesOf = (ctx) => ctx.stageNames || [];
+const defsOf = (ctx) => ctx.propertyDefs || [];
+const valuesOf = (ctx) => ctx.propertyValues || [];
+const optionsOf = (ctx) => ctx.propertyOptions || [];
+/** Library sections, already narrowed to the approved ones this person may see. */
+const sectionsOf = (ctx) => ctx.sections || [];
+/**
+ * What the document being built is ABOUT, or null on a template.
+ *
+ * A template has no subject — it is written once and used on many records — so a
+ * property block set to "the record this document is about" is a question with no answer
+ * until somebody makes a document from it. The block says exactly that rather than
+ * rendering blank.
+ */
+const subjectOf = (ctx) => ctx.subject || null;
 
 /** Active teams only, in display order — the same set every picker in the app offers. */
 const activeTeams = (ctx) => teamsOf(ctx).filter(t => t.isActive).sort((a, b) => a.position - b.position);
@@ -173,6 +193,181 @@ const CHART_METRICS = [
 // ─── The widgets ─────────────────────────────────────────────────────
 
 export const LOFTY_WIDGETS = {
+  // ── A saved section, dropped in and resolved live ───────────────────
+  //
+  // Amber, 4 September: "any user and above can create a reusable section in a
+  // template. To add it to the library it needs to be approved by a manager."
+  //
+  // A section is a BLOCK rather than a paste, and that is the whole design. The
+  // alternative — copying the section's widgets into the layout when it is inserted —
+  // would mean fixing a typo in a section leaves every template that used it still
+  // carrying the typo. This way the section is resolved every time, so correcting it
+  // once corrects it everywhere, and the module needed no change to allow it: a section
+  // is simply a widget whose resolver expands other widgets.
+  librarySection: {
+    label: 'Library section',
+    group: 'Library',
+    hint: 'A saved section — it updates everywhere when somebody edits the section',
+    defaults: (ctx) => ({ sectionId: sectionsOf(ctx)[0]?.id || null }),
+    scopedOptions: ['sectionId'],
+    settings: [{
+      key: 'sectionId', type: 'select', label: 'Which section',
+      emptyHint: 'No sections have been approved into the library yet.',
+      options: (ctx) => sectionsOf(ctx).map(sec => ({ value: sec.id, label: sec.name }))
+    }],
+    resolve: (o, ctx, h) => {
+      if (!o.sectionId) {
+        return h.forExport ? [] : [helpers.info('Choose a section in this block’s settings.')];
+      }
+      const section = sectionsOf(ctx).find(sec => sec.id === o.sectionId);
+      if (!section) {
+        return [helpers.staleRef('That section is not in the library any more. Pick another one.')];
+      }
+      const expand = ctx.expandSection;
+      // The expander is supplied by the screen, because it needs the engine and the
+      // engine is not part of ctx. Without it this block cannot render, and saying so
+      // beats rendering the section's name and pretending that was the content.
+      if (typeof expand !== 'function') {
+        return [helpers.warn(`“${section.name}” cannot be expanded here.`)];
+      }
+      const blocks = expand(section, h);
+      if (!blocks.length) {
+        return [helpers.info(`“${section.name}” is empty — nothing has been added to it yet.`)];
+      }
+      return blocks;
+    }
+  },
+
+  // ── The properties recorded on a job or a project ───────────────────
+  //
+  // Amber, 4 September: "the builder will be able to bring in properties from the
+  // job/project", and the library will "embed a job/project/report which pulls in the
+  // properties selected for a job/project".
+  //
+  // Which properties come back is RLS's answer, not this block's: a restricted property
+  // the reader may not see never arrives in ctx, so it cannot be put into a document by
+  // choosing it here. That is the reason this reads `ctx.propertyValues` rather than
+  // asking for a record's values by id.
+  recordProperties: {
+    label: 'Record properties',
+    group: 'Job & project',
+    hint: 'Values captured on a job or project — pick the record and which fields',
+    defaults: () => ({ source: 'document', jobId: null, projectId: null, propertyKeys: [], showBlanks: false }),
+    scopedOptions: ['jobId', 'projectId'],
+    compactable: true,
+    settings: [
+      {
+        key: 'source', type: 'select', label: 'Which record', allowEmpty: false,
+        hint: 'Leave it on the document’s own record and the same block works for every job.',
+        options: [
+          { value: 'document', label: 'The record this document is about' },
+          { value: 'job', label: 'A named job' },
+          { value: 'project', label: 'A named project' }
+        ]
+      },
+      {
+        key: 'jobId', type: 'select', label: 'Which job',
+        visible: (o) => o.source === 'job',
+        emptyHint: 'There are no jobs to choose from yet.',
+        options: (ctx) => jobsOf(ctx).map(j => ({
+          value: j.jobNumber,
+          label: jobAddress(j) ? `${j.jobNumber} — ${jobAddress(j)}` : j.jobNumber
+        }))
+      },
+      {
+        key: 'projectId', type: 'select', label: 'Which project',
+        visible: (o) => o.source === 'project',
+        emptyHint: 'There are no projects to choose from yet.',
+        options: (ctx) => projectsOf(ctx).map(pr => ({
+          value: pr.projectNumber,
+          label: pr.currentAddress ? `${pr.projectNumber} — ${pr.currentAddress}` : pr.projectNumber
+        }))
+      },
+      {
+        key: 'propertyKeys', type: 'multiselect', label: 'Which properties', reorderable: true,
+        emptyMeansAll: true,
+        hint: 'Leave empty for every property recorded on the record. The order you set here is the order they print in.',
+        options: (ctx) => [...defsOf(ctx)]
+          .sort((a, b) => (a.stageName || '').localeCompare(b.stageName || '') || a.position - b.position)
+          .map(d => ({ value: d.key, label: d.stageName ? `${d.label} — ${d.stageName}` : d.label }))
+      },
+      {
+        key: 'showBlanks', type: 'checkbox',
+        label: 'Include properties nobody has filled in',
+        hint: 'Off by default: a document full of em dashes reads as a broken report rather than an incomplete one.'
+      }
+    ],
+    resolve: (o, ctx, h) => {
+      const defs = defsOf(ctx);
+      if (!defs.length) return [helpers.info('No properties are defined yet — Setup → Properties.')];
+
+      // Which record. `document` is the interesting one: it makes the block portable, so
+      // the same template renders 1042-001's properties on 1042-001 and 1043-002's on
+      // 1043-002 without anybody editing it.
+      let jobId = null;
+      let projectId = null;
+      if (o.source === 'job') jobId = o.jobId || null;
+      else if (o.source === 'project') projectId = o.projectId || null;
+      else {
+        const subject = subjectOf(ctx);
+        jobId = subject?.jobId || null;
+        projectId = subject?.projectId != null ? String(subject.projectId) : null;
+      }
+
+      if (!jobId && !projectId) {
+        if (o.source === 'document') {
+          // Not a fault, and not silent in an export either: a template built for one job
+          // and used on none has produced a document about nothing, and the reader should
+          // be told rather than shown a heading over nothing.
+          return h.forExport
+            ? [helpers.warn('This block is set to the document’s own record, and this document is not about a job or a project.')]
+            : [helpers.info('Set this document’s job or project, or point this block at a named record in its settings.')];
+        }
+        return h.forExport ? [] : [helpers.info('Choose a record in this block’s settings.')];
+      }
+
+      const rows = valuesOf(ctx).filter(v =>
+        jobId ? v.jobId === jobId : String(v.projectId) === String(projectId)
+      );
+      const label = jobId ? `job ${jobId}` : `project ${projectId}`;
+
+      const byKey = new Map(defs.map(d => [d.key, d]));
+      const valueFor = new Map(rows.map(v => [v.propertyKey, v.value]));
+      const people = peopleOf(ctx).map(pr => ({ id: pr.id, name: pr.fullName }));
+      const optionsFor = (key) => optionsOf(ctx).filter(op => op.propertyKey === key);
+
+      // Chosen order, or the pipeline's when nobody chose.
+      const keys = (o.propertyKeys || []).length
+        ? o.propertyKeys.filter(k => byKey.has(k))
+        : [...defs]
+            .sort((a, b) => (a.stageName || '').localeCompare(b.stageName || '') || a.position - b.position)
+            .map(d => d.key);
+
+      const items = [];
+      for (const key of keys) {
+        const def = byKey.get(key);
+        if (!def) continue;
+        const raw = valueFor.get(key) || null;
+        const filled = raw != null && hasValue(def, raw);
+        if (!filled && !o.showBlanks) continue;
+        items.push({
+          label: def.label,
+          // An em dash, never a zero and never a guess — the same rule the boards follow.
+          value: filled ? (formatValue(def, raw, optionsFor(key), people) || DASH) : DASH
+        });
+      }
+
+      if (!items.length) {
+        return [helpers.info(
+          o.showBlanks
+            ? `No properties are defined for ${label}.`
+            : `Nothing has been recorded against ${label} yet. Tick “Include properties nobody has filled in” to show the empty fields.`
+        )];
+      }
+      return [{ type: 'keyValues', items }];
+    }
+  },
+
   headlineNumbers: {
     label: 'Headline numbers',
     group: 'Portfolio',

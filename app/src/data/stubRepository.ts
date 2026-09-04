@@ -453,14 +453,22 @@ export function createStubRepository(): Repository {
     async deleteProcessRun(): Promise<never> { throw new Error("Removing a process run needs Supabase."); },
     async instantiateProcessTasks(): Promise<never> { throw new Error("Creating a process checklist needs Supabase."); },
 
-    // ---- report templates (0094) ------------------------------------------
-    // Reads answer empty; writes say what they need. A stub that kept templates in
-    // memory would let somebody build one, close the tab and lose it — a fabricated
-    // success, which is the one thing this file exists not to do.
+    // ---- the template library and its documents (0094) --------------------
+    // Reads answer empty; writes say what they need. A stub that kept these in memory
+    // would let somebody build a template, close the tab and lose it — a fabricated
+    // success, which is the one thing this file exists not to do. It also means the
+    // whole screen still renders with no backend, around the empty state it will have
+    // on a fresh tenant anyway.
     async listReportTemplates() { return []; },
     async getReportTemplate() { return null; },
-    async createReportTemplate(): Promise<never> { throw new Error("Saving a report template needs Supabase."); },
-    async updateReportTemplate(): Promise<never> { throw new Error("Saving a report template needs Supabase."); },
-    async deleteReportTemplate(): Promise<never> { throw new Error("Removing a report template needs Supabase."); }
+    async createReportTemplate(): Promise<never> { throw new Error("Saving a template needs Supabase."); },
+    async updateReportTemplate(): Promise<never> { throw new Error("Saving a template needs Supabase."); },
+    async approveReportTemplate(): Promise<never> { throw new Error("Approving a template needs Supabase."); },
+    async deleteReportTemplate(): Promise<never> { throw new Error("Removing a template needs Supabase."); },
+    async listReportDocuments() { return []; },
+    async getReportDocument() { return null; },
+    async createReportDocument(): Promise<never> { throw new Error("Creating a document needs Supabase."); },
+    async updateReportDocument(): Promise<never> { throw new Error("Saving a document needs Supabase."); },
+    async deleteReportDocument(): Promise<never> { throw new Error("Removing a document needs Supabase."); }
   };
 }

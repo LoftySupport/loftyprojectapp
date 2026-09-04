@@ -1621,37 +1621,95 @@ delete from property_defs where property_def_key in ('probe_margin', 'probe_pour
 delete from property_value_history where property_def_key in ('probe_margin', 'probe_pour', 'probe_team_only');
 update profiles set profile_permission = 'user' where profile_email = 'behaviour-test@lofty.com.au';
 
--- =========================================================== report_templates (0094)
--- A template is company-wide: everybody reads it, a manager writes it, an admin deletes
--- it. Watched failing before it was watched passing — with "managers write
--- report_templates" widened to `with check (true)`, the first probe below reported a
--- `user` writing a template the whole company would then send out.
-\echo '=== report templates: everyone reads, managers write, admins delete ==='
+-- ============================================ the library and its documents (0094)
+--
+-- Amber, 4 September, set the floor at `user` throughout and put the gate on the
+-- SIGN-OFF instead: anyone may propose a template or a section, a manager signs it into
+-- the library, and until then it is the author's own draft that nobody else can see.
+--
+-- So these probes are about four things a permission floor cannot express:
+--   * an unapproved draft is invisible to everybody but its author
+--   * a user cannot sign one off, their own included
+--   * an APPROVED entry is no longer its author's to edit
+--   * a manager-scoped entry is not readable below manager
+--
+-- Each was watched failing with the matching policy or the trigger widened before it was
+-- watched passing.
+\echo '=== the library: anyone proposes, a manager signs off, an approved entry is the library''s ==='
+
+-- Somebody else's draft and somebody else's approved entry, planted as the OWNER so the
+-- probe below is asking "can this person see a row they did not write", which is the
+-- whole question. current_profile_id() is null here, so the approval guard passes
+-- through and the values written are the values that stick.
+insert into profiles (profile_first_name, profile_last_name, profile_email, profile_permission)
+values ('Someone','Else','rls-other@lofty.com.au','user')
+on conflict (profile_email) do nothing;
+insert into report_templates (report_template_name, report_template_kind, report_template_created_by)
+select '__rls__ somebody else''s draft', 'template', profile_id
+  from profiles where profile_email = 'rls-other@lofty.com.au';
+insert into report_templates (report_template_name, report_template_approved_at, report_template_approved_by, report_template_created_by)
+select '__rls__ in the library', now(), profile_id, profile_id
+  from profiles where profile_email = 'rls-other@lofty.com.au';
+-- A manager-only entry, to prove the scope band.
+insert into report_templates (report_template_name, report_template_scope, report_template_approved_at, report_template_approved_by)
+select '__rls__ managers only', 'managers', now(), profile_id
+  from profiles where profile_email = 'rls-other@lofty.com.au';
+
 update profiles set profile_permission = 'user' where profile_email = 'behaviour-test@lofty.com.au';
--- Planted as the owner, so the read probe has something to find that the reader did not
--- write themselves.
-insert into report_templates (report_template_name, report_template_layout)
-values ('__rls_probe__ template', '{"widgets": []}'::jsonb);
 set role authenticated;
 set request.jwt.claim.sub = :'uid';
 do $$
-declare n integer;
+declare n integer; mine uuid;
 begin
-  select count(*) into n from report_templates where report_template_name = '__rls_probe__ template';
-  if n = 1 then raise notice 'ok  a user reads a template somebody else built';
-  else raise warning 'FAIL: a user could not read a report template'; end if;
+  -- The approved one is readable; the other person's DRAFT is not. If the read policy
+  -- ever loses its approval clause, the second half of this reports it.
+  select count(*) into n from report_templates where report_template_name = '__rls__ in the library';
+  if n = 1 then raise notice 'ok  a user reads an approved library entry';
+  else raise warning 'FAIL: a user could not read an approved library entry'; end if;
 
+  select count(*) into n from report_templates where report_template_name = '__rls__ somebody else''s draft';
+  if n = 0 then raise notice 'ok  a user cannot see somebody else''s unapproved draft';
+  else raise warning 'FAIL: a user read another person''s draft'; end if;
+
+  select count(*) into n from report_templates where report_template_name = '__rls__ managers only';
+  if n = 0 then raise notice 'ok  a manager-scoped entry is invisible below manager';
+  else raise warning 'FAIL: a user read a manager-scoped template'; end if;
+
+  -- Proposing is allowed…
   begin
-    insert into report_templates (report_template_name) values ('__rls_probe__ by a user');
-    raise warning 'FAIL: a user created a company-wide report template';
-  exception when insufficient_privilege then raise notice 'ok  a user cannot create a report template';
-    when others then raise warning 'FAIL: unexpected creating as a user (%)', sqlerrm; end;
+    insert into report_templates (report_template_name, report_template_kind)
+    values ('__rls__ a user''s proposal', 'section')
+    returning report_template_id into mine;
+    raise notice 'ok  a user proposes a section';
+  exception when others then raise warning 'FAIL: a user could not propose a section (%)', sqlerrm; end;
 
-  update report_templates set report_template_name = '__rls_probe__ renamed by a user'
-   where report_template_name = '__rls_probe__ template';
+  -- …and it lands unapproved, whatever the client sent. The trigger decides this, not
+  -- the payload: watched with the guard's manager branch removed, when the same insert
+  -- came back already in the library.
+  if (select report_template_approved_at from report_templates where report_template_id = mine) is null then
+    raise notice 'ok  a user''s proposal waits for a manager';
+  else raise warning 'FAIL: a user''s proposal approved itself'; end if;
+
+  -- Their own draft is theirs to see and to edit.
+  update report_templates set report_template_layout = '{"widgets": [{"id":"w","kind":"heading","options":{}}]}'::jsonb
+   where report_template_id = mine;
   get diagnostics n = row_count;
-  if n = 0 then raise notice 'ok  a user cannot rename a report template';
-  else raise warning 'FAIL: a user renamed a report template'; end if;
+  if n = 1 then raise notice 'ok  a user edits their own draft';
+  else raise warning 'FAIL: a user could not edit their own draft'; end if;
+
+  -- Signing it off is not.
+  begin
+    update report_templates set report_template_approved_at = now() where report_template_id = mine;
+    raise warning 'FAIL: a user signed off their own template';
+  exception when insufficient_privilege then raise notice 'ok  a user cannot sign off their own template';
+    when others then raise warning 'FAIL: unexpected on self sign-off (%)', sqlerrm; end;
+
+  -- Nor is editing something already in the library.
+  update report_templates set report_template_name = '__rls__ renamed by a user'
+   where report_template_name = '__rls__ in the library';
+  get diagnostics n = row_count;
+  if n = 0 then raise notice 'ok  a user cannot edit an approved library entry';
+  else raise warning 'FAIL: a user edited an approved library entry'; end if;
 end $$;
 reset role;
 reset request.jwt.claim.sub;
@@ -1660,28 +1718,80 @@ update profiles set profile_permission = 'manager' where profile_email = 'behavi
 set role authenticated;
 set request.jwt.claim.sub = :'uid';
 do $$
-declare n integer;
+declare n integer; approver uuid; who uuid;
 begin
-  begin
-    insert into report_templates (report_template_name, report_template_layout)
-    values ('__rls_probe__ by a manager', '{"widgets": []}'::jsonb);
-    raise notice 'ok  a manager creates a report template';
-  exception when others then raise warning 'FAIL: a manager could not create a report template (%)', sqlerrm; end;
+  -- A manager sees the manager-scoped entry the user could not.
+  select count(*) into n from report_templates where report_template_name = '__rls__ managers only';
+  if n = 1 then raise notice 'ok  a manager reads a manager-scoped entry';
+  else raise warning 'FAIL: a manager could not read a manager-scoped entry'; end if;
 
-  update report_templates
-     set report_template_layout = '{"widgets": [{"id": "w1", "kind": "heading", "options": {}}]}'::jsonb
-   where report_template_name = '__rls_probe__ template';
+  -- Signing off stamps the manager from the SESSION. Watched with the guard's
+  -- coalesce(me, ...) replaced by the submitted value: the row came back approved by
+  -- whoever the client named.
+  update report_templates set report_template_approved_at = now()
+   where report_template_name = '__rls__ a user''s proposal';
   get diagnostics n = row_count;
-  if n = 1 then raise notice 'ok  a manager edits a report template';
-  else raise warning 'FAIL: a manager could not edit a report template'; end if;
+  select report_template_approved_by into approver from report_templates
+   where report_template_name = '__rls__ a user''s proposal';
+  select profile_id into who from profiles where profile_email = 'behaviour-test@lofty.com.au';
+  if n = 1 and approver = who then raise notice 'ok  a manager signs a proposal into the library, and is named as the approver';
+  else raise warning 'FAIL: sign-off wrote % rows, approver %', n, approver; end if;
 
-  -- Deletion is the tighter half, and separate on purpose: an edit is recoverable by
-  -- editing back, a delete takes the layout with it.
-  delete from report_templates where report_template_name = '__rls_probe__ by a manager';
+  -- A manager writing one approves it by existing — the same rule contacts and companies
+  -- have had since 0082.
+  insert into report_templates (report_template_name) values ('__rls__ a manager''s own');
+  if (select report_template_approved_at from report_templates where report_template_name = '__rls__ a manager''s own') is not null then
+    raise notice 'ok  a manager''s own template is in the library on creation';
+  else raise warning 'FAIL: a manager''s template waited for approval'; end if;
+
+  -- Taking a sign-off back is a manager's too, and it puts the entry out of sight again.
+  update report_templates set report_template_approved_at = null, report_template_approved_by = null
+   where report_template_name = '__rls__ a manager''s own';
+  if (select report_template_approved_at from report_templates where report_template_name = '__rls__ a manager''s own') is null then
+    raise notice 'ok  a manager can take a sign-off back';
+  else raise warning 'FAIL: a sign-off could not be withdrawn'; end if;
+end $$;
+reset role;
+reset request.jwt.claim.sub;
+
+\echo '=== documents: a user makes and edits one; deleting somebody else''s is not theirs ==='
+-- Somebody else's document, planted as the owner for the same reason as above.
+insert into report_documents (report_document_title, report_document_created_by)
+select '__rls__ somebody else''s letter', profile_id
+  from profiles where profile_email = 'rls-other@lofty.com.au';
+
+update profiles set profile_permission = 'user' where profile_email = 'behaviour-test@lofty.com.au';
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+do $$
+declare n integer; doc uuid;
+begin
+  insert into report_documents (report_document_title, report_document_layout)
+  values ('__rls__ a user''s letter', '{"widgets": []}'::jsonb)
+  returning report_document_id into doc;
+  raise notice 'ok  a user makes a document';
+
+  update report_documents set report_document_title = '__rls__ a user''s letter, edited'
+   where report_document_id = doc;
   get diagnostics n = row_count;
-  if n = 0 and exists (select 1 from report_templates where report_template_name = '__rls_probe__ by a manager')
-    then raise notice 'ok  a manager cannot delete a report template (the row is still there)';
-  else raise warning 'FAIL: a manager deleted a report template'; end if;
+  if n = 1 then raise notice 'ok  a user edits their own document';
+  else raise warning 'FAIL: a user could not edit their own document'; end if;
+
+  -- A document is internal work product and reads like every other record here.
+  select count(*) into n from report_documents where report_document_title = '__rls__ somebody else''s letter';
+  if n = 1 then raise notice 'ok  a user reads a colleague''s document';
+  else raise warning 'FAIL: a user could not read a colleague''s document'; end if;
+
+  -- Deleting one is not the same as reading it.
+  delete from report_documents where report_document_title = '__rls__ somebody else''s letter';
+  get diagnostics n = row_count;
+  if n = 0 then raise notice 'ok  a user cannot delete a colleague''s document';
+  else raise warning 'FAIL: a user deleted a colleague''s document'; end if;
+
+  delete from report_documents where report_document_id = doc;
+  get diagnostics n = row_count;
+  if n = 1 then raise notice 'ok  a user deletes their own document';
+  else raise warning 'FAIL: a user could not delete their own document'; end if;
 end $$;
 reset role;
 reset request.jwt.claim.sub;
@@ -1692,14 +1802,21 @@ set request.jwt.claim.sub = :'uid';
 do $$
 declare n integer;
 begin
-  delete from report_templates where report_template_name like '__rls_probe__%';
+  delete from report_documents where report_document_title like '__rls__%';
   get diagnostics n = row_count;
-  if n = 2 then raise notice 'ok  an admin deletes report templates';
-  else raise warning 'FAIL: an admin deleted % report templates, expected 2', n; end if;
+  if n >= 1 then raise notice 'ok  an admin deletes anybody''s document';
+  else raise warning 'FAIL: an admin deleted nothing'; end if;
+
+  delete from report_templates where report_template_name like '__rls__%';
+  get diagnostics n = row_count;
+  if n >= 3 then raise notice 'ok  an admin clears the library';
+  else raise warning 'FAIL: an admin deleted % library entries', n; end if;
 end $$;
 reset role;
 reset request.jwt.claim.sub;
 
 -- Left as found.
-delete from report_templates where report_template_name like '__rls_probe__%';
+delete from report_documents where report_document_title like '__rls__%';
+delete from report_templates where report_template_name like '__rls__%';
+delete from profiles where profile_email = 'rls-other@lofty.com.au';
 update profiles set profile_permission = 'user' where profile_email = 'behaviour-test@lofty.com.au';
