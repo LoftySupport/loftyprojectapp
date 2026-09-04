@@ -278,6 +278,29 @@ export function createDocumentStore(
      */
     compile?: (doc: unknown) => Promise<{ report: CompiledReport; theme?: unknown }>;
   }
-): ReportStore;
+): LoftyDocumentStore;
+
+/**
+ * The document store, which accepts more on `create` than the generic `ReportStore` does.
+ *
+ * `templateId` records what the document started from; `jobId` and `projectId` record
+ * what it is ABOUT, per document rather than per store — Amber, 4 September: *"all
+ * documents need to be associated to a job or project"*, and the Tools screen builds one
+ * store and then makes many documents, each for a different record.
+ *
+ * Declared rather than cast at the call site. The page used to write
+ * `as Parameters<typeof documentStore.create>[0]`, which is a cast that says "trust me"
+ * about the very fields most likely to be wrong, and which stopped compiling the moment
+ * a third field was added — the cast was the thing hiding the mismatch, not solving it.
+ */
+export interface LoftyDocumentStore extends ReportStore {
+  create(input?: {
+    title?: string;
+    layout?: ReportLayout;
+    templateId?: string | null;
+    jobId?: string | null;
+    projectId?: number | null;
+  }): Promise<ReportStoreRow>;
+}
 
 export type { ReactNode };

@@ -30,6 +30,38 @@ import { IconEye, IconGripVertical, IconPlus, IconTrash } from './icons.jsx';
 
 const PALETTE_PREFIX = 'palette:';
 
+// ─── The page you drop onto ──────────────────────────────────────────
+//
+// THIS IS A COMPONENT FOR ONE REASON: `useDroppable` has to run BELOW `<DndContext>`.
+//
+// It used to be a `useDroppable` call in ReportBuilder itself — the same component that
+// renders the provider. A hook reads the context of an ANCESTOR, so it saw no DndContext
+// at all, registered with the default no-op store, and never became a drop target.
+//
+// The failure was invisible in the worst way. Dragging a palette card looked completely
+// normal: the card dimmed, the overlay followed the cursor, the cursor changed. Only
+// `over` was permanently `undefined`, so `onDragEnd` took its "dropped outside the
+// document" branch and returned, every time. Reordering existing blocks kept working the
+// whole while, because `useSortable` lives in SortableWidget, which IS a child — so the
+// feature was half-broken in a way that reads as "drag and drop works".
+//
+// Amber, 4 September: *"drag and drop isnt working on the add block to report it only
+// ads by double clicking"*.
+function DocumentSurface({ pageWidth, armed, children }) {
+  const { setNodeRef, isOver } = useDroppable({ id: 'report-doc' });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ maxWidth: pageWidth }}
+      className={`bg-white w-full mx-auto my-6 px-8 py-10 rounded-xl border shadow-sm min-h-[70%] transition-all ${
+        isOver && armed ? 'border-[#00393f] border-dashed' : 'border-neutral-200'
+      }`}
+    >
+      {children}
+    </div>
+  );
+}
+
 // ─── Palette ─────────────────────────────────────────────────────────
 
 function PaletteCard({ kind, meta, onAdd }) {
@@ -100,6 +132,11 @@ function SortableWidget({ widget, engine, ctx, allWidgets, theme, selected, onSe
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       onClick={(e) => { e.stopPropagation(); onSelect(widget.id); }}
+      /* A stable hook for `npm run check:builder-dnd` to count blocks by. The check used
+         to select on a Tailwind class, which ties a test to a styling decision and breaks
+         the day somebody changes the padding. It carries the kind because that costs
+         nothing and makes the DOM readable while debugging. */
+      data-block={widget.kind}
       className={`group relative rounded-lg -mx-3 px-3 py-1.5 border-2 transition-colors cursor-pointer ${
         isDragging ? 'opacity-40' : ''
       } ${selected ? 'border-[#00393f] bg-[#f5f6f8]/60' : 'border-transparent hover:border-[#898A8D]/40'}`}
@@ -394,7 +431,6 @@ export default function ReportBuilder({
   const templateBtnRef = useRef(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
-  const { setNodeRef: setDocRef, isOver: isOverDoc } = useDroppable({ id: 'report-doc' });
 
   // ── Autosave (debounced; flushed on close/unmount) ──
   const stateRef = useRef({ title, widgets, page, themeKey });
@@ -687,11 +723,7 @@ export default function ReportBuilder({
 
           {/* Document */}
           <main className="flex-1 overflow-y-auto overscroll-contain" onClick={() => setSelectedId(null)}>
-            <div
-              ref={setDocRef}
-              style={{ maxWidth: pageWidth }}
-              className={`bg-white w-full mx-auto my-6 px-8 py-10 rounded-xl border shadow-sm min-h-[70%] transition-all ${isOverDoc && activeDrag?.kind ? 'border-[#00393f] border-dashed' : 'border-neutral-200'}`}
-            >
+            <DocumentSurface pageWidth={pageWidth} armed={!!activeDrag?.kind}>
               <h1 className="text-2xl font-bold text-[#00393f] leading-tight border-b-2 border-[#00393f] pb-4 mb-6">{title || 'Untitled report'}</h1>
               {widgets.length === 0 ? (
                 <div className="border-2 border-dashed border-neutral-300 rounded-xl py-16 text-center px-6">
@@ -723,7 +755,7 @@ export default function ReportBuilder({
                   </div>
                 </SortableContext>
               )}
-            </div>
+            </DocumentSurface>
           </main>
 
           {/* Right panel — share panel or block settings */}

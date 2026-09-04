@@ -7,6 +7,7 @@ import { TITLE_TYPE_LABELS, TITLE_TYPES, type TeamId, type TitleType } from "../
 import { StatusPill } from "./RecordCards";
 import { PropertySlots } from "./PropertySlots";
 import { ProcessesPanel } from "./ProcessesPanel";
+import { RecordDocuments } from "./RecordDocuments";
 import { ExpandButton, usePanelExpand } from "./PanelExpand";
 import { useResizablePanel } from "./useResizablePanel";
 import { JOB_MOVE_NOTE, MoveStageControl } from "./MoveStageDialog";
@@ -482,6 +483,12 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
               as such; the stage header counts them. This replaced a Milestones panel of
               disabled checkboxes that had nothing behind it. */}
           <ProcessesPanel target={{ jobId: job.jobNumber }} scope="job" currentStage={job.stage} />
+
+          {/* What has been written ABOUT this job — the progress reports, client letters
+              and maintenance reports made in the Document Builder. Amber, 4 September:
+              *"all documents need to be associated to a job or project and they are
+              listed on that project"*. This is where they are listed. */}
+          <RecordDocuments jobId={job.jobNumber} />
           </>)}
 
           {(!expanded || tab === 1) && (<>

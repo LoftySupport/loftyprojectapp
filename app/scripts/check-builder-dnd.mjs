@@ -1,0 +1,155 @@
+/**
+ * `npm run check:builder-dnd` — can you actually drag a block into a report?
+ *
+ * WHY THIS EXISTS AS ITS OWN CHECK
+ *
+ *   Because the answer was no for a while and nothing said so. `useDroppable` was called
+ *   in ReportBuilder, the same component that renders `<DndContext>` — and a hook reads
+ *   the context of an ANCESTOR, so the document never registered as a drop target.
+ *
+ *   Every other check stayed green. It typechecked, it linted, it built, and it LOOKED
+ *   right: the card dimmed, the drag overlay followed the cursor, the cursor changed to
+ *   a grabbing hand. Only `over` was permanently undefined, so the drop silently did
+ *   nothing. Reordering blocks already in the document kept working the whole time,
+ *   because `useSortable` lives in a child — so the feature read as "drag and drop
+ *   works" to anyone who tried the wrong half of it first.
+ *
+ *   Amber found it, not the suite: *"drag and drop isnt working on the add block to
+ *   report it only ads by double clicking"*.
+ *
+ * It needs a real browser because that is where the bug lived. There is no unit test of
+ * a pure function that would have caught it — the fault was in where a hook was called
+ * relative to a provider, and it only shows up when a pointer moves.
+ *
+ * Chromium comes from LOFTY_CHROMIUM if set, for the same reason responsive-check.mjs
+ * takes it: a container has the browser on disk under a version Playwright's pin does
+ * not know, and "run npx playwright install" is a dead end with no network.
+ */
+import { spawn } from "node:child_process";
+import { createServer } from "node:http";
+import { readFile, rm, mkdtemp } from "node:fs/promises";
+import { createReadStream, statSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, extname, normalize } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const here = fileURLToPath(new URL(".", import.meta.url));
+const run = (cmd, args, opts = {}) =>
+  new Promise((resolve, reject) => {
+    const c = spawn(cmd, args, { stdio: "inherit", ...opts });
+    c.on("exit", code => (code === 0 ? resolve() : reject(new Error(`${cmd} exited ${code}`))));
+  });
+
+let failures = 0;
+const ok = (name, condition, detail = "") => {
+  if (condition) console.log(`  ok   ${name}`);
+  else { failures += 1; console.log(`  FAIL ${name}${detail ? ` — ${detail}` : ""}`); }
+};
+
+const out = await mkdtemp(join(tmpdir(), "lofty-dnd-"));
+let server;
+let browser;
+try {
+  console.log("building the builder on its own…");
+  await run("npx", ["vite", "build",
+    "--config", here + "vite.builder-dnd.ts",
+    "--outDir", out, "--emptyOutDir", "--logLevel", "warn"]);
+
+  const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css",
+                  ".svg": "image/svg+xml", ".png": "image/png", ".json": "application/json",
+                  ".woff2": "font/woff2", ".ico": "image/x-icon" };
+  const page = await readFile(join(out, "scripts", "builder-dnd.html")).catch(
+    () => readFile(join(out, "builder-dnd.html")));
+
+  server = createServer((req, res) => {
+    const path = normalize(decodeURIComponent(new URL(req.url, "http://x").pathname))
+      .replace(/^(\.\.[/\\])+/, "");
+    const file = join(out, path);
+    const ext = extname(file);
+    let isFile = false;
+    if (ext && file.startsWith(out)) {
+      try { isFile = statSync(file).isFile(); } catch { isFile = false; }
+    }
+    if (!isFile) { res.writeHead(200, { "content-type": "text/html" }); return res.end(page); }
+    res.writeHead(200, { "content-type": TYPES[ext] ?? "application/octet-stream" });
+    createReadStream(file).pipe(res);
+  });
+  await new Promise(r => server.listen(0, "127.0.0.1", r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+
+  const { chromium } = await import("playwright");
+  browser = await chromium.launch(
+    process.env.LOFTY_CHROMIUM ? { executablePath: process.env.LOFTY_CHROMIUM } : {}
+  );
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  // Nothing off this machine, for the reason responsive-check.mjs gives: a check that
+  // needs the internet is a check that fails for reasons that are not about the code.
+  await ctx.route("**://fonts.googleapis.com/**", r => r.abort());
+  await ctx.route("**://fonts.gstatic.com/**", r => r.abort());
+  const pg = await ctx.newPage();
+
+  const crashes = [];
+  pg.on("pageerror", e => crashes.push(String(e)));
+
+  await pg.goto(`${base}/`, { waitUntil: "networkidle" });
+  await pg.waitForSelector('[role="dialog"]', { timeout: 20_000 });
+  await pg.waitForTimeout(400);
+
+  const EMPTY = "Drag blocks in from the palette";
+
+  ok("the builder mounts with an empty document",
+    (await pg.getByText(EMPTY).count()) === 1);
+
+  /** Press, move in steps, release. One jump does not drag: dnd-kit's PointerSensor
+   *  activates on movement, and a single teleport from A to B is one event. */
+  const dragIn = async (label) => {
+    const card = pg.locator("aside button", { hasText: label }).first();
+    const from = await card.boundingBox();
+    const onto = await pg.locator("main").first().boundingBox();
+    const tx = onto.x + onto.width / 2;
+    const ty = onto.y + 220;
+    await pg.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await pg.mouse.down();
+    for (let i = 1; i <= 14; i++) {
+      await pg.mouse.move(
+        from.x + from.width / 2 + (tx - from.x - from.width / 2) * i / 14,
+        from.y + from.height / 2 + (ty - from.y - from.height / 2) * i / 14
+      );
+      await pg.waitForTimeout(20);
+    }
+    await pg.mouse.up();
+    await pg.waitForTimeout(500);
+  };
+
+  // THE ONE THAT MATTERS. Broken by moving `useDroppable` back into ReportBuilder,
+  // beside the `<DndContext>` it renders: the drag still animates, and this reports.
+  await dragIn("Text");
+  ok("dragging a block from the palette puts it in the document",
+    (await pg.getByText(EMPTY).count()) === 0,
+    "the empty-state is still showing, so nothing was dropped");
+
+  // A second one, because "the first drop works" and "drops work" are different claims —
+  // the first lands on an empty page, the rest land on a SortableContext.
+  await dragIn("Divider");
+  const blocks = await pg.locator("main [data-block]").count();
+  ok("and a second block lands alongside the first", blocks >= 2, `${blocks} blocks`);
+
+  // Clicking is the other way in, and it is the one Amber fell back to. Broken by
+  // removing `onClick` from PaletteCard.
+  await pg.locator("aside button", { hasText: "QR code" }).first().click();
+  await pg.waitForTimeout(400);
+  const afterClick = await pg.locator("main [data-block]").count();
+  ok("clicking a palette card adds one at the end", afterClick === blocks + 1,
+    `${blocks} → ${afterClick}`);
+
+  ok("nothing threw while doing it", crashes.length === 0, crashes[0]?.slice(0, 200));
+} finally {
+  await browser?.close().catch(() => {});
+  server?.close();
+  await rm(out, { recursive: true, force: true });
+}
+
+console.log(failures === 0
+  ? "\nthe builder accepts blocks: dragged in, and clicked in"
+  : `\n${failures} FAILURE(S)`);
+process.exit(failures === 0 ? 0 : 1);

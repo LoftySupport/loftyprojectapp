@@ -2348,6 +2348,70 @@ code { overflow-wrap: anywhere; }
   grid-template-columns: repeat(auto-fit, minmax(240px, 340px));
   gap: var(--space-12);
 }
+
+/* ── The Document Builder's whole screen ──────────────────────────────────
+   Amber, 4 September: *"I just want the document build to be full screen like the image
+   with the three butons in the middle."*
+
+   No panel, no border, no head. There is nothing on this screen but the choice, so a
+   card sitting inside a bordered panel would be a box inside a box for no reason.
+
+   The height is the viewport less the app chrome above it — the top bar, the page
+   heading and the tab row — so the three land in the middle of what is left rather than
+   in the middle of the whole window, which would put them under the tabs. The floor
+   stops them from being squeezed against the footer on a short laptop screen. */
+.lane-empty {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: max(420px, calc(100vh - 300px));
+  padding: var(--space-24) 0;
+}
+/* STRETCH, NOT CENTRE, and the width is definite.
+   `align-items: center` on the column made the grid shrink-to-fit, and an `auto-fit`
+   grid with no definite width has nothing to fit against — so all three collapsed into
+   one column, stacked down the middle of the page. The grid needs a real width to divide
+   up; the centring is then done by the max-width and the auto margins. */
+.get-started-centred { align-items: stretch; width: 100%; }
+/* Once a library HAS something in it the cards stop being the whole screen and become a
+   band above the list. Same cards, same size, same behaviour — just not vertically
+   centred in a viewport they no longer own. */
+.get-started-inline { margin: 0 0 var(--space-16); }
+.get-started-inline .get-started-card-button { min-height: 104px; }
+.get-started-centred .get-started-grid {
+  width: 100%;
+  max-width: 1064px;
+  margin: 0 auto;
+  justify-content: center;
+}
+
+/* The whole card is the control. A <button>, so it is keyboard-reachable and announces
+   itself — which means undoing the browser's own button styling first. */
+.get-started-card-button {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  /* Cards hold a title, a sentence and nothing else now, so they need a floor of their
+     own — without it the three shrink to the height of their text and stop reading as
+     the three big targets the sketch shows. */
+  min-height: 128px;
+}
+.get-started-card-button:hover:not(:disabled),
+.get-started-card-button:focus-visible:not(:disabled) {
+  border-color: var(--primary-color);
+  background: var(--primary-background-color);
+}
+.get-started-card-button:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+.get-started-card-button:active:not(:disabled) { transform: translateY(1px); }
+/* Greyed rather than hidden. Which of the three are available is itself the answer to
+   "can I clone anything yet", and a card that vanishes cannot answer it. */
+.get-started-card-button:disabled { cursor: not-allowed; opacity: 0.55; }
 .get-started-card {
   display: flex;
   flex-direction: column;
@@ -2380,4 +2444,23 @@ code { overflow-wrap: anywhere; }
 }
 @media (max-width: 600px) {
   .get-started-grid { grid-template-columns: 1fr; }
+}
+
+/* ── A record's documents ─────────────────────────────────────────────────
+   The list on a job or a project. Plain rows: the title is the whole of what
+   somebody is scanning for, and a table of one column with a header is furniture. */
+.record-documents { list-style: none; margin: var(--space-8) 0 0; padding: 0; }
+.record-documents li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-8);
+  padding: var(--space-8) 0;
+  border-top: 1px solid var(--layout-border-color);
+}
+.record-documents li:first-child { border-top: 0; }
+.record-documents-note {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--secondary-text-color);
 }

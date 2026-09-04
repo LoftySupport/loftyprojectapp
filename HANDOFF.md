@@ -17,9 +17,30 @@ Unreleased: 134 changes since then —
 <!-- /generated:shipped -->
 
 **Phase A is done and applied, and so is the property-and-process half of Phase C (`0076`–`0079`, 1 September).
-Next job: [Phase B, the import](#next-phase-b-the-import)** — and before it, the spine review
-described there, because that is the only category of change that gets expensive once 200 jobs
-are in.
+The spine review is done too — Amber, 4 September — so the one thing that had to happen before
+any data was loaded has happened.
+
+Next job: [Phase B, the import](#next-phase-b-the-import), and nothing is in front of it now.**
+It starts with a person-checked spreadsheet of the ~200 live jobs, grouped into projects and
+sequenced by lot; the order of work is set out in that section.
+
+### Two standing decisions, so nobody spends an afternoon reopening them
+
+**`amberbeaumont/modules` is out of scope. Ignore it.** Amber, 4 September: *"ignore the
+amberbeaumont repositry now. it is not needed and done is prupose"*. The report-builder module
+was installed here and the app's copy is now the only copy that matters — the QR code, the
+table of contents and the record pickers live in `app/src/features/reports/` and are not going
+upstream. Do not raise PRs against that repo, and do not treat the two copies as needing to
+agree.
+
+**`report-share` is deployed and inert until one secret is set.** Deployed 4 September to
+`gmekuqdjemrfuurxhuib`, `verify_jwt` off, and answering — a POST returns
+`503 "Sharing is not switched on."` because `SHARE_ALLOWED_ORIGINS` has no value yet. That is
+the designed default, not a fault: the secret is a comma-separated origin allowlist with no
+fallback, so a deploy made before somebody decides the domains answers nothing. Set it in
+Project Settings → Edge Functions → Secrets and the Share button starts producing links that
+open. Until then it produces links that do not, so it is worth doing before anybody is shown
+the feature.
 
 Last updated: 2026-09-04.
 

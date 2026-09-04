@@ -18,6 +18,7 @@ import { Board } from "../components/Board";
 import { ProjectCard, StatusPill } from "../components/RecordCards";
 import { PropertySlots } from "../components/PropertySlots";
 import { ProcessesPanel } from "../components/ProcessesPanel";
+import { RecordDocuments } from "../components/RecordDocuments";
 import { PushToJobs } from "../components/PushToJobs";
 import {
   PROJECT_TYPES, PROJECT_TYPE_LABELS, RECORD_STATUSES, RECORD_STATUS_LABELS, teamName,
@@ -1060,6 +1061,10 @@ function ProjectDetail({
 
         {/* The project's own processes — the site-wide ones, Concept Plan through DA. */}
         <ProcessesPanel target={{ projectId: project.projectId }} scope="project" currentStage={project.stage} reloadKey={propsReload} />
+
+        {/* Same list as the job drawer, for a document about the whole site rather than
+            one lot — a feasibility, a whole-project summary. */}
+        <RecordDocuments projectId={project.projectId} />
 
         <section className="panel">
           <div className="panel-head">

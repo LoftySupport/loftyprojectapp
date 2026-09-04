@@ -170,13 +170,30 @@ export function createDocumentStore(repo, subject = {}, { compile } = {}) {
       return documentToRow(row);
     },
 
-    async create({ title = 'Untitled document', layout = { widgets: [] }, templateId = null } = {}) {
+    /**
+     * @param jobId,projectId the record this document is ABOUT, overriding the subject
+     *   the store was built with.
+     *
+     * Both, because the store is built once per screen while the record is chosen per
+     * document. Amber, 4 September: *"all documents need to be associated to a job or
+     * project and they are listed on that project"* — so the Tools screen, which builds
+     * one store and then makes many documents, has to say which record each one is for
+     * at the moment it is created. `undefined` falls back to the store's subject, which
+     * is what a builder opened FROM a job already carries.
+     */
+    async create({
+      title = 'Untitled document',
+      layout = { widgets: [] },
+      templateId = null,
+      jobId,
+      projectId
+    } = {}) {
       return documentToRow(await repo.createReportDocument({
         title,
         layout: withTheme(layout),
         templateId,
-        jobId: subject.jobId ?? null,
-        projectId: subject.projectId ?? null
+        jobId: jobId !== undefined ? jobId : (subject.jobId ?? null),
+        projectId: projectId !== undefined ? projectId : (subject.projectId ?? null)
       }));
     },
 
