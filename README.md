@@ -113,7 +113,42 @@ npm run dictionary   # regenerate data-dictionary.md
 ```
 
 `./build.sh` from the repo root assembles the whole deploy — the app, the binding
-template and the prototype — into `dist/`. That is what Netlify runs.
+template and the prototype — into `dist/`. That is what both hosts run.
+
+### Deploying: moving from Netlify to Vercel
+
+The site is mid-migration and both hosts are connected, so both configurations are in the
+repository and neither has been removed. `netlify.toml` is the one that has been building
+the site; `vercel.json` is the one being brought up.
+
+`vercel.json` exists because Vercel's zero-config cannot work this repository out: the
+build is `./build.sh` (not a framework preset), the output is `dist/` at the root, and
+there is a stray root `package-lock.json` with **no `package.json` beside it** — enough
+for Vercel to try an install that cannot succeed. So the file names the build command and
+the output directory, sets an empty install command (the real `npm ci` happens inside
+`app/`, in `build.sh`), and ports the three routing rules and four headers from
+`netlify.toml`. JSON takes no comments, which is why the reasoning is here.
+
+**Two things have to be done in the Vercel project itself and cannot be done from the
+repository:**
+
+1. **`VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.** Without them the app builds
+   and serves, and every screen runs on the stub repository — real structure, no data —
+   with the sign-in page saying *Not configured*. Note that the Netlify **Supabase
+   extension** wrote a second pair of spellings (`VITE_SUPABASE_DATABASE_URL`,
+   `VITE_SUPABASE_ANON_KEY`) that the app also reads; there is no such extension on
+   Vercel, so the two names above are the ones to set.
+2. **The Node version.** `netlify.toml` pins 22. Vercel takes its version from a root
+   `package.json`'s `engines`, and this repository has none, so it uses the project
+   default — worth setting to 22 explicitly rather than inheriting whatever the default
+   becomes.
+
+The build identity reads both hosts' variables (`COMMIT_REF`/`CONTEXT` on Netlify,
+`VERCEL_GIT_COMMIT_SHA`/`VERCEL_ENV` on Vercel), so the version in the footer says which
+commit it is on either. See the note in `app/vite.config.ts` for the trap in that: the
+first draft used `??`, which falls through on null and not on an empty string, so a
+variable set to nothing would have won and the footer would have read "local" on a real
+deployment.
 
 ### One branch and PR per table
 
@@ -127,7 +162,8 @@ cd app && npm run dictionary && npx tsc -b
 git commit && git push -u origin claude/<table>-schema
 ```
 
-Netlify builds a deploy preview per PR. Merge when the preview looks right.
+Both hosts build a preview per PR. Merge when the preview looks right — and while the
+migration is on, check the one you are moving to.
 
 ## Design system
 
