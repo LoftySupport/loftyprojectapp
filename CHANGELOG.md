@@ -14,6 +14,10 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Every list and report has an Export menu — download exactly what is on screen as an Excel workbook, a Word document or a PDF
+- A grouped board or table exports one sheet, one Word section and one page per group
+- Downloads name themselves for the screen and the day, so several exports in a folder can be told apart
+- npm run export-check proves the Excel, Word and PDF writers are real files, re-parsed from the bytes out
 - Group the projects board by where its jobs are — a project appears in every stage or process its jobs have reached, carrying just those jobs
 - Drag a job between columns on the board — by lifecycle stage or by the processes inside a stage — and pick several to move at once from either view
 - See what each job is up to — group the board by Process, or drill into a stage to get its processes as columns with every job in the one it has reached
