@@ -191,6 +191,15 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
    */
   const [starting, setStarting] = useState<{ how: "template" | "clone" | "scratch" } | null>(null);
   /**
+   * The record the new document is ABOUT, as one value rather than two.
+   *
+   * Amber, 4 September: *"all documents need to be associated to a job or project and
+   * they are listed on that project"*. It is one question with one answer, so it is one
+   * control — `job:1042-001` or `project:1042` — rather than two pickers where filling
+   * in the wrong one is a thing that can happen.
+   */
+  const [subjectPick, setSubjectPick] = useState<string | null>(null);
+  /**
    * The same thing for the library lanes: which card was clicked, so the panel knows
    * whether to ask for a source as well as a name.
    *
@@ -358,6 +367,37 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
     }
   }, []);
 
+  /**
+   * Every job and every project, in one list, jobs first.
+   *
+   * Jobs first because a document is usually about one — a progress report for
+   * 1042-001, a client letter about that lot. A project-wide document (a feasibility, a
+   * whole-site summary) is the rarer case and sits below.
+   *
+   * The label carries the address as well as the number, because "1042-001" is what
+   * somebody types and "28 Corner Street" is what they remember, and the Select searches
+   * the label.
+   */
+  const subjectOptions = useMemo(() => [
+    ...jobs.map(j => ({
+      value: `job:${j.jobNumber}`,
+      label: `${j.jobNumber}${j.currentAddress ? ` — ${j.currentAddress}` : ""}`
+    })),
+    ...projects.map(p => ({
+      value: `project:${p.projectNumber}`,
+      label: `Project ${p.projectNumber}${p.currentAddress ? ` — ${p.currentAddress}` : ""}`
+    }))
+  ], [jobs, projects]);
+
+  /** `job:1042-001` → what createReportDocument wants. */
+  const pickedSubject = useMemo(() => {
+    if (!subjectPick) return null;
+    const [kind, id] = subjectPick.split(/:(.*)/s);
+    return kind === "project"
+      ? { jobId: null, projectId: Number(id) }
+      : { jobId: id, projectId: null };
+  }, [subjectPick]);
+
   // ── Documents ────────────────────────────────────────────────────────────
 
   /**
@@ -376,18 +416,27 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
       // `remapIds` so the copy shares no block id with the template it came from —
       // otherwise two documents from one template would collide in the builder's
       // drag-and-drop, which keys on block id.
+      // The record is required by the screen rather than by the column — both are
+      // nullable, because a document made from a job drawer gets its subject from where
+      // it was opened and an import may arrive without one. The button is what enforces
+      // it here; see the panel below.
+      const subject = pickedSubject ?? { jobId: null, projectId: null };
       const row = await documentStore.create({
         title,
         layout: from
           ? { ...from.layout, widgets: engine.remapIds((from.layout?.widgets ?? []) as ReportWidget[]) }
           : { widgets: [] },
-        templateId: from?.id ?? null
-      } as Parameters<typeof documentStore.create>[0]);
+        templateId: from?.id ?? null,
+        ...subject
+      });
       setDocTitle("");
       setDocFrom(null);
+      setSubjectPick(null);
       setStarting(null);
       bump();
-      setOpen({ lane: "document", row, subject: { jobId: null, projectId: null } });
+      // The builder opens ON that record, so a "Record properties" block left on "this
+      // document's own record" resolves to 1042-001 rather than to nothing.
+      setOpen({ lane: "document", row, subject });
     });
 
   /**
@@ -407,26 +456,26 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
       const source = documents.find(d => d.id === cloneFrom);
       if (!title || !source) return;
       const full = await documentStore.get(source.id);
+      // A clone defaults to the record its source was about — copying last month's
+      // progress report for 28 Corner Street and having it come back about nothing means
+      // re-picking in every property block — but the panel lets it be moved, because
+      // "the same report for the other lot" is exactly why somebody clones one.
+      const subject = pickedSubject ?? { jobId: source.jobId, projectId: source.projectId };
       const row = await documentStore.create({
         title,
         layout: {
           ...(full.layout as object),
           widgets: engine.remapIds((full.layout?.widgets ?? []) as ReportWidget[])
         },
-        templateId: source.templateId
-      } as Parameters<typeof documentStore.create>[0]);
+        templateId: source.templateId,
+        ...subject
+      });
       setDocTitle("");
       setCloneFrom(null);
+      setSubjectPick(null);
       setStarting(null);
       bump();
-      setOpen({
-        lane: "document",
-        row,
-        // A clone is about the same job as the document it came from — copying a progress
-        // report for 28 Corner Street and having it come back about nothing would mean
-        // re-picking the record in every property block.
-        subject: { jobId: source.jobId, projectId: source.projectId }
-      });
+      setOpen({ lane: "document", row, subject });
     });
 
   /**
@@ -442,6 +491,7 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
     setDocTitle("");
     setDocFrom(null);
     setCloneFrom(null);
+    setSubjectPick(null);
   };
 
   /**
@@ -837,7 +887,7 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
             <Button
               onClick={confirmStart}
               disabled={
-                busy || !docTitle.trim()
+                busy || !docTitle.trim() || !subjectPick
                 || (starting?.how === "template" && !docFrom)
                 || (starting?.how === "clone" && !cloneFrom)
               }
@@ -859,6 +909,25 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
                rather than on the panel. */
             autoFocus
             inputAriaLabel="Title for a new document"
+          />
+
+          {/* WHICH RECORD, AND IT IS REQUIRED.
+              *"all documents need to be associated to a job or project and they are
+              listed on that project"*. One control rather than two, because it is one
+              question — a document is about a job or about a project, never both and
+              never neither.
+
+              The column stays nullable on purpose: a document started from a job drawer
+              takes its record from where it was opened, and an imported one may arrive
+              without a record to attach. What is required is the ANSWER on this screen,
+              which is where somebody is choosing freely and could otherwise leave it
+              blank without noticing. */}
+          <Select
+            aria-label="The job or project this document is about"
+            placeholder={subjectOptions.length ? "Which job or project…" : "No jobs or projects yet"}
+            options={subjectOptions}
+            value={subjectPick}
+            onChange={v => setSubjectPick(v)}
           />
 
           {starting?.how === "template" && (
