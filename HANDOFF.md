@@ -12,6 +12,13 @@ Unreleased: 126 changes since then —
 - Changed: Users, teams, permissions, the dictionary, the wiring, the bug and idea queues, the roadmap and the changelog are all now under the cog
 - Added: Managers can set how long a stage should take and who hears when it is overdue, without being able to rename or reorder the stages themselves
 - …and 121 more.
+Unreleased: 122 changes since then —
+- Changed: Tools → Template Builder is Document Builder, Template Library and Section Library, each with its own buttons
+- Added: A document, template or section can be cloned from an existing one
+- Changed: Tools → Template Builder is three tabs — Documents, Templates and Sections — instead of two stacked panels
+- Added: Documents can be sent outside Lofty as a share link — a page a client opens with no login, with an optional password and a link that expires
+- Added: A shared link shows the document as it was when it was sent, and says so, rather than re-reading Lofty every time it is opened
+- …and 117 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
