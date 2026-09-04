@@ -83,6 +83,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- The row hairline in an exported PDF was one shade off the same line in the Word document
 - The jobs board offers only the processes of the stage you have filtered to, and says the right thing when a process belongs to a stage the job has already left
 - The jobs board no longer scrolls sideways on a phone
 - Setup → Processes no longer scrolls sideways on a tablet or a small phone
@@ -107,6 +108,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- Documents built in the Template Builder now carry Lofty's house document format — the same wordmark, colours, section rule and font as every other export
 - Excel, Word and PDF exports now carry Lofty's house document format — the wordmark, the orange section rule, the grey table header and the "Commercial in confidence" footer
 - Every dropdown narrows as you type and lists its options alphabetically, except where the order is the information — and a process can be filed straight into a pipeline when it is created
 - Setup → Processes is now a pipeline you drag, with the name editable in place and a process added straight into its stage
