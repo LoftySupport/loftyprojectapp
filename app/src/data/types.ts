@@ -2810,11 +2810,11 @@ export interface MaintenanceOutboxStat {
 }
 
 // ---------------------------------------------------------------------------
-// Report templates (0094) — Tools → Template Builder
+// The template library and the documents made from it (0094)
 // ---------------------------------------------------------------------------
 
 /**
- * One block in a report template.
+ * One block in a layout.
  *
  * `kind` names a widget registered in `features/reports/adapters/lofty/widgets.js`, and
  * `options` is that widget's own settings. Neither is typed here on purpose: a block type
@@ -2822,10 +2822,10 @@ export interface MaintenanceOutboxStat {
  * be edited every time somebody adds a block — the coupling the single jsonb column
  * exists to avoid.
  *
- * `options` holds the QUESTION ("group the jobs by stage"), never the ANSWER. Nothing
- * here ever contains a job, a project or a number: those are read live whenever the
- * template is opened. A template that stored its rows would be a fossil that still
- * looked current.
+ * `options` holds the QUESTION ("group the jobs by stage", "the Site Start properties for
+ * this job"), never the ANSWER. Nothing here ever contains a job, a project or a number:
+ * those are read live whenever the layout is opened. A template that stored its rows
+ * would be a fossil that still looked current.
  */
 export interface ReportTemplateBlock {
   id: string;
@@ -2833,7 +2833,7 @@ export interface ReportTemplateBlock {
   options: Record<string, unknown>;
 }
 
-/** The builder's whole layout, as it is stored in `report_template_layout`. */
+/** A builder layout, as stored in `report_template_layout` and `report_document_layout`. */
 export interface ReportTemplateLayout {
   widgets: ReportTemplateBlock[];
   page?: { pageSize?: string; orientation?: string };
@@ -2841,23 +2841,134 @@ export interface ReportTemplateLayout {
   theme?: string;
 }
 
+/** An empty layout — what a new one starts as, and what the CHECK requires. */
+export const EMPTY_REPORT_TEMPLATE_LAYOUT: ReportTemplateLayout = { widgets: [] };
+
 /**
- * A report template: a layout somebody built, shared by the whole company.
+ * A whole template, or a reusable section dropped into one.
  *
- * `createdBy` and `updatedBy` are ids rather than names, and deliberately: the screens
- * that show them already hold `listProfiles()`, and an embed of `profiles` from here
- * would be ambiguous — the audit quartet gives this table two foreign keys to `profiles`,
- * which is the PGRST201 shape `verify/embeds.sh` exists to catch.
+ * Same table, same sign-off, same scope rules — the discriminator is what decides where
+ * it is offered: a template starts a document, a section is inserted into one by the
+ * "Library section" block.
+ */
+export const REPORT_TEMPLATE_KINDS = ["template", "section"] as const;
+export type ReportTemplateKind = (typeof REPORT_TEMPLATE_KINDS)[number];
+
+export const REPORT_TEMPLATE_KIND_LABELS: Record<ReportTemplateKind, string> = {
+  template: "Template",
+  section: "Section"
+};
+
+/**
+ * Who a library entry is for — a visibility band, not an owner.
+ *
+ * The author is `createdBy` and never changes; this decides who else the entry is offered
+ * to once a manager has signed it off.
+ */
+export const REPORT_TEMPLATE_SCOPES = ["global", "team", "managers"] as const;
+export type ReportTemplateScope = (typeof REPORT_TEMPLATE_SCOPES)[number];
+
+export const REPORT_TEMPLATE_SCOPE_LABELS: Record<ReportTemplateScope, string> = {
+  global: "Everyone",
+  team: "One team",
+  managers: "Managers and above"
+};
+
+/**
+ * A library entry: a template or a section.
+ *
+ * `approvedAt` null means it is still the author's draft — nobody else can see it, and
+ * the read policy in 0094 is what makes that true rather than the screen. `approvedBy` is
+ * an id rather than a name: the screens that show it already hold `listProfiles()`, and
+ * an embed of `profiles` from here would be ambiguous, because the audit quartet gives
+ * this table two foreign keys to it (the PGRST201 shape `verify/embeds.sh` exists to
+ * catch).
  */
 export interface ReportTemplate {
   id: Uuid;
+  kind: ReportTemplateKind;
   name: string;
+  description: string | null;
+  scope: ReportTemplateScope;
+  /** Set for the `team` scope and null for every other, by constraint. */
+  teamId: TeamId | null;
   layout: ReportTemplateLayout;
+  approvedAt: IsoDateTime | null;
+  approvedBy: Uuid | null;
+  /** Retired rather than deleted: documents made from it still name it. */
+  isActive: boolean;
   createdAt: IsoDateTime;
   createdBy: Uuid | null;
   updatedAt: IsoDateTime;
   updatedBy: Uuid | null;
 }
 
-/** An empty layout — what a new template starts as, and what the CHECK requires. */
-export const EMPTY_REPORT_TEMPLATE_LAYOUT: ReportTemplateLayout = { widgets: [] };
+/** True when the entry is in the library rather than sitting in its author's drafts. */
+export const isInLibrary = (t: ReportTemplate): boolean => t.approvedAt !== null && t.isActive;
+
+export interface NewReportTemplate {
+  kind: ReportTemplateKind;
+  name: string;
+  description?: string | null;
+  scope?: ReportTemplateScope;
+  teamId?: TeamId | null;
+  layout?: ReportTemplateLayout;
+}
+
+export interface ReportTemplatePatch {
+  name?: string;
+  description?: string | null;
+  scope?: ReportTemplateScope;
+  teamId?: TeamId | null;
+  layout?: ReportTemplateLayout;
+  isActive?: boolean;
+}
+
+/**
+ * One document somebody made — a progress report, a client letter, a maintenance report.
+ *
+ * Copied from a template and then theirs to edit. That copy is the whole point: Amber,
+ * 4 September, on changing the wording of a letter for one instance — if the edit wrote
+ * back to the template, the next person to use it would inherit one letter's wording.
+ *
+ * `jobId` / `projectId` are what the property blocks resolve against. Both null is a real
+ * state: a portfolio report is about the whole book of work rather than one site.
+ */
+export interface ReportDocument {
+  id: Uuid;
+  title: string;
+  layout: ReportTemplateLayout;
+  /** What it started from. Null once that template is deleted, or if it never had one. */
+  templateId: Uuid | null;
+  jobId: string | null;
+  projectId: number | null;
+  /**
+   * Sharing. Inert as shipped — nothing writes these, because reading by token needs the
+   * `report-share` endpoint and that is not deployed.
+   *
+   * `hasSharePassword` and never the hash: a hash returned to the browser is a hash
+   * somebody can attack offline, and the browser has no use for it either way.
+   */
+  shareToken: string | null;
+  shareExpiresAt: IsoDateTime | null;
+  hasSharePassword: boolean;
+  createdAt: IsoDateTime;
+  createdBy: Uuid | null;
+  updatedAt: IsoDateTime;
+  updatedBy: Uuid | null;
+}
+
+export interface NewReportDocument {
+  title: string;
+  layout?: ReportTemplateLayout;
+  templateId?: Uuid | null;
+  jobId?: string | null;
+  projectId?: number | null;
+}
+
+export interface ReportDocumentPatch {
+  title?: string;
+  layout?: ReportTemplateLayout;
+  jobId?: string | null;
+  projectId?: number | null;
+}

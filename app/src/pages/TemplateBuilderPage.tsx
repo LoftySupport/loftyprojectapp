@@ -1,14 +1,21 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Button, Text, TextField } from "@vibe/core";
 import { useQuery, useRepository } from "../data/DataProvider";
+import { useAuth } from "../data/AuthProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { useBoardRecords } from "../data/boardModel";
-import { useProcesses, useStages, useTeams } from "../data/useLookups";
+import { useProcesses, usePropertyDefs, usePropertyOptions, useStages, useTeams } from "../data/useLookups";
 import { LoadProblem, NothingYet } from "../components/SearchNotices";
 import { Problem } from "../components/Form";
+import { Select, toOptions } from "../components/Select";
 import { useToasts } from "../components/Toasts";
-import type { ReportTemplate } from "../data/types";
-import type { CompiledReport, ReportStoreRow } from "../features/reports/index.js";
+import {
+  REPORT_TEMPLATE_SCOPE_LABELS,
+  type ReportDocument,
+  type ReportTemplate,
+  type ReportTemplateKind
+} from "../data/types";
+import type { CompiledReport, ReportStoreRow, ReportWidget } from "../features/reports/index.js";
 import {
   LOFTY_GROUPS,
   LOFTY_SEEDS,
@@ -17,10 +24,12 @@ import {
   LOFTY_WIDGETS,
   ReportBuilder,
   ReportOverlay,
+  createDocumentStore,
+  createLibraryStore,
   createReportEngine,
   createReportRegistry,
-  createRepositoryTemplateStore,
-  createThemeSet
+  createThemeSet,
+  helpers
 } from "../features/reports/index.js";
 import "../features/reports/reports.css";
 import "../components/ui.css";
@@ -30,25 +39,38 @@ import "../components/ui.css";
  *
  * The report builder from `amberbeaumont/modules → packages/report-builder`, wired to
  * Lofty's data. `src/features/reports/README.md` says what was changed on the way in;
- * this file is the whole of the wiring.
+ * this file and the three adapter files beside it are the whole of the wiring.
  *
- * WHAT A TEMPLATE IS, AND THE ONE THING THAT MAKES IT WORTH HAVING
+ * THREE THINGS ON ONE SCREEN, AND THEY ARE NOT THE SAME THING
  *
- *   A template is a list of blocks, not a list of rows. "The jobs table grouped by
- *   stage" is what is stored; the jobs are read out of the app every time somebody opens
- *   it. So a template built in September and used in March shows March's jobs, and the
- *   prose its author typed around them is kept verbatim. A builder that saved the rows
- *   would produce a document that looked current and was not — which is the same failure
- *   as the Reports page computing "45% on track" from a fixed array.
+ *   Documents   what somebody made and is sending. Theirs to edit.
+ *   Templates   the layouts a document starts from.
+ *   Sections    reusable fragments dropped into a template by the "Library section"
+ *               block, and resolved live — so fixing a section fixes every template
+ *               using it.
  *
- * WHAT PEOPLE CAN DO, BY RUNG
+ * WHY A DOCUMENT IS A COPY
  *
- *   Everyone reads a template and can preview and export it. Manager and above builds
- *   and edits one; admin and above deletes one. The `can()` calls below decide which
- *   buttons render; the policies in migration 0094 decide what the database accepts, and
- *   they are the security. A viewer who reaches this screen gets Preview & export and no
- *   other control — not a disabled Edit button, and not a builder that looks editable
- *   and then refuses every autosave.
+ *   Amber, 4 September: *"a user may take an existing template and modify it for a
+ *   particular instance eg sending a letter and they need to change the wording"*. If
+ *   that edit wrote back to the template, the next person would inherit one letter's
+ *   wording — silently, because the template would still be called what it was called.
+ *
+ * WHAT A TEMPLATE STILL HOLDS
+ *
+ *   The question, never the answer. "The jobs table grouped by stage", "the Site Start
+ *   properties for this job" — the rows are read out of the app every time it is opened.
+ *   A builder that saved the rows would produce a document that looked current and was
+ *   not, which is the same failure as the Reports page computing "45% on track" from a
+ *   fixed array.
+ *
+ * WHO MAY DO WHAT
+ *
+ *   Everyone at `user` and above makes documents, and proposes templates and sections.
+ *   A manager signs a proposal into the library. Until then it is the author's draft and
+ *   literally nobody else can see it — that is the read policy in 0094, not this screen.
+ *   The `can()` calls below decide which buttons render; the policies decide what the
+ *   database accepts, and they are the security.
  */
 
 // Built once at module scope. The registry is a pure description of the palette, so
@@ -57,176 +79,305 @@ const registry = createReportRegistry({ widgets: LOFTY_WIDGETS, groups: LOFTY_GR
 const engine = createReportEngine(registry, { seeds: LOFTY_SEEDS });
 const themes = createThemeSet(LOFTY_THEME_SPECS);
 
+/** How deep a section may sit inside another before we stop expanding. */
+const MAX_SECTION_DEPTH = 3;
+
+/** What the builder is currently open on — the two stores are not interchangeable. */
+type OpenTarget =
+  | { lane: "document"; row: ReportStoreRow; subject: { jobId: string | null; projectId: number | null } }
+  | { lane: "library"; row: ReportStoreRow; kind: ReportTemplateKind };
+
 export function TemplateBuilderPage() {
   const repo = useRepository();
   const { can } = usePermission();
+  const { profile } = useAuth();
   const { toast } = useToasts();
 
-  const canEdit = can("manager");
+  const canWrite = can("user");
+  const canApprove = can("manager");
   const canDelete = can("admin");
 
   const [reloadKey, setReloadKey] = useState(0);
-  const [open, setOpen] = useState<ReportStoreRow | null>(null);
-  /** A compiled report, for the read-only Preview & export path. */
+  const bump = useCallback(() => setReloadKey(k => k + 1), []);
+  const [open, setOpen] = useState<OpenTarget | null>(null);
   const [preview, setPreview] = useState<{ model: CompiledReport; theme: string } | null>(null);
-  const [newName, setNewName] = useState("");
-  const [creating, setCreating] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
-  const {
-    data: templates, loading: templatesLoading, error: templatesError
-  } = useQuery(r => r.listReportTemplates(), [], [reloadKey]);
+  const [docTitle, setDocTitle] = useState("");
+  const [docFrom, setDocFrom] = useState<string | null>(null);
+  const [libName, setLibName] = useState("");
+  const [libKind, setLibKind] = useState<ReportTemplateKind>("template");
+  const [busy, setBusy] = useState(false);
+
+  // ── What is in the library, and what has been made from it ───────────────
+  const { data: templates, loading: libLoading, error: libError } =
+    useQuery(r => r.listReportTemplates(), [], [reloadKey]);
+  const { data: documents, loading: docsLoading, error: docsError } =
+    useQuery(r => r.listReportDocuments(), [], [reloadKey]);
 
   // ── The data every block resolves against ────────────────────────────────
   //
   // The same reads the boards use, so a report cannot disagree with the board it was
-  // taken from — and already narrowed by RLS, so "every job" means every job this
-  // person may see. The blocks say so in their hints.
-  const { projects, jobs, loading: recordsLoading, error: recordsError } = useBoardRecords(reloadKey);
+  // taken from — and already narrowed by RLS, so "every job" means every job this person
+  // may see, and a restricted property they may not see never arrives at all.
+  const { projects, jobs, error: recordsError } = useBoardRecords(reloadKey);
   const { teams } = useTeams();
   const { stageNames } = useStages();
   const { processes } = useProcesses();
+  const { propertyDefs } = usePropertyDefs(reloadKey);
+  const { options: propertyOptions } = usePropertyOptions(reloadKey);
+  const { data: propertyValues } = useQuery(r => r.listPropertyValues(), [], [reloadKey]);
   const { data: people } = useQuery(r => r.listProfiles(), []);
+
+  /** Only the sections a document may actually use: in the library, and still current. */
+  const sections = useMemo(
+    () => templates.filter(t => t.kind === "section" && t.approvedAt !== null && t.isActive),
+    [templates]
+  );
+  const libraryTemplates = useMemo(
+    () => templates.filter(t => t.kind === "template" && t.approvedAt !== null && t.isActive),
+    [templates]
+  );
+
+  /**
+   * Expanding a "Library section" block into the blocks it stands for.
+   *
+   * It lives here rather than in the widget because it needs the engine, and the engine
+   * is not part of `ctx`. Two things it has to get right:
+   *
+   * - **The context it resolves against is the CURRENT one**, read through a ref. `ctx`
+   *   holds this function, so a `ctx` in its closure would be last render's — the
+   *   section would keep rendering the jobs the page had when it first loaded.
+   * - **Depth.** A section holding a Library section block pointing at itself is an
+   *   infinite loop, and it is one an author can build by accident in two clicks. The
+   *   counter is a ref rather than an argument because the recursion goes back out
+   *   through `engine.resolve`, which has no idea it is nested.
+   */
+  const ctxRef = useRef<unknown>(null);
+  const depthRef = useRef(0);
+  const expandSection = useCallback(
+    (section: ReportTemplate, h: { forExport: boolean }) => {
+      if (depthRef.current >= MAX_SECTION_DEPTH) {
+        return [helpers.warn(
+          `“${section.name}” is nested inside itself, or more than ${MAX_SECTION_DEPTH} sections deep. It stops here.`
+        )];
+      }
+      depthRef.current += 1;
+      try {
+        return (section.layout?.widgets ?? []).flatMap(w =>
+          engine.resolve(w as ReportWidget, ctxRef.current, { forExport: h.forExport })
+        );
+      } finally {
+        depthRef.current -= 1;
+      }
+    },
+    []
+  );
+
+  /** What the open document is about, so "the record this document is about" has an answer. */
+  const subject = open?.lane === "document" ? open.subject : null;
 
   // Memoised, and it is not an optimisation: a fresh `ctx` identity re-resolves every
   // block on every render, which makes typing in a text block feel broken.
   const ctx = useMemo(
-    () => ({ projects, jobs, teams, stageNames, people, processes }),
-    [projects, jobs, teams, stageNames, people, processes]
+    () => ({
+      projects, jobs, teams, stageNames, people, processes,
+      propertyDefs, propertyValues, propertyOptions,
+      sections, expandSection,
+      subject
+    }),
+    [projects, jobs, teams, stageNames, people, processes,
+     propertyDefs, propertyValues, propertyOptions, sections, expandSection, subject]
   );
+  ctxRef.current = ctx;
 
-  const store = useMemo(() => createRepositoryTemplateStore(repo), [repo]);
+  const documentStore = useMemo(() => createDocumentStore(repo), [repo]);
+  const templateStore = useMemo(() => createLibraryStore(repo, "template"), [repo]);
+  const sectionStore = useMemo(() => createLibraryStore(repo, "section"), [repo]);
+  const storeFor = (t: OpenTarget) =>
+    t.lane === "document" ? documentStore : t.kind === "section" ? sectionStore : templateStore;
 
-  const nameTaken = templates.some(
-    t => t.name.trim().toLowerCase() === newName.trim().toLowerCase()
+  const nameOf = useCallback(
+    (id: string | null) => (id ? people.find(p => p.id === id)?.fullName ?? null : null),
+    [people]
   );
+  const mine = (createdBy: string | null) => createdBy != null && createdBy === profile?.id;
 
-  const create = useCallback(async () => {
-    const name = newName.trim();
-    if (!name) return;
-    setCreating(true);
+  const run = useCallback(async (fn: () => Promise<void>) => {
+    setBusy(true);
     setProblem(null);
     try {
-      const row = await store.create({ title: name, layout: { widgets: [] } });
-      setNewName("");
-      setReloadKey(k => k + 1);
-      setOpen(row);
+      await fn();
     } catch (e) {
       setProblem(e instanceof Error ? e.message : String(e));
     } finally {
-      setCreating(false);
+      setBusy(false);
     }
-  }, [newName, store]);
+  }, []);
 
-  const remove = useCallback(async (t: ReportTemplate) => {
-    if (!window.confirm(`Delete the template “${t.name}”? Everyone shares these, so it goes for the whole company.`)) return;
-    setProblem(null);
-    try {
-      await repo.deleteReportTemplate(t.id);
-      setReloadKey(k => k + 1);
-      toast(`Deleted “${t.name}”.`, "positive");
-    } catch (e) {
-      setProblem(e instanceof Error ? e.message : String(e));
-    }
-  }, [repo, toast]);
+  // ── Documents ────────────────────────────────────────────────────────────
 
-  /**
-   * Open the builder on a template.
-   *
-   * Re-read through the store rather than handed the row the list is holding. The list
-   * was fetched when the tab opened, and these are shared: somebody else may have
-   * changed the layout since. The builder autosaves whatever it was given, so opening a
-   * stale copy would write the stale copy back over their work.
-   */
-  const openForEdit = useCallback(async (t: ReportTemplate) => {
-    setProblem(null);
-    try {
-      setOpen(await store.get(t.id));
-    } catch (e) {
-      setProblem(e instanceof Error ? e.message : String(e));
-      setReloadKey(k => k + 1);
-    }
-  }, [store]);
-
-  /**
-   * Preview & export without opening the builder.
-   *
-   * `engine.compile` resolves every block against `ctx` right now and returns the same
-   * model the builder's own preview hands to the overlay — so print, PDF, Word, Markdown
-   * and HTML all come out of one pipeline whether or not the reader may edit.
-   */
-  const previewTemplate = useCallback((t: ReportTemplate) => {
-    setPreview({
-      model: engine.compile({ title: t.name }, t.layout?.widgets ?? [], ctx),
-      theme: t.layout?.theme ?? LOFTY_THEME.key
+  const createDocument = () =>
+    run(async () => {
+      const title = docTitle.trim();
+      if (!title) return;
+      const from = docFrom ? libraryTemplates.find(t => t.id === docFrom) : null;
+      // `remapIds` so the copy shares no block id with the template it came from —
+      // otherwise two documents from one template would collide in the builder's
+      // drag-and-drop, which keys on block id.
+      const row = await documentStore.create({
+        title,
+        layout: from
+          ? { ...from.layout, widgets: engine.remapIds((from.layout?.widgets ?? []) as ReportWidget[]) }
+          : { widgets: [] },
+        templateId: from?.id ?? null
+      } as Parameters<typeof documentStore.create>[0]);
+      setDocTitle("");
+      setDocFrom(null);
+      bump();
+      setOpen({ lane: "document", row, subject: { jobId: null, projectId: null } });
     });
-  }, [ctx]);
 
-  if (templatesError) return <LoadProblem error={templatesError} />;
+  const openDocument = (d: ReportDocument) =>
+    run(async () => {
+      // Re-read rather than use the row the list is holding: these are shared, the list
+      // was fetched when the tab opened, and the builder autosaves whatever it is given.
+      // Opening a stale copy would write it back over somebody's work.
+      const row = await documentStore.get(d.id);
+      setOpen({ lane: "document", row, subject: { jobId: d.jobId, projectId: d.projectId } });
+    });
+
+  const removeDocument = (d: ReportDocument) =>
+    run(async () => {
+      if (!window.confirm(`Delete “${d.title}”? This does not touch the template it came from.`)) return;
+      await repo.deleteReportDocument(d.id);
+      bump();
+      toast(`Deleted “${d.title}”.`, "positive");
+    });
+
+  // ── The library ──────────────────────────────────────────────────────────
+
+  const createLibraryEntry = () =>
+    run(async () => {
+      const name = libName.trim();
+      if (!name) return;
+      const store = libKind === "section" ? sectionStore : templateStore;
+      const row = await store.create({ title: name, layout: { widgets: [] } });
+      setLibName("");
+      bump();
+      setOpen({ lane: "library", row, kind: libKind });
+    });
+
+  const openLibraryEntry = (t: ReportTemplate) =>
+    run(async () => {
+      const store = t.kind === "section" ? sectionStore : templateStore;
+      setOpen({ lane: "library", row: await store.get(t.id), kind: t.kind });
+    });
+
+  const approve = (t: ReportTemplate, approved: boolean) =>
+    run(async () => {
+      await repo.approveReportTemplate(t.id, approved);
+      bump();
+      toast(
+        approved ? `“${t.name}” is in the library.` : `“${t.name}” is back with its author.`,
+        "positive"
+      );
+    });
+
+  const retire = (t: ReportTemplate) =>
+    run(async () => {
+      await repo.updateReportTemplate(t.id, { isActive: false });
+      bump();
+      toast(`“${t.name}” retired — documents made from it still name it.`, "positive");
+    });
+
+  const withdraw = (t: ReportTemplate) =>
+    run(async () => {
+      if (!window.confirm(`Delete the draft “${t.name}”?`)) return;
+      await repo.deleteReportTemplate(t.id);
+      bump();
+    });
+
+  // ── Preview, for anything ────────────────────────────────────────────────
+
+  const previewLayout = useCallback(
+    (title: string, widgets: unknown[], theme: string | undefined, docSubject: typeof subject) => {
+      // The subject has to be in ctx for THIS compile, or a "the record this document is
+      // about" block silently renders its prompt instead of the record's properties.
+      const compileCtx = { ...(ctx as object), subject: docSubject };
+      ctxRef.current = compileCtx;
+      try {
+        setPreview({
+          model: engine.compile({ title }, widgets as ReportWidget[], compileCtx),
+          theme: theme ?? LOFTY_THEME.key
+        });
+      } finally {
+        ctxRef.current = ctx;
+      }
+    },
+    [ctx]
+  );
+
+  if (libError) return <LoadProblem error={libError} />;
+
+  const pending = templates.filter(t => t.approvedAt === null);
+  const inLibrary = templates.filter(t => t.approvedAt !== null);
 
   return (
     <>
+      {problem && <Problem>{problem}</Problem>}
+
+      {/* ── Documents ───────────────────────────────────────────────────── */}
       <section className="panel">
         <div className="panel-head">
-          <Text type="text2" weight="bold">Report templates</Text>
+          <Text type="text2" weight="bold">Documents</Text>
           <Text type="text3" color="secondary">
-            {canEdit
-              ? "shared by everyone — a change here changes the report the whole company sends"
-              : "read-only below manager — preview and export any of these"}
+            yours to edit — changing one never changes the template it came from
           </Text>
         </div>
         <Text type="text2" color="secondary" ellipsis={false}>
-          A template holds the <em>question</em> — “the jobs table grouped by stage”, “the
-          teams’ workload” — never the answer. Open one and it reads the app as it is
-          today, so the same template is a September report in September and a March
-          report in March. The prose you type around the blocks is kept as you wrote it.
+          A progress report, a client letter, a maintenance report. Start from a template
+          and change whatever this one needs — the wording, the blocks, the order. Send it
+          with <strong>Preview &amp; export</strong>: print, PDF, Word, Markdown or HTML.
         </Text>
 
-        {/* `panel-actions` rather than `page-head-row`: that one is space-between, which
-            sent Vibe's full-width TextField across the panel and wrapped the button onto
-            its own line. The field gets a flex basis so the two sit together and still
-            wrap on a phone. */}
-        {canEdit && (
+        {canWrite && (
           <div className="panel-actions" style={{ marginTop: "var(--space-12)" }}>
-            <span style={{ flex: "0 1 280px", minWidth: 0 }}>
+            <span style={{ flex: "0 1 260px", minWidth: 0 }}>
               <TextField
-                id="new-template-name"
-                placeholder="Name a new template…"
-                value={newName}
-                onChange={setNewName}
+                id="new-document-title"
+                placeholder="Name a new document…"
+                value={docTitle}
+                onChange={setDocTitle}
                 size="small"
-                inputAriaLabel="Name for a new report template"
-                onKeyDown={e => { if (e.key === "Enter" && !nameTaken) void create(); }}
+                inputAriaLabel="Title for a new document"
               />
             </span>
-            <Button
-              size="small"
-              onClick={() => void create()}
-              disabled={!newName.trim() || nameTaken || creating}
-            >
-              {creating ? "Creating…" : "New template"}
+            <span style={{ flex: "0 1 240px", minWidth: 0 }}>
+              <Select
+                aria-label="Template to start the document from"
+                placeholder={libraryTemplates.length ? "Start from a template…" : "No templates in the library yet"}
+                options={toOptions(libraryTemplates.map(t => t.name))}
+                value={docFrom ? libraryTemplates.find(t => t.id === docFrom)?.name ?? null : null}
+                onChange={n => setDocFrom(libraryTemplates.find(t => t.name === n)?.id ?? null)}
+              />
+            </span>
+            <Button size="small" onClick={createDocument} disabled={!docTitle.trim() || busy}>
+              New document
             </Button>
-            {/* Said before the save rather than after it: the unique constraint would
-                otherwise answer with a database error the moment they press the button. */}
-            {nameTaken && (
-              <Text type="text3" color="secondary">
-                There is already a template with that name.
-              </Text>
-            )}
           </div>
         )}
 
-        {problem && <Problem>{problem}</Problem>}
-
-        {templatesLoading ? (
+        {docsError && <LoadProblem error={docsError} />}
+        {docsLoading ? (
           <Text type="text2" color="secondary">Loading…</Text>
-        ) : templates.length === 0 ? (
+        ) : documents.length === 0 ? (
           <NothingYet
-            title="No templates yet"
+            title="No documents yet"
             description={
-              canEdit
-                ? "Name one above and the builder opens on an empty page — drag blocks in from the palette, or start from one of the drafts it offers."
-                : "Nobody has built a report template yet. Manager and above can create one."
+              canWrite
+                ? "Name one above. Start it from a template, or leave that empty for a blank page."
+                : "Nobody has made a document yet."
             }
           />
         ) : (
@@ -234,52 +385,51 @@ export function TemplateBuilderPage() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Template</th>
-                  <th>Blocks</th>
+                  <th>Document</th>
+                  <th>About</th>
+                  <th>From</th>
                   <th>Last changed</th>
                   <th aria-label="Actions" />
                 </tr>
               </thead>
               <tbody>
-                {templates.map(t => (
-                  <tr key={t.id}>
-                    <td><Text type="text2" weight="medium">{t.name}</Text></td>
-                    <td><Text type="text2">{t.layout?.widgets?.length ?? 0}</Text></td>
+                {documents.map(d => (
+                  <tr key={d.id}>
+                    <td><Text type="text2" weight="medium">{d.title}</Text></td>
                     <td>
-                      {/* The date, and the person only when the database knows one. A
-                          template written by a migration or a script has no author, and
-                          a name invented for it would be quoted back as though somebody
-                          had made that edit. */}
                       <Text type="text2">
-                        {new Date(t.updatedAt).toLocaleDateString("en-AU")}
-                        {t.updatedBy
-                          ? ` · ${people.find(p => p.id === t.updatedBy)?.fullName ?? "someone no longer listed"}`
-                          : ""}
+                        {d.jobId ?? (d.projectId != null ? String(d.projectId) : "—")}
+                      </Text>
+                    </td>
+                    <td>
+                      <Text type="text2">
+                        {d.templateId
+                          ? templates.find(t => t.id === d.templateId)?.name ?? "a template since removed"
+                          : "—"}
+                      </Text>
+                    </td>
+                    <td>
+                      <Text type="text2">
+                        {new Date(d.updatedAt).toLocaleDateString("en-AU")}
+                        {nameOf(d.updatedBy) ? ` · ${nameOf(d.updatedBy)}` : ""}
                       </Text>
                     </td>
                     <td>
                       <div className="row-actions">
                         <Button
-                          size="small"
-                          kind="tertiary"
-                          onClick={() => previewTemplate(t)}
-                          disabled={recordsLoading}
+                          size="small" kind="tertiary"
+                          onClick={() => previewLayout(
+                            d.title, d.layout?.widgets ?? [], d.layout?.theme,
+                            { jobId: d.jobId, projectId: d.projectId }
+                          )}
                         >
                           Preview &amp; export
                         </Button>
-                        {canEdit && (
-                          <Button
-                            size="small"
-                            kind="tertiary"
-                            onClick={() => void openForEdit(t)}
-                          >
-                            Edit
-                          </Button>
+                        {canWrite && (
+                          <Button size="small" kind="tertiary" onClick={() => openDocument(d)}>Edit</Button>
                         )}
-                        {canDelete && (
-                          <Button size="small" kind="tertiary" onClick={() => void remove(t)}>
-                            Delete
-                          </Button>
+                        {(canDelete || mine(d.createdBy)) && (
+                          <Button size="small" kind="tertiary" onClick={() => removeDocument(d)}>Delete</Button>
                         )}
                       </div>
                     </td>
@@ -289,10 +439,161 @@ export function TemplateBuilderPage() {
             </table>
           </div>
         )}
+      </section>
 
-        {/* The reads behind the blocks, failing loudly. A builder whose ctx never
-            arrived renders every block as "no jobs yet", which is the same sentence as
-            the truth on an empty database and a lie on a full one. */}
+      {/* ── The library ─────────────────────────────────────────────────── */}
+      <section className="panel">
+        <div className="panel-head">
+          <Text type="text2" weight="bold">Template library</Text>
+          <Text type="text3" color="secondary">
+            {canApprove
+              ? "you can sign entries into the library — a change here changes what everybody starts from"
+              : "anyone can propose one; a manager signs it into the library"}
+          </Text>
+        </div>
+        <Text type="text2" color="secondary" ellipsis={false}>
+          A <strong>template</strong> is a whole document to start from. A{" "}
+          <strong>section</strong> is a fragment — a letterhead, a scope-of-works table, a
+          sign-off block — dropped into a template by the <em>Library section</em> block and
+          resolved every time it renders, so correcting a section corrects every template
+          using it.
+        </Text>
+
+        {canWrite && (
+          <div className="panel-actions" style={{ marginTop: "var(--space-12)" }}>
+            <span style={{ flex: "0 1 260px", minWidth: 0 }}>
+              <TextField
+                id="new-library-name"
+                placeholder="Name a new template or section…"
+                value={libName}
+                onChange={setLibName}
+                size="small"
+                inputAriaLabel="Name for a new template or section"
+              />
+            </span>
+            <span style={{ flex: "0 0 150px" }}>
+              <Select
+                aria-label="Whether to make a template or a section"
+                options={toOptions(["Template", "Section"])}
+                value={libKind === "section" ? "Section" : "Template"}
+                onChange={v => setLibKind(v === "Section" ? "section" : "template")}
+              />
+            </span>
+            <Button size="small" onClick={createLibraryEntry} disabled={!libName.trim() || busy}>
+              {canApprove ? "New" : "Propose"}
+            </Button>
+            {!canApprove && (
+              <Text type="text3" color="secondary">
+                Yours to work on until a manager approves it — nobody else can see it before then.
+              </Text>
+            )}
+          </div>
+        )}
+
+        {libLoading ? (
+          <Text type="text2" color="secondary">Loading…</Text>
+        ) : templates.length === 0 ? (
+          <NothingYet
+            title="The library is empty"
+            description={
+              canWrite
+                ? "Name a template above and the builder opens on an empty page — drag blocks in, or start from one of the drafts it offers."
+                : "Nothing has been added to the library yet."
+            }
+          />
+        ) : (
+          <div className="data-table-wrap" style={{ marginTop: "var(--space-12)" }}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Kind</th>
+                  <th>For</th>
+                  <th>Status</th>
+                  <th>Last changed</th>
+                  <th aria-label="Actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {[...pending, ...inLibrary].map(t => {
+                  const draft = t.approvedAt === null;
+                  const editable = canApprove || (draft && mine(t.createdBy));
+                  return (
+                    <tr key={t.id}>
+                      <td>
+                        <Text type="text2" weight="medium">{t.name}</Text>
+                        {t.description && (
+                          <Text type="text3" color="secondary" ellipsis={false}>{t.description}</Text>
+                        )}
+                      </td>
+                      <td><Text type="text2">{t.kind === "section" ? "Section" : "Template"}</Text></td>
+                      <td>
+                        <Text type="text2">
+                          {t.scope === "team"
+                            ? teams.find(x => x.id === t.teamId)?.name ?? t.teamId ?? "—"
+                            : REPORT_TEMPLATE_SCOPE_LABELS[t.scope]}
+                        </Text>
+                      </td>
+                      <td>
+                        {/* Not a colour-only signal: the word is the status, and the
+                            sentence beside it says whose move it is. */}
+                        <Text type="text2">
+                          {!t.isActive
+                            ? "Retired"
+                            : draft
+                              ? mine(t.createdBy) ? "Your draft — awaiting a manager" : "Awaiting approval"
+                              : "In the library"}
+                        </Text>
+                      </td>
+                      <td>
+                        <Text type="text2">
+                          {new Date(t.updatedAt).toLocaleDateString("en-AU")}
+                          {nameOf(t.updatedBy) ? ` · ${nameOf(t.updatedBy)}` : ""}
+                        </Text>
+                      </td>
+                      <td>
+                        <div className="row-actions">
+                          {t.kind === "template" && (
+                            <Button
+                              size="small" kind="tertiary"
+                              onClick={() => previewLayout(t.name, t.layout?.widgets ?? [], t.layout?.theme, null)}
+                            >
+                              Preview
+                            </Button>
+                          )}
+                          {editable && (
+                            <Button size="small" kind="tertiary" onClick={() => openLibraryEntry(t)}>
+                              Edit
+                            </Button>
+                          )}
+                          {canApprove && draft && (
+                            <Button size="small" onClick={() => approve(t, true)} disabled={busy}>
+                              Approve
+                            </Button>
+                          )}
+                          {canApprove && !draft && t.isActive && (
+                            <Button size="small" kind="tertiary" onClick={() => retire(t)} disabled={busy}>
+                              Retire
+                            </Button>
+                          )}
+                          {draft && (mine(t.createdBy) || canDelete) && (
+                            <Button size="small" kind="tertiary" onClick={() => withdraw(t)} disabled={busy}>
+                              Delete
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* The reads behind the blocks, failing loudly. A builder whose ctx never arrived
+            renders every block as "no jobs yet", which is the same sentence as the truth
+            on an empty database and a lie on a full one. */}
         {recordsError && <LoadProblem error={recordsError} />}
       </section>
 
@@ -300,15 +601,18 @@ export function TemplateBuilderPage() {
           the page's layout. */}
       {open && (
         <ReportBuilder
-          report={open}
+          report={open.row}
           engine={engine}
-          store={store}
+          store={storeFor(open)}
           ctx={ctx}
           themes={themes}
           branding="Lofty"
-          canSaveTemplate={false}
-          onClose={() => { setOpen(null); setReloadKey(k => k + 1); }}
-          onSaved={(row: ReportStoreRow) => setOpen(row)}
+          // Only from a document, and it means "propose this layout as a template".
+          // From a library entry it would be a template saved as a template.
+          canSaveTemplate={open.lane === "document"}
+          onClose={() => { setOpen(null); bump(); }}
+          onSaved={(row: ReportStoreRow) =>
+            setOpen(cur => (cur ? { ...cur, row } as OpenTarget : cur))}
         />
       )}
 

@@ -1,3 +1,4 @@
+import { HOUSE_COLOURS, pdfRgb } from "./houseFormat";
 import { encode, truncate, widthOf } from "./helvetica";
 import { LOGO_RGB } from "./logo";
 import { stamp, type ExportCell, type ExportDocument, type ExportTable } from "./table";
@@ -60,14 +61,17 @@ const HEADER_H = 44;
 const FOOTER_H = 30;
 
 // Lofty's palette, lifted from `src/theme/tokens.css` and the house document template.
-const GREEN = "0.000 0.314 0.345"; // #005058 — the eyebrow and section labels
-const INK = "0.255 0.251 0.259"; // #414042 — headings and body
-const MUTED = "0.404 0.400 0.416"; // #67666a — captions and the subtitle
-const FOOT_INK = "0.541 0.537 0.553"; // #8a898d — the footer
-const ORANGE = "0.957 0.494 0.388"; // #f47e63 — the rule under a section heading
-const HEAD_FILL = "0.965 0.969 0.969"; // #f6f7f7 — the table header row
-const ROW_RULE = "0.925 0.929 0.933"; // #ececee — the hairline between rows
-const HAIRLINE = "0.906 0.910 0.914"; // #e7e8e9 — the header and footer rules
+// The house palette, derived rather than retyped — see data/export/houseFormat.ts. The
+// hand-written triples these replaced had already drifted from the Word writer's copy in
+// one channel of ROW_RULE; deriving them is what stops that happening again.
+const GREEN = pdfRgb(HOUSE_COLOURS.green);
+const INK = pdfRgb(HOUSE_COLOURS.ink);
+const MUTED = pdfRgb(HOUSE_COLOURS.muted);
+const FOOT_INK = pdfRgb(HOUSE_COLOURS.footInk);
+const ORANGE = pdfRgb(HOUSE_COLOURS.orange);
+const HEAD_FILL = pdfRgb(HOUSE_COLOURS.headFill);
+const ROW_RULE = pdfRgb(HOUSE_COLOURS.rowRule);
+const HAIRLINE = pdfRgb(HOUSE_COLOURS.hairline);
 
 /** How wide the wordmark is drawn, in points; its height follows the logo's aspect. */
 const LOGO_W = 62;

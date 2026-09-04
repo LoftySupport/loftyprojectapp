@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button, Text } from "@vibe/core";
 import { Select } from "./Select";
+import { fmtDate, fmtMoney, hasValue } from "../data/propertyFormat";
 import type {
   MyPropertyAccess, PropertyDef, PropertyOption, PropertyValueData
 } from "../data/types";
@@ -262,34 +263,12 @@ function TypedInput({
   );
 }
 
-export function hasValue(def: PropertyDef, v: PropertyValueData): boolean {
-  switch (def.format) {
-    case "date": return v.date != null;
-    case "checkbox": return v.bool != null;
-    case "person": return v.profileId != null;
-    case "single select": return v.optionKey != null;
-    case "multi select": return (v.optionKeys?.length ?? 0) > 0;
-    case "number": case "currency": return v.number != null;
-    case "unknown": return false;
-    default: return v.text != null && v.text !== "";
-  }
-}
+/**
+ * The value helpers now live in `data/propertyFormat.ts` — a pure module, so the report
+ * builder's widget adapter can use the same one without dragging React into a plain-Node
+ * check. Re-exported here because this is where every caller already imports them from,
+ * and moving the import site is a change with no benefit.
+ */
+export { hasValue, formatValue, fmtDate } from "../data/propertyFormat";
 
-/** The value as a sentence, for tables and reports. */
-export function formatValue(def: PropertyDef, v: PropertyValueData | null, options: PropertyOption[] = [], people: { id: string; name: string }[] = []): string {
-  if (!v || !hasValue(def, v)) return "";
-  switch (def.format) {
-    case "date": return fmtDate(v.date!);
-    case "checkbox": return v.bool ? "Yes" : "No";
-    case "person": return people.find(p => p.id === v.profileId)?.name ?? "—";
-    case "single select": return options.find(o => o.key === v.optionKey)?.label ?? v.optionKey!;
-    case "multi select": return (v.optionKeys ?? []).map(k => options.find(o => o.key === k)?.label ?? k).join(", ");
-    case "currency": return fmtMoney(v.number!);
-    case "number": return String(v.number);
-    default: return v.text ?? "";
-  }
-}
-
-export const fmtDate = (iso: string) => new Date(iso + "T00:00:00").toLocaleDateString();
-const fmtMoney = (n: number) => n.toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 });
 const shorten = (url: string) => url.replace(/^https?:\/\//, "").replace(/\/$/, "").slice(0, 48) + (url.length > 56 ? "…" : "");

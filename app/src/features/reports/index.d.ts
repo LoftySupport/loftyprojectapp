@@ -258,7 +258,17 @@ export const LOFTY_THEME: ReportTheme;
 export const LOFTY_THEME_QUIET: ReportTheme;
 export const LOFTY_THEME_SPECS: Record<string, ReportTheme>;
 
-/** The store, over the app's repository seam rather than a Supabase client. */
-export function createRepositoryTemplateStore(repo: unknown): ReportStore;
+/**
+ * The two stores, over the app's repository seam rather than a Supabase client.
+ *
+ * Both satisfy `ReportStore`; the builder is handed whichever matches what is open. The
+ * document store also implements `saveTemplate`, which is how "Save as template" becomes
+ * a proposal into the library rather than a second kind of save.
+ */
+export function createLibraryStore(repo: unknown, kind?: "template" | "section"): ReportStore;
+export function createDocumentStore(
+  repo: unknown,
+  subject?: { jobId?: string | null; projectId?: number | null }
+): ReportStore;
 
 export type { ReactNode };

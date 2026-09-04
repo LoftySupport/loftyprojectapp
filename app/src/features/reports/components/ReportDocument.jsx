@@ -63,7 +63,16 @@ export function themePresentation(theme) {
     titleRule: header === 'minimal' ? 'border-b border-[var(--rb-line)]'
       : header === 'band' ? ''
       : 'border-b-2 border-[var(--rb-ink)]',
-    sectionRule: header === 'minimal' ? '' : 'border-b border-[var(--rb-line)]',
+    // `house` is an integration addition, not the module's: Lofty's document template
+    // puts a 2pt accent rule under every section heading (the brand kit calls it Level
+    // 2), and the app's own PDF and Word writers have drawn it that way since 0026.
+    // Scoped to the style rather than applied to every theme, so the module's own four
+    // still look the way the module intends. Note the HTML serialiser already draws a
+    // 2px accent rule here for EVERY theme — that disagreement is the module's and is
+    // left alone; under `house` all three now agree.
+    sectionRule: header === 'minimal' ? ''
+      : header === 'house' ? 'border-b-2 border-[var(--rb-accent)]'
+      : 'border-b border-[var(--rb-line)]',
     tableHeadBg: 'bg-[var(--rb-surface-alt)]',
     band: header === 'band',
   };

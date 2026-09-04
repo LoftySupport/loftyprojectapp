@@ -943,23 +943,64 @@ select case when :un_projects = 116 and :un_jobs = 796
        || (select count(*) from import_staging_jobs where import_staging_job_loaded_at is not null) || ' stamps remain' end;
 rollback;
 
-\echo '--- 45. report_templates: the layout round-trips and the touch trigger moves updated_at'
+\echo '--- 45. the library round-trips, the touch trigger moves updated_at, and a document keeps its parent'
 -- Outside a transaction on purpose, and that IS the check. `extensions.moddatetime`
 -- writes now(), the TRANSACTION timestamp, so the same probe inside a DO block reports
 -- updated_at equal to created_at whether the trigger fired or not — watched, in 0094,
 -- which is why the assertion lives here instead of in the migration.
-insert into report_templates (report_template_name, report_template_layout)
-values ('__behaviour__ leadership summary',
-        '{"widgets": [{"id": "w1", "kind": "heading", "options": {"text": "Summary"}}], "page": {"pageSize": "a4", "orientation": "portrait"}, "theme": "lofty"}'::jsonb);
+insert into report_templates (report_template_name, report_template_kind, report_template_scope, report_template_layout)
+values ('__behaviour__ progress report', 'template', 'global',
+        '{"widgets": [{"id": "w1", "kind": "heading", "options": {"text": "Summary"}}], "page": {"pageSize": "a4"}, "theme": "lofty"}'::jsonb);
 update report_templates
    set report_template_layout = jsonb_set(report_template_layout, '{theme}', '"lofty-quiet"')
- where report_template_name = '__behaviour__ leadership summary';
+ where report_template_name = '__behaviour__ progress report';
 select case
   when report_template_updated_at > report_template_created_at
    and report_template_layout -> 'widgets' -> 0 ->> 'kind' = 'heading'
    and report_template_layout ->> 'theme' = 'lofty-quiet'
+   and report_template_kind = 'template'
   then 'ok  the layout round-tripped and the update moved report_template_updated_at'
   else 'FAIL: updated_at ' || report_template_updated_at || ' vs created_at ' || report_template_created_at
        || ', theme ' || coalesce(report_template_layout ->> 'theme', 'null') end
-from report_templates where report_template_name = '__behaviour__ leadership summary';
-delete from report_templates where report_template_name = '__behaviour__ leadership summary';
+from report_templates where report_template_name = '__behaviour__ progress report';
+
+-- A template and a section may share a name; two templates may not. Proved by writing
+-- the section, because the refusal half is in constraints.sql.
+insert into report_templates (report_template_name, report_template_kind)
+values ('__behaviour__ progress report', 'section');
+select case when count(*) = 2 then 'ok  a template and a section may share one name'
+  else 'FAIL: ' || count(*) || ' rows named __behaviour__ progress report' end
+from report_templates where report_template_name = '__behaviour__ progress report';
+
+-- Retiring a template does NOT take the documents made from it, and they still name it.
+-- Deleting it sets their pointer to null rather than removing the letter that went out.
+insert into report_documents (report_document_title, report_template_id, job_id)
+select '__behaviour__ letter', report_template_id, '9106-002'
+  from report_templates
+ where report_template_name = '__behaviour__ progress report' and report_template_kind = 'template';
+delete from report_templates
+ where report_template_name = '__behaviour__ progress report' and report_template_kind = 'template';
+select case when count(*) = 1 and bool_and(report_template_id is null)
+  then 'ok  deleting a template leaves the document, with its parent set to null'
+  else 'FAIL: ' || count(*) || ' documents survived, parent still set on some' end
+from report_documents where report_document_title = '__behaviour__ letter';
+
+-- And deleting the JOB does take the document with it: a document about a job that no
+-- longer exists is about nothing, and the cascade says so rather than leaving an orphan.
+--
+-- INSIDE a transaction that rolls back, and that is not fussiness. The first version of
+-- this deleted 9106-002 for real, and every constraint probe after it in check.sh — a
+-- dozen of them, all hanging off that one fixture job — went from biting to reporting
+-- "FAIL: accepted", because the row they aimed at was gone. A check that destroys the
+-- fixture the next check needs turns one assertion into a page of false alarms.
+begin;
+select count(*) as docs_before from report_documents where report_document_title = '__behaviour__ letter' \gset
+delete from jobs where job_id = '9106-002';
+select case when :docs_before = 1 and count(*) = 0
+  then 'ok  deleting the job cascades to the documents about it'
+  else 'FAIL: ' || count(*) || ' documents survived their job' end
+from report_documents where report_document_title = '__behaviour__ letter';
+rollback;
+
+delete from report_documents where report_document_title like '__behaviour__%';
+delete from report_templates where report_template_name like '__behaviour__%';

@@ -1,3 +1,4 @@
+import { HOUSE_COLOURS, ooxmlRgb } from "./houseFormat";
 import { zip, type ZipEntry } from "./zip";
 import { LOGO_PNG_BASE64, LOGO_ASPECT } from "./logo";
 import { stamp, type ExportDocument, type ExportTable } from "./table";
@@ -34,14 +35,15 @@ import { stamp, type ExportDocument, type ExportTable } from "./table";
  */
 
 // ── the palette and the type scale, from the brand kit ──────────────────────────────
-const INK = "414042"; // Foundation Black — headings and body
-const MUTED = "67666A"; // subtitle and captions
-const FOOT = "8A898D"; // the footer
-const GREEN = "005058"; // Eco Green — the eyebrow, once
-const ORANGE = "F47E63"; // Crisp Orange — the section rule
-const HEAD_FILL = "F6F7F7"; // the table header row
-const ROW_RULE = "ECECEE"; // the hairline between rows
-const HAIRLINE = "E7E8E9"; // the header rule
+// The house palette, derived rather than retyped — see data/export/houseFormat.ts.
+const INK = ooxmlRgb(HOUSE_COLOURS.ink);
+const MUTED = ooxmlRgb(HOUSE_COLOURS.muted);
+const FOOT = ooxmlRgb(HOUSE_COLOURS.footInk);
+const GREEN = ooxmlRgb(HOUSE_COLOURS.green);
+const ORANGE = ooxmlRgb(HOUSE_COLOURS.orange);
+const HEAD_FILL = ooxmlRgb(HOUSE_COLOURS.headFill);
+const ROW_RULE = ooxmlRgb(HOUSE_COLOURS.rowRule);
+const HAIRLINE = ooxmlRgb(HOUSE_COLOURS.hairline);
 
 // Word sizes are in half-points; borders in eighths of a point.
 const hp = (pt: number) => Math.round(pt * 2);

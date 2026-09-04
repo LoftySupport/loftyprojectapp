@@ -1703,49 +1703,99 @@ Amber's call, and the load waits on it; the three ways are set out in
 deciding: between them the seven hold two comments ("Job cancelled", "here is a test
 update") and nothing else — no tasks, parties, documents, property values or process runs.
 
-## 4 September — Tools, and one table for the report builder
+## 4 September — Tools: the template library, and the documents made from it
 
-Amber: *"add in the report builder module from amberbeaumont/modules to a new section in
-the app called tools"*, shown as a sidebar page **Tools** with a **Template Builder** tab.
-The module is a drag-and-drop report builder; the schema question it asks is where a
-built layout is kept.
+Amber asked for the report builder from `amberbeaumont/modules` as a **Tools** section
+with a **Template Builder** tab, then set out what it actually has to do. The
+requirements are the design, so they are worth quoting before the schema:
 
-**`report_templates` (0094), one table, one jsonb column.** A row is one report layout:
-an ordered list of blocks, the page setup, and the theme it prints in.
+- any user and above creates a **report from an existing template**
+- any user and above creates a **reusable section**; a manager approves it into the library
+- any user and above creates a **template**; a manager approves it before it is in the library
+- a user may **take a template and change it for one instance** — reword a letter, add or
+  remove blocks — without that touching the template
+- the builder brings in **properties from the job/project**
+- the library holds templates and sections at **global, team and manager** level
+- documents go **outside Lofty** by export or by a share link
+- it is for **reports, internal documents and client documents** alike
 
-**Why not a `report_template_blocks` child table.** Because a block holds a *reference*,
-never a copy: what is stored is "the jobs table grouped by stage", and the jobs are read
-out of the app every time the template is opened. Nothing joins to a block, nothing
-filters by one, and the builder rewrites the whole list on every autosave — a child table
-would be a delete-and-reinsert on every debounce. It would also make adding a block type
-a migration, which is the coupling `0077` and `0078` spent two batches removing elsewhere.
+### Two tables, because a template and a document are not the same thing
 
-The cost is stated rather than hidden: Postgres cannot see inside the layout. The one
-thing it *can* check is the shape the builder needs, so it does —
-`coalesce(jsonb_typeof(layout -> 'widgets'), 'missing') = 'array'`. The `coalesce` is
-load-bearing and was found by watching the constraint fail to bite: `jsonb_typeof` of a
-missing key is NULL, a CHECK reads NULL as a pass, and `= 'array'` alone accepted
-`{"page": {...}}` — precisely the row that opens the builder as a blank screen.
+`report_templates` is the library: whole templates and reusable sections, one table with
+a `kind` discriminator because they have the same shape, the same sign-off and the same
+scope rules, and two tables would need every policy, trigger and constraint written twice.
 
-**No `scope_id`.** The module's own schema scopes a report to a workspace or a customer.
-At Lofty a template is company-wide the way a process definition is; one scoped to a
-project would have to be copied to be used on the next, which is the opposite of a
-template. The name is therefore unique across the company, for the same reason
-`saved_views` names are unique per person per board.
+`report_documents` is what somebody made. **This is the table the fourth requirement
+forces.** If "change the wording for this letter" wrote back to the template, the next
+person to use it would inherit one letter's wording — and inherit it silently, because
+the template would still be called what it was called. One row per thing sent is the only
+shape where "change it for this one" and "change it for everyone" are different acts.
 
-**No `share_token`, no `password_hash`.** Public share links are the half of that module
-with real security consequences — an anonymous read path around RLS, served by an edge
-function with a service-role key. Nothing has asked for one. The builder feature-detects
-the store's share methods and hides the panel when they are absent, so not wiring it
-costs nothing and leaves the door open: two columns, an edge function and a public route
-whenever it is wanted.
+A document names the template it came from (`SET NULL` on delete — a letter that has gone
+to a client does not vanish because somebody retired its template) and, optionally, the
+job or project it is about (`CASCADE` — a document about a job that no longer exists is
+about nothing).
 
-**Open, and Amber's to settle: who may build a template.** The policies say read for
-every active user, write for manager and above, delete for admin and above. That middle
-line is a guess at a rule nobody has stated. It sits between "move a job" (`user`) and
-"add or rename a team" (`admin`) on the ladder the app already has, and the reasoning is
-that one person's edit changes the report everybody else sends. If the answer is
-"anybody", it is one word in two policies.
+### The sign-off is the gate, not the permission floor
+
+The write floor is `user` throughout, exactly as asked. What decides whether something is
+in the library is `report_template_approved_at`, stamped by
+`guard_report_template_approval()` from the session — modelled on `guard_party_approval()`
+(0082) down to the error code, so this schema has one approval idiom rather than two that
+drift. A manager writing a template approves it by existing; everybody else's waits.
+
+Until it is approved it is the author's own draft and **literally nobody else can see it**
+— that is the SELECT policy, not the screen. Three things the policies enforce that a
+floor cannot:
+
+| | |
+|---|---|
+| an unapproved draft | visible only to its author |
+| an **approved** entry | no longer its author's to edit — it belongs to the library |
+| a manager-scoped entry | not readable below manager |
+
+Worth recording because it was found by experiment rather than designed: **two independent
+mechanisms** stop a user approving their own template. Disabling the trigger's refusal
+alone did not do it, because the UPDATE policy's `WITH CHECK` then rejects the new row —
+`approved_at` is no longer null and they are not a manager. Both had to be widened before
+`verify/rls.sql` reported it. Neither is redundant: the trigger also governs what a
+*manager's* write may say, which a row-level policy cannot see.
+
+### Properties reach a document through the record it is about
+
+`report_documents.job_id` / `project_id` is what the **Record properties** block resolves
+against when it is set to "the record this document is about" — which is what lets one
+template render 1042-001's properties on 1042-001 and 1043-002's on 1043-002 with nobody
+editing it.
+
+Which properties come back is RLS's answer, not the block's: a restricted property the
+reader may not see never arrives in the context, so it cannot be put into a document by
+choosing it in a settings panel. That is the reason the block reads the already-loaded
+`property_values` rather than asking for a record's values by id.
+
+### Sections are resolved, not pasted
+
+A section is inserted by a **block** that names it and expands it at render time, rather
+than by copying its widgets into the layout. So correcting a section corrects every
+template using it — which is what "reusable" has to mean, or the second requirement buys
+nothing over copy and paste. The cost is a recursion risk: a section containing a section
+block pointing at itself is two clicks to build, so the expander carries a depth counter.
+Without it the stack blows and the reader gets "this block failed to render".
+
+### Share links: the columns exist and nothing writes them
+
+`report_document_share_token`, its **mandatory** expiry (a link that never ends is one
+nobody revokes, and the pair check makes "forever" unwritable) and a password hash.
+
+They are inert. Reading by token cannot go through RLS — serving a share link from the
+browser would mean granting `anon` SELECT on `report_documents`, which exposes every
+other document in it to anybody holding any link. It needs a server endpoint with the
+service role, and `app/supabase/functions/report-share/` is that endpoint, written and
+**not deployed**, with its allowed-origin list and its viewer context deliberately empty
+so an accidental deploy achieves nothing.
+
+**This is the one requirement not delivered live**, and the two questions it waits on are
+Lofty's: which origins may open a link, and what a person outside Lofty may see of a job.
 
 ## Verification
 

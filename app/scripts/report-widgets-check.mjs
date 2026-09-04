@@ -28,6 +28,8 @@ import {
 // it needs no browser and no bundler.
 import { createReportRegistry } from "../src/features/reports/core/registry.js";
 import { createReportEngine } from "../src/features/reports/core/widgetEngine.js";
+import { LOFTY_THEME, LOFTY_THEME_QUIET } from "../src/features/reports/adapters/lofty/theme.js";
+import { HOUSE_COLOURS } from "../src/data/export/houseFormat.ts";
 
 let failures = 0;
 const ok = (name, condition, detail = "") => {
@@ -97,9 +99,80 @@ const processes = [
   { id: "pr2", key: "frame_inspection", name: "Frame inspection", stageName: "Construction", position: 2 }
 ];
 
-const full = { projects, jobs, teams, stageNames, people, processes };
+// The property store, and a library section, so the two blocks that read them have
+// something to read. `property_defs` rows are trimmed to the fields the widgets touch.
+const propertyDefs = [
+  { key: "site_start_date", label: "Site start date", format: "date", stageName: "Construction", position: 1 },
+  { key: "slab_cost", label: "Slab cost", format: "currency", stageName: "Construction", position: 2 },
+  { key: "council_approved", label: "Council approved", format: "checkbox", stageName: "Pre-Construction", position: 1 },
+  { key: "cladding", label: "Cladding", format: "single select", stageName: "Design", position: 1 },
+  { key: "never_filled_in", label: "Nobody has filled this in", format: "text", stageName: "Design", position: 2 }
+];
+const propertyOptions = [
+  { propertyKey: "cladding", key: "brick", label: "Brick veneer", position: 1, isActive: true }
+];
+const propertyValues = [
+  { id: "v1", propertyKey: "site_start_date", format: "date", jobId: "1042-001", projectId: null, value: { date: "2026-10-01" } },
+  { id: "v2", propertyKey: "slab_cost", format: "currency", jobId: "1042-001", projectId: null, value: { number: 18400 } },
+  { id: "v3", propertyKey: "council_approved", format: "checkbox", jobId: "1042-001", projectId: null, value: { bool: true } },
+  { id: "v4", propertyKey: "cladding", format: "single select", jobId: "1042-001", projectId: null, value: { optionKey: "brick" } },
+  { id: "v5", propertyKey: "slab_cost", format: "currency", jobId: null, projectId: 1042, value: { number: 51000 } }
+];
+
+/** One approved library section, holding two blocks. */
+const sections = [
+  {
+    id: "sec1", kind: "section", name: "Site header", scope: "global", teamId: null,
+    approvedAt: "2026-09-04T00:00:00Z", isActive: true,
+    layout: {
+      widgets: [
+        { id: "s_w1", kind: "heading", options: { text: "Site" } },
+        { id: "s_w2", kind: "recordProperties", options: { source: "document", propertyKeys: ["site_start_date"] } }
+      ]
+    }
+  }
+];
+
+/**
+ * The expander the screen supplies, in miniature.
+ *
+ * Same shape as `TemplateBuilderPage`'s: resolve the section's widgets against the
+ * CURRENT context, with a depth counter, because the recursion goes back out through
+ * `engine.resolve` which has no idea it is nested.
+ */
+const MAX_SECTION_DEPTH = 3;
+let depth = 0;
+const expandSection = (section, h) => {
+  // The same sentence the screen uses. A stub that worded its refusal differently would
+  // let the assertion below pass while the real one said something else.
+  if (depth >= MAX_SECTION_DEPTH) {
+    return [{
+      type: "callout", tone: "warn",
+      text: `\u201c${section.name}\u201d is nested inside itself, or more than ${MAX_SECTION_DEPTH} sections deep. It stops here.`
+    }];
+  }
+  depth += 1;
+  try {
+    return (section.layout?.widgets ?? []).flatMap(w => engine.resolve(w, currentCtx, { forExport: h.forExport }));
+  } finally {
+    depth -= 1;
+  }
+};
+
+const full = {
+  projects, jobs, teams, stageNames, people, processes,
+  propertyDefs, propertyValues, propertyOptions,
+  sections, expandSection,
+  subject: { jobId: "1042-001", projectId: null }
+};
 /** Not an error state: Phase B has not run, so this is the app as it stands today. */
-const empty = { projects: [], jobs: [], teams, stageNames, people: [], processes: [] };
+const empty = {
+  projects: [], jobs: [], teams, stageNames, people: [], processes: [],
+  propertyDefs: [], propertyValues: [], propertyOptions: [],
+  sections: [], expandSection, subject: null
+};
+/** What `expandSection` resolves against; the screen keeps this in a ref for the same reason. */
+let currentCtx = full;
 
 // Walk a block tree and collect what a reader would actually see.
 const textOf = (blocks) => JSON.stringify(blocks);
@@ -113,6 +186,7 @@ const typesIn = (blocks) => blocks.map(b => b.type);
 console.log("--- every registered widget resolves against a full context and an empty one");
 for (const kind of Object.keys(LOFTY_WIDGETS)) {
   for (const [label, ctx] of [["full", full], ["empty", empty]]) {
+    currentCtx = ctx;
     const widget = engine.createWidget(kind, ctx);
     const blocks = engine.resolve(widget, ctx);
     const failed = blocks.some(b => b.type === "callout" && /failed to render|Unknown block/i.test(b.text || ""));
@@ -128,6 +202,7 @@ for (const kind of Object.keys(LOFTY_WIDGETS)) {
 // rather than as "there are no jobs yet".
 console.log("--- an empty database produces callouts, not empty tables");
 for (const kind of Object.keys(LOFTY_WIDGETS)) {
+  currentCtx = empty;
   const blocks = engine.resolve(engine.createWidget(kind, empty), empty);
   const emptyTable = blocks.find(b => b.type === "table" && (b.rows || []).length === 0);
   const emptyBoard = blocks.find(b => b.type === "board" && (b.columns || []).every(c => !c.cards?.length));
@@ -135,6 +210,7 @@ for (const kind of Object.keys(LOFTY_WIDGETS)) {
     !emptyTable && !emptyBoard,
     emptyTable ? "an empty table" : emptyBoard ? "a board of empty columns" : "");
 }
+currentCtx = full;
 
 // ─── 3. Blocks hold references, never copies ─────────────────────────
 //
@@ -145,8 +221,11 @@ for (const kind of Object.keys(LOFTY_WIDGETS)) {
 console.log("--- a resolver reads ctx every time, so the same block renders different data");
 for (const kind of Object.keys(LOFTY_WIDGETS)) {
   const widget = engine.createWidget(kind, full);
+  currentCtx = full;
   const before = textOf(engine.resolve(widget, full));
+  currentCtx = empty;
   const after = textOf(engine.resolve(widget, empty));
+  currentCtx = full;
   ok(`${kind} renders differently against different data`, before !== after,
     "identical output for a full and an empty context — the resolver is not reading ctx");
 }
@@ -249,6 +328,159 @@ console.log("--- compiling a seeded draft produces a sectioned document");
     "a block is still telling the reader to open its settings");
   ok("the tables carry real rows",
     typesIn(report.sections.flatMap(s => s.blocks)).includes("table"));
+}
+
+// ─── 11. Properties come from the record, formatted the app's own way ────
+//
+// Watched: a second formatter written here rendered the slab cost as "18400" where the
+// job drawer says "$18,400" — the report and the drawer disagreeing about the same
+// number, which is why `formatValue` was lifted into `data/propertyFormat.ts` and is
+// imported rather than reimplemented.
+console.log("--- record properties read the job's own values, formatted as the drawer formats them");
+{
+  currentCtx = full;
+  const w = { id: "w7", kind: "recordProperties", options: { source: "document", propertyKeys: [], showBlanks: false } };
+  const items = engine.resolve(w, full)[0].items;
+  const val = (label) => items.find(i => i.label === label)?.value;
+
+  ok("a date renders as a date", !!val("Site start date") && val("Site start date") !== "—", val("Site start date"));
+  ok("a currency renders with its symbol and separators", /\$/.test(val("Slab cost") || "") && /18[,.]?400/.test(val("Slab cost") || ""), val("Slab cost"));
+  ok("a checkbox renders Yes, not true", val("Council approved") === "Yes", val("Council approved"));
+  ok("a select renders its label, not its key", val("Cladding") === "Brick veneer", val("Cladding"));
+
+  // Watched: without the hasValue filter the block emitted a row of em dashes for every
+  // property nobody had filled in, which is a page of dashes on a client letter.
+  ok("a property nobody filled in is left out by default",
+    val("Nobody has filled this in") === undefined, String(val("Nobody has filled this in")));
+
+  const withBlanks = engine.resolve(
+    { id: "w8", kind: "recordProperties", options: { source: "document", propertyKeys: [], showBlanks: true } },
+    full
+  )[0].items;
+  ok("…and is an em dash, never a zero or a blank, when asked for",
+    withBlanks.find(i => i.label === "Nobody has filled this in")?.value === "—",
+    withBlanks.find(i => i.label === "Nobody has filled this in")?.value);
+
+  // The project's own slab cost is a different row from the job's. Watched: a filter on
+  // propertyKey alone returned both and the block printed the project's number on a job
+  // report.
+  const onProject = engine.resolve(
+    { id: "w9", kind: "recordProperties", options: { source: "project", projectId: "1042", propertyKeys: ["slab_cost"] } },
+    full
+  )[0].items;
+  ok("a project's value is not the job's", /51[,.]?000/.test(onProject[0]?.value || ""), onProject[0]?.value);
+
+  // The chosen order is the printed order, not the pipeline's.
+  const ordered = engine.resolve(
+    { id: "w10", kind: "recordProperties", options: { source: "document", propertyKeys: ["cladding", "site_start_date"] } },
+    full
+  )[0].items;
+  ok("the order chosen in settings is the order printed",
+    ordered.map(i => i.label).join("|") === "Cladding|Site start date",
+    ordered.map(i => i.label).join("|"));
+}
+
+// ─── 12. A document about nothing says so, in the document ───────────────
+//
+// The one place a prompt SHOULD survive into an export. Watched: returning [] here put a
+// heading over nothing into a compiled letter, which reads as a rendering fault.
+console.log("--- a properties block on a document about no record is not silently blank");
+{
+  const noSubject = { ...full, subject: null };
+  currentCtx = noSubject;
+  const w = { id: "w11", kind: "recordProperties", options: { source: "document", propertyKeys: [] } };
+  const inBuilder = engine.resolve(w, noSubject, { forExport: false });
+  const inDocument = engine.resolve(w, noSubject, { forExport: true });
+  ok("the builder tells the author to set the record",
+    inBuilder.length === 1 && inBuilder[0].tone === "info", textOf(inBuilder));
+  ok("the export warns the reader rather than printing nothing",
+    inDocument.length === 1 && inDocument[0].tone === "warn", textOf(inDocument));
+  currentCtx = full;
+}
+
+// ─── 13. A library section expands to the blocks it stands for ───────────
+console.log("--- a library section renders its own blocks, resolved against live data");
+{
+  currentCtx = full;
+  const w = { id: "w12", kind: "librarySection", options: { sectionId: "sec1" } };
+  const blocks = engine.resolve(w, full);
+  ok("the section's heading and its properties block both render",
+    blocks.some(b => b.type === "subheading") && blocks.some(b => b.type === "keyValues"),
+    typesIn(blocks).join("|"));
+  // The nested properties block read the OUTER document's subject, which is the whole
+  // reason a section is worth having: written once, correct on every job.
+  const kv = blocks.find(b => b.type === "keyValues");
+  ok("a block inside the section resolved against the document's own record",
+    kv?.items?.[0]?.label === "Site start date" && kv.items[0].value !== "—",
+    JSON.stringify(kv?.items));
+
+  const gone = engine.resolve({ id: "w13", kind: "librarySection", options: { sectionId: "nope" } }, full);
+  ok("a section that has left the library asks to be re-picked",
+    gone.length === 1 && gone[0].repick === true, textOf(gone));
+}
+
+// ─── 14. A section inside itself stops, rather than hanging the tab ──────
+//
+// Two clicks build this by accident. Watched: without the depth counter this recursed
+// until the stack blew — and in the browser that is a frozen tab with no error, on the
+// author's own screen, with their unsaved work in it.
+console.log("--- a section nested inside itself is stopped, not followed");
+{
+  const selfReferential = [{
+    ...sections[0],
+    id: "loop", name: "Loops back",
+    layout: { widgets: [{ id: "l_w1", kind: "librarySection", options: { sectionId: "loop" } }] }
+  }];
+  const looping = { ...full, sections: selfReferential };
+  currentCtx = looping;
+  let blocks;
+  const started = Date.now();
+  try {
+    blocks = engine.resolve({ id: "w14", kind: "librarySection", options: { sectionId: "loop" } }, looping);
+  } catch (e) {
+    blocks = [{ type: "callout", tone: "danger", text: String(e && e.message) }];
+  }
+  ok("it terminates", Date.now() - started < 2000, `${Date.now() - started}ms`);
+  ok("and says why rather than rendering nothing",
+    JSON.stringify(blocks).includes("nested inside itself"), textOf(blocks).slice(0, 200));
+  currentCtx = full;
+}
+
+// ─── 15. The builder's documents wear the house format, not a second one ─
+//
+// A document composed in the builder and a table exported from Jobs land in the same
+// email. They came from different code and, before this, from two different palettes:
+// the theme here was built from the app's UI tokens (teal ink) while every export in
+// data/export/ uses the house document format (Foundation Black, Eco Green, Crisp
+// Orange). Nobody would have called that a bug; they would have called the app
+// inconsistent, which is worse because there is nothing to fix.
+//
+// Watched: with the theme's ink set back to the old #00393f, this reports.
+console.log("--- the Lofty theme is the house document format, role for role");
+{
+  const pairs = [
+    ["ink", HOUSE_COLOURS.ink],
+    ["muted", HOUSE_COLOURS.muted],
+    ["surfaceAlt", HOUSE_COLOURS.headFill],
+    ["line", HOUSE_COLOURS.rowRule],
+    ["accent", HOUSE_COLOURS.orange],
+    ["heading", HOUSE_COLOURS.green]
+  ];
+  for (const [role, expected] of pairs) {
+    const got = LOFTY_THEME.colors[role];
+    ok(`${role} is the house ${expected}`,
+      String(got).toLowerCase() === String(expected).toLowerCase(), String(got));
+  }
+  // The quiet variant is the same format with the rule held back, not a third palette.
+  ok("the quiet variant shares the house ink and heading",
+    LOFTY_THEME_QUIET.colors.ink.toLowerCase() === HOUSE_COLOURS.ink.toLowerCase()
+    && LOFTY_THEME_QUIET.colors.heading.toLowerCase() === HOUSE_COLOURS.green.toLowerCase(),
+    `${LOFTY_THEME_QUIET.colors.ink} / ${LOFTY_THEME_QUIET.colors.heading}`);
+  // Helvetica first, never Arial — the Word writer's rule, and core/docx.js takes the
+  // first family in the stack and writes it into the file.
+  ok("the document font is Helvetica first, and Arial appears nowhere",
+    /^Helvetica\b/.test(LOFTY_THEME.fonts.body) && !/Arial/i.test(LOFTY_THEME.fonts.body),
+    LOFTY_THEME.fonts.body);
 }
 
 console.log(failures === 0

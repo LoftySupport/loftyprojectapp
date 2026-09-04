@@ -14,6 +14,11 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Documents — make a progress report, a client letter or a maintenance report from a template, and change whatever that one needs without touching the template
+- A template library, with reusable sections that update everywhere when you edit them
+- Anyone can propose a template or a section; a manager approves it into the library, and until then only its author can see it
+- Templates and sections can be for everyone, for one team, or for managers and above
+- A report block that pulls the properties recorded on a job or project into the document
 - Tools — a new section in the sidebar for the things you use to make something
 - Template Builder — build a report layout by dragging blocks, then print it, save it as a PDF, or download it as Word, Markdown or HTML
 - A report template reads the app every time it is opened, so the same template is always current rather than a snapshot of the day it was written
@@ -78,6 +83,8 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- The version in the footer names the commit it was built from on Vercel as well as Netlify, instead of reading "local" on a real deployment
+- The row hairline in an exported PDF was one shade off the same line in the Word document
 - The jobs board offers only the processes of the stage you have filtered to, and says the right thing when a process belongs to a stage the job has already left
 - The jobs board no longer scrolls sideways on a phone
 - Setup → Processes no longer scrolls sideways on a tablet or a small phone
@@ -102,6 +109,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- Documents built in the Template Builder now carry Lofty's house document format — the same wordmark, colours, section rule and font as every other export
 - Excel, Word and PDF exports now carry Lofty's house document format — the wordmark, the orange section rule, the grey table header and the "Commercial in confidence" footer
 - Every dropdown narrows as you type and lists its options alphabetically, except where the order is the information — and a process can be filed straight into a pipeline when it is created
 - Setup → Processes is now a pipeline you drag, with the name editable in place and a process added straight into its stage
