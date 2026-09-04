@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 104 changes since then —
+Unreleased: 108 changes since then —
+- Added: Tools — a new section in the sidebar for the things you use to make something
+- Added: Template Builder — build a report layout by dragging blocks, then print it, save it as a PDF, or download it as Word, Markdown or HTML
+- Added: A report template reads the app every time it is opened, so the same template is always current rather than a snapshot of the day it was written
+- Added: Report templates carry Lofty's colours and wordmark, with a quieter variant for long documents
 - Changed: Excel, Word and PDF exports now carry Lofty's house document format — the wordmark, the orange section rule, the grey table header and the "Commercial in confidence" footer
-- Added: The exported PDF and Word document embed the real Lofty wordmark and set the brand's Helvetica
-- Added: Every list and report has an Export menu — download exactly what is on screen as an Excel workbook, a Word document or a PDF
-- Added: A grouped board or table exports one sheet, one Word section and one page per group
-- Added: Downloads name themselves for the screen and the day, so several exports in a folder can be told apart
-- …and 99 more.
+- …and 103 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
