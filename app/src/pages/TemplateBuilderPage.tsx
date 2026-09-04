@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Button, Text, TextField } from "@vibe/core";
+import { Button, Tab, TabList, Text, TextField } from "@vibe/core";
 import { useQuery, useRepository } from "../data/DataProvider";
 import { useAuth } from "../data/AuthProvider";
 import { usePermission } from "../data/PermissionProvider";
@@ -107,7 +107,17 @@ export function TemplateBuilderPage() {
   const [docTitle, setDocTitle] = useState("");
   const [docFrom, setDocFrom] = useState<string | null>(null);
   const [libName, setLibName] = useState("");
-  const [libKind, setLibKind] = useState<ReportTemplateKind>("template");
+  /**
+   * Which lane is on screen. Amber, 4 September: *"have the builder and templates in
+   * libraries with tabs"*.
+   *
+   * It replaces two things at once — the two stacked panels, and the Template/Section
+   * dropdown beside the library's name field. The dropdown was a second way of saying
+   * what the tab now says, and two controls for one question is how somebody names a
+   * section and finds it filed as a template.
+   */
+  const [lane, setLane] = useState<"documents" | "template" | "section">("documents");
+  const libKind: ReportTemplateKind = lane === "section" ? "section" : "template";
   const [busy, setBusy] = useState(false);
 
   // ── What is in the library, and what has been made from it ───────────────
@@ -367,14 +377,36 @@ export function TemplateBuilderPage() {
 
   if (libError) return <LoadProblem error={libError} />;
 
-  const pending = templates.filter(t => t.approvedAt === null);
-  const inLibrary = templates.filter(t => t.approvedAt !== null);
+  // Filtered by the tab, so the Sections tab is sections and nothing else. Waiting
+  // proposals come first in the list below: they are the ones somebody has to act on.
+  const ofKind = templates.filter(t => t.kind === libKind);
+  const pending = ofKind.filter(t => t.approvedAt === null);
+  const inLibrary = ofKind.filter(t => t.approvedAt !== null);
+
+  const LANES = [
+    { id: "documents", label: "Documents" },
+    { id: "template", label: "Templates" },
+    { id: "section", label: "Sections" }
+  ] as const;
 
   return (
     <>
       {problem && <Problem>{problem}</Problem>}
 
+      {/* Three lanes, one on screen at a time. A second TabList under the Tools tabs is
+          deliberate: those choose the tool, these choose what you are working on inside
+          it, and flattening them would put "Sections" beside "Template Builder" as if
+          they were the same kind of choice. */}
+      <TabList
+        activeTabId={LANES.findIndex(l => l.id === lane)}
+        onTabChange={(i: number) => setLane(LANES[i].id)}
+        size="small"
+      >
+        {LANES.map(l => <Tab key={l.id}>{l.label}</Tab>)}
+      </TabList>
+
       {/* ── Documents ───────────────────────────────────────────────────── */}
+      {lane === "documents" && (
       <section className="panel">
         <div className="panel-head">
           <Text type="text2" weight="bold">Documents</Text>
@@ -487,11 +519,15 @@ export function TemplateBuilderPage() {
           </div>
         )}
       </section>
+      )}
 
       {/* ── The library ─────────────────────────────────────────────────── */}
+      {lane !== "documents" && (
       <section className="panel">
         <div className="panel-head">
-          <Text type="text2" weight="bold">Template library</Text>
+          <Text type="text2" weight="bold">
+            {libKind === "section" ? "Section library" : "Template library"}
+          </Text>
           <Text type="text3" color="secondary">
             {canApprove
               ? "you can sign entries into the library — a change here changes what everybody starts from"
@@ -499,31 +535,35 @@ export function TemplateBuilderPage() {
           </Text>
         </div>
         <Text type="text2" color="secondary" ellipsis={false}>
-          A <strong>template</strong> is a whole document to start from. A{" "}
-          <strong>section</strong> is a fragment — a letterhead, a scope-of-works table, a
-          sign-off block — dropped into a template by the <em>Library section</em> block and
-          resolved every time it renders, so correcting a section corrects every template
-          using it.
+          {libKind === "section" ? (
+            <>
+              A <strong>section</strong> is a fragment — a letterhead, a scope-of-works
+              table, a sign-off block — dropped into a template by the{" "}
+              <em>Library section</em> block and resolved every time it renders, so
+              correcting a section here corrects every template using it.
+            </>
+          ) : (
+            <>
+              A <strong>template</strong> is a whole document to start from. Making a
+              document from one takes a copy, so changing that document never changes the
+              template it came from.
+            </>
+          )}
         </Text>
 
         {canWrite && (
           <div className="panel-actions" style={{ marginTop: "var(--space-12)" }}>
-            <span style={{ flex: "0 1 260px", minWidth: 0 }}>
+            {/* The kind comes from the tab. It used to be a dropdown here as well, which
+                was two controls for one question — and the way somebody names a section,
+                leaves the dropdown on Template, and cannot find it afterwards. */}
+            <span style={{ flex: "0 1 320px", minWidth: 0 }}>
               <TextField
                 id="new-library-name"
-                placeholder="Name a new template or section…"
+                placeholder={libKind === "section" ? "Name a new section…" : "Name a new template…"}
                 value={libName}
                 onChange={setLibName}
                 size="small"
-                inputAriaLabel="Name for a new template or section"
-              />
-            </span>
-            <span style={{ flex: "0 0 150px" }}>
-              <Select
-                aria-label="Whether to make a template or a section"
-                options={toOptions(["Template", "Section"])}
-                value={libKind === "section" ? "Section" : "Template"}
-                onChange={v => setLibKind(v === "Section" ? "section" : "template")}
+                inputAriaLabel={libKind === "section" ? "Name for a new section" : "Name for a new template"}
               />
             </span>
             <Button size="small" onClick={createLibraryEntry} disabled={!libName.trim() || busy}>
@@ -643,6 +683,7 @@ export function TemplateBuilderPage() {
             on an empty database and a lie on a full one. */}
         {recordsError && <LoadProblem error={recordsError} />}
       </section>
+      )}
 
       {/* Both render into a portal over the whole viewport, so neither needs a slot in
           the page's layout. */}
