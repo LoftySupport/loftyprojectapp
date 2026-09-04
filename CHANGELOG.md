@@ -14,6 +14,11 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Documents — make a progress report, a client letter or a maintenance report from a template, and change whatever that one needs without touching the template
+- A template library, with reusable sections that update everywhere when you edit them
+- Anyone can propose a template or a section; a manager approves it into the library, and until then only its author can see it
+- Templates and sections can be for everyone, for one team, or for managers and above
+- A report block that pulls the properties recorded on a job or project into the document
 - Tools — a new section in the sidebar for the things you use to make something
 - Template Builder — build a report layout by dragging blocks, then print it, save it as a PDF, or download it as Word, Markdown or HTML
 - A report template reads the app every time it is opened, so the same template is always current rather than a snapshot of the day it was written

@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 108 changes since then —
-- Added: Tools — a new section in the sidebar for the things you use to make something
-- Added: Template Builder — build a report layout by dragging blocks, then print it, save it as a PDF, or download it as Word, Markdown or HTML
-- Added: A report template reads the app every time it is opened, so the same template is always current rather than a snapshot of the day it was written
-- Added: Report templates carry Lofty's colours and wordmark, with a quieter variant for long documents
-- Changed: Excel, Word and PDF exports now carry Lofty's house document format — the wordmark, the orange section rule, the grey table header and the "Commercial in confidence" footer
-- …and 103 more.
+Unreleased: 113 changes since then —
+- Added: Documents — make a progress report, a client letter or a maintenance report from a template, and change whatever that one needs without touching the template
+- Added: A template library, with reusable sections that update everywhere when you edit them
+- Added: Anyone can propose a template or a section; a manager approves it into the library, and until then only its author can see it
+- Added: Templates and sections can be for everyone, for one team, or for managers and above
+- Added: A report block that pulls the properties recorded on a job or project into the document
+- …and 108 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
