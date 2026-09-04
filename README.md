@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 125 changes since then —
+Unreleased: 126 changes since then —
+- Fixed: The changelog generator no longer reports "Changelog: skip" as a mistake, so its check can pass again
 - Changed: Setup is now Settings, and managers and above can open it — properties, processes, contacts, maintenance, the stage SLAs and the notification rules
 - Changed: Admin has moved off the sidebar to a cog in the top bar, and appears only for admins and super admins
 - Changed: Users, teams, permissions, the dictionary, the wiring, the bug and idea queues, the roadmap and the changelog are all now under the cog
 - Added: Managers can set how long a stage should take and who hears when it is overdue, without being able to rename or reorder the stages themselves
-- Added: Typing the address of a page above your permission level now says which level it needs and what yours is, instead of showing an empty screen
-- …and 120 more.
+- …and 121 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

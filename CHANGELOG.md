@@ -88,6 +88,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- The changelog generator no longer reports "Changelog: skip" as a mistake, so its check can pass again
 - The version in the footer names the commit it was built from on Vercel as well as Netlify, instead of reading "local" on a real deployment
 - The row hairline in an exported PDF was one shade off the same line in the Word document
 - The jobs board offers only the processes of the stage you have filtered to, and says the right thing when a process belongs to a stage the job has already left
