@@ -8,6 +8,7 @@ import { useProcesses, usePropertyDefs, usePropertyOptions, useStages, useTeams 
 import { LoadProblem, NothingYet } from "../components/SearchNotices";
 import { Problem } from "../components/Form";
 import { Select, toOptions } from "../components/Select";
+import { SidePanel } from "../components/SidePanel";
 import { useToasts } from "../components/Toasts";
 import {
   REPORT_TEMPLATE_SCOPE_LABELS,
@@ -105,25 +106,53 @@ type OpenTarget =
  * three unrelated controls rather than three choices.
  */
 function GetStartedCard(
-  { title, hint, children, action }:
+  { title, hint, action, children, onClick, disabled, disabledNote }:
   {
     title: string;
     hint: string;
+    /** A button, for the library lanes where the choice still needs a field beside it. */
+    action?: React.ReactNode;
     children?: React.ReactNode;
-    action: React.ReactNode;
+    /** Makes the whole card the control. The Document Builder uses this. */
+    onClick?: () => void;
+    disabled?: boolean;
+    /** Why it is disabled, in place of the hint. "No templates in the library yet". */
+    disabledNote?: string;
   }
 ) {
-  return (
-    <div className="get-started-card">
+  const body = (
+    <>
       <div className="get-started-card-title">
         <Text type="text2" weight="bold">{title}</Text>
       </div>
-      <Text type="text3" color="secondary" ellipsis={false}>{hint}</Text>
+      <Text type="text3" color="secondary" ellipsis={false}>
+        {disabled && disabledNote ? disabledNote : hint}
+      </Text>
       {children && <div className="get-started-card-fields">{children}</div>}
       <div className="get-started-card-fill" />
       {action}
-    </div>
+    </>
   );
+
+  // THE WHOLE CARD IS THE BUTTON, not a card with a button in it.
+  //
+  // Amber's sketch has three things to click and nothing else on the screen. A card
+  // holding a button gives the eye two targets for one act and a dead margin between
+  // them that looks clickable and is not. A real <button> rather than a div with an
+  // onClick, so it is reachable by keyboard and announces itself as a control.
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        className="get-started-card get-started-card-button"
+        onClick={onClick}
+        disabled={disabled}
+      >
+        {body}
+      </button>
+    );
+  }
+  return <div className="get-started-card">{body}</div>;
 }
 
 /**
@@ -152,13 +181,25 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
   const [libName, setLibName] = useState("");
   /** What "Clone" copies from — a document id in the builder lane, a library id otherwise. */
   const [cloneFrom, setCloneFrom] = useState<string | null>(null);
+  /**
+   * Which of the three was clicked, and therefore what the naming panel has to ask.
+   *
+   * Null means no panel. The choice comes FIRST and the name second, which is the order
+   * Amber asked for — *"when you click on it, it should create a new one and ask to name
+   * it"* — and the order that lets the three cards be live buttons rather than three
+   * controls greyed out behind a field nobody has filled in yet.
+   */
+  const [starting, setStarting] = useState<{ how: "template" | "clone" | "scratch" } | null>(null);
   const libKind: ReportTemplateKind = lane === "section" ? "section" : "template";
   const [busy, setBusy] = useState(false);
 
   // ── What is in the library, and what has been made from it ───────────────
   const { data: templates, loading: libLoading, error: libError } =
     useQuery(r => r.listReportTemplates(), [], [reloadKey]);
-  const { data: documents, loading: docsLoading, error: docsError } =
+  // Still read, though nothing lists them any more: "Clone An Existing Document" needs
+  // to know what there is to clone, and whether there is anything at all decides whether
+  // that card is live or greyed.
+  const { data: documents, error: docsError } =
     useQuery(r => r.listReportDocuments(), [], [reloadKey]);
 
   // ── The data every block resolves against ────────────────────────────────
@@ -334,6 +375,7 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
       } as Parameters<typeof documentStore.create>[0]);
       setDocTitle("");
       setDocFrom(null);
+      setStarting(null);
       bump();
       setOpen({ lane: "document", row, subject: { jobId: null, projectId: null } });
     });
@@ -365,6 +407,7 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
       } as Parameters<typeof documentStore.create>[0]);
       setDocTitle("");
       setCloneFrom(null);
+      setStarting(null);
       bump();
       setOpen({
         lane: "document",
@@ -376,22 +419,49 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
       });
     });
 
-  const openDocument = (d: ReportDocument) =>
-    run(async () => {
-      // Re-read rather than use the row the list is holding: these are shared, the list
-      // was fetched when the tab opened, and the builder autosaves whatever it is given.
-      // Opening a stale copy would write it back over somebody's work.
-      const row = await documentStore.get(d.id);
-      setOpen({ lane: "document", row, subject: { jobId: d.jobId, projectId: d.projectId } });
-    });
+  /**
+   * Close the naming panel, and forget what was half-typed into it.
+   *
+   * Clearing on close rather than on open: a panel that opens showing the last attempt's
+   * name looks like it remembered something on purpose, and the first thing anybody does
+   * is delete it.
+   */
+  const closeStarting = () => {
+    if (busy) return;
+    setStarting(null);
+    setDocTitle("");
+    setDocFrom(null);
+    setCloneFrom(null);
+  };
 
-  const removeDocument = (d: ReportDocument) =>
-    run(async () => {
-      if (!window.confirm(`Delete “${d.title}”? This does not touch the template it came from.`)) return;
-      await repo.deleteReportDocument(d.id);
-      bump();
-      toast(`Deleted “${d.title}”.`, "positive");
-    });
+  /**
+   * The one button at the bottom of the naming panel, whichever card opened it.
+   *
+   * It dispatches to the same two functions the old inline buttons called, rather than
+   * repeating their bodies — `remapIds`, the share columns a clone must not inherit, and
+   * the subject a clone keeps are all decisions with reasons written where they are made,
+   * and a second copy here would be a second place for them to drift.
+   */
+  const confirmStart = () => {
+    if (!starting) return;
+    if (starting.how === "clone") cloneDocument();
+    else createDocument(starting.how === "template" ? docFrom : null);
+  };
+
+  // NO `openDocument` AND NO `removeDocument`, AND THAT IS A GAP WORTH NAMING.
+  //
+  // Both existed for the table that used to sit under the cards. Amber, 4 September:
+  // *"I don't need a list of documents created below. they will live on the job."* They
+  // will — but they do not yet, so between this change and the job page carrying them
+  // there is NO WAY BACK INTO A DOCUMENT once the builder is closed, and no way to
+  // delete one.
+  //
+  // Deleted rather than left unused: dead code that still compiles is the kind a later
+  // reader wires back up to "fix" the gap, which would put the list back on the screen
+  // it was just taken off. The functions were eight lines each; the decisions in them —
+  // re-read before opening so autosave cannot write a stale copy over somebody's work,
+  // and say in the confirm that deleting a document does not touch its template — are
+  // the parts worth carrying to the job page, so they are written here.
 
   // ── The library ──────────────────────────────────────────────────────────
 
@@ -498,180 +568,68 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
       {problem && <Problem>{problem}</Problem>}
 
       {/* ── Documents ───────────────────────────────────────────────────── */}
-      {lane === "documents" && (
-      <section className="panel">
-        <div className="panel-head">
-          <Text type="text2" weight="bold">Document Builder</Text>
-          <Text type="text3" color="secondary">
-            yours to edit — changing one never changes the template it came from
-          </Text>
-        </div>
-        <Text type="text2" color="secondary" ellipsis={false}>
-          A progress report, a client letter, a maintenance report. Start from a template
-          and change whatever this one needs — the wording, the blocks, the order. Send it
-          with <strong>Preview &amp; export</strong>: print, PDF, Word, Markdown or HTML.
-        </Text>
+      {/* ── Document Builder ─────────────────────────────────────────────
+          FULL SCREEN, THREE CHOICES, NOTHING ELSE.
 
-        {canWrite && (
-          <div className="get-started">
-            <span className="get-started-label">Get started</span>
-            {/* ONE NAME FIELD, ABOVE THE THREE, BECAUSE ALL THREE NEED IT.
-                It was inside the first card for a draft, with a line underneath saying
-                the other two used it as well — which is the same "which control belongs
-                to which" problem the cards exist to remove, moved rather than fixed. A
-                field that belongs to all three sits above all three. */}
-            <span style={{ display: "block", maxWidth: 360 }}>
-              <TextField
-                id="new-document-title"
-                title="Name"
-                placeholder="Name a new document…"
-                value={docTitle}
-                onChange={setDocTitle}
-                size="small"
-                inputAriaLabel="Title for a new document"
-              />
-            </span>
+          Amber, 4 September: *"I don't need text explaining above the buttons. I don't
+          need a list of documents created below. they will live on the job. I just want
+          the document build to be full screen like the image with the three butons in
+          the middle. when you click on it, it should create a new one and ask to name
+          it"*.
+
+          Three things went, and each was load-bearing until it was not:
+
+          THE PARAGRAPH. It said what a document is and what Preview & export does — read
+          once, then stepped over daily by the person who already knows.
+
+          THE NAME FIELD. It sat above the cards and had to be filled before any button
+          would light up, so the first thing the screen did was disable itself. The name
+          is asked for AFTER the choice now, when it is a question about a thing that is
+          about to exist rather than a gate in front of three greyed-out buttons.
+
+          THE TABLE. A document belongs to the job it is about, and that is where it will
+          be opened from. A second list here would be a second place to look, going stale
+          the moment the job page has one.
+
+          What is left is the choice, in the middle of the screen. */}
+      {lane === "documents" && (
+      <section className="lane-empty">
+        {canWrite ? (
+          <div className="get-started get-started-centred">
             <div className="get-started-grid">
-              {/* THREE CARDS, BECAUSE THEY ARE THREE DIFFERENT ACTS
-                  and a single button with a dropdown made the difference invisible. Each
-                  is disabled until it has what it needs, so which are available is itself
-                  the answer to "can I clone anything yet". */}
               <GetStartedCard
                 title="Start From A Template"
                 hint="A layout a manager has signed into the library. You get a copy — changing it never changes the template."
-                action={
-                  <Button
-                    size="small"
-                    onClick={() => createDocument(docFrom)}
-                    disabled={!docTitle.trim() || !docFrom || busy}
-                  >
-                    Create New Document
-                  </Button>
-                }
-              >
-                <Select
-                  aria-label="Template to start the document from"
-                  placeholder={libraryTemplates.length ? "From a template…" : "No templates in the library yet"}
-                  options={toOptions(libraryTemplates.map(t => t.name))}
-                  value={docFrom ? libraryTemplates.find(t => t.id === docFrom)?.name ?? null : null}
-                  onChange={n => setDocFrom(libraryTemplates.find(t => t.name === n)?.id ?? null)}
-                />
-              </GetStartedCard>
-
+                disabled={!libraryTemplates.length}
+                disabledNote="No templates in the library yet"
+                onClick={() => setStarting({ how: "template" })}
+              />
               <GetStartedCard
                 title="Clone An Existing Document"
                 hint="Start from one that has already been sent — last month's progress report, with this month's numbers read fresh."
-                action={
-                  <Button
-                    size="small"
-                    kind="secondary"
-                    onClick={cloneDocument}
-                    disabled={!docTitle.trim() || !cloneFrom || busy}
-                  >
-                    Clone Existing
-                  </Button>
-                }
-              >
-                <Select
-                  aria-label="Document to clone"
-                  placeholder={documents.length ? "A document to copy…" : "No documents to copy yet"}
-                  options={toOptions(documents.map(d => d.title))}
-                  value={cloneFrom ? documents.find(d => d.id === cloneFrom)?.title ?? null : null}
-                  onChange={n => setCloneFrom(documents.find(d => d.title === n)?.id ?? null)}
-                />
-              </GetStartedCard>
-
+                disabled={!documents.length}
+                disabledNote="No documents to copy yet"
+                onClick={() => setStarting({ how: "clone" })}
+              />
               <GetStartedCard
                 title="Start From Scratch"
                 hint="An empty page. Drag blocks in from the palette on the left of the builder."
-                action={
-                  <Button
-                    size="small"
-                    kind="secondary"
-                    onClick={() => createDocument(null)}
-                    disabled={!docTitle.trim() || busy}
-                  >
-                    Start From Scratch
-                  </Button>
-                }
+                onClick={() => setStarting({ how: "scratch" })}
               />
             </div>
           </div>
+        ) : (
+          <NothingYet
+            title="Documents are made by the people who send them"
+            description="Ask a colleague at user level or above to start one."
+          />
         )}
 
+        {/* The reads behind the blocks, failing loudly. A builder whose ctx never arrived
+            renders every block as "no jobs yet", which is the same sentence as the truth
+            on an empty database and a lie on a full one. */}
+        {recordsError && <LoadProblem error={recordsError} />}
         {docsError && <LoadProblem error={docsError} />}
-        {docsLoading ? (
-          <Text type="text2" color="secondary">Loading…</Text>
-        ) : documents.length === 0 ? (
-          <NothingYet
-            title="No documents yet"
-            /* The three cards are directly above this and say all of it. What is left is
-               the one thing they do not: whether the emptiness is yours or everyone's. */
-            description={
-              canWrite
-                ? "Use one of the three ways above to make the first one."
-                : "Nobody has made a document yet."
-            }
-          />
-        ) : (
-          <div className="data-table-wrap" style={{ marginTop: "var(--space-12)" }}>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Document</th>
-                  <th>About</th>
-                  <th>From</th>
-                  <th>Last changed</th>
-                  <th aria-label="Actions" />
-                </tr>
-              </thead>
-              <tbody>
-                {documents.map(d => (
-                  <tr key={d.id}>
-                    <td><Text type="text2" weight="medium">{d.title}</Text></td>
-                    <td>
-                      <Text type="text2">
-                        {d.jobId ?? (d.projectId != null ? String(d.projectId) : "—")}
-                      </Text>
-                    </td>
-                    <td>
-                      <Text type="text2">
-                        {d.templateId
-                          ? templates.find(t => t.id === d.templateId)?.name ?? "a template since removed"
-                          : "—"}
-                      </Text>
-                    </td>
-                    <td>
-                      <Text type="text2">
-                        {new Date(d.updatedAt).toLocaleDateString("en-AU")}
-                        {nameOf(d.updatedBy) ? ` · ${nameOf(d.updatedBy)}` : ""}
-                      </Text>
-                    </td>
-                    <td>
-                      <div className="row-actions">
-                        <Button
-                          size="small" kind="tertiary"
-                          onClick={() => previewLayout(
-                            d.title, d.layout?.widgets ?? [], d.layout?.theme,
-                            { jobId: d.jobId, projectId: d.projectId }
-                          )}
-                        >
-                          Preview &amp; export
-                        </Button>
-                        {canWrite && (
-                          <Button size="small" kind="tertiary" onClick={() => openDocument(d)}>Edit</Button>
-                        )}
-                        {(canDelete || mine(d.createdBy)) && (
-                          <Button size="small" kind="tertiary" onClick={() => removeDocument(d)}>Delete</Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
       </section>
       )}
 
@@ -690,23 +648,16 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
               : "anyone can propose one; a manager signs it into the library"}
           </Text>
         </div>
-        <Text type="text2" color="secondary" ellipsis={false}>
-          {libKind === "section" ? (
-            <>
-              A <strong>section</strong> is a fragment — a letterhead, a scope-of-works
-              table, a sign-off block — dropped into a template by the{" "}
-              <em>Library section</em> block and resolved every time it renders, so
-              correcting a section here corrects every template using it.
-            </>
-          ) : (
-            <>
-              A <strong>template</strong> is a whole document to start from. Making a
-              document from one takes a copy, so changing that document never changes the
-              template it came from.
-            </>
-          )}
-        </Text>
+        {/* NO PARAGRAPH HERE EITHER. Amber: *"I don't need text explaining above the
+            buttons."* It described what a template and a section are — worth reading
+            once, and then in the way of the two buttons every day after that. The cards
+            below carry the same distinction in the sentence under each title, where it
+            is answering a question somebody is actually asking.
 
+            THE TABLE STAYS, though, and that is the one place these lanes differ from
+            the Document Builder. A document belongs to its job and will be opened from
+            there; a template belongs to the library and this is the library. Take the
+            list away and there is no way to open a template again once it is made. */}
         {canWrite && (
           <div className="get-started">
             <span className="get-started-label">Get started</span>
@@ -891,6 +842,82 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
         {recordsError && <LoadProblem error={recordsError} />}
       </section>
       )}
+
+      {/* ── Name it, once the choice is made ────────────────────────────────
+          A SidePanel rather than a modal of its own, because that is what this app
+          opens for "one more thing before I make the record" — cloning a job, splitting
+          a project, adding a user. A second convention for the same act would be a
+          second thing to learn.
+
+          The name is the only required field. Where the act needs a source as well —
+          which template, which document — that sits under it, already narrowed to the
+          one kind of thing that can answer. */}
+      <SidePanel
+        open={starting !== null}
+        title={
+          starting?.how === "template" ? "New document from a template"
+          : starting?.how === "clone" ? "Copy an existing document"
+          : "New empty document"
+        }
+        onClose={closeStarting}
+        footer={
+          <>
+            <Button
+              onClick={confirmStart}
+              disabled={
+                busy || !docTitle.trim()
+                || (starting?.how === "template" && !docFrom)
+                || (starting?.how === "clone" && !cloneFrom)
+              }
+            >
+              {busy ? "Creating…" : "Create and open"}
+            </Button>
+            <Button kind="tertiary" onClick={closeStarting} disabled={busy}>Cancel</Button>
+          </>
+        }
+      >
+        <div className="get-started-card-fields">
+          <TextField
+            id="new-document-title"
+            title="Name"
+            placeholder="Progress report — 28 Corner Street"
+            value={docTitle}
+            onChange={setDocTitle}
+            /* The name is what somebody came here to type, so the caret starts in it
+               rather than on the panel. */
+            autoFocus
+            inputAriaLabel="Title for a new document"
+          />
+
+          {starting?.how === "template" && (
+            <Select
+              aria-label="Template to start the document from"
+              placeholder="Which template…"
+              options={toOptions(libraryTemplates.map(t => t.name))}
+              value={docFrom ? libraryTemplates.find(t => t.id === docFrom)?.name ?? null : null}
+              onChange={n => setDocFrom(libraryTemplates.find(t => t.name === n)?.id ?? null)}
+            />
+          )}
+
+          {starting?.how === "clone" && (
+            <Select
+              aria-label="Document to copy"
+              placeholder="Which document…"
+              options={toOptions(documents.map(d => d.title))}
+              value={cloneFrom ? documents.find(d => d.id === cloneFrom)?.title ?? null : null}
+              onChange={n => setCloneFrom(documents.find(d => d.title === n)?.id ?? null)}
+            />
+          )}
+
+          <Text type="text3" color="secondary" ellipsis={false}>
+            {starting?.how === "template"
+              ? "You get a copy. Changing this document never changes the template it came from."
+              : starting?.how === "clone"
+                ? "A copy of the blocks, not of the numbers — the data is read fresh every time it is opened."
+                : "An empty page. Drag blocks in from the palette on the left of the builder."}
+          </Text>
+        </div>
+      </SidePanel>
 
       {/* Both render into a portal over the whole viewport, so neither needs a slot in
           the page's layout. */}
