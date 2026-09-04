@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- The exported PDF and Word document embed the real Lofty wordmark and set the brand's Helvetica
 - Every list and report has an Export menu — download exactly what is on screen as an Excel workbook, a Word document or a PDF
 - A grouped board or table exports one sheet, one Word section and one page per group
 - Downloads name themselves for the screen and the day, so several exports in a folder can be told apart
@@ -97,6 +98,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- Excel, Word and PDF exports now carry Lofty's house document format — the wordmark, the orange section rule, the grey table header and the "Commercial in confidence" footer
 - Every dropdown narrows as you type and lists its options alphabetically, except where the order is the information — and a process can be filed straight into a pipeline when it is created
 - Setup → Processes is now a pipeline you drag, with the name editable in place and a process added straight into its stage
 - Every record — a contact, a maintenance request, a property, a project — now opens in the same slide-out panel, which expands to full width and can be dragged wider

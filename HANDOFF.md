@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 102 changes since then —
+Unreleased: 104 changes since then —
+- Changed: Excel, Word and PDF exports now carry Lofty's house document format — the wordmark, the orange section rule, the grey table header and the "Commercial in confidence" footer
+- Added: The exported PDF and Word document embed the real Lofty wordmark and set the brand's Helvetica
 - Added: Every list and report has an Export menu — download exactly what is on screen as an Excel workbook, a Word document or a PDF
 - Added: A grouped board or table exports one sheet, one Word section and one page per group
 - Added: Downloads name themselves for the screen and the day, so several exports in a folder can be told apart
-- Added: npm run export-check proves the Excel, Word and PDF writers are real files, re-parsed from the bytes out
-- Added: Group the projects board by where its jobs are — a project appears in every stage or process its jobs have reached, carrying just those jobs
-- …and 97 more.
+- …and 99 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
