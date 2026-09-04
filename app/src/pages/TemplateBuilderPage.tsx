@@ -190,6 +190,16 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
    * controls greyed out behind a field nobody has filled in yet.
    */
   const [starting, setStarting] = useState<{ how: "template" | "clone" | "scratch" } | null>(null);
+  /**
+   * The same thing for the library lanes: which card was clicked, so the panel knows
+   * whether to ask for a source as well as a name.
+   *
+   * A second piece of state rather than one shared with the documents lane, because the
+   * two write to different stores and to different name fields, and a single `starting`
+   * covering both would need a lane check at every read — the kind of condition that is
+   * right until somebody adds a fourth way in.
+   */
+  const [startingLib, setStartingLib] = useState<{ how: "clone" | "scratch" } | null>(null);
   const libKind: ReportTemplateKind = lane === "section" ? "section" : "template";
   const [busy, setBusy] = useState(false);
 
@@ -472,6 +482,7 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
       const store = libKind === "section" ? sectionStore : templateStore;
       const row = await store.create({ title: name, layout: { widgets: [] } });
       setLibName("");
+      setStartingLib(null);
       bump();
       setOpen({ lane: "library", row, kind: libKind });
     });
@@ -501,9 +512,23 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
       });
       setLibName("");
       setCloneFrom(null);
+      setStartingLib(null);
       bump();
       setOpen({ lane: "library", row, kind: libKind });
     });
+
+  const closeStartingLib = () => {
+    if (busy) return;
+    setStartingLib(null);
+    setLibName("");
+    setCloneFrom(null);
+  };
+
+  const confirmStartLib = () => {
+    if (!startingLib) return;
+    if (startingLib.how === "clone") cloneLibraryEntry();
+    else createLibraryEntry();
+  };
 
   const openLibraryEntry = (t: ReportTemplate) =>
     run(async () => {
@@ -634,54 +659,26 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
       )}
 
       {/* ── The library ─────────────────────────────────────────────────── */}
+      {/* ── Template Library and Section Library ────────────────────────
+          Amber, 4 September: *"fix the other 2 pages as well to have same format"*.
+
+          Same format, and it is the same code — one GetStartedCard, one naming panel,
+          one set of styles. The card is the button, the name is asked for after the
+          choice, and the cards sit in the middle of the screen with nothing above them.
+
+          TWO CARDS, NOT THREE: there is no "start from a template" for a template. The
+          acts that exist are a blank page and a copy.
+
+          AND THE LIST COMES BACK ONCE THERE IS ONE. This is the single deviation, and it
+          is not cosmetic: a document belongs to its job and will be opened from there,
+          but a template belongs to the library and this IS the library. With no list a
+          template could be made and never opened again. So an EMPTY library is the same
+          full-screen screen as the Document Builder, and a library with something in it
+          shows the cards above what it holds. */}
       {lane !== "documents" && (
-      <section className="panel">
-        <div className="panel-head">
-          <Text type="text2" weight="bold">
-            {/* Capitalised to match the tab that got you here. "Template Library" in the
-                tab and "Template library" in the panel under it reads as two places. */}
-            {libKind === "section" ? "Section Library" : "Template Library"}
-          </Text>
-          <Text type="text3" color="secondary">
-            {canApprove
-              ? "you can sign entries into the library — a change here changes what everybody starts from"
-              : "anyone can propose one; a manager signs it into the library"}
-          </Text>
-        </div>
-        {/* NO PARAGRAPH HERE EITHER. Amber: *"I don't need text explaining above the
-            buttons."* It described what a template and a section are — worth reading
-            once, and then in the way of the two buttons every day after that. The cards
-            below carry the same distinction in the sentence under each title, where it
-            is answering a question somebody is actually asking.
-
-            THE TABLE STAYS, though, and that is the one place these lanes differ from
-            the Document Builder. A document belongs to its job and will be opened from
-            there; a template belongs to the library and this is the library. Take the
-            list away and there is no way to open a template again once it is made. */}
-        {canWrite && (
-          <div className="get-started">
-            <span className="get-started-label">Get started</span>
-            {/* The kind comes from the tab. It used to be a dropdown here as well, which
-                was two controls for one question — and the way somebody names a section,
-                leaves the dropdown on Template, and cannot find it afterwards. */}
-            <span style={{ display: "block", maxWidth: 360 }}>
-              <TextField
-                id="new-library-name"
-                title="Name"
-                placeholder={libKind === "section" ? "Name a new section…" : "Name a new template…"}
-                value={libName}
-                onChange={setLibName}
-                size="small"
-                inputAriaLabel={libKind === "section" ? "Name for a new section" : "Name for a new template"}
-              />
-            </span>
-
-            {/* TWO CARDS HERE, NOT THREE.
-                Amber: *"This is the sam for template library and sction library"* — the
-                treatment, which is what the screenshot showed. Not the count: there is no
-                "start from a template" for a template. The two acts that exist are a
-                blank page and a copy, and a third dashed card standing for an act nobody
-                can perform would be decoration. */}
+      <section className={templates.length === 0 ? "lane-empty" : ""}>
+        {canWrite ? (
+          <div className={`get-started get-started-centred${templates.length ? " get-started-inline" : ""}`}>
             <div className="get-started-grid">
               <GetStartedCard
                 title="Start From Scratch"
@@ -690,63 +687,38 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
                     ? "An empty fragment. Build the blocks a template will drop in — a letterhead, a scope-of-works table, a sign-off."
                     : "An empty page. Drag blocks in from the palette on the left of the builder."
                 }
-                action={
-                  <Button size="small" onClick={createLibraryEntry} disabled={!libName.trim() || busy}>
-                    {libKind === "section" ? "Create New Section" : "Create New Template"}
-                  </Button>
-                }
+                onClick={() => setStartingLib({ how: "scratch" })}
               />
-
               <GetStartedCard
                 title={libKind === "section" ? "Clone An Existing Section" : "Clone An Existing Template"}
                 hint="Copy one that already works and change what this one needs. The original is untouched."
-                action={
-                  <Button
-                    size="small"
-                    kind="secondary"
-                    onClick={cloneLibraryEntry}
-                    disabled={!libName.trim() || !cloneFrom || busy}
-                  >
-                    {libKind === "section" ? "Clone Section" : "Clone Template"}
-                  </Button>
-                }
-              >
-                <Select
-                  aria-label={libKind === "section" ? "Section to clone" : "Template to clone"}
-                  placeholder={
-                    ofKind.length
-                      ? libKind === "section" ? "A section to copy…" : "A template to copy…"
-                      : "Nothing to copy yet"
-                  }
-                  options={toOptions(ofKind.map(t => t.name))}
-                  value={cloneFrom ? ofKind.find(t => t.id === cloneFrom)?.name ?? null : null}
-                  onChange={n => setCloneFrom(ofKind.find(t => t.name === n)?.id ?? null)}
-                />
-              </GetStartedCard>
+                disabled={!ofKind.length}
+                disabledNote={libKind === "section" ? "No sections to copy yet" : "No templates to copy yet"}
+                onClick={() => setStartingLib({ how: "clone" })}
+              />
             </div>
-
             {!canApprove && (
               <Text type="text3" color="secondary" ellipsis={false}>
                 Yours to work on until a manager approves it — nobody else can see it before then.
               </Text>
             )}
           </div>
-        )}
-
-        {libLoading ? (
-          <Text type="text2" color="secondary">Loading…</Text>
         ) : templates.length === 0 ? (
           <NothingYet
             title={libKind === "section" ? "No sections yet" : "No templates yet"}
-            description={
-              canWrite
-                ? libKind === "section"
-                  ? "Use one of the two ways above. A section is a group of blocks a template drops in — a letterhead, a scope-of-works table, a sign-off."
-                  : "Use one of the two ways above to make the first one."
-                : "Nothing has been added to the library yet."
-            }
+            description="Nothing has been added to the library yet."
           />
-        ) : (
+        ) : null}
+
+        {/* NO "No templates yet" BOX UNDER THE CARDS.
+            It sat directly beneath them saying "use one of the two ways above", which
+            the two ways above already say — and the Clone card says the more useful half
+            of it in place of its own hint ("No templates to copy yet"). An empty library
+            is now the two cards on an empty screen, which is the Document Builder's
+            format and the point of this change. */}
+        {libLoading ? (
+          <Text type="text2" color="secondary">Loading…</Text>
+        ) : templates.length === 0 ? null : (
           <div className="data-table-wrap" style={{ marginTop: "var(--space-12)" }}>
             <table className="data-table">
               <thead>
@@ -915,6 +887,59 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
               : starting?.how === "clone"
                 ? "A copy of the blocks, not of the numbers — the data is read fresh every time it is opened."
                 : "An empty page. Drag blocks in from the palette on the left of the builder."}
+          </Text>
+        </div>
+      </SidePanel>
+
+      {/* The library's naming panel — the same one, asking the same question. */}
+      <SidePanel
+        open={startingLib !== null}
+        title={
+          startingLib?.how === "clone"
+            ? (libKind === "section" ? "Copy an existing section" : "Copy an existing template")
+            : (libKind === "section" ? "New empty section" : "New empty template")
+        }
+        onClose={closeStartingLib}
+        footer={
+          <>
+            <Button
+              onClick={confirmStartLib}
+              disabled={busy || !libName.trim() || (startingLib?.how === "clone" && !cloneFrom)}
+            >
+              {busy ? "Creating…" : "Create and open"}
+            </Button>
+            <Button kind="tertiary" onClick={closeStartingLib} disabled={busy}>Cancel</Button>
+          </>
+        }
+      >
+        <div className="get-started-card-fields">
+          <TextField
+            id="new-library-name"
+            title="Name"
+            placeholder={libKind === "section" ? "Letterhead" : "Progress report"}
+            value={libName}
+            onChange={setLibName}
+            autoFocus
+            inputAriaLabel={libKind === "section" ? "Name for a new section" : "Name for a new template"}
+          />
+
+          {startingLib?.how === "clone" && (
+            <Select
+              aria-label={libKind === "section" ? "Section to copy" : "Template to copy"}
+              placeholder={libKind === "section" ? "Which section…" : "Which template…"}
+              options={toOptions(ofKind.map(t => t.name))}
+              value={cloneFrom ? ofKind.find(t => t.id === cloneFrom)?.name ?? null : null}
+              onChange={n => setCloneFrom(ofKind.find(t => t.name === n)?.id ?? null)}
+            />
+          )}
+
+          {/* THE KIND COMES FROM THE TAB, and is not asked here. It used to be a dropdown
+              as well, which was two controls for one question — and the way somebody
+              names a section, leaves the dropdown on Template, and cannot find it after. */}
+          <Text type="text3" color="secondary" ellipsis={false}>
+            {canApprove
+              ? "Signed into the library on creation, so everybody can start from it."
+              : "Yours until a manager approves it — nobody else can see it before then."}
           </Text>
         </div>
       </SidePanel>

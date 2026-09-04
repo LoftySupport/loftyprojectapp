@@ -2374,6 +2374,11 @@ code { overflow-wrap: anywhere; }
    one column, stacked down the middle of the page. The grid needs a real width to divide
    up; the centring is then done by the max-width and the auto margins. */
 .get-started-centred { align-items: stretch; width: 100%; }
+/* Once a library HAS something in it the cards stop being the whole screen and become a
+   band above the list. Same cards, same size, same behaviour — just not vertically
+   centred in a viewport they no longer own. */
+.get-started-inline { margin: 0 0 var(--space-16); }
+.get-started-inline .get-started-card-button { min-height: 104px; }
 .get-started-centred .get-started-grid {
   width: 100%;
   max-width: 1064px;
