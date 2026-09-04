@@ -1,56 +1,77 @@
 import { encode, truncate, widthOf } from "./helvetica";
+import { LOGO_RGB } from "./logo";
 import { stamp, type ExportCell, type ExportDocument, type ExportTable } from "./table";
 
 /**
- * A PDF of the table on screen: A4 landscape, the heading repeated on every page, and a
- * page number, so the thing that lands in somebody's inbox is a document rather than a
- * screenshot.
+ * A PDF of the table on screen, in Lofty's house document format: A4 landscape, the
+ * wordmark and a hairline on every page, each table under a heading with the orange rule,
+ * and a footer carrying the title, "Commercial in confidence" and the page number — so the
+ * thing that lands in somebody's inbox is a Lofty document rather than a screenshot.
  *
- * WHY THIS EXISTS WHEN THE APP CAN ALREADY PRINT. `window.print()` on the job report
- * (G37) is a different thing, and both are wanted. Print asks the reader to find "Save
- * as PDF" in a dialog, prints what the browser's paged CSS happens to do with a table
- * inside a horizontally scrolling container, and cannot be triggered for a board or a
- * roadmap at all. Amber asked for a **download**: one click, a file, the same on every
- * machine.
+ * WHY LANDSCAPE, WHEN THE HOUSE TEMPLATE IS PORTRAIT. The template
+ * (`Lofty Document Template`) is a portrait prose format; these exports are DATA TABLES,
+ * and a job carries eleven columns and the data dictionary thirteen. Portrait fits about
+ * six before every cell is a truncated stub, so the export keeps landscape and wears the
+ * template's identity — the logo, the palette, the orange section rule, the grey header
+ * row, the footer — over its own wider page.
  *
- * WHY IT IS HAND-WRITTEN. The same reason as the spreadsheet: the candidates — jsPDF,
- * pdfmake — each bring a document model, a layout engine and an embedded font stack,
- * which is a great deal of bundle for what this actually asks of them, which is text at
- * coordinates on a fixed page. Because the standard fourteen fonts need no embedding,
- * the files stay small: the data dictionary is 298 rows over 50 pages and 250 kB, and a
- * board of 140 jobs is 90 kB.
+ * WHY IT IS HAND-WRITTEN. The candidates — jsPDF, pdfmake — each bring a document model, a
+ * layout engine and an embedded font stack, which is a great deal of bundle for text at
+ * coordinates on a fixed page. The standard fourteen fonts need no embedding, so the files
+ * stay small; the one raster is the wordmark, decoded ahead of time (see `logo.ts`) because
+ * a PDF has no PNG filter and this writer has no zlib.
  *
- * WHAT IT DELIBERATELY DOES NOT DO: wrap. A cell that does not fit its column is
- * truncated with an ellipsis, and every row is one line tall. Wrapping means rows of
- * different heights, which means a page break can land inside a row, and the whole
- * pagination becomes a different problem. The visible ellipsis is also the honest
- * signal — a wrapped cell silently pushes the rest of the table down the page, while
- * "12 Hawthorn Cr…" tells the reader to go and look at the screen.
+ * ON THE TYPEFACE. The template's rounded display face cannot be used here without
+ * embedding a TrueType font and its metrics — weeks of writer for a wordmark's worth of
+ * glyphs — so the PDF sets Helvetica, one of the fourteen standard faces, and carries the
+ * brand in the logo, the palette and the layout instead. The Word document, which names
+ * fonts rather than embedding them, uses the real family.
+ *
+ * WHAT IT DELIBERATELY DOES NOT DO: wrap. A cell that does not fit its column is truncated
+ * with an ellipsis, and every row is one line tall. Wrapping means rows of different
+ * heights, which means a page break can land inside a row, and the whole pagination becomes
+ * a different problem. The visible ellipsis is also the honest signal.
  */
 
-// A4 landscape, in points. The tables here are wide — ten columns of a job — and
-// portrait A4 fits about six of them before every column is a truncated stub.
+// A4 landscape, in points.
 const WIDTH = 841.89;
 const HEIGHT = 595.28;
-const MARGIN = 36;
+const MARGIN = 40;
 
-const TITLE_SIZE = 14;
+const H2_SIZE = 15;
 const NOTE_SIZE = 8.5;
 const CELL_SIZE = 8.5;
 const FOOT_SIZE = 7.5;
+const EYEBROW_SIZE = 8;
 
-const ROW_HEIGHT = 14;
-const HEAD_HEIGHT = 16;
+const ROW_HEIGHT = 15;
+const HEAD_HEIGHT = 17;
 /** Each side of a cell. Also the gap between two columns' text. */
-const PAD = 5;
+const PAD = 6;
 /** Nothing is narrower than this, so a squeezed table stays readable rather than fair. */
 const MIN_COLUMN = 34;
 
-const INK = "0.11 0.11 0.13";
-const MUTED = "0.42 0.42 0.47";
-const HEAD_FILL = "0.945 0.945 0.957";
-const STRIPE = "0.976 0.976 0.984";
-const RULE = "0.85 0.85 0.87";
+/**
+ * The reserved bands at the top and bottom of every page: the wordmark and its hairline
+ * above, the footer and its hairline below. The table lives between them, so a page found
+ * on its own still carries the brand and says what it is from and which page it is.
+ */
+const HEADER_H = 44;
+const FOOTER_H = 30;
+
+// Lofty's palette, lifted from `src/theme/tokens.css` and the house document template.
+const GREEN = "0.000 0.314 0.345"; // #005058 — the eyebrow and section labels
+const INK = "0.255 0.251 0.259"; // #414042 — headings and body
+const MUTED = "0.404 0.400 0.416"; // #67666a — captions and the subtitle
+const FOOT_INK = "0.541 0.537 0.553"; // #8a898d — the footer
+const ORANGE = "0.957 0.494 0.388"; // #f47e63 — the rule under a section heading
+const HEAD_FILL = "0.965 0.969 0.969"; // #f6f7f7 — the table header row
+const ROW_RULE = "0.925 0.929 0.933"; // #ececee — the hairline between rows
+const HAIRLINE = "0.906 0.910 0.914"; // #e7e8e9 — the header and footer rules
+
+/** How wide the wordmark is drawn, in points; its height follows the logo's aspect. */
+const LOGO_W = 62;
+const LOGO_H = (LOGO_W * LOGO_RGB.height) / LOGO_RGB.width;
 
 /** What the reader sees in a cell. Numbers unformatted, exactly as the screen shows them. */
 function cellText(value: ExportCell): string {
@@ -61,9 +82,7 @@ function cellText(value: ExportCell): string {
 
 /**
  * A PDF literal string. `(`, `)` and `\` have to be escaped or they end the string
- * early; everything above 126 is written as an octal escape so the file stays
- * seven-bit — a raw 0x0D inside a string is a real hazard, because some tools normalise
- * line endings in transit and would silently rewrite the byte.
+ * early; everything above 126 is written as an octal escape so the file stays seven-bit.
  */
 function pdfString(text: string, bold = false): string {
   let out = "";
@@ -80,17 +99,25 @@ function text(ops: string[], value: string, x: number, y: number, size: number, 
   ops.push(`BT ${colour} rg /${bold ? "F2" : "F1"} ${size} Tf ${x.toFixed(2)} ${y.toFixed(2)} Td ${pdfString(value, bold)} Tj ET`);
 }
 
+/**
+ * Letter-spaced text — for the green eyebrow over the title, set as small caps the way the
+ * template's "REPORT" label is. `Tc` is the character spacing operator, reset after.
+ */
+function trackedText(ops: string[], value: string, x: number, y: number, size: number, colour: string, tracking: number) {
+  if (!value) return;
+  ops.push(
+    `BT ${colour} rg /F2 ${size} Tf ${tracking} Tc ${x.toFixed(2)} ${y.toFixed(2)} Td ${pdfString(value, true)} Tj ET 0 Tc`
+  );
+}
+
 function rect(ops: string[], x: number, y: number, w: number, h: number, colour: string) {
   ops.push(`${colour} rg ${x.toFixed(2)} ${y.toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)} re f`);
 }
 
 /**
  * How wide each column would like to be: its header, or its widest value, plus padding.
- *
- * Uncapped, and used for two different decisions below — which columns share a page, and
- * how the room on that page is shared out. Measured over every row, which is the only
- * way to get it right: sizing from the header alone puts a 60-character address under a
- * 7-character heading.
+ * Measured over every row — sizing from the header alone puts a 60-character address under
+ * a 7-character heading.
  */
 function naturalWidths(table: ExportTable): number[] {
   return table.columns.map((c, i) => {
@@ -108,48 +135,21 @@ const AVAILABLE = WIDTH - 2 * MARGIN;
 const SQUEEZE_LIMIT = 1.5;
 
 /**
- * Which columns go on which page.
- *
- * THE PROBLEM THIS SOLVES, WHICH WAS WATCHED HAPPENING. The data dictionary exports
- * thirteen columns. Thirteen columns on a landscape A4 at 8.5pt is 34 points each, which
- * is five characters — so every cell was an ellipsis and the download was a list of the
- * *shapes* of the answers. The spreadsheet was fine; the PDF was a page of "profil…
- * profi… profil… Profi…".
- *
- * So a table too wide for the page is split across pages by column, the way a printed
- * report has always done it, and **the first column repeats on every one of them** —
- * without the job number or the property name, the second band is a page of values
- * belonging to nothing. That repeat is the whole reason this is worth building rather
- * than just shrinking the type: a band you cannot line up against a row is not the data,
- * it is a puzzle.
- *
- * Greedy packing, left to right, so the reading order is the column order.
+ * Which columns go on which page. A table too wide for the page is split across pages by
+ * column, the first column repeating on every band — without the job number the second
+ * band is a page of values belonging to nothing. Greedy, left to right, so the reading
+ * order is the column order.
  */
 function columnBands(natural: number[]): number[][] {
   if (natural.length === 0) return [[]];
   const total = natural.reduce((a, b) => a + b, 0);
-  // Half again too wide is still one page. A table that overflows by a fifth — which is
-  // the jobs table with every column switched on — squeezes to about eleven characters a
-  // column and reads; splitting it would put the same nine columns on two pages to save
-  // a few truncated addresses, and a reader comparing two jobs would be turning pages to
-  // do it. Past `SQUEEZE_LIMIT` the squeeze stops being a squeeze and becomes a column of
-  // ellipses, and then bands are the lesser loss.
   if (total <= AVAILABLE * SQUEEZE_LIMIT) return [natural.map((_w, i) => i)];
 
-  // What the repeated identity column costs on every band after the first. Capped, or a
-  // wide first column would leave no room for the columns the band exists to carry.
   const idWidth = Math.min(natural[0], AVAILABLE / 3);
   const bands: number[][] = [];
   let band: number[] = [0];
   let used = natural[0];
   for (let i = 1; i < natural.length; i++) {
-    // A column asks for at most half of what a band has to give.
-    //
-    // Without the cap, one free-text column takes a band to itself and strands its
-    // narrow neighbours in bands of their own: the dictionary came out as seventy pages,
-    // several of which were a page of "Type" beside the repeated identifier. A long
-    // definition is going to be truncated at any width — half a band is enough of it to
-    // be worth reading, and the spreadsheet is where the whole of it lives.
     const want = Math.min(natural[i], (AVAILABLE - idWidth) / 2);
     if (band.length > 1 && used + want > AVAILABLE) {
       bands.push(band);
@@ -165,15 +165,10 @@ function columnBands(natural: number[]): number[][] {
 }
 
 /**
- * How the room on one page is shared out between the columns on it.
- *
- * Scaled up as well as down: a four-column table left at its natural width sits in the
- * left third of a landscape page and reads as a rendering failure rather than a narrow
- * table.
- *
- * Squeezing is not proportional. Every column is guaranteed `MIN_COLUMN` first and the
- * rest is shared out in proportion to what each column asked for, so a table with one
- * enormous free-text column does not reduce the other nine to two characters each.
+ * How the room on one page is shared out between the columns on it. Scaled up as well as
+ * down; every column is guaranteed `MIN_COLUMN` first and the rest is shared in proportion
+ * to what each asked for, so one enormous free-text column does not reduce the others to
+ * two characters each.
  */
 function fitWidths(natural: number[]): number[] {
   const total = natural.reduce((a, b) => a + b, 0);
@@ -188,61 +183,97 @@ function fitWidths(natural: number[]): number[] {
   return natural.map((w, i) => floors[i] + (asking ? ((w - floors[i]) / asking) * spare : 0));
 }
 
-/** The heading block. Identical on every page of a table, so the rows-per-page is too. */
-function headingLines(table: ExportTable, doc: ExportDocument, takenAt: Date) {
-  const lines: { value: string; size: number; bold: boolean; colour: string }[] = [
-    { value: table.name, size: TITLE_SIZE, bold: true, colour: INK }
-  ];
-  if (doc.note) lines.push({ value: doc.note, size: NOTE_SIZE, bold: false, colour: MUTED });
-  if (table.note && table.note !== doc.note) {
-    lines.push({ value: table.note, size: NOTE_SIZE, bold: false, colour: MUTED });
+/**
+ * The heading block over a table: the document title once (the first table only), the
+ * table's own name as the section heading with the orange rule under it, and the caption
+ * lines. Identical on every page of a table, so the rows-per-page is too.
+ *
+ * `withTitle` is set for the very first table, which carries the whole-document title block
+ * the way the template's cover does — the green eyebrow, the big title, the subtitle. Later
+ * tables get their section heading alone.
+ */
+interface HeadingLine {
+  value: string;
+  size: number;
+  bold: boolean;
+  colour: string;
+  /** An eyebrow is letter-spaced small caps; a rule is the orange line under a heading. */
+  kind?: "eyebrow" | "rule";
+  gap: number;
+}
+
+function headingLines(table: ExportTable, doc: ExportDocument, takenAt: Date, withTitle: boolean): HeadingLine[] {
+  const lines: HeadingLine[] = [];
+  if (withTitle) {
+    lines.push({ value: "LOFTY EXPORT", size: EYEBROW_SIZE, bold: true, colour: GREEN, kind: "eyebrow", gap: 6 });
+    lines.push({ value: doc.title, size: H2_SIZE + 3, bold: true, colour: INK, gap: 4 });
+    if (doc.note) lines.push({ value: doc.note, size: NOTE_SIZE + 1.5, bold: false, colour: MUTED, gap: 3 });
+    lines.push({ value: `Exported ${stamp(takenAt)}`, size: NOTE_SIZE, bold: false, colour: FOOT_INK, gap: 10 });
   }
-  lines.push({ value: `Exported ${stamp(takenAt)}`, size: NOTE_SIZE, bold: false, colour: MUTED });
+  // The table's own name is the section heading, with the orange rule under it.
+  lines.push({ value: table.name, size: H2_SIZE, bold: true, colour: INK, gap: 5 });
+  lines.push({ value: "", size: 0, bold: false, colour: ORANGE, kind: "rule", gap: 7 });
+  if (!withTitle && doc.note) lines.push({ value: doc.note, size: NOTE_SIZE, bold: false, colour: MUTED, gap: 3 });
+  if (table.note && table.note !== doc.note) {
+    lines.push({ value: table.note, size: NOTE_SIZE, bold: false, colour: MUTED, gap: 3 });
+  }
+  if (!withTitle) {
+    lines.push({ value: `Exported ${stamp(takenAt)}`, size: NOTE_SIZE, bold: false, colour: FOOT_INK, gap: 4 });
+  }
   return lines;
+}
+
+/** The total height a heading block occupies, so the rows-per-page can be counted. */
+function headingHeight(lines: HeadingLine[]): number {
+  return lines.reduce((n, l) => n + (l.kind === "rule" ? 2 : l.size) + l.gap, 0);
+}
+
+/** Draw a heading block from `contentTop` down; returns the y it finished at. */
+function drawHeading(ops: string[], lines: HeadingLine[], contentTop: number): number {
+  let y = contentTop;
+  for (const line of lines) {
+    if (line.kind === "rule") {
+      // The 2px orange rule under a section heading, full content width — the house
+      // format's Level 2 rule (brand kit: 2px #f47e63 below the heading).
+      rect(ops, MARGIN, y - 2, WIDTH - 2 * MARGIN, 2, line.colour);
+      y -= 2 + line.gap;
+      continue;
+    }
+    y -= line.size;
+    if (line.kind === "eyebrow") trackedText(ops, line.value, MARGIN, y, line.size, line.colour, 1.2);
+    else text(ops, line.value, MARGIN, y, line.size, line.bold, line.colour);
+    y -= line.gap;
+  }
+  return y;
 }
 
 export function toPdf(doc: ExportDocument): Uint8Array {
   const takenAt = doc.takenAt ?? new Date();
   const pages: string[] = [];
+  const contentTop = HEIGHT - MARGIN - HEADER_H;
 
-  // Laid out table by table, each starting a new page: a report is several tables of
-  // different shapes, and continuing one under another means a column layout that
-  // changes half way down a page.
-  for (const table of doc.tables) {
+  doc.tables.forEach((table, tableIndex) => {
     const natural = naturalWidths(table);
     const bands = columnBands(natural);
-    const lines = headingLines(table, doc, takenAt);
-    const floor = MARGIN + 10; // above the footer
+    const floor = MARGIN + FOOTER_H;
     const fits = (heading: number) =>
-      Math.max(1, Math.floor((HEIGHT - MARGIN - heading - floor - HEAD_HEIGHT) / ROW_HEIGHT));
+      Math.max(1, Math.floor((contentTop - heading - floor - HEAD_HEIGHT) / ROW_HEIGHT));
 
-    /**
-     * Twice, because the "Part 2 of 5" line only exists once the table is known to span
-     * pages — and it costs a line of heading on every page, including the first. Sized
-     * once with it and once without, the rows-per-page is the same on every page of the
-     * table, which is what keeps the header band at the same height throughout. Sized
-     * only without it, every continuation page ran eleven points past its own floor.
-     *
-     * The banded case takes the same line, so a table that is both too wide and too long
-     * measures the same on every one of its pages.
-     */
-    const bare = lines.reduce((n, l) => n + l.size + 5, 0) + 8;
-    const needsNote = bands.length > 1 || table.rows.length > fits(bare);
-    const headingHeight = needsNote ? bare + NOTE_SIZE + 5 : bare;
-    const top = HEIGHT - MARGIN - headingHeight;
-    const perPage = fits(headingHeight);
+    // Sized twice, so the "Rows/columns …" continuation line — which only exists once the
+    // table is known to span — costs the same line of heading on every page, keeping the
+    // rows-per-page constant.
+    const linesBare = headingLines(table, doc, takenAt, tableIndex === 0);
+    const bareHeight = headingHeight(linesBare);
+    const needsNote = bands.length > 1 || table.rows.length > fits(bareHeight);
+    const fullHeight = needsNote ? bareHeight + NOTE_SIZE + 5 : bareHeight;
+    const perPage = fits(fullHeight);
 
     const chunks: ExportCell[][][] = [];
     for (let at = 0; at < table.rows.length; at += perPage) {
       chunks.push(table.rows.slice(at, at + perPage));
     }
-    // A table with no rows still gets its page. "Nothing needs attention" is a result,
-    // and a report that silently omits the section reads as a report that lost it.
     if (chunks.length === 0) chunks.push([]);
 
-    // Bands outside, row chunks inside: all the rows for the first set of columns, then
-    // all the rows again for the next. The other nesting interleaves them, and a reader
-    // following one job down the page would have to leaf back and forth.
     for (const band of bands) {
       const columns = band.map(i => table.columns[i]);
       const widths = fitWidths(band.map(i => Math.min(natural[i], AVAILABLE)));
@@ -251,20 +282,10 @@ export function toPdf(doc: ExportDocument): Uint8Array {
 
       chunks.forEach((rows, index) => {
         const ops: string[] = [];
-        let y = HEIGHT - MARGIN;
-        for (const line of lines) {
-          y -= line.size + 2;
-          text(ops, line.value, MARGIN, y, line.size, line.bold, line.colour);
-          y -= 3;
-        }
-        // Said on the pages that need it and nowhere else: "part 1 of 1" on a one-page
-        // table is a line of chrome answering a question nobody asked. Where a table is
-        // split both ways, both halves of the position are on the line — the page is
-        // otherwise indistinguishable from the one before it.
+        const lines = headingLines(table, doc, takenAt, tableIndex === 0);
+        let y = drawHeading(ops, lines, contentTop);
+
         if (needsNote) {
-          // The first column of a later band is the repeated identifier, not one of the
-          // columns the band is carrying — so the range starts at the second entry
-          // there, and says which column is along for the ride.
           const carried = band.length > 1 && band[1] !== 1 ? band[1] : band[0];
           const where = [
             chunks.length > 1
@@ -277,102 +298,135 @@ export function toPdf(doc: ExportDocument): Uint8Array {
           ]
             .filter(Boolean)
             .join(" · ");
-          y -= NOTE_SIZE + 2;
+          y -= NOTE_SIZE;
           text(ops, where, MARGIN, y, NOTE_SIZE, false, MUTED);
-          y -= 3;
+          y -= 5;
         }
 
         // Header band, then the header text sitting on its baseline.
-        let rowTop = Math.min(y - 8, top);
+        let rowTop = y - 4;
         rect(ops, MARGIN, rowTop - HEAD_HEIGHT, right - MARGIN, HEAD_HEIGHT, HEAD_FILL);
         columns.forEach((c, i) => {
           const inner = widths[i] - 2 * PAD;
           const label = truncate(c.label, inner, CELL_SIZE, true);
           const x = c.numeric ? edges[i + 1] - PAD - widthOf(label, CELL_SIZE, true) : edges[i] + PAD;
-          text(ops, label, x, rowTop - HEAD_HEIGHT + 5, CELL_SIZE, true, INK);
+          text(ops, label, x, rowTop - HEAD_HEIGHT + 6, CELL_SIZE, true, INK);
         });
         rowTop -= HEAD_HEIGHT;
-        rect(ops, MARGIN, rowTop - 0.5, right - MARGIN, 0.5, RULE);
+        rect(ops, MARGIN, rowTop - 0.6, right - MARGIN, 0.6, HAIRLINE);
 
         rows.forEach((row, r) => {
           const bottom = rowTop - ROW_HEIGHT * (r + 1);
-          if (r % 2 === 1) rect(ops, MARGIN, bottom, right - MARGIN, ROW_HEIGHT, STRIPE);
+          // A hairline under each row, the way the template's data table separates rows —
+          // no zebra fill, which the house format does not use.
+          rect(ops, MARGIN, bottom, right - MARGIN, 0.5, ROW_RULE);
           columns.forEach((c, i) => {
             const inner = widths[i] - 2 * PAD;
             const value = truncate(cellText(row[band[i]]), inner, CELL_SIZE);
             if (!value) return;
             const x = c.numeric ? edges[i + 1] - PAD - widthOf(value, CELL_SIZE) : edges[i] + PAD;
-            text(ops, value, x, bottom + 4, CELL_SIZE, false, INK);
+            text(ops, value, x, bottom + 5, CELL_SIZE, false, INK);
           });
         });
 
-        // The running head as a footer, so a page found on its own says what it is from.
-        text(ops, doc.title, MARGIN, MARGIN - 14, FOOT_SIZE, false, MUTED);
         pages.push(ops.join("\n"));
       });
     }
-  }
-
-  // "Page 3 of 11" counts the whole download, not the table it happens to be in —
-  // added here rather than in the loop above because the total is not known until every
-  // table has been laid out, and a footer reading "page 3 of 4" on a document of eleven
-  // pages is how a report gets sent out with two of its sections missing unnoticed.
-  const numbered = pages.map((content, i) => {
-    const ops: string[] = [];
-    const label = `Page ${i + 1} of ${pages.length}`;
-    text(ops, label, WIDTH - MARGIN - widthOf(label, FOOT_SIZE), MARGIN - 14, FOOT_SIZE, false, MUTED);
-    return `${content}\n${ops.join("\n")}`;
   });
 
-  return assemble(doc.title, numbered, takenAt);
+  // The brand furniture — wordmark and hairline above, footer and hairline below — plus the
+  // page number, added once every page is laid out: "Page 3 of 11" counts the whole
+  // download, and the total is not known until the last table has paginated.
+  // The footer's date — spelled, not numeric, so 03/09 and 09/03 are not both read as it.
+  const footerDate = takenAt.toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
+
+  const decorated = pages.map((content, i) => {
+    const ops: string[] = [];
+
+    // Running header: the wordmark top-left, drawn from the shared image, and a hairline.
+    const logoY = HEIGHT - MARGIN - LOGO_H;
+    ops.push(`q ${LOGO_W.toFixed(2)} 0 0 ${LOGO_H.toFixed(2)} ${MARGIN} ${logoY.toFixed(2)} cm /Im0 Do Q`);
+    const headRuleY = HEIGHT - MARGIN - HEADER_H + 12;
+    rect(ops, MARGIN, headRuleY, WIDTH - 2 * MARGIN, 0.6, HAIRLINE);
+
+    // Footer (brand kit): a hairline, then the document name with © and the date beneath
+    // it on the left, and the confidentiality line with the page number on the right.
+    const footRuleY = MARGIN + FOOTER_H - 6;
+    rect(ops, MARGIN, footRuleY, WIDTH - 2 * MARGIN, 0.6, HAIRLINE);
+    text(ops, `${doc.title} ©`, MARGIN, MARGIN + FOOT_SIZE + 3, FOOT_SIZE, false, FOOT_INK);
+    text(ops, footerDate, MARGIN, MARGIN, FOOT_SIZE, false, FOOT_INK);
+    const right = `Commercial in confidence  ·  Page ${i + 1} of ${pages.length}`;
+    text(ops, right, WIDTH - MARGIN - widthOf(right, FOOT_SIZE), MARGIN + (FOOT_SIZE + 3) / 2, FOOT_SIZE, false, FOOT_INK);
+
+    return `${ops.join("\n")}\n${content}`;
+  });
+
+  return assemble(doc.title, decorated, takenAt);
 }
 
+/** One PDF object's body: text, or a stream whose data is raw bytes (the logo image). */
+type ObjectBody = string | { head: string; bytes: Uint8Array; tail: string };
+
 /**
- * The file itself: objects, then the cross-reference table that says where each one
- * starts. Every offset is counted in bytes rather than characters — a `·` in a heading
- * is two bytes of UTF-8 and one character, and an xref built by counting characters
- * points a few bytes short of every object after the first accent. This is the classic
- * way a hand-written PDF breaks, and it breaks in Acrobat while looking fine in Chrome.
+ * The file itself: objects, then the cross-reference table that says where each one starts.
+ * Every offset is counted in bytes rather than characters — a `·` in a heading is two bytes
+ * of UTF-8 and one character, and an xref built by counting characters points a few bytes
+ * short of every object after the first accent. The image object carries raw binary, so the
+ * assembler works in bytes throughout rather than encoding strings after the fact.
  */
 function assemble(title: string, pages: string[], takenAt: Date): Uint8Array {
   const encoder = new TextEncoder();
   const parts: Uint8Array[] = [];
   let length = 0;
-  const push = (s: string) => {
-    const bytes = encoder.encode(s);
+  const pushBytes = (bytes: Uint8Array) => {
     parts.push(bytes);
     length += bytes.length;
   };
+  const push = (s: string) => pushBytes(encoder.encode(s));
 
-  const FIRST_PAGE = 6; // 1 catalog, 2 pages, 3 F1, 4 F2, 5 info
+  // The wordmark, decoded once in `logo.ts`, as an uncompressed DeviceRGB image XObject.
+  const logoBytes = base64ToBytes(LOGO_RGB.base64);
+  const LOGO_OBJ = 6; // 1 catalog, 2 pages, 3 F1, 4 F2, 5 info, 6 image
+  const FIRST_PAGE = 7;
   const pageIds = pages.map((_p, i) => FIRST_PAGE + i * 2);
-  const objects: string[] = [
+
+  const objects: ObjectBody[] = [
     `<< /Type /Catalog /Pages 2 0 R >>`,
     `<< /Type /Pages /Count ${pages.length} /Kids [${pageIds.map(id => `${id} 0 R`).join(" ")}] >>`,
     `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>`,
     `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>`,
-    `<< /Title ${pdfString(title)} /Producer ${pdfString("Lofty")} /CreationDate ${pdfString(pdfDate(takenAt))} >>`
+    `<< /Title ${pdfString(title)} /Producer ${pdfString("Lofty")} /CreationDate ${pdfString(pdfDate(takenAt))} >>`,
+    {
+      head:
+        `<< /Type /XObject /Subtype /Image /Width ${LOGO_RGB.width} /Height ${LOGO_RGB.height}` +
+        ` /ColorSpace /DeviceRGB /BitsPerComponent 8 /Length ${logoBytes.length} >>\nstream\n`,
+      bytes: logoBytes,
+      tail: `\nendstream`
+    }
   ];
 
   pages.forEach((content, i) => {
     objects.push(
       `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${WIDTH} ${HEIGHT}]` +
-        ` /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >>` +
+        ` /Resources << /Font << /F1 3 0 R /F2 4 0 R >> /XObject << /Im0 ${LOGO_OBJ} 0 R >> >>` +
         ` /Contents ${pageIds[i] + 1} 0 R >>`
     );
-    // The stream length counts bytes, for the same reason the xref does.
     objects.push(`<< /Length ${encoder.encode(content).length} >>\nstream\n${content}\nendstream`);
   });
 
   push(`%PDF-1.4\n`);
-  // A comment of high bytes, which is the convention that tells anything sniffing the
-  // file that it is binary and must not be line-ending-converted.
   push(`%âãÏÓ\n`);
 
   const offsets: number[] = [];
   objects.forEach((body, i) => {
     offsets.push(length);
-    push(`${i + 1} 0 obj\n${body}\nendobj\n`);
+    if (typeof body === "string") {
+      push(`${i + 1} 0 obj\n${body}\nendobj\n`);
+    } else {
+      push(`${i + 1} 0 obj\n${body.head}`);
+      pushBytes(body.bytes);
+      push(`${body.tail}\nendobj\n`);
+    }
   });
 
   const xrefAt = length;
@@ -389,6 +443,31 @@ function assemble(title: string, pages: string[], takenAt: Date): Uint8Array {
   for (const p of parts) {
     out.set(p, at);
     at += p.length;
+  }
+  return out;
+}
+
+/**
+ * Base64 to bytes, without `atob` — this writer runs in the browser and in the Node check,
+ * and `atob` is not in Node's globals in every version the check runs under. Standard
+ * alphabet, no line breaks (which is how `logo.ts` is generated).
+ */
+function base64ToBytes(b64: string): Uint8Array {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  const lookup = new Uint8Array(256);
+  for (let i = 0; i < chars.length; i++) lookup[chars.charCodeAt(i)] = i;
+  const clean = b64.replace(/=+$/, "");
+  const out = new Uint8Array((clean.length * 3) >> 2);
+  let bits = 0;
+  let acc = 0;
+  let o = 0;
+  for (let i = 0; i < clean.length; i++) {
+    acc = (acc << 6) | lookup[clean.charCodeAt(i)];
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      out[o++] = (acc >> bits) & 0xff;
+    }
   }
   return out;
 }

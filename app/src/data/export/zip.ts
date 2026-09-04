@@ -81,15 +81,28 @@ class Buf {
   }
 }
 
-export function zip(entries: ZipEntry[], at: Date): Uint8Array {
+/**
+ * `binaryPaths` names the entries whose body is not text but raw bytes carried as a string
+ * of code points 0–255 — the .docx logo image. Those are written byte-for-byte rather than
+ * UTF-8-encoded, because `TextEncoder` would turn every byte above 0x7f into two and the
+ * PNG would arrive corrupt. XML parts (the default) stay UTF-8, so an accented sheet name
+ * survives.
+ */
+export function zip(entries: ZipEntry[], at: Date, binaryPaths: string[] = []): Uint8Array {
   const encoder = new TextEncoder();
+  const binary = new Set(binaryPaths);
+  const latin1 = (s: string) => {
+    const b = new Uint8Array(s.length);
+    for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xff;
+    return b;
+  };
   const { date, time } = dosStamp(at);
   const out = new Buf();
   const central: { entry: ZipEntry; name: Uint8Array; body: Uint8Array; crc: number; offset: number }[] = [];
 
   for (const entry of entries) {
     const name = encoder.encode(entry.path);
-    const body = encoder.encode(entry.body);
+    const body = binary.has(entry.path) ? latin1(entry.body) : encoder.encode(entry.body);
     const crc = crc32(body);
     const offset = out.length;
 

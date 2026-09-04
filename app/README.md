@@ -148,6 +148,18 @@ Each format is for a different reader: the **spreadsheet** for sorting and total
 the **PDF** for the fixed copy that prints or forwards. Adding one is a line in
 `index.ts` and a writer beside the others — the menu reads the format list.
 
+The PDF and Word writers carry Lofty's **house document format** (the `Lofty Document
+Template` brand kit): the wordmark and a hairline in the running header, the green
+`LOFTY EXPORT` eyebrow over the title, the 2pt orange rule under each table's heading, the
+grey table header row, and the `Commercial in confidence · Page X of Y` footer. Both set
+**Helvetica** — the brand's only approved fallback, and what the template itself uses for
+the Word file a client edits; the real Fieldwork Geo needs Word's embed-fonts option. The
+wordmark is the app's own `public/lofty_logo_orange.png`, decoded ahead of time by
+`node scripts/build-logo.mjs` into `src/data/export/logo.ts` (raw samples for the PDF's
+image, the original PNG for Word's media part) so neither writer needs an image library.
+The PDF stays landscape for its wider tables; the Word document is A4 portrait, since Word
+wraps cells rather than truncating them.
+
 **One rule decides what goes in a file: it is what is on screen.** The rows after the
 search, the filters and the sort; the columns you have switched on, in the order you
 dragged them. A download that quietly returned all two hundred jobs when the toolbar said

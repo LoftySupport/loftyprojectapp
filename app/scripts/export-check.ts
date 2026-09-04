@@ -233,7 +233,8 @@ const wordPart = (path: string) => wordEntries.find(e => e.path === path)?.body.
 // as unreadable, the same way Excel does for a missing sheet.
 for (const path of [
   "[Content_Types].xml", "_rels/.rels", "docProps/core.xml",
-  "word/document.xml", "word/_rels/document.xml.rels", "word/styles.xml"
+  "word/document.xml", "word/_rels/document.xml.rels", "word/styles.xml",
+  "word/header1.xml", "word/footer1.xml", "word/_rels/header1.xml.rels", "word/media/image1.png"
 ]) {
   ok(`the package contains ${path}`, wordEntries.some(e => e.path === path));
 }
@@ -278,14 +279,15 @@ ok("a control character is dropped", !document.includes(NUL));
 // Watched by omitting <w:tblHeader/>: the header row then does not repeat when a long
 // table breaks across pages, and page two is a grid of values with no column names.
 ok("the header row repeats across pages", document.includes("<w:tblHeader/>"));
-// Watched by shading nothing: the header row is then indistinguishable from the body.
-ok("the header row is shaded", document.includes(`w:fill="F1F1F3"`));
+// Watched by shading nothing: the header row is then indistinguishable from the body. The
+// fill is the brand kit's table-header grey.
+ok("the header row is shaded in the brand grey", document.includes(`w:fill="F6F7F7"`));
 // Watched by left-aligning figures: a numeric column right-aligns in Word as it does in
 // the sheet and the PDF. "Days in stage" is the numeric column in the fixture.
 ok("a numeric cell is right-aligned", document.includes(`<w:jc w:val="right"/>`));
-// Watched by writing a portrait page: the thirteen-column dictionary needs landscape, and
-// this is where that is set for Word.
-ok("the page is landscape", document.includes(`w:orient="landscape"`));
+// Watched by leaving the page at Word's default: the Word document is A4 portrait, the
+// house document format's page. (The PDF stays landscape for its wider tables.)
+ok("the page is A4 portrait", document.includes(`<w:pgSz w:w="11906" w:h="16838"/>`));
 // One table element per table in the document — the empty "Needs attention" table still
 // gets its heading and its header row. Watched by skipping empty tables: the section then
 // vanishes and reads as one lost on the way out.
@@ -321,14 +323,47 @@ ok(
 // A blank cell is a bare paragraph, never an empty run or a missing paragraph: Word
 // requires the last block in a cell to be a paragraph. Watched by emitting `<w:tc/>` for a
 // null, which makes the document unreadable. The null address is row 2 of the fixture.
-ok("a blank cell is an empty paragraph", document.includes("<w:tc><w:tcPr/><w:p/></w:tc>"));
+ok("a blank cell is an empty paragraph", /<w:tc><w:tcPr>[^<]*(<w:tcMar>.*?<\/w:tcMar>)?<\/w:tcPr><w:p\/><\/w:tc>/.test(document));
 // Provenance in the place Word shows it under File → Info. Watched by dropping the title
 // from core.xml: the file's properties then read "Document1" whatever the download was.
 ok("the document's title is recorded in its properties", wordPart("docProps/core.xml").includes("<dc:title>Jobs · at risk</dc:title>"));
-// The default font, so a value written with no explicit run properties still has one.
-// Watched by dropping docDefaults: Word substitutes its own default and the document opens
-// in a font nobody chose.
-ok("the styles part sets a default font", wordPart("word/styles.xml").includes("<w:rFonts"));
+// Helvetica specifically, not Word's default: the house document format names it the only
+// approved fallback for the .docx a client edits (never Arial, Calibri or Aptos). Watched
+// by leaving Calibri in place, which is what the writer shipped before the brand kit.
+ok("the default font is Helvetica", wordPart("word/styles.xml").includes(`w:ascii="Helvetica"`));
+
+section("the Word document wears the Lofty house format");
+// The wordmark rides in the running header as a picture. Watched by dropping the drawing:
+// the header is then an empty band and the file no longer reads as a Lofty document.
+const header = wordPart("word/header1.xml");
+ok("the header embeds the wordmark as a picture", header.includes("<pic:pic") && header.includes(`r:embed="rIdLogo"`));
+// The header's picture relationship resolves to the media part. Watched by pointing the
+// blip at a missing rel: Word shows a red-x placeholder where the logo should be.
+ok("the logo relationship points at the media part", wordPart("word/_rels/header1.xml.rels").includes("media/image1.png"));
+// The embedded PNG is the real logo, byte-for-byte — its signature survives the trip
+// through the shared zip writer (which stores this one entry as raw bytes, not UTF-8).
+// Watched by UTF-8-encoding it like the XML parts: every byte above 0x7f doubles and Word
+// calls the image corrupt.
+const logo = wordEntries.find(e => e.path === "word/media/image1.png")?.body;
+ok(
+  "the embedded logo is a valid PNG",
+  !!logo && logo.length > 1000 && logo[0] === 0x89 && logo[1] === 0x50 && logo[2] === 0x4e && logo[3] === 0x47,
+  logo ? `${logo.length} bytes, starts ${[...logo.subarray(0, 4)].join(",")}` : "no image part"
+);
+// The header carries the brand hairline under the logo. Watched by dropping the border.
+ok("a hairline sits under the header", header.includes(`w:color="E7E8E9"`));
+// The section heading carries the 2pt orange rule (brand kit: Level 2). Watched by dropping
+// the paragraph border: the heading then floats with nothing marking the section.
+ok("the section heading has the orange rule", document.includes(`<w:bottom w:val="single" w:sz="16" w:space="2" w:color="F47E63"/>`));
+// The green eyebrow, tracked caps, once — the house format's cover title header. Watched by
+// dropping the colour: the eyebrow then reads as ordinary grey text.
+ok("the eyebrow is Eco Green, letter-spaced caps", document.includes(`<w:color w:val="005058"/>`) && document.includes("<w:caps/>"));
+// The footer auto-numbers with Word fields and carries the confidentiality line. Watched by
+// writing a literal "1": every page then reads "Page 1", and a fixed page number in a
+// growing document is worse than none.
+const footer = wordPart("word/footer1.xml");
+ok("the footer numbers pages with fields", footer.includes("PAGE") && footer.includes("NUMPAGES") && footer.includes("fldChar"));
+ok("the footer carries the confidentiality line", footer.includes("Commercial in confidence"));
 
 section("every offered format can be written, and names itself");
 // The menu, the toast and the download all read one registry; a format with a label but no
@@ -397,12 +432,40 @@ ok("the page tree counts every page", pageCount === declaredPages, `${pageCount}
 // end of the page.
 ok("a long table runs to several pages", pageCount > doc.tables.length, `${pageCount} pages`);
 // Watched by numbering per table: a nine-page download then reads "Page 1 of 2" three
-// times over, and a section that failed to render is invisible.
-ok("page numbers count the whole download", raw.includes(`(Page 1 of ${pageCount})`));
-ok("the last page is numbered as the last", raw.includes(`(Page ${pageCount} of ${pageCount})`));
+// times over, and a section that failed to render is invisible. The page number sits in
+// the footer's standing line, so it is matched as a substring, not as a whole string.
+ok("page numbers count the whole download", raw.includes(`Page 1 of ${pageCount})`));
+ok("the last page is numbered as the last", raw.includes(`Page ${pageCount} of ${pageCount})`));
+// The footer carries the house confidentiality line beside the page number. Watched by
+// dropping it: a page found on its own no longer says how it may be shared.
+ok("the footer carries the confidentiality line", raw.includes("Commercial in confidence"));
 // Watched by skipping the empty table's page: "nothing needs attention" is a result, and
 // its absence reads as a section lost on the way out.
 ok("a table with no rows still gets a page", raw.includes("(Needs attention)"));
+
+section("the PDF wears the Lofty house format");
+// The wordmark is embedded as an uncompressed DeviceRGB image XObject and drawn on the
+// page. Watched by dropping the /Im0 Do operator: the header loses its logo and the file
+// no longer reads as a Lofty document.
+ok("the wordmark is an image XObject", raw.includes("/Subtype /Image") && raw.includes("/ColorSpace /DeviceRGB"));
+ok("the wordmark is drawn on the page", raw.includes("/Im0 Do"));
+// The image's declared length reaches its endstream, the same arithmetic the content
+// streams are held to — the logo carries raw binary, so a miscount truncates it and the
+// image draws as noise or not at all. Watched by declaring it one byte short.
+const image = [...pdf.toString("latin1").matchAll(/\/Width (\d+) \/Height (\d+) \/ColorSpace \/DeviceRGB \/BitsPerComponent 8 \/Length (\d+) >>\nstream\n/g)][0];
+ok("the logo image declares its true pixel count", !!image && Number(image[1]) * Number(image[2]) * 3 === Number(image[3]),
+  image ? `${image[1]}×${image[2]}×3 vs ${image[3]}` : "no image object");
+if (image) {
+  const from = image.index! + image[0].length;
+  const end = pdf.subarray(from + Number(image[3]), from + Number(image[3]) + 10).toString("latin1");
+  ok("the logo image stream reaches its endstream", end.startsWith("\nendstream"), JSON.stringify(end));
+}
+// The orange section rule, filled in Crisp Orange. Watched by dropping the rule: the
+// section heading floats with nothing under it.
+ok("the section rule is drawn in Crisp Orange", raw.includes("0.957 0.494 0.388 rg"));
+// The green eyebrow, in Eco Green. Watched by setting it in ink: it stops reading as the
+// house format's labelled header.
+ok("the eyebrow is set in Eco Green", raw.includes("0.000 0.314 0.345 rg"));
 
 section("a table too wide for the page");
 // Thirteen columns is the data dictionary, which is what made this necessary: at four
