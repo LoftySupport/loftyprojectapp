@@ -5,6 +5,8 @@ import { useQuery } from "../data/DataProvider";
 import { useProcesses, usePropertyAccess, usePropertyDefs, useTeams } from "../data/useLookups";
 import type { BoardJob } from "../data/boardModel";
 import { PROCESS_RUN_HEALTH_LABELS, isRunOpen, teamName, type ProcessRun } from "../data/types";
+import { ExportMenu } from "./ExportMenu";
+import { tableFromFields, type ExportDocument } from "../data/export";
 import "./ui.css";
 import "./processes.css";
 
@@ -73,12 +75,80 @@ export function ProcessReport({ jobs }: { jobs: BoardJob[] }) {
     .filter(r => r.n > 0)
     .sort((a, b) => b.n - a.n), [propertyDefs, access, jobs]);
 
+  /**
+   * The Processes report as a file, built from the very `rows`, `overdue` and
+   * `propertyRows` the panels below render — not a second aggregation of the runs.
+   *
+   * That is the whole reason the Export button is here rather than in the toolbar of the
+   * Reports page: the report is computed in this component, and one place deciding what
+   * "processes across the jobs in view" contains is the CLAUDE.md rule the boards' exports
+   * follow too. A right-aligned column exports as a number; a blank in a count column is
+   * left blank rather than written as the dash the screen shows.
+   */
+  const buildExport = (): ExportDocument => ({
+    title: "Processes report",
+    note: `Across ${jobs.length} job${jobs.length === 1 ? "" : "s"} in view · ${latest.length} runs, latest attempt per job`,
+    tables: [
+      tableFromFields(
+        "Processes",
+        [
+          { label: "Process", text: r => r.process.name },
+          { label: "Stage", text: r => r.process.stageName + (r.process.stageGroup ? ` · ${r.process.stageGroup}` : "") },
+          { label: "Team", text: r => (r.process.owningTeam ? teamName(r.process.owningTeam, teams) : null) },
+          { label: "Runs", numeric: true, text: r => r.runs },
+          { label: "Open", numeric: true, text: r => r.open },
+          { label: "Waiting", numeric: true, text: r => r.waiting || null },
+          { label: "At risk", numeric: true, text: r => r.atRisk || null },
+          { label: "Overdue", numeric: true, text: r => r.overdue || null },
+          { label: "Complete", numeric: true, text: r => r.complete },
+          { label: "Not applicable", numeric: true, text: r => r.na || null },
+          { label: "Avg days", numeric: true, text: r => r.avgDays },
+          { label: "Repeats", numeric: true, text: r => r.attempts || null }
+        ],
+        rows,
+        "latest attempt per job"
+      ),
+      tableFromFields(
+        "Runs at risk or overdue",
+        [
+          { label: "Record", text: r => (r.jobId ? r.jobId : `Project ${r.projectId}`) },
+          { label: "Process", text: r => r.processName + (r.attempt > 1 ? ` (attempt ${r.attempt})` : "") },
+          { label: "Health", text: r => PROCESS_RUN_HEALTH_LABELS[r.health] },
+          { label: "Started", text: r => (r.startedAt ? new Date(r.startedAt).toLocaleDateString() : null) },
+          { label: "Due", text: r => (r.dueDate ? new Date(r.dueDate + "T00:00:00").toLocaleDateString() : null) },
+          { label: "Waiting on", text: r => (r.waitingOn ? teamName(r.waitingOn, teams) : null) }
+        ],
+        overdue,
+        overdue.length === 0 ? "None — every started process with a duration is inside it" : "soonest due first"
+      ),
+      tableFromFields(
+        "Properties recorded",
+        [
+          { label: "Property", text: r => r.def.label },
+          { label: "Stage", text: r => r.def.stageName },
+          { label: "Recorded on", numeric: true, text: r => r.n },
+          { label: "Missing on", numeric: true, text: r => jobs.length - r.n }
+        ],
+        propertyRows,
+        `how many of the ${jobs.length} jobs in view have each`
+      )
+    ]
+  });
+
   return (
     <div className="stack">
       <section className="panel">
         <div className="panel-head">
-          <Text type="text2" weight="bold">Processes across the jobs in view</Text>
-          <Text type="text3" color="secondary">{latest.length} runs · latest attempt per job</Text>
+          <div>
+            <Text type="text2" weight="bold">Processes across the jobs in view</Text>
+            <Text type="text3" color="secondary">{latest.length} runs · latest attempt per job</Text>
+          </div>
+          {/* The Processes report's own Export, beside the data it downloads. Disabled
+              while the runs are loading and when nothing has been started, for the same
+              reason the boards' are: a file of nothing is not an answer. */}
+          <div className="panel-head-actions">
+            <ExportMenu build={buildExport} disabled={loading || rows.length === 0} />
+          </div>
         </div>
         {loading && <Text type="text3" color="secondary">Loading…</Text>}
         {!loading && rows.length === 0 && (

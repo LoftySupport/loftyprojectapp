@@ -17,6 +17,8 @@ import { useQuery, useRepository } from "../data/DataProvider";
 import { Problem } from "../components/Form";
 import { useStages, useTeams } from "../data/useLookups";
 import { Select, toOptions } from "../components/Select";
+import { ExportMenu } from "../components/ExportMenu";
+import { tableFromFields, type ExportDocument } from "../data/export";
 import "../components/ui.css";
 import "./DictionaryPage.css";
 
@@ -57,6 +59,10 @@ const isRetired = (s: DictionaryStatus) => RETIRED.includes(s);
 
 export function DictionaryPage() {
   const { can } = usePermission();
+  // The two lookups the allowed-values cell reads live, needed up here too so the
+  // download can resolve them the same way — see `allowedValues` below.
+  const { teams } = useTeams();
+  const { stageNames } = useStages();
   const canEditWording = can("manager");
   const canEditStatus = can("admin");
   const canArchive = can("superadmin");
@@ -160,6 +166,75 @@ export function DictionaryPage() {
 
   const counts = countByStatus();
 
+  /**
+   * The permitted values as one cell of text.
+   *
+   * The same resolution `AllowedValuesCell` does — read live for the two that are rows
+   * in a lookup, because the point of a lookup table is that it changes — flattened,
+   * because a nested list has nowhere to go in a spreadsheet. A column whose values have
+   * not loaded yet exports as blank rather than as an empty list: "no values" and "not
+   * read yet" are different, and one of them is a claim.
+   */
+  const allowedValues = (allowed?: AllowedValues): string | null => {
+    if (!allowed) return null;
+    const live =
+      allowed.lookup === "teams" ? teams.map(t => t.name)
+      : allowed.lookup === "stages" ? stageNames
+      : null;
+    const values = allowed.values ?? live;
+    return values && values.length > 0 ? values.join(", ") : null;
+  };
+
+  /**
+   * The dictionary as a file — the filtered set, with Lofty's edits already folded in
+   * (`merged`, not `DICTIONARY`), so a manager who has renamed forty properties exports
+   * their words and not the repo's.
+   *
+   * This is the export somebody actually reads away from the app: a hundred and ninety
+   * properties is a spreadsheet job, not a scrolling job, and the schema conversation
+   * with Lofty has been happening in a spreadsheet since before this page existed. The
+   * allowed values come along flattened into one cell — a nested list has nowhere to go
+   * in a sheet, and the values are what somebody checks a form against.
+   */
+  const buildExport = (): ExportDocument => ({
+    title: "Data dictionary",
+    note: [
+      `Showing ${rows.length} of ${status ? DICTIONARY.length : liveTotal} properties`,
+      table ? `table: ${table}` : null,
+      status ? `status: ${STATUS_LABELS[status as DictionaryStatus]}` : null,
+      query.trim() ? `search: ${query.trim()}` : null
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    tables: [
+      tableFromFields<DictionaryEntry>(
+        "Dictionary",
+        [
+          { label: "Supabase ID", text: d => d.id },
+          { label: "Table", text: d => d.table },
+          { label: "Column", text: d => d.column },
+          { label: "Lofty name", text: d => d.friendlyName },
+          { label: "Definition", text: d => d.definition },
+          { label: "Type", text: d => d.type },
+          { label: "Rules", text: d => d.rules || null },
+          { label: "Relationships", text: d => d.relationships || null },
+          { label: "Allowed values", text: d => allowedValues(d.allowed) },
+          {
+            label: "Values held in",
+            text: d =>
+              d.allowed
+                ? `${d.allowed.holder} (${d.allowed.source === "table" ? "lookup table" : d.allowed.source})`
+                : null
+          },
+          { label: "Status", text: d => STATUS_LABELS[d.status] },
+          { label: "Last updated", text: d => d.updatedAt },
+          { label: "Updated by", text: d => d.updatedBy }
+        ],
+        rows
+      )
+    ]
+  });
+
   const edit = (id: string, patch: Partial<DictionaryEntry>) =>
     setEdits(prev => ({
       ...prev,
@@ -245,6 +320,7 @@ export function DictionaryPage() {
                 inputAriaLabel="Search the dictionary"
               />
             </div>
+            <ExportMenu build={buildExport} disabled={rows.length === 0} />
             <div className="toolbar-spacer" />
             <Text type="text2" color="secondary">
               Showing {rows.length} of {status ? DICTIONARY.length : liveTotal}

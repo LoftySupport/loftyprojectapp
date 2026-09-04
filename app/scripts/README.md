@@ -52,3 +52,55 @@ land on the version that checks nothing.
 
 Found on 3 September, by a change that referenced three functions it had not imported and
 sailed through `tsc --noEmit`. `npm run build` caught it, as it had been doing all along.
+
+---
+
+# `npm run export-check`
+
+The files the Export menu hands people — an .xlsx, a .docx and a PDF — asserted to be
+real files. Roughly ninety checks, each watched failing before it was kept.
+
+```
+npm run export-check
+```
+
+Needs no browser and no server: it calls the same writers the app calls
+(`src/data/export/`) and reads their output back.
+
+## Why it exists
+
+Every writer produces a container whose correctness is invisible. An .xlsx or a .docx with
+one bad byte offset in its ZIP directory, or a PDF whose cross-reference table was counted
+in characters instead of bytes, opens perfectly in one reader and reports "the file is
+corrupt" in another — and neither failure can be seen by opening the download on the
+machine that made it, which is the only way anybody would otherwise test this.
+
+## What makes it independent
+
+Each archive is re-parsed from the bytes: end of central directory, then each entry, with
+every checksum re-computed using `zlib.crc32` — Node's, not the app's. A check that
+verified the writer's CRC with the writer's own CRC would agree with itself about a wrong
+answer. The spreadsheet and the Word document share the one `zip.ts`, so the same parse
+re-checks both.
+
+The PDF is walked the same way: every offset in the xref has to land exactly on its
+`N 0 obj`, and every content stream's declared length has to reach its `endstream`. The
+Word document's table markup is checked for balance — every `<w:tbl>`, `<w:tr>` and
+`<w:tc>` closed — because an unbalanced table is exactly what makes Word call a file
+corrupt.
+
+## Where it needs a person
+
+It cannot tell you the PDF is *readable* — that it is not a page of ellipses, or that the
+column bands line up — nor that the Word document opens where Word actually runs. Those
+were checked by opening the files: `app/scripts/ts-extensions.mjs` lets a scratch script
+import the writers directly, and the data dictionary (298 rows, 13 columns) is the hardest
+case the app has.
+
+## Node loading the app's own TypeScript
+
+`src/` is written for a bundler, so its imports carry no extension. `--import
+./scripts/register-ts.mjs` adds a resolve hook that tries `.ts` on the second attempt,
+which is the difference between a check that runs the shipping code and a check that runs
+a copy of it kept in step by hand. Node strips the types itself (22.18+); nothing here
+compiles anything.

@@ -2259,3 +2259,49 @@ code { overflow-wrap: anywhere; }
   /* No hover to reveal it on a phone, so it stays. */
   .board-card-pick { opacity: 1; }
 }
+
+/* ---- the export menu -----------------------------------------------------
+   The same popover the date picker uses, for the same reason: it sits in a toolbar
+   beside other small controls, and a Vibe Dialog there renders in a layer above the
+   toolbar's own stacking context and lands a few pixels off the trigger. */
+
+.export-wrap { position: relative; }
+.export-pop {
+  position: absolute; top: calc(100% + var(--space-4)); left: 0; z-index: 30;
+  min-width: 260px; padding: var(--space-8);
+  display: flex; flex-direction: column; gap: 2px;
+  background: var(--primary-background-color);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-small);
+  box-shadow: var(--box-shadow-medium);
+}
+/* Hangs from the right edge of the trigger when there is not 260px to its right —
+   set by the component, which measures it on open. A media query cannot decide this:
+   the export button is mid-toolbar on the boards and at the right-hand end on the
+   dictionary, and only one of those opens off-screen. */
+.export-pop.is-from-right { left: auto; right: 0; }
+@media (max-width: 720px) {
+  .export-pop { min-width: min(260px, calc(100vw - var(--space-32))); }
+}
+.export-pop button[role="menuitem"] {
+  text-align: left; background: none; border: 0;
+  min-height: 32px; padding: var(--space-8) var(--space-12);
+  border-radius: var(--border-radius-small);
+  font: var(--font-text2-normal); color: var(--primary-text-color); cursor: pointer;
+}
+.export-pop button[role="menuitem"]:hover { background: var(--primary-background-hover-color); }
+.export-pop button[role="menuitem"]:focus-visible {
+  outline: 2px solid var(--primary-color); outline-offset: -2px;
+}
+.export-hint {
+  margin: var(--space-4) var(--space-12) 0;
+  padding-top: var(--space-8);
+  border-top: 1px solid var(--layout-border-color);
+}
+
+/* Two controls where a panel head expects one — the export menu beside the panel's own
+   action. `align-items: center` locally, because the head aligns on the baseline for its
+   title and caption and a button baselined against text sits a few pixels low. */
+.panel-head-actions {
+  display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap;
+}

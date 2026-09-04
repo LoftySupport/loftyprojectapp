@@ -132,6 +132,51 @@ numbers are in `../design-system-evaluation.md`.
 Two rules that are easy to lose in a rewrite: **nothing below 12px**, and **`#f47e63`
 never carries text** (2.6:1 — use `--lofty-orange-strong`).
 
+## Downloads — Excel, Word and PDF
+
+Every list and every report has an **Export** menu offering three formats, and all three
+are written here rather than pulled from a library: `src/data/export/`.
+
+```
+    a screen  ──►  ExportDocument  ──►  xlsx.ts  ──►  zip.ts     (an OOXML package)
+                   (tables, rows)   ├─►  docx.ts ──►  zip.ts     (an OOXML package)
+                                    └─►  pdf.ts  ──►  helvetica.ts  (A4 landscape)
+```
+
+Each format is for a different reader: the **spreadsheet** for sorting and totalling, the
+**Word document** for the table that goes out under a cover note and keeps being edited,
+the **PDF** for the fixed copy that prints or forwards. Adding one is a line in
+`index.ts` and a writer beside the others — the menu reads the format list.
+
+**One rule decides what goes in a file: it is what is on screen.** The rows after the
+search, the filters and the sort; the columns you have switched on, in the order you
+dragged them. A download that quietly returned all two hundred jobs when the toolbar said
+"Showing 11 of 200" would make that line a lie in the one direction nobody checks. Where
+a board or a table is grouped, each group becomes a sheet, a Word section and a page.
+
+**A column says what it exports.** `ColumnDef.text` is required, beside `cell`, because a
+cell is a React node — `<StatusPill status="at_risk" />` has no text in it at all, and a
+walk over its children would export an empty Status column that nobody notices until a
+report has gone out. `null` means the record has no answer and becomes an **empty cell**,
+not a dash; where the screen shows a `{{table.column}}` token the file carries the same
+token, because unbound and empty are different facts.
+
+**Why not a library.** The candidates each bring a general-purpose document model —
+a reader, a formula engine, an embedded font stack, a paragraph/section builder — for a
+job that is a handful of small XML parts and text at coordinates. What is actually hard is
+the OOXML and the PDF cross-reference table, not the archive (`zip.ts`, shared by the
+spreadsheet and the Word document), and all of it is checked:
+
+```bash
+npm run export-check
+```
+
+It re-parses each package from the bytes out, re-computes every entry's checksum with
+Node's `zlib.crc32` rather than the app's own, walks the PDF's xref and the Word table's
+tag balance, and asserts the things that make an export wrong rather than broken: a job
+number typed as a date, a null written as a dash, an unbound column exporting as blank.
+See `scripts/export-check.ts`.
+
 ## Not built yet
 
 The prototype at `../index.html` is the reference for every screen. Ported so far: the

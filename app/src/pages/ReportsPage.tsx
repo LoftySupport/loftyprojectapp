@@ -7,8 +7,10 @@ import { useBoardRecords } from "../data/boardModel";
 import { jobMatchesQuery, matchedOnPreviousAddress, useSearch } from "../data/SearchProvider";
 import { LoadProblem, NoResults, NothingYet, PreviousAddressNote } from "../components/SearchNotices";
 import { StatusPill } from "../components/RecordCards";
-import { Token } from "../components/Token";
+import { Token, token } from "../components/Token";
 import { Toolbar, type ToolbarFilter } from "../components/Toolbar";
+import { ExportMenu } from "../components/ExportMenu";
+import { tableFromFields, tableOfFigures, type ExportDocument } from "../data/export";
 import { toOptions } from "../components/Select";
 import { PROCESS_HEALTH_FILTER_OPTIONS, RECORDED_FILTER_OPTIONS, jobMatchesFilters } from "../data/filtering";
 import { ProcessReport } from "../components/ProcessReport";
@@ -68,6 +70,98 @@ export function ReportsPage() {
     .filter(j => j.status !== "on_track")
     .sort((a, b) => b.daysInStage - a.daysInStage);
 
+  // The four tabs, named so the export button can say what it downloads. The Processes
+  // tab is not here: its report is computed inside `ProcessReport`, and its Export button
+  // lives there too, next to the data, so the two cannot drift.
+  const TABS = ["Portfolio overview", "Leadership summary", "Job report", "Processes"];
+
+  /**
+   * The report as a file. **The tab you are on**, not all of them: the tabs are different
+   * reports for different audiences, and a leadership summary arriving with a 200-row job
+   * table stapled to it is not the thing anybody asked for.
+   *
+   * The figures go in as figures. A stat tile is a number with a label, which is a
+   * two-column table — so "On track (64%)" arrives as a row of a sheet somebody can put
+   * in a deck, rather than as a picture of a tile. The bars are the same: a bar is a count
+   * drawn wide, and the count is what survives the trip to a spreadsheet or a Word table.
+   */
+  const buildExport = (): ExportDocument => {
+    const filtersSet = filters.filter(f => f.value).length;
+    const note = [
+      `Showing ${jobs.length} of ${all.length} jobs`,
+      filtersSet > 0 ? `${filtersSet} filter${filtersSet === 1 ? "" : "s"} set` : null,
+      terms.length > 0 ? `search: ${terms.join(" ")}` : null
+    ]
+      .filter(Boolean)
+      .join(" · ");
+
+    const jobFields = [
+      { label: "Job", text: (j: (typeof jobs)[number]) => j.jobNumber },
+      { label: "Project", text: (j: (typeof jobs)[number]) => j.projectNumber },
+      {
+        label: "Address",
+        text: (j: (typeof jobs)[number]) =>
+          j.currentAddress ?? token("addresses.consolidated_address")
+      },
+      { label: "Stage", text: (j: (typeof jobs)[number]) => j.stage },
+      { label: "Team", text: (j: (typeof jobs)[number]) => j.team },
+      { label: "Assigned to", text: (j: (typeof jobs)[number]) => j.assigneeName ?? null },
+      { label: "Days in stage", numeric: true, text: (j: (typeof jobs)[number]) => j.daysInStage },
+      { label: "Status", text: (j: (typeof jobs)[number]) => RECORD_STATUS_LABELS[j.status] }
+    ];
+
+    if (tab === 1) {
+      return {
+        title: "Leadership summary",
+        note,
+        tables: [
+          tableOfFigures("Leadership summary", "Figure", [
+            { key: "Jobs in flight", n: jobs.length },
+            { key: "Teams holding work", n: byTeam.length },
+            { key: "Needing attention", n: atRisk + stalled }
+          ]),
+          tableOfFigures("Where the work is sitting", "Team", byTeam, "by team, longest queue first")
+        ]
+      };
+    }
+
+    if (tab === 2) {
+      return {
+        title: "Job report",
+        note,
+        tables: [tableFromFields("Every job", jobFields, jobs)]
+      };
+    }
+
+    return {
+      title: "Portfolio overview",
+      note,
+      tables: [
+        tableOfFigures("Portfolio at a glance", "Figure", [
+          { key: "Jobs in view", n: jobs.length },
+          { key: "On track", n: onTrack },
+          { key: "On track (%)", n: pctOnTrack },
+          { key: "At risk", n: atRisk },
+          { key: "Stalled", n: stalled },
+          { key: "Average days in stage", n: avgDays }
+        ]),
+        tableOfFigures("Jobs by stage", "Stage", byStage),
+        tableOfFigures("Jobs by team", "Team", byTeam),
+        // Kept even when it is empty, and the note says which it is: "nothing needs
+        // attention" is the good news, and a report that drops the section instead
+        // reads as a report that lost it.
+        tableFromFields(
+          "Needs attention",
+          jobFields,
+          attention,
+          attention.length === 0
+            ? "Nothing in view is at risk or stalled"
+            : "at risk or stalled, longest-running first"
+        )
+      ]
+    };
+  };
+
   const optionsFor = (field: string) =>
     field === "Stage" ? toOptions(stageNames)
     : field === "Team" ? toOptions(teamNames)
@@ -90,6 +184,17 @@ export function ReportsPage() {
         onFiltersChange={setFilters}
         optionsFor={optionsFor}
         count={`Showing ${jobs.length} of ${all.length} jobs`}
+        /* Named for the tab, because that is what it downloads. The Processes tab carries
+           its own Export button, next to the figures it exports, so nothing here. */
+        actions={
+          tab !== 3 ? (
+            <ExportMenu
+              build={buildExport}
+              label={`Export ${TABS[tab].toLowerCase()}`}
+              disabled={loading || all.length === 0}
+            />
+          ) : undefined
+        }
       />
 
       {stale && <PreviousAddressNote />}

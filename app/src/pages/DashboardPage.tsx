@@ -6,7 +6,9 @@ import { greetingName, teamName } from "../data/types";
 import type { MentionEntry } from "../data/types";
 import { useTeamLabels, useTeams, useTemplatePhases } from "../data/useLookups";
 import { daysSince } from "../data/boardModel";
-import { Token } from "../components/Token";
+import { Token, token } from "../components/Token";
+import { ExportMenu } from "../components/ExportMenu";
+import { tableFromFields, type ExportDocument } from "../data/export";
 import { PageShell } from "./Placeholder";
 import "./DashboardPage.css";
 
@@ -80,6 +82,37 @@ export function DashboardPage() {
         // silence forever reads as "you are in no team", which is a different fact.
         : <span className="pd-unassigned">{teamsError ? "Team names unavailable" : ""}</span>;
 
+  /**
+   * Your jobs as a file — the middle column of this page, which is a list of cards and
+   * therefore a table with the arrangement taken off.
+   *
+   * The two SLA figures the cards carry come along: days in stage, and the expected days
+   * for that stage when the template sets one. Nothing else on this page exports, and
+   * that is deliberate — the hero tile and the workload block are em dashes waiting on
+   * the health calculation, and a spreadsheet column of dashes claims a figure was
+   * computed.
+   */
+  const buildExport = (): ExportDocument => ({
+    title: "My jobs",
+    note: `${myJobs.length} job${myJobs.length === 1 ? "" : "s"} assigned to ${profile?.fullName ?? "you"}`,
+    tables: [
+      tableFromFields<(typeof myJobs)[number]>(
+        "My jobs",
+        [
+          { label: "Job", text: j => j.id },
+          { label: "Address", text: j => j.currentAddress ?? token("addresses.consolidated_address") },
+          { label: "Stage", text: j => j.stage },
+          { label: "Team", text: j => teamName(j.owningTeam, teams) },
+          { label: "Days in stage", numeric: true, text: j => daysSince(j.stageEnteredAt) },
+          // Blank rather than a dash where the template has no SLA for the stage: the
+          // card says nothing there either, and a 0 would read as "no time allowed".
+          { label: "Expected days", numeric: true, text: j => expectedDaysByStage[j.stage] ?? null }
+        ],
+        myJobs
+      )
+    ]
+  });
+
   if (loading) {
     return (
       <PageShell title="Dashboard" subtitle="What is on your plate today.">
@@ -103,7 +136,13 @@ export function DashboardPage() {
             Hi, {profile ? greetingName(profile) : <Token>profiles.first_name</Token>}!
           </h2>
         </div>
-        <div className="pd-centre-title">Your jobs today</div>
+        {/* Over the cards, which are what it downloads — and not inside the workload
+            block, which is painted in the primary colour and would take a tertiary
+            button's dark text with it. */}
+        <div className="pd-centre-title">
+          <span>Your jobs today</span>
+          <ExportMenu build={buildExport} label="Export" disabled={myJobs.length === 0} />
+        </div>
         <div className="pd-team">
           <span className="pd-team-label">{teamLabel}</span>
           {/* Three teammates called "SB" used to sit here. They were invented — there is

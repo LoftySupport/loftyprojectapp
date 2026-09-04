@@ -17,13 +17,15 @@ import {
   DateRangeFilter, matchesRange, parseRange, serialiseRange
 } from "../components/DateRange";
 import { SortHeader, useTableSort } from "../components/SortableTable";
+import { ExportMenu } from "../components/ExportMenu";
+import { tableFromFields, type ExportDocument } from "../data/export";
 import { useChangelogPulls } from "../data/github";
 import {
   FEEDBACK_OPEN_STAGES, FEEDBACK_STAGES, FEEDBACK_STAGE_LABELS, FEEDBACK_STAGE_MEANING,
   RELEASE_ENTRY_KINDS, RELEASE_ENTRY_KIND_LABELS, ROADMAP_PHASE_STATUSES,
   ROADMAP_PHASE_STATUS_LABELS,
   type FeedbackItem, type FeedbackKind, type FeedbackStage, type FeedbackVoter,
-  type Release, type ReleaseEntryKind, type RoadmapPhase, type RoadmapPhaseStatus
+  type Release, type ReleaseEntry, type ReleaseEntryKind, type RoadmapPhase, type RoadmapPhaseStatus
 } from "../data/types";
 import "../components/ui.css";
 import "./UpdatesPage.css";
@@ -213,6 +215,42 @@ function Requests() {
   const open = shown.find(f => f.id === openId) ?? null;
   const filtered = search.trim() !== "" || kind !== "all" || phaseId !== "all" || range !== null;
 
+  /**
+   * The tracker as a file — `shown`, so the download is the queue after the search, the
+   * kind, the phase and the date range, in the order the sort control put them.
+   *
+   * Board and table export the same thing, and they should: the board's columns ARE the
+   * stage column, so a spreadsheet of the same requests sorts into the same groups with
+   * one click. What the board has that the file cannot is the drag, and a file is not
+   * where anybody moves a request between stages.
+   */
+  const buildExport = (): ExportDocument => ({
+    title: "Requests and bugs",
+    note: filtered
+      ? `Showing ${shown.length} of ${items.length} requests`
+      : `${shown.length} ${shown.length === 1 ? "request" : "requests"}`,
+    tables: [
+      tableFromFields<FeedbackItem>(
+        "Requests",
+        [
+          { label: "Request", text: f => f.title },
+          { label: "Detail", text: f => f.detail || null },
+          { label: "Kind", text: f => (f.kind === "bug" ? "Bug" : "Idea") },
+          { label: "Stage", text: f => FEEDBACK_STAGE_LABELS[f.stage] },
+          {
+            label: "Phase",
+            text: f => phases.find(p => p.id === f.roadmapPhaseId)?.name ?? null
+          },
+          { label: "Votes", numeric: true, text: f => f.voteCount },
+          { label: "From", text: f => f.fromName ?? null },
+          { label: "Sent", text: f => shortDate(f.createdAt) },
+          { label: "In stage since", text: f => shortDate(f.stageEnteredAt) }
+        ],
+        shown
+      )
+    ]
+  });
+
   return (
     <section className="panel">
       <div className="panel-head">
@@ -284,6 +322,7 @@ function Requests() {
         </div>
 
         <span className="updates-bar-spacer" />
+        <ExportMenu build={buildExport} disabled={loading || shown.length === 0} />
         <ViewSwitcher value={view} onChange={setView} />
         {/* "+ New", not "Report something" (Amber, 1 Sep): the form takes an idea as
             readily as a bug, and a button that says "report" asks people with a
@@ -965,11 +1004,50 @@ function Roadmap() {
     }
   };
 
+  /**
+   * The roadmap as a file. Two counts per phase, which is what the board draws and the
+   * table lists: how much is planned into it, and how much of that is already live.
+   *
+   * "Not set" for a phase with no dates, in both the file and the table — an empty cell
+   * where a date belongs reads as data that failed to load, where unscheduled is a
+   * decision nobody has made yet. That is the one place a blank would say the wrong
+   * thing, so it is the one place this writes a word instead.
+   */
+  const buildExport = (): ExportDocument => ({
+    title: "Roadmap",
+    note: `${phases.length} ${phases.length === 1 ? "phase" : "phases"}`,
+    tables: [
+      tableFromFields<RoadmapPhase>(
+        "Roadmap",
+        [
+          { label: "Phase", text: p => p.name },
+          { label: "Summary", text: p => p.summary || null },
+          { label: "Status", text: p => ROADMAP_PHASE_STATUS_LABELS[p.status] },
+          { label: "Starts", text: p => shortDate(p.startsOn) ?? "Not set" },
+          { label: "Ends", text: p => shortDate(p.endsOn) ?? "Not set" },
+          {
+            label: "Planned",
+            numeric: true,
+            text: p => items.filter(f => f.roadmapPhaseId === p.id).length
+          },
+          {
+            label: "Live in the app",
+            numeric: true,
+            text: p =>
+              items.filter(f => f.roadmapPhaseId === p.id && f.stage === "shipped").length
+          }
+        ],
+        phases
+      )
+    ]
+  });
+
   return (
     <section className="panel">
       <div className="panel-head">
         <Text type="text2" weight="bold">Roadmap</Text>
         <div className="updates-bar" style={{ margin: 0 }}>
+          <ExportMenu build={buildExport} disabled={loading || phases.length === 0} />
           <ViewSwitcher value={view} onChange={setView} />
           {canEdit && (
             <Button size="small" onClick={() => setAdding(true)}>Add a phase</Button>
@@ -1499,11 +1577,71 @@ function Changelog() {
   const [problem, setProblem] = useState<string | null>(null);
   const canPublish = can("superadmin");
 
+  /**
+   * The changelog as a file — one row per line of a release, rather than one per
+   * release, because the version and the date repeating down a column is what makes it
+   * sortable and filterable. A release with no lines in it still contributes a row: a
+   * version that shipped with nothing written about it is a fact worth seeing, and
+   * dropping it would make the file disagree with the page above it.
+   *
+   * The "asked for as" column is the one worth downloading. It is the join between what
+   * somebody asked for and what actually went out, and it exists nowhere else.
+   */
+  const buildExport = (): ExportDocument => {
+    interface Line { release: Release; entry: ReleaseEntry | null }
+    const lines = releases.flatMap<Line>(r =>
+      r.entries.length > 0
+        ? r.entries.map(e => ({ release: r, entry: e }))
+        : [{ release: r, entry: null }]
+    );
+    const tables = [
+      tableFromFields<Line>(
+        "Changelog",
+        [
+          { label: "Version", text: l => l.release.version },
+          { label: "Released", text: l => shortDate(l.release.shippedOn + "T00:00:00") },
+          { label: "Release name", text: l => l.release.name || null },
+          { label: "Kind", text: l => (l.entry ? RELEASE_ENTRY_KIND_LABELS[l.entry.kind] : null) },
+          { label: "Change", text: l => l.entry?.summary ?? null },
+          { label: "Asked for as", text: l => l.entry?.feedbackTitle ?? null }
+        ],
+        lines
+      )
+    ];
+    if (shipped.length > 0) {
+      tables.push(
+        tableFromFields<FeedbackItem>(
+          "Live in the app",
+          [
+            { label: "Request", text: f => f.title },
+            { label: "Asked for by", text: f => f.fromName ?? null },
+            { label: "Kind", text: f => (f.kind === "bug" ? "Bug" : "Idea") },
+            { label: "Votes", numeric: true, text: f => f.voteCount },
+            { label: "Live since", text: f => shortDate(f.stageEnteredAt) }
+          ],
+          shipped,
+          "Requests moved to Live in the app on the tracker"
+        )
+      );
+    }
+    return {
+      title: "Changelog",
+      note: `${releases.length} ${releases.length === 1 ? "release" : "releases"}`,
+      tables
+    };
+  };
+
   return (
     <section className="panel">
       <div className="panel-head">
         <Text type="text2" weight="bold">Changelog</Text>
-        {canPublish && <Button size="small" onClick={() => setPublishing(true)}>Publish a release</Button>}
+        <span className="panel-head-actions">
+          <ExportMenu
+            build={buildExport}
+            disabled={loading || (releases.length === 0 && shipped.length === 0)}
+          />
+          {canPublish && <Button size="small" onClick={() => setPublishing(true)}>Publish a release</Button>}
+        </span>
       </div>
       <Text type="text2" color="secondary" ellipsis={false}>
         What has actually gone out. A line that came from somebody's request names it, so
