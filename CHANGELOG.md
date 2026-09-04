@@ -93,6 +93,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- The privacy policy named Netlify as the host serving the app; Vercel serves it
 - The changelog generator no longer reports "Changelog: skip" as a mistake, so its check can pass again
 - Setting a document to landscape now shows a landscape page in the builder, not only in the export
 - The version in the footer names the commit it was built from on Vercel as well as Netlify, instead of reading "local" on a real deployment

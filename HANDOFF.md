@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 133 changes since then —
+Unreleased: 134 changes since then —
+- Fixed: The privacy policy named Netlify as the host serving the app; Vercel serves it
 - Fixed: The changelog generator no longer reports "Changelog: skip" as a mistake, so its check can pass again
 - Added: A table of contents block, listing the document's section headings in order
 - Added: A block can be pointed at particular jobs, projects or teams instead of covering everything
 - Added: Long dropdowns in a block's settings narrow as you type
-- Fixed: Setting a document to landscape now shows a landscape page in the builder, not only in the export
-- …and 128 more.
+- …and 129 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
