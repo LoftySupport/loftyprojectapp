@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Button, Text, TextField } from "@vibe/core";
 import { useQuery, useRepository } from "../data/DataProvider";
 import { useAuth } from "../data/AuthProvider";
@@ -162,6 +163,7 @@ function GetStartedCard(
  */
 export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" | "section" }) {
   const repo = useRepository();
+  const [params, setParams] = useSearchParams();
   const { can } = usePermission();
   const { profile } = useAuth();
   const { toast } = useToasts();
@@ -508,7 +510,53 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
     else createDocument(starting.how === "template" ? docFrom : null);
   };
 
-  // NO `openDocument` AND NO `removeDocument`, AND THAT IS A GAP WORTH NAMING.
+  /**
+   * `?open=<id>` — the way back into a document.
+   *
+   * A document has no URL of its own: the builder is a portal over the viewport that
+   * opens on a click, so "the progress report for 28 Corner Street" was not a thing
+   * anybody could link to, and after the list came off this screen it was not a thing
+   * anybody could reach either.
+   *
+   * A query parameter rather than a route, because the document is not a PLACE — it is
+   * this screen with something open on it. Consumed on arrival so that closing the
+   * builder does not immediately reopen it, and so the URL somebody copies afterwards is
+   * the plain screen rather than a link that springs a document on them.
+   *
+   * Amber, 4 September: *"all documents need to be associated to a job or project and
+   * they are listed on that project"* — this is the half that makes a listing clickable.
+   */
+  const wanted = params.get("open");
+  useEffect(() => {
+    if (!wanted || open) return;
+    let live = true;
+    (async () => {
+      try {
+        const row = await documentStore.get(wanted);
+        const meta = await repo.getReportDocument(wanted);
+        if (!live) return;
+        setOpen({
+          lane: "document",
+          row,
+          subject: { jobId: meta?.jobId ?? null, projectId: meta?.projectId ?? null }
+        });
+      } catch (e) {
+        if (live) setProblem(e instanceof Error ? e.message : "That document could not be opened.");
+      } finally {
+        if (live) {
+          const next = new URLSearchParams(params);
+          next.delete("open");
+          setParams(next, { replace: true });
+        }
+      }
+    })();
+    return () => { live = false; };
+    // `params`/`setParams` deliberately out: the effect clears the parameter it reads, and
+    // depending on them would re-run it against the URL it just changed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wanted, open, documentStore, repo]);
+
+  // NO `openDocument` AND NO `removeDocument` ON THIS SCREEN, AND THAT IS DELIBERATE.
   //
   // Both existed for the table that used to sit under the cards. Amber, 4 September:
   // *"I don't need a list of documents created below. they will live on the job."* They
