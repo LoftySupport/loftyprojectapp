@@ -57,6 +57,20 @@ Everything below is a deviation from the module as published. Anyone re-syncing 
    module was extracted from ("tools tables, boards, team costs, pipelines and canvas
    sketches"). It names Lofty's now.
 
+5. **A `house` header style**, in `themePresentation()` (`components/ReportDocument.jsx`)
+   and `docxPresetFromTheme()` (`core/docx.js`). Lofty's document template puts a **2pt
+   Crisp Orange rule under every section heading** — the brand kit's Level 2 — where the
+   module's built-in styles draw a grey hairline. It is a new style rather than a change
+   to the existing ones, so the module's own four themes still look the way the module
+   intends. The docx preset is one of the two edits inside `core/` the module's own
+   `AGENTS.md` sanctions ("change `DOCX_STYLE_PRESETS` in `core/docx.js`" to match a
+   brand).
+
+   Worth knowing while you are in there: the HTML serialiser already draws a 2px accent
+   rule under `h2` for **every** theme, so it and the React view disagree for the
+   module's built-ins. That is the module's own inconsistency and is left alone; under
+   `house` all three renderers agree.
+
 ## The three adapter files
 
 Everything Lofty-specific is here and nowhere else.
@@ -64,7 +78,7 @@ Everything Lofty-specific is here and nowhere else.
 | File | What it decides |
 | --- | --- |
 | `adapters/lofty/widgets.js` | The twelve blocks: what is worth reporting on, and how each one renders when it has nothing |
-| `adapters/lofty/theme.js` | The brand, read off `theme/tokens.css` rather than retyped |
+| `adapters/lofty/theme.js` | The house document format, imported from `data/export/houseFormat.ts` rather than retyped |
 | `adapters/lofty/store.js` | Two stores — the library and the documents — over the repository seam |
 
 Two blocks are worth knowing about because neither is in the module:
@@ -77,6 +91,25 @@ Two blocks are worth knowing about because neither is in the module:
   `TemplateBuilderPage` because it needs the engine, and it carries a depth counter: a
   section holding a Library-section block pointing at itself is two clicks to build and,
   without the counter, a frozen tab.
+
+## The documents look like every other Lofty document, and that is enforced
+
+`adapters/lofty/theme.js` builds the Lofty theme from **`src/data/export/houseFormat.ts`**
+— the same palette the app's PDF and Word writers have used since 0026 (Foundation Black
+ink, Eco Green headings, the Crisp Orange Level 2 rule, the `#f6f7f7` table header) and
+the same font rule (Helvetica first; the brand face Fieldwork Geo cannot be embedded in a
+`.docx`, and Arial is never the fallback).
+
+The first version of this file read `theme/tokens.css` instead and produced a teal-inked
+document. It looked like Lofty and was wrong: a document built here and a table exported
+from Jobs land in the same email, and they were two different looks.
+
+`npm run check:report-widgets` asserts the theme role-for-role against the house palette,
+so the two cannot drift apart again.
+
+**The builder's own chrome is a separate question** and still wears the app's UI teal from
+`theme/tokens.css`. A document and the tool that made it may look different; a document
+and another document may not.
 
 ## What is not wired, and what that costs
 

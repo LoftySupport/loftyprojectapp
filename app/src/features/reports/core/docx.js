@@ -45,7 +45,11 @@ export function docxPresetFromTheme(theme) {
   const t = resolveTheme(theme);
   const ink = hexForDocx(t.colors.ink, '021012');
   const line = hexForDocx(t.colors.line, 'C9CACB');
-  const minimal = (t.header?.style || 'rule') === 'minimal';
+  const style = t.header?.style || 'rule';
+  const minimal = style === 'minimal';
+  // See the note in ReportDocument.jsx: `house` is Lofty's, and it is the brand kit's
+  // Level 2 rule — 2pt (16 eighths, which is what Word counts in) in the accent.
+  const house = style === 'house';
   return {
     theme: t,
     ink,
@@ -55,7 +59,11 @@ export function docxPresetFromTheme(theme) {
     font: firstFamily(t.fonts?.body),
     headingFont: firstFamily(t.fonts?.heading, firstFamily(t.fonts?.body)),
     titleBorder: { style: BorderStyle.SINGLE, size: minimal ? 4 : 12, color: minimal ? line : ink },
-    sectionBorder: minimal ? null : { style: BorderStyle.SINGLE, size: 4, color: line },
+    sectionBorder: minimal
+      ? null
+      : house
+        ? { style: BorderStyle.SINGLE, size: 16, color: hexForDocx(t.colors.accent, line) }
+        : { style: BorderStyle.SINGLE, size: 4, color: line },
     tableHeadFill: hexForDocx(t.colors.surfaceAlt, 'F9F7F2'),
   };
 }

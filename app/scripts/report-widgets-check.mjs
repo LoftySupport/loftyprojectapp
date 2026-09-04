@@ -28,6 +28,8 @@ import {
 // it needs no browser and no bundler.
 import { createReportRegistry } from "../src/features/reports/core/registry.js";
 import { createReportEngine } from "../src/features/reports/core/widgetEngine.js";
+import { LOFTY_THEME, LOFTY_THEME_QUIET } from "../src/features/reports/adapters/lofty/theme.js";
+import { HOUSE_COLOURS } from "../src/data/export/houseFormat.ts";
 
 let failures = 0;
 const ok = (name, condition, detail = "") => {
@@ -442,6 +444,43 @@ console.log("--- a section nested inside itself is stopped, not followed");
   ok("and says why rather than rendering nothing",
     JSON.stringify(blocks).includes("nested inside itself"), textOf(blocks).slice(0, 200));
   currentCtx = full;
+}
+
+// ─── 15. The builder's documents wear the house format, not a second one ─
+//
+// A document composed in the builder and a table exported from Jobs land in the same
+// email. They came from different code and, before this, from two different palettes:
+// the theme here was built from the app's UI tokens (teal ink) while every export in
+// data/export/ uses the house document format (Foundation Black, Eco Green, Crisp
+// Orange). Nobody would have called that a bug; they would have called the app
+// inconsistent, which is worse because there is nothing to fix.
+//
+// Watched: with the theme's ink set back to the old #00393f, this reports.
+console.log("--- the Lofty theme is the house document format, role for role");
+{
+  const pairs = [
+    ["ink", HOUSE_COLOURS.ink],
+    ["muted", HOUSE_COLOURS.muted],
+    ["surfaceAlt", HOUSE_COLOURS.headFill],
+    ["line", HOUSE_COLOURS.rowRule],
+    ["accent", HOUSE_COLOURS.orange],
+    ["heading", HOUSE_COLOURS.green]
+  ];
+  for (const [role, expected] of pairs) {
+    const got = LOFTY_THEME.colors[role];
+    ok(`${role} is the house ${expected}`,
+      String(got).toLowerCase() === String(expected).toLowerCase(), String(got));
+  }
+  // The quiet variant is the same format with the rule held back, not a third palette.
+  ok("the quiet variant shares the house ink and heading",
+    LOFTY_THEME_QUIET.colors.ink.toLowerCase() === HOUSE_COLOURS.ink.toLowerCase()
+    && LOFTY_THEME_QUIET.colors.heading.toLowerCase() === HOUSE_COLOURS.green.toLowerCase(),
+    `${LOFTY_THEME_QUIET.colors.ink} / ${LOFTY_THEME_QUIET.colors.heading}`);
+  // Helvetica first, never Arial — the Word writer's rule, and core/docx.js takes the
+  // first family in the stack and writes it into the file.
+  ok("the document font is Helvetica first, and Arial appears nowhere",
+    /^Helvetica\b/.test(LOFTY_THEME.fonts.body) && !/Arial/i.test(LOFTY_THEME.fonts.body),
+    LOFTY_THEME.fonts.body);
 }
 
 console.log(failures === 0

@@ -74,9 +74,40 @@ pour date differently from the drawer.
 counter: a section pointing at itself is two clicks to build, and without the counter the
 stack blows and the reader gets "this block failed to render".
 
+### The documents wear the house format, not a second one
+
+Amber, on the design: the Template Builder should use the template established in
+**PR #26**. It should, and it now does — the palette, the font rule and the section rule
+all come from there rather than from the app's UI tokens.
+
+The first pass built the theme by reading `theme/tokens.css` and produced a teal-inked
+document. It looked like Lofty and was wrong: a document composed in the builder and a
+table exported from Jobs land in the same email, and they were two different looks.
+
+`src/data/export/houseFormat.ts` is now the one place the house palette lives, and it has
+three consumers — `pdf.ts`, `docx.ts` and the builder's theme. Three things came out of
+that:
+
+- **The two writers had already drifted.** The PDF drew the row hairline as
+  `0.925 0.929 0.933` — `#ECEDEE` — while its own comment and the Word writer both said
+  `#ECECEE`. One channel, invisible, and exactly what two copies of a palette produce.
+  Proved by hashing both files before and after: the `.docx` is byte-identical, and
+  putting the drifted value back returns the PDF to its original hash, so that one
+  channel is the whole of the change.
+- **The brand face is Fieldwork Geo, with Helvetica as the template's only approved
+  fallback — never Arial.** I had Figtree. `core/docx.js` writes the first family in the
+  stack into the file, so Helvetica is first and Fieldwork Geo is documented behind it.
+- **The Level 2 rule is 2pt Crisp Orange under a section heading.** The React view drew a
+  grey hairline and the Word writer a half-point one; the HTML serialiser already had it
+  right. A new `house` header style brings all three into line without changing how the
+  module's own four themes look.
+
+`npm run check:report-widgets` now asserts the theme role-for-role against the house
+palette, so they cannot drift apart again.
+
 ### What was checked
 
-- `npm run check:report-widgets` — **80 assertions**, plain Node, no browser. Every block
+- `npm run check:report-widgets` — **88 assertions**, plain Node, no browser. Every block
   resolves against a full and an empty context; empty data is a sentence; **every
   resolver reads `ctx` rather than a copy**; properties format the way the drawer formats
   them; a section inside itself terminates and says why. Each watched failing under a
@@ -84,7 +115,8 @@ stack blows and the reader gets "this block failed to render".
 - `app/supabase/verify/check.sh` — green, **75 constraint checks**. Nineteen RLS probes
   covering the whole sign-off model, each watched failing with the matching policy or
   trigger widened.
-- `npm run responsive` 120/120 · build, typecheck, lint clean.
+- `npm run responsive` 120/120 · `npm run export-check` (~90 assertions on the two
+  document writers) still green after the palette was shared · build, typecheck, lint clean.
 - Driven in Chromium: the two-panel screen, and the builder with a library section
   expanding into a properties block resolved against the document's own job.
 
