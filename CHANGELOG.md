@@ -14,6 +14,10 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- A table of contents block, listing the document's section headings in order
+- A block can be pointed at particular jobs, projects or teams instead of covering everything
+- Long dropdowns in a block's settings narrow as you type
+- The document theme can be chosen while you build, not only in Preview & Export
 - Managers can set how long a stage should take and who hears when it is overdue, without being able to rename or reorder the stages themselves
 - Typing the address of a page above your permission level now says which level it needs and what yours is, instead of showing an empty screen
 - A document, template or section can be cloned from an existing one
@@ -89,7 +93,9 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- The privacy policy named Netlify as the host serving the app; Vercel serves it
 - The changelog generator no longer reports "Changelog: skip" as a mistake, so its check can pass again
+- Setting a document to landscape now shows a landscape page in the builder, not only in the export
 - The version in the footer names the commit it was built from on Vercel as well as Netlify, instead of reading "local" on a real deployment
 - The row hairline in an exported PDF was one shade off the same line in the Word document
 - The jobs board offers only the processes of the stage you have filtered to, and says the right thing when a process belongs to a stage the job has already left

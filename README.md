@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 128 changes since then —
+Unreleased: 134 changes since then —
+- Fixed: The privacy policy named Netlify as the host serving the app; Vercel serves it
 - Fixed: The changelog generator no longer reports "Changelog: skip" as a mistake, so its check can pass again
-- Changed: Setup is now Settings, and managers and above can open it — properties, processes, contacts, maintenance, the stage SLAs and the notification rules
-- Changed: Admin has moved off the sidebar to a cog in the top bar, and appears only for admins and super admins
-- Changed: Users, teams, permissions, the dictionary, the wiring, the bug and idea queues, the roadmap and the changelog are all now under the cog
-- Added: Managers can set how long a stage should take and who hears when it is overdue, without being able to rename or reorder the stages themselves
-- …and 123 more.
+- Added: A table of contents block, listing the document's section headings in order
+- Added: A block can be pointed at particular jobs, projects or teams instead of covering everything
+- Added: Long dropdowns in a block's settings narrow as you type
+- …and 129 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -46,12 +46,9 @@ built from.** It started in `amberbeaumont/loftyprojectapp`, moved to
 `LoftyGroup/loftyprojectapp` on 1 September, and now lives here under the `LoftySupport`
 account. The personal one is public and still holds the history up to 1 September, so it
 answers when something reads it — with an answer that stopped that day and does not say
-so. Two things need doing outside this repository: the Netlify site was recreated on
-2 September and builds from here, but its Supabase environment variables have not been
-set yet, so the sign-in page says *Not configured*; and this repository is private where
-the old one was public, which is what the changelog's live pull-request feed depends on.
-Both are written up, with the exact steps, in [HANDOFF.md](HANDOFF.md) under *This is the
-repository now*.
+so. One thing still needs doing outside this repository: it is private where the old one
+was public, which is what the changelog's live pull-request feed depends on. It is written
+up, with the exact steps, in [HANDOFF.md](HANDOFF.md) under *This is the repository now*.
 
 ---
 
@@ -60,7 +57,7 @@ repository now*.
 | URL | What |
 | --- | --- |
 | [`LoftySupport/loftyprojectapp`](https://github.com/LoftySupport/loftyprojectapp) | **This repository.** Where the code, the branches and the pull requests live |
-| [`loftyprojectapp.netlify.app`](https://loftyprojectapp.netlify.app) | **The build.** Every screen, on Vibe — *built from this repository since 2 September; its environment variables still need setting* |
+| [`loftyprojectapp.vercel.app`](https://loftyprojectapp.vercel.app) | **The build.** Every screen, on Vibe — Vercel serves the app (Amber, 4 September: *"it is using vercel now"*) |
 | `…/signin` | Microsoft Entra sign-in — the only route open without a session |
 | `…/dictionary` | The data dictionary |
 | `…/binding-template` | The tokenised prototype — **layout** reference only |
@@ -115,11 +112,16 @@ npm run dictionary   # regenerate data-dictionary.md
 `./build.sh` from the repo root assembles the whole deploy — the app, the binding
 template and the prototype — into `dist/`. That is what both hosts run.
 
-### Deploying: moving from Netlify to Vercel
+### Deploying: Vercel serves the app
 
-The site is mid-migration and both hosts are connected, so both configurations are in the
-repository and neither has been removed. `netlify.toml` is the one that has been building
-the site; `vercel.json` is the one being brought up.
+**Vercel is the host** (Amber, 4 September: *"it is using vercel now"*). `vercel.json` is
+the configuration that matters; `netlify.toml` is still in the repository and has not been
+removed, but the Netlify site no longer serves anything — `loftyprojectapp.netlify.app`
+and `main--loftyprojectapp.netlify.app` both answer 404. Deleting the Netlify half is a
+decision about whether it stays as a fallback, so it is left where it is rather than swept
+out on the way past.
+
+The rest of this section is the Vercel setup, and it still applies.
 
 `vercel.json` exists because Vercel's zero-config cannot work this repository out: the
 build is `./build.sh` (not a framework preset), the output is `dist/` at the root, and

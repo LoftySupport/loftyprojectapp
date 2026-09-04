@@ -23,7 +23,7 @@ interface Section {
 const PRIVACY: Section[] = [
   { heading: "What we collect", note: "Sign-in identity from Microsoft Entra (name, work email), and the project and job records staff enter." },
   { heading: "How it is used", note: "Running the job pipeline for Lofty staff. The app is internal and has no public users." },
-  { heading: "Who it is shared with", note: "Supabase hosts the database and Netlify serves the app. Note any other processors." },
+  { heading: "Who it is shared with", note: "Supabase hosts the database and Vercel serves the app. Note any other processors." },
   { heading: "How long it is kept", note: "Retention periods for project records, and what happens to a profile when someone leaves." },
   { heading: "Your rights and who to contact", note: "Access, correction, and the contact point for a request." }
 ];
