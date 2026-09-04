@@ -107,6 +107,8 @@ export function TemplateBuilderPage() {
   const [docTitle, setDocTitle] = useState("");
   const [docFrom, setDocFrom] = useState<string | null>(null);
   const [libName, setLibName] = useState("");
+  /** What "Clone" copies from — a document id in the builder lane, a library id otherwise. */
+  const [cloneFrom, setCloneFrom] = useState<string | null>(null);
   /**
    * Which lane is on screen. Amber, 4 September: *"have the builder and templates in
    * libraries with tabs"*.
@@ -274,11 +276,19 @@ export function TemplateBuilderPage() {
 
   // ── Documents ────────────────────────────────────────────────────────────
 
-  const createDocument = () =>
+  /**
+   * @param fromTemplateId which template to copy, or null for a blank page.
+   *
+   * Passed in rather than read from state, because "Start From Scratch" would otherwise
+   * have to `setDocFrom(null)` first — and a state setter does not take effect before the
+   * next render, so the blank-page button would silently make a document from whatever
+   * template happened to be selected.
+   */
+  const createDocument = (fromTemplateId: string | null) =>
     run(async () => {
       const title = docTitle.trim();
       if (!title) return;
-      const from = docFrom ? libraryTemplates.find(t => t.id === docFrom) : null;
+      const from = fromTemplateId ? libraryTemplates.find(t => t.id === fromTemplateId) : null;
       // `remapIds` so the copy shares no block id with the template it came from —
       // otherwise two documents from one template would collide in the builder's
       // drag-and-drop, which keys on block id.
@@ -293,6 +303,44 @@ export function TemplateBuilderPage() {
       setDocFrom(null);
       bump();
       setOpen({ lane: "document", row, subject: { jobId: null, projectId: null } });
+    });
+
+  /**
+   * Clone a document somebody already sent.
+   *
+   * `remapIds` for the same reason `createDocument` uses it: two documents sharing block
+   * ids collide in the builder's drag-and-drop, which keys on them.
+   *
+   * The clone does NOT inherit the original's share link. That is deliberate and it is
+   * the whole risk in this button — a copy that arrived carrying a live URL would be a
+   * document somebody could open before its author had read it. The columns are simply
+   * not carried across: `create` writes a fresh row and never touches them.
+   */
+  const cloneDocument = () =>
+    run(async () => {
+      const title = docTitle.trim();
+      const source = documents.find(d => d.id === cloneFrom);
+      if (!title || !source) return;
+      const full = await documentStore.get(source.id);
+      const row = await documentStore.create({
+        title,
+        layout: {
+          ...(full.layout as object),
+          widgets: engine.remapIds((full.layout?.widgets ?? []) as ReportWidget[])
+        },
+        templateId: source.templateId
+      } as Parameters<typeof documentStore.create>[0]);
+      setDocTitle("");
+      setCloneFrom(null);
+      bump();
+      setOpen({
+        lane: "document",
+        row,
+        // A clone is about the same job as the document it came from — copying a progress
+        // report for 28 Corner Street and having it come back about nothing would mean
+        // re-picking the record in every property block.
+        subject: { jobId: source.jobId, projectId: source.projectId }
+      });
     });
 
   const openDocument = (d: ReportDocument) =>
@@ -321,6 +369,35 @@ export function TemplateBuilderPage() {
       const store = libKind === "section" ? sectionStore : templateStore;
       const row = await store.create({ title: name, layout: { widgets: [] } });
       setLibName("");
+      bump();
+      setOpen({ lane: "library", row, kind: libKind });
+    });
+
+  /**
+   * Clone a template or a section.
+   *
+   * The copy is a PROPOSAL, exactly as a new one is: it goes through the same store, so
+   * the same trigger decides whether it is signed off on creation. Cloning an approved
+   * template as a user therefore gives you a draft only you can see — which is right,
+   * because otherwise "clone and edit" would be the way around the sign-off.
+   */
+  const cloneLibraryEntry = () =>
+    run(async () => {
+      const name = libName.trim();
+      const source = ofKind.find(t => t.id === cloneFrom);
+      if (!name || !source) return;
+      const store = libKind === "section" ? sectionStore : templateStore;
+      const full = await repo.getReportTemplate(source.id);
+      if (!full) throw new Error("That is no longer in the library.");
+      const row = await store.create({
+        title: name,
+        layout: {
+          ...(full.layout as object),
+          widgets: engine.remapIds((full.layout?.widgets ?? []) as ReportWidget[])
+        }
+      });
+      setLibName("");
+      setCloneFrom(null);
       bump();
       setOpen({ lane: "library", row, kind: libKind });
     });
@@ -384,9 +461,9 @@ export function TemplateBuilderPage() {
   const inLibrary = ofKind.filter(t => t.approvedAt !== null);
 
   const LANES = [
-    { id: "documents", label: "Documents" },
-    { id: "template", label: "Templates" },
-    { id: "section", label: "Sections" }
+    { id: "documents", label: "Document Builder" },
+    { id: "template", label: "Template Library" },
+    { id: "section", label: "Section Library" }
   ] as const;
 
   return (
@@ -399,7 +476,7 @@ export function TemplateBuilderPage() {
           they were the same kind of choice. */}
       <TabList
         activeTabId={LANES.findIndex(l => l.id === lane)}
-        onTabChange={(i: number) => setLane(LANES[i].id)}
+        onTabChange={(i: number) => { setLane(LANES[i].id); setCloneFrom(null); }}
         size="small"
       >
         {LANES.map(l => <Tab key={l.id}>{l.label}</Tab>)}
@@ -409,7 +486,7 @@ export function TemplateBuilderPage() {
       {lane === "documents" && (
       <section className="panel">
         <div className="panel-head">
-          <Text type="text2" weight="bold">Documents</Text>
+          <Text type="text2" weight="bold">Document Builder</Text>
           <Text type="text3" color="secondary">
             yours to edit — changing one never changes the template it came from
           </Text>
@@ -432,17 +509,51 @@ export function TemplateBuilderPage() {
                 inputAriaLabel="Title for a new document"
               />
             </span>
+            {/* Three ways to start, because they are three different acts and a single
+                button with a dropdown made the difference invisible. Each one is disabled
+                until it has what it needs, so which are available is itself the answer to
+                "can I clone anything yet". */}
             <span style={{ flex: "0 1 240px", minWidth: 0 }}>
               <Select
                 aria-label="Template to start the document from"
-                placeholder={libraryTemplates.length ? "Start from a template…" : "No templates in the library yet"}
+                placeholder={libraryTemplates.length ? "From a template…" : "No templates in the library yet"}
                 options={toOptions(libraryTemplates.map(t => t.name))}
                 value={docFrom ? libraryTemplates.find(t => t.id === docFrom)?.name ?? null : null}
                 onChange={n => setDocFrom(libraryTemplates.find(t => t.name === n)?.id ?? null)}
               />
             </span>
-            <Button size="small" onClick={createDocument} disabled={!docTitle.trim() || busy}>
-              New document
+            <Button
+              size="small"
+              onClick={() => createDocument(docFrom)}
+              disabled={!docTitle.trim() || !docFrom || busy}
+            >
+              Create New Document
+            </Button>
+            <Button
+              size="small"
+              kind="secondary"
+              onClick={() => createDocument(null)}
+              disabled={!docTitle.trim() || busy}
+            >
+              Start From Scratch
+            </Button>
+
+            <span style={{ flex: "0 1 240px", minWidth: 0 }}>
+              <Select
+                aria-label="Document to clone"
+                placeholder={documents.length ? "A document to copy…" : "No documents to copy yet"}
+                options={toOptions(documents.map(d => d.title))}
+                value={cloneFrom ? documents.find(d => d.id === cloneFrom)?.title ?? null : null}
+                onChange={n => setCloneFrom(documents.find(d => d.title === n)?.id ?? null)}
+              />
+            </span>
+            <Button
+              size="small"
+              kind="secondary"
+              onClick={cloneDocument}
+              disabled={!docTitle.trim() || !cloneFrom || busy}
+            >
+              Clone Existing
             </Button>
           </div>
         )}
@@ -455,7 +566,7 @@ export function TemplateBuilderPage() {
             title="No documents yet"
             description={
               canWrite
-                ? "Name one above. Start it from a template, or leave that empty for a blank page."
+                ? "Name one above, then Create New Document from a template, Start From Scratch for a blank page, or Clone Existing to copy one."
                 : "Nobody has made a document yet."
             }
           />
@@ -567,7 +678,29 @@ export function TemplateBuilderPage() {
               />
             </span>
             <Button size="small" onClick={createLibraryEntry} disabled={!libName.trim() || busy}>
-              {canApprove ? "New" : "Propose"}
+              {libKind === "section" ? "Create New Section" : "Create New Template"}
+            </Button>
+
+            <span style={{ flex: "0 1 240px", minWidth: 0 }}>
+              <Select
+                aria-label={libKind === "section" ? "Section to clone" : "Template to clone"}
+                placeholder={
+                  ofKind.length
+                    ? libKind === "section" ? "A section to copy…" : "A template to copy…"
+                    : libKind === "section" ? "Nothing to copy yet" : "Nothing to copy yet"
+                }
+                options={toOptions(ofKind.map(t => t.name))}
+                value={cloneFrom ? ofKind.find(t => t.id === cloneFrom)?.name ?? null : null}
+                onChange={n => setCloneFrom(ofKind.find(t => t.name === n)?.id ?? null)}
+              />
+            </span>
+            <Button
+              size="small"
+              kind="secondary"
+              onClick={cloneLibraryEntry}
+              disabled={!libName.trim() || !cloneFrom || busy}
+            >
+              {libKind === "section" ? "Clone Section" : "Clone Template"}
             </Button>
             {!canApprove && (
               <Text type="text3" color="secondary">
@@ -581,10 +714,12 @@ export function TemplateBuilderPage() {
           <Text type="text2" color="secondary">Loading…</Text>
         ) : templates.length === 0 ? (
           <NothingYet
-            title="The library is empty"
+            title={libKind === "section" ? "No sections yet" : "No templates yet"}
             description={
               canWrite
-                ? "Name a template above and the builder opens on an empty page — drag blocks in, or start from one of the drafts it offers."
+                ? libKind === "section"
+                  ? "Name one above and the builder opens on an empty page. A section is a group of blocks a template drops in — a letterhead, a scope-of-works table, a sign-off."
+                  : "Name one above and the builder opens on an empty page — drag blocks in, or start from one of the drafts it offers."
                 : "Nothing has been added to the library yet."
             }
           />

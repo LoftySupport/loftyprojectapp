@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- A document, template or section can be cloned from an existing one
 - Documents can be sent outside Lofty as a share link — a page a client opens with no login, with an optional password and a link that expires
 - A shared link shows the document as it was when it was sent, and says so, rather than re-reading Lofty every time it is opened
 - Real page-load timings are collected from Vercel deployments, grouped by page rather than by individual job or project
@@ -112,6 +113,8 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- Tools → Template Builder is Document Builder, Template Library and Section Library, each with its own buttons
+- Tools → Template Builder is three tabs — Documents, Templates and Sections — instead of two stacked panels
 - Documents built in the Template Builder now carry Lofty's house document format — the same wordmark, colours, section rule and font as every other export
 - Excel, Word and PDF exports now carry Lofty's house document format — the wordmark, the orange section rule, the grey table header and the "Commercial in confidence" footer
 - Every dropdown narrows as you type and lists its options alphabetically, except where the order is the information — and a process can be filed straight into a pipeline when it is created
