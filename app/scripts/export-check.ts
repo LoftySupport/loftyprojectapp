@@ -21,6 +21,7 @@ import { crc32 } from "node:zlib";
 import { toXlsx } from "../src/data/export/xlsx.ts";
 import { toDocx } from "../src/data/export/docx.ts";
 import { toPdf } from "../src/data/export/pdf.ts";
+import { FORMAT_LABELS, FORMAT_NOUNS } from "../src/data/export/index.ts";
 import { encode, truncate, widthOf, widthOfBytes } from "../src/data/export/helvetica.ts";
 import { fileStem, tableFromFields, type ExportDocument } from "../src/data/export/table.ts";
 
@@ -291,6 +292,63 @@ ok("the page is landscape", document.includes(`w:orient="landscape"`));
 const tableCount = (document.match(/<w:tbl>/g) ?? []).length;
 ok("a table is written for every table", tableCount === doc.tables.length, `saw ${tableCount}`);
 ok("an empty table's heading is still present", document.includes("<w:t xml:space=\"preserve\">Needs attention</w:t>"));
+
+section("the Word document carries the preamble the screen showed");
+// The document title, the whole-download note and the stamp, once at the top, above the
+// first table — the same three lines the spreadsheet's preamble carries. Watched by
+// dropping the head block: the file then opens straight into a table with nothing saying
+// what it is or when it was taken.
+ok("the document title heads the file", document.includes(`<w:t xml:space="preserve">Jobs · at risk</w:t>`));
+ok("the whole-download note is present", document.includes(`<w:t xml:space="preserve">Showing 5 of 200 jobs</w:t>`));
+ok("the export is stamped with when it was taken", /<w:t xml:space="preserve">Exported [^<]+<\/w:t>/.test(document));
+// Watched by writing a table before the head: the title must sit above the first table,
+// not somewhere in the middle of the document.
+ok(
+  "the title sits above the first table",
+  document.indexOf("Jobs · at risk") < document.indexOf("<w:tbl>"),
+  `title at ${document.indexOf("Jobs · at risk")}, first table at ${document.indexOf("<w:tbl>")}`
+);
+// Exactly one right-aligned cell per numeric body value, and no more: "Days in stage" is
+// the only numeric column and every one of the 65 rows has a value, while the header and
+// every text column stay left. Watched by right-aligning the header too, or a text column
+// — the count then overshoots and the assertion names by how much.
+const rightAligned = (document.match(/<w:jc w:val="right"\/>/g) ?? []).length;
+ok(
+  "only the numeric column's cells are right-aligned",
+  rightAligned === rows.length,
+  `${rightAligned} right-aligned, ${rows.length} numeric rows`
+);
+// A blank cell is a bare paragraph, never an empty run or a missing paragraph: Word
+// requires the last block in a cell to be a paragraph. Watched by emitting `<w:tc/>` for a
+// null, which makes the document unreadable. The null address is row 2 of the fixture.
+ok("a blank cell is an empty paragraph", document.includes("<w:tc><w:tcPr/><w:p/></w:tc>"));
+// Provenance in the place Word shows it under File → Info. Watched by dropping the title
+// from core.xml: the file's properties then read "Document1" whatever the download was.
+ok("the document's title is recorded in its properties", wordPart("docProps/core.xml").includes("<dc:title>Jobs · at risk</dc:title>"));
+// The default font, so a value written with no explicit run properties still has one.
+// Watched by dropping docDefaults: Word substitutes its own default and the document opens
+// in a font nobody chose.
+ok("the styles part sets a default font", wordPart("word/styles.xml").includes("<w:rFonts"));
+
+section("every offered format can be written, and names itself");
+// The menu, the toast and the download all read one registry; a format with a label but no
+// noun would toast "downloaded as a undefined". Watched by deleting a `FORMAT_NOUNS` entry.
+const labelKeys = Object.keys(FORMAT_LABELS).sort();
+const nounKeys = Object.keys(FORMAT_NOUNS).sort();
+ok(
+  "every format with a menu label also has a toast noun",
+  labelKeys.join(",") === nounKeys.join(","),
+  `labels: ${labelKeys.join(",")} · nouns: ${nounKeys.join(",")}`
+);
+// Word is actually on the menu — the whole point of this change. Watched by removing it
+// from the registry: the app then silently offers only Excel and PDF again.
+ok("Word is one of the offered formats", labelKeys.includes("docx"));
+// Every writer returns real bytes for the same document. Watched by returning an empty
+// array from a writer: the download then hands the browser a zero-byte file that every
+// reader calls corrupt.
+for (const [format, write] of [["xlsx", toXlsx], ["docx", toDocx], ["pdf", toPdf]] as const) {
+  ok(`the ${format} writer returns a non-empty file`, write(doc).length > 0);
+}
 
 section("the PDF is a PDF");
 const pdf = Buffer.from(toPdf(doc));
