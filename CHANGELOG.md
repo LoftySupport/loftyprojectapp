@@ -14,6 +14,8 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Managers can set how long a stage should take and who hears when it is overdue, without being able to rename or reorder the stages themselves
+- Typing the address of a page above your permission level now says which level it needs and what yours is, instead of showing an empty screen
 - A document, template or section can be cloned from an existing one
 - Documents can be sent outside Lofty as a share link — a page a client opens with no login, with an optional password and a link that expires
 - A shared link shows the document as it was when it was sent, and says so, rather than re-reading Lofty every time it is opened
@@ -87,6 +89,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- The changelog generator no longer reports "Changelog: skip" as a mistake, so its check can pass again
 - The version in the footer names the commit it was built from on Vercel as well as Netlify, instead of reading "local" on a real deployment
 - The row hairline in an exported PDF was one shade off the same line in the Word document
 - The jobs board offers only the processes of the stage you have filtered to, and says the right thing when a process belongs to a stage the job has already left
@@ -113,6 +116,9 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- Setup is now Settings, and managers and above can open it — properties, processes, contacts, maintenance, the stage SLAs and the notification rules
+- Admin has moved off the sidebar to a cog in the top bar, and appears only for admins and super admins
+- Users, teams, permissions, the dictionary, the wiring, the bug and idea queues, the roadmap and the changelog are all now under the cog
 - Tools → Template Builder is Document Builder, Template Library and Section Library, each with its own buttons
 - Tools → Template Builder is three tabs — Documents, Templates and Sections — instead of two stacked panels
 - Documents built in the Template Builder now carry Lofty's house document format — the same wordmark, colours, section rule and font as every other export

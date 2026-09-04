@@ -11,7 +11,8 @@ import { ReportPage } from "./pages/ReportPage";
 import { SharedDocumentPage } from "./pages/SharedDocumentPage";
 import { SignInPage } from "./pages/SignInPage";
 import { DataProvider } from "./data/DataProvider";
-import { PermissionProvider } from "./data/PermissionProvider";
+import { PermissionProvider, usePermission } from "./data/PermissionProvider";
+import { type PermissionLevel } from "./data/types";
 import { SearchProvider } from "./data/SearchProvider";
 import { AppShell } from "./shell/AppShell";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -117,6 +118,48 @@ function RequireSignedIn() {
   if (profileState === "unlinked") return <NotSetUpPage />;
 
   return <Outlet />;
+}
+
+/**
+ * A rung on the route, for the two screens that are not everybody's.
+ *
+ * Amber, 4 September: Settings is *"for managers and above"* and Admin appears *"when an
+ * admin or super admin login"*. The nav already declines to draw what is not yours
+ * (`PAGES[].need` in AppShell), but a nav item is not a boundary — a URL typed, pasted
+ * from Teams, or left in somebody's history reaches the route regardless, and until this
+ * existed it rendered the whole screen.
+ *
+ * THIS IS STILL NOT THE SECURITY BOUNDARY, and the file it lives in should say so once:
+ * RLS is. Every table behind Settings and Admin has a policy, so a manager who reached
+ * /admin/users before today saw an empty list rather than the company — this turns that
+ * into an answer instead of a screen that looks broken.
+ */
+function RequireLevel({ need }: { need: PermissionLevel }) {
+  const { can } = usePermission();
+  if (!can(need)) return <NoAccess need={need} />;
+  return <Outlet />;
+}
+
+/**
+ * What a person below the rung is told.
+ *
+ * It names the rung and their own level, and stops. No invented "request access" button
+ * that posts nowhere, and no list of what they are missing: the honest content of this
+ * page is which door this is, who it is for, and who to ask.
+ */
+function NoAccess({ need }: { need: PermissionLevel }) {
+  const { permission } = usePermission();
+  const location = useLocation();
+  return (
+    <section className="panel not-found">
+      <Heading type="h2">{location.pathname.startsWith("/admin") ? "Admin" : "Settings"} is for {need}s and above</Heading>
+      <Text type="text2" color="secondary" element="p">
+        You are signed in with <strong>{permission}</strong> access. An admin can change
+        that on the Admin screen if you need it.
+      </Text>
+      <NavLink to="/">Go to the dashboard</NavLink>
+    </section>
+  );
 }
 
 /** Signing in and then being shown the sign-in page again reads as a failure. */
@@ -292,24 +335,40 @@ export default function App() {
                   goes dead. */}
               <Route path="processes" element={<Navigate to="/setup/processes" replace />} />
               <Route path="templates" element={<Navigate to="/setup/processes" replace />} />
-              <Route path="admin" element={<AdminPage />} />
+              {/* Admin, behind the header cog rather than the sidebar (Amber, 4 Sep).
+                  The section is in the path like Settings' — a link to Teams or to the
+                  bug queue is a link somebody can send. Two rungs, two guards: this one
+                  is admin's, Settings below is manager's. */}
+              <Route element={<RequireLevel need="admin" />}>
+                <Route path="admin" element={<AdminPage />} />
+                <Route path="admin/:section" element={<AdminPage />} />
+              </Route>
               <Route
                 path="settings"
                 element={<SettingsPage theme={theme} onThemeChange={setTheme} />}
               />
-              {/* Setup owns Properties, Dictionary, Wiring and Automations. The
-                  section is in the path so a tab can be linked to. */}
+              {/* Settings owns the dials a manager turns: properties, processes,
+                  contacts, maintenance, and the SLAs and notification rules on
+                  Automations. The section is in the path so a tab can be linked to.
+                  It kept the /setup path when it was renamed — /settings is the personal
+                  screen above, and swapping the two would break every bookmark in the
+                  company to save a word. */}
               {/* The tracker everybody can see: what has been asked for, what is
                   planned, and what shipped. The section is in the path so a link to
                   the roadmap is a link somebody can send. */}
               <Route path="updates" element={<UpdatesPage />} />
               <Route path="updates/:section" element={<UpdatesPage />} />
-              <Route path="setup" element={<SetupPage />} />
-              <Route path="setup/:section" element={<SetupPage />} />
+              <Route element={<RequireLevel need="manager" />}>
+                <Route path="setup" element={<SetupPage />} />
+                <Route path="setup/:section" element={<SetupPage />} />
+              </Route>
               {/* The old top-level routes still resolve — they were in the nav for
-                  weeks and will be in somebody's bookmarks and Teams messages. */}
-              <Route path="dictionary" element={<Navigate to="/setup/dictionary" replace />} />
-              <Route path="wiring" element={<Navigate to="/setup/wiring" replace />} />
+                  weeks and will be in somebody's bookmarks and Teams messages. Both now
+                  land on Admin: the dictionary and the wiring went there with the cog on
+                  4 September, and a redirect that lands on a tab which no longer exists
+                  is worse than the dead link it was meant to fix. */}
+              <Route path="dictionary" element={<Navigate to="/admin/dictionary" replace />} />
+              <Route path="wiring" element={<Navigate to="/admin/wiring" replace />} />
               <Route path="*" element={<NotFound />} />
             </Route>
             </Route>

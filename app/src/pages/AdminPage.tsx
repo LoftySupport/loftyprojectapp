@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router";
+import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import {
   Button, Heading, Modal, ModalBasicLayout, ModalContent, ModalFooter, ModalHeader,
   Search, Tab, TabList, Text, TextField
@@ -20,39 +20,100 @@ import { useRepository } from "../data/DataProvider";
 import { useToasts } from "../components/Toasts";
 import { ExportMenu } from "../components/ExportMenu";
 import { tableFromFields, type ExportDocument } from "../data/export";
+import { DictionaryPage } from "./DictionaryPage";
+import { FeedbackList } from "./FeedbackList";
+import { PermissionsPage } from "./PermissionsPage";
+import { WiringPage } from "./WiringPage";
+import { Changelog, Roadmap } from "./UpdatesPage";
 import "../components/ui.css";
 
 /**
- * People: who works here, which team they are in, and what they may do.
+ * Admin: the app itself, and the people in it.
  *
- * Properties moved to Setup. The two were one screen and are two jobs — this one is
- * about a person's access, that one is about how the app is configured, and they are
- * used by different people at different times. Dictionary and Wiring went with it, which
- * also took the nav from nine destinations to eight.
+ * IT IS NO LONGER A SIDEBAR DESTINATION. Amber, 4 September: *"move 'Admin' to the top
+ * navigation bar and replace with a cog icon. This appears when an admin or super admin
+ * login and allows them to manage users, teams, roadmap/updates pages, data dictionary,
+ * wiring, changelog/bugs and everything else in setup that isn't in the manager
+ * settings."* So it is the cog in the header (`AdminLink` in AppShell), behind an
+ * admin-only route guard, and Setup became **Settings** — a manager's screen — with the
+ * tabs that were never a manager's business moving here.
+ *
+ * WHERE THE LINE FALLS, because it is the whole point of the change:
+ *
+ *   Settings (manager and above)   the dials of the work — properties, processes,
+ *                                  contacts, maintenance, SLAs, notification rules
+ *   Admin (admin and above)        who works here and what the app IS — users, teams,
+ *                                  the permission model, the dictionary, the wiring,
+ *                                  the roadmap, the changelog, and the queues
+ *
+ * The two questions were one screen once, then two screens split by subject, and this is
+ * the third cut: split by **who asks**. A manager configuring a maintenance category and
+ * an admin deactivating a person were sharing a tab strip for no better reason than that
+ * both were "setup".
+ *
+ * Roadmap and Changelog are the SAME COMPONENTS the Updates page renders, imported rather
+ * than copied. Updates stays where it is — in the footer, for everybody, because the queue
+ * is the thing people are meant to read (0060) — and the planning and publishing controls
+ * inside it were already admin's and superadmin's respectively. What this gives an admin
+ * is one door with all of it behind it, not a second implementation to keep in step.
+ *
+ * The section is in the URL, like Settings' and Updates', so a link to Teams or to the
+ * bug queue is a link somebody can send.
  */
+const SECTIONS = [
+  // People first: it is what "Admin" meant before today and what most visits are for.
+  { slug: "users",       label: "Users" },
+  { slug: "teams",       label: "Teams" },
+  // Moved off Setup with the rest. A permission model is not a manager's dial — it is the
+  // shape of who may do what, which is this screen's own subject.
+  { slug: "permissions", label: "Permissions" },
+  { slug: "dictionary",  label: "Dictionary" },
+  { slug: "wiring",      label: "Wiring" },
+  // The tracker, from an administrator's side. Bugs and Ideas are the triage lists that
+  // were Setup's last two admin-only tabs; Roadmap and Changelog are Updates' own tabs,
+  // reachable here because planning and publishing are admin acts.
+  { slug: "bugs",        label: "Bugs" },
+  { slug: "ideas",       label: "Ideas" },
+  { slug: "roadmap",     label: "Roadmap" },
+  { slug: "changelog",   label: "Changelog" }
+] as const;
+
 export function AdminPage() {
-  const [tab, setTab] = useState(0);
+  const { section } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const index = SECTIONS.findIndex(s => s.slug === section);
+
+  // `/admin` on its own is a reasonable thing to type, and `/admin?person=<id>` is what
+  // every activity line links to — so the search string has to survive the redirect or
+  // that link stops opening the person it names.
+  if (index === -1) {
+    return <Navigate to={{ pathname: "/admin/users", search: location.search }} replace />;
+  }
 
   return (
     <>
       <div className="page-head">
         <Heading type="h2" weight="bold">Admin</Heading>
         <Text type="text2" color="secondary">
-          Who works here, which team they are in, and what they may do.
+          Who works here, what they may do, and how the app itself is defined.
         </Text>
       </div>
 
-      {/* Permissions moved to Setup — Admin is who works here, Setup is how the app is
-          configured, and the matrix that used to sit here was five invented objects over
-          a table that does not exist. */}
-      <TabList activeTabId={tab} onTabChange={setTab}>
-        <Tab>Users</Tab>
-        <Tab>Teams</Tab>
+      <TabList activeTabId={index} onTabChange={i => navigate(`/admin/${SECTIONS[i].slug}`)}>
+        {SECTIONS.map(s => <Tab key={s.slug}>{s.label}</Tab>)}
       </TabList>
 
       <div style={{ marginTop: "var(--space-16)" }}>
-        {tab === 0 && <Users />}
-        {tab === 1 && <Teams />}
+        {section === "users"       && <Users />}
+        {section === "teams"       && <Teams />}
+        {section === "permissions" && <PermissionsPage />}
+        {section === "dictionary"  && <DictionaryPage />}
+        {section === "wiring"      && <WiringPage />}
+        {section === "bugs"        && <FeedbackList kind="bug" />}
+        {section === "ideas"       && <FeedbackList kind="idea" />}
+        {section === "roadmap"     && <Roadmap />}
+        {section === "changelog"   && <Changelog />}
       </div>
     </>
   );

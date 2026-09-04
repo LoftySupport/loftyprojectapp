@@ -5,16 +5,17 @@ import {
 } from "@vibe/core";
 import {
   Home, Menu, NavigationChevronLeft, NavigationChevronRight,
-  Person, SettingsKnobs, Group, Broom, Apps } from "@vibe/icons";
+  Settings, SettingsKnobs, Group, Broom, Apps } from "@vibe/icons";
 import { HouseChart, HousePin, Houses } from "../theme/houseIcons";
 import { initialsOf, useAuth } from "../data/AuthProvider";
+import { usePermission } from "../data/PermissionProvider";
 import { useSearch } from "../data/SearchProvider";
 import { Tooltip } from "@vibe/tooltip";
 import { AskButton, AskDockProvider } from "../components/AskDock";
 import { FeedbackButtons, FeedbackProvider } from "../components/Feedback";
 import { NotificationsBell } from "../components/NotificationsBell";
 import { ToastsProvider } from "../components/Toasts";
-import { greetingName } from "../data/types";
+import { greetingName, type PermissionLevel } from "../data/types";
 import "./AppShell.css";
 
 /**
@@ -25,10 +26,17 @@ import "./AppShell.css";
  * icons (Amber, 27 Aug): **a project holds many houses, a job is one site**, so
  * Projects gets the pair and Jobs gets the pin — her call, and the right way round:
  * the pin marks a single place, which is exactly what a job is. Reports is the house
- * doing well. SettingsKnobs stays for Setup — the app's own configuration as opposed
- * to the person-shaped Admin beside it.
+ * doing well. SettingsKnobs — sliders, not a cog — stays for Settings: the app's own
+ * dials, as opposed to the cog in the header that opens Admin.
+ *
+ * `need` is a **rung, not a lock**. A destination below somebody's level is not drawn
+ * for them, and that is all this does: the page behind it is gated again in App.tsx and
+ * the data behind that is gated by RLS. A nav item is not a security boundary and must
+ * never be the only thing standing between a person and a screen.
  */
-const PAGES = [
+const PAGES: {
+  to: string; label: string; icon: typeof Home; end?: boolean; need?: PermissionLevel;
+}[] = [
   // "/dashboard", not "/": "/" is the front door and forwards to whatever the
   // landing preference names, so a nav link pointing there could never reach the
   // dashboard for anybody who had chosen a different landing page.
@@ -41,26 +49,37 @@ const PAGES = [
   { to: "/reports", label: "Reports", icon: HouseChart },
   { to: "/contacts", label: "Contacts", icon: Group },
   // Tools is the third kind of destination. Projects, Jobs, Maintenance, Reports and
-  // Contacts are the work; Setup is how the app is wired; this is what you use to make
+  // Contacts are the work; Settings is how the app is wired; this is what you use to make
   // something — the report Template Builder today, more later. Apps rather than a
   // spanner: it is a set of things you open, which is what the section is.
   { to: "/tools", label: "Tools", icon: Apps },
   // Processes is NOT here (Amber, 2 Sep: "processes are not a page on the sidebar, they
   // are part of setup only"). It was Templates, then Processes, as a destination beside
-  // the work; it is configuration, so it lives at Setup → Processes and /processes
+  // the work; it is configuration, so it lives at Settings → Processes and /processes
   // forwards there for the bookmarks that still carry it.
   // Updates (the tracker, 0060–0063) is NOT here. It was, on the reasoning that it is for
-  // everybody where Setup is configuration — but "for everybody" is not the same as "a
+  // everybody where Settings is configuration — but "for everybody" is not the same as "a
   // destination beside the work", and Amber, 3 September: "remove 'updates' from sidebar
   // navigation as this in the footer". It is where the queue, the roadmap and the
   // changelog live, which is a thing you go to when you want it rather than a place you
   // work, so it sits with Privacy, Terms and Support at the bottom of every screen.
-  { to: "/admin", label: "Admin", icon: Person },
-  // Setup replaced Dictionary and Wiring as separate destinations: configuration was
-  // sitting at the same rank as the work.
-  { to: "/setup", label: "Setup", icon: SettingsKnobs }
-  // Settings is deliberately absent — it is personal, not a destination, so it lives in
-  // the menu under your own name where "User settings" says whose settings they are.
+  //
+  // ADMIN IS NOT HERE EITHER, AS OF 4 SEPTEMBER. Amber: "move 'Admin' to the top
+  // navigation bar and replace with a cog icon". It was a sidebar destination at the same
+  // rank as Jobs for something two people in the company ever open; it is now the cog in
+  // the header (see `AdminLink`), which is where an app puts the door nobody but an
+  // administrator is meant to walk through.
+  //
+  // Setup became **Settings** in the same breath, and became manager's (Amber: "grant
+  // permissions for managers and above to view this page… allow managers and above update
+  // properties, processes, contact settings, maintenance tabs, SLAs and automations").
+  // The tabs that were never a manager's business — users, teams, permissions, the
+  // dictionary, the wiring, the bug and idea queues — went to Admin with the cog.
+  { to: "/setup", label: "Settings", icon: SettingsKnobs, need: "manager" }
+  // Your OWN settings are deliberately absent — they are personal, not a destination, so
+  // they live in the menu under your own name where "User settings" says whose settings
+  // they are. That label is doing more work now that the nav item beside it says
+  // "Settings": one is the app's dials, the other is yours.
 ];
 
 const RAIL_KEY = "lofty-nav-collapsed";
@@ -136,6 +155,44 @@ function UserMenu() {
 }
 
 /**
+ * The cog: Admin, in the header, for administrators only.
+ *
+ * Amber, 4 September: *"move 'Admin' to the top navigation bar and replace with a cog
+ * icon. This appears when an admin or super admin login."* It was the ninth item in a
+ * sidebar of destinations people visit all day, for a screen that manages the people
+ * themselves — so it sat at the rank of Jobs and was, for everybody below admin, a link
+ * to a page they had no business opening.
+ *
+ * `Settings` — the cog — rather than `SettingsKnobs`, which the Settings rail item keeps.
+ * The two are deliberately different shapes: dials you turn to configure the app, and the
+ * cog behind which the app itself is administered.
+ *
+ * NOT RENDERED AT ALL below admin, rather than rendered disabled. There is nothing useful
+ * to tell a user about a door that is not theirs, and `/admin` is refused by its own route
+ * guard and by every policy behind it either way — this is the affordance, not the lock.
+ *
+ * It shares `.notif-bell-trigger` with the bell and the Ask button so the header cluster
+ * reads as one row of 32px targets rather than three different buttons.
+ */
+function AdminLink() {
+  const { can } = usePermission();
+  if (!can("admin")) return null;
+  return (
+    <Tooltip content="Admin" position="bottom">
+      <NavLink
+        to="/admin"
+        className={({ isActive }) =>
+          "notif-bell-trigger app-admin-cog" + (isActive ? " is-active" : "")
+        }
+        aria-label="Admin"
+      >
+        <Settings size={20} aria-hidden />
+      </NavLink>
+    </Tooltip>
+  );
+}
+
+/**
  * The left rail.
  *
  * Nav moved off the top for room: seven destinations across a header wrapped to two and
@@ -158,6 +215,10 @@ function Rail({
   drawerOpen: boolean;
   onCloseDrawer: () => void;
 }) {
+  const { can } = usePermission();
+  // Filtered, not disabled: a greyed-out destination is an invitation to ask why, and the
+  // answer ("you are a user, not a manager") is not something a nav rail can say well.
+  const pages = PAGES.filter(p => !p.need || can(p.need));
   return (
     <aside
       className={
@@ -195,7 +256,7 @@ function Rail({
       </div>
 
       <nav className="app-nav" aria-label="Main">
-        {PAGES.map(p => {
+        {pages.map(p => {
           const Icon = p.icon;
           const link = (
             <NavLink
@@ -345,6 +406,11 @@ export function AppShell() {
                 cluster rather than two decisions. */}
             <AskButton />
             <NotificationsBell />
+            {/* The cog sits between the bell and your name, and that order is the
+                argument: Ask is something you go and do, the bell is something that
+                happens to you, and Admin is the app itself — which belongs beside the
+                other thing that is about you rather than about the board. */}
+            <AdminLink />
             <UserMenu />
           </div>
         </header>

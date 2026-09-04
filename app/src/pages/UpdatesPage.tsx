@@ -951,7 +951,17 @@ function RequestPanel({
  * screen where breaking it would do the most damage: a date on a roadmap gets quoted back
  * as a commitment by whoever read it.
  */
-function Roadmap() {
+/**
+ * Exported since 4 September: Admin renders this same component on its Roadmap tab.
+ *
+ * One implementation, two doors. Amber wanted the roadmap reachable from the cog along
+ * with users, teams and the changelog; the alternative was a second roadmap screen for
+ * admins, which is how two pages start disagreeing about what phase 2 contains. Nothing
+ * about the component changes with the door — the planning controls are already
+ * `can("admin")` and shaping the phases is already `can("superadmin")`, and Updates
+ * remains everybody's read of the same rows.
+ */
+export function Roadmap() {
   const repo = useRepository();
   const { can } = usePermission();
   const [reloadKey, setReloadKey] = useState(0);
@@ -1565,7 +1575,10 @@ function NewPhasePanel({
  * to different audiences — one to the repository, one to the forty-seven people who do
  * not read it.
  */
-function Changelog() {
+/** Exported since 4 September — Admin's Changelog tab renders this same component. See
+ *  the note on `Roadmap` above: one implementation, two doors, publishing still
+ *  superadmin's. */
+export function Changelog() {
   const { can } = usePermission();
   const repo = useRepository();
   const [reloadKey, setReloadKey] = useState(0);

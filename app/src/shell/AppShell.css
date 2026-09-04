@@ -214,6 +214,15 @@ html, body, #root { height: 100%; }
   min-width: 0;
   margin-inline-start: auto;
 }
+/* The Admin cog (admin and above only — see AdminLink). It borrows the bell's 32px
+   trigger so the header cluster is one row of identical targets, and adds the two things
+   an anchor needs that a button did not: the header's fixed ink, because a NavLink would
+   otherwise take the theme's link colour on a bar that is dark teal in every theme, and a
+   visible active state, because unlike the bell this one is a destination and "am I on
+   Admin?" is a question the header should answer. */
+.app-admin-cog { text-decoration: none; }
+.app-header .app-admin-cog, .app-header .app-admin-cog * { color: var(--fixed-light-color); }
+.app-admin-cog.is-active { background: var(--primary-selected-color); }
 .app-user { display: flex; align-items: center; gap: var(--space-8); min-width: 0; }
 /* Vibe's Text picks its colour from the theme, which is dark ink in light mode — on a
    bar that is dark teal in every theme. Pin the ink to the bar, as the yellow banner
@@ -442,7 +451,7 @@ html, body, #root { height: 100%; }
      was shrinking the avatar button to 16px at 320, failing the 24px tap target. The
      search field is the flexible one; identity and the bell are not. The tighter gap
      pays for the rigidity: at 320 the row was otherwise 4px too wide. */
-  .app-header-right > *, .notif-bell-trigger, .user-menu-trigger { flex-shrink: 0; }
+  .app-header-right > *, .notif-bell-trigger, .app-admin-cog, .user-menu-trigger { flex-shrink: 0; }
   .app-header-right { gap: var(--space-4); }
   /* The avatar carries the identity here. The name is an unbound token 200px wide,
      which is a whole line of a small screen to say what the circle already says. */

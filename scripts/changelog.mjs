@@ -89,6 +89,23 @@ function commits() {
     });
 }
 
+/**
+ * `Changelog: skip` — the deliberate nothing.
+ *
+ * A commit with NO trailer contributes nothing and was always fine (see the header). But
+ * sixteen commits in this history say `Changelog: skip` instead — every one of them a
+ * "regenerate the changelog" housekeeping commit, where writing the word is a better
+ * record than silence: it says the author considered the question and answered no.
+ *
+ * It was read as an unknown verb, reported as an unreadable trailer, and the run exited 1
+ * on it. That is the whole reason `--check` had stopped being usable as a gate: it could
+ * not pass on any history that already contains one, and history does not change. So the
+ * word is part of the vocabulary now rather than a fault — and a genuine typo
+ * (`Changelog: fixt: …`) is still reported and still fails the run, which is the case
+ * this check exists for. Watched both ways before it was kept.
+ */
+const SKIP = ["skip", "none"];
+
 /** `Changelog: fixed: something` → { kind, text }. An unknown verb is reported, not eaten. */
 function parseTrailers(commit) {
   const entries = [];
@@ -101,12 +118,13 @@ function parseTrailers(commit) {
     if (!m) continue;
     const [, key, value] = m;
     if (/^changelog$/i.test(key)) {
+      if (SKIP.includes(value.toLowerCase())) continue;
       const parts = /^(\w+)\s*:\s*(.+)$/.exec(value);
       if (!parts || !KINDS.includes(parts[1].toLowerCase())) {
         // Named rather than dropped: a trailer somebody wrote and this could not read is
         // a change that silently never reaches the changelog, which is the one failure
         // mode that makes the whole thing untrustworthy.
-        problems.push(`${commit.hash.slice(0, 8)}: "Changelog: ${value}" — expected one of ${KINDS.join(", ")}`);
+        problems.push(`${commit.hash.slice(0, 8)}: "Changelog: ${value}" — expected one of ${KINDS.join(", ")}, or ${SKIP.join(" / ")}`);
         continue;
       }
       entries.push({ kind: parts[1].toLowerCase(), text: parts[2] });

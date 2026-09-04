@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `schema-pl
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 122 changes since then —
-- Changed: Tools → Template Builder is Document Builder, Template Library and Section Library, each with its own buttons
-- Added: A document, template or section can be cloned from an existing one
-- Changed: Tools → Template Builder is three tabs — Documents, Templates and Sections — instead of two stacked panels
-- Added: Documents can be sent outside Lofty as a share link — a page a client opens with no login, with an optional password and a link that expires
-- Added: A shared link shows the document as it was when it was sent, and says so, rather than re-reading Lofty every time it is opened
-- …and 117 more.
+Unreleased: 128 changes since then —
+- Fixed: The changelog generator no longer reports "Changelog: skip" as a mistake, so its check can pass again
+- Changed: Setup is now Settings, and managers and above can open it — properties, processes, contacts, maintenance, the stage SLAs and the notification rules
+- Changed: Admin has moved off the sidebar to a cog in the top bar, and appears only for admins and super admins
+- Changed: Users, teams, permissions, the dictionary, the wiring, the bug and idea queues, the roadmap and the changelog are all now under the cog
+- Added: Managers can set how long a stage should take and who hears when it is overdue, without being able to rename or reorder the stages themselves
+- …and 123 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -22,6 +22,67 @@ described there, because that is the only category of change that gets expensive
 are in.
 
 Last updated: 2026-09-04.
+
+---
+
+## Session of 2026-09-04 (later) — Settings is the managers', Admin is behind a cog
+
+Amber, in two sentences that move one line: Setup becomes **Settings** and managers and above
+may open it "to update properties, processes, contact settings, maintenance tabs, SLAs and
+automations"; **Admin** leaves the sidebar for "a cog icon" in the header, for admins and
+super admins, holding "users, teams, roadmap/updates pages, data dictionary, wiring,
+changelog/bugs and everything else in setup that isn't in the manager settings".
+
+**A readable version with the diagrams is published at
+<https://claude.ai/code/artifact/5e2f1a3d-0cea-469b-aa53-5ff8323d8466>** — show that one to
+people. It carries the before/after of the chrome, the full tab-by-tab table with each write
+floor, the same rule seen as Deanna (manager) and as Ketan (admin), the SLA column-split
+diagram, and the three questions still open at the end. The decision log entry is
+`schema-plan.md` → *4 September — Settings is the managers', Admin is the administrators'*.
+
+### The cut is by who asks, not by subject
+
+| Settings — `/setup`, manager+ | Admin — `/admin`, admin+ |
+|---|---|
+| Properties, Processes, Contacts, Maintenance, Automations | Users, Teams, Permissions, Dictionary, Wiring, Bugs, Ideas, Roadmap, Changelog |
+
+Ten tabs became five and nine. Roadmap and Changelog on Admin are the **same components**
+Updates renders, imported rather than copied — Updates stays in the footer for everybody,
+because `0060`'s whole point is that the people who filed a request can read the queue.
+
+### 0096 is the half that stops the rename being decoration
+
+Properties, processes, contacts and maintenance already took a manager's write. Two things
+did not, so the migration moves them:
+
+- **Stage SLAs.** `pipeline_stages` was superadmin's (`0029`), and `0047` said the SLA is
+  part of what a stage IS. **That half is reversed on purpose.** A manager now holds an
+  UPDATE policy on the row, and `guard_stage_shape_change()` refuses every column but
+  `pipeline_stage_expected_days` and `pipeline_stage_at_risk_lead_days` below superadmin —
+  `0060`'s shape, because RLS cannot express a column rule. Insert and delete are untouched:
+  a manager still cannot add or rename a stage.
+- **Notification types and rules.** Admin's since `0083`, now manager's. They sit on
+  Settings → Automations because "overdue 5 days → the managers" is an automation.
+
+`verify/rls.sql` probe 4 in the manager block **asserted the opposite and passed**; it is now
+the reverse claim, with two new probes beside it (the rename must still be refused; a manager
+must be able to write a rule). All three were watched failing before they were kept — trigger
+dropped lets the rename through, policy dropped stops the SLA, rules policy dropped stops the
+rule. `./check.sh` green: 75 constraints biting, RLS holds, embeds resolve, seeds agree.
+
+### Two things to know before touching this again
+
+- **`/setup` is still the path.** Only the label and the permission changed. `/settings` is
+  the personal screen and stays. `/setup/{permissions,dictionary,wiring,bugs,ideas}` redirect
+  to their Admin tabs, and the old top-level `/dictionary` and `/wiring` now land there too.
+- **"Settings" and "User settings" now sit one menu apart.** `AppShell` used to argue against
+  exactly that; the comment there is now a record of a reversed decision, not a rule.
+
+### Not verified in a browser
+
+The app is behind the Microsoft gate and a Lofty profile row, so nothing here was clicked:
+`tsc`, lint and the build are clean, and the RLS half is proved in the harness. **The cog's
+placement, the rail with eight items, and the two tab strips have not been seen rendered.**
 
 ---
 
@@ -207,7 +268,7 @@ Three decisions inside the writers are worth keeping:
 
 ### What is deliberately not exported
 
-The Setup forms and the Wiring page: configuration, not records. The dashboard's hero tile
+The Settings forms and the Wiring page: configuration, not records. The dashboard's hero tile
 and workload figures, which are em dashes waiting on the health calculation — a spreadsheet
 column of dashes claims a figure was computed. And screenshots on a bug report, which live
 behind signed URLs; the file carries the count and says where to look.
@@ -298,10 +359,10 @@ to full width, width adjustable and remembered, Escape to close.
 
 | screen | was | now |
 | --- | --- | --- |
-| Jobs, Setup → Processes, Updates, Admin | already the slideout | unchanged |
+| Jobs, Settings → Processes, Updates, Admin | already the slideout | unchanged |
 | Contacts | a detail column beside the list | `SidePanel` |
 | Maintenance | a detail column beside the list | `SidePanel` |
-| Setup → Properties | a detail column beside the list | `SidePanel` |
+| Settings → Properties | a detail column beside the list | `SidePanel` |
 | **Projects** | **replaced the whole board with a project page** | `SidePanel` over the board |
 
 Projects was the odd one and the worst of them: a job at `/jobs/1042-01` slid out over its
@@ -319,8 +380,8 @@ Sorting is shared code: `SortHeader` / `useTableSort` / `sortRows` in
 `app/src/components/SortableTable.tsx`, with the column readers for the boards in
 `TableColumns.tsx`. Blanks sort last in both directions.
 
-**Meets it:** Jobs, Projects (both through `TableColumns`), Setup → Processes, Admin,
-Updates.
+**Meets it:** Jobs, Projects (both through `TableColumns`), Settings → Processes,
+Admin → Users, Updates.
 
 **Does not yet — sortable headers to add:**
 
@@ -328,12 +389,12 @@ Updates.
 | --- | --- | --- |
 | Contacts | name, company, role, email, on-how-many | company, classification, team, awaiting sign-off |
 | Maintenance | number, address, reported, trade, owner, health, next visit | trade, status, owner, job, warranty, **reported-date range** |
-| Setup → Properties | label, stage, level, team, format, SLA | stage, level, team, format, restricted |
-| Setup → Maintenance | category, SLA days | — |
-| Setup → Notifications | type | — |
-| Setup → Permissions | permission, capability | — |
-| Setup → Dictionary | name, table, column, status | table, status |
-| Setup → Wiring | method, table, wired | wired / not wired |
+| Settings → Properties | label, stage, level, team, format, SLA | stage, level, team, format, restricted |
+| Settings → Maintenance | category, SLA days | — |
+| Settings → Automations (was Setup → Notifications) | type | — |
+| Admin → Permissions | permission, capability | — |
+| Admin → Dictionary | name, table, column, status | table, status |
+| Admin → Wiring | method, table, wired | wired / not wired |
 | Updates → Bugs / Ideas (`FeedbackList`) | title, stage, votes, comments, reported | stage, kind, reporter |
 | Reports | whatever each report's table holds | the report's own controls |
 
@@ -1332,7 +1393,9 @@ worth an hour: a probe that has been red for a while is a probe nobody reads.
   never a percentage) and Changelog.
 - **Setup → Bugs / Ideas stays** as the triage table it always was — the page, the error,
   the browser, the screenshots. Note that its `adminOnly` flag no longer mirrors a database
-  rule; it is a routing choice now, and the file says so.
+  rule; it is a routing choice now, and the file says so. (4 September: both tabs are
+  **Admin → Bugs / Ideas**, and the flag is gone — the whole screen is admin's, so the
+  routing choice became the route's.)
 
 ### The repository half
 
@@ -1462,6 +1525,9 @@ A fourth batch, after PR #39 merged (the branch was restarted from `main`):
   0029's policy: the SLA is part of what the stages are. Overdue is past the
   expected days; there is no third number. **Applied to the live database.**
   `pipeline_stages` thereby got its first two dictionary entries.
+  **Superseded 4 September: `0096` gives the two SLA columns to managers** and keeps the
+  rest of the stage superadmin's with a trigger — the tab is Settings → Automations now.
+  Everything else in this bullet still holds.
 
 A fifth batch — the prototype-parity shells (Amber: match the prototype, placeholders
 where the data is not real yet; every placeholder names itself):
@@ -2423,9 +2489,17 @@ against an empty database, wrong the day real data lands, and the reason the ema
 provider above matters. `profile_teams` and `permission_level` exist to drive the real
 scope model; the shape is in `supabase-schema.md`.
 
-## Admin and Setup are different screens
+## Admin and Setup are different screens — SUPERSEDED 4 September
 
-Admin was Users, Teams, Properties, Permissions — two jobs on one screen. It is now:
+**This split was by SUBJECT, and the 4 September one is by WHO ASKS.** Setup is now
+**Settings**, manager and above, holding Properties, Processes, Contacts, Maintenance and
+Automations; Admin is behind the header cog, admin and above, and took Permissions,
+Dictionary, Wiring, Bugs, Ideas, Roadmap and Changelog with it. See *Session of
+2026-09-04 (later)* at the top, and `schema-plan.md` → *4 September — Settings is the
+managers', Admin is the administrators'*. The reasoning below is kept because it explains
+why the tabs sit where they do at all; the table is no longer what the app does.
+
+Admin was Users, Teams, Properties, Permissions — two jobs on one screen. It became:
 
 | **Admin** — people | **Setup** — configuration |
 | --- | --- |
@@ -2438,8 +2512,8 @@ folding them in took the nav from nine destinations to eight, and moving Setting
 menu under the user's own name took it to seven. Both old routes still resolve — they
 were in the nav for weeks and are in bookmarks.
 
-The Setup section is in the path (`/setup/dictionary`), not in component state, so a link
-to a tab is a link somebody can send.
+The section is in the path (`/setup/processes`, `/admin/dictionary`), not in component
+state, so a link to a tab is a link somebody can send.
 
 **Properties is deliberately read-only.** There is no create form: definitions are
 superadmin's and arrive by migration, which is what Lofty asked for at this stage. Note

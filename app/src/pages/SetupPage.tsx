@@ -5,71 +5,67 @@ import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { Problem } from "../components/Form";
 import { WORKING_STAGES, type StageName } from "../data/types";
-import { DictionaryPage } from "./DictionaryPage";
-import { FeedbackList } from "./FeedbackList";
-import { PermissionsPage } from "./PermissionsPage";
 import { PropertiesSetupPage } from "./PropertiesSetupPage";
 import { ProcessesSetupPage } from "./ProcessesSetupPage";
 import { ContactLookupsPage } from "./ContactLookupsPage";
 import { NotificationsSetupPage } from "./NotificationsSetupPage";
 import { MaintenanceSetupPage } from "./MaintenanceSetupPage";
-import { WiringPage } from "./WiringPage";
 import "../components/ui.css";
 
 /**
- * How the app is configured, as opposed to who may use it.
+ * Settings: the dials a manager turns.
  *
- * Admin answers "who works here and what may they do". This answers "how is this thing
- * set up" — the fields that exist, what every property means, what is wired to Supabase,
- * and the automations that fill values in. Different questions, asked by different people
- * at different times, so they are no longer four tabs on one screen.
+ * It was **Setup**, and it was everybody's. Amber, 4 September: *"Change the sidebar
+ * 'Setup' to 'Settings' and grant permissions for managers and above to view this page.
+ * The purpose of 'settings' is to allow managers and above update properties, processes,
+ * contact settings, maintenance tabs, SLAs and automations."*
  *
- * Dictionary and Wiring were top-level nav items sitting beside Projects and Jobs, which
- * put configuration in the same rank as the work. Folding them in here took the nav from
- * nine destinations to eight — worth having when nine already wrapped to two rows on a
- * phone.
+ * So two things happened at once, and they are the same decision read twice:
  *
- * The section is in the URL rather than in component state, so a link to a particular tab
- * is a link somebody can send.
- */
-
-/**
- * `adminOnly` NO LONGER MIRRORS A DATABASE RULE, and that is worth saying out loud
- * because it used to. Until 0060 the feedback SELECT policy admitted admin and above, so
- * a manager who typed /setup/bugs got an empty list either way and the hidden tab was
- * only tidiness. 0060 opened the tracker to everybody — the whole point of the feature is
- * that people can see the queue — so a manager reaching this URL would now see rows.
+ *   1. The five tabs a manager runs the work with stayed — Properties, Processes,
+ *      Contacts, Maintenance, Automations.
+ *   2. The five that were never a manager's business left for **Admin**, behind the
+ *      header cog: Permissions, Dictionary, Wiring, and the Bugs and Ideas queues.
  *
- * The tabs stay admin-only anyway, as a routing choice rather than a security one: this
- * is the triage view, and the queue everybody is meant to read lives on **Updates**. If
- * that flag is ever removed, nothing leaks; a manager simply gets a second, uglier way to
- * read what /updates already shows them.
+ * The old cut was by subject — Admin was people, Setup was configuration. This one is by
+ * **who asks**. A manager adding a maintenance category and an admin renaming a column in
+ * the dictionary were sharing a tab strip because both were "setup", and the strip was ten
+ * tabs long for it.
+ *
+ * WHAT THE NAME COSTS, said out loud because the file above this one used to say the
+ * opposite: the user menu's "User settings" is now the only thing keeping the two
+ * "settings" apart, and it is carrying that on its own. The screen kept its `/setup`
+ * path — `/settings` is the personal one, and swapping them would break every bookmark and
+ * Teams link in the company to save a word in a URL nobody reads.
+ *
+ * The section is still in the URL, so a link to a particular tab is a link somebody can
+ * send.
  */
 const SECTIONS = [
-  { slug: "properties",  label: "Properties",  adminOnly: false },
-  { slug: "processes",   label: "Processes",   adminOnly: false },
-  { slug: "contacts",    label: "Contacts",    adminOnly: false },
-  { slug: "maintenance", label: "Maintenance", adminOnly: false },
-  { slug: "permissions", label: "Permissions", adminOnly: false },
-  { slug: "dictionary",  label: "Dictionary",  adminOnly: false },
-  { slug: "wiring",      label: "Wiring",      adminOnly: false },
-  { slug: "automations", label: "Automations", adminOnly: false },
-  // Last, and in this order: a bug is something to fix, an idea is something to weigh.
-  { slug: "bugs",        label: "Bugs",        adminOnly: true },
-  { slug: "ideas",       label: "Ideas",       adminOnly: true }
+  { slug: "properties",  label: "Properties" },
+  { slug: "processes",   label: "Processes" },
+  { slug: "contacts",    label: "Contacts" },
+  { slug: "maintenance", label: "Maintenance" },
+  // SLAs and the notification rules. Last because it is the one that reads the others:
+  // an SLA is a number about a stage, and a rule is who hears when it is missed.
+  { slug: "automations", label: "Automations" }
 ] as const;
+
+/**
+ * The tabs that went to Admin, and where each one is now.
+ *
+ * A redirect rather than a 404, because these were the URLs for weeks: /setup/dictionary
+ * is in Teams messages, in the audit feed's links, and in at least one bookmark bar. A
+ * manager who follows one lands on Admin's own "for admins and above" answer, which is
+ * the truth and is more use than a dead tab.
+ */
+const MOVED_TO_ADMIN = ["permissions", "dictionary", "wiring", "bugs", "ideas"] as const;
 
 export function SetupPage() {
   const { section } = useParams();
   const navigate = useNavigate();
-  const { can } = usePermission();
-  const sections = SECTIONS.filter(s => !s.adminOnly || can("admin"));
-  const index = sections.findIndex(s => s.slug === section);
+  const index = SECTIONS.findIndex(s => s.slug === section);
 
-  // An unknown or missing section is a redirect, not an error page: /setup on its own is
-  // a reasonable thing to type, and it should land somewhere. A section this person may
-  // not see takes the same path — landing on Properties beats an error for a tab that,
-  // to them, does not exist.
   /**
    * Notifications was a tab of its own, and Amber, 3 Sep: "notificatiosn are already
    * under user settings so it is doubling up having it in setup". It was — from the
@@ -84,19 +80,25 @@ export function SetupPage() {
    * the old tab, and Updates' own links to it, landing on that.
    */
   if (section === "notifications") return <Navigate to="/setup/automations" replace />;
+  if (MOVED_TO_ADMIN.includes(section as (typeof MOVED_TO_ADMIN)[number])) {
+    return <Navigate to={`/admin/${section}`} replace />;
+  }
+  // An unknown or missing section is a redirect, not an error page: /setup on its own is
+  // a reasonable thing to type, and it should land somewhere.
   if (index === -1) return <Navigate to="/setup/properties" replace />;
 
   return (
     <>
       <div className="page-head">
-        <Heading type="h2" weight="bold">Setup</Heading>
+        <Heading type="h2" weight="bold">Settings</Heading>
         <Text type="text2" color="secondary">
-          Properties, processes, definitions, wiring and automations — how the app itself is configured.
+          Properties, processes, contacts, maintenance and automations — the dials the work
+          runs on. Users, teams, the dictionary and the wiring are under the cog.
         </Text>
       </div>
 
-      <TabList activeTabId={index} onTabChange={i => navigate(`/setup/${sections[i].slug}`)}>
-        {sections.map(s => <Tab key={s.slug}>{s.label}</Tab>)}
+      <TabList activeTabId={index} onTabChange={i => navigate(`/setup/${SECTIONS[i].slug}`)}>
+        {SECTIONS.map(s => <Tab key={s.slug}>{s.label}</Tab>)}
       </TabList>
 
       <div style={{ marginTop: "var(--space-16)" }}>
@@ -104,14 +106,7 @@ export function SetupPage() {
         {section === "processes"   && <ProcessesSetupPage />}
         {section === "contacts"    && <ContactLookupsPage />}
         {section === "maintenance" && <MaintenanceSetupPage />}
-        {/* Moved off Admin. Admin is about people; a permission model is configuration,
-            which is what this screen is for. */}
-        {section === "permissions" && <PermissionsPage />}
-        {section === "dictionary"  && <DictionaryPage />}
-        {section === "wiring"      && <WiringPage />}
         {section === "automations" && <Automations />}
-        {section === "bugs"        && <FeedbackList kind="bug" />}
-        {section === "ideas"       && <FeedbackList kind="idea" />}
       </div>
     </>
   );
@@ -126,9 +121,14 @@ export function SetupPage() {
  * Completed job is not late, the archive runs on a fixed clock, and a Cancelled job
  * fires no alerts by rule.
  *
- * Superadmin to edit — the 0029 policy on pipeline_stages, because the SLA is part of
- * what the stages ARE. Everyone else reads the numbers, or the em dash that honestly
- * says nobody has set one.
+ * MANAGER TO EDIT, SINCE 0096 — and it was superadmin until 4 September, on 0047's
+ * reasoning that the SLA is part of what the stages ARE. Amber moved it with the screen:
+ * Settings exists to let "managers and above update properties, processes, contact
+ * settings, maintenance tabs, SLAs and automations". The policy moved with it, in the only
+ * way that keeps the rest of 0047 true — a manager may set the two SLA columns and still
+ * cannot rename, reorder or add a stage, which a trigger enforces because RLS cannot
+ * express a column rule. Below manager: the numbers, or the em dash that honestly says
+ * nobody has set one.
  */
 function Automations() {
   const repo = useRepository();
@@ -137,7 +137,7 @@ function Automations() {
   const { data: phases } = useQuery(r => r.listTemplatePhases(), [], [reloadKey]);
   const [saving, setSaving] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
-  const canEdit = can("superadmin");
+  const canEdit = can("manager");
 
   const byName = new Map(phases.map(p => [p.stageName, p]));
 
@@ -169,7 +169,7 @@ function Automations() {
         <div className="panel-head">
           <Text type="text2" weight="bold">Stage SLAs</Text>
           <Text type="text3" color="secondary">
-            {canEdit ? "blank means no SLA — saving happens when you leave a field" : "read-only below superadmin"}
+            {canEdit ? "blank means no SLA — saving happens when you leave a field" : "read-only below manager"}
           </Text>
         </div>
         <Text type="text2" color="secondary" ellipsis={false}>

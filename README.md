@@ -7,7 +7,7 @@ Supabase — projects, jobs, profiles, teams, the pipeline stages, properties, p
 and the tracker are live queries. The database holds **117 projects, 66 jobs, 270
 property definitions and 49 processes**; the 110 projects Amber sent on 3 September are in
 with the number of sites each will hold, and their jobs are deliberately not created yet.
-(Setup → Wiring counts the wiring rather than repeating it here: these numbers are a
+(Admin → Wiring counts the wiring rather than repeating it here: these numbers are a
 snapshot and that screen is generated.)
 
 Values whose table is not built yet still render as a `{{table.column}}` token, so an
@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 122 changes since then —
-- Changed: Tools → Template Builder is Document Builder, Template Library and Section Library, each with its own buttons
-- Added: A document, template or section can be cloned from an existing one
-- Changed: Tools → Template Builder is three tabs — Documents, Templates and Sections — instead of two stacked panels
-- Added: Documents can be sent outside Lofty as a share link — a page a client opens with no login, with an optional password and a link that expires
-- Added: A shared link shows the document as it was when it was sent, and says so, rather than re-reading Lofty every time it is opened
-- …and 117 more.
+Unreleased: 128 changes since then —
+- Fixed: The changelog generator no longer reports "Changelog: skip" as a mistake, so its check can pass again
+- Changed: Setup is now Settings, and managers and above can open it — properties, processes, contacts, maintenance, the stage SLAs and the notification rules
+- Changed: Admin has moved off the sidebar to a cog in the top bar, and appears only for admins and super admins
+- Changed: Users, teams, permissions, the dictionary, the wiring, the bug and idea queues, the roadmap and the changelog are all now under the cog
+- Added: Managers can set how long a stage should take and who hears when it is overdue, without being able to rename or reorder the stages themselves
+- …and 123 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
