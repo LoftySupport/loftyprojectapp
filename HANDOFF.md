@@ -25,6 +25,67 @@ Last updated: 2026-09-04.
 
 ---
 
+## Session of 2026-09-04 (later) — Settings is the managers', Admin is behind a cog
+
+Amber, in two sentences that move one line: Setup becomes **Settings** and managers and above
+may open it "to update properties, processes, contact settings, maintenance tabs, SLAs and
+automations"; **Admin** leaves the sidebar for "a cog icon" in the header, for admins and
+super admins, holding "users, teams, roadmap/updates pages, data dictionary, wiring,
+changelog/bugs and everything else in setup that isn't in the manager settings".
+
+**A readable version with the diagrams is published at
+<https://claude.ai/code/artifact/5e2f1a3d-0cea-469b-aa53-5ff8323d8466>** — show that one to
+people. It carries the before/after of the chrome, the full tab-by-tab table with each write
+floor, the same rule seen as Deanna (manager) and as Ketan (admin), the SLA column-split
+diagram, and the three questions still open at the end. The decision log entry is
+`schema-plan.md` → *4 September — Settings is the managers', Admin is the administrators'*.
+
+### The cut is by who asks, not by subject
+
+| Settings — `/setup`, manager+ | Admin — `/admin`, admin+ |
+|---|---|
+| Properties, Processes, Contacts, Maintenance, Automations | Users, Teams, Permissions, Dictionary, Wiring, Bugs, Ideas, Roadmap, Changelog |
+
+Ten tabs became five and nine. Roadmap and Changelog on Admin are the **same components**
+Updates renders, imported rather than copied — Updates stays in the footer for everybody,
+because `0060`'s whole point is that the people who filed a request can read the queue.
+
+### 0096 is the half that stops the rename being decoration
+
+Properties, processes, contacts and maintenance already took a manager's write. Two things
+did not, so the migration moves them:
+
+- **Stage SLAs.** `pipeline_stages` was superadmin's (`0029`), and `0047` said the SLA is
+  part of what a stage IS. **That half is reversed on purpose.** A manager now holds an
+  UPDATE policy on the row, and `guard_stage_shape_change()` refuses every column but
+  `pipeline_stage_expected_days` and `pipeline_stage_at_risk_lead_days` below superadmin —
+  `0060`'s shape, because RLS cannot express a column rule. Insert and delete are untouched:
+  a manager still cannot add or rename a stage.
+- **Notification types and rules.** Admin's since `0083`, now manager's. They sit on
+  Settings → Automations because "overdue 5 days → the managers" is an automation.
+
+`verify/rls.sql` probe 4 in the manager block **asserted the opposite and passed**; it is now
+the reverse claim, with two new probes beside it (the rename must still be refused; a manager
+must be able to write a rule). All three were watched failing before they were kept — trigger
+dropped lets the rename through, policy dropped stops the SLA, rules policy dropped stops the
+rule. `./check.sh` green: 75 constraints biting, RLS holds, embeds resolve, seeds agree.
+
+### Two things to know before touching this again
+
+- **`/setup` is still the path.** Only the label and the permission changed. `/settings` is
+  the personal screen and stays. `/setup/{permissions,dictionary,wiring,bugs,ideas}` redirect
+  to their Admin tabs, and the old top-level `/dictionary` and `/wiring` now land there too.
+- **"Settings" and "User settings" now sit one menu apart.** `AppShell` used to argue against
+  exactly that; the comment there is now a record of a reversed decision, not a rule.
+
+### Not verified in a browser
+
+The app is behind the Microsoft gate and a Lofty profile row, so nothing here was clicked:
+`tsc`, lint and the build are clean, and the RLS half is proved in the harness. **The cog's
+placement, the rail with eight items, and the two tab strips have not been seen rendered.**
+
+---
+
 ## Session of 2026-09-04 — Tools: the template library and the documents made from it
 
 Amber asked for the report builder from `amberbeaumont/modules` as a **Tools** section

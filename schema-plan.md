@@ -1852,6 +1852,123 @@ Three things fell out of it that were not the point but are worth keeping:
 What is left is not a decision: the endpoint has to be **deployed** and given
 `SHARE_ALLOWED_ORIGINS`. Until it is, the Share panel makes a link that will not open.
 
+## 4 September — Settings is the managers', Admin is the administrators'
+
+Amber, in two sentences that move one line:
+
+> Change the sidebar "Setup" to "settings" and grant permissions for managers and above to
+> view this page. The purpose of "settings" is to allow managers and above update
+> properties, processes, contact settings, maintenance tabs, SLAs and automations.
+
+> Move "Admin" to the top navigation bar and replace with a cog icon. This appears when an
+> admin or super admin login and allows them to manage users, teams, roadmap/updates
+> pages, data dictionary, wiring, changelog/bugs and everything else in setup that isn't in
+> the manager settings.
+
+### The cut is by who asks, and it is the third one
+
+Admin and Setup have been split twice before, both times **by subject**: Admin was people,
+Setup was configuration. That is why the permission matrix moved from Admin to Setup
+(a permission model is configuration) and the dictionary and wiring moved from the top-level
+nav into Setup (they were configuration sitting at the rank of the work).
+
+Read by subject, both cuts were right. Read by **who opens the screen**, both were wrong:
+
+| | Settings — manager and above | Admin — admin and above |
+|---|---|---|
+| Properties | ✅ | |
+| Processes | ✅ | |
+| Contacts (classifications, roles) | ✅ | |
+| Maintenance (settings, categories) | ✅ | |
+| Automations (stage SLAs, notification rules) | ✅ | |
+| Users, Teams | | ✅ |
+| Permissions | | ✅ |
+| Dictionary, Wiring | | ✅ |
+| Bugs, Ideas | | ✅ |
+| Roadmap, Changelog | | ✅ |
+
+A ten-tab strip became five and nine, and neither strip is a place two different jobs meet
+any more. The manager configuring a maintenance category and the admin deactivating a
+person were sharing a tab bar because both were "setup".
+
+Roadmap and Changelog on Admin are the **same components** Updates renders, imported rather
+than copied. Updates stays in the footer for everybody — the whole point of `0060` was that
+the queue is readable by the people who filed it — and the planning and publishing controls
+inside it were already `admin` and `superadmin`. What the cog adds is one door, not a second
+implementation that can disagree about what phase 2 contains.
+
+### `0096` — the two policies that would have made the rename a lie
+
+Properties, processes, contacts and maintenance already took a manager's write (`0077`,
+`0078`, `0082`, `0084`). Two things on Amber's list did not, and shipping the rename without
+them would have been the worst kind of half-change: a screen a manager may open, with
+controls a manager may use, over tables that refuse them.
+
+**The SLAs. This reverses half of `0047`, on purpose.** `0047` said outright: *"Editing stays
+superadmin's, per 0029's policy on pipeline_stages: the SLA is part of what the stages
+ARE."* That reasoning still holds for what a stage **is** — its name, its position, whether
+it is external, which team owns it. It does not hold for how long the stage should take,
+which is the number Amber has just handed to managers.
+
+RLS cannot express a column rule, so the split takes `0060`'s shape — a policy that lets a
+manager UPDATE the row, and a trigger that refuses every column but the SLA pair below
+superadmin:
+
+```sql
+create policy "managers set stage slas" on pipeline_stages
+  for update to authenticated
+  using ((select current_permission()) >= 'manager')
+  with check ((select current_permission()) >= 'manager');
+```
+
+`guard_stage_shape_change()` is the other half. Insert and delete are untouched: a manager
+still cannot add or remove a stage, which is the line `0029` drew and the part of `0047`
+that survives.
+
+**The notification rules.** `notification_types` and `notification_rules` were admin's
+(`0083`) and are now manager's. They sit on Settings → Automations because *"overdue 5 days
+→ the managers"* is an automation, and a manager who can set the SLA that decides when
+overdue starts but not who hears about it has half a feature.
+
+Nothing moved the other way. The permission model, the dictionary's status ladder, the
+wiring, users and teams were already at the level Admin needs.
+
+### The check that asserted the opposite
+
+`verify/rls.sql` probe 4 in the manager block read **"expected days is editable, but not
+below superadmin"** and passed. That probe is now the reverse claim, and two more sit beside
+it: a manager renaming a stage must still be refused (the trigger, which only shows at
+manager — exactly as `0060`'s stage guard only shows at admin), and a manager writing a
+notification rule must go through. All three were watched failing before they were kept:
+the trigger dropped lets the rename through, the policy dropped stops the SLA, and the
+notification policy dropped stops the rule.
+
+### What the name costs
+
+The app now has **Settings** in the sidebar (`/setup`) and **User settings** in the menu
+under your own name (`/settings`), and the second label is the only thing holding them
+apart. `AppShell` used to argue the other way — *"the app has a Setup screen now, and
+'Settings' beside it was two words for two unrelated things"* — and that comment is now a
+record of a reversed decision rather than a rule.
+
+The paths did not swap. `/settings` is the personal screen and has been for weeks; swapping
+them would break every bookmark and Teams link in the company to save a word in a URL
+nobody reads. So the rename is a label and a permission, not an address.
+
+### Open, for Amber
+
+1. **Should a manager see the Bugs and Ideas triage tabs?** They are on Admin now, and a
+   manager still reads the same queue on Updates — which is the screen built for it. If
+   triage is a manager's job too, the tabs move and no policy changes (`0060` already opens
+   the read to everybody).
+2. **Roadmap and Changelog appear in two places** — the cog for admins, the footer for
+   everybody. Same component, same rows, no second implementation; but if that reads as
+   doubling up the way the notifications tab did, the Admin tabs come out and the cog links
+   to `/updates` instead.
+3. **Notification *types* went down to manager with the *rules*.** A rule is who hears a
+   thing; a type is whether that kind of notification exists at all. If creating a type
+   should stay admin's, that is a second policy, not a second screen.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

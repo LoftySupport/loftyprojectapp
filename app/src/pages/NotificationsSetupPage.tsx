@@ -23,8 +23,10 @@ import "../components/processes.css";
  * Amber: "notifications on incomplete tasks and who they go to need to be added". The
  * rules are the "who": per type, an audience — the assignee, the owning team, the engaged
  * teams, whoever watches the record, the managers, a named team or person — with an
- * escalation delay ("overdue 5 days → managers"). Admins edit; everyone can read what
- * will happen to them.
+ * escalation delay ("overdue 5 days → managers"). Managers edit, since 0096 — it was
+ * admin's until Settings became the managers' screen, and a manager who can set the SLA
+ * that decides when overdue starts but not who hears about it has half a feature. Everyone
+ * can still read what will happen to them.
  *
  * The outbox panel at the end says what has actually gone out per channel, and says
  * plainly when nothing has, so "notifications are on" is never a claim the table cannot back.
@@ -32,7 +34,7 @@ import "../components/processes.css";
 export function NotificationsSetupPage() {
   const repo = useRepository();
   const { can } = usePermission();
-  const canEdit = can("admin");
+  const canEdit = can("manager");
   const { teams } = useTeams();
   const [reload, setReload] = useState(0);
   const { data: types } = useQuery<NotificationType[]>(r => r.listNotificationTypes(), [], [reload]);
@@ -62,7 +64,7 @@ export function NotificationsSetupPage() {
       <Text type="text2" color="secondary" ellipsis={false}>
         Each <strong>type</strong> of notification has defaults everyone starts from — which channels, and whether it
         comes at once or in the morning digest — and <strong>rules</strong> for who hears it. People change their own
-        channels in Settings; the rules are yours. {canEdit ? "Admins edit." : "Admins edit; you can read what applies to you."}
+        channels in User settings; the rules are yours. {canEdit ? "Managers and above edit." : "Managers and above edit; you can read what applies to you."}
       </Text>
       {problem && <Problem>{problem}</Problem>}
 

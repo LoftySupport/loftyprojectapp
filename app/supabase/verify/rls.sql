@@ -663,6 +663,13 @@ reset request.jwt.claim.sub;
 update profiles set profile_permission = 'manager'
  where profile_email = 'behaviour-test@lofty.com.au';
 
+-- Probe 4 in the block below now SUCCEEDS where its predecessor was refused (0096), so
+-- unlike every other probe here it leaves numbers behind. Snapshot as postgres, restore
+-- after the block: a later probe reading an SLA nobody at Lofty set would be reading this
+-- file's own scribble.
+create temp table sla_before as
+  select pipeline_stage_id, pipeline_stage_expected_days from pipeline_stages;
+
 \echo '=== a MANAGER ==='
 set role authenticated;
 set request.jwt.claim.sub = :'uid';
@@ -745,25 +752,65 @@ begin
     when others then raise warning 'FAIL: unexpected adding a stage (%)', sqlerrm;
   end;
 
-  -- 4. How long a phase should take. Lofty's answer, same day: "there is no set limit for
+  -- 4. How long a phase should take. Lofty's answer, 23 August: "there is no set limit for
   --    how long a phase should take — this needs to be an editable property." Nullable
   --    with no default is the "no set limit" half, and constraints.sql holds the check
   --    that a nonsense one is refused. This is the other half: that it can be edited at
-  --    all, and by whom. Superadmin, because it is a property of the process rather than
-  --    of a job — the same line as 3.
+  --    all, and by whom.
+  --
+  --    **THIS PROBE ASSERTED THE OPPOSITE UNTIL 0096, AND THE REVERSAL IS THE POINT.**
+  --    It read "expected days is editable, but not below superadmin", per 0029's blanket
+  --    write policy and 0047's reasoning that the SLA is part of what a stage IS. Amber,
+  --    4 September, moved it: Settings is the managers' screen and its purpose is to
+  --    "allow managers and above update properties, processes, contact settings,
+  --    maintenance tabs, SLAs and automations". So the manager now gets the number, and
+  --    probe 3 above is what keeps the rest of 0047's reasoning true — the same person
+  --    still cannot rename the stage the number is about.
   begin
     update pipeline_stages set pipeline_stage_expected_days = 30;
     if found then
-      raise warning 'FAIL: a manager set how long a phase should take — that is the process, not a job';
+      raise notice 'ok  a manager sets how long a phase should take (0096)';
     else
-      raise notice 'ok  expected days is editable, but not below superadmin';
+      raise warning 'FAIL: a manager could not set expected days — Settings offers the control';
     end if;
   exception
-    when insufficient_privilege then raise notice 'ok  expected days is editable, but not below superadmin';
+    when insufficient_privilege then raise warning 'FAIL: expected days refused a manager (%)', sqlerrm;
     when others then raise warning 'FAIL: unexpected setting expected days (%)', sqlerrm;
+  end;
+
+  -- 5. The column rule, which is a TRIGGER and not a policy — so it only shows at
+  --    manager, exactly like 0060's stage guard only shows at admin. Probe 3 above
+  --    covers insert, which the policy refuses; this covers the update the policy now
+  --    ALLOWS and guard_stage_shape_change() has to stop. Drop that trigger and 3 and 4
+  --    both still pass while a manager quietly renames the company's lifecycle.
+  begin
+    update pipeline_stages set pipeline_stage_name = pipeline_stage_name || ' (renamed)';
+    raise warning 'FAIL: a manager renamed a stage — that is the process, not its SLA';
+  exception
+    when insufficient_privilege then raise notice 'ok  a manager sets the SLA on a stage but cannot rename it';
+    when others then raise warning 'FAIL: unexpected renaming a stage (%)', sqlerrm;
+  end;
+
+  -- 6. And who hears about it. The notification rules moved down with the SLAs (0096):
+  --    a manager who can say when something is overdue and not who finds out has half a
+  --    feature. `user` is refused a few hundred lines below, which is the other end of
+  --    the same rule.
+  begin
+    insert into notification_rules (notification_type_id, notification_rule_audience)
+    values ('task_overdue', 'managers');
+    raise notice 'ok  a manager sets who hears an overdue task (0096)';
+    delete from notification_rules
+     where notification_type_id = 'task_overdue' and notification_rule_audience = 'managers';
+  exception when others then raise warning 'FAIL: a manager could not write a notification rule (%)', sqlerrm;
   end;
 end $$;
 reset role;
+update pipeline_stages ps
+   set pipeline_stage_expected_days = b.pipeline_stage_expected_days
+  from sla_before b
+ where b.pipeline_stage_id = ps.pipeline_stage_id
+   and ps.pipeline_stage_expected_days is distinct from b.pipeline_stage_expected_days;
+drop table sla_before;
 
 -- =============================================================================
 -- AN ADMIN, THEN A SUPERADMIN — the one rule that needs both (0060)
@@ -1515,7 +1562,10 @@ begin
   begin
     insert into notification_rules (notification_type_id, notification_rule_audience) values ('mention', 'managers');
     raise warning 'FAIL: a user added a notification rule';
-  exception when insufficient_privilege then raise notice 'ok  notification rules refuse a write below admin';
+  -- "below manager" since 0096, not "below admin": the rules sit on Settings →
+  -- Automations, which is the managers' screen. A user is still refused, which is what
+  -- this probe is for — the floor moved one rung, it did not disappear.
+  exception when insufficient_privilege then raise notice 'ok  notification rules refuse a write below manager';
     when others then raise warning 'FAIL: unexpected on rules (%)', sqlerrm; end;
 
   begin
