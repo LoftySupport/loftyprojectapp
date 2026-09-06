@@ -234,7 +234,7 @@ function Rail({
             wordmark at 28px is unreadable rather than small. */}
         <img
           src={collapsed ? "/faivcon.png" : "/lofty_logo_orange.png"}
-          alt="Lofty"
+          alt="Lofty Hub"
           className={"app-logo" + (collapsed ? " app-logo-mark" : "")}
         />
         {/* G3 — the styled tooltip, from @vibe/tooltip (pinned to the version core

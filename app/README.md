@@ -1,4 +1,4 @@
-# Lofty Job Oversight Board — React app
+# Lofty Hub — the React app
 
 The real build. React + [Vibe](https://vibe.monday.com) + Supabase.
 

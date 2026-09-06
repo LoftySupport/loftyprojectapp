@@ -50,11 +50,9 @@ decisions are kept on purpose, because a schema choice without its reasoning get
 published at <https://claude.ai/code/artifact/188ca532-0cb0-4cf9-a6fb-d10db5bc7d0c> — show
 that one to people; edit the file.
 
-[`docs/schema/supabase-schema.md`](docs/schema/supabase-schema.md) is **superseded** and
-carries a banner saying so. It was written before the migrations and never swept forward,
-and it contradicts the plan on keys, naming, stages, teams, permissions and parties. Kept
-for its reasoning, not for its schema. **Trust the migrations and the live database over
-every document here**, this one included.
+**Trust the migrations and the live database over every document here**, this one
+included. [`docs/README.md`](docs/README.md) says which of the older documents are records
+rather than references.
 
 ## Conventions that already bind
 
