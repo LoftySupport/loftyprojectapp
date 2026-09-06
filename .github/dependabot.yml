@@ -1,0 +1,28 @@
+version: 2
+updates:
+  # The app is the only thing with dependencies. Grouped and monthly on purpose: this is a
+  # two-person build and a PR per patch bump is noise that trains people to stop reading
+  # dependency PRs, which is exactly when a real advisory goes past unread.
+  - package-ecosystem: npm
+    directory: /app
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      react:
+        patterns: ["react", "react-dom", "@types/react", "@types/react-dom", "react-router-dom"]
+      supabase:
+        patterns: ["@supabase/*"]
+      vibe:
+        patterns: ["@vibe/*"]
+      build-tooling:
+        patterns: ["vite", "@vitejs/*", "typescript", "oxlint", "tailwindcss", "postcss"]
+    commit-message:
+      prefix: "deps"
+      # The changelog is built from trailers; a dependency bump is not a Lofty-visible change.
+      include: scope
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

@@ -7,13 +7,13 @@
 > `permission_level` enum, `1201`-style numbers became `PRJ-`/sequential, divisions and
 > job types are gone, and addresses became their own table.
 >
-> **Current sources of truth:** `HANDOFF.md`, `data-dictionary.md`, `supabase-schema.md`.
+> **Current sources of truth:** `HANDOFF.md`, `docs/schema/data-dictionary.md`, `docs/schema/supabase-schema.md`.
 >
 > Kept because the reasoning about *approach* — the seam, the build order, the Vibe
 > component mapping — still holds, and because it records what was thought at the time.
 
 
-Companion to `concept-spec.md`. Written for the person building the real platform on
+Companion to `docs/schema/concept-spec.md`. Written for the person building the real platform on
 Supabase, so the prototype's decisions carry forward rather than being re-derived.
 
 Three parts:

@@ -1,4 +1,9 @@
-# Working with Amber on this repo
+# Lofty Hub — working on this repo
+
+**Lofty Hub** is Lofty's job pipeline board: React + [Vibe](https://vibe.monday.com) +
+Supabase, in `app/`. **Vercel is the only host**, and the app answers at
+**`hub.lofty.au`**. Everything else at the repository root is documentation or the
+assembly the deploy runs.
 
 ## How to present substantial work
 
@@ -21,32 +26,50 @@ What made it work, and should be repeated:
 Keep the chat reply short when an artifact carries the detail: what changed, what to look
 at first, what needs a decision.
 
-## Where the current work lives
+## The seven files at the root, and what each owns
 
-**`HANDOFF.md` is where to start** — state of play, what is next, and which kinds of change
-are cheaper before the import than after.
+Nothing else belongs at the root. If a document does not fit one of these, it goes under
+`docs/` — see [`docs/README.md`](docs/README.md) for that map.
 
-**`schema-plan.md` is the current design and the record of how it was decided.** Phase A
-(structure) is **built and applied**; Phase B (the import) has not run, so there are no
-projects or jobs yet; Phase C waits on business decisions listed at its end. It is a
-decision log rather than a specification — reversed decisions are kept on purpose, because
-a schema choice without its reasoning gets "simplified" back into a bug by the next person.
+| File | Owns |
+| --- | --- |
+| [`README.md`](README.md) | The entry point: what this is, where it runs, how to work on it |
+| **[`HANDOFF.md`](HANDOFF.md)** | **Start here.** State of play, what is next, and which kinds of change are cheaper before the import than after |
+| [`PRODUCT.md`](PRODUCT.md) | Who the app is for, what binds it, and the **interface must-haves** every screen has to meet |
+| [`DESIGN.md`](DESIGN.md) | **The single design file.** Tokens, contrast decisions, the accessibility contract, the board's colour rule |
+| [`ROADMAP.md`](ROADMAP.md) | What is planned. Partly generated — the ticks come from commit trailers |
+| [`CHANGELOG.md`](CHANGELOG.md) | **What is done.** Fully generated from `Changelog:` trailers |
+| [`CLAUDE.md`](CLAUDE.md) | This file |
 
-A readable version with diagrams is published at
-https://claude.ai/code/artifact/188ca532-0cb0-4cf9-a6fb-d10db5bc7d0c — show that one to
-people; edit `schema-plan.md`.
+**[`docs/schema/schema-plan.md`](docs/schema/schema-plan.md) is the current data design and
+the record of how it was decided.** Phase A (structure) is **built and applied**; Phase B
+(the import) has not run, so there are no projects or jobs yet; Phase C waits on business
+decisions listed at its end. It is a decision log rather than a specification — reversed
+decisions are kept on purpose, because a schema choice without its reasoning gets
+"simplified" back into a bug by the next person. A readable version with diagrams is
+published at <https://claude.ai/code/artifact/188ca532-0cb0-4cf9-a6fb-d10db5bc7d0c> — show
+that one to people; edit the file.
 
-`supabase-schema.md` is **superseded** and carries a banner saying so. It was written before
-the migrations and never swept forward, and it now contradicts the plan on keys, naming,
-stages, teams, permissions and parties. Kept for its reasoning, not for its schema. Trust
-the migrations and the live database over it.
+[`docs/schema/supabase-schema.md`](docs/schema/supabase-schema.md) is **superseded** and
+carries a banner saying so. It was written before the migrations and never swept forward,
+and it contradicts the plan on keys, naming, stages, teams, permissions and parties. Kept
+for its reasoning, not for its schema. **Trust the migrations and the live database over
+every document here**, this one included.
 
 ## Conventions that already bind
 
 - **One branch and PR per table.** Each schema change moves four files together:
-  `supabase-schema.md`, the migration, `app/src/data/types.ts`, `app/src/data/dictionary.ts`
-  — then `cd app && npm run dictionary`.
-- **Never edit `data-dictionary.md` by hand.** It is generated from `dictionary.ts`.
+  the migration in `app/supabase/migrations/`, `app/src/data/types.ts`,
+  `app/src/data/dictionary.ts` and `docs/schema/schema-plan.md` — then
+  `cd app && npm run dictionary`. `.github/pull_request_template.md` carries the checklist.
+- **Never edit a generated file by hand.** `docs/schema/data-dictionary.md` comes from
+  `app/src/data/dictionary.ts`; `CHANGELOG.md`, the ticks in `ROADMAP.md` and the
+  `<!-- generated:shipped -->` blocks in `README.md` and `HANDOFF.md` come from commit
+  trailers via `node scripts/changelog.mjs`. An edit made in one of them is lost on the
+  next commit — put it in the source, or in the commit message.
+- **Every change carries a `Changelog:` trailer.** `Added:`, `Changed:`, `Fixed:`,
+  `Removed:` — or `Changelog: skip` for something nobody outside the repo would notice.
+  Add `Roadmap: <the item's text>` when it finishes a roadmap item.
 - **No component imports the Supabase client or seed data.** Everything reads through the
   repository seam in `app/src/data/repository.ts`. If a screen needs something new, add a
   method — do not reach around it.
@@ -61,3 +84,14 @@ the migrations and the live database over it.
 - **A check nobody has watched fail is not evidence.** Every assertion in
   `app/supabase/verify/` was proved by breaking the thing it guards and seeing it report.
   `./check.sh` runs the lot: constraints bite, RLS holds, embeds resolve, seeds agree.
+
+## Before opening a PR
+
+```bash
+cd app && npm run lint && npm run typecheck && npm run build
+node scripts/check-links.mjs        # if any document moved or was added
+cd app && npm run responsive        # if a screen's layout changed
+app/supabase/verify/check.sh        # if a migration changed
+```
+
+CI runs the first two of those plus `./build.sh`, which is what Vercel runs.

@@ -1,3 +1,12 @@
+> ## Superseded as the design reference — kept as the record
+>
+> The single design file is now [`DESIGN.md`](../../DESIGN.md) at the repository root.
+> **This page describes the prototype** (`prototypes/prototype.html`, a single static HTML
+> file), evaluated in July 2026, before the React build existed. Its measurements and its
+> reasoning are why the rules in `DESIGN.md` are what they are — that is what it is kept
+> for. Where the two disagree about what the app does today, `DESIGN.md` and the code in
+> `app/src/theme/` are right and this is history.
+
 # Lofty Job Oversight Board — UX evaluation against Vibe
 
 **Standard:** [Vibe](https://vibe.monday.com), monday.com's design system

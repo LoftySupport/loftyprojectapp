@@ -7,9 +7,9 @@ import react from '@vitejs/plugin-react'
  * `??` is wrong here and it was wrong in the first draft of this file: it falls through
  * only on null and undefined, so a variable that exists with an EMPTY value wins and the
  * next one is never read. A project setting defined with no value is an ordinary state on
- * both hosts, and on a build carrying `COMMIT_REF=""` the Vercel SHA beneath it would
- * never be looked at — the footer would say "local" on a real deployment and nobody would
- * know which commit they were looking at. Caught by a build that set it empty on purpose.
+ * Vercel, and a build carrying `VERCEL_ENV=""` would take the empty string as an answer —
+ * the footer would say "local" on a real deployment and nobody would know which commit
+ * they were looking at. Caught by a build that set it empty on purpose.
  */
 const firstSet = (...values: (string | undefined)[]): string =>
   values.find(v => v != null && v.trim() !== "") ?? "";
@@ -24,40 +24,26 @@ export default defineConfig({
 
   // The build identity the footer shows.
   //
-  // Netlify sets these during the build but they are not `VITE_` prefixed, so Vite will
-  // not expose them on its own — inlining them here is the whole reason this block
-  // exists. COMMIT_REF is the commit the deploy was built from, which is the version
-  // question anyone actually asks ("is what I am looking at the fix?"). Shortened to
-  // seven characters because that is what GitHub shows.
+  // Vercel is the only host. It sets VERCEL=1, VERCEL_ENV and VERCEL_GIT_COMMIT_SHA
+  // during the build, and none of them is VITE_-prefixed, so Vite will not expose them
+  // on its own — inlining them here is the whole reason this block exists.
   //
-  // "local" rather than a fake number when building outside Netlify: a version string
-  // that looks real and is not is worse than one that admits what it is.
-  // Both hosts' spellings. Vercel is the host as of 4 September, but `netlify.toml` is
-  // still in the repository, so a Netlify build is still a thing that can happen and a
-  // build identity that only knew one host would be wrong on the other.
-  // Netlify sets COMMIT_REF and CONTEXT; Vercel sets
-  // VERCEL_GIT_COMMIT_SHA and VERCEL_ENV. Neither is VITE_-prefixed, so Vite will not
-  // expose either on its own — inlining them here is the whole reason this block exists.
+  // The commit is the version question anyone actually asks ("is what I am looking at
+  // the fix?"), shortened to seven characters because that is what GitHub shows. A build
+  // that cannot say which commit it is has lost the only question that footer exists for.
   //
-  // Reading only Netlify's names on a Vercel build is not a cosmetic miss: the footer
-  // would say "vlocal" on a real deployment, and the version string is there to answer
-  // "is what I am looking at the fix?". A build that cannot say which commit it is has
-  // lost the only question that footer exists for.
+  // "local" rather than a fake number when building outside Vercel: a version string that
+  // looks real and is not is worse than one that admits what it is.
   //
-  // WHICH host, as well as which context, because "production" is what both of them call
-  // it and the two are not interchangeable to anything downstream. Speed Insights reports
-  // to an endpoint Vercel serves and Netlify does not, so a build that cannot say where it
-  // is running would either miss its own metrics or ask Netlify for a script that 404s.
-  // Each host is read by two signals: the flag it sets (VERCEL=1, NETLIFY=true) and the
-  // git variable already read above, so losing one of them does not make the build
-  // anonymous.
+  // __BUILD_HOST__ survives the move to a single host because it is not really about
+  // which host — it is about whether the Vercel runtime is there. `npm run dev` and
+  // `npm run preview` serve no /_vercel/speed-insights/script.js either, and a component
+  // that asks for it there puts a 404 in the console and collects nothing for it.
   define: {
-    __BUILD_REF__: JSON.stringify(firstSet(process.env.COMMIT_REF, process.env.VERCEL_GIT_COMMIT_SHA).slice(0, 7) || "local"),
-    __BUILD_CONTEXT__: JSON.stringify(firstSet(process.env.CONTEXT, process.env.VERCEL_ENV) || "local"),
+    __BUILD_REF__: JSON.stringify(firstSet(process.env.VERCEL_GIT_COMMIT_SHA).slice(0, 7) || "local"),
+    __BUILD_CONTEXT__: JSON.stringify(firstSet(process.env.VERCEL_ENV) || "local"),
     __BUILD_HOST__: JSON.stringify(
-      firstSet(process.env.VERCEL, process.env.VERCEL_ENV) ? "vercel"
-        : firstSet(process.env.NETLIFY, process.env.CONTEXT) ? "netlify"
-        : "local"
+      firstSet(process.env.VERCEL, process.env.VERCEL_ENV) ? "vercel" : "local"
     )
   }
 })

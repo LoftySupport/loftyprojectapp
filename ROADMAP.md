@@ -55,8 +55,8 @@ The spine review comes first: the changes that get expensive once real records e
 
 ## Phase C — the property model
 
-Decided in full and not built. `NEXT-SESSION.md` carries the decisions and the four open
-questions; the migrations are the next job after the import.
+Decided in full and not built. `docs/history/next-session-2026-08-28.md` carries the
+decisions and the four open questions; the migrations are the next job after the import.
 
 - [ ] Record types, and the properties catalogue
 - [x] `property_values`, with one nullable parent column per record type

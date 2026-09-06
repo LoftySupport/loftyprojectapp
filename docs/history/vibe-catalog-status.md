@@ -1,3 +1,11 @@
+> ## Superseded as the design reference — kept as the record
+>
+> The single design file is now [`DESIGN.md`](../../DESIGN.md) at the repository root.
+> **This audit is against the prototype**, which does not import `@vibe/core` — every
+> component in it was built to Vibe's documented geometry rather than being a Vibe React
+> component. The React app in `app/` uses the real components, so the counts below do not
+> describe it. Kept for the foundation-by-foundation reasoning.
+
 # Vibe catalog — implementation status
 
 Audited against the [Vibe catalog](https://vibe.monday.com/?path=/docs/catalog--docs):

@@ -11,53 +11,43 @@
  * build — which is its own small trap, and the reason the sign-in page says so out loud.
  */
 
-// Two spellings of the same two values, because Netlify's Supabase extension picks the
-// names, not this app.
+// Two names, and only these two.
 //
-// Connecting a Netlify site to Supabase with the Vite framework selected provisions
-// `VITE_SUPABASE_DATABASE_URL` and `VITE_SUPABASE_ANON_KEY` — the right values under
-// different names. Reading only this app's own two names meant a connected site built a
-// bundle with no client in it, and the sign-in page said "Not configured" while the
-// Netlify screen listed the variables sitting right there. A prefix mismatch cost this
-// app its data once already; a name mismatch is the same bug wearing a hat.
+// This app once read a second spelling of each — `VITE_SUPABASE_DATABASE_URL` and
+// `VITE_SUPABASE_ANON_KEY`, the names a host integration provisioned when it was told the
+// framework was something other than Vite. That fallback was removed on 6 September, after
+// checking the LIVE production bundle rather than assuming: both fell through to `void 0`,
+// so neither name was set on the deployment and the branch was dead code.
 //
-// So read both, and let the extension keep owning the values. The alternative — a
-// hand-typed `VITE_SUPABASE_URL` beside the extension's copy — is two places to update
-// and one of them silently stale after the next key rotation.
+// If a future integration provisions names of its own, the fix is to tell it the framework
+// is **Vite** so it writes the two below, not to add a third spelling here. The prefix is
+// the framework's and not Supabase's: Vite exposes only `VITE_`-prefixed variables, and a
+// `NEXT_PUBLIC_*` variable is absent from the bundle entirely — the build goes green, the
+// site serves, and sign-in reports "Not configured" while the dashboard shows the values
+// sitting right there. A prefix mismatch cost this app its data once already.
 //
-// The extension makes public copies of exactly the two values that are safe to publish.
-// It does not prefix `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_JWT_SECRET`, and nothing
-// here reads them: anything named VITE_* is inlined into the JavaScript that ships to
-// the browser, and the service role key bypasses RLS entirely.
-const firstSet = (...candidates: (string | undefined)[]): string | undefined =>
-  candidates.map(c => c?.trim()).find(c => c) || undefined;
+// Nothing here reads `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_JWT_SECRET`, and nothing
+// ever should: anything named `VITE_*` is inlined into the JavaScript that ships to the
+// browser, and the service role key bypasses RLS entirely.
+const clean = (value: string | undefined): string | undefined => value?.trim() || undefined;
 
-const rawUrl = firstSet(
-  import.meta.env.VITE_SUPABASE_URL as string | undefined,
-  import.meta.env.VITE_SUPABASE_DATABASE_URL as string | undefined
-);
-// The publishable key (`sb_publishable_…`) first, the legacy JWT anon key second. Both
-// work and both are safe in a client bundle — they are public by design and RLS is what
-// protects the data — but the publishable one rotates independently of the JWT secret,
-// which the legacy key does not, so a compromise there does not force a re-issue of
-// every token. Preferring it means a site that later adds the better key starts using it
-// without anyone having to remember to delete the extension's.
-const publishableKey = firstSet(
-  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined,
-  import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
-);
+const rawUrl = clean(import.meta.env.VITE_SUPABASE_URL as string | undefined);
 
-// The extension's variable is named "database URL" and holds the project API URL
-// (`https://<ref>.supabase.co`). The guard is for the day that stops being true: a
-// `postgres://` connection string handed to `createClient` would fail every request at
-// runtime with something unreadable, and refusing it here says "not configured" instead,
-// which is at least the truth.
+// The publishable key (`sb_publishable_…`). It is safe in a client bundle — public by
+// design, and RLS is what protects the data — and it rotates independently of the JWT
+// secret, so a compromise here does not force a re-issue of every token.
+const publishableKey = clean(import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined);
+
+// The guard is for a value that is set but is not a project API URL: a `postgres://`
+// connection string handed to `createClient` would fail every request at runtime with
+// something unreadable, and refusing it here says "not configured" instead, which is at
+// least the truth.
 const url = rawUrl && /^https:\/\//i.test(rawUrl) ? rawUrl.replace(/\/+$/, "") : undefined;
 
 /** The project API URL this build is pointed at, for the screens that must link to it. */
 export const supabaseUrl: string | null = url ?? null;
 
-/** The public key the client authenticates with. Publishable if there is one, else anon. */
+/** The publishable key the client authenticates with. */
 export const supabaseKey: string | null = publishableKey ?? null;
 
 /**

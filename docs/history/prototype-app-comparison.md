@@ -44,7 +44,7 @@ prototype feature verbatim would reintroduce decisions that were deliberately re
 Every gap below is stated in current vocabulary; where the prototype's version used old
 vocabulary, the entry says what translates and what doesn't.
 
-The translation table (current model per `schema-plan.md` and migration `0035`):
+The translation table (current model per `docs/schema/schema-plan.md` and migration `0035`):
 
 | The prototype has | The current model has | What it means for porting |
 |---|---|---|
@@ -193,7 +193,7 @@ change to make now, per `HANDOFF.md`):
 - `STAGE_NAMES` / the stage CHECKs (`types.ts:857-864`, `0035`, `0039`) hold five values
   ending in Closed; this revision implies **Completed, Closed, and Cancelled** as distinct
   positions with a 12-month automation between them.
-- It **revises `schema-plan.md`'s recorded decision** that "cancellation is not a phase —
+- It **revises `docs/schema/schema-plan.md`'s recorded decision** that "cancellation is not a phase —
   it's a status"; the schema plan should log the reversal with this reasoning, not silently
   flip.
 - The new forwards-only guards (`0039`'s `jobs_guard_linear_stage` /
@@ -208,7 +208,7 @@ change to make now, per `HANDOFF.md`):
 > guards, the `lifecycle_archive()` 12-month clock (pg_cron where present), cancelled
 > jobs excluded from the project roll-up, the Cancel…/Revive to… controls in the stage
 > picker, saved views hiding Closed by default, and the reversal logged in
-> `schema-plan.md`. Also landed with it: assignee bound everywhere (the column existed
+> `docs/schema/schema-plan.md`. Also landed with it: assignee bound everywhere (the column existed
 > since 0028 — cards, table, drawer and Team-member grouping now show real names), the
 > Team filter matching membership per Amber's rule, modal padding fixed at its cause
 > (`ModalBasicLayout` + body-level brand tokens for everything Vibe portals out of the
@@ -283,7 +283,7 @@ bell (`NotificationsBell.tsx`) opens a panel naming the seven signals and what e
 on — no badge, because there is no real count to show. The notification model (table,
 triggers, read state) remains the C-class work.
 
-![Notifications panel](docs/comparison-screenshots/notifications-panel.png)
+![Notifications panel](../comparison-screenshots/notifications-panel.png)
 
 **Prototype.** A bell in the header with a red pill counter; clicking opens a 400px panel
 anchored under the header with type-filter chips ("All 12 · Overdue 3 · Mentions 2 …") and
@@ -442,7 +442,7 @@ not hue, separates neighbours, so the ramp still holds under colour-vision defic
 every ink/tint pair re-verified ≥ 8.7:1. What the single family gives up: Cancelled no
 longer shouts in red — flagged to Amber as a one-line change in `accents.ts` if it should.
 
-![Board by stage](docs/comparison-screenshots/board-by-stage.png)
+![Board by stage](../comparison-screenshots/board-by-stage.png)
 
 **Prototype.** The settled colour rule: **colour on containers encodes phase; colour on
 records encodes health; never both on one element** (`prototype-handover.md:727-741`). Each
@@ -482,7 +482,7 @@ Closed / Cancelled), so cut the ramp against the final phase list, not today's f
 
 #### G6 · Job card content — **C (mixed)**
 
-![Job card close-up](docs/comparison-screenshots/job-card-closeup.png)
+![Job card close-up](../comparison-screenshots/job-card-closeup.png)
 
 **Prototype card, top to bottom** (`index.html:6964-6987`, `.card` CSS `:1756-1774`):
 job no + status pill · parent project name · address · divider · Stage/Type lines (the
@@ -587,8 +587,8 @@ URL (`?group=Team&stage=Pre-construction`), linkable and Back-able like everythi
 else. Fixing it surfaced a real bug: two `useBoardParams` writes in one handler were
 two navigations and the second erased the first — `setMany` now composes them.
 
-![Column drill-down](docs/comparison-screenshots/drilldown-column.png)
-![Scheduling drill-down](docs/comparison-screenshots/drilldown-scheduling.png)
+![Column drill-down](../comparison-screenshots/drilldown-column.png)
+![Scheduling drill-down](../comparison-screenshots/drilldown-scheduling.png)
 
 **Prototype.** Every column head carries a chevron ("See everything in Planning &
 Engineering") that replaces the page with a drill-down: breadcrumb back to the board, five
@@ -703,7 +703,7 @@ sorting compose; stage sorts by pipeline position, not the alphabet; no default 
 the natural pipeline order stays until a header is clicked. Extra columns still land with
 their data (tags/dependency C, Source at Phase B).
 
-![Table view](docs/comparison-screenshots/table-view.png)
+![Table view](../comparison-screenshots/table-view.png)
 
 **Prototype.** 12 columns: Job no · Project · Address · Phase · Build stage · Team ·
 Assignee · Type · Status · Days · Tags · Source; fixed sort stage-then-days
@@ -737,7 +737,7 @@ orange today line — and each bar is the job's stay in its CURRENT stage: solid
 it. The prototype's fabricated duration model was not ported, exactly as this entry
 said; dependency connectors still wait on G6's task wiring.
 
-![Gantt view](docs/comparison-screenshots/gantt-view.png)
+![Gantt view](../comparison-screenshots/gantt-view.png)
 
 **Prototype.** A full day-grid Gantt (`renderGantt`, `index.html:9709-9835`): sticky
 week/day header with weekend shading, seven sticky left columns (job/address, assignee,
@@ -778,7 +778,7 @@ empty state survived the port. Entries are the two real dates a job has: the day
 entered its stage, and the SLA due day where one is set. Dated step-properties join
 these when they land.
 
-![Calendar view](docs/comparison-screenshots/calendar-view.png)
+![Calendar view](../comparison-screenshots/calendar-view.png)
 
 **Prototype.** A month grid (`renderCalendar` + shell, `index.html:9517-9634`, CSS
 `:4026-4165`): Monday-start weeks, weekend/outside-month shading, a ringed today cell with
@@ -819,8 +819,8 @@ same day: the **docked head stacks** — four controls beside a full street addr
 left the title reading "Lot 1, 28…", so docked, the actions now sit on their own line
 under the full address; expanded keeps the single row.
 
-![Docked drawer](docs/comparison-screenshots/drawer-docked.png)
-![Fullscreen — Main info](docs/comparison-screenshots/drawer-fullscreen-main.png)
+![Docked drawer](../comparison-screenshots/drawer-docked.png)
+![Fullscreen — Main info](../comparison-screenshots/drawer-fullscreen-main.png)
 
 **Prototype.** The drawer has two modes. **Docked** (420px right panel): a single scrolled
 column — main info, then the activity feed, then "All properties" behind a `<details>`
@@ -895,7 +895,7 @@ Acquisition & Development on creation) — schema first, then an `updateJob` fol
 
 #### G17 · All-properties view — **C**
 
-![Fullscreen — All properties](docs/comparison-screenshots/drawer-fullscreen-properties.png)
+![Fullscreen — All properties](../comparison-screenshots/drawer-fullscreen-properties.png)
 
 **Prototype.** Every field on the job in one grouped view — Identity / Ownership /
 Commercial / Status & flags / Notes — with locked rows for system fields (job number
@@ -932,7 +932,7 @@ token: `property_values` has no table and no repository method
 
 #### G18 · Unified activity & comments feed with @mentions — **C**
 
-![Fullscreen — Activity & comments](docs/comparison-screenshots/drawer-fullscreen-activity.png)
+![Fullscreen — Activity & comments](../comparison-screenshots/drawer-fullscreen-activity.png)
 
 **Prototype.** Activity entries and comments merged into **one feed**, newest first, ties
 broken by insertion order — "one event, one row"; posting a comment does not also write a
@@ -983,7 +983,7 @@ comment edit/delete UI. The merge rule and mention-chip spec above remain the ta
 other jobs by number or address (top five), and picking one jumps the drawer to it
 without closing — board state rides along in the URL. Resets when the record changes.
 
-![Drawer search results](docs/comparison-screenshots/drawer-search-results.png)
+![Drawer search results](../comparison-screenshots/drawer-search-results.png)
 
 **Prototype.** A search box in the drawer head ("Search jobs — number, address, team,
 tag…") drops results into an anchored panel — up to 12 rows of job no + address + stage ·
@@ -1048,7 +1048,7 @@ App today: app/src/components/JobDrawer.tsx:22-24 (focus bug note), :60-70 (brea
 
 #### G21 · Departments / handoff view — **D**
 
-![Fullscreen — Departments](docs/comparison-screenshots/drawer-fullscreen-departments.png)
+![Fullscreen — Departments](../comparison-screenshots/drawer-fullscreen-departments.png)
 
 **Prototype.** "Where every team stands on this job, in the order it passes through them":
 one block per team per phase, stated as **Current owner / Handed on / Not started**
@@ -1077,7 +1077,7 @@ App today: absent
 
 #### G22 · Scheduling checklists — **D**
 
-![Drawer with checklists](docs/comparison-screenshots/drawer-scheduling-checklists.png)
+![Drawer with checklists](../comparison-screenshots/drawer-scheduling-checklists.png)
 
 **Prototype.** For jobs in its scheduling phase: a **Selections tracker** (9 steps, each a
 tick + a date input, coupled both ways — ticking dates it today, dating it ticks it,
@@ -1118,7 +1118,7 @@ App today: app/src/components/JobDrawer.tsx (empty milestones panel);
 "Ask about this job" callout in the drawer head opening it pre-scoped. Nothing answers —
 the dock says so — and the fact-assembly wiring stays the D→build step.
 
-![AI dock](docs/comparison-screenshots/ai-dock.png)
+![AI dock](../comparison-screenshots/ai-dock.png)
 
 **Prototype.** One AI surface: a floating dock (FAB bottom-right rotating into an ×; a
 380px window with a scope line — the open job, else "All jobs in view"), suggestion chips,
@@ -1228,7 +1228,7 @@ jobs-total — the one per-job fact the card already holds ("1 of 3 jobs complet
 with the prototype's task-based progress joining when tasks are wired. Per-job lot
 lines landed earlier (PR #39).
 
-![Project cards](docs/comparison-screenshots/projects-cards.png)
+![Project cards](../comparison-screenshots/projects-cards.png)
 
 **Prototype.** A project card carries: name + worst-of-jobs health pill · a meta row ·
 a progress bar (average stage-index of its jobs, `projectProgress`,
@@ -1272,7 +1272,7 @@ no status pill at all (`RecordCards.tsx:33`).
 
 #### G27 · Project table columns — **C**
 
-![Project table](docs/comparison-screenshots/projects-table.png)
+![Project table](../comparison-screenshots/projects-table.png)
 
 **Prototype.** Project · Name+suburb · Division · Type · Manager · Jobs (with a red "⚠ N"
 when any job isn't on track) · Progress (inline bar + %) · Health · Start · Target
@@ -1304,7 +1304,7 @@ target completion, month ticks, today line, rust when past target and not comple
 and projects missing either date are listed underneath with where to set them, not
 estimated. The calendar half can reuse `MonthCalendar` when project dates deserve one.
 
-![Project gantt](docs/comparison-screenshots/projects-gantt.png)
+![Project gantt](../comparison-screenshots/projects-gantt.png)
 
 **Prototype.** The project Gantt is a different, simpler model than the job Gantt: month
 timeline, one row per project, bar = the explicit start→target window (pill-shaped, health-
@@ -1338,7 +1338,7 @@ cheaper, earlier win than the job gantt.
 
 #### G29 · Project detail editing — **C**
 
-![Project detail](docs/comparison-screenshots/project-detail.png)
+![Project detail](../comparison-screenshots/project-detail.png)
 
 **Prototype.** The detail page's property rows are editable in place for roles with
 `editProject` — name, type, manager, client, suburb, council, start, target — each write
@@ -1352,7 +1352,7 @@ appending a project activity entry; system fields (id, number) locked with hints
 activity, then in-place editing per the `UserRow` idiom. Field list per the current
 schema (no division/manager/client unless those survive as columns/properties — check the
 dictionary, not the prototype). Address edits are **not** a text field — addresses are
-their own table with history (`schema-plan.md`); an address change goes through an
+their own table with history (`docs/schema/schema-plan.md`); an address change goes through an
 address-specific flow. This is spine-adjacent: HANDOFF's spine review explicitly includes
 "rename an address, open the job drawer, note anything that makes you say 'that is not how
 we work'" (`HANDOFF.md:1008-1020`) — worth sequencing right after that review.
@@ -1382,7 +1382,7 @@ gains editable assignee team + user.
 beside Create jobs on the project page and answers with what is coming — the flow
 itself rides the variations design (Q8), per Amber's placeholder rule.
 
-![Push modal](docs/comparison-screenshots/push-modal.png)
+![Push modal](../comparison-screenshots/push-modal.png)
 
 **Prototype.** From a project: push a property value or a comment down to selected jobs,
 with the honest preview that made it good (`renderPushModal`/`applyPush`,
@@ -1418,7 +1418,7 @@ diff-preview interaction spec above stands.
 
 #### G31 · Job creation from template with preview — **D**
 
-![New job modal](docs/comparison-screenshots/new-job-modal.png)
+![New job modal](../comparison-screenshots/new-job-modal.png)
 
 **Prototype.** New job goes through the template: pick parent project (or create one
 inline), address, type, assignee — and a live "What this creates" preview: derived job
@@ -1491,7 +1491,7 @@ the Assigned count are live. Need-you/Overdue show em dashes (nothing computes h
 yet), the hero says what it waits for, and the three right-rail panels say what will fill
 them. It also stopped counting every job in the company as yours (`jobs.length`).
 
-![Personal dashboard (as Priya Nair, team member)](docs/comparison-screenshots/dashboard-personal.png)
+![Personal dashboard (as Priya Nair, team member)](../comparison-screenshots/dashboard-personal.png)
 
 **Prototype.** The landing page, deliberately filter-free ("what should I do today"):
 greeting row with teammate avatar stack · "N jobs assigned to you" pill · a hero "67% of
@@ -1539,7 +1539,7 @@ Cancelled records are excluded from every alert here (lifecycle revision).
 counts join once task dependencies and the conflict flag are wired — a tile showing 0
 would claim they were checked.
 
-![Portfolio overview](docs/comparison-screenshots/reports-portfolio.png)
+![Portfolio overview](../comparison-screenshots/reports-portfolio.png)
 
 **Prototype.** Seven KPI tiles: the app's five plus **Blocked by dependency** and
 **Ownership conflicts** (`renderDashboard`, `index.html:9324-9406`).
@@ -1586,7 +1586,7 @@ App today: app/src/pages/ReportsPage.tsx (BarPanel)
 "Overruns &amp; bottlenecks — coming soon" panel saying exactly what it waits for: SLAs
 set, and history accumulating against them. Nothing draws until it is measured.
 
-![Leadership summary](docs/comparison-screenshots/reports-leadership.png)
+![Leadership summary](../comparison-screenshots/reports-leadership.png)
 
 **Prototype.** The leadership tab's whole value is overrun analytics: "Past expected time
 in stage" tile · "Biggest bottleneck" (named stage) · "Where jobs are jamming up" — bars
@@ -1625,7 +1625,7 @@ renders honestly where none are set. Cancelled records are excluded from overrun
 chrome, toolbar, tabs and the dock drop out; a print-only line states the date and how
 many jobs the filters left in; rows avoid page breaks.
 
-![Job report](docs/comparison-screenshots/reports-job-report.png)
+![Job report](../comparison-screenshots/reports-job-report.png)
 
 **Prototype.** The Job report tab is built to print: a report header stating generated
 date, N of M shown, and **the filter sentence** (so a printed page says exactly which
@@ -1685,7 +1685,7 @@ route and as `useBoardParams`' default; a link naming its own view still wins. T
 owns up to device-local storage. The C-half — profile-roaming defaults, session view
 state, user-saved views (Amber's Q9 layers) — still needs its preferences home.
 
-![Settings](docs/comparison-screenshots/settings.png)
+![Settings](../comparison-screenshots/settings.png)
 
 **Prototype.** Landing page, default jobs view, default projects view, density — stored
 per user (though the prototype itself never read them back, `index.html:7605-7727`).
@@ -1759,7 +1759,7 @@ arrive.
 
 #### G41 · Template / milestone editing — **D**
 
-![Templates](docs/comparison-screenshots/templates.png)
+![Templates](../comparison-screenshots/templates.png)
 
 **Prototype.** Per-type templates (Residential/Commercial/Development toggles; Development
 skips a phase, and the page says so), a required-fields block, and **in-place milestone
@@ -1786,7 +1786,7 @@ App today: app/src/pages/TemplatesPage.tsx (read-only, honest empties)
 
 #### G42 · Property-definition editing — **C**
 
-![Admin properties (prototype)](docs/comparison-screenshots/admin-properties.png)
+![Admin properties (prototype)](../comparison-screenshots/admin-properties.png)
 
 **Prototype.** Property definitions as editable rows grouped by capture stage: label, key,
 level (project/job/stage), format (9 formats), required, automation (7 automations),
@@ -1875,7 +1875,7 @@ an **ordered subset** — app-created teams are allowed; a missing or reordered 
 slug still fails (watched failing both ways). Insert shape proved against the live
 schema in a rolled-back transaction.
 
-![Admin users (prototype)](docs/comparison-screenshots/admin-users.png)
+![Admin users (prototype)](../comparison-screenshots/admin-users.png)
 
 **Prototype.** Teams tab: members, phases owned, jobs held, not-on-track count, and
 **remove with a guard** — a team still holding jobs refuses deletion with "reassign them
@@ -1903,7 +1903,7 @@ App today: app/src/pages/AdminPage.tsx:241-303 (read-only Teams tab); membership
 
 #### G45 · Permissions matrix, real — **C**
 
-![Admin permissions (prototype)](docs/comparison-screenshots/admin-permissions.png)
+![Admin permissions (prototype)](../comparison-screenshots/admin-permissions.png)
 
 **Prototype.** Per-role grant grids (objects × actions, every cell a scope select) with a
 **scope heat-scale** — cells colour from grey (`none`) through teals to amber and **red
@@ -1937,7 +1937,7 @@ month", labels saying the semantics out loud — riding the same filters array a
 chips, so it lands in the URL (`?date=7d`) and the Showing count. Latest-activity and
 dated-property ranges can widen it later; the inert select is gone.
 
-![Date range popover](docs/comparison-screenshots/daterange-popover.png)
+![Date range popover](../comparison-screenshots/daterange-popover.png)
 
 **Prototype.** A working date filter: trigger showing "Any date" / "Jul 1 – Jul 17" /
 "From…" / "Until…", a popover with four presets (Last 7/30 days, This month, Next 30
@@ -2145,7 +2145,7 @@ details still owed):
 - The **lifecycle revision details** (§1.6): exact position list (Completed / Closed /
   Cancelled alongside today's five), the 12-month Completed→Closed automation, the
   cancelled-revival carve-out in the forwards-only guards — and logging the reversal in
-  `schema-plan.md` (it currently records "cancellation is a status, not a phase").
+  `docs/schema/schema-plan.md` (it currently records "cancellation is a status, not a phase").
 - Whether the existing **Team filter** should read owning team, assignee team, or offer
   both once Q2's columns land (G47).
 - `HANDOFF.md` needs its PR #37 session note — it currently describes the app as it was

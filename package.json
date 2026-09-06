@@ -1,0 +1,17 @@
+{
+  "name": "lofty-hub",
+  "private": true,
+  "description": "Lofty Hub — the deploy root. The application itself is in app/.",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "build": "./build.sh",
+    "dev": "npm --prefix app run dev",
+    "lint": "npm --prefix app run lint",
+    "typecheck": "npm --prefix app run typecheck",
+    "dictionary": "npm --prefix app run dictionary",
+    "changelog": "node scripts/changelog.mjs",
+    "hooks": "./scripts/install-hooks.sh"
+  }
+}
