@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A second push to the same branch cancels the run still going for the first one. A PR
+# that gets three pushes in five minutes should cost one green tick, not three queues.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: lint · typecheck · build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      # `npm ci` and not `npm install`: it installs the lockfile as written and fails when
+      # package.json and the lockfile disagree, which is the disagreement worth catching.
+      - run: npm ci
+        working-directory: app
+
+      - run: npm run lint
+        working-directory: app
+
+      - run: npm run typecheck
+        working-directory: app
+
+      - run: npm run build
+        working-directory: app
+
+      # data-dictionary.md is generated from src/data/dictionary.ts. Regenerating it and
+      # finding a diff means somebody edited the generated file, or changed the array and
+      # did not regenerate — the two failures the "never edit it by hand" rule exists for.
+      - name: the data dictionary matches dictionary.ts
+        run: |
+          npm run dictionary --prefix app
+          git diff --exit-code -- docs/schema/data-dictionary.md
+
+  docs:
+    name: documentation links resolve
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: node scripts/check-links.mjs
+
+  deploy:
+    name: the deploy assembles
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      # What Vercel runs, run here. A build that only ever succeeds on Vercel is a build
+      # nobody can debug: this proves build.sh still finds prototypes/ and app/dist.
+      - run: ./build.sh
+
+      - name: every file the deploy promises is in dist/
+        run: |
+          for f in index.html binding-template.html prototype.html \
+                   lofty_logo_orange.png faivcon.png; do
+            test -f "dist/$f" || { echo "missing from dist/: $f"; exit 1; }
+          done
+          echo "dist/ carries all five."

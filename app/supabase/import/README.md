@@ -37,7 +37,7 @@ addresses, projects and jobs — with the original beside anything it normalised
 
 It does **not** load anything. `import_spine()` does, and takes the decisions the sheet
 cannot make as parameters with no defaults. Amber made them on 2–3 September (`0088`,
-and `schema-plan.md` → *3 September — the decisions*); the live call is:
+and `docs/schema/schema-plan.md` → *3 September — the decisions*); the live call is:
 
 ```sql
 select * from import_spine(

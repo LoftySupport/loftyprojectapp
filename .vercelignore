@@ -1,0 +1,7 @@
+# Not part of the build. build.sh reads app/ and prototypes/ only, so everything here is
+# upload weight and nothing else — docs/comparison-screenshots alone is ~30 PNGs.
+docs/
+.github/
+.githooks/
+.claude/
+.agents/

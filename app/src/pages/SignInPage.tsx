@@ -45,7 +45,7 @@ export function SignInPage() {
 
              It names which half is missing, and both accepted spellings, because the
              first version of this message sent somebody to add two variables that were
-             already set — Netlify's Supabase extension had written the same values under
+             already set — a Supabase host integration had written the same values under
              names of its own. "This build has no VITE_SUPABASE_URL" is a true sentence
              that pointed at the wrong fix, and the missing sentence was the one about
              build time. */
@@ -65,7 +65,7 @@ export function SignInPage() {
               Either spelling is read:{" "}
               <code className="sb-token">VITE_SUPABASE_URL</code> and{" "}
               <code className="sb-token">VITE_SUPABASE_PUBLISHABLE_KEY</code>, or the
-              Netlify Supabase extension's{" "}
+              host integration's{" "}
               <code className="sb-token">VITE_SUPABASE_DATABASE_URL</code> and{" "}
               <code className="sb-token">VITE_SUPABASE_ANON_KEY</code>. They are read when
               the site is built, so a deploy that went out before they were set still

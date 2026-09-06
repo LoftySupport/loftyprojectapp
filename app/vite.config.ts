@@ -32,9 +32,10 @@ export default defineConfig({
   //
   // "local" rather than a fake number when building outside Netlify: a version string
   // that looks real and is not is worse than one that admits what it is.
-  // Both hosts' spellings. Vercel is the host as of 4 September, but `netlify.toml` is
-  // still in the repository, so a Netlify build is still a thing that can happen and a
-  // build identity that only knew one host would be wrong on the other.
+  // Both hosts' spellings. **Vercel is the only host** — `netlify.toml` was removed on
+  // 6 September and no Netlify site serves this any more. Netlify's names are still read
+  // because a build identity that guesses is worse than one that reads two spellings: the
+  // cost is three `||` and the failure it prevents is a footer that cannot name its commit.
   // Netlify sets COMMIT_REF and CONTEXT; Vercel sets
   // VERCEL_GIT_COMMIT_SHA and VERCEL_ENV. Neither is VITE_-prefixed, so Vite will not
   // expose either on its own — inlining them here is the whole reason this block exists.
