@@ -240,10 +240,10 @@ const RECORD_ROUTES = new Map([
 /**
  * Speed Insights, and only where its endpoint exists.
  *
- * Vercel is the host (Amber, 4 September: "it is using vercel now"), and it serves
- * `/_vercel/speed-insights/script.js`; nothing else does. The gate stays now that Vercel
- * is the only host, because `npm run dev` and `npm run preview` have no such endpoint
- * either, and mounting this there would put a 404 in the console and collect nothing.
+ * Vercel is the host, and it serves `/_vercel/speed-insights/script.js`. The gate is not
+ * about which host — it is about whether that endpoint exists: `npm run dev` and
+ * `npm run preview` do not serve it, and mounting this there would put a 404 in the
+ * console and collect nothing for it.
  *
  * The full URL reaches Vercel either way — it is the host, and its access log already
  * has every path — so `route` is about the dashboard being readable, not about holding

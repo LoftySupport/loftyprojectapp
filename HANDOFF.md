@@ -760,7 +760,7 @@ smaller problem behind; **neither can be fixed from inside this repository**:
 
 | | What is wrong | Who fixes it, and where |
 | --- | --- | --- |
-| **The Netlify build source** | **Resolved and deployed 2 September** — `loftyprojectapp.netlify.app` is a *new* Netlify site (new site id, new team) building from `LoftySupport/loftyprojectapp` on `main`; first deploy `0d84e59`. The sign-in page said *Not configured* on it, which read like missing environment variables and was not: the site is connected to Supabase and the extension sets `VITE_SUPABASE_DATABASE_URL` and `VITE_SUPABASE_ANON_KEY`, names the app did not read | **Closed** — `app/src/data/supabaseEnv.ts` reads either spelling, nothing was added in Netlify, and the deploy after merging put a configured bundle on the production URL. Reasoning in *Session of 2026-09-02, later* |
+| **The build source** | **Superseded 6 September.** This row tracked a Netlify site that has since been disconnected; the history is in [`docs/history/handoff-2026-08.md`](docs/history/handoff-2026-08.md) and *Session of 2026-09-02, later*. What survives it is the lesson: the sign-in page said *Not configured* on a fully populated environment, because the integration wrote the values under names the app did not read | **Closed** — Vercel is the only host, `hub.lofty.au` is the domain, and `app/src/data/supabaseEnv.ts` reads exactly `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`. The fix for a name mismatch is to tell the integration the framework is Vite, never a third spelling in the app |
 | **Repository visibility** | This repository is **private**; the old one is public. The Updates changelog reads merged pull requests from the browser with no token — see `app/src/data/github.ts` for why a token cannot go there — and GitHub answers an unauthenticated read of a private repository with 404 | A decision, not a fix. Make `LoftySupport/loftyprojectapp` public and the feed works exactly as before. Keep it private and the feed has to be generated at build time instead, which is a different piece of work and has not been done |
 
 That deploy has gone out and the site signs in. Until the second is decided, Updates → *Merged from the build* renders its error state saying the
@@ -789,7 +789,7 @@ The link was proved against the live database rather than reasoned about: insert
 stayed at 45. Run inside a transaction and rolled back.
 
 The client is wired too: `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` are set
-on the Netlify project for every deploy context, so `supabaseRepository.ts` builds a real
+on the Vercel project for every environment, so `supabaseRepository.ts` builds a real
 client instead of returning null. Locally they come from `app/.env.local`.
 
 **Auth has landed, and the data path is open.** Reads are gated on `is_active_user()`,
@@ -798,38 +798,45 @@ reads none. Where a table is not wired yet the repository still falls back to se
 deliberately: a half-built database should degrade to the structure, not to a blank
 screen.
 
-### The Netlify environment, and what is deliberately not in it
+### The build environment, and what is deliberately not in it
 
-The Supabase Netlify extension provisions four variables of its own —
+**The prefix is the framework's, not Supabase's, and it has cost this app its data
+twice.** Vite exposes only variables prefixed `VITE_`. A Supabase integration provisions
 `SUPABASE_DATABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_JWT_SECRET` and
-`SUPABASE_SERVICE_ROLE_KEY`. None of them reach the browser, because **Vite only exposes
-variables prefixed `VITE_`**. That is the whole reason the app sat on mock data with a
-fully populated environment: it was a prefix mismatch, not a missing value.
+`SUPABASE_SERVICE_ROLE_KEY` — none of which reach the browser. That is the whole reason
+the app once sat on mock data with a fully populated environment: a prefix mismatch, not
+a missing value.
 
-**And then it happened again, one layer up.** Told the site is a Vite site, the extension
-also writes `VITE_SUPABASE_DATABASE_URL` and `VITE_SUPABASE_ANON_KEY` — correctly
-prefixed, correctly public, and named nothing like the `VITE_SUPABASE_URL` and
-`VITE_SUPABASE_PUBLISHABLE_KEY` the app read. Same outage, same screen, different half of
-the variable name. `app/src/data/supabaseEnv.ts` now accepts either pair and prefers this
-app's own, so neither spelling is a trap; see *Session of 2026-09-02, later*.
+**And then it happened again, one layer up.** The integration also wrote correctly
+prefixed, correctly public variables under names of its own —
+`VITE_SUPABASE_DATABASE_URL` and `VITE_SUPABASE_ANON_KEY`, nothing like the
+`VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` the app read. Same outage, same
+screen, different half of the variable name.
 
-**`SUPABASE_JWT_SECRET` and `SUPABASE_SERVICE_ROLE_KEY` have been deleted from Netlify.
-Do not put them back.** This is a static Vite build — no Netlify Functions, no edge
-functions, nothing in this repo reads either one. The service role key bypasses RLS
-entirely and the JWT secret mints tokens for any user, so an unused copy sitting in a
-build environment is pure risk: the only thing separating it from the public bundle was
-the convention that nobody types `VITE_` in front of it. If a Netlify Function ever
-genuinely needs one, add it back scoped to functions only — never to builds.
+**On Vercel the same trap wears a third face:** its Supabase integration assumes Next.js
+unless told otherwise and provisions `NEXT_PUBLIC_SUPABASE_URL` and
+`NEXT_PUBLIC_SUPABASE_ANON_KEY`, which `import.meta.env` cannot see at all. **Tell the
+integration the framework is Vite.** That is the fix, every time — not another spelling in
+the app.
 
-Two gotchas worth knowing before touching that screen:
+`app/src/data/supabaseEnv.ts` reads exactly two names and no fallback. The old
+either-spelling fallback was removed on 6 September after the live production bundle was
+checked rather than assumed: both fallback names compiled to `void 0`, so neither was set
+and the branch was dead code.
 
-- **Set env vars with all scopes.** Writing one scoped to `builds` alone through the
-  Netlify API reports success and then does not persist. Always read the variable back
-  after writing it; the success message is not proof.
-- **Never mark a `VITE_` variable as secret.** Netlify fails any build whose output
-  contains a secret value, and Vite inlines these into the bundle by design — so the flag
-  turns every build red. They are public keys, and that is correct: RLS is the boundary,
-  not the key.
+**`SUPABASE_JWT_SECRET` and `SUPABASE_SERVICE_ROLE_KEY` must never be in the build
+environment.** This is a static Vite build and nothing in it reads either one. The service
+role key bypasses RLS entirely and the JWT secret mints tokens for any user, so an unused
+copy sitting in a build environment is pure risk: the only thing separating it from the
+public bundle is the convention that nobody types `VITE_` in front of it. The Supabase
+edge functions that genuinely need a privileged key read it from **Supabase's own function
+secrets**, which the build environment never sees.
+
+One gotcha worth knowing before touching that screen:
+
+- **Never mark a `VITE_` variable as sensitive.** That setting is for values that must not
+  reach the browser, and Vite inlines these into the bundle by design. They are public
+  keys, and that is correct: **RLS is the boundary, not the key.**
 
 
 **The prototype it grew from is a different repo** — `amberbeaumont/loftyprojectboard`,
@@ -864,8 +871,8 @@ the window next to it.
 
 Fix: **Authentication → Sign In / Providers → Email → off.** Lofty has no
 email-and-password users and never will; the directory is the source of truth. Then
-re-run the curl above and confirm `email` is gone — the same read-it-back rule as the
-Netlify variables.
+re-run the curl above and confirm `email` is gone. Read it back: a dashboard that says it
+saved is not proof that it did.
 
 **What actually stops it today, and why that is not luck.** 0009 moved every read policy
 off `using (true)` and onto `is_active_user()`:
@@ -947,7 +954,7 @@ registrations** → **New registration**:
 
 Single-tenant is the point: it is what stops any Microsoft account on earth signing in.
 The redirect URI is Supabase's callback, not the app's — a common early mistake is
-putting the Netlify URL here. It goes in the redirect allow list instead.
+putting the app's own URL here. That goes in the redirect allow list instead.
 
 #### 2. Client ID and secret
 
@@ -986,18 +993,26 @@ App registration → **Manifest** → back up the JSON → set `optionalClaims`:
 
 ### The redirect allow list — now at the root
 
-Supabase → **Authentication** → **URL Configuration**. **The app moved out of `/app/`,
-so these changed.** Site URL `https://loftyprojectapp.netlify.app/`, and under *Redirect
-URLs* the deploy previews too or every PR preview fails to complete sign-in:
+Supabase → **Authentication** → **URL Configuration**. Site URL
+`https://hub.lofty.au/`, and under *Redirect URLs* the preview deployments too, or every
+PR preview fails to complete sign-in:
 
 ```
-https://loftyprojectapp.netlify.app/**
-https://deploy-preview-*--loftyprojectapp.netlify.app/**
+https://hub.lofty.au/**
+https://loftyprojectapp.vercel.app/**
+https://loftyprojectapp-*-loftygroup.vercel.app/**
 http://localhost:5173/**
 ```
 
-A stale `/app/**` entry here is harmless but no longer matched; the old paths 301 to the
-root at the CDN, and Supabase compares against the URL the browser was sent to.
+The third line is the shape Vercel gives a branch deployment — the preview for PR #38 was
+`loftyprojectapp-git-claude-lofty-hub-repo-set-103bf1-loftygroup.vercel.app`, so the
+wildcard has to sit in the middle, not only at the end.
+
+**A domain that serves the app is not a domain that can sign in.** `hub.lofty.au` needs to
+be in THREE places and all three are separate: added in Vercel, listed here, and — because
+Supabase's callback is the Entra redirect URI — nothing extra in Entra, which points at
+Supabase rather than at the app. Missing from this list, the app loads and sign-in bounces.
+Any stale `*.netlify.app` or `/app/**` entry here is inert and can be deleted.
 
 ### The client call
 
@@ -1177,7 +1192,7 @@ Each schema decision touches four things that must move together:
 4. `app/src/data/dictionary.ts` — the dictionary (then `npm run dictionary`)
 
 Landing those on `main` separately is how they drift. So: a branch per table, all four in
-one PR, Netlify builds a deploy preview, merge when it looks right.
+one PR, Vercel builds a deploy preview, merge when it looks right.
 
 ```bash
 git checkout -b claude/<table>-schema
@@ -1193,8 +1208,12 @@ git commit && git push -u origin claude/<table>-schema
 `netlify.toml` was removed on 6 September; the two Netlify site names had been answering
 404 for two days, and a second host configuration nobody deploys from is a file that
 contradicts the live one the first time either changes. The subsections below that were
-written against Netlify keep their own "stale as of" markers — they are the record of what
-belongs where and why, and that part has not changed.
+written against Netlify have been swept forward to Vercel and to `hub.lofty.au`; what
+belongs where, and why, did not change, only the host it is set on.
+
+The one Netlify thing left in these documents is **not this app**:
+`loftyprojectboard.netlify.app` is the frozen stakeholder prototype, in the separate
+`amberbeaumont/loftyprojectboard` repository. It is still live and it stays that way.
 
 | URL | What |
 | --- | --- |
@@ -1226,23 +1245,28 @@ link opened from a domain not in that allowlist is refused.
 
 ### The environment variables, and where the security actually comes from
 
-> **Stale as of 2 September.** The site this was verified against is gone; the site now at
-> `loftyprojectapp.netlify.app` is new and has **none** of these set — see *Session of
-> 2026-09-02*. Kept because what belongs where, and why, has not changed.
+> **The host this was first verified against is gone.** The table below was read off a
+> Netlify site in August; that site is disconnected and the deploy is Vercel's. Kept
+> because **what belongs where, and why, has not changed** — and re-verified on 6 September
+> against the live `hub.lofty.au` bundle, which is the only check that cannot be fooled by
+> a dashboard.
 
-Verified against the live site, 23 August:
+What the production bundle proves, 6 September — read out of `hub.lofty.au`'s own
+JavaScript, not off a settings screen:
 
 | key | set | read by |
 | --- | --- | --- |
-| `VITE_SUPABASE_URL` | ✅ | the app |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | ✅ `sb_publishable_…` | the app |
-| `SUPABASE_ANON_KEY` | ✅ | **nothing** — added by the Supabase Netlify extension |
-| `SUPABASE_DATABASE_URL` | ✅ | **nothing** — same |
+| `VITE_SUPABASE_URL` | ✅ inlined | the app |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | ✅ inlined, `sb_publishable_…` | the app |
+| `VITE_SUPABASE_DATABASE_URL` | ✗ compiles to `void 0` | nothing — the fallback that read it is now removed |
+| `VITE_SUPABASE_ANON_KEY` | ✗ compiles to `void 0` | nothing — same |
 
-**There is no `service_role` key on the site**, which is the check that actually matters.
+**No `service_role` key appears anywhere in the bundle**, which is the check that actually
+matters. Grep it and see: an unset `VITE_` variable becomes the literal `void 0`, so the
+bundle answers the question a dashboard only claims to.
 
-Keeping these in Netlify rather than in the repo is right and worth doing — a key in git
-is a key in every clone, every fork and every screen share forever. But it is worth being
+Keeping these in the host's environment rather than in the repo is right and worth doing —
+a key in git is a key in every clone, every fork and every screen share forever. But it is worth being
 exact about what it does *not* do: **a `VITE_`-prefixed variable is inlined into the
 JavaScript bundle at build time and shipped to every browser.** Built with a probe value,
 the string appears verbatim in `dist/assets/*.js`. Anyone who opens the site can read the
@@ -1254,32 +1278,30 @@ a matching policy. The one thing that would be catastrophic is a `service_role` 
 a `VITE_` prefix, because that key bypasses RLS entirely and would be published the same
 way. Never add one.
 
-Both `VITE_` variables are scoped to context `all`, so **deploy previews point at
-production Supabase**. Fine while there are no jobs; scope them per context at Phase B,
+Both `VITE_` variables are set for every environment, so **preview deployments point at
+production Supabase**. Fine while there are no jobs; scope them per environment at Phase B,
 when a preview branch can write to real records.
 
 ### `SUPABASE_ACCESS_TOKEN`, and the environment it has to be in
 
-**Netlify is the wrong place for this one, and the distinction is not obvious.** Every
-other variable on this page is read by a Netlify *build* — the app's two `VITE_` keys, and
-the two the Supabase extension adds. `SUPABASE_ACCESS_TOKEN` is read by the **Supabase MCP
-server**, which runs in the Claude Code session's own container. Netlify's environment
-never reaches that container, so a token stored there authenticates nothing and is only a
-credential sitting somewhere nothing reads — which is precisely why
-`SUPABASE_JWT_SECRET` and `SUPABASE_SERVICE_ROLE_KEY` were deleted from Netlify above.
-It belongs in the **Claude Code remote environment's** variables instead.
+**The host's environment is the wrong place for this one, and the distinction is not
+obvious.** Every other variable on this page is read by a *build* — the app's two `VITE_`
+keys. `SUPABASE_ACCESS_TOKEN` is read by the **Supabase MCP server**, which runs in the
+Claude Code session's own container. The deploy environment never reaches that container,
+so a token stored there authenticates nothing and is only a credential sitting somewhere
+nothing reads — which is precisely why `SUPABASE_JWT_SECRET` and
+`SUPABASE_SERVICE_ROLE_KEY` do not belong in a build environment either. It goes in the
+**Claude Code remote environment's** variables instead.
 
 Asserted once and then actually checked, because the two environments are easy to
-conflate. Four variables that *are* set on the Netlify project, read from inside a
-session container:
+conflate. The variables that *are* set on the deploy project, read from inside a session
+container:
 
 ```
 VITE_SUPABASE_URL              (absent)
 VITE_SUPABASE_PUBLISHABLE_KEY  (absent)
-SUPABASE_ANON_KEY              (absent)
-SUPABASE_DATABASE_URL          (absent)
 
-env vars matching /netlify|supabase/i:  0
+env vars matching /vercel|supabase/i:  0
 ```
 
 Not one of them crosses. `env` in a session mentions neither service.

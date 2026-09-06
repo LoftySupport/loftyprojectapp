@@ -118,10 +118,13 @@ template and the prototype — into `dist/`. That is what Vercel runs.
 ### Deploying: Vercel serves the app
 
 **Vercel is the only host** (Amber, 4 September: *"it is using vercel now"*).
-`netlify.toml` was removed on 6 September — `loftyprojectapp.netlify.app` and
-`main--loftyprojectapp.netlify.app` had both been answering 404 since 4 September, and a
-second host configuration nobody deploys from is a file that contradicts the live one the
-first time either changes. `vercel.json` is now the only deploy configuration.
+`netlify.toml` was removed on 6 September and the Netlify site was disconnected from this
+repository the same day. Both Netlify site names had been answering 404 since 4 September,
+and a second host configuration nobody deploys from is a file that contradicts the live one
+the first time either changes. `vercel.json` is now the only deploy configuration.
+
+(`loftyprojectboard.netlify.app` is still live and is **not** this app — it is the frozen
+stakeholder prototype, in a separate repository.)
 
 `vercel.json` exists because Vercel's zero-config cannot work this repository out: the
 build is `./build.sh` (not a framework preset) and the output is `dist/` at the root. So
@@ -178,9 +181,11 @@ Neither is visible to `import.meta.env`. `app/vite.config.ts` sets no `envPrefix
 Vite's default of `VITE_` applies and a `NEXT_PUBLIC_*` variable is not merely wrong — it
 is absent from the bundle entirely. The build goes green, the site serves, and sign-in
 reports *Not configured* while the Vercel dashboard shows the variables sitting right
-there. That is the same failure the Netlify **Supabase extension** caused with a different
-pair of names (`VITE_SUPABASE_DATABASE_URL`, `VITE_SUPABASE_ANON_KEY`), which is why
-`app/src/data/supabaseEnv.ts` already reads two spellings of each value.
+there. A previous host integration caused the same failure with a different pair of names
+(`VITE_SUPABASE_DATABASE_URL`, `VITE_SUPABASE_ANON_KEY`), and `app/src/data/supabaseEnv.ts`
+carried a fallback for them until 6 September — removed once the live production bundle
+showed both compiling to `void 0`, so neither was set and the branch was dead code. **The
+fix for a name mismatch is option 1 below, never another spelling in the app.**
 
 Three ways to resolve it, best first:
 
@@ -214,16 +219,13 @@ in `build.sh` — so `installCommand: ""` in `vercel.json` is still correct.
 `/next`, which is what Vercel's own quickstart shows by default. Same trap as the
 environment variables above: the dashboard assumes Next.js, and this is a Vite app.
 
-It is gated on `__BUILD_HOST__`. Vercel serves `/_vercel/speed-insights/script.js` and
-nothing else does, so an ungated component would put a 404 in the console of anyone served
-from somewhere else and collect nothing for it. The gate is a compile-time constant, so on
-a non-Vercel build Rollup removes the component and the import with it — the string
-`_vercel/speed-insights` does not appear in that bundle at all. Measured while the deploy
-still ran on two hosts: **2,246,200 bytes on a Vercel build against 2,243,807 on a Netlify
-one**, so it costs 2.4 kB where it is used and nothing where it is not.
-
-The gate is kept now that Vercel is the only host, because it also covers `npm run dev` and
-`npm run preview`, where the endpoint does not exist either.
+It is gated on `__BUILD_HOST__`, which asks *does that endpoint exist* rather than *which
+host is this*. Vercel serves `/_vercel/speed-insights/script.js`; `npm run dev` and
+`npm run preview` do not, so an ungated component would put a 404 in the console and
+collect nothing for it. The gate is a compile-time constant, so on a non-Vercel build
+Rollup removes the component and the import with it — the string `_vercel/speed-insights`
+does not appear in that bundle at all. Measured: **2,246,200 bytes with it against
+2,243,807 without**, so it costs 2.4 kB where it is used and nothing where it is not.
 
 The `route` prop groups by `/jobs/:jobNumber` and `/projects/:projectNumber` rather than by
 the literal path, or the dashboard would hold one row per job number and be unable to say
@@ -233,9 +235,8 @@ apart is the point. This is about the dashboard being readable, not about withho
 anything: Speed Insights posts the full `href` regardless, and Vercel is the host, so its
 access log already has every path.
 
-The build identity reads both hosts' variables (`COMMIT_REF`/`CONTEXT` on Netlify,
-`VERCEL_GIT_COMMIT_SHA`/`VERCEL_ENV` on Vercel), so the version in the footer says which
-commit it is on either. See the note in `app/vite.config.ts` for the trap in that: the
+The build identity reads `VERCEL_GIT_COMMIT_SHA` and `VERCEL_ENV`, so the version in the
+footer says which commit it is on. See the note in `app/vite.config.ts` for the trap in that: the
 first draft used `??`, which falls through on null and not on an empty string, so a
 variable set to nothing would have won and the footer would have read "local" on a real
 deployment.

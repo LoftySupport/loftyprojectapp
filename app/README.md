@@ -62,11 +62,13 @@ VITE_SUPABASE_URL=https://<project>.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_<...>
 ```
 
-**A second pair of spellings is also read.** A Supabase host integration provisions
-`VITE_SUPABASE_DATABASE_URL` and `VITE_SUPABASE_ANON_KEY` — the project URL and the legacy
-anon key, under names of its own. The app reads either pair and prefers the two above when
-both are set, so adding a publishable key later supersedes the anon key without anyone
-deleting anything. `src/data/supabaseEnv.ts` is where that is decided.
+**These two names are the only ones read.** `src/data/supabaseEnv.ts` once carried a
+fallback to `VITE_SUPABASE_DATABASE_URL` and `VITE_SUPABASE_ANON_KEY`, the names a host
+integration provisioned when it was told the framework was something other than Vite. That
+fallback was removed on 6 September, after checking the live production bundle rather than
+assuming: both fell through to `void 0`, so neither was set and the branch was dead code.
+If an integration ever provisions names of its own again, tell it the framework is **Vite**
+rather than adding a third spelling.
 
 **On Vercel these are Environment Variables on the project, not a file.** The prefix is the
 FRAMEWORK's and not Supabase's, and this is the trap worth knowing about: Vercel's Supabase
