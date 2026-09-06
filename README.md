@@ -78,7 +78,7 @@ the accurate one.
 | `docs/README.md` | The map of everything under `docs/` — the schema reference, and the record of how decisions were made |
 | **`docs/schema/schema-plan.md`** | The current design and the record of how it was decided. Phase A is built; Phase C waits on the business decisions at its end |
 | `docs/schema/data-dictionary.md` | Every property: Lofty name, definition, type, rules, relationships, status. Generated — see below |
-| `app/supabase/migrations/` | `0001`–`0093`. The database is the authority; these rebuild it |
+| `app/supabase/migrations/` | `0001` upwards, applied in order. The database is the authority; these rebuild it. (No end number here on purpose — it was written as `0093` and was `0096` within days) |
 | `app/supabase/verify/check.sh` | Replays every migration into a throwaway database and proves the schema *behaves* — constraints bite, RLS holds, embeds resolve, seeds agree |
 | `docs/schema/supabase-schema.md` | **Superseded** — carries a banner saying so. Kept for its reasoning, not its schema |
 | `docs/schema/concept-spec.md` | The original data-architecture write-up |
