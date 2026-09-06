@@ -9,13 +9,19 @@
  * Checked: [text](path). Skipped: absolute URLs, mailto:, bare #anchors, and the vendored
  * skills under .claude/ and .agents/, which are somebody else's documents.
  *
+ * UNTRACKED FILES COUNT. The first version listed `git ls-files`, which is tracked files
+ * only — so a brand-new document's links were unchecked until it was staged, and the run
+ * that mattered (the one before `git add`) always passed. That shipped a broken link to
+ * CI on 6 September. `--others --exclude-standard` adds new files while still honouring
+ * .gitignore, so the check now sees what the author sees.
+ *
  *   node scripts/check-links.mjs
  */
 import { readFileSync, existsSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 
-const files = execSync("git ls-files '*.md'", { encoding: "utf8" })
+const files = execSync("git ls-files --cached --others --exclude-standard '*.md'", { encoding: "utf8" })
   .split("\n").filter(Boolean)
   .filter(f => !f.startsWith(".claude/") && !f.startsWith(".agents/"));
 

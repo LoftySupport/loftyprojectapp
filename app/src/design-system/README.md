@@ -30,7 +30,7 @@ sync — the whole point of the mirror is that those two can be compared.
   contract. Two implementations of `Button` would be two things to keep in step.
 - **The 276 Vibe icons.** The app already has them through `@vibe/icons`. Only the Lofty
   glyphs — the ones Vibe does not ship — are worth copying, and they live in
-  [`../theme/icons/`](../theme/icons/).
+  [`../theme/loftyIcons.tsx`](../theme/loftyIcons.tsx).
 - **The six Fieldwork `.woff` files.** Fieldwork is for brand-led surfaces: decks, print,
   proposals. The design system is explicit that product screens use Figtree and Poppins,
   so shipping ~300 KB of fonts no screen asks for would cost every visitor for nothing.
