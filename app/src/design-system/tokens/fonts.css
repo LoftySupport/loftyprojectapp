@@ -1,0 +1,14 @@
+/* Screen/product typography — Figtree + Poppins, per monday.com Vibe. */
+@import url("https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,300..800;1,300..800&family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,600&display=swap");
+
+/* Brand typography — Fieldwork (Lofty corporate typeface, licensed via Adobe Fonts / Tipotype).
+   Geo = geometric cut, used for headings and brand-led surfaces.
+   Hum = humanist cut, used for long-form/print body copy. */
+@font-face{font-family:"Fieldwork Geo";src:url("../assets/fonts/Fieldwork-Geo-Light.woff") format("woff");font-weight:300;font-style:normal;font-display:swap}
+@font-face{font-family:"Fieldwork Geo";src:url("../assets/fonts/Fieldwork-Geo-Demibold.woff") format("woff");font-weight:600;font-style:normal;font-display:swap}
+@font-face{font-family:"Fieldwork Hum";src:url("../assets/fonts/Fieldwork-Hum-Light.woff") format("woff");font-weight:300;font-style:normal;font-display:swap}
+@font-face{font-family:"Fieldwork Hum";src:url("../assets/fonts/Fieldwork-Hum-DemiBold.woff") format("woff");font-weight:600;font-style:normal;font-display:swap}
+@font-face{font-family:"Fieldwork";src:url("../assets/fonts/Fieldwork-Geo-Light.woff") format("woff");font-weight:300;font-style:normal;font-display:swap}
+@font-face{font-family:"Fieldwork";src:url("../assets/fonts/Fieldwork-Geo-Demibold.woff") format("woff");font-weight:600;font-style:normal;font-display:swap}
+@font-face{font-family:"Fieldwork";src:url("../assets/fonts/Fieldwork-ItalicLight.woff") format("woff");font-weight:300;font-style:italic;font-display:swap}
+@font-face{font-family:"Fieldwork";src:url("../assets/fonts/Fieldwork-ItalicDemiBold.woff") format("woff");font-weight:600;font-style:italic;font-display:swap}

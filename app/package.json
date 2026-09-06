@@ -17,7 +17,9 @@
     "check:process-move": "node scripts/check-process-move.mjs",
     "check:report-widgets": "node --import ./scripts/register-ts.mjs scripts/report-widgets-check.mjs",
     "check:share-password": "node --import ./scripts/register-ts.mjs scripts/share-password-check.mjs",
-    "check:builder-dnd": "node scripts/check-builder-dnd.mjs"
+    "check:builder-dnd": "node scripts/check-builder-dnd.mjs",
+    "check:design-tokens": "node scripts/check-design-tokens.mjs",
+    "check:contrast": "node scripts/check-contrast.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -1,69 +1,157 @@
+/* ---------------------------------------------------------------------------
+   Lofty Hub's theme = the design system, applied at the specificity Vibe needs.
+
+   The VALUES live in ../design-system/tokens/, which is a verbatim mirror of the
+   "Lofty's App Design System" project. Nothing in this file invents a colour: every
+   one is a `var(--lofty-*)` reference into that mirror, so there is exactly one place
+   a hex is written down. See ../design-system/README.md for how the mirror is synced.
+
+   Why this file exists at all, rather than just importing the mirror:
+
+   The mirror declares its semantic tokens on `:root`. Vibe declares ITS palette on the
+   `.light-app-theme` / `.dark-app-theme` CLASS it puts on <body>, and a class beats an
+   element selector — so a bare `:root` declaration loses and every Vibe component paints
+   monday.com blue. Everything below is therefore re-declared at body-class specificity.
+   The names repeat; the values do not.
+   --------------------------------------------------------------------------- */
+@import url("../design-system/tokens/colors.css");
+@import url("../design-system/tokens/typography.css");
+@import url("../design-system/tokens/spacing.css");
+@import url("../design-system/tokens/radius.css");
+@import url("../design-system/tokens/shadows.css");
+@import url("../design-system/tokens/motion.css");
+@import url("../design-system/tokens/dark.css");
+
+/* Deliberately NOT imported from the mirror:
+
+   tokens/fonts.css — it @imports Figtree and Poppins from Google Fonts, which index.html
+   already loads with a <link> and two preconnects (faster: a <link> starts fetching during
+   HTML parse, a CSS @import waits for the stylesheet). It also declares @font-face for the
+   six Fieldwork cuts against ../assets/fonts/, which this app does not ship — Fieldwork is
+   for brand-led surfaces (decks, print, proposals), and the design system is explicit that
+   product screens use Figtree + Poppins. The `--brand-font-family` chain in the mirror ends
+   in Poppins, so a brand token used here degrades to the product face rather than to a
+   system serif.
+
+   tokens/base.css — its `body{font:…}` and heading rules would fight Vibe's own base layer.
+   The three parts of it worth having are re-stated at the bottom of this file. */
+
 /* Vibe requires border-box globally. */
 *, *::before, *::after { box-sizing: border-box; }
 
 /* ---------------------------------------------------------------------------
-   The Lofty values ThemeProvider cannot carry.
-   It themes 11 primary/brand tokens; these are the rest, and they are the ones
-   with contrast decisions behind them. Numbers are in design-system-evaluation.md.
+   The semantic layer, at a specificity that beats Vibe's.
+
+   `body.light-app-theme` and not bare `body`: Vibe puts its palette on the class the
+   body carries, and a class out-specifies an element. This also covers PORTALS — Vibe
+   renders every Modal and every Dropdown menu into document.body, outside ThemeProvider's
+   wrapper, and before this existed a modal's primary button painted blue while the button
+   that opened it was branded.
+   --------------------------------------------------------------------------- */
+body, body.light-app-theme {
+  /* Primary is Crisp Orange. Ink on it, not white: white on #f47e63 is 2.6:1 and fails AA;
+     #191819 is 6.7:1. This is the design system's answer to the contrast problem, and it
+     differs from the app's previous one (a darker orange) — the brand hue is kept intact
+     and the text is what moves. */
+  --primary-color: var(--lofty-crisp-orange);
+  --primary-hover-color: var(--lofty-orange-hover);
+  --primary-selected-color: var(--lofty-orange-selected);
+  --primary-selected-hover-color: var(--lofty-orange-selected-hover);
+  --text-color-on-primary: var(--lofty-ink);
+  --brand-color: var(--lofty-crisp-orange);
+  --brand-hover-color: var(--lofty-orange-hover);
+  --text-color-on-brand: var(--lofty-ink);
+
+  /* Eco Green is a minimal highlight, never a shell, a panel fill or a link colour. */
+  --highlight-color: var(--lofty-eco-green);
+  --highlight-hover-color: var(--lofty-green-hover);
+
+  --primary-text-color: var(--lofty-foundation-black);
+  --secondary-text-color: var(--lofty-black-80);
+  --link-color: var(--lofty-foundation-black);
+  --link-hover-color: var(--lofty-orange-pressed);
+  --ui-border-color: var(--lofty-black-60);
+  --layout-border-color: var(--lofty-gray-light);
+  --icon-color: var(--lofty-black-80);
+  --allgrey-background-color: var(--lofty-gray-surface);
+  --primary-background-color: var(--lofty-finisher-white);
+  --primary-background-hover-color: rgba(65, 64, 66, .08);
+}
+
+/* Dark and black both take the design system's one dark theme. The `--lofty-dark-*`
+   names referenced here are declared by the mirror's dark.css under [data-theme="dark"],
+   which App.tsx stamps on <html> alongside these body classes — so they are in scope by
+   inheritance, and this block only has to win the specificity fight against Vibe. */
+body.dark-app-theme,
+body.black-app-theme {
+  --primary-color: var(--lofty-crisp-orange);
+  --primary-hover-color: var(--lofty-orange-dark-hover);
+  --primary-selected-color: var(--lofty-orange-dark-selected);
+  --primary-selected-hover-color: #5a3730;
+  --text-color-on-primary: var(--lofty-dark-base);
+  --brand-color: var(--lofty-crisp-orange);
+  --brand-hover-color: var(--lofty-orange-dark-hover);
+  --text-color-on-brand: var(--lofty-dark-base);
+
+  --highlight-color: var(--lofty-green-dark);
+  --highlight-hover-color: var(--lofty-green-dark-hover);
+
+  --primary-text-color: var(--lofty-dark-text);
+  --secondary-text-color: var(--lofty-dark-text-muted);
+  --link-color: var(--lofty-dark-text);
+  --link-hover-color: var(--lofty-orange-dark-hover);
+  --ui-border-color: var(--lofty-dark-border-strong);
+  --layout-border-color: var(--lofty-dark-border);
+  --icon-color: var(--lofty-dark-text-muted);
+  --allgrey-background-color: var(--lofty-dark-base);
+  --primary-background-color: var(--lofty-dark-surface);
+  --primary-background-hover-color: rgba(242, 241, 242, .08);
+}
+
+/* ---------------------------------------------------------------------------
+   Lofty values Vibe has no slot for.
    --------------------------------------------------------------------------- */
 :root {
-  --lofty-orange: #f47e63;          /* logo and decorative fills only — 2.6:1 on white */
-  --lofty-orange-strong: #b8482a;   /* anything that carries text or meaning — 5.3:1 */
-  --lofty-orange-tint: #fdeee9;
-
-  /* Vibe ships -selected tints but no ink to sit on them; these are the darkest
-     member of each family that clears 4.5:1 on its own tint. */
+  /* Vibe ships -selected tints but no ink to sit on them; each is the darkest member
+     of its family that clears 4.5:1 on its own tint. */
   --positive-ink: #005c35;
   --negative-ink: #a32436;
   --warning-ink: #6b5000;
 
-  --lofty-header-bg: #00393f;
-  --lofty-header-text-muted: #a9c6c8;
+  /* The shell. Foundation Black, per the design system's "solid Foundation Black for
+     brand panels" — the app shell was Eco Green before the design system landed. */
+  --lofty-header-bg: var(--lofty-foundation-black);
+  --lofty-header-text-muted: #c9c8cb;
 }
 
-/* ---------------------------------------------------------------------------
-   The brand tokens, again, at body level — for PORTALS.
-
-   ThemeProvider scopes its generated CSS to its own wrapper div, and Vibe renders
-   every Modal and every Dropdown menu into document.body, OUTSIDE that wrapper. So a
-   modal's primary button painted monday.com blue while the button that opened it was
-   Lofty green. Same values as loftyTheme.ts (which still wins inside the wrapper by
-   specificity — these are the fallback for everything portaled out of it). The dark
-   overrides key off the body classes App.tsx already mirrors.
-   --------------------------------------------------------------------------- */
-/* body.light-app-theme, not bare body: Vibe puts its own palette on the
-   .light-app-theme class the body carries, and a class out-specifies an element. */
-body, body.light-app-theme {
-  --primary-color: #005058;
-  --primary-hover-color: #00393f;
-  --primary-selected-color: #d3e3e4;
-  --primary-selected-hover-color: #bcd4d6;
-  --text-color-on-primary: #ffffff;
-  --brand-color: #005058;
-  --brand-hover-color: #00393f;
-  --text-color-on-brand: #ffffff;
-}
 body.dark-app-theme,
 body.black-app-theme {
-  --primary-color: #4db3bd;
-  --primary-hover-color: #59c2cc;
-  --primary-selected-color: #173c41;
-  --primary-selected-hover-color: #1d4a50;
-  --text-color-on-primary: #12141f;
-  --brand-color: #4db3bd;
-  --brand-hover-color: #59c2cc;
-  --text-color-on-brand: #12141f;
-}
-
-.dark-app-theme {
-  --lofty-orange-strong: #ff9478;
-  --lofty-orange-tint: #3d2a24;
   --positive-ink: #7ce8bd;
   --negative-ink: #ffb3bc;
   --warning-ink: #ffdf80;
-  --lofty-header-bg: #12141f;
-  /* Vibe's own #9699a6 is 4.38:1 on its dark grey — just under AA */
-  --secondary-text-color: #a8abb8;
+  --lofty-header-bg: var(--lofty-dark-base);
+  --lofty-header-text-muted: var(--lofty-dark-text-muted);
+}
+
+/* ---------------------------------------------------------------------------
+   The three rules worth keeping from the mirror's base.css. The rest of that file
+   sets body and heading typography, which Vibe already owns.
+   --------------------------------------------------------------------------- */
+:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* A focus ring drawn with box-shadow disappears in forced-colors mode, which is the one
+   mode where a keyboard user most needs it. */
+@media (forced-colors: active) {
+  :focus-visible { outline: 3px solid CanvasText; outline-offset: 2px; }
 }
 
 html, body, #root { height: 100%; margin: 0; }

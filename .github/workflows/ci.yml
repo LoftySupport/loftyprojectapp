@@ -46,6 +46,21 @@ jobs:
           npm run dictionary --prefix app
           git diff --exit-code -- docs/schema/data-dictionary.md
 
+      # ThemeProvider needs the brand hexes as literals, so loftyTheme.ts repeats eight of
+      # them. This is the guard on that duplication: sync the design system, forget this
+      # file, and Vibe's wrapper paints last month's brand while portals paint the new one.
+      - name: loftyTheme.ts matches the design-system mirror
+        run: npm run check:design-tokens
+        working-directory: app
+
+      # The palette moved from green-primary to orange-primary on 6 September, and white on
+      # Crisp Orange is 2.6:1. This turns DESIGN.md's contrast numbers into assertions so
+      # that "the button text should be white, it looks cleaner" fails here and not in an
+      # accessibility audit six months on.
+      - name: the contrast claims in DESIGN.md hold
+        run: npm run check:contrast
+        working-directory: app
+
   docs:
     name: documentation links resolve
     runs-on: ubuntu-latest

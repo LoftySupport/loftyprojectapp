@@ -1,0 +1,125 @@
+/* Lofty colour system.
+   Brand palette is the source of truth (Lofty brand kit); the semantic layer follows
+   monday.com Vibe's token names so Vibe-shaped components map straight onto it. */
+:root{
+  /* ---- Brand palette (Lofty brand kit) ---- */
+  --lofty-crisp-orange:#f47e63;      /* Pantone 2024U · R244 G126 B99 */
+  --lofty-eco-green:#005058;         /* Pantone 2216U · R0 G80 B88 */
+  --lofty-foundation-black:#414042;  /* R65 G64 B66 */
+  --lofty-finisher-white:#ffffff;
+  --lofty-mid-gray:#d1d3d4;          /* R209 G211 B212 */
+
+  /* ---- Softening neutrals (warm, for large calm areas — never text) ---- */
+  --lofty-paper:#fcfaee;             /* warmest page tint */
+  --lofty-mineral:#eae3df;           /* mid warm surface */
+  --lofty-stone:#dbd0be;             /* deepest warm surface / rule */
+
+  /* Derived brand steps (tints/shades of the five above — no new hues) */
+  --lofty-orange-hover:#d9634a;
+  --lofty-orange-pressed:#c2543c;
+  --lofty-orange-selected:#fae4d5;
+  --lofty-orange-selected-hover:#f6d3bf;
+  --lofty-orange-tint:#fdf6f0;
+  --lofty-green-hover:#003c42;
+  --lofty-green-selected:#b8d0d2;
+  --lofty-green-tint:#eef4f4;
+  --lofty-black-80:#67666a;
+  --lofty-black-60:#8a898d;
+  --lofty-gray-light:#e7e8e9;
+  --lofty-gray-surface:#f6f7f7;
+  --lofty-paper-border:#efe9d6;
+  --lofty-ink:#191819;               /* deepest brand black — ink on Crisp Orange (6.7:1); also the dark-mode base */
+
+  /* ---- Semantic: primary / brand ---- */
+  --primary-color:var(--lofty-crisp-orange);
+  --primary-hover-color:var(--lofty-orange-hover);
+  --primary-selected-color:var(--lofty-orange-selected);
+  --primary-selected-hover-color:var(--lofty-orange-selected-hover);
+  --primary-highlighted-color:var(--lofty-orange-tint);
+  --primary-surface-color:var(--lofty-gray-surface);
+  --brand-color:var(--lofty-crisp-orange);
+  --brand-hover-color:var(--lofty-orange-hover);
+  --brand-selected-color:var(--lofty-orange-selected);
+  --brand-selected-hover-color:var(--lofty-orange-selected-hover);
+
+  /* Secondary brand (Foundation Black) — shells, dark surfaces, second-rank UI.
+     Eco Green is NOT a secondary: it is a minimal highlight only (see --highlight-color). */
+  --secondary-color:var(--lofty-foundation-black);
+  --secondary-hover-color:var(--lofty-black-80);
+  --secondary-selected-color:var(--lofty-gray-light);
+
+  /* Minimal highlight (Eco Green) — small decorative accents and data series only */
+  --highlight-color:var(--lofty-eco-green);
+  --highlight-hover-color:var(--lofty-green-hover);
+  --highlight-tint-color:var(--lofty-green-tint);
+
+  /* ---- Semantic: text ---- */
+  --primary-text-color:var(--lofty-foundation-black);
+  --secondary-text-color:var(--lofty-black-80);
+  --placeholder-color:var(--lofty-black-60);
+  --text-color-on-primary:var(--lofty-ink);      /* white on #f47e63 is 2.6:1 — fails AA; ink is 6.7:1 */
+  --text-color-on-brand:var(--lofty-ink);
+  --text-color-on-inverted:var(--lofty-finisher-white);
+  --text-color-on-status:var(--lofty-finisher-white);  /* white on positive 4.6:1 / negative 4.5:1 */
+  --text-color-on-warning:var(--lofty-foundation-black);
+  --disabled-text-color:rgba(65,64,66,.4);
+  --link-color:var(--lofty-foundation-black);
+  --link-hover-color:var(--lofty-orange-pressed);
+
+  /* ---- Semantic: surfaces ---- */
+  --primary-background-color:var(--lofty-finisher-white);
+  --secondary-background-color:var(--lofty-finisher-white);
+  --primary-background-hover-color:rgba(65,64,66,.08);
+  --allgrey-background-color:var(--lofty-gray-surface);
+  --warm-background-color:var(--lofty-paper);
+  --warm-surface-color:var(--lofty-mineral);
+  --warm-border-color:var(--lofty-stone);
+  --grey-background-color:var(--lofty-gray-surface);
+  --dark-background-color:var(--lofty-gray-surface);
+  --inverted-color-background:var(--lofty-foundation-black);
+  --modal-background-color:var(--lofty-finisher-white);
+  --dialog-background-color:var(--lofty-finisher-white);
+  --backdrop-color:rgba(65,64,66,.7);
+  --disabled-background-color:var(--lofty-gray-light);
+  --fixed-dark-color:var(--lofty-foundation-black);
+  --fixed-light-color:var(--lofty-finisher-white);
+
+  /* ---- Semantic: lines & icons ---- */
+  --ui-border-color:var(--lofty-black-60);       /* control boundaries need 3:1 on white — Mid Gray is 1.5:1, black-60 is 3.5:1 */
+  --ui-border-subtle-color:var(--lofty-mid-gray); /* decorative rules inside controls (e.g. stepper divider) */
+  --layout-border-color:var(--lofty-gray-light);
+  --ui-background-color:var(--lofty-gray-light);
+  --ui-background-hover-color:#dcdddd;
+  --icon-color:var(--lofty-black-80);
+
+  /* ---- Semantic: status (Vibe values, kept for contrast/readability) ---- */
+  --positive-color:#00854d;
+  --positive-color-hover:#007038;
+  --positive-color-selected:#bbdbc9;
+  --positive-color-selected-hover:#b5cec0;
+  --negative-color:#d83a52;
+  --negative-color-hover:#b63546;
+  --negative-color-selected:#f4c3cb;
+  --negative-color-selected-hover:#ecb7bf;
+  --warning-color:#ffcb00;
+  --warning-color-hover:#eaaa15;
+  --warning-color-selected:#fceba1;
+  --warning-color-selected-hover:#f2d973;
+
+  --disabled-component-opacity:.4; /* @kind other */
+
+  /* ---- Z-index scale — never a literal ---- */
+  --z-sticky:10;      /* @kind other */ /* sticky table headers, top bar */
+  --z-dropdown:20;    /* @kind other */ /* dropdown lists, combobox panels */
+  --z-tooltip:30;     /* @kind other */ /* tooltips, tipseens */
+  --z-dialog:40;      /* @kind other */ /* dialogs, modals + backdrop */
+  --z-toast:50;       /* @kind other */ /* toasts, alert banners */
+
+  /* ---- Data-viz ramp: brand-only, ordered for categorical series ---- */
+  --data-1:var(--lofty-crisp-orange);
+  --data-2:var(--lofty-foundation-black);
+  --data-3:var(--lofty-eco-green);
+  --data-4:var(--lofty-mid-gray);
+  --data-5:var(--lofty-orange-selected);
+  --data-6:var(--lofty-green-selected);
+}

@@ -1,0 +1,12 @@
+:root{
+  --motion-productive-short:70ms; /* @kind other */
+  --motion-productive-medium:100ms; /* @kind other */
+  --motion-productive-long:150ms; /* @kind other */
+  --motion-expressive-short:250ms; /* @kind other */
+  --motion-expressive-long:400ms; /* @kind other */
+  --motion-timing-enter:cubic-bezier(0,0,0.35,1); /* @kind other */
+  --motion-timing-exit:cubic-bezier(0.4,0,1,1); /* @kind other */
+  --motion-timing-transition:cubic-bezier(0.4,0,0.2,1); /* @kind other */
+  --motion-timing-emphasize:cubic-bezier(0,0,0.2,1.4); /* @kind other */
+  --expand-animation-timing:var(--motion-timing-enter); /* @kind other */
+}
