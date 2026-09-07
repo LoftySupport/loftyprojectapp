@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Lists longer than five items show the first five and offer the rest
 - A table of contents block, listing the document's section headings in order
 - A block can be pointed at particular jobs, projects or teams instead of covering everything
 - Long dropdowns in a block's settings narrow as you type
@@ -126,6 +127,8 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- Sections in the job panel fold away, and Collapse all shuts the lot at once
+- Activity and comments now sit at the bottom of the job panel instead of behind a tab
 - Sections in the job panel now fold away, and stay folded how you leave them
 - Only admins can create a new kind of notification; managers still decide who hears each one
 - The roadmap and changelog now live in one place instead of two
@@ -166,6 +169,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Removed
 
+- Clone is no longer on the job panel — cloning belongs to the project
 - Notifications is no longer a Setup tab; your own channels stay in User settings and the audience rules moved under Automations
 - Processes is no longer a destination in the main navigation — it is part of Setup; /processes and /templates forward there
 - The tracker's gantt and calendar

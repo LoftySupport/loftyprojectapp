@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 146 changes since then —
+Unreleased: 150 changes since then —
+- Changed: Sections in the job panel fold away, and Collapse all shuts the lot at once
+- Changed: Activity and comments now sit at the bottom of the job panel instead of behind a tab
+- Added: Lists longer than five items show the first five and offer the rest
+- Removed: Clone is no longer on the job panel — cloning belongs to the project
 - Changed: Sections in the job panel now fold away, and stay folded how you leave them
-- Fixed: Cards on the board no longer touch each other
-- Fixed: The icons in the top bar no longer flash pink when you hover them
-- Fixed: Menu labels no longer lose their first letter when the sidebar is collapsed
-- Changed: Only admins can create a new kind of notification; managers still decide who hears each one
-- …and 141 more.
+- …and 145 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
