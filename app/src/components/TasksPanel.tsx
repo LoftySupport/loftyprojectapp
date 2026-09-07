@@ -12,6 +12,7 @@ import {
 } from "../data/types";
 import "./ui.css";
 import "./processes.css";
+import { CollapsiblePanel } from "./CollapsiblePanel";
 
 /**
  * What has to be done on this job or this project — tasks, their sub-tasks, and the
@@ -135,17 +136,14 @@ export function TasksPanel({
   const fmt = (iso: string) => new Date(iso.length === 10 ? iso + "T00:00:00" : iso).toLocaleDateString();
 
   return (
-    <section className="panel">
-      <div className="panel-head">
-        <Text type="text2" weight="bold">{title}</Text>
-        {counted.length > 0 && (
-          <Text type="text3" color="secondary">
-            {done} of {counted.length} done
-            {overdue > 0 && ` · ${overdue} overdue`}
-            {atRisk > 0 && ` · ${atRisk} at risk`}
-          </Text>
-        )}
-      </div>
+    <CollapsiblePanel
+      id="job-tasks"
+      title={title}
+      defaultOpen={false}
+      summary={counted.length > 0
+        ? <>{done} of {counted.length} done{overdue > 0 && ` · ${overdue} overdue`}{atRisk > 0 && ` · ${atRisk} at risk`}</>
+        : undefined}
+    >
 
       {error && <LoadProblem error={error} />}
       {problem && <Problem>{problem}</Problem>}
@@ -405,6 +403,6 @@ export function TasksPanel({
           })}
         </ul>
       )}
-    </section>
+    </CollapsiblePanel>
   );
 }

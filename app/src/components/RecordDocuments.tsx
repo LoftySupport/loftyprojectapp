@@ -4,6 +4,7 @@ import { useQuery } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { LoadProblem } from "./SearchNotices";
 import "./ui.css";
+import { CollapsiblePanel } from "./CollapsiblePanel";
 
 /**
  * The documents about one job or one project, on that record's own screen.
@@ -46,13 +47,16 @@ export function RecordDocuments({
   if (loading) return null;
 
   return (
-    <section className="panel">
-      <div className="panel-head">
-        <Text type="text2" weight="bold">Documents</Text>
-        {can("user") && (
+    <CollapsiblePanel id="job-documents" title="Documents" defaultOpen={false}>
+      {/* The link is in the BODY, not the heading. The heading is a <button> now, and a
+          <Link> inside a <button> is invalid HTML — the nested interactive element is
+          unreachable by keyboard and browsers disagree about which one a click hits.
+          Nothing is lost: you open a section before you act on it. */}
+      {can("user") && (
+        <div className="panel-actions">
           <Link to="/tools/document-builder"><Text type="text3">New document</Text></Link>
-        )}
-      </div>
+        </div>
+      )}
 
       {error && <LoadProblem error={error} />}
 
@@ -77,6 +81,6 @@ export function RecordDocuments({
           ))}
         </ul>
       )}
-    </section>
+    </CollapsiblePanel>
   );
 }

@@ -198,6 +198,59 @@
   margin-bottom: var(--space-12);
 }
 
+/* ---- a panel whose heading collapses it ----------------------------------
+   See CollapsiblePanel.tsx for why. The heading is a real <button> filling the
+   panel's width, so the whole row is the hit target rather than a 12px chevron —
+   at 460px in a docked drawer, a small target is the difference between using
+   this and not. */
+.panel-head-h { margin: 0; font: inherit; }
+.panel-toggle {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-8);
+  width: 100%;
+  /* Eats the panel's own padding so the row is edge to edge and the hit target
+     matches what looks clickable. Without this the button stops 16px short on
+     each side and the gap between two closed panels is dead space. */
+  margin: calc(var(--space-16) * -1);
+  padding: var(--space-16);
+  background: none;
+  border: 0;
+  border-radius: var(--border-radius-medium);
+  text-align: start;
+  cursor: pointer;
+  color: inherit;
+  transition: background-color var(--motion-productive-medium) var(--motion-timing-transition);
+}
+.panel-toggle:hover { background: var(--primary-background-hover-color); }
+.panel-toggle:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.panel-toggle-title { flex: 1 1 auto; min-width: 0; }
+/* Baseline-aligned with the title, and it wraps under it rather than truncating —
+   the same reasoning as .panel-head: half a count is worse than two lines. */
+.panel-toggle-summary {
+  flex: 0 1 auto;
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+}
+.panel-toggle-chevron {
+  display: inline-flex;
+  flex: 0 0 auto;
+  /* Nudged to sit on the text baseline rather than the line box's top. */
+  align-self: center;
+  color: var(--icon-color);
+  transition: transform var(--motion-productive-medium) var(--motion-timing-transition);
+}
+.panel-toggle[aria-expanded="true"] .panel-toggle-chevron { transform: rotate(90deg); }
+/* Restores the gap the negative margin above removed, but only when there is a body
+   to separate from. A closed panel is just its heading and needs no bottom gap. */
+.panel-collapsible-body { margin-top: var(--space-16); padding-top: var(--space-16); border-top: 1px solid var(--layout-border-color); }
+/* A closed panel is a single row, so it should not carry the visual weight of a card
+   with content in it. */
+.panel-collapsible:has(> .panel-head-h > [aria-expanded="false"]) { padding-bottom: var(--space-16); }
+@media (prefers-reduced-motion: reduce) {
+  .panel-toggle, .panel-toggle-chevron { transition: none; }
+}
+
 .stack { display: flex; flex-direction: column; gap: var(--space-16); }
 .stack-tight { display: flex; flex-direction: column; gap: var(--space-8); }
 .muted { color: var(--secondary-text-color); }
@@ -250,6 +303,14 @@
   margin-bottom: var(--space-12);
 }
 .board-column-empty { padding: var(--space-16) 0; text-align: center; }
+/* Cards were direct siblings with no gap, so they touched and read as one striped block
+   instead of as separate records — Amber, 7 September. The cards are block-level, so
+   adjacent margins COLLAPSE: the column head and .drag-hint already carry a 12px
+   margin-bottom, and this margin-top collapses against them to 12px rather than stacking
+   to 24px. One rule therefore spaces every board — Jobs and Projects both render their
+   cards as direct children of .board-column — without touching either page's markup or
+   double-spacing the head. */
+.board-column > * + * { margin-top: var(--space-12); }
 
 /* The board's scrollbar, moved to the bottom of the screen.
    ---------------------------------------------------------------------------
@@ -1800,7 +1861,15 @@ code { overflow-wrap: anywhere; }
   color: inherit;
   cursor: pointer;
 }
-.notif-bell-trigger:hover { background: var(--primary-selected-color); }
+/* The hover reads from the bar it is on. This used to be --primary-selected-color, the
+   peach selection tint (#fae4d5) — which is a LIGHT-surface token, and the header is dark
+   in every theme, so hovering the bell, the Ask button or the cog put a pale pink patch on
+   a near-black bar. Amber, 7 September: "remove the pale pink hover over icons from above".
+   Every other control on that bar already uses a white alpha (.app-nav-item,
+   .app-menu-button, .user-menu-trigger, .app-side-toggle), so the header now publishes
+   that value as --header-control-hover and this reads it. The fallback keeps the class
+   usable on a light surface if it is ever reused off the header. */
+.notif-bell-trigger:hover { background: var(--header-control-hover, var(--primary-background-hover-color)); }
 .notif-panel { width: min(400px, 80vw); padding: var(--space-4); }
 .notif-panel-head {
   display: flex;

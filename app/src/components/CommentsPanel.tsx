@@ -6,6 +6,7 @@ import { Problem } from "./Form";
 import { Token } from "./Token";
 import { FEEDBACK_STAGE_LABELS, type CommentEntry } from "../data/types";
 import "./ui.css";
+import { CollapsiblePanel } from "./CollapsiblePanel";
 
 /**
  * The comment thread on one record, and the composer that adds to it.
@@ -106,13 +107,12 @@ export function CommentsPanel({
   const [latest, ...earlier] = comments;
 
   return (
-    <section className="panel">
-      <div className="panel-head">
-        <Text type="text2" weight="bold">{title}</Text>
-        {comments.length > 1 && (
-          <Text type="text3" color="secondary">{comments.length} updates</Text>
-        )}
-      </div>
+    <CollapsiblePanel
+      id="job-comments"
+      title={title}
+      defaultOpen={false}
+      summary={comments.length > 1 ? <>{comments.length} updates</> : undefined}
+    >
 
       {/* The composer first: "add the latest update" is the action this panel is for,
           and it should not sit under a long thread. `user` and above is the insert
@@ -215,7 +215,7 @@ export function CommentsPanel({
           <Text type="text3" ellipsis={false}>{c.body}</Text>
         </div>
       ))}
-    </section>
+    </CollapsiblePanel>
   );
 }
 

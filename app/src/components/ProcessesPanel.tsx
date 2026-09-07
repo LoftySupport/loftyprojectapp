@@ -12,6 +12,7 @@ import { PartiesPanel } from "./PartiesPanel";
 import { Select } from "./Select";
 import "./ui.css";
 import "./processes.css";
+import { CollapsiblePanel } from "./CollapsiblePanel";
 
 /**
  * Where a record stands in every process of every stage.
@@ -122,25 +123,23 @@ export function ProcessesPanel({
 
   if (!loading && stages.length === 0) {
     return (
-      <section className="panel" aria-label={title}>
-        <div className="panel-head"><Text type="text2" weight="bold">{title}</Text></div>
+      <CollapsiblePanel id={`processes-${scope}`} title={title} defaultOpen={false} summary="none defined">
         <Text type="text2" color="secondary" ellipsis={false}>
           No {scope} processes are defined yet. Managers define them in Setup → Processes.
         </Text>
-      </section>
+      </CollapsiblePanel>
     );
   }
 
   return (
-    <section className="panel" aria-label={title}>
-      <div className="panel-head">
-        <Text type="text2" weight="bold">{title}</Text>
-        <Text type="text3" color="secondary">
-          {loading
-            ? "Loading…"
-            : `${runs.filter(r => r.status === "complete").length} complete · ${runs.filter(r => isRunOpen(r.status) && r.status !== "not_started").length} in progress`}
-        </Text>
-      </div>
+    <CollapsiblePanel
+      id={`processes-${scope}`}
+      title={title}
+      defaultOpen={false}
+      summary={loading
+        ? "Loading…"
+        : `${runs.filter(r => r.status === "complete").length} complete · ${runs.filter(r => isRunOpen(r.status) && r.status !== "not_started").length} in progress`}
+    >
       {error && <div className="create-problem" role="alert"><Text type="text2" ellipsis={false}>{error}</Text></div>}
 
       {stages.map(({ stage, processes: ps }) => {
@@ -293,7 +292,7 @@ export function ProcessesPanel({
           </details>
         );
       })}
-    </section>
+    </CollapsiblePanel>
   );
 }
 

@@ -157,6 +157,10 @@ html, body, #root { height: 100%; }
 /* ---- the top bar ----------------------------------------------------------
    What is left once nav moves out: find something, and who you are. */
 .app-header {
+  /* Read by .notif-bell-trigger in ui.css — the bell, the Ask button and the cog. The bar
+     is dark in every theme, so its controls hover with a white alpha, never with a
+     light-surface tint. */
+  --header-control-hover: rgba(255, 255, 255, 0.12);
   display: flex;
   align-items: center;
   gap: var(--space-12);
@@ -222,7 +226,10 @@ html, body, #root { height: 100%; }
    Admin?" is a question the header should answer. */
 .app-admin-cog { text-decoration: none; }
 .app-header .app-admin-cog, .app-header .app-admin-cog * { color: var(--fixed-light-color); }
-.app-admin-cog.is-active { background: var(--primary-selected-color); }
+/* Active, not hovered, so it has to be stronger than the .12 hover to read as "you are
+   here" — the same 0.22 the collapsed rail's toggle uses for the same reason. It was the
+   peach selection tint, which is a light-surface token on a dark bar. */
+.app-admin-cog.is-active { background: rgba(255, 255, 255, 0.22); }
 .app-user { display: flex; align-items: center; gap: var(--space-8); min-width: 0; }
 /* Vibe's Text picks its colour from the theme, which is dark ink in light mode — on a
    bar that is dark teal in every theme. Pin the ink to the bar, as the yellow banner
