@@ -9,6 +9,7 @@ import { useProcesses, usePropertyDefs, usePropertyOptions, useStages, useTeams 
 import { LoadProblem, NothingYet } from "../components/SearchNotices";
 import { Problem } from "../components/Form";
 import { Select, toOptions } from "../components/Select";
+import { parseSubject, subjectOptionsFor, type SubjectKind } from "./documentSubject";
 import { SidePanel } from "../components/SidePanel";
 import { useToasts } from "../components/Toasts";
 import {
@@ -231,6 +232,14 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
    * in the wrong one is a thing that can happen.
    */
   const [subjectPick, setSubjectPick] = useState<string | null>(null);
+  /**
+   * Job or project — asked before the list, not buried inside it.
+   *
+   * See `subjectOptions` for the number that made this its own control. It defaults to
+   * "job" because that is still the common case; what changed is that "project" is now
+   * one click away instead of 75 rows down.
+   */
+  const [subjectKind, setSubjectKind] = useState<SubjectKind>("job");
   /**
    * The same thing for the library lanes: which card was clicked, so the panel knows
    * whether to ask for a source as well as a name.
@@ -497,33 +506,43 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
   /**
    * Every job and every project, in one list, jobs first.
    *
-   * Jobs first because a document is usually about one — a progress report for
-   * 1042-001, a client letter about that lot. A project-wide document (a feasibility, a
-   * whole-site summary) is the rarer case and sits below.
+   * ONE LIST OF ONE KIND, chosen above it — and the reason is a number.
+   *
+   * This was a single list of every job AND every project, jobs first on the reasoning
+   * that a document is usually about one. On 7 September the live database had 75 jobs
+   * and 117 projects, and of the 8 documents anybody had made, **6 were on a job and 0
+   * were on a project.** Not one, ever.
+   *
+   * Nothing was broken: the column, the foreign key, the RLS policy and the value this
+   * picker emits were all correct, and a project-linked document rendered on the project
+   * perfectly well once one existed. What was wrong was that you could not get to it.
+   * 192 options in one control, and `Select` sorts by label unless told not to — job
+   * labels start with a digit and project labels started with the word "Project", so
+   * every project sorted below every job. Reaching one meant scrolling past 75 jobs or
+   * guessing that "Project" was the word to type.
+   *
+   * "Rarer" was the wrong thing to optimise for. Rare is not the same as hidden, and a
+   * list that is technically complete but practically unreachable produces exactly this:
+   * a feature that works and that nobody has ever used. So the kind is its own control
+   * now, and each list holds one kind and is as long as that kind is.
    *
    * The label carries the address as well as the number, because "1042-001" is what
    * somebody types and "28 Corner Street" is what they remember, and the Select searches
-   * the label.
+   * the label. "Project" is no longer prefixed onto it — the control above already says
+   * which kind you are looking at, and repeating it in all 117 labels only made them
+   * sort away from the numbers people search by.
    */
-  const subjectOptions = useMemo(() => [
-    ...jobs.map(j => ({
-      value: `job:${j.jobNumber}`,
-      label: `${j.jobNumber}${j.currentAddress ? ` — ${j.currentAddress}` : ""}`
-    })),
-    ...projects.map(p => ({
-      value: `project:${p.projectNumber}`,
-      label: `Project ${p.projectNumber}${p.currentAddress ? ` — ${p.currentAddress}` : ""}`
-    }))
-  ], [jobs, projects]);
+  const subjectOptions = useMemo(
+    () => subjectOptionsFor(
+      subjectKind,
+      jobs.map(j => ({ number: j.jobNumber, currentAddress: j.currentAddress })),
+      projects.map(p => ({ number: p.projectNumber, currentAddress: p.currentAddress }))
+    ),
+    [subjectKind, jobs, projects]
+  );
 
-  /** `job:1042-001` → what createReportDocument wants. */
-  const pickedSubject = useMemo(() => {
-    if (!subjectPick) return null;
-    const [kind, id] = subjectPick.split(/:(.*)/s);
-    return kind === "project"
-      ? { jobId: null, projectId: Number(id) }
-      : { jobId: id, projectId: null };
-  }, [subjectPick]);
+  /** `job:1042-001` → what createReportDocument wants. See `documentSubject.ts`. */
+  const pickedSubject = useMemo(() => parseSubject(subjectPick), [subjectPick]);
 
   // ── Documents ────────────────────────────────────────────────────────────
 
@@ -680,6 +699,38 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
     // depending on them would re-run it against the URL it just changed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wanted, open, documentStore, repo]);
+
+  /**
+   * `?for=project:1042` — arriving from a record, with that record already chosen.
+   *
+   * The other half of the same problem `subjectOptions` describes. "New document" on a
+   * project used to drop you on the builder with an empty picker, so the first thing you
+   * did was hunt for the project you had just been looking at. Now the link carries it.
+   *
+   * It opens the naming panel too, because coming from that link IS the decision to make
+   * a document; stopping at the Get Started cards would be one more click to say what you
+   * have already said. "Start from scratch" is the assumption — the record is known, the
+   * template is not, and a template can be chosen on the next document.
+   *
+   * The parameter is cleared once read, exactly as `?open=` is and for the same reason:
+   * cancel the panel and it must stay cancelled, rather than springing back on the next
+   * render from a URL nobody updated.
+   */
+  const wantedFor = params.get("for");
+  useEffect(() => {
+    if (!wantedFor || open || starting) return;
+    const [kind, id] = wantedFor.split(/:(.*)/s);
+    if ((kind === "job" || kind === "project") && id) {
+      setSubjectKind(kind);
+      setSubjectPick(`${kind}:${id}`);
+      setStarting({ how: "scratch" });
+    }
+    const next = new URLSearchParams(params);
+    next.delete("for");
+    setParams(next, { replace: true });
+    // Same reasoning as the effect above: it clears the parameter it reads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantedFor, open, starting]);
 
   // NO `openDocument` AND NO `removeDocument` ON THIS SCREEN, AND THAT IS DELIBERATE.
   //
@@ -1117,13 +1168,36 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
               without a record to attach. What is required is the ANSWER on this screen,
               which is where somebody is choosing freely and could otherwise leave it
               blank without noticing. */}
-          <Select
-            aria-label="The job or project this document is about"
-            placeholder={subjectOptions.length ? "Which job or project…" : "No jobs or projects yet"}
-            options={subjectOptions}
-            value={subjectPick}
-            onChange={v => setSubjectPick(v)}
-          />
+          <div className="subject-pick">
+            <div className="subject-kind" role="radiogroup" aria-label="Is this document about a job or a project?">
+              {(["job", "project"] as const).map(k => (
+                <button
+                  key={k}
+                  type="button"
+                  role="radio"
+                  aria-checked={subjectKind === k}
+                  className={`subject-kind-option${subjectKind === k ? " is-on" : ""}`}
+                  /* Clearing the pick is the point, not tidiness: `job:1042-001` left in
+                     state while the Project list is showing would create a document
+                     against a job the panel is no longer offering. */
+                  onClick={() => { setSubjectKind(k); setSubjectPick(null); }}
+                >
+                  {k === "job" ? "A job" : "A project"}
+                </button>
+              ))}
+            </div>
+            <Select
+              aria-label={subjectKind === "project" ? "The project this document is about" : "The job this document is about"}
+              placeholder={
+                subjectOptions.length
+                  ? (subjectKind === "project" ? "Which project…" : "Which job…")
+                  : (subjectKind === "project" ? "No projects yet" : "No jobs yet")
+              }
+              options={subjectOptions}
+              value={subjectPick}
+              onChange={v => setSubjectPick(v)}
+            />
+          </div>
 
           {starting?.how === "template" && (
             <Select
