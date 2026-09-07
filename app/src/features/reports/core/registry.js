@@ -24,7 +24,9 @@
 // Settings field:
 //   { key, type, label, hint?, options?, visible?(options, ctx), ... }
 //   type: 'text' | 'textarea' | 'richtext' | 'number' | 'checkbox'
-//       | 'select' | 'multiselect' | 'table'
+//       | 'select' | 'multiselect' | 'table' | 'image'
+//   'image' offers a file picker and a drop target as well as a URL box, and only when
+//   the host provides ctx.uploadImage(file) => Promise<url>. It stores a URL either way.
 //   `options` is an array of { value, label } or a function (ctx) => that.
 //   `visible` hides a field until another option makes it relevant.
 
@@ -94,14 +96,20 @@ export const CORE_WIDGETS = {
   image: {
     label: 'Image',
     group: TEXT_GROUP,
-    hint: 'Image from a URL: logo, screenshot, diagram',
+    hint: 'A picture: logo, site photo, screenshot, diagram',
     defaults: () => ({ url: '', caption: '' }),
     settings: [
-      { key: 'url', type: 'text', label: 'Image URL', placeholder: 'https://…' },
+      /**
+       * `image` rather than `text`, which is what makes the control offer an upload —
+       * but only when the host supplies `ctx.uploadImage`. Without it the field renders
+       * as the URL box it has always been, so a host with nowhere to put a file is not
+       * shown a button that cannot work.
+       */
+      { key: 'url', type: 'image', label: 'Image', placeholder: 'https://…' },
       { key: 'caption', type: 'text', label: 'Caption' },
     ],
     resolve: (o, ctx, h) => (!o?.url
-      ? (h.forExport ? [] : [helpers.info('Set an image URL in this block’s settings.')])
+      ? (h.forExport ? [] : [helpers.info('No image yet. Select this block and drop one in, or paste a URL.')])
       : [{ type: 'image', src: o.url, caption: o.caption || '' }]),
   },
 

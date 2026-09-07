@@ -18,6 +18,7 @@
     "check:report-widgets": "node --import ./scripts/register-ts.mjs scripts/report-widgets-check.mjs",
     "check:share-password": "node --import ./scripts/register-ts.mjs scripts/share-password-check.mjs",
     "check:builder-dnd": "node scripts/check-builder-dnd.mjs",
+    "check:import": "node scripts/check-import.mjs",
     "check:design-tokens": "node scripts/check-design-tokens.mjs",
     "check:capped-list": "node scripts/check-capped-list.mjs",
     "check:contrast": "node scripts/check-contrast.mjs"
@@ -35,6 +36,8 @@
     "@vibe/tooltip": "^4.0.19",
     "docx": "^9.7.1",
     "dompurify": "^3.4.14",
+    "mammoth": "^1.12.2",
+    "pdfjs-dist": "^6.3.289",
     "qrcode-generator": "^2.0.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

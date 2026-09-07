@@ -54,12 +54,12 @@ responsive sweep included, now that it runs there):**
    Jobs table. If any of them misbehaves, the seam (`undoableRepository.ts`) is where undo
    lives now — there is no longer a per-screen registration to look for.
 2. **Work the open-questions queue**, top question first — `docs/open-questions.md`. Six
-   questions were added today; the first (Bugs and Ideas off Admin) was asked and answered
-   the same evening, so nine remain (numbered 1–9 there; the four older ones follow). Two of
-   the first four are cheap confirmations of decisions made under time pressure; asked once,
-   they stop being risks. Number 5 is the one that BLOCKS something: cloning a job has no
-   entry point since the button left the drawer (#50) and nothing on the Projects side has
-   taken it yet.
+   questions were added today by this line of work; the first (Bugs and Ideas off Admin) was
+   asked and answered the same evening, and #54 put three security-advisor questions at the
+   top, so twelve remain. Numbers 4–7 are the cheap confirmations of decisions made under
+   time pressure; asked once, they stop being risks. Number 8 is the one that BLOCKS
+   something: cloning a job has no entry point since the button left the drawer (#50) and
+   nothing on the Projects side has taken it yet.
 3. **Small follow-ups that fell out of today, none blocking:**
    - The column picker will list every property — eighty-odd once the definitions are all
      active. It has no search box. Add one when it gets unwieldy, not before.
