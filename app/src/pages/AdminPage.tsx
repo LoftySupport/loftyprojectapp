@@ -24,7 +24,6 @@ import { DictionaryPage } from "./DictionaryPage";
 import { FeedbackList } from "./FeedbackList";
 import { PermissionsPage } from "./PermissionsPage";
 import { WiringPage } from "./WiringPage";
-import { Changelog, Roadmap } from "./UpdatesPage";
 import "../components/ui.css";
 
 /**
@@ -51,11 +50,17 @@ import "../components/ui.css";
  * an admin deactivating a person were sharing a tab strip for no better reason than that
  * both were "setup".
  *
- * Roadmap and Changelog are the SAME COMPONENTS the Updates page renders, imported rather
- * than copied. Updates stays where it is — in the footer, for everybody, because the queue
- * is the thing people are meant to read (0060) — and the planning and publishing controls
- * inside it were already admin's and superadmin's respectively. What this gives an admin
- * is one door with all of it behind it, not a second implementation to keep in step.
+ * ROADMAP AND CHANGELOG ARE NOT HERE, as of 7 September. They were, as the same components
+ * Updates renders — imported rather than copied, so there was never a second implementation
+ * to keep in step. The argument for keeping them was "one door with all of it behind it".
+ * Amber's answer was that it read as doubling up: *"there is duplication on footer and other
+ * page"*. Two doors to identical content is a thing a person has to check, and being the
+ * same component underneath is a fact about the code, not about the experience.
+ *
+ * So the cog links to `/updates` for both. Nothing moved and no permission changed — the
+ * planning and publishing controls inside Updates were already admin's and superadmin's
+ * respectively, and Updates stays in the footer for everybody because the queue is the
+ * thing people are meant to read (0060).
  *
  * The section is in the URL, like Settings' and Updates', so a link to Teams or to the
  * bug queue is a link somebody can send.
@@ -70,12 +75,11 @@ const SECTIONS = [
   { slug: "dictionary",  label: "Dictionary" },
   { slug: "wiring",      label: "Wiring" },
   // The tracker, from an administrator's side. Bugs and Ideas are the triage lists that
-  // were Setup's last two admin-only tabs; Roadmap and Changelog are Updates' own tabs,
-  // reachable here because planning and publishing are admin acts.
+  // were Setup's last two admin-only tabs, and they are admin-only on purpose — Amber,
+  // 7 September: "only admins and super admin get to see the bug manager". Filing is not
+  // triage: ReportForm has no permission gate, so anybody with app access can send one.
   { slug: "bugs",        label: "Bugs" },
-  { slug: "ideas",       label: "Ideas" },
-  { slug: "roadmap",     label: "Roadmap" },
-  { slug: "changelog",   label: "Changelog" }
+  { slug: "ideas",       label: "Ideas" }
 ] as const;
 
 export function AdminPage() {
@@ -83,6 +87,16 @@ export function AdminPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const index = SECTIONS.findIndex(s => s.slug === section);
+
+  // Roadmap and Changelog left this screen on 7 September. They were sections with URLs, and
+  // this file's own reasoning for putting the section in the URL was that "a link to Teams or
+  // to the bug queue is a link somebody can send" — so somebody has sent these. Forwarding
+  // them costs two lines; the alternative is an old link landing silently on Users, which
+  // looks like the page is broken rather than like the tab moved.
+  const MOVED: Record<string, string> = { roadmap: "/updates/roadmap", changelog: "/updates/changelog" };
+  if (section && MOVED[section]) {
+    return <Navigate to={{ pathname: MOVED[section], search: location.search }} replace />;
+  }
 
   // `/admin` on its own is a reasonable thing to type, and `/admin?person=<id>` is what
   // every activity line links to — so the search string has to survive the redirect or
@@ -112,8 +126,6 @@ export function AdminPage() {
         {section === "wiring"      && <WiringPage />}
         {section === "bugs"        && <FeedbackList kind="bug" />}
         {section === "ideas"       && <FeedbackList kind="idea" />}
-        {section === "roadmap"     && <Roadmap />}
-        {section === "changelog"   && <Changelog />}
       </div>
     </>
   );

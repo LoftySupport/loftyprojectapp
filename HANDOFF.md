@@ -65,11 +65,20 @@ diagram, and the three questions still open at the end. The decision log entry i
 
 | Settings — `/setup`, manager+ | Admin — `/admin`, admin+ |
 |---|---|
-| Properties, Processes, Contacts, Maintenance, Automations | Users, Teams, Permissions, Dictionary, Wiring, Bugs, Ideas, Roadmap, Changelog |
+| Properties, Processes, Contacts, Maintenance, Automations | Users, Teams, Permissions, Dictionary, Wiring, Bugs, Ideas |
 
-Ten tabs became five and nine. Roadmap and Changelog on Admin are the **same components**
-Updates renders, imported rather than copied — Updates stays in the footer for everybody,
-because `0060`'s whole point is that the people who filed a request can read the queue.
+Ten tabs became five and seven. **Roadmap and Changelog were on Admin too until 7 September**
+— the same components Updates renders, imported rather than copied. Amber: *"there is
+duplication on footer and other page"*, so they came out and the cog links to `/updates`.
+Being one component underneath was a fact about the code, not about the experience: two
+doors to identical content is still a thing a person has to check. `/admin/roadmap` and
+`/admin/changelog` forward to their Updates equivalents, because those URLs were shareable
+and somebody has shared them. Updates itself stays in the footer for everybody, because
+`0060`'s whole point is that the people who filed a request can read the queue.
+
+**Bugs and Ideas stay admin-only**, confirmed the same day: *"only admins and super admin get
+to see the bug manager"*. Filing is not triage — `ReportForm` has no permission gate, so
+anybody with app access including a viewer can send one.
 
 ### 0096 is the half that stops the rename being decoration
 
@@ -1156,7 +1165,8 @@ scope model; the shape is in `docs/schema/supabase-schema.md`.
 **This split was by SUBJECT, and the 4 September one is by WHO ASKS.** Setup is now
 **Settings**, manager and above, holding Properties, Processes, Contacts, Maintenance and
 Automations; Admin is behind the header cog, admin and above, and took Permissions,
-Dictionary, Wiring, Bugs, Ideas, Roadmap and Changelog with it. See *Session of
+Dictionary, Wiring, Bugs, Ideas, Roadmap and Changelog with it — **Roadmap and Changelog
+came back out again on 7 September as duplication; see the top of this file.** See *Session of
 2026-09-04 (later)* at the top, and `docs/schema/schema-plan.md` → *4 September — Settings is the
 managers', Admin is the administrators'*. The reasoning below is kept because it explains
 why the tabs sit where they do at all; the table is no longer what the app does.
