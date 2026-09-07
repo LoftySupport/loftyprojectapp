@@ -118,7 +118,9 @@ const propertyDefs = [
   { key: "slab_cost", label: "Slab cost", format: "currency", stageName: "Construction", position: 2 },
   { key: "council_approved", label: "Council approved", format: "checkbox", stageName: "Pre-Construction", position: 1 },
   { key: "cladding", label: "Cladding", format: "single select", stageName: "Design", position: 1 },
-  { key: "never_filled_in", label: "Nobody has filled this in", format: "text", stageName: "Design", position: 2 }
+  { key: "never_filled_in", label: "Nobody has filled this in", format: "text", stageName: "Design", position: 2 },
+  // Project-scoped: recorded once for the site, read through by every job on it.
+  { key: "council", label: "Council", format: "text", stageName: "Pre-Construction", position: 2 }
 ];
 const propertyOptions = [
   { propertyKey: "cladding", key: "brick", label: "Brick veneer", position: 1, isActive: true }
@@ -128,7 +130,9 @@ const propertyValues = [
   { id: "v2", propertyKey: "slab_cost", format: "currency", jobId: "1042-001", projectId: null, value: { number: 18400 } },
   { id: "v3", propertyKey: "council_approved", format: "checkbox", jobId: "1042-001", projectId: null, value: { bool: true } },
   { id: "v4", propertyKey: "cladding", format: "single select", jobId: "1042-001", projectId: null, value: { optionKey: "brick" } },
-  { id: "v5", propertyKey: "slab_cost", format: "currency", jobId: null, projectId: 1042, value: { number: 51000 } }
+  { id: "v5", propertyKey: "slab_cost", format: "currency", jobId: null, projectId: 1042, value: { number: 51000 } },
+  // Only the project has this one, and only project 1042 — so a job on 1043 must not see it.
+  { id: "v6", propertyKey: "council", format: "text", jobId: null, projectId: 1042, value: { text: "Tea Tree Gully" } }
 ];
 
 /** One approved library section, holding two blocks. */
@@ -807,6 +811,55 @@ console.log("--- the Lofty theme is the house document format, role for role");
     LOFTY_WIDGETS.qrCode.settings.length === 3
     && LOFTY_WIDGETS.qrCode.settings.map(s => s.key).join(",") === "url,caption,size",
     LOFTY_WIDGETS.qrCode.settings.map(s => s.key).join(","));
+}
+
+// ─── 17. A job reads its project's properties through ────────────────────
+//
+// Amber, 5 September: *"jobs inherit project proerties so they should be available to
+// select on the job"*. They were always available to SELECT — the picker lists every
+// definition — and selecting a project property on a job printed nothing, because the
+// resolver took job rows or project rows and never both.
+//
+// The app has always done it the other way round: `PropertySlots` shows a job the
+// project's value read through, and the type for `property_values` says so in as many
+// words. The report was the odd one out, and a report that disagrees with the drawer it
+// was taken from is the failure this feature exists to prevent.
+{
+  // It emits a definition list, not a table — `[0].items` of {label, value}, which is
+  // how every other assertion on this block reads it.
+  const itemsOf = (opts) => engine.resolve(
+    { id: "wI", kind: "recordProperties", options: { propertyKeys: [], showBlanks: false, ...opts } },
+    full
+  )[0]?.items ?? [];
+  const find = (items, label) => items.find(i => i.label === label);
+
+  // Broken by putting the old `jobId ? v.jobId === jobId : …` filter back: Council
+  // vanishes from the job while staying on the project.
+  const onJob = itemsOf({ source: "job", jobId: "1042-001" });
+  ok("a job shows a property only its project carries",
+    !!find(onJob, "Council"),
+    onJob.map(i => i.label).join(" | "));
+
+  // Broken by dropping the two-pass `valueFor` build back to one `new Map(rows.map(…))`:
+  // whichever row the fixture happens to list last wins, which is the project's.
+  const slab = find(onJob, "Slab cost");
+  ok("and the job's own value beats the project's for the same property",
+    !!slab && /18[,.]?400/.test(String(slab.value)),
+    slab ? String(slab.value) : "no Slab cost row");
+
+  // The one that stops "inherit" meaning "from any project". Broken by dropping the
+  // `String(v.projectId) === ownProject` test: 1043-001 picks up Tea Tree Gully.
+  const otherProject = itemsOf({ source: "job", jobId: "1043-001" });
+  ok("a job on another project inherits nothing from this one",
+    !find(otherProject, "Council"),
+    otherProject.map(i => i.label).join(" | "));
+
+  // A project still reads only its own. Broken by letting job rows through when no
+  // jobId is set: the project would show 1042-001's site start date as its own.
+  const ownOnly = itemsOf({ source: "project", projectId: "1042" });
+  ok("a project reads its own values and not its jobs'",
+    !!find(ownOnly, "Council") && !find(ownOnly, "Site start date"),
+    ownOnly.map(i => i.label).join(" | "));
 }
 
 console.log(failures === 0
