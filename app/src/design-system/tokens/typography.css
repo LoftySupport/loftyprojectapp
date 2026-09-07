@@ -1,0 +1,75 @@
+/* Type scale — Vibe's screen scale (Figtree body, Poppins titles), plus Lofty's
+   Fieldwork brand families for brand-led surfaces (decks, print, marketing heroes). */
+:root{
+  --font-family:Figtree,"Fieldwork Hum",Roboto,sans-serif;
+  --title-font-family:Poppins,"Fieldwork Geo",Roboto,sans-serif;
+  --h1-font-family:var(--title-font-family);
+  --brand-font-family:"Fieldwork Geo","Fieldwork",Poppins,sans-serif;
+  --brand-body-font-family:"Fieldwork Hum","Fieldwork",Figtree,sans-serif;
+
+  --font-smoothing-webkit:antialiased;
+  --font-smoothing-moz:grayscale;
+
+  --font-weight-very-light:200;
+  --font-weight-light:300;
+  --font-weight-normal:400;
+  --font-weight-medium:600;
+  --font-weight-bold:700;
+
+  --font-size-10:14px;
+  --font-size-20:14px;
+  --font-size-30:16px;
+  --font-size-40:18px;
+  --font-size-50:24px;
+  --font-size-60:30px;
+
+  --font-line-height-10:18px;
+  --font-line-height-20:24px;
+  --font-line-height-30:24px;
+  --font-line-height-40:24px;
+  --font-line-height-50:32px;
+  --font-line-height-60:42px;
+
+  /* Composite text styles (font shorthand) */
+  --font-h1-bold:700 32px/40px var(--title-font-family);
+  --font-h1-medium:600 32px/40px var(--title-font-family);
+  --font-h1-normal:500 32px/40px var(--title-font-family);
+  --font-h1-light:300 32px/40px var(--title-font-family);
+  --font-h2-bold:700 24px/30px var(--title-font-family);
+  --font-h2-medium:600 24px/30px var(--title-font-family);
+  --font-h2-normal:500 24px/30px var(--title-font-family);
+  --font-h2-light:300 24px/30px var(--title-font-family);
+  --font-h3-bold:700 18px/24px var(--title-font-family);
+  --font-h3-medium:600 18px/24px var(--title-font-family);
+  --font-h3-normal:500 18px/24px var(--title-font-family);
+  --font-h3-light:300 18px/24px var(--title-font-family);
+
+  --font-text1-bold:700 16px/22px var(--font-family);
+  --font-text1-medium:600 16px/22px var(--font-family);
+  --font-text1-normal:400 16px/22px var(--font-family);
+  --font-text2-bold:700 14px/20px var(--font-family);
+  --font-text2-medium:600 14px/20px var(--font-family);
+  --font-text2-normal:400 14px/20px var(--font-family);
+  --font-text3-bold:700 12px/16px var(--font-family);
+  --font-text3-medium:600 12px/16px var(--font-family);
+  --font-text3-normal:400 12px/16px var(--font-family);
+
+  /* Brand display (Fieldwork Geo Demi Bold, tight tracking per brand kit) */
+  --font-display-xl:600 64px/1.02 var(--brand-font-family);
+  --font-display-l:600 48px/1.05 var(--brand-font-family);
+  --font-display-m:600 32px/1.1 var(--brand-font-family);
+  --font-brand-body:300 18px/1.5 var(--brand-body-font-family);
+
+  --letter-spacing-h1-bold:-0.5px;
+  --letter-spacing-h1-normal:-0.5px;
+  --letter-spacing-h1-light:-0.5px;
+  --letter-spacing-h2-bold:-0.1px;
+  --letter-spacing-h2-normal:-0.1px;
+  --letter-spacing-h2-light:-0.1px;
+  --letter-spacing-h3-bold:-0.1px;
+  --letter-spacing-h3-normal:-0.1px;
+  --letter-spacing-h3-light:-0.1px;
+  /* Brand kit: headings -10 tracking, body -20 tracking (of 1000 em units) */
+  --letter-spacing-brand-heading:-0.01em;
+  --letter-spacing-brand-body:-0.02em;
+}

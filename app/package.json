@@ -17,7 +17,9 @@
     "check:process-move": "node scripts/check-process-move.mjs",
     "check:report-widgets": "node --import ./scripts/register-ts.mjs scripts/report-widgets-check.mjs",
     "check:share-password": "node --import ./scripts/register-ts.mjs scripts/share-password-check.mjs",
-    "check:builder-dnd": "node scripts/check-builder-dnd.mjs"
+    "check:builder-dnd": "node scripts/check-builder-dnd.mjs",
+    "check:design-tokens": "node scripts/check-design-tokens.mjs",
+    "check:contrast": "node scripts/check-contrast.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -29,19 +31,19 @@
     "@vercel/speed-insights": "^2.0.0",
     "@vibe/core": "^4.5.30",
     "@vibe/icons": "^4.1.0",
-    "@vibe/tooltip": "^3.1.0",
+    "@vibe/tooltip": "^4.0.19",
     "docx": "^9.7.1",
     "dompurify": "^3.4.14",
     "qrcode-generator": "^2.0.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-qr-code": "^2.2.0",
-    "react-router-dom": "^7.18.2"
+    "react-router-dom": "^7.18.3"
   },
   "devDependencies": {
-    "@types/node": "^24.13.3",
+    "@types/node": "^26.4.1",
     "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
+    "@types/react-dom": "^19.2.6",
     "@vitejs/plugin-react": "^6.0.4",
     "jsqr": "^1.4.0",
     "oxlint": "^1.75.0",

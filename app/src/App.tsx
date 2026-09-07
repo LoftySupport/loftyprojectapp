@@ -270,6 +270,12 @@ export default function App() {
     // off the same class, so mirror it on <body> for anything outside that tree.
     document.body.classList.toggle("dark-app-theme", theme !== "light");
     document.body.classList.toggle("black-app-theme", theme === "black");
+    // And the design system's own switch, on <html>: its dark.css declares the whole
+    // --lofty-dark-* palette under [data-theme="dark"], and tokens.css references those
+    // names. Without this stamp they are undefined and the dark theme silently falls back
+    // to the light values. Body classes cannot do this job on their own — they win the
+    // specificity fight against Vibe, but they are not where the mirror declares its palette.
+    document.documentElement.dataset.theme = theme === "light" ? "light" : "dark";
   }, [theme]);
 
   return (

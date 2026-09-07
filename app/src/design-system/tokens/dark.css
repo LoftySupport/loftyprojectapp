@@ -1,0 +1,104 @@
+/* Lofty dark theme. Apply data-theme="dark" on <html> or any subtree.
+   Grounds are shades of Foundation Black (no new hue). Text is lifted to near-white so every
+   pairing clears 4.5:1; accents keep their hue but shift value for contrast on dark. */
+[data-theme="dark"]{
+  /* dark neutral steps */
+  --lofty-dark-base:#191819;
+  --lofty-dark-surface:#232224;
+  --lofty-dark-raised:#2e2d2f;
+  --lofty-dark-border:#414042;
+  --lofty-dark-border-strong:#5a595c;
+  --lofty-dark-text:#f2f1f2;        /* 15.6:1 on surface */
+  --lofty-dark-text-muted:#b9b8bc;  /* 8.4:1 on surface */
+  --lofty-dark-text-faint:#a3a2a6;  /* 5.1:1 on raised (inputs) — placeholders only */
+  --lofty-orange-dark-hover:#f79a84;
+  --lofty-orange-dark-selected:#4a2e28;
+  --lofty-orange-dark-tint:#2d211f;
+  --lofty-green-dark:#1f8791;       /* Eco Green lifted: white on it 4.6:1 */
+  --lofty-green-dark-hover:#2a9ea9;
+  --lofty-green-dark-tint:#1c2e30;
+
+  /* primary / brand */
+  --primary-hover-color:var(--lofty-orange-dark-hover);
+  --primary-selected-color:var(--lofty-orange-dark-selected);
+  --primary-selected-hover-color:#5a3730;
+  --primary-highlighted-color:var(--lofty-orange-dark-tint);
+  --primary-surface-color:var(--lofty-dark-raised);
+  --brand-hover-color:var(--lofty-orange-dark-hover);
+  --brand-selected-color:var(--lofty-orange-dark-selected);
+  --brand-selected-hover-color:#5a3730;
+  --secondary-color:var(--lofty-dark-text);
+  --secondary-hover-color:var(--lofty-dark-text-muted);
+  --secondary-selected-color:var(--lofty-dark-raised);
+  --highlight-color:var(--lofty-green-dark);
+  --highlight-hover-color:var(--lofty-green-dark-hover);
+  --highlight-tint-color:var(--lofty-green-dark-tint);
+
+  /* text */
+  --primary-text-color:var(--lofty-dark-text);
+  --secondary-text-color:var(--lofty-dark-text-muted);
+  --placeholder-color:var(--lofty-dark-text-faint);
+  --text-color-on-primary:var(--lofty-finisher-white); /* never black on Crisp Orange, on either theme */
+  --text-color-on-brand:var(--lofty-finisher-white);
+  --text-color-on-inverted:var(--lofty-dark-base);
+  --text-color-on-status:var(--lofty-finisher-white);
+  --text-color-on-warning:var(--lofty-dark-base);
+  --disabled-text-color:rgba(242,241,242,.4);
+  --link-color:var(--lofty-dark-text);
+  --link-hover-color:var(--lofty-orange-dark-hover);
+
+  /* surfaces */
+  --primary-background-color:var(--lofty-dark-surface);
+  --secondary-background-color:var(--lofty-dark-raised);
+  --primary-background-hover-color:rgba(242,241,242,.08);
+  --allgrey-background-color:var(--lofty-dark-base);
+  --grey-background-color:var(--lofty-dark-base);
+  --dark-background-color:var(--lofty-dark-base);
+  --warm-background-color:var(--lofty-dark-base);
+  --warm-surface-color:var(--lofty-dark-raised);
+  --warm-border-color:var(--lofty-dark-border);
+  --inverted-color-background:var(--lofty-dark-text);
+  --modal-background-color:var(--lofty-dark-raised);
+  --dialog-background-color:var(--lofty-dark-raised);
+  --backdrop-color:rgba(0,0,0,.7);
+  --disabled-background-color:var(--lofty-dark-raised);
+  --fixed-dark-color:var(--lofty-dark-base);
+  --fixed-light-color:var(--lofty-dark-text);
+
+  /* lines & icons */
+  --ui-border-color:var(--lofty-dark-border-strong);
+  --layout-border-color:var(--lofty-dark-border);
+  --ui-background-color:var(--lofty-dark-border);
+  --ui-background-hover-color:#4c4b4e;
+  --icon-color:var(--lofty-dark-text-muted);
+
+  /* status — lifted so text and icons clear 4.5:1 on dark grounds */
+  --positive-color:#3fb37f;
+  --positive-color-hover:#5cc494;
+  --positive-color-selected:#1d3a2c;
+  --negative-color:#f0687d;
+  --negative-color-hover:#f48a9b;
+  --negative-color-selected:#42232a;
+  --warning-color:#ffcb00;
+  --warning-color-hover:#ffd633;
+  --warning-color-selected:#3d3312;
+  --positive-color-selected-hover:#244a37;
+  --negative-color-selected-hover:#552c34;
+  --warning-color-selected-hover:#4e4218;
+
+  /* shadows — deeper and neutral black; surfaces also step up in lightness to show elevation */
+  --box-shadow-xs:0 4px 6px -4px rgba(0,0,0,.4);
+  --box-shadow-small:0 4px 8px rgba(0,0,0,.5);
+  --box-shadow-medium:0 6px 20px rgba(0,0,0,.55);
+  --box-shadow-large:0 15px 50px rgba(0,0,0,.7);
+  --focus-ring:0 0 0 3px rgba(244,126,99,.55),0 0 0 1px var(--lofty-orange-dark-hover) inset;
+
+  /* data-viz */
+  --data-2:var(--lofty-dark-text);
+  --data-3:var(--lofty-green-dark);
+  --data-4:var(--lofty-dark-border-strong);
+  --data-5:#8a4a3c;
+  --data-6:#2f5a5f;
+
+  color-scheme:dark;
+}

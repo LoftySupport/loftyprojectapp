@@ -1,0 +1,7 @@
+:root{
+  --box-shadow-xs:0px 4px 6px -4px rgba(65,64,66,.1);
+  --box-shadow-small:0px 4px 8px rgba(65,64,66,.2);
+  --box-shadow-medium:0px 6px 20px rgba(65,64,66,.2);
+  --box-shadow-large:0px 15px 50px rgba(65,64,66,.3);
+  --focus-ring:0 0 0 3px rgba(244,126,99,.5),0 0 0 1px var(--primary-hover-color) inset;
+}
