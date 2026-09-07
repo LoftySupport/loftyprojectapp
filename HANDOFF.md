@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 156 changes since then —
+Unreleased: 165 changes since then —
 - Changed: The Jobs and Projects filters are the same fields as Group by, always on the bar, with everything else in one Advanced row instead of chips added one at a time
 - Added: A job or project number can be typed straight into the filters
 - Added: Any property, including the project properties a job inherits, can be shown as a column on the Jobs and Projects tables
 - Changed: On the Projects board, Stage now filters by the project's own phase and a separate Job stage filter finds projects with a job in that stage
-- Fixed: Undo and redo take back every edit that saves as you make it — dates, tasks, maintenance, process runs and properties included, not only a job's team and assignee
-- …and 151 more.
+- Changed: Sections in the job panel fold away, and Collapse all shuts the lot at once
+- …and 160 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
