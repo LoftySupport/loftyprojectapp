@@ -4,6 +4,13 @@ Everything that is not one of the seven files at the repository root. The root h
 new person reads; this holds the reference they read next and the record of how it was
 decided.
 
+## `open-questions.md` — the queue
+
+[`open-questions.md`](open-questions.md) holds the decisions only Amber can make, **asked
+one at a time**, with every answer recorded against its date. It is current, not history:
+where it says something is undecided, nothing should be built that assumes an answer.
+`CLAUDE.md` carries the convention.
+
 ## `schema/` — the data model
 
 | File | What it is |
