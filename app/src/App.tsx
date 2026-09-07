@@ -31,6 +31,43 @@ import { LANDING_ROUTES, readPrefs } from "./data/preferences";
 const THEME_KEY = "lofty-theme";
 
 /**
+ * Where somebody was headed when sign-in interrupted them.
+ *
+ * The guards below used to hand `/signin` a `state.from`, and the comment said a deep
+ * link "survives the round trip through Microsoft". It did not. Sign-in leaves the site
+ * — `signInWithOAuth` sends the browser to Entra and Entra sends it back to the app's
+ * root — and router state does not survive leaving. So a demo account opening the
+ * `/report` link Amber sends them signed in and landed on the gate screen, one click
+ * short of the form they were sent to; anybody else's deep link landed on the dashboard.
+ *
+ * `sessionStorage` does survive the round trip (same tab, same origin), so the guard
+ * writes the path there on the way out and `RequireAuth` reads it once on the way back.
+ * Only a same-origin path is honoured — a value that does not start with a single `/`
+ * is dropped — because the stash is writable by anything else on the origin and a
+ * redirect target is exactly the thing that should not be.
+ *
+ * The root is never remembered: "/" already means "wherever you land", and stashing it
+ * would only make the resume redirect to where they were going anyway.
+ */
+const AFTER_SIGN_IN = "lofty.after-sign-in";
+
+function rememberDestination(path: string) {
+  if (path === "/" || path.startsWith("//")) return;
+  try { sessionStorage.setItem(AFTER_SIGN_IN, path); } catch { /* private mode: they land on "/" */ }
+}
+
+/** The stashed path, or null. Cleared when `clear` — once the person has arrived on it. */
+function destination(clear = false): string | null {
+  try {
+    const path = sessionStorage.getItem(AFTER_SIGN_IN);
+    if (clear) sessionStorage.removeItem(AFTER_SIGN_IN);
+    return path && /^\/(?!\/)/.test(path) ? path : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * The gate.
  *
  * Two conditions, not one: a Microsoft session **and** a Lofty staff record. Anyone in
@@ -62,10 +99,21 @@ function RequireAuth() {
     );
   }
   if (status !== "signed-in") {
-    // `state` carries where they were headed, so a deep link survives the round trip
-    // through Microsoft instead of dumping everyone on the dashboard.
+    // Remembered in sessionStorage, not router state: the round trip through Microsoft
+    // leaves the site, and only the former survives that (see AFTER_SIGN_IN).
+    rememberDestination(location.pathname + location.search);
     return <Navigate to="/signin" replace state={{ from: location.pathname }} />;
   }
+
+  // Back from Microsoft, at the root. If they were headed somewhere, send them on before
+  // the gate below gets a say — the one place a held account may go (`/report`) is
+  // guarded by `RequireSignedIn`, which decides for itself. Cleared on arrival, so the
+  // next visit to "/" is a plain one.
+  const resume = destination();
+  if (resume && resume !== location.pathname + location.search) {
+    return <Navigate to={resume} replace />;
+  }
+  if (resume) destination(true);
 
   // A session is not admission. Only people created in the app have a profiles row, and
   // without one every RLS policy denies — so rendering the board would show an empty
@@ -111,8 +159,12 @@ function RequireSignedIn() {
     );
   }
   if (status !== "signed-in") {
+    rememberDestination(location.pathname + location.search);
     return <Navigate to="/signin" replace state={{ from: location.pathname }} />;
   }
+  // Arrived — whether straight here or via the resume in `RequireAuth`. Clear the stash
+  // so it cannot send them here again later.
+  if (destination() === location.pathname + location.search) destination(true);
   // Still refused without a profile row: that is not "held", it is "not on the staff
   // list", and no policy would accept their insert either.
   if (profileState === "unlinked") return <NotSetUpPage />;
@@ -162,10 +214,15 @@ function NoAccess({ need }: { need: PermissionLevel }) {
   );
 }
 
-/** Signing in and then being shown the sign-in page again reads as a failure. */
+/**
+ * Signing in and then being shown the sign-in page again reads as a failure. And a
+ * session that restores while the person is sitting on `/signin` still owes them the
+ * page they came for, so the stash is honoured here too; `RequireAuth` or
+ * `RequireSignedIn` clears it on arrival.
+ */
 function RedirectIfSignedIn() {
   const { status } = useAuth();
-  if (status === "signed-in") return <Navigate to="/" replace />;
+  if (status === "signed-in") return <Navigate to={destination() ?? "/"} replace />;
   return <SignInPage />;
 }
 
