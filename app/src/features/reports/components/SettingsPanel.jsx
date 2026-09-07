@@ -323,7 +323,15 @@ function SettingsField({ field, options, ctx, onSet }) {
     case 'richtext':
       return (
         <Field label={field.label} hint={field.hint || 'Tip: you can also edit this text directly in the document.'}>
-          <RichTextEditor value={value || ''} onChange={set} />
+          {/* INTEGRATION EDIT — the host's fields, for the "Insert field" menu. Absent
+              on a host that supplies none, which hides the control. */}
+          <RichTextEditor
+            value={value || ''}
+            onChange={set}
+            tokens={ctx?.textTokens || []}
+            snippets={ctx?.textSnippets || []}
+            onSaveSnippet={ctx?.saveTextSnippet}
+          />
         </Field>
       );
     case 'table':

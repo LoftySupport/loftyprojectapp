@@ -197,6 +197,17 @@ function SortableWidget({ widget, engine, ctx, allWidgets, theme, selected, onSe
             minHeight={96}
             maxHeight={420}
             saveDebounceMs={300}
+            /* INTEGRATION EDIT — the same fields the settings panel offers.
+               This is the editor people actually write in: the settings panel is for
+               blocks that need configuring, and a text block is one you type into on the
+               page. Wiring the menu into one and not the other meant "Insert field"
+               existed and was nowhere near the writing. */
+            tokens={ctx?.textTokens || []}
+            /* And the saved wording, from the same place. `onSaveSnippet` is absent when
+               the host has nowhere to put one, which hides the button rather than
+               offering a save that goes nowhere. */
+            snippets={ctx?.textSnippets || []}
+            onSaveSnippet={ctx?.saveTextSnippet}
           />
         </div>
       ) : (

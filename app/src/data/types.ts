@@ -2851,18 +2851,55 @@ export interface ReportTemplateLayout {
 export const EMPTY_REPORT_TEMPLATE_LAYOUT: ReportTemplateLayout = { widgets: [] };
 
 /**
- * A whole template, or a reusable section dropped into one.
+ * A snippet's wording, in and out of the layout it is stored in.
+ *
+ * A snippet is one `text` widget and nothing else (0098). Storing it that way rather than
+ * in a column of its own is what lets the same CHECK guard it, the same builder edit it
+ * and the same library list it — but it means every reader would otherwise repeat the
+ * same reach into `widgets[0].options.html`, and the first one to write `widgets[0].html`
+ * instead would get `undefined` and store a blank snippet without anything complaining.
+ *
+ * So the reach lives here once, in both directions.
+ *
+ * `snippetHtml` returns "" for a layout that is not a snippet's — a missing widget, a
+ * widget of another kind, a non-string html. Empty, not a stand-in: a snippet with no
+ * wording is a snippet somebody has yet to write, and the screen says so.
+ */
+export function snippetHtml(layout: ReportTemplateLayout | null | undefined): string {
+  const first = layout?.widgets?.[0];
+  if (!first || first.kind !== "text") return "";
+  const html = first.options?.html;
+  return typeof html === "string" ? html : "";
+}
+
+export function snippetLayout(html: string, id = "w_snippet"): ReportTemplateLayout {
+  return { widgets: [{ id, kind: "text", options: { html } }] };
+}
+
+/**
+ * A whole template, a reusable section dropped into one, or a snippet of wording.
  *
  * Same table, same sign-off, same scope rules — the discriminator is what decides where
- * it is offered: a template starts a document, a section is inserted into one by the
- * "Library section" block.
+ * it is offered, and WHEN it is read:
+ *
+ *   template — starts a document. Copied once, at the moment somebody makes one.
+ *   section  — a live reference. The "Library section" block resolves it every time the
+ *              document is opened, so editing the section changes every template using it.
+ *   snippet  — wording, copied into a text block at the caret and then that document's
+ *              own. Edit the snippet afterwards and letters already written keep what
+ *              they were given (0098).
+ *
+ * The difference between the last two is the reason a snippet is not just a section:
+ * "Please find attached our progress report for" is a line somebody adjusts per client,
+ * and if that edit rewrote it in forty other letters nobody would dare touch it.
  */
-export const REPORT_TEMPLATE_KINDS = ["template", "section"] as const;
+export const REPORT_TEMPLATE_KINDS = ["template", "section", "snippet"] as const;
 export type ReportTemplateKind = (typeof REPORT_TEMPLATE_KINDS)[number];
 
 export const REPORT_TEMPLATE_KIND_LABELS: Record<ReportTemplateKind, string> = {
   template: "Template",
-  section: "Section"
+  section: "Section",
+  snippet: "Snippet"
 };
 
 /**

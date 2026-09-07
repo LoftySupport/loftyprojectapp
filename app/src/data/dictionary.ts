@@ -1511,14 +1511,14 @@ export const DICTIONARY: DictionaryEntry[] = [
 
   // ------------------------- the library and its documents (0094)
   e("report_templates.report_template_id", "Library entry",
-    "One thing in the template library: a whole template, or a reusable section dropped into one. Built in Tools → Template Builder.",
+    "One thing in the template library: a whole template, a reusable section dropped into one, or a snippet of wording. Built in Tools → Template Builder.",
     "uuid", "Primary key, default gen_random_uuid().",
     "Named by report_documents.report_template_id, which is SET NULL on delete — a letter that has gone out does not vanish because somebody removed the template it started from.",
     "created"),
   e("report_templates.report_template_kind", "Kind",
-    "template — a whole document to start from. section — a fragment (a letterhead, a sign-off block) inserted into one by the Library section block, which resolves it live, so correcting a section corrects every template using it.",
-    "text", "Not null, default 'template'. CHECK: template | section.",
-    "One table with a discriminator rather than two: same shape, same sign-off, same scope rules, and two tables would need every policy, trigger and constraint written twice. Uniqueness is per kind, so a template and a section may share a name.",
+    "template — a whole document to start from. section — a fragment (a letterhead, a sign-off block) inserted into one by the Library section block, which resolves it live, so correcting a section corrects every template using it. snippet — reusable wording, dropped into a text block at the caret and then that document's own.",
+    "text", "Not null, default 'template'. CHECK: template | section | snippet.",
+    "One table with a discriminator rather than three: same shape, same sign-off, same scope rules, and three tables would need every policy, trigger and constraint written three times. Uniqueness is per kind, so a template, a section and a snippet may share a name. What separates a section from a snippet is WHEN it is read — a section is resolved on every open, a snippet is copied once — which is why 0098 added a kind rather than reusing section.",
     "created"),
   e("report_templates.report_template_name", "Name",
     "What it is called in the library — \"Monthly progress report\". Unique within its kind, because everybody picks from one list and two rows of the same name is a coin-toss.",

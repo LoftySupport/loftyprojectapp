@@ -474,13 +474,42 @@ export const LOFTY_WIDGETS = {
         return h.forExport ? [] : [helpers.info('Choose a record in this block’s settings.')];
       }
 
-      const rows = valuesOf(ctx).filter(v =>
-        jobId ? v.jobId === jobId : String(v.projectId) === String(projectId)
-      );
+      /**
+       * A JOB READS ITS PROJECT'S VALUES THROUGH.
+       *
+       * Amber, 5 September: *"jobs inherit project proerties so they should be available
+       * to select on the job"*. They were already available to SELECT — the picker lists
+       * every definition, project-scoped ones included — and selecting one on a job
+       * printed nothing, because this filter took job rows or project rows and never
+       * both. Available and inert is worse than absent.
+       *
+       * The app has always done it the other way: `PropertySlots` shows a job the
+       * project's value read through, and `property_values` is documented as sparse for
+       * exactly this reason — "the project's own value is the one read through otherwise".
+       * The report was the odd one out, and a report that disagrees with the drawer it
+       * was taken from is the failure this whole feature is built to avoid.
+       *
+       * The job's own row wins where there is one, which is the same precedence the
+       * drawer uses: a pushed copy is an answer somebody gave for THIS job.
+       */
+      const job = jobId ? jobsOf(ctx).find(j => j.jobNumber === jobId) : null;
+      const ownProject = jobId
+        ? String(job?.projectId ?? job?.projectNumber ?? "")
+        : String(projectId);
+      const rows = valuesOf(ctx).filter(v => {
+        if (!jobId) return String(v.projectId) === String(projectId);
+        if (v.jobId === jobId) return true;
+        // Inherited: a project row, and only from the project this job belongs to.
+        return v.jobId == null && ownProject !== "" && String(v.projectId) === ownProject;
+      });
       const label = jobId ? `job ${jobId}` : `project ${projectId}`;
 
       const byKey = new Map(defs.map(d => [d.key, d]));
-      const valueFor = new Map(rows.map(v => [v.propertyKey, v.value]));
+      // Project rows first, then the job's own over the top: `Map.set` keeps the last
+      // write, and the rows arrive in whatever order the query returned them.
+      const valueFor = new Map();
+      rows.filter(v => v.jobId == null).forEach(v => valueFor.set(v.propertyKey, v.value));
+      rows.filter(v => v.jobId != null).forEach(v => valueFor.set(v.propertyKey, v.value));
       const people = peopleOf(ctx).map(pr => ({ id: pr.id, name: pr.fullName }));
       const optionsFor = (key) => optionsOf(ctx).filter(op => op.propertyKey === key);
 

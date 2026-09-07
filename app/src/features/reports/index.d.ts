@@ -265,7 +265,7 @@ export const LOFTY_THEME_SPECS: Record<string, ReportTheme>;
  * document store also implements `saveTemplate`, which is how "Save as template" becomes
  * a proposal into the library rather than a second kind of save.
  */
-export function createLibraryStore(repo: unknown, kind?: "template" | "section"): ReportStore;
+export function createLibraryStore(repo: unknown, kind?: "template" | "section" | "snippet"): ReportStore;
 export function createDocumentStore(
   repo: unknown,
   subject?: { jobId?: string | null; projectId?: number | null },
@@ -302,5 +302,17 @@ export interface LoftyDocumentStore extends ReportStore {
     projectId?: number | null;
   }): Promise<ReportStoreRow>;
 }
+
+/**
+ * Placeholders in prose. `tokensFor` is the list the rich-text editor offers; the
+ * function `makeFillTokens` returns is what `ctx.fillTokens` should be set to.
+ *
+ * Both take the resolved report context — they need the subject, the jobs and the
+ * property values to answer anything.
+ */
+export function tokensFor(ctx: unknown): { value: string; label: string; group: string }[];
+export function makeFillTokens(
+  ctx: unknown
+): (html: string, opts?: { forExport?: boolean }) => string;
 
 export type { ReactNode };

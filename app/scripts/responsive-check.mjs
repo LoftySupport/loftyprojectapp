@@ -43,6 +43,7 @@ const ROUTES = ["/", "/dashboard", "/projects", "/jobs", "/reports", "/setup/pro
                 // would show up here as a route that measures nothing rather than as a
                 // 404 somebody reports.
                 "/tools/document-builder", "/tools/template-library", "/tools/section-library",
+                "/tools/snippet-library",
                 "/tools/template-builder",
                 // The tracker. All three tabs, because they are three different layouts
                 // sharing one route — a five-column board, a list of dated phases, and a

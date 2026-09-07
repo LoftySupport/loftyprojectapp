@@ -29,7 +29,9 @@ import {
 import { createReportRegistry } from "../src/features/reports/core/registry.js";
 import { createReportEngine } from "../src/features/reports/core/widgetEngine.js";
 import { LOFTY_THEME, LOFTY_THEME_QUIET } from "../src/features/reports/adapters/lofty/theme.js";
+import { makeFillTokens, tokensFor } from "../src/features/reports/adapters/lofty/tokens.js";
 import { HOUSE_COLOURS } from "../src/data/export/houseFormat.ts";
+import { snippetHtml, snippetLayout } from "../src/data/types.ts";
 import { execFileSync } from "node:child_process";
 // Dev-only, and dependency-free itself. It is here to answer the one question none of the
 // assertions below could: not "do the two drawings agree" but "does a phone read it".
@@ -118,7 +120,9 @@ const propertyDefs = [
   { key: "slab_cost", label: "Slab cost", format: "currency", stageName: "Construction", position: 2 },
   { key: "council_approved", label: "Council approved", format: "checkbox", stageName: "Pre-Construction", position: 1 },
   { key: "cladding", label: "Cladding", format: "single select", stageName: "Design", position: 1 },
-  { key: "never_filled_in", label: "Nobody has filled this in", format: "text", stageName: "Design", position: 2 }
+  { key: "never_filled_in", label: "Nobody has filled this in", format: "text", stageName: "Design", position: 2 },
+  // Project-scoped: recorded once for the site, read through by every job on it.
+  { key: "council", label: "Council", format: "text", stageName: "Pre-Construction", position: 2 }
 ];
 const propertyOptions = [
   { propertyKey: "cladding", key: "brick", label: "Brick veneer", position: 1, isActive: true }
@@ -128,7 +132,9 @@ const propertyValues = [
   { id: "v2", propertyKey: "slab_cost", format: "currency", jobId: "1042-001", projectId: null, value: { number: 18400 } },
   { id: "v3", propertyKey: "council_approved", format: "checkbox", jobId: "1042-001", projectId: null, value: { bool: true } },
   { id: "v4", propertyKey: "cladding", format: "single select", jobId: "1042-001", projectId: null, value: { optionKey: "brick" } },
-  { id: "v5", propertyKey: "slab_cost", format: "currency", jobId: null, projectId: 1042, value: { number: 51000 } }
+  { id: "v5", propertyKey: "slab_cost", format: "currency", jobId: null, projectId: 1042, value: { number: 51000 } },
+  // Only the project has this one, and only project 1042 — so a job on 1043 must not see it.
+  { id: "v6", propertyKey: "council", format: "text", jobId: null, projectId: 1042, value: { text: "Tea Tree Gully" } }
 ];
 
 /** One approved library section, holding two blocks. */
@@ -807,6 +813,165 @@ console.log("--- the Lofty theme is the house document format, role for role");
     LOFTY_WIDGETS.qrCode.settings.length === 3
     && LOFTY_WIDGETS.qrCode.settings.map(s => s.key).join(",") === "url,caption,size",
     LOFTY_WIDGETS.qrCode.settings.map(s => s.key).join(","));
+}
+
+// ─── 17. A job reads its project's properties through ────────────────────
+//
+// Amber, 5 September: *"jobs inherit project proerties so they should be available to
+// select on the job"*. They were always available to SELECT — the picker lists every
+// definition — and selecting a project property on a job printed nothing, because the
+// resolver took job rows or project rows and never both.
+//
+// The app has always done it the other way round: `PropertySlots` shows a job the
+// project's value read through, and the type for `property_values` says so in as many
+// words. The report was the odd one out, and a report that disagrees with the drawer it
+// was taken from is the failure this feature exists to prevent.
+{
+  // It emits a definition list, not a table — `[0].items` of {label, value}, which is
+  // how every other assertion on this block reads it.
+  const itemsOf = (opts) => engine.resolve(
+    { id: "wI", kind: "recordProperties", options: { propertyKeys: [], showBlanks: false, ...opts } },
+    full
+  )[0]?.items ?? [];
+  const find = (items, label) => items.find(i => i.label === label);
+
+  // Broken by putting the old `jobId ? v.jobId === jobId : …` filter back: Council
+  // vanishes from the job while staying on the project.
+  const onJob = itemsOf({ source: "job", jobId: "1042-001" });
+  ok("a job shows a property only its project carries",
+    !!find(onJob, "Council"),
+    onJob.map(i => i.label).join(" | "));
+
+  // Broken by dropping the two-pass `valueFor` build back to one `new Map(rows.map(…))`:
+  // whichever row the fixture happens to list last wins, which is the project's.
+  const slab = find(onJob, "Slab cost");
+  ok("and the job's own value beats the project's for the same property",
+    !!slab && /18[,.]?400/.test(String(slab.value)),
+    slab ? String(slab.value) : "no Slab cost row");
+
+  // The one that stops "inherit" meaning "from any project". Broken by dropping the
+  // `String(v.projectId) === ownProject` test: 1043-001 picks up Tea Tree Gully.
+  const otherProject = itemsOf({ source: "job", jobId: "1043-001" });
+  ok("a job on another project inherits nothing from this one",
+    !find(otherProject, "Council"),
+    otherProject.map(i => i.label).join(" | "));
+
+  // A project still reads only its own. Broken by letting job rows through when no
+  // jobId is set: the project would show 1042-001's site start date as its own.
+  const ownOnly = itemsOf({ source: "project", projectId: "1042" });
+  ok("a project reads its own values and not its jobs'",
+    !!find(ownOnly, "Council") && !find(ownOnly, "Site start date"),
+    ownOnly.map(i => i.label).join(" | "));
+}
+
+// ─── 18. Placeholders in prose ───────────────────────────────────────────
+//
+// Amber, 5 September: *"i want to be able to add properties in rich text and save them
+// so i can create a letter with proeprties as placeholders"*.
+{
+  const fill = makeFillTokens(full);
+  const strip = (h) => String(h).replace(/<[^>]*>/g, "");
+
+  // Broken by having `makeFillTokens` return the html untouched: the letter goes out
+  // saying "booked for {{site_start_date}}".
+  ok("a placeholder becomes the value",
+    /1 October 2026|1\/10\/2026|2026/.test(strip(fill("<p>Booked for {{site_start_date}}.</p>", { forExport: true }))),
+    strip(fill("<p>{{site_start_date}}</p>", { forExport: true })));
+
+  // The whole point of using formatValue: a currency is A$18,400 in a letter because it
+  // is A$18,400 in the drawer. Broken by returning `v.number` raw.
+  ok("and it is formatted the way the drawer formats it",
+    /A\$18[,.]?400/.test(strip(fill("<p>{{slab_cost}}</p>", { forExport: true }))),
+    strip(fill("<p>{{slab_cost}}</p>", { forExport: true })));
+
+  // Inherited, same as the block. Broken by dropping the project fallback in valuesFor.
+  ok("a job's letter can use a property only its project carries",
+    /Tea Tree Gully/.test(strip(fill("<p>{{council}}</p>", { forExport: true }))),
+    strip(fill("<p>{{council}}</p>", { forExport: true })));
+
+  // Recorded nothing → an em dash, never a blank. CLAUDE.md: never fill a gap with a
+  // plausible value, and a blank in a sentence reads as a typo.
+  ok("a property nobody has filled in is an em dash, not a gap",
+    strip(fill("<p>[{{never_filled_in}}]</p>", { forExport: true })) === "[—]",
+    strip(fill("<p>[{{never_filled_in}}]</p>", { forExport: true })));
+
+  // A TYPO IS LEFT STANDING. Broken by treating an unknown key like a blank: "booked
+  // for {{slab_dat}}" silently becomes "booked for", which is a sentence somebody sends.
+  ok("a token naming no field is left visible rather than deleted",
+    strip(fill("<p>Booked for {{slab_dat}}.</p>", { forExport: true })) === "Booked for {{slab_dat}}.",
+    strip(fill("<p>Booked for {{slab_dat}}.</p>", { forExport: true })));
+
+  // Escaped, because a property is user-entered text going into html. Broken by
+  // dropping `esc`: an address containing a tag becomes markup in the document.
+  const nasty = makeFillTokens({
+    ...full,
+    jobs: [{ ...full.jobs[0], currentAddress: '28 <b>Corner</b> & Co' }]
+  });
+  ok("a value carrying markup is escaped, not rendered",
+    !/<b>/.test(nasty("<p>{{address}}</p>", { forExport: true }))
+    && /&amp;/.test(nasty("<p>{{address}}</p>", { forExport: true })),
+    nasty("<p>{{address}}</p>", { forExport: true }));
+
+  // On the canvas it is marked; in an export it is a sentence. Broken by rendering the
+  // canvas markup in both: a client letter with highlighted words is a draft.
+  ok("the marks are on the canvas and not in the export",
+    /rb-token/.test(fill("<p>{{slab_cost}}</p>", { forExport: false }))
+    && !/rb-token/.test(fill("<p>{{slab_cost}}</p>", { forExport: true })),
+    "canvas and export render the same");
+
+  // Untouched html must come back identical — the fast path, and the common case.
+  const plain = "<p>No placeholders here at all.</p>";
+  ok("prose with no placeholders is returned unchanged", fill(plain) === plain);
+
+  // The menu the editor offers. Broken by dropping the record basics: a letter cannot
+  // open with the job number, which is the first thing every letter says.
+  const menu = tokensFor(full);
+  ok("the insert menu offers the record's own facts as well as its properties",
+    menu.some(t => t.value === "job_number") && menu.some(t => t.value === "address")
+    && menu.some(t => t.value === "slab_cost"),
+    `${menu.length} fields`);
+}
+
+// ── A snippet's wording, in and out of the layout it hides in ──────────────
+//
+// A snippet is one text widget (0098), which means every reader has to reach into
+// `widgets[0].options.html`. `snippetHtml` is that reach, written once — and the reason
+// it is worth asserting is that EVERY WAY OF GETTING IT WRONG RETURNS UNDEFINED rather
+// than throwing. A snippet saved through a typo'd path is a menu entry that inserts
+// nothing, with no error anywhere to say why.
+{
+  const wording = '<p>Kind regards,<br><b>Lofty</b></p>';
+
+  // The round trip, which is the only path the app actually uses.
+  ok("a snippet's wording survives the layout it is stored in",
+    snippetHtml(snippetLayout(wording)) === wording);
+
+  // The shape the CHECK constraint requires is the shape this writes. Broken by returning
+  // `widgets` as an object rather than an array of one: the round trip above breaks too,
+  // but this is the one that names WHY — `report_templates_layout_has_widgets` refuses
+  // the row, at save time, which is the harder place to work out what went wrong.
+  //
+  // It does NOT catch html written at the top level instead of in `options` — that shape
+  // is a perfectly legal layout and the database takes it happily. The round trip above
+  // is what catches that one. Both mutations were run.
+  const made = snippetLayout(wording);
+  ok("and it is written as a layout the database will accept",
+    Array.isArray(made.widgets) && made.widgets.length === 1
+    && made.widgets[0].kind === "text",
+    JSON.stringify(made));
+
+  // The four ways it is not a snippet, all of which must be "" rather than undefined —
+  // the page filters on `.trim() !== ""`, and `undefined.trim()` is the crash that would
+  // take the whole builder down when one bad row arrives.
+  const notSnippets = [
+    ["null", null],
+    ["no widgets", { widgets: [] }],
+    ["a widget of another kind", { widgets: [{ id: "w", kind: "table", options: {} }] }],
+    ["html that is not a string", { widgets: [{ id: "w", kind: "text", options: { html: 42 } }] }]
+  ];
+  ok("anything that is not a snippet reads as empty, not as undefined",
+    notSnippets.every(([, layout]) => snippetHtml(layout) === ""),
+    notSnippets.map(([name, l]) => `${name}: ${JSON.stringify(snippetHtml(l))}`).join(", "));
 }
 
 console.log(failures === 0

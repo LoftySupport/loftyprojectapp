@@ -1789,6 +1789,47 @@ nothing over copy and paste. The cost is a recursion risk: a section containing 
 block pointing at itself is two clicks to build, so the expander carries a depth counter.
 Without it the stack blows and the reader gets "this block failed to render".
 
+### 7 September — snippets are a third kind, and the reason is *when*, not *what* (`0098`)
+
+Amber: *"i also want to be able to save text snippets and reusue them"*, in the same
+breath as asking for property placeholders in prose. The two go together — once a letter
+can carry `{{site_start_date}}`, the paragraph around it is worth keeping too.
+
+**The tempting answer is "that is what a section is", and it is wrong.** A section and a
+snippet differ in *when* they are read, and the section above is the reason that matters:
+
+| | read | so editing it later |
+|---|---|---|
+| **section** | every time the document is opened | changes every template using it |
+| **snippet** | once, at the caret, when you insert it | changes nothing already written |
+
+"Please find attached our progress report for" is wording somebody adjusts per client. If
+that edit rewrote it in forty other letters nobody would dare touch it. Storing snippets as
+sections and copying them anyway would work right up until the first person opened one
+expecting the behaviour the kind promises.
+
+So it is a third value on `report_template_kind` — which is the discriminator earning its
+keep. The whole migration is one CHECK: the `(kind, scope)` index already covers it, the
+per-kind uniqueness already lets a template, a section and a snippet share a name, and the
+audit trigger is on the table rather than the kind.
+
+**The part that had to be checked rather than assumed:** none of the four policies on
+`report_templates` look at `kind`. That is what makes a one-line migration safe — a snippet
+inherits the visibility bands, the sign-off and the delete rules already proved, rather
+than arriving unguarded. The assumption is invisible in the diff that depends on it, so
+`verify/rls.sql` now asserts it directly: add a policy that branches on kind and the check
+reports. Watched both ways.
+
+The wording itself lives in `report_template_layout` as a single `text` widget, so the same
+`layout_has_widgets` CHECK guards it and the same builder edits it. `snippetHtml` /
+`snippetLayout` in `types.ts` are the only code that knows that, because every way of
+reaching into `widgets[0].options.html` by hand returns `undefined` rather than throwing —
+a snippet saved through a typo'd path would be a menu entry that inserts nothing, silently.
+
+A **Snippet Library** lane sits beside the template and section lanes. Not decoration: a
+user's snippet needs a manager to sign it off, and without a screen for that the feature
+would save a snippet and then hide it forever.
+
 ### Share links: the columns exist and nothing writes them
 
 `report_document_share_token`, its **mandatory** expiry (a link that never ends is one
