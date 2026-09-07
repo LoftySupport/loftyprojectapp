@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 151 changes since then —
+Unreleased: 152 changes since then —
+- Fixed: Undo and redo take back every edit that saves as you make it — dates, tasks, maintenance, process runs and properties included, not only a job's team and assignee
 - Fixed: Creating jobs from a project opens over the project instead of behind it, and the jobs list sits at the top of the drawer
 - Added: A SiteBook number can be given to each job as it is created
 - Changed: Choosing a person is a type-ahead — names with their team, the record's own team first, and a single match is taken as you tab away
 - Fixed: Every dropdown lists its options alphabetically, including the multi-selects
-- Fixed: A half-written bug report is kept when the panel is closed or the page changes
-- …and 146 more.
+- …and 147 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -77,6 +77,17 @@ editing, the person panel, the project drawer with the split panel over it, the 
 typeahead grouped by team, the request panel with "Filed as", and the draft surviving a page
 change. Not seen: a real write going through, since there is no database in the harness — the
 undo steps were exercised only as far as the toast.
+
+**Undo moved to the repository seam the same evening.** Amber, an hour after the bar shipped:
+*"the undo and redo doesn't work when i made an update it didn't let me undo it"*. The first
+version registered a step at six call sites; the app has fifty places that write, and her edit
+was one of the forty-four that recorded nothing. `undoableRepository.ts` now wraps every
+patch-shaped write — read the record, write the patch, record the inverse — and
+`DataProvider` bumps a version every `useQuery` depends on, so the screen re-reads after an
+undo without knowing which screen it is. Lifecycle moves, creates and deletes stay out on
+purpose. Seen working in the fixture harness: assign → undo → redo → Ctrl+Z, with the writes
+logged to prove the inverse carried the OLD value (the first cut built it after the write and
+re-applied the new one; the harness caught it).
 
 **Two checks CI now runs that it did not** (Amber, same day: *"should there be a check for
 this"*): the responsive sweep, because it caught the 16px link and nobody but a person at a

@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Button, Text, TextField, Toggle } from "@vibe/core";
 import { MultiSelect, Select, toOptions } from "./Select";
 import { useRepository } from "../data/DataProvider";
-import { useUndo } from "../data/UndoProvider";
 import { useTeamLabels, useTeams } from "../data/useLookups";
 import {
   PERMISSION_LEVELS, profileStatus,
@@ -195,7 +194,6 @@ function EditingRow({
   selectable?: boolean;
 }) {
   const repo = useRepository();
-  const { record } = useUndo();
   const { teams } = useTeams();
   const active = teams.filter(t => t.isActive);
 
@@ -230,18 +228,8 @@ function EditingRow({
     setSaving(true);
     setError(null);
     try {
+      // Undoable from the header — the repository records the step (undoableRepository).
       await repo.updateProfile(p.id, patch);
-      // The inverse is the same patch with the values the row had — every key in `patch`
-      // has a "before" on `p`, so undo writes exactly the columns this write did.
-      const before: Partial<NewProfile> = {};
-      (Object.keys(patch) as (keyof NewProfile)[]).forEach(k => {
-        (before as Record<string, unknown>)[k] = p[k as keyof Profile];
-      });
-      record({
-        label: `Edited ${p.fullName}`,
-        undo: async () => { await repo.updateProfile(p.id, before); },
-        redo: async () => { await repo.updateProfile(p.id, patch); }
-      });
       onDone(true);
     } catch (e) {
       // Verbatim, for the reason every other form in this app shows it verbatim: an RLS

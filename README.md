@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 151 changes since then —
+Unreleased: 152 changes since then —
+- Fixed: Undo and redo take back every edit that saves as you make it — dates, tasks, maintenance, process runs and properties included, not only a job's team and assignee
 - Fixed: Creating jobs from a project opens over the project instead of behind it, and the jobs list sits at the top of the drawer
 - Added: A SiteBook number can be given to each job as it is created
 - Changed: Choosing a person is a type-ahead — names with their team, the record's own team first, and a single match is taken as you tab away
 - Fixed: Every dropdown lists its options alphabetically, including the multi-selects
-- Fixed: A half-written bug report is kept when the panel is closed or the page changes
-- …and 146 more.
+- …and 147 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

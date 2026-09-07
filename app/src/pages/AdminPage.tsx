@@ -23,7 +23,6 @@ import { tableFromFields, type ExportDocument } from "../data/export";
 import { DictionaryPage } from "./DictionaryPage";
 import { PermissionsPage } from "./PermissionsPage";
 import { WiringPage } from "./WiringPage";
-import { useUndo } from "../data/UndoProvider";
 import "../components/ui.css";
 
 /**
@@ -227,7 +226,6 @@ function Users() {
   // Only managers and above may write. This hides the controls; the RLS policy on
   // `profiles` is what actually refuses, and one without the other is decoration.
   const canEdit = can("manager");
-  const { record } = useUndo();
 
   /**
    * The status toggle's two directions are not symmetrical, so they are not handled
@@ -238,11 +236,6 @@ function Users() {
     if (p.active) { setDeactivating(p); return; }
     try {
       await repo.setProfileActive(p.id, true);
-      record({
-        label: `Restored ${p.fullName}`,
-        undo: async () => { await repo.setProfileActive(p.id, false); refresh(); },
-        redo: async () => { await repo.setProfileActive(p.id, true); refresh(); }
-      });
       refresh();
     } catch (e) {
       setBulkNote({ ok: null, err: e instanceof Error ? e.message : String(e) });
@@ -260,11 +253,6 @@ function Users() {
     if (!p.isDemo) { setDemoPending(p); return; }
     try {
       await repo.updateProfile(p.id, { isDemo: false });
-      record({
-        label: `Let ${p.fullName} into the app`,
-        undo: async () => { await repo.updateProfile(p.id, { isDemo: true }); refresh(); },
-        redo: async () => { await repo.updateProfile(p.id, { isDemo: false }); refresh(); }
-      });
       setBulkNote({ ok: `${p.fullName} can use the app now.`, err: null });
       refresh();
     } catch (e) {

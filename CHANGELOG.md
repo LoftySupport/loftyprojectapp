@@ -96,6 +96,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- Undo and redo take back every edit that saves as you make it — dates, tasks, maintenance, process runs and properties included, not only a job's team and assignee
 - Creating jobs from a project opens over the project instead of behind it, and the jobs list sits at the top of the drawer
 - Every dropdown lists its options alphabetically, including the multi-selects
 - A half-written bug report is kept when the panel is closed or the page changes

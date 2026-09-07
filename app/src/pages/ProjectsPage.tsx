@@ -38,7 +38,6 @@ import { Toolbar } from "../components/Toolbar";
 import { accentStyle, columnAccent } from "../theme/accents";
 import { Select, toOptions } from "../components/Select";
 import { PersonSelect } from "../components/PersonSelect";
-import { useUndo } from "../data/UndoProvider";
 import { NewProjectDialog, SplitProjectDialog } from "../components/CreateDialogs";
 import { InlineNewProjectRow } from "../components/InlineNewProjectRow";
 import { ProjectsGantt } from "../components/ProjectsGantt";
@@ -681,26 +680,14 @@ function WhoHoldsIt({ project, onChanged, onError }: {
 }) {
   const repo = useRepository();
   const { can } = usePermission();
-  const { record } = useUndo();
   const { teams } = useTeams();
   const { data: profiles } = useQuery(r => r.listProfiles(), []);
 
   const save = async (patch: { owningTeam?: TeamId; assigneeId?: string | null }) => {
     onError(null);
     try {
+      // Undoable from the header — the repository records the step (undoableRepository).
       await repo.updateProject(project.projectId, patch);
-      // The inverse: the same keys, with what the project held before this write.
-      const before: typeof patch = {};
-      if ("owningTeam" in patch) before.owningTeam = project.owningTeam ?? undefined;
-      if ("assigneeId" in patch) before.assigneeId = project.assigneeId ?? null;
-      const who = "assigneeId" in patch
-        ? (patch.assigneeId ? profiles.find(p => p.id === patch.assigneeId)?.fullName ?? "somebody" : "nobody")
-        : teams.find(t => t.id === patch.owningTeam)?.name ?? "a team";
-      record({
-        label: `${"assigneeId" in patch ? "Assigned" : "Moved"} project ${project.projectNumber} to ${who}`,
-        undo: async () => { await repo.updateProject(project.projectId, before); onChanged(); },
-        redo: async () => { await repo.updateProject(project.projectId, patch); onChanged(); }
-      });
       onChanged();
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));

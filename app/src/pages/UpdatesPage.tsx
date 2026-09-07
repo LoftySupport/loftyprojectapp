@@ -5,7 +5,6 @@ import { Search, ThumbsUp } from "@vibe/icons";
 import { CommentsPanel } from "../components/CommentsPanel";
 import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
-import { useUndo } from "../data/UndoProvider";
 import { useFeedback } from "../components/Feedback";
 import { Field, Problem } from "../components/Form";
 import { Select } from "../components/Select";
@@ -675,7 +674,6 @@ function RequestPanel({
   busyVote: string | null;
 }) {
   const repo = useRepository();
-  const { record } = useUndo();
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [shots, setShots] = useState<Record<string, string>>({});
@@ -867,17 +865,9 @@ function RequestPanel({
                 options={FEEDBACK_STAGES.map(s => ({ value: s, label: FEEDBACK_STAGE_LABELS[s] }))}
                 value={item.stage}
                 onChange={v => void run(async () => {
-                  const from = item.stage;
-                  const to = v as FeedbackStage;
-                  const result = await repo.setFeedbackStage(item.id, to, note);
+                  // Undoable from the header — the repository records the step.
+                  const result = await repo.setFeedbackStage(item.id, v as FeedbackStage, note);
                   setNote("");
-                  // The note is not re-sent on undo: the move back is its own event, and
-                  // a comment saying why it went forward would be wrong on the way back.
-                  record({
-                    label: `Moved “${item.title}” to ${FEEDBACK_STAGE_LABELS[to]}`,
-                    undo: async () => { await repo.setFeedbackStage(item.id, from); onChanged(); },
-                    redo: async () => { await repo.setFeedbackStage(item.id, to); onChanged(); }
-                  });
                   return result;
                 })}
                 aria-label="Stage"
@@ -909,16 +899,7 @@ function RequestPanel({
                 value={item.roadmapPhaseId}
                 clearable
                 placeholder="Not planned into a phase"
-                onChange={v => void run(async () => {
-                  const from = item.roadmapPhaseId;
-                  await repo.setFeedbackPhase(item.id, v);
-                  const name = (id: string | null) => phases.find(p => p.id === id)?.name ?? "no phase";
-                  record({
-                    label: `Planned “${item.title}” into ${name(v)}`,
-                    undo: async () => { await repo.setFeedbackPhase(item.id, from); onChanged(); },
-                    redo: async () => { await repo.setFeedbackPhase(item.id, v); onChanged(); }
-                  });
-                })}
+                onChange={v => void run(() => repo.setFeedbackPhase(item.id, v))}
                 aria-label="Roadmap phase"
                 className={busy ? "is-busy" : undefined}
               />
@@ -942,15 +923,7 @@ function RequestPanel({
                 ]}
                 value={item.kind}
                 onChange={v => void run(async () => {
-                  const from = item.kind;
-                  const to = v as FeedbackKind;
-                  if (to === from) return;
-                  await repo.setFeedbackKind(item.id, to);
-                  record({
-                    label: `Re-filed “${item.title}” as ${to === "bug" ? "a bug" : "an idea"}`,
-                    undo: async () => { await repo.setFeedbackKind(item.id, from); onChanged(); },
-                    redo: async () => { await repo.setFeedbackKind(item.id, to); onChanged(); }
-                  });
+                  if (v !== item.kind) await repo.setFeedbackKind(item.id, v as FeedbackKind);
                 })}
                 aria-label="Filed as"
                 className={busy ? "is-busy" : undefined}
