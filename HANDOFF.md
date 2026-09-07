@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 151 changes since then —
-- Fixed: Creating jobs from a project opens over the project instead of behind it, and the jobs list sits at the top of the drawer
-- Added: A SiteBook number can be given to each job as it is created
-- Changed: Choosing a person is a type-ahead — names with their team, the record's own team first, and a single match is taken as you tab away
-- Fixed: Every dropdown lists its options alphabetically, including the multi-selects
-- Fixed: A half-written bug report is kept when the panel is closed or the page changes
-- …and 146 more.
+Unreleased: 156 changes since then —
+- Changed: The Jobs and Projects filters are the same fields as Group by, always on the bar, with everything else in one Advanced row instead of chips added one at a time
+- Added: A job or project number can be typed straight into the filters
+- Added: Any property, including the project properties a job inherits, can be shown as a column on the Jobs and Projects tables
+- Changed: On the Projects board, Stage now filters by the project's own phase and a separate Job stage filter finds projects with a job in that stage
+- Fixed: Undo and redo take back every edit that saves as you make it — dates, tasks, maintenance, process runs and properties included, not only a job's team and assignee
+- …and 151 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -77,6 +77,41 @@ editing, the person panel, the project drawer with the split panel over it, the 
 typeahead grouped by team, the request panel with "Filed as", and the draft surviving a page
 change. Not seen: a real write going through, since there is no database in the harness — the
 undo steps were exercised only as far as the toast.
+
+**Undo moved to the repository seam the same evening.** Amber, an hour after the bar shipped:
+*"the undo and redo doesn't work when i made an update it didn't let me undo it"*. The first
+version registered a step at six call sites; the app has fifty places that write, and her edit
+was one of the forty-four that recorded nothing. `undoableRepository.ts` now wraps every
+patch-shaped write — read the record, write the patch, record the inverse — and
+`DataProvider` bumps a version every `useQuery` depends on, so the screen re-reads after an
+undo without knowing which screen it is. Lifecycle moves, creates and deletes stay out on
+purpose. Seen working in the fixture harness: assign → undo → redo → Ctrl+Z, with the writes
+logged to prove the inverse carried the OLD value (the first cut built it after the write and
+re-applied the new one; the harness caught it).
+
+**The toolbar's filters are the Group-by fields, and the rest is one Advanced row.** Amber,
+later the same day: *"filters on jobs and projects should be same as the group ones and then you
+can add in the extra detail like an advanced not clicking a million times to get new filters up.
+you also need to be able to enter a job number and columns should be able to add any property in
+the job (including project properties as they are inherited by the job) to the column."* Three
+changes, all in `Toolbar`, `filtering.ts`, `boardModel.ts` and the two pages:
+
+- **Filters.** The chips and "+ Add filter" are gone. Jobs shows Stage, Team, Status and Process
+  from the start; Projects shows Stage, Job stage, Type and Status. One **Advanced** button opens
+  a second row with every other filter at once — number, project, type, moved date, process
+  health, property, recorded — and carries a count when one of them is narrowing the board while
+  folded. A filter reading "Any" is not in the URL.
+- **Job stage is its own filter on Projects.** The projects board groups by the project's phase
+  and by its jobs' stages, so it now filters by both: `?stage=` is the project's own
+  (`project_stage`, 0039) and `?jobstage=` is "has a job in this stage", which is what `?stage=`
+  used to mean there. A saved projects view carrying `?stage=` changes meaning accordingly.
+- **A number box.** "Job or project number", prefix-matched against the job number, the old
+  SiteBook number and the project number — `1042` is every job on the project, `1042-003` is one.
+- **Property columns.** `BoardJob.properties` and `BoardProject.properties` carry every recorded
+  value the reader may see (the job's own over its project's, exactly as the drawer reads
+  through), and `propertyColumnDefs` turns every active readable definition into a column, off by
+  default, labelled "(project)" on the jobs table where the two scopes mix. Cells are
+  `formatValue`, the drawer's and the reports' sentence; figures and dates sort as what they are.
 
 **Two checks CI now runs that it did not** (Amber, same day: *"should there be a check for
 this"*): the responsive sweep, because it caught the 16px link and nobody but a person at a

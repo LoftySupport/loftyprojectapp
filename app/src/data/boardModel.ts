@@ -2,7 +2,8 @@ import { useMemo } from "react";
 import { useQuery } from "./DataProvider";
 import { useTeams } from "./useLookups";
 import {
-  teamName, type ProcessRunHealth, type ProcessRunStatus, type ProjectType, type RecordStatus, type TeamId, type TitleType
+  teamName, type ProcessRunHealth, type ProcessRunStatus, type ProjectType, type PropertyValueData,
+  type RecordStatus, type TeamId, type TitleType
 } from "./types";
 
 /**
@@ -114,6 +115,13 @@ export interface BoardJob {
    * so an absence filter here is only ever asked of a property the person may read.
    */
   recordedKeys: string[];
+  /**
+   * Every recorded value the reader may see, by property key — the job's own rows with
+   * its project's read through underneath, exactly as the drawer shows them (Amber,
+   * 7 Sep: columns should take "any property in the job (including project properties as
+   * they are inherited by the job)"). Built from rows RLS already let through.
+   */
+  properties: Record<string, PropertyValueData>;
 }
 
 export interface BoardProject {
@@ -156,6 +164,8 @@ export interface BoardProject {
   startDate: string | null;
   endDate: string | null;
   sharepointUrl: string | null;
+  /** The project's own recorded values, by property key — see BoardJob.properties. */
+  properties: Record<string, PropertyValueData>;
 }
 
 const DAY = 86_400_000;
@@ -218,9 +228,17 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
     });
     const keysByJob = new Map<string, Set<string>>();
     const keysByProject = new Map<number, Set<string>>();
+    const valuesByJob = new Map<string, Record<string, PropertyValueData>>();
+    const valuesByProject = new Map<number, Record<string, PropertyValueData>>();
     values.forEach(v => {
-      if (v.jobId) (keysByJob.get(v.jobId) ?? keysByJob.set(v.jobId, new Set()).get(v.jobId)!).add(v.propertyKey);
-      if (v.projectId != null) (keysByProject.get(v.projectId) ?? keysByProject.set(v.projectId, new Set()).get(v.projectId)!).add(v.propertyKey);
+      if (v.jobId) {
+        (keysByJob.get(v.jobId) ?? keysByJob.set(v.jobId, new Set()).get(v.jobId)!).add(v.propertyKey);
+        (valuesByJob.get(v.jobId) ?? valuesByJob.set(v.jobId, {}).get(v.jobId)!)[v.propertyKey] = v.value;
+      } else if (v.projectId != null) {
+        // A project's own row, not a job's — the read-through is composed per job below.
+        (keysByProject.get(v.projectId) ?? keysByProject.set(v.projectId, new Set()).get(v.projectId)!).add(v.propertyKey);
+        (valuesByProject.get(v.projectId) ?? valuesByProject.set(v.projectId, {}).get(v.projectId)!)[v.propertyKey] = v.value;
+      }
     });
 
     const boardJobs: BoardJob[] = jobs.map(j => ({
@@ -245,7 +263,10 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
       originalAddress: j.originalAddress,
       projectAddress: j.projectCurrentAddress,
       processRuns: [...(runsByJob.get(j.id)?.values() ?? [])].map(({ processKey, status, health }) => ({ processKey, status, health })),
-      recordedKeys: [...new Set([...(keysByJob.get(j.id) ?? []), ...(keysByProject.get(j.projectId) ?? [])])]
+      recordedKeys: [...new Set([...(keysByJob.get(j.id) ?? []), ...(keysByProject.get(j.projectId) ?? [])])],
+      // The project's values underneath, the job's own on top — the same read-through
+      // the drawer's slot list shows.
+      properties: { ...(valuesByProject.get(j.projectId) ?? {}), ...(valuesByJob.get(j.id) ?? {}) }
     }));
 
     const byProject = new Map<string, BoardJob[]>();
@@ -279,7 +300,8 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
       startDate: p.startDate,
       endDate: p.endDate,
       sharepointUrl: p.sharepointUrl,
-      status: p.status
+      status: p.status,
+      properties: valuesByProject.get(p.id) ?? {}
     }));
 
     return {

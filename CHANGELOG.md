@@ -14,6 +14,8 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- A job or project number can be typed straight into the filters
+- Any property, including the project properties a job inherits, can be shown as a column on the Jobs and Projects tables
 - A SiteBook number can be given to each job as it is created
 - A request on Updates can be re-filed as a bug or as an idea
 - Undo and redo in the header, for the edits that save as you make them
@@ -96,6 +98,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- Undo and redo take back every edit that saves as you make it — dates, tasks, maintenance, process runs and properties included, not only a job's team and assignee
 - Creating jobs from a project opens over the project instead of behind it, and the jobs list sits at the top of the drawer
 - Every dropdown lists its options alphabetically, including the multi-selects
 - A half-written bug report is kept when the panel is closed or the page changes
@@ -131,6 +134,8 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- The Jobs and Projects filters are the same fields as Group by, always on the bar, with everything else in one Advanced row instead of chips added one at a time
+- On the Projects board, Stage now filters by the project's own phase and a separate Job stage filter finds projects with a job in that stage
 - Choosing a person is a type-ahead — names with their team, the record's own team first, and a single match is taken as you tab away
 - Bugs, ideas, the roadmap and the changelog live only on Updates; the copies under Admin are gone
 - The roadmap and changelog now live in one place instead of two
