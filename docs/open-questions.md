@@ -21,7 +21,51 @@ invent a value, and `CLAUDE.md` is explicit that an invented default is worse th
 
 ## Open — next question first
 
-### 1. Where does "clone a job" live now?
+### 1. Bugs and Ideas came off Admin as well — is that right?
+
+Two sentences the same day, to two sessions. *"There is duplication on footer and other
+page"* took Roadmap and Changelog off Admin (#48) and kept Bugs and Ideas as the admin-only
+"bug manager" (*"only admins and super admin get to see the bug manager"*). An hour later,
+*"the updates page is duplicated with the bugs/ideas/roadmap/changelog pages in admin. this
+only needs to be one page"* took the other two as well (#49). The second session read the
+fuller sentence as the decision. The bug **manager** — stage, phase, kind, merge, planning — is
+still admin's and superadmin's inside Updates; only the second door went. If Bugs and Ideas
+should come back as Admin tabs, say so and they are two lines to restore; the triage list
+component (`FeedbackList.tsx`) was deleted and would come back from history.
+
+### 2. Saved projects views carrying `?stage=` — leave them, or rewrite them?
+
+Since #51 the projects board has two stage filters: **Stage** is the project's own phase (as
+the Stage grouping is) and **Job stage** is "has a job in this stage". Before, `?stage=` on
+the projects board meant the second. `saved_views` stores query strings verbatim (0048), so
+any saved *projects* view with `?stage=` now filters by the project's phase instead. There
+are no shared saved views of that shape that Claude can see, but Claude cannot see everyone's.
+Options: leave it (the new meaning matches the grouping, which was the point), or run a
+one-off `UPDATE saved_views SET … 'stage=' → 'jobstage='` for projects views only.
+
+### 3. Does undo need a home on a phone?
+
+The header bar is hidden below 600px because two more 32px targets left the search box 70px
+wide, and Ctrl+Z does not exist on a phone — so a phone has no undo at all. Is that
+acceptable for now, or does it need one (a long-press on the "saved" toast is the obvious
+place)?
+
+### 4. Should the person picker offer deactivated people?
+
+`PersonSelect` lists active people only, and every assignee, owner and "who is doing this"
+control uses it. A job already assigned to somebody who has since been deactivated still
+shows their name read-only. Nobody asked for the other behaviour; this records that it was a
+choice.
+
+### 5. What is "undo" allowed to reach?
+
+Today it reaches every field write that saves as you make it — team, assignee, dates, tasks,
+process runs, property values, a request's stage. It deliberately does NOT reach lifecycle
+moves (forwards-only by your rule), creating, deleting, votes, follows or comments. Is that
+the right line, or should a lifecycle move be undoable within, say, a minute of making it?
+(The database refuses the way back today; allowing it is a migration, not a UI change.)
+
+### 6. Where does "clone a job" live now?
 
 **Blocked:** nothing is broken, but the app currently has no way to clone a job at all.
 
@@ -41,14 +85,14 @@ What is not decided is what it should look like there:
 Either way `cloneJob(id, copy)` is unchanged and manager+ still gates it. Do not delete
 `CloneDialog.tsx` as dead code before this is answered.
 
-### 2. Is the placeholder at 3.47:1 accepted, or does it get fixed?
+### 7. Is the placeholder at 3.47:1 accepted, or does it get fixed?
 
 The design system now labels it *"example text only, never a label"*, which narrows the
 exposure but does not clear it — placeholder text is still text under WCAG 1.4.3. `#757478`
 would clear it at 4.64:1 as a new `--lofty-black-70` step, leaving `--ui-border-color` at
 the 3.47:1 it was deliberately chosen for.
 
-### 3. What should five missing roadmap items say?
+### 8. What should five missing roadmap items say?
 
 Five commits carry a `Roadmap:` trailer whose text matches no checkbox in `ROADMAP.md`, so
 work that was finished has no line to tick:
@@ -63,7 +107,7 @@ They are real and shipped. What is missing is which phase each belongs to and wh
 wording above is the wording you want, and inventing roadmap text is exactly the thing
 `CLAUDE.md` forbids.
 
-### 4. How is health status worked out?
+### 9. How is health status worked out?
 
 Long-standing, from the schema plan's own risk list. *"Status is what someone sets. Health
 is what the system works out"* — from inputs nobody has defined. Kanban-by-status and
@@ -71,7 +115,7 @@ kanban-by-team work today; **kanban-by-health cannot be built until this is answ
 job at risk because it is past `expected_days`, because a required field is empty, because a
 dependency is blocked, or some combination?
 
-### 5. Does Acquisition & Development want a `project_stage` vocabulary?
+### 10. Does Acquisition & Development want a `project_stage` vocabulary?
 
 `project_stage` is nullable and costs nothing empty. Do not seed a vocabulary until they
 confirm they want one — a half-filled stage column that some projects use and others ignore
@@ -83,6 +127,10 @@ is worse for reporting than no column.
 
 | Date | Question | Answer |
 | --- | --- | --- |
+| 7 Sep | Does undo work after the seam rewrite (#51)? | **"undo redo works"** — confirmed on the live app after the first version (six hand-registered sites) had failed her: *"it didn't let me undo it"* |
+| 7 Sep | How many digits is a job number? | **Three** — *"the job numbers are 3 digits"*. Migration 0073 had already made it so; the toolbar's example read `1042-03` and now reads `1042-003`. Older two-digit examples remain in earlier sessions' notes and in `dictionary.ts` |
+| 7 Sep | Should there be a CI check for the generated files and the responsive sweep? | **Yes** — *"ok"*. Both are jobs now; the generated-files check caught two real faults on its first day |
+| 7 Sep | Filters, a number box, property columns | *"filters on jobs and projects should be same as the group ones … an advanced … enter a job number … columns should be able to add any property in the job (including project properties …)"* — **done in #51** |
 | 7 Sep | Should creating a notification *type* stay with admins? | **Yes** — `0097`. Insert and delete are admin's; a manager keeps every rule and may still change an existing type's default channels, timing and active flag, which is what Settings → Automations edits. Three policies by command, not one `for all`, because `for all` would have taken that screen off managers |
 | 7 Sep | What does "mark as complete" mean for the seven import sites? | **The question dissolved.** *"i don't need any jobs imported from spreadsheets. all jobs that need to be created from now on will be created from the projects in the app"* — so there is no import, no second copy, and nothing to reconcile. Phase B is closed without ever running |
 | 7 Sep | What happens to the import machinery on the live database? | **Nothing — leave it.** *"everything that is in supabase now is correct. If I need to import other areas I will let you know as properties may change between now and then. No new importing for job or projects"*. The staging table, its 801 rows and the three functions stay applied and inert |
@@ -90,7 +138,7 @@ is worse for reporting than no column.
 | 7 Sep | Text colour on Crisp Orange | **Never black on orange.** Filled orange carries Finisher White. Reversed the previous day's ink decision; the design system was updated to match |
 | 7 Sep | Where do the three contrast fixes live? | Amber fixes them in the Claude Design project; Claude supplies exact hexes and re-syncs. Sync stays one-way into this repository |
 | 7 Sep | PR #47 — merge, or hold? | Held as a draft while Amber looked, then **merged** (`3d218d0`). She marked it ready for review and confirmed the merge; it deployed the rebrand to `hub.lofty.au` |
-| 7 Sep | Who sees Bugs and Ideas triage? | *"Only admins and super admin get to see the bug manager."* The **form** is open to everyone with app access, viewers included. Both already behaved that way |
+| 7 Sep | Who sees Bugs and Ideas triage? | *"Only admins and super admin get to see the bug manager."* The **form** is open to everyone with app access, viewers included. Both already behaved that way. *(Later the same day the Bugs and Ideas tabs left Admin too — see open question 1)* |
 | 7 Sep | Is Roadmap/Changelog duplicated? | Yes — *"there is duplication on footer and other page"*. **Done:** the Admin tabs came out, the cog links to `/updates`, and `/admin/roadmap` and `/admin/changelog` forward there |
 | 7 Sep | The seven colliding import sites | The app is the record; ignore those workbook rows. *(Superseded the same day by closing the import altogether — see the two rows above)* |
 | 6 Sep | Primary colour | Follow the design system: **Crisp Orange**, inverting the app's previous green primary |

@@ -32,6 +32,45 @@ properties may change between now and then"* — so the machinery has a plausibl
 even though jobs and projects are not it. It never ran: the load rolled back whole on its
 first write, so no project, job or address in the app came from it.
 
+## Where it stands, and what is next — 7 September, evening
+
+**Live on `hub.lofty.au`, all merged to `main` today with CI green on every merge (the
+responsive sweep included, now that it runs there):**
+
+- #48 — Roadmap and Changelog off Admin; Phase B closed.
+- #49 — Amber's eight first-week fixes; the responsive sweep and the generated-files check in CI.
+- #51 — undo at the repository seam; filters mirror Group by with one Advanced row; a job or
+  project number box; any property as a table column.
+- #50 — nine more from the same list, in a parallel session: the drawer collapses and is
+  findable, the board's cards separate, the header loses its pink, the rail tooltip stops
+  eating its first letter, and `0097` makes a notification *type* admin's again.
+
+**Next, in order.** Nothing here needs a schema change.
+
+1. **Amber clicks through what the harness could not.** Every check today ran against a
+   fixture repository, never the live database. The four things to try on `hub.lofty.au`:
+   change a project's target date and undo it; change a task's status and undo it; move a
+   request's stage on Updates and undo it; turn on a property column with real values on the
+   Jobs table. If any of them misbehaves, the seam (`undoableRepository.ts`) is where undo
+   lives now — there is no longer a per-screen registration to look for.
+2. **Work the open-questions queue**, top question first — `docs/open-questions.md`. Six
+   questions were added today (numbered 1–6 there; the four older ones follow). Three are
+   cheap confirmations of decisions made under time pressure; asked once, they stop being
+   risks. Number 6 is the one that BLOCKS something: cloning a job has no entry point since
+   the button left the drawer (#50) and nothing on the Projects side has taken it yet.
+3. **Small follow-ups that fell out of today, none blocking:**
+   - The column picker will list every property — eighty-odd once the definitions are all
+     active. It has no search box. Add one when it gets unwieldy, not before.
+   - The undo bar is hidden below 600px to keep the phone header usable. Ctrl+Z has no phone
+     equivalent, so a phone has no undo at all. A long-press on the toast is the obvious home.
+   - `PersonSelect` offers active people only. A job already assigned to somebody deactivated
+     still shows their name read-only; whether the picker should offer them was not asked.
+   - The deep-link case: a write on a record the page has not listed (tasks, runs, property
+     values, feedback) goes through unrecorded, because the seam has no "before" for it.
+     Every screen today lists before it edits, so nothing hits this; the fallback is honest.
+4. **Still queued from earlier sessions**, unchanged: `SHARE_ALLOWED_ORIGINS` (below), the
+   sortable-header table further down this file, and the notification worker.
+
 ### Two standing decisions, so nobody spends an afternoon reopening them
 
 **`amberbeaumont/modules` is out of scope. Ignore it.** Amber, 4 September: *"ignore the
