@@ -14,6 +14,9 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Import a Word document or a PDF and it becomes a template or a document — headings, prose and Word tables become blocks you can edit, and it tells you up front what it could not bring across
+- Drop an image straight into a report, or pick one from your machine, instead of hosting it somewhere and pasting a link
+- New document on a job or project starts with that record already chosen
 - Text snippets — save wording once and drop it into any letter from the editor, as a copy you can then edit
 - A Snippet Library under Tools, where a manager signs off, renames or retires saved wording
 - A job's report reads the properties recorded on its project as well as its own, and the job's own value wins where both are set
@@ -104,6 +107,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- A document can be put on a project as easily as on a job — the choice is now asked before the list, instead of every project sorting below every job in one long picker
 - Undo and redo take back every edit that saves as you make it — dates, tasks, maintenance, process runs and properties included, not only a job's team and assignee
 - Cards on the board no longer touch each other
 - The icons in the top bar no longer flash pink when you hover them
