@@ -1156,6 +1156,30 @@ code { overflow-wrap: anywhere; }
 [class*="circleText"] { background: var(--primary-color) !important; }
 [class*="circleText"] [class*="contentText"] { color: var(--text-color-on-primary) !important; }
 
+/* Vibe's tooltip eats the first letter of its own label.
+   Measured on the collapsed nav rail, where the tooltip IS the label and losing a
+   character makes it unreadable: "Projects" rendered as "rojects" and "Expand
+   navigation" as "xpand navigation".
+
+   The cause is paint order, not overflow — nothing clips the tooltip. Vibe builds it as
+
+       <div class="contentComponent right_…">   padding 6px
+         <div class="tooltip_… dark_…"><div class="content_…">Projects</div></div>
+         <div class="arrow_… dark_…" data-placement="right">        absolute, 12x12, rot 45deg
+
+   The arrow is a 12px square rotated 45°, so it measures 17px across and spans
+   x 62.5→79.5 while the text starts at x 70. Its inner half is MEANT to be hidden
+   behind the bubble, leaving only the pointer outside — but it is a later sibling with
+   no z-index, so it paints on top instead, in the same #323338 as the bubble. The first
+   glyph is not clipped or shifted; it is painted over in its own background colour.
+
+   So the fix is z-order, not geometry: lift the bubble above the arrow. Nothing moves,
+   the pointer still points, and the arrow's inner half goes back behind the bubble where
+   it was always supposed to be. Applied to every placement, because the same overlap
+   happens on each side — right is simply where this app puts a tooltip that has to be
+   read rather than glanced at. */
+[class*="contentComponent"] > [class*="tooltip_"] { position: relative; z-index: 1; }
+
 /* ---- the inline add row --------------------------------------------------
    "+ New project" as the last row of the table, monday-style. Only possible since
    0037: a project may sit at a locality, which is five inputs rather than seven.
