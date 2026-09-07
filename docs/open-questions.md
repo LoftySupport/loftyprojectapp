@@ -137,6 +137,17 @@ dependency is blocked, or some combination?
 confirm they want one — a half-filled stage column that some projects use and others ignore
 is worse for reporting than no column.
 
+### 13. Do exported documents take Flint for their greys?
+
+The design system retired the two cool greys on 7 September: `#f6f7f7` and `#e7e8e9` are
+gone from the mirror, and in the app Flint 100 `#f4f3ee` is the page and Flint 300 `#c6c5ba`
+draws the rules. The Word and PDF writers (`app/src/data/export/houseFormat.ts`) still use
+the old two behind a table header and for the header hairline — deliberately decoupled from
+the app's theme so a document does not change look when a screen does, and print is also
+where the design system says Mid Grey still belongs. So: do exported documents follow the
+app onto Flint, or is the house format its own record? Not changed on the sync, because the
+export palette is written down as a decision (0026) and this file is where decisions change.
+
 ---
 
 ## Answered
@@ -155,7 +166,7 @@ is worse for reporting than no column.
 | 7 Sep | What happens to the import machinery on the live database? | **Nothing — leave it.** *"everything that is in supabase now is correct. If I need to import other areas I will let you know as properties may change between now and then. No new importing for job or projects"*. The staging table, its 801 rows and the three functions stay applied and inert |
 | 7 Sep | Should filled primary buttons use the pressed orange? | **Yes.** Filled buttons paint `--primary-action-color` `#c2543c` (4.54:1 with white); `--primary-color` stays `#f47e63` for focus rings, tints, accents and chart series. Hover `#9a4330` is derived here and should go back into the design project |
 | 7 Sep | Text colour on Crisp Orange | **Never black on orange.** Filled orange carries Finisher White. Reversed the previous day's ink decision; the design system was updated to match |
-| 7 Sep | Where do the three contrast fixes live? | Amber fixes them in the Claude Design project; Claude supplies exact hexes and re-syncs. Sync stays one-way into this repository |
+| 7 Sep | Where do the three contrast fixes live? | Amber fixes them in the Claude Design project; Claude supplies exact hexes and re-syncs. Sync stays one-way into this repository. *Two of the three arrived on the evening sync: the dark Eco Green fill is `#20707a` (5.74:1 with white) and the dark control boundary `#807f74` (3.86:1). The placeholder did not move — question 9 above* |
 | 7 Sep | PR #47 — merge, or hold? | Held as a draft while Amber looked, then **merged** (`3d218d0`). She marked it ready for review and confirmed the merge; it deployed the rebrand to `hub.lofty.au` |
 | 7 Sep | Who sees Bugs and Ideas triage? | *"Only admins and super admin get to see the bug manager."* The **form** is open to everyone with app access, viewers included. Both already behaved that way. *(Later the same day the Bugs and Ideas tabs left Admin too, and Amber confirmed that is right — see the top row)* |
 | 7 Sep | Is Roadmap/Changelog duplicated? | Yes — *"there is duplication on footer and other page"*. **Done:** the Admin tabs came out, the cog links to `/updates`, and `/admin/roadmap` and `/admin/changelog` forward there |

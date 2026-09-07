@@ -3,19 +3,20 @@
    pairing clears 4.5:1; accents keep their hue but shift value for contrast on dark. */
 [data-theme="dark"]{
   /* dark neutral steps */
-  --lofty-dark-base:#191819;
-  --lofty-dark-surface:#232224;
-  --lofty-dark-raised:#2e2d2f;
-  --lofty-dark-border:#414042;
-  --lofty-dark-border-strong:#5a595c;
+  --lofty-dark-base:var(--lofty-flint-900);
+  --lofty-dark-surface:var(--lofty-flint-800);
+  --lofty-dark-raised:#2f2e28;
+  --lofty-dark-border:var(--lofty-flint-700);
+  --lofty-dark-border-strong:#807f74;  /* control boundaries need 3:1 on dark surfaces — 3.9:1 on Flint 800, 3.4:1 on raised */
   --lofty-dark-text:#f2f1f2;        /* 15.6:1 on surface */
   --lofty-dark-text-muted:#b9b8bc;  /* 8.4:1 on surface */
   --lofty-dark-text-faint:#a3a2a6;  /* 5.1:1 on raised (inputs) — placeholders only */
   --lofty-orange-dark-hover:#f79a84;
   --lofty-orange-dark-selected:#4a2e28;
   --lofty-orange-dark-tint:#2d211f;
-  --lofty-green-dark:#1f8791;       /* Eco Green lifted: white on it 4.6:1 */
-  --lofty-green-dark-hover:#2a9ea9;
+  --lofty-green-dark:#20707a;       /* Eco Green lifted for a dark ground: white on it 5.7:1 */
+  --lofty-green-dark-hover:#1a5f68; /* darkens on hover, as in light mode: white 7.3:1 */
+  --lofty-green-dark-ink:#57c3cc;   /* green as TEXT or an icon on dark: 7.5:1 on Flint 800. Never as a fill — black on it is 5:1 but white fails. */
   --lofty-green-dark-tint:#1c2e30;
 
   /* primary / brand */
@@ -41,7 +42,7 @@
   --text-color-on-primary:var(--lofty-finisher-white); /* never black on Crisp Orange, on either theme */
   --text-color-on-brand:var(--lofty-finisher-white);
   --text-color-on-inverted:var(--lofty-dark-base);
-  --text-color-on-status:var(--lofty-finisher-white);
+  --text-color-on-status:var(--lofty-dark-base);  /* dark status fills are lifted, so the ink flips: 6.6:1 on positive, 5.8:1 on negative */
   --text-color-on-warning:var(--lofty-dark-base);
   --disabled-text-color:rgba(242,241,242,.4);
   --link-color:var(--lofty-dark-text);
@@ -54,9 +55,15 @@
   --allgrey-background-color:var(--lofty-dark-base);
   --grey-background-color:var(--lofty-dark-base);
   --dark-background-color:var(--lofty-dark-base);
-  --warm-background-color:var(--lofty-dark-base);
-  --warm-surface-color:var(--lofty-dark-raised);
-  --warm-border-color:var(--lofty-dark-border);
+  --page-tint-color:var(--lofty-dark-base);
+  --page-tint-soft-color:var(--lofty-dark-base);
+  --surface-recessed-color:var(--lofty-flint-700);
+
+  /* data-viz on dark: series 3 and the neutral steps invert so nothing melts into the panel */
+  --data-3:var(--lofty-orange-40);
+  --data-4:var(--lofty-flint-200);
+  --data-5:var(--lofty-flint-400);
+  --data-6:var(--lofty-flint-700);
   --inverted-color-background:var(--lofty-dark-text);
   --modal-background-color:var(--lofty-dark-raised);
   --dialog-background-color:var(--lofty-dark-raised);
@@ -93,12 +100,6 @@
   --box-shadow-large:0 15px 50px rgba(0,0,0,.7);
   --focus-ring:0 0 0 3px rgba(244,126,99,.55),0 0 0 1px var(--lofty-orange-dark-hover) inset;
 
-  /* data-viz */
-  --data-2:var(--lofty-dark-text);
-  --data-3:var(--lofty-green-dark);
-  --data-4:var(--lofty-dark-border-strong);
-  --data-5:#8a4a3c;
-  --data-6:#2f5a5f;
 
   color-scheme:dark;
 }
