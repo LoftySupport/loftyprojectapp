@@ -87,6 +87,12 @@ says shipped and what the app shows people cannot use different words for it.
 - The bell tells you when a request you follow moves, with the note whoever moved it left
 - A vote can be added for somebody whose request arrived on a call, recorded against whoever entered it
 - The responsive sweep covers the three Updates tabs
+- One form for reporting a bug or requesting a feature, with a radio instead of two footer buttons
+- Screenshots, the page, the error and the browser sent with a report — captured, never typed
+- A tracker everybody can see, with the stages requested, in review, planned and in development
+- One thumbs up per person per request, and the vote count the next phase is planned from
+- A roadmap of phases and dates, and what is planned into each
+- A changelog, in the app and in this repository
 
 ### Fixed
 
@@ -156,6 +162,8 @@ says shipped and what the app shows people cannot use different words for it.
 - "Shipped" is now "Live in the app", and it is the last column on the board
 - The new project form asks only for suburb, state, postcode and a project type — the street, its numbers and the council are all optional
 - The handoff and the README say what the tracker changed, and what is still open
+- Bugs and requests are readable by everyone, not just admins — a queue nobody can see cannot stop a duplicate request
+- Only superadmin moves a request between stages
 
 ### Removed
 
