@@ -93,6 +93,10 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- Cards on the board no longer touch each other
+- The icons in the top bar no longer flash pink when you hover them
+- Menu labels no longer lose their first letter when the sidebar is collapsed
+- In dark mode, the fields in the document and report builder showed black text on a black background; they are readable again
 - The privacy policy named Netlify as the host serving the app; Vercel serves it
 - The changelog generator no longer reports "Changelog: skip" as a mistake, so its check can pass again
 - Setting a document to landscape now shows a landscape page in the builder, not only in the export
@@ -122,6 +126,14 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- Sections in the job panel now fold away, and stay folded how you leave them
+- Only admins can create a new kind of notification; managers still decide who hears each one
+- The roadmap and changelog now live in one place instead of two
+- Buttons in Lofty orange are now a deeper shade, so their labels are easier to read
+- Buttons and labels on Lofty orange now use white text, never black
+- The app takes Lofty's brand colours from the design system — orange is now the primary action colour, with green kept for small accents
+- The app is called Lofty Hub in the sidebar logo and in the browser tab of a shared document
+- Sign-in and Wiring no longer mention a second pair of Supabase variable names that the app stopped reading
 - Setup is now Settings, and managers and above can open it — properties, processes, contacts, maintenance, the stage SLAs and the notification rules
 - Admin has moved off the sidebar to a cog in the top bar, and appears only for admins and super admins
 - Users, teams, permissions, the dictionary, the wiring, the bug and idea queues, the roadmap and the changelog are all now under the cog

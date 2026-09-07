@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 134 changes since then —
-- Fixed: The privacy policy named Netlify as the host serving the app; Vercel serves it
-- Fixed: The changelog generator no longer reports "Changelog: skip" as a mistake, so its check can pass again
-- Added: A table of contents block, listing the document's section headings in order
-- Added: A block can be pointed at particular jobs, projects or teams instead of covering everything
-- Added: Long dropdowns in a block's settings narrow as you type
-- …and 129 more.
+Unreleased: 146 changes since then —
+- Changed: Sections in the job panel now fold away, and stay folded how you leave them
+- Fixed: Cards on the board no longer touch each other
+- Fixed: The icons in the top bar no longer flash pink when you hover them
+- Fixed: Menu labels no longer lose their first letter when the sidebar is collapsed
+- Changed: Only admins can create a new kind of notification; managers still decide who hears each one
+- …and 141 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
