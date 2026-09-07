@@ -50,9 +50,14 @@ export function SettingsPage({
         </Text>
       </div>
 
-      {/* `min(320px, 100%)`, not a bare 320px: a track floor wider than the container
-          is a floor the grid honours, and the page scrolls sideways on a 320px phone. */}
-      <div className="card-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))" }}>
+      {/* Two columns (Amber, 7 Sep): your details with "where you land" BENEATH them on
+          the left, and notifications beside them on the right. It was an auto-fit grid of
+          three equal cards, which put a six-column table in a third of the screen — the
+          notifications were cut off at the Timing column and the details were three
+          short cards in a row. The notifications table is the wide thing on this page,
+          so it gets the wide column; below 900px everything stacks. */}
+      <div className="settings-grid">
+        <div className="settings-you">
         <section className="panel">
           <div className="panel-head">
             <Text type="text2" weight="bold">Your details</Text>
@@ -116,6 +121,7 @@ export function SettingsPage({
             />
           </Row>
         </section>
+        </div>
 
         <NotificationSettings />
       </div>

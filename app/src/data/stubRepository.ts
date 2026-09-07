@@ -316,6 +316,9 @@ export function createStubRepository(): Repository {
     async setFeedbackPhase(): Promise<never> {
       throw new Error("Planning a request into a phase needs Supabase.");
     },
+    async setFeedbackKind(): Promise<never> {
+      throw new Error("Re-filing a request needs Supabase.");
+    },
     async setFeedbackVote(): Promise<never> {
       throw new Error("Voting needs Supabase.");
     },

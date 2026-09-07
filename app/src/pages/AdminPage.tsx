@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
+import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import {
   Button, Heading, Modal, ModalBasicLayout, ModalContent, ModalFooter, ModalHeader,
   Search, Tab, TabList, Text, TextField
@@ -21,9 +21,9 @@ import { useToasts } from "../components/Toasts";
 import { ExportMenu } from "../components/ExportMenu";
 import { tableFromFields, type ExportDocument } from "../data/export";
 import { DictionaryPage } from "./DictionaryPage";
-import { FeedbackList } from "./FeedbackList";
 import { PermissionsPage } from "./PermissionsPage";
 import { WiringPage } from "./WiringPage";
+import { useUndo } from "../data/UndoProvider";
 import "../components/ui.css";
 
 /**
@@ -50,20 +50,25 @@ import "../components/ui.css";
  * an admin deactivating a person were sharing a tab strip for no better reason than that
  * both were "setup".
  *
- * ROADMAP AND CHANGELOG ARE NOT HERE, as of 7 September. They were, as the same components
- * Updates renders — imported rather than copied, so there was never a second implementation
- * to keep in step. The argument for keeping them was "one door with all of it behind it".
- * Amber's answer was that it read as doubling up: *"there is duplication on footer and other
- * page"*. Two doors to identical content is a thing a person has to check, and being the
- * same component underneath is a fact about the code, not about the experience.
+ * THE TRACKER IS NOT HERE ANY MORE. On 4 September Roadmap and Changelog were rendered
+ * here as well, imported from Updates, with Bugs and Ideas as two triage lists beside
+ * them — one door with everything behind it. Amber said it twice on 7 September, to two
+ * sessions: *"there is duplication on footer and other page"*, which took Roadmap and
+ * Changelog out (#48), and *"the updates page is duplicated with the bugs/ideas/roadmap/
+ * changelog pages in admin. this only needs to be one page"*, which takes the other two.
+ * Being one component underneath was a fact about the code, not about the experience:
+ * two doors to identical rows is still a thing a person opens twice. Updates is the one
+ * page now. Nothing an admin could do here is lost — the stage, phase and kind controls,
+ * the merge and the export all live in a request's panel and the Requests table, and
+ * they are still admin's and superadmin's there (*"only admins and super admin get to see
+ * the bug manager"* — the manager is the controls, and those never opened to anybody
+ * else; the queue itself has been everybody's since 0060). The four old addresses forward
+ * to the matching view of Updates. The reasoning for having it here at all is kept in
+ * this paragraph so the next person does not re-import it for the same good-sounding
+ * reason.
  *
- * So the cog links to `/updates` for both. Nothing moved and no permission changed — the
- * planning and publishing controls inside Updates were already admin's and superadmin's
- * respectively, and Updates stays in the footer for everybody because the queue is the
- * thing people are meant to read (0060).
- *
- * The section is in the URL, like Settings' and Updates', so a link to Teams or to the
- * bug queue is a link somebody can send.
+ * The section is in the URL, like Settings' and Updates', so a link to Teams is a link
+ * somebody can send.
  */
 const SECTIONS = [
   // People first: it is what "Admin" meant before today and what most visits are for.
@@ -73,13 +78,7 @@ const SECTIONS = [
   // shape of who may do what, which is this screen's own subject.
   { slug: "permissions", label: "Permissions" },
   { slug: "dictionary",  label: "Dictionary" },
-  { slug: "wiring",      label: "Wiring" },
-  // The tracker, from an administrator's side. Bugs and Ideas are the triage lists that
-  // were Setup's last two admin-only tabs, and they are admin-only on purpose — Amber,
-  // 7 September: "only admins and super admin get to see the bug manager". Filing is not
-  // triage: ReportForm has no permission gate, so anybody with app access can send one.
-  { slug: "bugs",        label: "Bugs" },
-  { slug: "ideas",       label: "Ideas" }
+  { slug: "wiring",      label: "Wiring" }
 ] as const;
 
 export function AdminPage() {
@@ -88,14 +87,22 @@ export function AdminPage() {
   const location = useLocation();
   const index = SECTIONS.findIndex(s => s.slug === section);
 
-  // Roadmap and Changelog left this screen on 7 September. They were sections with URLs, and
-  // this file's own reasoning for putting the section in the URL was that "a link to Teams or
-  // to the bug queue is a link somebody can send" — so somebody has sent these. Forwarding
-  // them costs two lines; the alternative is an old link landing silently on Users, which
-  // looks like the page is broken rather than like the tab moved.
-  const MOVED: Record<string, string> = { roadmap: "/updates/roadmap", changelog: "/updates/changelog" };
+  // The tracker's four tabs left this screen on 7 September. They were sections with URLs,
+  // and this file's own reasoning for putting the section in the URL was that "a link to
+  // Teams or to the bug queue is a link somebody can send" — so somebody has sent these.
+  // Forwarding them costs four lines; the alternative is an old link landing silently on
+  // Users, which looks like the page is broken rather than like the tab moved. Bugs and
+  // Ideas land on the Requests TABLE, filtered to their kind, which is the nearest thing
+  // to the triage list they were.
+  const MOVED: Record<string, string> = {
+    roadmap: "/updates/roadmap",
+    changelog: "/updates/changelog",
+    bugs: "/updates/requests?kind=bug&view=table",
+    ideas: "/updates/requests?kind=idea&view=table"
+  };
   if (section && MOVED[section]) {
-    return <Navigate to={{ pathname: MOVED[section], search: location.search }} replace />;
+    const target = MOVED[section];
+    return <Navigate to={target.includes("?") ? target : target + location.search} replace />;
   }
 
   // `/admin` on its own is a reasonable thing to type, and `/admin?person=<id>` is what
@@ -109,8 +116,11 @@ export function AdminPage() {
     <>
       <div className="page-head">
         <Heading type="h2" weight="bold">Admin</Heading>
-        <Text type="text2" color="secondary">
-          Who works here, what they may do, and how the app itself is defined.
+        <Text type="text2" color="secondary" ellipsis={false}>
+          Who works here, what they may do, and how the app itself is defined. Bugs, ideas,
+          the roadmap and the changelog are on{" "}
+          <Link to="/updates" className="text-link">Updates</Link> — one page for everybody, with the triage
+          controls inside each request.
         </Text>
       </div>
 
@@ -124,8 +134,6 @@ export function AdminPage() {
         {section === "permissions" && <PermissionsPage />}
         {section === "dictionary"  && <DictionaryPage />}
         {section === "wiring"      && <WiringPage />}
-        {section === "bugs"        && <FeedbackList kind="bug" />}
-        {section === "ideas"       && <FeedbackList kind="idea" />}
       </div>
     </>
   );
@@ -155,7 +163,22 @@ function Users() {
   const [permission, setPermission] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
-  const [editing, setEditing] = useState<Profile | null>(null);
+  /**
+   * WHICH person the panel shows — an id, not a `Profile`.
+   *
+   * It held the object, captured at the click. Save a job title in the row underneath
+   * and the table re-read, but the panel went on showing the object it was handed, so
+   * "if you make changes inline then it doesn't persist to the side bar" (Amber, 7 Sep)
+   * was exactly right: it persisted everywhere except the one place still holding the
+   * stale copy. Resolving the id against `profiles` on every render means the panel and
+   * the row are the same read.
+   */
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editing = useMemo(
+    () => (editingId ? profiles.find(p => p.id === editingId) ?? null : null),
+    [profiles, editingId]
+  );
+  const setEditing = (p: Profile | null) => setEditingId(p?.id ?? null);
   const [adding, setAdding] = useState(false);
   const [editingRow, setEditingRow] = useState<string | null>(null);
   const [deactivating, setDeactivating] = useState<Profile | null>(null);
@@ -179,7 +202,7 @@ function Users() {
     if (!wanted || !profiles.length) return;
     const person = profiles.find(p => p.id === wanted);
     if (!person) return;
-    setEditing(person);
+    setEditingId(person.id);
     const next = new URLSearchParams(params);
     next.delete("person");
     setParams(next, { replace: true });
@@ -204,6 +227,7 @@ function Users() {
   // Only managers and above may write. This hides the controls; the RLS policy on
   // `profiles` is what actually refuses, and one without the other is decoration.
   const canEdit = can("manager");
+  const { record } = useUndo();
 
   /**
    * The status toggle's two directions are not symmetrical, so they are not handled
@@ -214,6 +238,11 @@ function Users() {
     if (p.active) { setDeactivating(p); return; }
     try {
       await repo.setProfileActive(p.id, true);
+      record({
+        label: `Restored ${p.fullName}`,
+        undo: async () => { await repo.setProfileActive(p.id, false); refresh(); },
+        redo: async () => { await repo.setProfileActive(p.id, true); refresh(); }
+      });
       refresh();
     } catch (e) {
       setBulkNote({ ok: null, err: e instanceof Error ? e.message : String(e) });
@@ -231,6 +260,11 @@ function Users() {
     if (!p.isDemo) { setDemoPending(p); return; }
     try {
       await repo.updateProfile(p.id, { isDemo: false });
+      record({
+        label: `Let ${p.fullName} into the app`,
+        undo: async () => { await repo.updateProfile(p.id, { isDemo: true }); refresh(); },
+        redo: async () => { await repo.updateProfile(p.id, { isDemo: false }); refresh(); }
+      });
       setBulkNote({ ok: `${p.fullName} can use the app now.`, err: null });
       refresh();
     } catch (e) {
@@ -512,6 +546,7 @@ function Users() {
                 onEdit={() => setEditingRow(p.id)}
                 onDone={saved => { setEditingRow(null); if (saved) refresh(); }}
                 onActivity={() => setActivityFor(p)}
+                onOpen={() => { setEditingRow(null); setEditing(p); }}
                 onFullEdit={() => { setEditingRow(null); setEditing(p); }}
                 onDeactivate={() => void onStatusToggle(p)}
                 onToggleDemo={canEdit ? () => void onDemoToggle(p) : undefined}
@@ -525,8 +560,29 @@ function Users() {
 
       <UserDialog show={adding} profile={null}
         onClose={() => setAdding(false)} onSaved={refresh} />
+      {/* Settings and actions in one panel (Amber, 7 Sep: "when you click on the name it
+          should open the side panel with settings and actions"). The actions are the
+          row's — activity, the status switch, the gate — so nothing here is a third way
+          to do what the table already does; it is the same acts, beside the details. */}
       <UserDialog show={editing !== null} profile={editing}
-        onClose={() => setEditing(null)} onSaved={refresh} />
+        onClose={() => setEditing(null)} onSaved={refresh}
+        actions={editing && (
+          <div className="user-actions">
+            <Button size="small" kind="secondary" onClick={() => setActivityFor(editing)}>
+              View activity
+            </Button>
+            {canEdit && (
+              <Button size="small" kind="secondary" onClick={() => void onStatusToggle(editing)}>
+                {editing.active ? "Deactivate…" : "Restore access"}
+              </Button>
+            )}
+            {canEdit && (
+              <Button size="small" kind="secondary" onClick={() => void onDemoToggle(editing)}>
+                {editing.isDemo ? "Let into the app" : "Hold at the gate…"}
+              </Button>
+            )}
+          </div>
+        )} />
       <DeactivateDialog show={deactivating !== null} profile={deactivating}
         onClose={() => setDeactivating(null)} onSaved={refresh} />
 

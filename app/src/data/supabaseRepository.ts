@@ -121,7 +121,7 @@ const WIRED: RepositoryMethod[] = [
   "setProjectCurrentAddress", "listAddressHistory",
   "listStages", "listTeams", "updateTeam", "createTeam", "listTemplatePhases", "updateStageSla",
   "listSavedViews", "saveView", "deleteSavedView", "shareSavedView",
-  "submitFeedback", "listFeedback", "setFeedbackStage", "setFeedbackPhase",
+  "submitFeedback", "listFeedback", "setFeedbackStage", "setFeedbackPhase", "setFeedbackKind",
   "setFeedbackVote", "attachmentUrl",
   "listRoadmapPhases", "createRoadmapPhase", "updateRoadmapPhase", "deleteRoadmapPhase",
   "moveRoadmapPhase", "listReleases", "createRelease", "deleteRelease",
@@ -1418,11 +1418,24 @@ export function createSupabaseRepository(): Repository {
           // enum to text with a check — so a wrong value here is a constraint violation
           // naming itself rather than a type error.
           job_stage: input.stage ?? "Acquisition & Development",
-          job_status: input.status ?? "on_track"
+          job_status: input.status ?? "on_track",
+          // The SiteBook number, when the job already exists there (Amber, 7 Sep: "you
+          // should be able to add a sitebook number as well at the time"). Trimmed and
+          // blank-to-null for the reason updateJob gives: the column is unique over
+          // non-nulls. Omitted from the row entirely when not given, so the column's own
+          // default stands.
+          ...(input.jobNumberOld?.trim() ? { job_number_old: input.jobNumberOld.trim() } : {})
         })
         .select("*")
         .single();
-      if (error) throw error;
+      if (error) {
+        if (error.code === "23505" && input.jobNumberOld?.trim()) {
+          throw new Error(
+            `SiteBook number ${input.jobNumberOld.trim()} is already on another job — search it to see which.`
+          );
+        }
+        throw error;
+      }
       return toJob(data);
     },
 
@@ -2489,6 +2502,22 @@ export function createSupabaseRepository(): Repository {
         .select("feedback_id");
       if (error) throw error;
       if (!data?.[0]) throw new Error("That was not changed — planning a request needs admin.");
+      return await repo.listFeedback();
+    },
+
+    /**
+     * Bug or idea. The same policy as the phase — `admins triage feedback` — and no
+     * trigger stands in the way: the kind is not the stage, so `guard_feedback_stage_change`
+     * lets it through at admin, which is where re-filing belongs.
+     */
+    async setFeedbackKind(id: string, kind: FeedbackKind): Promise<FeedbackItem[]> {
+      const { data, error } = await client
+        .from("feedback")
+        .update({ feedback_kind: kind })
+        .eq("feedback_id", id)
+        .select("feedback_id");
+      if (error) throw error;
+      if (!data?.[0]) throw new Error("That was not changed — re-filing a request needs admin.");
       return await repo.listFeedback();
     },
 

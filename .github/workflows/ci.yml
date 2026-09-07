@@ -78,6 +78,58 @@ jobs:
           node-version-file: .nvmrc
       - run: node scripts/check-links.mjs
 
+  # CHANGELOG.md, the ticks in ROADMAP.md and the generated blocks in README.md and
+  # HANDOFF.md come from commit trailers. The post-commit hook regenerates them locally,
+  # but a hook is opt-in: a commit made without it (7 September, this very check's own
+  # PR) lands with the four files stale and nothing notices. Same shape as the dictionary
+  # step above — regenerate, and a difference is somebody who edited a generated file or
+  # forgot to run the generator.
+  #
+  # Pull requests only, on the PR's OWN head. The generator walks `git log`, so on the
+  # merge ref it would see main's newer trailers and fail a branch for entries it never
+  # had; and after a merge, main carries the last-merged branch's file, which lacks any
+  # PR merged in between until the next commit's hook repairs it. That drift is the
+  # hook's to fix, not a reason to fail main.
+  generated:
+    name: changelog, roadmap, README and handoff are current
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          # The whole history: every trailer ever written is an input.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: node scripts/changelog.mjs --check
+
+  # Does every page still fit a phone? Two assertions, both objective: the page does not
+  # scroll sideways, and nothing tappable is under 24x24. It caught a real regression on
+  # 7 September — a link written into a sentence was 16px tall on all five sizes — and
+  # only because somebody ran it by hand. Against the BUILT app, with the network blocked,
+  # so it measures the CSS that ships and needs nothing off the runner. About three
+  # minutes; see app/scripts/responsive.mjs for why it is not the dev server.
+  responsive:
+    name: every page fits a phone and a tablet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+        working-directory: app
+      # Only Chromium, and the version the lockfile's Playwright expects — `install`
+      # without a browser name pulls three.
+      - run: npx playwright install --with-deps chromium
+        working-directory: app
+      - run: npm run responsive
+        working-directory: app
+
   deploy:
     name: the deploy assembles
     runs-on: ubuntu-latest

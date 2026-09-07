@@ -40,6 +40,7 @@ import { readPrefs } from "../data/preferences";
 import { Token, token } from "../components/Token";
 import { Toolbar } from "../components/Toolbar";
 import { Problem, Result } from "../components/Form";
+import { PersonSelect } from "../components/PersonSelect";
 import { Select, toOptions } from "../components/Select";
 import "../components/ui.css";
 
@@ -239,7 +240,6 @@ export function JobsPage() {
     [jobKey]
   );
 
-  const { data: profiles } = useQuery(r => r.listProfiles(), []);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkNote, setBulkNote] = useState<{ ok: string | null; err: string | null }>({ ok: null, err: null });
@@ -864,21 +864,26 @@ export function JobsPage() {
                     if (v) bulkApply("moved to the team", selectedJobs, j => repo.updateJob(j.jobNumber, { owningTeam: v as TeamId }));
                   }}
                 />
-                <Select
+                <PersonSelect
                   aria-label="Assign the selected jobs to a person"
                   placeholder="Assign to…"
-                  options={[
-                    { value: "— nobody —", label: "— nobody —" },
-                    ...profiles.map(p => ({ value: p.id, label: p.fullName }))
-                  ]}
+                  clearable={false}
                   value={null}
                   onChange={v => {
                     if (!v) return;
-                    const id = v === "— nobody —" ? null : v;
-                    bulkApply(id ? "assigned" : "unassigned", selectedJobs,
-                      j => repo.updateJob(j.jobNumber, { assigneeId: id }));
+                    bulkApply("assigned", selectedJobs,
+                      j => repo.updateJob(j.jobNumber, { assigneeId: v }));
                   }}
                 />
+                <Button
+                  size="small"
+                  kind="tertiary"
+                  disabled={selectedJobs.every(j => !j.assigneeId)}
+                  onClick={() => bulkApply("unassigned", selectedJobs,
+                    j => repo.updateJob(j.jobNumber, { assigneeId: null }))}
+                >
+                  Unassign
+                </Button>
               </div>
               {bulkBusy && <Text type="text3" color="secondary">Saving…</Text>}
               {bulkNote.ok && <Result>{bulkNote.ok}</Result>}
