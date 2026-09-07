@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 134 changes since then —
-- Fixed: The privacy policy named Netlify as the host serving the app; Vercel serves it
-- Fixed: The changelog generator no longer reports "Changelog: skip" as a mistake, so its check can pass again
-- Added: A table of contents block, listing the document's section headings in order
-- Added: A block can be pointed at particular jobs, projects or teams instead of covering everything
-- Added: Long dropdowns in a block's settings narrow as you type
-- …and 129 more.
+Unreleased: 139 changes since then —
+- Fixed: Creating jobs from a project opens over the project instead of behind it, and the jobs list sits at the top of the drawer
+- Added: A SiteBook number can be given to each job as it is created
+- Changed: Choosing a person is a type-ahead — names with their team, the record's own team first, and a single match is taken as you tab away
+- Fixed: Every dropdown lists its options alphabetically, including the multi-selects
+- Fixed: A half-written bug report is kept when the panel is closed or the page changes
+- …and 134 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -42,7 +42,42 @@ Project Settings → Edge Functions → Secrets and the Share button starts prod
 open. Until then it produces links that do not, so it is worth doing before anybody is shown
 the feature.
 
-Last updated: 2026-09-04.
+Last updated: 2026-09-07.
+
+---
+
+## Session of 2026-09-07 — eight bugs from Amber's first week on it
+
+Amber's list, in her order, and what each turned out to be. None of it touched the schema —
+every fix is in `app/src`, and the one repository method added (`setFeedbackKind`) writes a
+column that already existed under a policy that already allowed it.
+
+| she said | it was | now |
+|---|---|---|
+| "new job creation not working on project tab" | The split-into-jobs panel rendered BEFORE the project's panel in the tree; same z-index, so it opened behind the project. Escape also closed both. | Rendered after, so it stacks on top; `SidePanel` keeps a stack and only the topmost hears Escape. "Jobs on this project" is the first section of the drawer, **+ Create jobs** in its head. A SiteBook number can be typed per lot at creation (the column was already there as "old job number"; it is named for what people call it). |
+| "all drop downs alphabetical … typing a name auto selects … team first, then people with their team" | `Select` sorted; `MultiSelect` did not. The people pickers were Vibe dropdowns — filter, but no auto-select, no team. | `MultiSelect` sorts. New `TypeaheadSelect` (the suburb field's shape for any closed list) and `PersonSelect` on it: every name with their team beside it; the record's own team first under its name, then "Other teams"; one unambiguous match is taken on Tab or on leaving the field. Used for every assignee/owner/person control. |
+| "sidebar text not persisting" | The report panel closes on any click outside it — including the nav — and unmounted the form. | `FeedbackProvider` owns the draft (kind, title, detail, requested-by in `sessionStorage`; files in memory). Sending clears it. |
+| "updates page is duplicated with the bugs/ideas/roadmap/changelog pages in admin" | Four Admin tabs rendering Updates' components and a second triage table. | Gone, with `FeedbackList.tsx`. `/admin/{bugs,ideas,roadmap,changelog}` redirect to the matching Updates view. Admin's head says where they went. |
+| "user settings notifications cut off" | A six-column table in one third of an auto-fit grid. | Two-column page: details with "where you land" beneath on the left, notifications beside. The toggles lost their "Off"/"On" words, which were a third of the table's width. |
+| "add the undo and redo bar to the top navigation" | There was no undo anywhere. | `UndoProvider` + two header arrows, Ctrl/⌘+Z and Shift+Z. A screen registers a step with its inverse at the moment it writes; the drawer's team/assignee/title/SiteBook number, a project's team/assignee, property values, inline user edits, restore/let-in, and a request's stage/phase/kind do. Lifecycle moves and deactivation do not — the first is forwards-only by rule, the second confirms. Hidden below 600px. |
+| "users settings row cut off, can't edit or save; name should open the side panel" | Save sat in the last column of a row wider than the screen; the panel held a stale `Profile` object. | Save/Cancel in the spanning row beneath, sticky to the left edge. The name opens the edit panel, with View activity / Deactivate / Hold at gate under the form. The panel resolves the person by id from the latest read, so an inline save shows in it. |
+| "can't change an idea to a bug in updates" | No control wrote `feedback_kind`. | "Filed as" in the request panel, admin+, under the existing UPDATE policy; undoable. |
+
+**Seen rendered this time**, against a fixture build (the responsive harness's signed-in stub
+with six people and three notification types added): Settings, Admin → Users reading and
+editing, the person panel, the project drawer with the split panel over it, the assignee
+typeahead grouped by team, the request panel with "Filed as", and the draft surviving a page
+change. Not seen: a real write going through, since there is no database in the harness — the
+undo steps were exercised only as far as the toast.
+
+**Open, and hers to decide:**
+
+- The undo bar is hidden below 600px to keep the phone header usable. If phone undo matters,
+  it needs a home — a long-press on the toast is the obvious one.
+- `PersonSelect` lists active people only. A job already assigned to somebody deactivated still
+  shows their name read-only; whether the picker should offer them too was not asked.
+- The old `Admin → Bugs/Ideas` export (page, error, screenshot count in one file) is now the
+  Requests table's export, which carries the same columns except the screenshot count.
 
 ---
 
@@ -65,11 +100,13 @@ diagram, and the three questions still open at the end. The decision log entry i
 
 | Settings — `/setup`, manager+ | Admin — `/admin`, admin+ |
 |---|---|
-| Properties, Processes, Contacts, Maintenance, Automations | Users, Teams, Permissions, Dictionary, Wiring, Bugs, Ideas, Roadmap, Changelog |
+| Properties, Processes, Contacts, Maintenance, Automations | Users, Teams, Permissions, Dictionary, Wiring, ~~Bugs, Ideas, Roadmap, Changelog~~ |
 
-Ten tabs became five and nine. Roadmap and Changelog on Admin are the **same components**
+Ten tabs became five and nine. Roadmap and Changelog on Admin were the **same components**
 Updates renders, imported rather than copied — Updates stays in the footer for everybody,
 because `0060`'s whole point is that the people who filed a request can read the queue.
+*(Struck through on 7 September: the four went, because two doors to the same rows read as
+two pages. See that session above.)*
 
 ### 0096 is the half that stops the rename being decoration
 
@@ -416,7 +453,7 @@ Admin → Users, Updates.
 | Admin → Permissions | permission, capability | — |
 | Admin → Dictionary | name, table, column, status | table, status |
 | Admin → Wiring | method, table, wired | wired / not wired |
-| Updates → Bugs / Ideas (`FeedbackList`) | title, stage, votes, comments, reported | stage, kind, reporter |
+| Updates → Requests, table view | title, kind, stage, phase, votes, from, moved — sorts already | stage, kind, reporter |
 | Reports | whatever each report's table holds | the report's own controls |
 
 The date-range picker is the one piece with no shared component yet: Jobs and Projects

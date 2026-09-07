@@ -4,6 +4,7 @@ import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { useTeams } from "../data/useLookups";
 import { Problem } from "../components/Form";
+import { PersonSelect } from "../components/PersonSelect";
 import { Select } from "../components/Select";
 import {
   NOTIFICATION_AUDIENCES, NOTIFICATION_AUDIENCE_LABELS, NOTIFICATION_CHANNELS, NOTIFICATION_CHANNEL_LABELS, teamName,
@@ -139,7 +140,7 @@ export function NotificationsSetupPage() {
                     <Select aria-label="Team" clearable placeholder="Team…" value={draft.teamId} options={teams.map(x => ({ value: x.id, label: x.name }))} onChange={v => setDraft({ ...draft, teamId: v })} />
                   )}
                   {draft.audience === "specific_person" && (
-                    <Select aria-label="Person" clearable placeholder="Person…" value={draft.profileId} options={profiles.filter(p => p.active).map(p => ({ value: p.id, label: p.fullName }))} onChange={v => setDraft({ ...draft, profileId: v })} />
+                    <PersonSelect aria-label="Person" placeholder="Person…" teamId={draft.teamId} value={draft.profileId} onChange={v => setDraft({ ...draft, profileId: v })} />
                   )}
                   <label className="pf-check">
                     <Text type="text3" element="span">after</Text>

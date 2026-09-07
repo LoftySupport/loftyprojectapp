@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 import { Button, Heading } from "@vibe/core";
 import { ExpandButton, usePanelExpand } from "./PanelExpand";
 import { useResizablePanel } from "./useResizablePanel";
@@ -36,6 +36,18 @@ import "./ui.css";
  *   also dims and centres, which is the behaviour being moved away from; a class on the
  *   same element gets the width without the scrim coming back.
  */
+/**
+ * Which panels are open, in the order they opened.
+ *
+ * Two can be open at once now — the split-into-jobs form over the project's own panel,
+ * a person's activity over their edit form — and before this each of them answered
+ * Escape. One press closed the form you were in AND the record behind it, which is how
+ * "create a job should open the interface, not make you close out" (Amber, 7 Sep) came to
+ * be filed: the split panel opened, the drawer under it heard the same Escape, and both
+ * went. Only the panel on top of the stack listens now.
+ */
+const OPEN_PANELS: string[] = [];
+
 export function SidePanel({
   open,
   title,
@@ -51,6 +63,15 @@ export function SidePanel({
   children: ReactNode;
 }) {
   const panel = useRef<HTMLElement>(null);
+  const panelId = useId();
+  useEffect(() => {
+    if (!open) return;
+    OPEN_PANELS.push(panelId);
+    return () => {
+      const at = OPEN_PANELS.indexOf(panelId);
+      if (at >= 0) OPEN_PANELS.splice(at, 1);
+    };
+  }, [open, panelId]);
   // The expand control and its rules live in PanelExpand, so the job drawer gets the
   // identical behaviour rather than a second implementation of it.
   const { expanded, canExpand, toggle } = usePanelExpand(open);
@@ -86,11 +107,14 @@ export function SidePanel({
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close.current();
+      if (e.key !== "Escape") return;
+      // Only the panel on top. The one beneath gets the next press.
+      if (OPEN_PANELS[OPEN_PANELS.length - 1] !== panelId) return;
+      close.current();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [open]);
+  }, [open, panelId]);
 
   if (!open) return null;
 

@@ -15,6 +15,8 @@ import { AskButton, AskDockProvider } from "../components/AskDock";
 import { FeedbackButtons, FeedbackProvider } from "../components/Feedback";
 import { NotificationsBell } from "../components/NotificationsBell";
 import { ToastsProvider } from "../components/Toasts";
+import { UndoProvider } from "../data/UndoProvider";
+import { UndoRedoBar } from "../components/UndoRedoBar";
 import { greetingName, type PermissionLevel } from "../data/types";
 import "./AppShell.css";
 
@@ -344,6 +346,7 @@ export function AppShell() {
 
   return (
     <ToastsProvider>
+    <UndoProvider>
     <AskDockProvider>
     <FeedbackProvider>
     <div className={"app-shell" + (narrow ? " is-narrow" : "")}>
@@ -400,6 +403,10 @@ export function AppShell() {
           </span>
 
           <div className="app-header-right">
+            {/* Undo and redo first (Amber, 7 Sep: "add the undo and redo bar to the top
+                navigation"): they are about what you just did on the page, so they sit
+                nearest the page and furthest from the things that are about you. */}
+            <UndoRedoBar />
             {/* Ask sits before the bell: it is a thing you go and do, where the bell is
                 a thing that happens to you, and reading left to right the active one
                 comes first. Both are the same 32px target, so the pair reads as one
@@ -462,6 +469,7 @@ export function AppShell() {
     </div>
     </FeedbackProvider>
     </AskDockProvider>
+    </UndoProvider>
     </ToastsProvider>
   );
 }

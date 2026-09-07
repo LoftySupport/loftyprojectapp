@@ -2464,3 +2464,94 @@ code { overflow-wrap: anywhere; }
   text-transform: uppercase;
   color: var(--secondary-text-color);
 }
+
+/* ---- the typeahead --------------------------------------------------------
+   `TypeaheadSelect`: the suburb field's list, for any closed set. It borrows the
+   suburb classes for the list and the rows so the two cannot drift apart, and adds
+   only what the suburb field never needed — a group heading, an empty line, a ×. */
+.typeahead { position: relative; min-width: 0; }
+.typeahead-list { z-index: 6; }
+.typeahead-group {
+  padding: var(--space-8) var(--space-8) var(--space-4);
+  font: var(--font-text3-medium);
+  color: var(--secondary-text-color);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.typeahead li + li .typeahead-group { border-top: 1px solid var(--layout-border-color); margin-top: var(--space-4); }
+.typeahead-empty { padding: var(--space-8); font: var(--font-text3-normal); color: var(--secondary-text-color); }
+/* Name first and whole; the team gives way. "Sam Adams" must not wrap to two lines
+   because "Design, Scheduling" sits beside it. */
+.typeahead-list .suburb-suggestion > span:first-child { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.typeahead-sub { flex: 0 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
+.typeahead-clear {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--border-radius-small);
+  background: none;
+  color: var(--secondary-text-color);
+  font: var(--font-text1-normal);
+  line-height: 1;
+  cursor: pointer;
+}
+.typeahead-clear:hover { background: var(--primary-background-hover-color); color: var(--primary-text-color); }
+/* Room for the × so the last letters of a long name are not under it. */
+.typeahead:has(.typeahead-clear) input { padding-right: 32px; }
+
+/* ---- undo / redo in the header -------------------------------------------- */
+.undo-bar { display: inline-flex; align-items: center; gap: var(--space-4); }
+.app-header .undo-btn, .app-header .undo-btn * { color: var(--fixed-light-color); }
+.undo-btn:disabled { opacity: 0.4; cursor: default; }
+.undo-btn:disabled:hover { background: transparent; }
+/* On a phone the header is the search box and four icons already; two more arrows left
+   the search 70px wide. Ctrl+Z has no phone equivalent either way, so below 600px the
+   pair steps aside and the toasts' "Undone" still names what the keyboard cannot. */
+@media (max-width: 600px) { .undo-bar { display: none; } }
+
+/* A link inside a sentence that still meets the 24px target floor (WCAG 2.2, 2.5.8) —
+   the padding grows the box and the negative margin gives the line its height back. */
+.text-link { display: inline-block; padding: 4px 0; margin: -4px 0; }
+
+/* ---- user settings: two columns ------------------------------------------
+   Your details and where you land stacked on the left; the notifications table, which
+   is the wide thing on the page, beside them. One column below 900px. */
+.settings-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+  gap: var(--space-16);
+  align-items: start;
+}
+.settings-grid > * { min-width: 0; }
+.settings-you { display: flex; flex-direction: column; gap: var(--space-16); min-width: 0; }
+@media (max-width: 900px) {
+  .settings-grid { grid-template-columns: minmax(0, 1fr); }
+}
+/* The notifications matrix fits its column: cells wrap, the two timing controls stack,
+   and the per-cell width cap comes off so the "When" column can take what is left. */
+.notif-table { width: 100%; }
+.notif-table th { white-space: normal; }
+.notif-table td { max-width: none; }
+.notif-timing { display: flex; flex-direction: column; gap: var(--space-4); min-width: 150px; }
+
+/* ---- the users table, editing --------------------------------------------- */
+.row-editing-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  flex-wrap: wrap;
+  /* Pinned to the left edge of whatever is in view. The editing row is wider than the
+     table's wrapper, so the wrapper scrolls — and Save must not scroll away with it. */
+  position: sticky;
+  left: 0;
+  width: fit-content;
+  max-width: 100%;
+}
+.notif-table .notif-timing { min-width: 130px; }
+.notif-table td { padding-left: var(--space-8); padding-right: var(--space-8); }
+/* The actions under a person's details in the edit panel. */
+.user-actions { display: flex; gap: var(--space-8); flex-wrap: wrap; margin-top: var(--space-8); }

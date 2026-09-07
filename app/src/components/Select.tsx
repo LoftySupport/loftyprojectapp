@@ -69,10 +69,7 @@ export function Select({
    * and "Stage 2", which is exactly the list this app is full of. `localeCompare` with
    * numeric collation puts them in the order a person would write them.
    */
-  const items = (ordered
-    ? options
-    : [...options].sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: "base" }))
-  ).map(o => ({ value: o.value, label: o.label }));
+  const items = (ordered ? options : sortOptions(options)).map(o => ({ value: o.value, label: o.label }));
   const selected = items.find(o => o.value === value) ?? null;
 
   return (
@@ -130,6 +127,13 @@ export const toOptions = (values: readonly string[]): SelectOption[] =>
   values.map(v => ({ value: v, label: v }));
 
 /**
+ * The one sort every dropdown uses — shared so `Select`, `MultiSelect` and the typeahead
+ * cannot disagree about where "Stage 10" goes.
+ */
+export const sortOptions = <T extends { label: string }>(options: readonly T[]): T[] =>
+  [...options].sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: "base" }));
+
+/**
  * The same Dropdown in multi mode, for the fields that hold a set rather than a value.
  *
  * Separate from `Select` rather than a flag on it because the two have genuinely
@@ -144,7 +148,8 @@ export function MultiSelect({
   placeholder,
   "aria-label": ariaLabel,
   size = "small",
-  className
+  className,
+  ordered = false
 }: {
   options: SelectOption[];
   value: string[];
@@ -153,8 +158,13 @@ export function MultiSelect({
   "aria-label": string;
   size?: "small" | "medium" | "large";
   className?: string;
+  /** Keep the caller's order — the same opt-out `Select` has, for the same reason. */
+  ordered?: boolean;
 }) {
-  const items = options.map(o => ({ value: o.value, label: o.label }));
+  // Alphabetical by default, exactly as `Select` is. This was the one dropdown that kept
+  // insertion order, so a team picker offered Estimating before Admin because that was
+  // the order the rows came back in — the one gap in "all drop downs alphabetical".
+  const items = (ordered ? options : sortOptions(options)).map(o => ({ value: o.value, label: o.label }));
   const selected = value
     .map(v => items.find(o => o.value === v))
     .filter((o): o is SelectOption => Boolean(o));

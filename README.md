@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 134 changes since then —
-- Fixed: The privacy policy named Netlify as the host serving the app; Vercel serves it
-- Fixed: The changelog generator no longer reports "Changelog: skip" as a mistake, so its check can pass again
-- Added: A table of contents block, listing the document's section headings in order
-- Added: A block can be pointed at particular jobs, projects or teams instead of covering everything
-- Added: Long dropdowns in a block's settings narrow as you type
-- …and 129 more.
+Unreleased: 139 changes since then —
+- Fixed: Creating jobs from a project opens over the project instead of behind it, and the jobs list sits at the top of the drawer
+- Added: A SiteBook number can be given to each job as it is created
+- Changed: Choosing a person is a type-ahead — names with their team, the record's own team first, and a single match is taken as you tab away
+- Fixed: Every dropdown lists its options alphabetically, including the multi-selects
+- Fixed: A half-written bug report is kept when the panel is closed or the page changes
+- …and 134 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
