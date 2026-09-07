@@ -223,6 +223,19 @@ export function themePresentation(theme: string | ReportTheme): Record<string, u
 export function reportFilename(title: string): string;
 export function sanitizeHtml(html: string): string;
 
+/**
+ * A Word or PDF file turned into builder blocks.
+ *
+ * `notes` is not decoration — it is what the conversion could not carry, and the screen
+ * shows it. A PDF's headings are inferred from text size rather than read from the file,
+ * and its tables arrive as text; `notes` is where that is said.
+ */
+export function documentToWidgets(file: File): Promise<{
+  widgets: ReportWidget[];
+  notes: string[];
+}>;
+export function sniffKind(file: File): Promise<"docx" | "pdf" | null>;
+
 // ─── Serialisers ─────────────────────────────────────────────────────
 
 export function reportToMarkdown(report: CompiledReport, options?: Record<string, unknown>): string;

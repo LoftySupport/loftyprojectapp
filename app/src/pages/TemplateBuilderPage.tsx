@@ -175,6 +175,37 @@ function GetStartedCard(
  * "an empty one" would be the kind of copy that is technically correct and tells nobody
  * anything.
  */
+/**
+ * What an import could not carry, shown before it becomes a document.
+ *
+ * NOT a warning and not an error — it is a receipt. A .docx says how many images it left
+ * out; a .pdf says its headings were inferred from text size rather than read from the
+ * file, and that its tables arrived as text. All three are true and none of them means
+ * the import failed.
+ *
+ * It is here, above the Create button, rather than in a toast afterwards, because the
+ * useful moment to learn a PDF's tables did not survive is while deciding whether to
+ * import it — not once it is already a document with somebody's name on it.
+ */
+function ImportNotes({ fileName, notes }: { fileName: string; notes: string[] }) {
+  return (
+    <div className="import-notes">
+      <Text type="text3" weight="bold" ellipsis={false}>Read from {fileName}</Text>
+      {notes.length === 0 ? (
+        <Text type="text3" color="secondary" ellipsis={false}>
+          Everything in it came across.
+        </Text>
+      ) : (
+        <ul>
+          {notes.map((n, i) => (
+            <li key={i}><Text type="text3" color="secondary" ellipsis={false}>{n}</Text></li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 const LANE_WORDS: Record<ReportTemplateKind, {
   one: string; One: string; many: string; egName: string; scratchHint: string;
 }> = {
@@ -232,7 +263,7 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
    * it"* — and the order that lets the three cards be live buttons rather than three
    * controls greyed out behind a field nobody has filled in yet.
    */
-  const [starting, setStarting] = useState<{ how: "template" | "clone" | "scratch" } | null>(null);
+  const [starting, setStarting] = useState<{ how: "template" | "clone" | "scratch" | "import" } | null>(null);
   /**
    * The record the new document is ABOUT, as one value rather than two.
    *
@@ -259,7 +290,7 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
    * covering both would need a lane check at every read — the kind of condition that is
    * right until somebody adds a fourth way in.
    */
-  const [startingLib, setStartingLib] = useState<{ how: "clone" | "scratch" } | null>(null);
+  const [startingLib, setStartingLib] = useState<{ how: "clone" | "scratch" | "import" } | null>(null);
   const libKind: ReportTemplateKind =
     lane === "section" ? "section" : lane === "snippet" ? "snippet" : "template";
 
@@ -367,6 +398,20 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
    * panel — by the time somebody has typed a name the selection they saved is long gone,
    * and re-reading it then would save whatever happens to be selected now.
    */
+  /**
+   * A parsed import, held between choosing the file and naming what it becomes.
+   *
+   * The parse happens on the file picker's change, not on Create, and that is the point:
+   * a Word document with an unreadable table or a scanned PDF with no text at all should
+   * say so BEFORE somebody has typed a name and pressed a button, not after. `notes` is
+   * what the conversion could not carry, and the panel shows it.
+   */
+  const [imported, setImported] =
+    useState<{ widgets: ReportWidget[]; notes: string[]; fileName: string } | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+  /** Which lane asked, so the file picker knows which naming panel to open afterwards. */
+  const importLaneRef = useRef<"documents" | "library">("documents");
+
   const [savingSnippet, setSavingSnippet] = useState<string | null>(null);
   const [snippetName, setSnippetName] = useState("");
 
@@ -601,12 +646,19 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
         title,
         layout: from
           ? { ...from.layout, widgets: engine.remapIds((from.layout?.widgets ?? []) as ReportWidget[]) }
-          : { widgets: [] },
+          // An import brings its own blocks. `remapIds` here too, for the same reason it
+          // is used on a clone: the importer generates ids, and importing the same file
+          // twice must not produce two documents whose blocks collide in the builder's
+          // drag-and-drop, which keys on block id.
+          : imported
+            ? { widgets: engine.remapIds(imported.widgets) }
+            : { widgets: [] },
         templateId: from?.id ?? null,
         ...subject
       });
       setDocTitle("");
       setDocFrom(null);
+      setImported(null);
       setSubjectPick(null);
       setStarting(null);
       bump();
@@ -668,6 +720,7 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
     setDocFrom(null);
     setCloneFrom(null);
     setSubjectPick(null);
+    setImported(null);
   };
 
   /**
@@ -678,9 +731,38 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
    * the subject a clone keeps are all decisions with reasons written where they are made,
    * and a second copy here would be a second place for them to drift.
    */
+  /**
+   * Read the chosen file, then open the naming panel with what came out of it.
+   *
+   * The parsers are loaded by `documentToWidgets` on demand — mammoth and pdfjs together
+   * are larger than the rest of the builder, and nobody who is not importing should wait
+   * for them. The name is suggested from the file's own, minus the extension, because
+   * "Site Report.docx" is what the thing is called and retyping it is a chore.
+   */
+  const takeImport = (file: File | undefined, lane: "documents" | "library") =>
+    run(async () => {
+      if (!file) return;
+      importLaneRef.current = lane;
+      const { documentToWidgets } = await import("../features/reports/index.js");
+      const { widgets, notes } = await documentToWidgets(file);
+      if (!widgets.length) {
+        throw new Error(`Nothing could be read out of ${file.name}.`);
+      }
+      const suggested = file.name.replace(/\.[^.]+$/, "");
+      setImported({ widgets: widgets as ReportWidget[], notes, fileName: file.name });
+      if (lane === "documents") {
+        setDocTitle(suggested);
+        setStarting({ how: "import" });
+      } else {
+        setLibName(suggested);
+        setStartingLib({ how: "import" });
+      }
+    });
+
   const confirmStart = () => {
     if (!starting) return;
     if (starting.how === "clone") cloneDocument();
+    else if (starting.how === "import") createDocument(null);
     else createDocument(starting.how === "template" ? docFrom : null);
   };
 
@@ -784,8 +866,12 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
       const name = libName.trim();
       if (!name) return;
       const store = libraryStoreFor(libKind);
-      const row = await store.create({ title: name, layout: { widgets: [] } });
+      const row = await store.create({
+        title: name,
+        layout: imported ? { widgets: engine.remapIds(imported.widgets) } : { widgets: [] }
+      });
       setLibName("");
+      setImported(null);
       setStartingLib(null);
       bump();
       setOpen({ lane: "library", row, kind: libKind });
@@ -852,11 +938,14 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
     setStartingLib(null);
     setLibName("");
     setCloneFrom(null);
+    setImported(null);
   };
 
   const confirmStartLib = () => {
     if (!startingLib) return;
     if (startingLib.how === "clone") cloneLibraryEntry();
+    // "scratch" and "import" both go to createLibraryEntry — it reads `imported` for the
+    // layout, so the only difference between them is whether that is set.
     else createLibraryEntry();
   };
 
@@ -971,6 +1060,11 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
                 hint="An empty page. Drag blocks in from the palette on the left of the builder."
                 onClick={() => setStarting({ how: "scratch" })}
               />
+              <GetStartedCard
+                title="Import A Document"
+                hint="A Word file or a PDF you already have. Its headings, prose and tables become blocks you can edit."
+                onClick={() => { importLaneRef.current = "documents"; importInputRef.current?.click(); }}
+              />
             </div>
           </div>
         ) : (
@@ -1021,6 +1115,11 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
                 disabled={!ofKind.length}
                 disabledNote={`No ${words.many} to copy yet`}
                 onClick={() => setStartingLib({ how: "clone" })}
+              />
+              <GetStartedCard
+                title="Import A Document"
+                hint="A Word file or a PDF you already have. Its headings, prose and tables become blocks you can edit."
+                onClick={() => { importLaneRef.current = "library"; importInputRef.current?.click(); }}
               />
             </div>
             {!canApprove && (
@@ -1155,6 +1254,7 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
         title={
           starting?.how === "template" ? "New document from a template"
           : starting?.how === "clone" ? "Copy an existing document"
+          : starting?.how === "import" ? "New document from a file"
           : "New empty document"
         }
         onClose={closeStarting}
@@ -1175,6 +1275,9 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
         }
       >
         <div className="get-started-card-fields">
+          {starting?.how === "import" && imported && (
+            <ImportNotes fileName={imported.fileName} notes={imported.notes} />
+          )}
           <TextField
             id="new-document-title"
             title="Name"
@@ -1259,6 +1362,24 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
         </div>
       </SidePanel>
 
+      {/* ONE file input for both lanes, outside either panel.
+          Inside a SidePanel it would unmount with the panel — and the panel is exactly
+          what the file picker OPENS, so the element that fired the change would be gone
+          before the change was handled. `importLaneRef` is what remembers which card
+          asked, because the input cannot know. */}
+      <input
+        ref={importInputRef}
+        type="file"
+        accept=".docx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        hidden
+        onChange={e => {
+          const file = e.target.files?.[0];
+          // Cleared immediately, so picking the SAME file twice still fires a change.
+          e.target.value = "";
+          takeImport(file, importLaneRef.current);
+        }}
+      />
+
       {/* Naming a snippet. The wording is already decided — this asks the one thing the
           editor cannot: what to call it in the menu. */}
       <SidePanel
@@ -1314,6 +1435,7 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
         title={
           startingLib?.how === "clone"
             ? `Copy an existing ${words.one}`
+            : startingLib?.how === "import" ? `New ${words.one} from a file`
             : `New empty ${words.one}`
         }
         onClose={closeStartingLib}
@@ -1330,6 +1452,9 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
         }
       >
         <div className="get-started-card-fields">
+          {startingLib?.how === "import" && imported && (
+            <ImportNotes fileName={imported.fileName} notes={imported.notes} />
+          )}
           <TextField
             id="new-library-name"
             title="Name"

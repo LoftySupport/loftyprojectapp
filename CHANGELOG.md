@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Import a Word document or a PDF and it becomes a template or a document — headings, prose and Word tables become blocks you can edit, and it tells you up front what it could not bring across
 - Drop an image straight into a report, or pick one from your machine, instead of hosting it somewhere and pasting a link
 - New document on a job or project starts with that record already chosen
 - Text snippets — save wording once and drop it into any letter from the editor, as a copy you can then edit

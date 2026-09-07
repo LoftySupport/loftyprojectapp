@@ -2611,6 +2611,19 @@ code { overflow-wrap: anywhere; }
   outline-offset: 2px;
 }
 
+/* An import's receipt: what came across and what did not. Informational, so it is a
+   quiet panel and not the red of an error — a PDF whose tables arrived as text is a
+   successful import with a caveat, not a failure. */
+.import-notes {
+  border: 1px solid var(--ui-border-color, #d0d4e4);
+  border-radius: var(--radius-4, 4px);
+  padding: var(--space-8, 8px) var(--space-12, 12px);
+  background: var(--surface-subtle, #f6f7fb);
+}
+.import-notes ul { margin: var(--space-4, 4px) 0 0; padding-left: var(--space-16, 16px); }
+.import-notes li { margin-bottom: var(--space-4, 4px); }
+.import-notes li:last-child { margin-bottom: 0; }
+
 /* What a snippet is about to keep, shown rather than described.
    Capped and scrollable: somebody who caught the whole block instead of one paragraph
    should see that, and a panel that grew to the length of the selection would push its
