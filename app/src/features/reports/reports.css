@@ -154,3 +154,31 @@
   .shared-doc-sheet { box-shadow: none; border-radius: 0; padding: 0; max-width: none; }
   .shared-doc-foot { color: #8a898d; }
 }
+
+/* ── Placeholders in prose ────────────────────────────────────────────────
+   `{{site_start_date}}` in a letter, the value when it renders.
+
+   Marked ON THE CANVAS ONLY — `forExport` renders the plain value, because a client
+   letter with highlighted words in it is a letter that looks like a draft. What the
+   author needs is to see at a glance which words are coming from the record and which
+   of them have nothing behind them yet; what the client needs is a sentence. */
+.rb-token {
+  background: rgba(0, 80, 88, 0.08);
+  border-bottom: 1px solid rgba(0, 80, 88, 0.35);
+  border-radius: 2px;
+  padding: 0 2px;
+}
+/* Nobody has recorded it. An em dash, marked, so it reads as a gap rather than a typo. */
+.rb-token-blank {
+  background: rgba(255, 181, 159, 0.3);
+  border-bottom-color: #b8482a;
+}
+/* No such field — a typo in the token itself. Left standing and obvious: deleting it
+   would turn "booked for {{slab_dat}}" into "booked for", which is a sentence somebody
+   sends. */
+.rb-token-unknown {
+  background: rgba(179, 38, 30, 0.12);
+  border-bottom-color: #b3261e;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+}

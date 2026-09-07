@@ -29,6 +29,7 @@ import {
 import { createReportRegistry } from "../src/features/reports/core/registry.js";
 import { createReportEngine } from "../src/features/reports/core/widgetEngine.js";
 import { LOFTY_THEME, LOFTY_THEME_QUIET } from "../src/features/reports/adapters/lofty/theme.js";
+import { makeFillTokens, tokensFor } from "../src/features/reports/adapters/lofty/tokens.js";
 import { HOUSE_COLOURS } from "../src/data/export/houseFormat.ts";
 import { execFileSync } from "node:child_process";
 // Dev-only, and dependency-free itself. It is here to answer the one question none of the
@@ -860,6 +861,74 @@ console.log("--- the Lofty theme is the house document format, role for role");
   ok("a project reads its own values and not its jobs'",
     !!find(ownOnly, "Council") && !find(ownOnly, "Site start date"),
     ownOnly.map(i => i.label).join(" | "));
+}
+
+// ─── 18. Placeholders in prose ───────────────────────────────────────────
+//
+// Amber, 5 September: *"i want to be able to add properties in rich text and save them
+// so i can create a letter with proeprties as placeholders"*.
+{
+  const fill = makeFillTokens(full);
+  const strip = (h) => String(h).replace(/<[^>]*>/g, "");
+
+  // Broken by having `makeFillTokens` return the html untouched: the letter goes out
+  // saying "booked for {{site_start_date}}".
+  ok("a placeholder becomes the value",
+    /1 October 2026|1\/10\/2026|2026/.test(strip(fill("<p>Booked for {{site_start_date}}.</p>", { forExport: true }))),
+    strip(fill("<p>{{site_start_date}}</p>", { forExport: true })));
+
+  // The whole point of using formatValue: a currency is A$18,400 in a letter because it
+  // is A$18,400 in the drawer. Broken by returning `v.number` raw.
+  ok("and it is formatted the way the drawer formats it",
+    /A\$18[,.]?400/.test(strip(fill("<p>{{slab_cost}}</p>", { forExport: true }))),
+    strip(fill("<p>{{slab_cost}}</p>", { forExport: true })));
+
+  // Inherited, same as the block. Broken by dropping the project fallback in valuesFor.
+  ok("a job's letter can use a property only its project carries",
+    /Tea Tree Gully/.test(strip(fill("<p>{{council}}</p>", { forExport: true }))),
+    strip(fill("<p>{{council}}</p>", { forExport: true })));
+
+  // Recorded nothing → an em dash, never a blank. CLAUDE.md: never fill a gap with a
+  // plausible value, and a blank in a sentence reads as a typo.
+  ok("a property nobody has filled in is an em dash, not a gap",
+    strip(fill("<p>[{{never_filled_in}}]</p>", { forExport: true })) === "[—]",
+    strip(fill("<p>[{{never_filled_in}}]</p>", { forExport: true })));
+
+  // A TYPO IS LEFT STANDING. Broken by treating an unknown key like a blank: "booked
+  // for {{slab_dat}}" silently becomes "booked for", which is a sentence somebody sends.
+  ok("a token naming no field is left visible rather than deleted",
+    strip(fill("<p>Booked for {{slab_dat}}.</p>", { forExport: true })) === "Booked for {{slab_dat}}.",
+    strip(fill("<p>Booked for {{slab_dat}}.</p>", { forExport: true })));
+
+  // Escaped, because a property is user-entered text going into html. Broken by
+  // dropping `esc`: an address containing a tag becomes markup in the document.
+  const nasty = makeFillTokens({
+    ...full,
+    jobs: [{ ...full.jobs[0], currentAddress: '28 <b>Corner</b> & Co' }]
+  });
+  ok("a value carrying markup is escaped, not rendered",
+    !/<b>/.test(nasty("<p>{{address}}</p>", { forExport: true }))
+    && /&amp;/.test(nasty("<p>{{address}}</p>", { forExport: true })),
+    nasty("<p>{{address}}</p>", { forExport: true }));
+
+  // On the canvas it is marked; in an export it is a sentence. Broken by rendering the
+  // canvas markup in both: a client letter with highlighted words is a draft.
+  ok("the marks are on the canvas and not in the export",
+    /rb-token/.test(fill("<p>{{slab_cost}}</p>", { forExport: false }))
+    && !/rb-token/.test(fill("<p>{{slab_cost}}</p>", { forExport: true })),
+    "canvas and export render the same");
+
+  // Untouched html must come back identical — the fast path, and the common case.
+  const plain = "<p>No placeholders here at all.</p>";
+  ok("prose with no placeholders is returned unchanged", fill(plain) === plain);
+
+  // The menu the editor offers. Broken by dropping the record basics: a letter cannot
+  // open with the job number, which is the first thing every letter says.
+  const menu = tokensFor(full);
+  ok("the insert menu offers the record's own facts as well as its properties",
+    menu.some(t => t.value === "job_number") && menu.some(t => t.value === "address")
+    && menu.some(t => t.value === "slab_cost"),
+    `${menu.length} fields`);
 }
 
 console.log(failures === 0

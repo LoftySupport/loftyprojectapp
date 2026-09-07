@@ -68,9 +68,27 @@ export const CORE_WIDGETS = {
     hint: 'Free-form rich text: summaries, recommendations, context',
     defaults: () => ({ html: '' }),
     settings: [{ key: 'html', type: 'richtext', label: 'Content' }],
-    resolve: (o, ctx, h) => (isEmptyHtml(o?.html)
-      ? (h.forExport ? [] : [helpers.info('Empty text block. Select it and start typing.')])
-      : [{ type: 'richText', html: o.html }]),
+    /**
+     * PLACEHOLDERS, WITHOUT THIS MODULE KNOWING WHAT ONE IS.
+     *
+     * `ctx.fillTokens` is supplied by the host, the same way `ctx.expandSection` is. It
+     * takes the html and gives back html; everything about WHICH tokens exist and what
+     * they resolve to belongs to the app, because a token is a name for one of that
+     * app's own fields. This package would be wrong to have an opinion about it.
+     *
+     * `forExport` is passed through so the host can render an unfilled placeholder one
+     * way on the canvas, where it is a thing to go and fix, and another in a document
+     * somebody is about to send.
+     */
+    resolve: (o, ctx, h) => {
+      if (isEmptyHtml(o?.html)) {
+        return h.forExport ? [] : [helpers.info('Empty text block. Select it and start typing.')];
+      }
+      const html = typeof ctx?.fillTokens === 'function'
+        ? ctx.fillTokens(o.html, { forExport: !!h.forExport })
+        : o.html;
+      return [{ type: 'richText', html }];
+    },
   },
 
   image: {

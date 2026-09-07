@@ -142,6 +142,51 @@ try {
   ok("clicking a palette card adds one at the end", afterClick === blocks + 1,
     `${blocks} → ${afterClick}`);
 
+  // ── Placeholders in prose ─────────────────────────────────────────────
+  //
+  // The resolver is covered in Node by `check:report-widgets`. What is checked here is
+  // the round trip: the menu exists in the editor people actually write in, choosing an
+  // item puts the token in the text, and the preview then shows the value.
+  //
+  // NOT COVERED, and worth saying: whether `el.focus()` before `insertText` is needed.
+  // Commenting it out leaves this green, because `selectOption` does not move focus the
+  // way a real click on a <select> does. The line stays for the real pointer; the claim
+  // that it is load-bearing is not one this check earns.
+  await dragIn("Text");
+  const editor = pg.locator('[contenteditable="true"]').first();
+  await editor.click();
+  await pg.keyboard.type("Booked for ");
+  // Scoped to the canvas. There are two of these — the settings panel renders the same
+  // editor — and the one that matters is the one you write in. An unscoped locator is
+  // ambiguous, which is Playwright telling you the same thing.
+  const menu = pg.locator('main select[aria-label="Insert a field"]');
+  ok("the editor you write in offers the host's fields", await menu.count() === 1,
+    `${await pg.locator('select[aria-label="Insert a field"]').count()} on the page`);
+
+  if (await menu.count()) {
+    await menu.selectOption("slab_cost");
+    await pg.waitForTimeout(400);
+    const typed = await editor.innerText();
+    // Broken by removing the `insertToken` call, or the menu's onChange.
+    ok("choosing one puts the token where the caret is",
+      typed.includes("{{slab_cost}}"), JSON.stringify(typed.slice(0, 80)));
+
+    // And once you step away, the canvas shows the VALUE rather than the token.
+    //
+    // The deselect is the point, not a workaround: a SELECTED text block is the editor,
+    // and it has to show the literal `{{slab_cost}}` or the token could never be edited
+    // or deleted. Only the resolved preview substitutes. Getting this wrong in the check
+    // would have meant "asserting the editor does not resolve", which is nothing.
+    //
+    // Broken by removing the fillTokens call in core/registry.js: the preview keeps
+    // showing the braces.
+    await pg.locator("main").first().click({ position: { x: 5, y: 5 } });
+    await pg.waitForTimeout(900);
+    const canvas = await pg.locator("main").first().innerText();
+    ok("and the document shows what it resolves to",
+      /A\$18[,.]?400/.test(canvas), JSON.stringify(canvas.slice(0, 160)));
+  }
+
   ok("nothing threw while doing it", crashes.length === 0, crashes[0]?.slice(0, 200));
 } finally {
   await browser?.close().catch(() => {});

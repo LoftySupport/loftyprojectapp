@@ -13,7 +13,8 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import {
   LOFTY_GROUPS, LOFTY_SEEDS, LOFTY_THEME_SPECS, LOFTY_WIDGETS,
-  ReportBuilder, createReportEngine, createReportRegistry, createThemeSet
+  ReportBuilder, createReportEngine, createReportRegistry, createThemeSet,
+  makeFillTokens, tokensFor
 } from "../src/features/reports/index.js";
 import "../src/features/reports/reports.css";
 
@@ -27,10 +28,21 @@ const store = {
   async save(patch) { row = { ...row, ...patch }; return row; }
 };
 
-const ctx = {
-  jobs: [], projects: [], teams: [], stages: [], processes: [],
-  propertyDefs: [], propertyValues: [], people: []
+/**
+ * Enough of a record for the "Insert field" menu to have something in it, and for a
+ * placeholder to resolve to a real value. Kept tiny on purpose — the check is about the
+ * builder accepting blocks and filling tokens, not about the shape of Lofty's data.
+ */
+const base = {
+  jobs: [{ jobNumber: "1042-001", projectNumber: "1042", projectId: 1042, currentAddress: "28 Corner Street" }],
+  projects: [{ projectNumber: "1042", projectId: 1042, currentAddress: "28 Corner Street" }],
+  teams: [], stages: [], stageNames: [], processes: [],
+  propertyDefs: [{ key: "slab_cost", label: "Slab cost", format: "currency", stageName: "Construction", position: 1 }],
+  propertyValues: [{ propertyKey: "slab_cost", format: "currency", jobId: "1042-001", projectId: null, value: { number: 18400 } }],
+  propertyOptions: [], people: [],
+  subject: { jobId: "1042-001", projectId: null }
 };
+const ctx = { ...base, textTokens: tokensFor(base), fillTokens: makeFillTokens(base) };
 
 createRoot(document.getElementById("root")).render(
   <ReportBuilder

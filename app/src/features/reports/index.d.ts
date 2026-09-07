@@ -303,4 +303,16 @@ export interface LoftyDocumentStore extends ReportStore {
   }): Promise<ReportStoreRow>;
 }
 
+/**
+ * Placeholders in prose. `tokensFor` is the list the rich-text editor offers; the
+ * function `makeFillTokens` returns is what `ctx.fillTokens` should be set to.
+ *
+ * Both take the resolved report context — they need the subject, the jobs and the
+ * property values to answer anything.
+ */
+export function tokensFor(ctx: unknown): { value: string; label: string; group: string }[];
+export function makeFillTokens(
+  ctx: unknown
+): (html: string, opts?: { forExport?: boolean }) => string;
+
 export type { ReactNode };

@@ -31,7 +31,9 @@ import {
   createReportEngine,
   createReportRegistry,
   createThemeSet,
+  makeFillTokens,
   resolveTheme,
+  tokensFor,
   helpers
 } from "../features/reports/index.js";
 import "../features/reports/reports.css";
@@ -288,12 +290,32 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
   // Memoised, and it is not an optimisation: a fresh `ctx` identity re-resolves every
   // block on every render, which makes typing in a text block feel broken.
   const ctx = useMemo(
-    () => ({
-      projects, jobs, teams, stageNames, people, processes,
-      propertyDefs, propertyValues, propertyOptions,
-      sections, expandSection,
-      subject
-    }),
+    () => {
+      const base = {
+        projects, jobs, teams, stageNames, people, processes,
+        propertyDefs, propertyValues, propertyOptions,
+        sections, expandSection,
+        subject
+      };
+      return {
+        ...base,
+        /**
+         * Placeholders in prose — `{{site_start_date}}` inside a letter.
+         *
+         * Two halves, both supplied by the app rather than the module: the list the
+         * editor's "Insert field" menu offers, and the function that fills them in when
+         * the block renders. `core/registry.js` knows only that a host may provide
+         * `fillTokens`; what a token means is Lofty's business, because a token is a
+         * name for one of Lofty's own fields.
+         *
+         * Built from `base` and not from `ctx`, which does not exist yet inside its own
+         * initialiser — and it needs the real subject, jobs and values, so it cannot be
+         * hoisted out of the memo either.
+         */
+        textTokens: tokensFor(base),
+        fillTokens: makeFillTokens(base)
+      };
+    },
     [projects, jobs, teams, stageNames, people, processes,
      propertyDefs, propertyValues, propertyOptions, sections, expandSection, subject]
   );

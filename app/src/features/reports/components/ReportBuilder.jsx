@@ -197,6 +197,12 @@ function SortableWidget({ widget, engine, ctx, allWidgets, theme, selected, onSe
             minHeight={96}
             maxHeight={420}
             saveDebounceMs={300}
+            /* INTEGRATION EDIT — the same fields the settings panel offers.
+               This is the editor people actually write in: the settings panel is for
+               blocks that need configuring, and a text block is one you type into on the
+               page. Wiring the menu into one and not the other meant "Insert field"
+               existed and was nowhere near the writing. */
+            tokens={ctx?.textTokens || []}
           />
         </div>
       ) : (

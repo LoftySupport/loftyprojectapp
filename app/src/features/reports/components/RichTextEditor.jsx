@@ -74,6 +74,14 @@ export default function RichTextEditor({
   maxHeight = 480,
   className = '',
   saveDebounceMs = 600,
+  /**
+   * What "Insert field" offers: `[{ value, label, group }]`, supplied by the host.
+   *
+   * Empty or absent hides the control entirely. This component knows a token is
+   * `{{value}}` and nothing else about it — which fields exist, and what they mean, is
+   * the app's business.
+   */
+  tokens = [],
 }) {
   const editorRef = useRef(null);
   const lastSavedRef = useRef(value || '');
@@ -136,6 +144,31 @@ export default function RichTextEditor({
     }
   };
 
+  /**
+   * Put `{{key}}` where the caret is.
+   *
+   * `insertText` rather than `insertHTML`: the token is literal characters, and letting
+   * the browser insert markup here is how a `<span>` ends up wrapped round half of it
+   * after the next edit.
+   *
+   * The editor is focused first, and this one is DEFENSIVE RATHER THAN PROVEN. A real
+   * click on a <select> moves focus to it, and `execCommand` acts on the document's
+   * selection — so without this the insert should land nowhere. `check:builder-dnd`
+   * does not demonstrate that: Playwright's `selectOption` dispatches the change without
+   * the focus move a mouse makes, so the check passes with this line commented out.
+   *
+   * Kept because the reasoning holds for a real pointer and the call costs nothing.
+   * Written down as unproven so nobody later reads a confident comment and trusts it.
+   */
+  const insertToken = (key) => {
+    if (!key) return;
+    const el = editorRef.current;
+    if (!el) return;
+    el.focus();
+    document.execCommand('insertText', false, `{{${key}}}`);
+    scheduleSave();
+  };
+
   const tbBtn = 'px-2 py-1 text-xs rounded text-neutral-700 hover:bg-neutral-100 border border-transparent hover:border-neutral-200';
 
   return (
@@ -155,6 +188,27 @@ export default function RichTextEditor({
         <button type="button" onClick={() => exec('insertOrderedList')} className={tbBtn}>1. List</button>
         <button type="button" onClick={insertChecklist} className={tbBtn} title="Checklist">☑ Todo</button>
         <button type="button" onClick={() => formatBlock('BLOCKQUOTE')} className={tbBtn}>❝</button>
+
+        {/* Only when the host offers fields. A menu with nothing in it is a control that
+            promises something the screen cannot do. */}
+        {tokens.length > 0 && (
+          <select
+            className={`${tbBtn} max-w-[150px]`}
+            value=""
+            aria-label="Insert a field"
+            title="Insert a field — it fills in with this document's record"
+            onChange={e => { insertToken(e.target.value); e.target.value = ''; }}
+          >
+            <option value="">Insert field…</option>
+            {[...new Set(tokens.map(t => t.group || 'Fields'))].map(group => (
+              <optgroup key={group} label={group}>
+                {tokens.filter(t => (t.group || 'Fields') === group).map(t => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        )}
         <div className="h-4 w-px bg-neutral-200 mx-1" />
         {/* Alignment, size and colour were missing entirely — and even if they
             had been here they would have done nothing, because the sanitiser
