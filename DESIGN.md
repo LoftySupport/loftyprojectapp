@@ -23,7 +23,7 @@ explicit instruction that readability and familiar product patterns come first.
 | --- | --- |
 | `app/src/design-system/tokens/` | **The values.** The mirror — every hex, size, radius, shadow and duration |
 | `app/src/theme/tokens.css` | The application layer: imports the mirror, then re-declares the semantic tokens at the specificity Vibe requires |
-| `app/src/theme/loftyTheme.ts` | The eight tokens Vibe's `ThemeProvider` carries, as literals it can read |
+| `app/src/theme/loftyTheme.ts` | The brand tokens Vibe's `ThemeProvider` carries, as literals it can read — 24 values across three themes, checked against the mirror |
 | `app/src/theme/accents.ts` | The board's colour rule — the lifecycle ramp |
 | `app/src/theme/loftyIcons.tsx` | The eight Lofty construction glyphs from the design system |
 | `app/src/theme/houseIcons.tsx` | Three hand-drawn nav icons that predate the design system |
@@ -42,7 +42,7 @@ Nothing outside these except status.
 
 | Token | Hex | Role |
 | --- | --- | --- |
-| **Crisp Orange** | `#f47e63` | **Primary.** The single filled action per view, the active tab underline, the selected nav item, the first data series |
+| **Crisp Orange** | `#f47e63` | **Primary.** The active tab underline, the selected nav item, focus rings, the first data series. A *filled button* uses the pressed step `#c2543c` — see below |
 | **Eco Green** | `#005058` | **Minimal highlight only.** Small decorative accents and later data series. **Never a shell, a panel fill, or a link colour** |
 | **Foundation Black** | `#414042` | Text, inverted surfaces, brand panels. The secondary |
 | **Finisher White** | `#ffffff` | Pages, shells, cards |
@@ -72,8 +72,33 @@ reach AA either. Restricting the size reduces the exposure; it does not remove i
 `#c2543c`, which is **4.54:1** with white, wherever AA text on an orange field is required.
 `check-contrast.mjs` asserts that step so the escape hatch cannot rot, and asserts the rule
 itself as an identity — because a check optimising for the ratio alone would put the ink
-back, and the rule outranks the ratio. **Whether Vibe's filled primary buttons should take
-the pressed step is open with Amber**; see *Where the palette falls short*.
+back, and the rule outranks the ratio.
+
+**Amber took that remedy for filled buttons, 7 September.** So:
+
+| Surface | Fill | White on it |
+| --- | --- | --- |
+| **Filled primary button** | `--primary-action-color` `#c2543c` | **4.54:1** ✓ |
+| …hovered | `--primary-action-hover-color` `#9a4330` | **6.52:1** ✓ |
+| Focus rings, selected tints, accents, chart series | `--primary-color` `#f47e63` | *carries no text* |
+| Toasts, tipseens, filled labels | `--primary-color` `#f47e63` | **2.62:1** ✗ |
+
+`--primary-color` stays Crisp Orange, because everywhere else it is used it carries no text
+and is doing its actual job — being the brand. **The last row is what is left of the
+problem:** a filled orange label or toast with small text is the thing this palette still
+cannot make accessible, and it is recorded as a shortfall rather than solved.
+
+**How the override works, and why it is shaped that way.** Vibe is the layout system; the
+brand system overrides it. Vibe's filled button is `.kindPrimary.colorPrimary { background:
+var(--primary-color) }`, so `theme/tokens.css` **rebinds `--primary-color` on the button
+element** rather than overriding `background`. Working with Vibe's cascade instead of
+against it means hover, focus and active follow for free and there is no specificity race to
+lose. The class hashes move between Vibe versions, so the selector matches the stable part
+of the name.
+
+`--primary-action-hover-color` `#9a4330` is **derived in this repo, not mirrored** — the
+pressed step darkened by the same 10.2% lightness the existing crisp→hover step uses, which
+keeps the ramp monotonic. It should go back into the design project as a real brand step.
 
 **One brand-kit contradiction, resolved.** The kit prints `HEX #000000` next to
 `RGB 65 64 66` for Foundation Black. The RGB is authoritative, so the token is `#414042`.
@@ -166,26 +191,22 @@ not a preference.
 
 ### Where the palette falls short
 
-Five pairings do **not** meet the floor. They are recorded in
+Four pairings do **not** meet the floor. They are recorded in
 `app/scripts/check-contrast.mjs` at their measured value, so the check fails if any of them
 gets worse, and prints them on every run so they stay visible rather than becoming normal.
 None is a value this repo chose.
 
 | Pairing | Measured | Needs | |
 | --- | --- | --- | --- |
-| **White on Crisp Orange** (light) | **2.62:1** | 4.5:1 | The brand rule. Below the 3:1 large-text floor too. **Decision needed** — see below |
-| **White on Crisp Orange** (dark) | **2.62:1** | 4.5:1 | The same pairing; dark does not redefine `--primary-color` |
+| **White on filled Crisp Orange** (both themes) | **2.62:1** | 4.5:1 | The brand rule. Below the 3:1 large-text floor too. **Buttons no longer use this** — what is left is toasts, tipseens and filled labels |
 | `--placeholder-color` `#8a898d` on white | **3.47:1** | 4.5:1 | The design system now calls this "example text only, never a label", which narrows the exposure but does not clear it. `#757478` would, at 4.64:1 |
 | Dark: white on the lifted Eco Green `#1f8791` | **4.26:1** | 4.5:1 | `dark.css` still claims 4.6:1. It is not. `#1e818a` would clear it at 4.60:1 |
 | Dark: `--ui-border-color` `#5a595c` on the surface | **2.28:1** | 3:1 | A control boundary has to be distinguishable from its surface. `#706f72` would clear it at 3.17:1 |
 
-**The first two need a decision, not a hex.** The brand rule forbids the accessible ink, and
-the design system's own remedy — fill with `--lofty-orange-pressed` `#c2543c` where AA text
-is required — would, applied to Vibe's filled primary buttons, mean the app's buttons are
-the pressed step while `--primary-color` stays Crisp Orange for focus rings, tints, accents
-and data series. That is a deliberate divergence from the mirror, so it is Amber's call and
-not one this repo should make quietly. Until it is made, primary button labels sit at
-2.62:1.
+**The first one no longer covers buttons.** Amber took the pressed step for filled buttons
+on 7 September, so a button label is now 4.54:1. What remains at 2.62:1 is every *other*
+filled-orange surface that carries text — toasts, tipseens, filled labels. Those either take
+the pressed step too, or the design project gives them a ground that white survives on.
 
 **Three of the five are design-side fixes with known values.** The replacement hexes above
 were solved by holding hue and saturation and moving only HSL lightness, then proved against

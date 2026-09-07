@@ -14,6 +14,11 @@
  * is the pressed step #c2543c at 4.54:1 with white, and that step is asserted here so it
  * cannot rot: if the escape hatch stops clearing 4.5:1, the rule has nowhere left to go.
  *
+ * Amber took that remedy for **filled buttons** on 7 September, so the button pairings are
+ * assertions and the raw white-on-Crisp-Orange rows now describe what is left using it:
+ * toasts, tipseens and filled labels. Those are the surfaces to watch — a filled orange
+ * label with small text is the thing this palette cannot currently make accessible.
+ *
  * Every pairing below is one this repo has written down as a reason. The numbers come out
  * of `src/design-system/tokens/`, not out of this file, so changing the mirror changes what
  * is measured — and the `"fail"` rows are the load-bearing ones. They assert that a pairing
@@ -57,10 +62,14 @@ const tokens = join(src, "design-system", "tokens");
 const themeCss = join(src, "theme", "tokens.css");
 
 // The mirror holds the palette; the app's theme layer holds the values Vibe has no slot
-// for — the three status inks. Both are needed to measure what a screen actually renders.
+// for — the three status inks and the filled action surface. Both are needed to measure
+// what a screen actually renders, so the body-class blocks are pulled in as well as
+// `:root`. Every other name those blocks re-declare is a `var(--lofty-*)` reference back
+// into the mirror, so including them changes what is *reachable*, never what a colour is.
 const light = new Map([
   ...declarations(join(tokens, "colors.css")),
-  ...block(themeCss, ":root {")
+  ...block(themeCss, ":root {"),
+  ...block(themeCss, "body, body.light-app-theme {")
 ]);
 const dark = new Map([
   ...light,
@@ -106,8 +115,12 @@ function ratio(a, b) {
 const PAIRS = [
   // The decision the whole palette turns on. The brand rule (never black on Crisp Orange)
   // costs contrast, and this is where that cost is recorded rather than argued away.
-  ["--text-color-on-primary", "--primary-color", 4.5, light, "white on Crisp Orange — the primary button", 2.62],
-  ["--lofty-finisher-white", "--lofty-orange-pressed", 4.5, light, "white on the PRESSED step — the remedy for AA text on orange"],
+  ["--text-color-on-primary", "--primary-color", 4.5, light, "white on filled Crisp Orange — toasts, tipseens, labels (NOT buttons)", 2.62],
+  // The filled action surface Amber chose on 7 September. These two are what actually make
+  // a primary button label legible, so they are assertions rather than recorded shortfalls.
+  ["--lofty-finisher-white", "--primary-action-color", 4.5, light, "white on a filled primary BUTTON"],
+  ["--lofty-finisher-white", "--primary-action-hover-color", 4.5, light, "white on a filled primary button, hovered"],
+  ["--lofty-finisher-white", "--primary-action-color", 4.5, dark, "dark: white on a filled primary BUTTON"],
 
   // Text on the page.
   ["--primary-text-color", "--primary-background-color", 4.5, light, "body text on white"],
@@ -134,7 +147,7 @@ const PAIRS = [
   // Dark.
   ["--primary-text-color", "--primary-background-color", 8.0, dark, "dark: body text on the surface"],
   ["--secondary-text-color", "--primary-background-color", 8.0, dark, "dark: muted text on the surface"],
-  ["--text-color-on-primary", "--primary-color", 4.5, dark, "dark: white on Crisp Orange", 2.62],
+  ["--text-color-on-primary", "--primary-color", 4.5, dark, "dark: white on filled Crisp Orange (NOT buttons)", 2.62],
   ["--lofty-finisher-white", "--highlight-color", 4.5, dark, "dark: white on the lifted Eco Green", 4.26],
   ["--primary-text-color", "--allgrey-background-color", 8.0, dark, "dark: body text on the base"],
   ["--ui-border-color", "--primary-background-color", 3.0, dark, "dark: a control boundary", 2.28]
