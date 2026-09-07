@@ -16,13 +16,21 @@ Unreleased: 150 changes since then —
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
 
-**Phase A is done and applied, and so is the property-and-process half of Phase C (`0076`–`0079`, 1 September).
-The spine review is done too — Amber, 4 September — so the one thing that had to happen before
-any data was loaded has happened.
+**Phase A is done and applied, and so is the property-and-process half of Phase C (`0076`–`0079`, 1 September).**
 
-Next job: [Phase B, the import](#next-phase-b-the-import), and nothing is in front of it now.**
-It starts with a person-checked spreadsheet of the ~200 live jobs, grouped into projects and
-sequenced by lot; the order of work is set out in that section.
+**Phase B — the import — is CLOSED, 7 September, without ever running.** Amber: *"i don't
+need any jobs imported from spreadsheets. all jobs that need to be created from now on will
+be created from the projects in the app"*, and *"everything that is in supabase now is
+correct"*. Jobs and projects are created in the app, from the project, by the people who
+own them. There is no spreadsheet load coming, so the seven colliding sites that stopped
+the load on 3 September stopped mattering rather than getting resolved.
+
+**Nothing was removed from the database, deliberately.** `import_staging_jobs` and its 801
+rows, `import_spine()`, `unimport_spine()` and `private.import_team_for_person()` are all
+still there, inert. Amber: *"if I need to import other areas I will let you know as
+properties may change between now and then"* — so the machinery has a plausible future job
+even though jobs and projects are not it. It never ran: the load rolled back whole on its
+first write, so no project, job or address in the app came from it.
 
 ### Two standing decisions, so nobody spends an afternoon reopening them
 
@@ -109,11 +117,22 @@ diagram, and the three questions still open at the end. The decision log entry i
 |---|---|
 | Properties, Processes, Contacts, Maintenance, Automations | Users, Teams, Permissions, Dictionary, Wiring, ~~Bugs, Ideas, Roadmap, Changelog~~ |
 
-Ten tabs became five and nine. Roadmap and Changelog on Admin were the **same components**
-Updates renders, imported rather than copied — Updates stays in the footer for everybody,
-because `0060`'s whole point is that the people who filed a request can read the queue.
-*(Struck through on 7 September: the four went, because two doors to the same rows read as
-two pages. See that session above.)*
+Ten tabs became five and nine, and on 7 September five and **five**. Roadmap and Changelog on
+Admin were the **same components** Updates renders, imported rather than copied — Amber:
+*"there is duplication on footer and other page"*, so they came out (#48). Bugs and Ideas
+followed the same day, in a second session — *"the updates page is duplicated with the
+bugs/ideas/roadmap/changelog pages in admin. this only needs to be one page"*. Being one
+component underneath was a fact about the code, not about the experience: two doors to
+identical rows is still a thing a person has to check. All four old addresses forward to the
+matching view of Updates, because those URLs were shareable and somebody has shared them.
+Updates itself stays in the footer for everybody, because `0060`'s whole point is that the
+people who filed a request can read the queue.
+
+**The bug manager is still admin's**, which is the other sentence from that day — *"only
+admins and super admin get to see the bug manager"*. The manager is the controls: stage,
+phase, kind, merge, planning, and those are `can("admin")` and superadmin inside Updates
+exactly as they were on the Admin tabs. Filing is not triage — `ReportForm` has no permission
+gate, so anybody with app access including a viewer can send one.
 
 ### 0096 is the half that stops the rename being decoration
 
@@ -266,7 +285,9 @@ palette, so they cannot drift apart again.
 - **Nothing has been saved from a browser to the real database.** The stores are proved
   through the repository seam and the policies are proved in `verify/`; the round trip
   between them is not.
-- **Every data block is in its empty state until Phase B lands.** Correct, not broken.
+- **Every data block is in its empty state until real jobs exist.** Correct, not broken. They
+  now arrive as people create them in the app, a project at a time, rather than all at once
+  from an import — so the empty states matter for longer and are seen by more people.
 
 ---
 
@@ -344,10 +365,11 @@ behind signed URLs; the file carries the count and says where to look.
   a re-parse of the bytes (and the `.docx` is recognised by `file` as a Word 2007+ document
   with every XML part well-formed), which is a different claim from "Excel and Word on
   Amber's laptop are happy". First thing to do with a real machine.
-- **The empty tables are the ones that will look wrong first.** With Phase B unimported,
-  most screens have nothing to export and the button is disabled. The shapes to check after
-  the import are the grouped exports on Jobs (a sheet per stage, empty groups dropped) and
-  the job report's four sections.
+- **The empty tables are the ones that will look wrong first.** With no jobs yet, most
+  screens have nothing to export and the button is disabled. The shapes to check once real
+  jobs exist are the grouped exports on Jobs (a sheet per stage, empty groups dropped) and
+  the job report's four sections. There is no longer a single import moment to check them
+  after, so check them as soon as the first project has a few jobs in it.
 
 ---
 
@@ -1200,7 +1222,8 @@ scope model; the shape is in `docs/schema/supabase-schema.md`.
 **This split was by SUBJECT, and the 4 September one is by WHO ASKS.** Setup is now
 **Settings**, manager and above, holding Properties, Processes, Contacts, Maintenance and
 Automations; Admin is behind the header cog, admin and above, and took Permissions,
-Dictionary, Wiring, Bugs, Ideas, Roadmap and Changelog with it. See *Session of
+Dictionary, Wiring, Bugs, Ideas, Roadmap and Changelog with it — **Roadmap and Changelog
+came back out again on 7 September as duplication; see the top of this file.** See *Session of
 2026-09-04 (later)* at the top, and `docs/schema/schema-plan.md` → *4 September — Settings is the
 managers', Admin is the administrators'*. The reasoning below is kept because it explains
 why the tabs sit where they do at all; the table is no longer what the app does.
@@ -1323,8 +1346,10 @@ a `VITE_` prefix, because that key bypasses RLS entirely and would be published 
 way. Never add one.
 
 Both `VITE_` variables are set for every environment, so **preview deployments point at
-production Supabase**. Fine while there are no jobs; scope them per environment at Phase B,
-when a preview branch can write to real records.
+production Supabase**. This was going to be fixed "at Phase B", which is now never — so it
+needs its own moment. Scope them per environment **before real jobs accumulate**, because
+from now on data arrives gradually and there is no longer a load date to schedule it
+against. Every preview branch can already write to real records.
 
 ### `SUPABASE_ACCESS_TOKEN`, and the environment it has to be in
 
@@ -1550,10 +1575,19 @@ re-asked in six months:
 
 ---
 
-## Next: Phase B, the import
+## Phase B, the import — closed 7 September without running
 
-Phase A is structure. Phase B is the first real data, and it is also the **checkpoint** —
-anything structurally wrong surfaces here, while changing it is still cheap.
+> **This section is a record, not a plan.** Amber closed the import on 7 September:
+> *"i don't need any jobs imported from spreadsheets. all jobs that need to be created from
+> now on will be created from the projects in the app"*. Nothing below is work anybody is
+> going to do. It is kept because the reasoning is still load-bearing — the spine review it
+> forced was done and applied, and the two hazards it names (projects reconstructed from
+> addresses; sequence following lot order, not old-number order) are now **things a person
+> gets right in the app, by hand, one project at a time**, rather than things a generator
+> gets right in bulk. The hazard did not go away with the importer.
+
+Phase A is structure. Phase B was to be the first real data, and also the **checkpoint** —
+anything structurally wrong would surface there, while changing it was still cheap.
 
 ### What the import actually is
 

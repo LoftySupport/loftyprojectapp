@@ -52,14 +52,20 @@ import "../components/ui.css";
  *
  * THE TRACKER IS NOT HERE ANY MORE. On 4 September Roadmap and Changelog were rendered
  * here as well, imported from Updates, with Bugs and Ideas as two triage lists beside
- * them — one door with everything behind it. Amber, 7 September: *"the updates page is
- * duplicated with the bugs/ideas/roadmap/changelog pages in admin. this only needs to be
- * one page."* She is right that it read as two: the same rows, the same controls, under
- * two headings. Updates is the one page now. Nothing an admin could do here is lost —
- * the stage, phase and kind controls, the merge and the export all live in a request's
- * panel and the Requests table — and the four old addresses redirect there. The reasoning
- * for having it here at all is kept in this paragraph so the next person does not
- * re-import it for the same good-sounding reason.
+ * them — one door with everything behind it. Amber said it twice on 7 September, to two
+ * sessions: *"there is duplication on footer and other page"*, which took Roadmap and
+ * Changelog out (#48), and *"the updates page is duplicated with the bugs/ideas/roadmap/
+ * changelog pages in admin. this only needs to be one page"*, which takes the other two.
+ * Being one component underneath was a fact about the code, not about the experience:
+ * two doors to identical rows is still a thing a person opens twice. Updates is the one
+ * page now. Nothing an admin could do here is lost — the stage, phase and kind controls,
+ * the merge and the export all live in a request's panel and the Requests table, and
+ * they are still admin's and superadmin's there (*"only admins and super admin get to see
+ * the bug manager"* — the manager is the controls, and those never opened to anybody
+ * else; the queue itself has been everybody's since 0060). The four old addresses forward
+ * to the matching view of Updates. The reasoning for having it here at all is kept in
+ * this paragraph so the next person does not re-import it for the same good-sounding
+ * reason.
  *
  * The section is in the URL, like Settings' and Updates', so a link to Teams is a link
  * somebody can send.
@@ -80,6 +86,24 @@ export function AdminPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const index = SECTIONS.findIndex(s => s.slug === section);
+
+  // The tracker's four tabs left this screen on 7 September. They were sections with URLs,
+  // and this file's own reasoning for putting the section in the URL was that "a link to
+  // Teams or to the bug queue is a link somebody can send" — so somebody has sent these.
+  // Forwarding them costs four lines; the alternative is an old link landing silently on
+  // Users, which looks like the page is broken rather than like the tab moved. Bugs and
+  // Ideas land on the Requests TABLE, filtered to their kind, which is the nearest thing
+  // to the triage list they were.
+  const MOVED: Record<string, string> = {
+    roadmap: "/updates/roadmap",
+    changelog: "/updates/changelog",
+    bugs: "/updates/requests?kind=bug&view=table",
+    ideas: "/updates/requests?kind=idea&view=table"
+  };
+  if (section && MOVED[section]) {
+    const target = MOVED[section];
+    return <Navigate to={target.includes("?") ? target : target + location.search} replace />;
+  }
 
   // `/admin` on its own is a reasonable thing to type, and `/admin?person=<id>` is what
   // every activity line links to — so the search string has to survive the redirect or

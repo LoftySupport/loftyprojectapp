@@ -376,15 +376,6 @@ export default function App() {
                   is worse than the dead link it was meant to fix. */}
               <Route path="dictionary" element={<Navigate to="/admin/dictionary" replace />} />
               <Route path="wiring" element={<Navigate to="/admin/wiring" replace />} />
-              {/* The tracker's four Admin tabs went on 7 September (Amber: "the updates page
-                  is duplicated with the bugs/ideas/roadmap/changelog pages in admin. this
-                  only needs to be one page"). Updates is that page, for everybody, and
-                  the triage controls inside it were already admin's — so the old tab
-                  addresses land on the matching view of Updates rather than dying. */}
-              <Route path="admin/bugs" element={<Navigate to="/updates/requests?kind=bug&view=table" replace />} />
-              <Route path="admin/ideas" element={<Navigate to="/updates/requests?kind=idea&view=table" replace />} />
-              <Route path="admin/roadmap" element={<Navigate to="/updates/roadmap" replace />} />
-              <Route path="admin/changelog" element={<Navigate to="/updates/changelog" replace />} />
               <Route path="*" element={<NotFound />} />
             </Route>
             </Route>
