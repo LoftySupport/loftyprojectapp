@@ -28,7 +28,7 @@
   --lofty-gray-light:#e7e8e9;
   --lofty-gray-surface:#f6f7f7;
   --lofty-paper-border:#efe9d6;
-  --lofty-ink:#191819;               /* deepest brand black — ink on Crisp Orange (6.7:1); also the dark-mode base */
+  --lofty-ink:#191819;               /* deepest brand black — dark-mode base. Never used on Crisp Orange. */
 
   /* ---- Semantic: primary / brand ---- */
   --primary-color:var(--lofty-crisp-orange);
@@ -57,8 +57,12 @@
   --primary-text-color:var(--lofty-foundation-black);
   --secondary-text-color:var(--lofty-black-80);
   --placeholder-color:var(--lofty-black-60);
-  --text-color-on-primary:var(--lofty-ink);      /* white on #f47e63 is 2.6:1 — fails AA; ink is 6.7:1 */
-  --text-color-on-brand:var(--lofty-ink);
+  /* Brand rule: black is never placed on Crisp Orange — not text, not icons.
+     Filled orange always carries Finisher White, so orange fills are reserved for
+     large or semibold labels (16px medium and up), never small body copy.
+     Where AA text is required on an orange field, use --lofty-orange-pressed (4.5:1 with white). */
+  --text-color-on-primary:var(--lofty-finisher-white);
+  --text-color-on-brand:var(--lofty-finisher-white);
   --text-color-on-inverted:var(--lofty-finisher-white);
   --text-color-on-status:var(--lofty-finisher-white);  /* white on positive 4.6:1 / negative 4.5:1 */
   --text-color-on-warning:var(--lofty-foundation-black);

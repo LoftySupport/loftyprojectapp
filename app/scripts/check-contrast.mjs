@@ -2,15 +2,23 @@
  * The contrast claims in DESIGN.md are arithmetic, so assert them.
  *
  * The design system moved the app's primary colour from Eco Green to Crisp Orange on
- * 6 September. Crisp Orange is the colour that made this check necessary: **white on
- * #f47e63 is 2.6:1 and fails AA**, which is exactly the kind of fact that gets lost when
- * somebody "fixes" the text colour on a primary button to white because it looks cleaner.
+ * 6 September, and on 7 September added the brand rule that decides the hardest pairing in
+ * the palette: **black is never placed on Crisp Orange — not text, not icons.** Filled
+ * orange carries Finisher White.
+ *
+ * That rule is not free, and this check exists so the cost stays visible rather than being
+ * discovered by a user. White on #f47e63 is 2.62:1: below the 4.5:1 normal-text floor and
+ * below the 3:1 large-text floor too, so the design system's own carve-out ("large or
+ * semibold labels only") does not actually reach AA either. It is recorded below as a known
+ * shortfall at its measured value — held, not accepted. The remedy the design system names
+ * is the pressed step #c2543c at 4.54:1 with white, and that step is asserted here so it
+ * cannot rot: if the escape hatch stops clearing 4.5:1, the rule has nowhere left to go.
  *
  * Every pairing below is one this repo has written down as a reason. The numbers come out
  * of `src/design-system/tokens/`, not out of this file, so changing the mirror changes what
- * is measured — and the two `expect: "fail"` rows are the load-bearing ones. They assert
- * that a pairing we deliberately do NOT use is still as bad as we said it was; if one of
- * them ever passes, the palette moved and the reasoning in DESIGN.md needs revisiting.
+ * is measured — and the `"fail"` rows are the load-bearing ones. They assert that a pairing
+ * we deliberately do NOT use is still as bad as we said it was; if one of them ever passes,
+ * the palette moved and the reasoning in DESIGN.md needs revisiting.
  *
  *   node scripts/check-contrast.mjs
  */
@@ -96,9 +104,10 @@ function ratio(a, b) {
  * them is a value this repo chose.
  */
 const PAIRS = [
-  // The decision the whole palette turns on.
-  ["--text-color-on-primary", "--primary-color", 4.5, light, "ink on Crisp Orange — the primary button"],
-  ["--lofty-finisher-white", "--primary-color", "fail", light, "WHITE on Crisp Orange — must stay a failure, it is why ink is used"],
+  // The decision the whole palette turns on. The brand rule (never black on Crisp Orange)
+  // costs contrast, and this is where that cost is recorded rather than argued away.
+  ["--text-color-on-primary", "--primary-color", 4.5, light, "white on Crisp Orange — the primary button", 2.62],
+  ["--lofty-finisher-white", "--lofty-orange-pressed", 4.5, light, "white on the PRESSED step — the remedy for AA text on orange"],
 
   // Text on the page.
   ["--primary-text-color", "--primary-background-color", 4.5, light, "body text on white"],
@@ -125,13 +134,34 @@ const PAIRS = [
   // Dark.
   ["--primary-text-color", "--primary-background-color", 8.0, dark, "dark: body text on the surface"],
   ["--secondary-text-color", "--primary-background-color", 8.0, dark, "dark: muted text on the surface"],
-  ["--text-color-on-primary", "--primary-color", 4.5, dark, "dark: ink on Crisp Orange"],
+  ["--text-color-on-primary", "--primary-color", 4.5, dark, "dark: white on Crisp Orange", 2.62],
   ["--lofty-finisher-white", "--highlight-color", 4.5, dark, "dark: white on the lifted Eco Green", 4.26],
   ["--primary-text-color", "--allgrey-background-color", 8.0, dark, "dark: body text on the base"],
   ["--ui-border-color", "--primary-background-color", 3.0, dark, "dark: a control boundary", 2.28]
 ];
 
 let failures = 0;
+
+/**
+ * The brand rule is an identity, not a ratio, so it cannot be asserted as a pairing.
+ *
+ * "Never black on Crisp Orange" is the one rule a contrast check would actively argue
+ * against if left to itself: ink on orange measures 6.75:1 and white measures 2.62:1, so
+ * anybody optimising for the number alone would put the ink back. The rule outranks the
+ * number, and this is what stops a well-meaning "accessibility fix" from breaking it.
+ */
+for (const [themeName, vars] of [["light", light], ["dark", dark]]) {
+  const ink = resolve("--text-color-on-primary", vars).toLowerCase();
+  if (ink !== "#ffffff" && ink !== "#fff") {
+    console.error(
+      `  ✗ BRAND RULE: --text-color-on-primary is ${ink} in ${themeName}, not Finisher White.\n` +
+      `      Black is never placed on Crisp Orange. If AA text on an orange field is needed,\n` +
+      `      fill with --lofty-orange-pressed (#c2543c, 4.54:1 with white) instead of darkening the ink.`
+    );
+    failures++;
+  }
+}
+
 console.log("pairing".padEnd(64) + "ratio    floor");
 console.log("-".repeat(84));
 

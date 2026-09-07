@@ -38,8 +38,8 @@
   --primary-text-color:var(--lofty-dark-text);
   --secondary-text-color:var(--lofty-dark-text-muted);
   --placeholder-color:var(--lofty-dark-text-faint);
-  --text-color-on-primary:var(--lofty-dark-base);   /* dark ink on Crisp Orange: 8.1:1 */
-  --text-color-on-brand:var(--lofty-dark-base);
+  --text-color-on-primary:var(--lofty-finisher-white); /* never black on Crisp Orange, on either theme */
+  --text-color-on-brand:var(--lofty-finisher-white);
   --text-color-on-inverted:var(--lofty-dark-base);
   --text-color-on-status:var(--lofty-finisher-white);
   --text-color-on-warning:var(--lofty-dark-base);

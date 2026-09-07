@@ -13,10 +13,13 @@
  * which also re-declares what is here at body-class specificity so PORTALED components
  * (Vibe renders modals and dropdown menus into document.body) get the brand too.
  *
- * **Primary is Crisp Orange, and the text on it is ink, not white.** White on #f47e63 is
- * 2.6:1 and fails AA; #191819 is 6.7:1 in light and 8.1:1 on the dark base. Eco Green is
- * NOT the secondary — the design system demotes it to a minimal highlight, never a shell,
- * a panel fill or a link colour.
+ * **Primary is Crisp Orange, and the text on it is Finisher White — black is never placed
+ * on Crisp Orange.** That is a brand rule, and it is the expensive one: white on #f47e63
+ * measures 2.62:1, below both the 4.5:1 normal-text floor and the 3:1 large-text floor.
+ * The design system's remedy where AA text on orange is required is the pressed step
+ * #c2543c (4.54:1 with white); `check-contrast.mjs` asserts that step still holds.
+ * Eco Green is NOT the secondary — the design system demotes it to a minimal highlight,
+ * never a shell, a panel fill or a link colour.
  */
 export const loftyTheme = {
   name: "lofty",
@@ -26,10 +29,10 @@ export const loftyTheme = {
       "primary-hover-color": "#d9634a",
       "primary-selected-color": "#fae4d5",
       "primary-selected-hover-color": "#f6d3bf",
-      "text-color-on-primary": "#191819",
+      "text-color-on-primary": "#ffffff",
       "brand-color": "#f47e63",
       "brand-hover-color": "#d9634a",
-      "text-color-on-brand": "#191819"
+      "text-color-on-brand": "#ffffff"
     },
     // Crisp Orange keeps its hex on dark — it is already 7.0:1 on the #191819 base, so the
     // hue does not move; only the ink on it and the hover step do.
@@ -38,20 +41,20 @@ export const loftyTheme = {
       "primary-hover-color": "#f79a84",
       "primary-selected-color": "#4a2e28",
       "primary-selected-hover-color": "#5a3730",
-      "text-color-on-primary": "#191819",
+      "text-color-on-primary": "#ffffff",
       "brand-color": "#f47e63",
       "brand-hover-color": "#f79a84",
-      "text-color-on-brand": "#191819"
+      "text-color-on-brand": "#ffffff"
     },
     black: {
       "primary-color": "#f47e63",
       "primary-hover-color": "#f79a84",
       "primary-selected-color": "#4a2e28",
       "primary-selected-hover-color": "#5a3730",
-      "text-color-on-primary": "#191819",
+      "text-color-on-primary": "#ffffff",
       "brand-color": "#f47e63",
       "brand-hover-color": "#f79a84",
-      "text-color-on-brand": "#191819"
+      "text-color-on-brand": "#ffffff"
     }
   }
 };

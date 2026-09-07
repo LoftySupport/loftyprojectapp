@@ -64,11 +64,20 @@ direction that is hardest to notice.
 
 ### The one thing the mirror cannot hold
 
-`../theme/loftyTheme.ts` repeats eight brand hexes as literal strings, because Vibe's
+`../theme/loftyTheme.ts` repeats brand hexes as literal strings, because Vibe's
 `ThemeProvider` takes a plain object and generates CSS from it — it cannot read a CSS
 custom property. `npm run check:design-tokens` resolves the mirror's `var()` chains and
-compares them against that file, and CI runs it, so the duplication cannot drift quietly.
-It was proved by breaking it in both directions before it was trusted.
+compares them against that file — 24 values across the three themes — and CI runs it, so
+the duplication cannot drift quietly. It was proved by breaking it in both directions
+before it was trusted.
+
+The check derives which mirror token each theme key maps to from the name itself, rather
+than holding its own table of that mapping. An earlier version held the table, and it went
+stale the first time the design system moved: the 7 September brand rule changed
+`--text-color-on-primary` to Finisher White, and the check went red claiming
+`loftyTheme.ts` disagreed with a mirror it in fact matched. A check that can be wrong about
+which file is at fault is worse than no check, because it sends you to edit the right value
+back out of the right file.
 
 ## How the app consumes this
 

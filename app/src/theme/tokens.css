@@ -49,18 +49,24 @@
    that opened it was branded.
    --------------------------------------------------------------------------- */
 body, body.light-app-theme {
-  /* Primary is Crisp Orange. Ink on it, not white: white on #f47e63 is 2.6:1 and fails AA;
-     #191819 is 6.7:1. This is the design system's answer to the contrast problem, and it
-     differs from the app's previous one (a darker orange) — the brand hue is kept intact
-     and the text is what moves. */
+  /* Primary is Crisp Orange, and the text on it is Finisher White.
+     **Black is never placed on Crisp Orange — not text, not icons.** That is a brand rule
+     from the design system (7 September), and it reverses what this file said before: the
+     app briefly used #191819 ink because it measures 6.75:1 where white measures 2.62:1.
+     The brand rule wins, and it costs contrast — white on #f47e63 clears neither the 4.5:1
+     normal-text floor nor the 3:1 large-text one. The design system's own remedy is to fill
+     with --lofty-orange-pressed (#c2543c, 4.54:1 with white) wherever AA text on orange is
+     required, which is why that step is asserted in check-contrast.mjs. Applying it to Vibe's
+     filled buttons is a live question with Amber — see DESIGN.md, "Where the palette falls
+     short". Do not "fix" this back to a dark ink: it is a decision, not an oversight. */
   --primary-color: var(--lofty-crisp-orange);
   --primary-hover-color: var(--lofty-orange-hover);
   --primary-selected-color: var(--lofty-orange-selected);
   --primary-selected-hover-color: var(--lofty-orange-selected-hover);
-  --text-color-on-primary: var(--lofty-ink);
+  --text-color-on-primary: var(--lofty-finisher-white);
   --brand-color: var(--lofty-crisp-orange);
   --brand-hover-color: var(--lofty-orange-hover);
-  --text-color-on-brand: var(--lofty-ink);
+  --text-color-on-brand: var(--lofty-finisher-white);
 
   /* Eco Green is a minimal highlight, never a shell, a panel fill or a link colour. */
   --highlight-color: var(--lofty-eco-green);
@@ -88,10 +94,12 @@ body.black-app-theme {
   --primary-hover-color: var(--lofty-orange-dark-hover);
   --primary-selected-color: var(--lofty-orange-dark-selected);
   --primary-selected-hover-color: #5a3730;
-  --text-color-on-primary: var(--lofty-dark-base);
+  /* Never black on Crisp Orange, on either theme — dark does not redefine --primary-color,
+     so this is the same 2.62:1 pairing as light, not a separate one. */
+  --text-color-on-primary: var(--lofty-finisher-white);
   --brand-color: var(--lofty-crisp-orange);
   --brand-hover-color: var(--lofty-orange-dark-hover);
-  --text-color-on-brand: var(--lofty-dark-base);
+  --text-color-on-brand: var(--lofty-finisher-white);
 
   --highlight-color: var(--lofty-green-dark);
   --highlight-hover-color: var(--lofty-green-dark-hover);

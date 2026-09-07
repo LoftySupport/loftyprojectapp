@@ -41,28 +41,21 @@ function resolve(name, vars, seen = new Set()) {
 const light = declarations(join(src, "design-system", "tokens", "colors.css"));
 const dark = new Map([...light, ...declarations(join(src, "design-system", "tokens", "dark.css"))]);
 
-// What loftyTheme.ts must match, per theme, as mirror variable names.
-const EXPECTED = {
-  light: {
-    "primary-color": "--lofty-crisp-orange",
-    "primary-hover-color": "--lofty-orange-hover",
-    "primary-selected-color": "--lofty-orange-selected",
-    "primary-selected-hover-color": "--lofty-orange-selected-hover",
-    "text-color-on-primary": "--lofty-ink",
-    "brand-color": "--lofty-crisp-orange",
-    "brand-hover-color": "--lofty-orange-hover",
-    "text-color-on-brand": "--lofty-ink"
-  },
-  dark: {
-    "primary-color": "--lofty-crisp-orange",
-    "primary-hover-color": "--lofty-orange-dark-hover",
-    "primary-selected-color": "--lofty-orange-dark-selected",
-    "text-color-on-primary": "--lofty-dark-base",
-    "brand-color": "--lofty-crisp-orange",
-    "brand-hover-color": "--lofty-orange-dark-hover",
-    "text-color-on-brand": "--lofty-dark-base"
-  }
-};
+/**
+ * Every Vibe token name in loftyTheme.ts is also a semantic token in the mirror, spelled the
+ * same with a `--` in front, so the mapping is derived rather than written down twice.
+ *
+ * An earlier version of this script hardcoded which *brand* variable each theme key should
+ * equal (`"text-color-on-primary": "--lofty-ink"`). That is a third copy of a decision the
+ * mirror already states, and it went stale the first time the design system moved: on
+ * 7 September the brand rule became "never black on Crisp Orange", the mirror changed to
+ * Finisher White, and this check went red pointing at the wrong file — it reported that
+ * loftyTheme.ts disagreed with a mirror that in fact already agreed with it. Deriving the
+ * mapping means a design change can only ever make this check fail for the real reason.
+ */
+const THEMES = ["light", "dark", "black"];
+/** The mirror palette each theme resolves against; "black" shares dark's. */
+const paletteFor = (theme) => (theme === "light" ? light : dark);
 
 // loftyTheme.ts is TypeScript, so read the literals out of the source rather than importing
 // it — this script must run under plain node with no transpiler in front of it.
@@ -77,18 +70,18 @@ function themeBlock(name) {
 }
 
 const problems = [];
-for (const [themeName, expected] of Object.entries(EXPECTED)) {
-  const actual = themeBlock(themeName);
-  // "black" takes the same palette as "dark"; check it against the same expectations.
-  const alsoCheck = themeName === "dark" ? ["black"] : [];
-  for (const target of [themeName, ...alsoCheck]) {
-    const got = target === themeName ? actual : themeBlock(target);
-    for (const [token, mirrorVar] of Object.entries(expected)) {
-      const want = resolve(mirrorVar, themeName === "dark" ? dark : light);
-      const have = got.get(token);
-      if (have === undefined) problems.push(`${target}.${token} is missing from loftyTheme.ts`);
-      else if (have !== want) problems.push(`${target}.${token} is ${have}, mirror says ${want} (${mirrorVar})`);
+let compared = 0;
+for (const themeName of THEMES) {
+  const palette = paletteFor(themeName);
+  for (const [token, have] of themeBlock(themeName)) {
+    const mirrorVar = `--${token}`;
+    if (!palette.has(mirrorVar)) {
+      problems.push(`${themeName}.${token} is not a token the mirror declares (${mirrorVar})`);
+      continue;
     }
+    const want = resolve(mirrorVar, palette);
+    compared++;
+    if (have !== want) problems.push(`${themeName}.${token} is ${have}, mirror says ${want} (${mirrorVar})`);
   }
 }
 
@@ -98,4 +91,8 @@ if (problems.length) {
   console.error("\nThe mirror is the source of truth. Update loftyTheme.ts to match it.");
   process.exit(1);
 }
-console.log(`loftyTheme.ts matches the design-system mirror — ${Object.keys(EXPECTED.light).length} tokens across 3 themes.`);
+if (!compared) {
+  console.error("check-design-tokens compared nothing — loftyTheme.ts parsed as empty, so this check proved nothing.");
+  process.exit(1);
+}
+console.log(`loftyTheme.ts matches the design-system mirror — ${compared} token values across ${THEMES.length} themes.`);

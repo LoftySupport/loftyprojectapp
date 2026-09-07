@@ -52,11 +52,28 @@ Nothing outside these except status.
 > primary slot and orange was decorative. Every primary button, focus ring, link and
 > selected state changed. The design system is the newer, deliberate artefact and it wins.
 
-**The contrast problem, and this system's answer.** White on Crisp Orange is **2.6:1** and
-fails AA. The app used to solve that by darkening the orange to `#b8482a`. The design
-system keeps the brand hue intact and **moves the text instead**: `--text-color-on-primary`
-is `#191819`, which is **6.7:1** in light and **8.1:1** on the dark base. Both are valid;
-this one is more faithful to the brand.
+**The contrast problem, and the brand rule that decides it.** White on Crisp Orange is
+**2.62:1**. Three answers have been on the table, and the third is the one in force:
+
+| | Answer | Cost |
+| --- | --- | --- |
+| Before 6 Sep | Darken the orange to `#b8482a`, keep white text | Loses the brand hue |
+| 6 Sep | Keep the hue, move the text to `#191819` ink (**6.75:1**) | Black on orange |
+| **7 Sep — in force** | **Keep the hue, keep white text** | **2.62:1** |
+
+**Black is never placed on Crisp Orange — not text, not icons.** That is a brand rule, and
+it outranks the arithmetic. It is also the expensive one, and the cost should be stated
+plainly rather than buried: at 2.62:1, white on Crisp Orange clears **neither** the 4.5:1
+normal-text floor **nor** the 3:1 large-text floor, so the design system's carve-out —
+orange fills reserved for "large or semibold labels, never small body copy" — does not
+reach AA either. Restricting the size reduces the exposure; it does not remove it.
+
+**The remedy the design system names** is the pressed step `--lofty-orange-pressed`
+`#c2543c`, which is **4.54:1** with white, wherever AA text on an orange field is required.
+`check-contrast.mjs` asserts that step so the escape hatch cannot rot, and asserts the rule
+itself as an identity — because a check optimising for the ratio alone would put the ink
+back, and the rule outranks the ratio. **Whether Vibe's filled primary buttons should take
+the pressed step is open with Amber**; see *Where the palette falls short*.
 
 **One brand-kit contradiction, resolved.** The kit prints `HEX #000000` next to
 `RGB 65 64 66` for Foundation Black. The RGB is authoritative, so the token is `#414042`.
@@ -98,7 +115,9 @@ What it gives up is Cancelled shouting in red; if it should, that is a one-line 
 `data-theme="dark"` on `<html>`, which `App.tsx` stamps alongside the body classes Vibe
 needs. Grounds are three shades of Foundation Black — base `#191819`, surface `#232224`,
 raised `#2e2d2f` — with `#414042` demoted to the border. Text lifts to `#f2f1f2` and muted
-`#b9b8bc`, both above 8:1. Crisp Orange keeps its hex and flips its ink. Eco Green lifts to
+`#b9b8bc`, both above 8:1. Crisp Orange keeps its hex **and its white ink** — dark does not
+redefine `--primary-color`, so white on orange is the same 2.62:1 pairing in both themes,
+not a separate one. Eco Green lifts to
 `#1f8791` — the design system says that clears 4.5:1 for white; measured, it is **4.26:1**,
 and it is one of the three shortfalls below. **Elevation is shown by the surface stepping
 lighter as much as by shadow.**
@@ -147,20 +166,39 @@ not a preference.
 
 ### Where the palette falls short
 
-Three pairings do **not** meet the floor. They are recorded in
+Five pairings do **not** meet the floor. They are recorded in
 `app/scripts/check-contrast.mjs` at their measured value, so the check fails if any of them
 gets worse, and prints them on every run so they stay visible rather than becoming normal.
-None is a value this repo chose — all three are open questions with the design system.
+None is a value this repo chose.
 
 | Pairing | Measured | Needs | |
 | --- | --- | --- | --- |
-| `--placeholder-color` `#8a898d` on white | **3.47:1** | 4.5:1 | Placeholder text is text. `#67666a` would clear it at 5.7:1 |
-| Dark: white on the lifted Eco Green `#1f8791` | **4.26:1** | 4.5:1 | `dark.css` says this pairing is 4.6:1. It is not — the comment is wrong, and the colour needs lifting a little further |
-| Dark: `--ui-border-color` `#5a595c` on the surface | **2.28:1** | 3:1 | A control boundary has to be distinguishable from its surface |
+| **White on Crisp Orange** (light) | **2.62:1** | 4.5:1 | The brand rule. Below the 3:1 large-text floor too. **Decision needed** — see below |
+| **White on Crisp Orange** (dark) | **2.62:1** | 4.5:1 | The same pairing; dark does not redefine `--primary-color` |
+| `--placeholder-color` `#8a898d` on white | **3.47:1** | 4.5:1 | The design system now calls this "example text only, never a label", which narrows the exposure but does not clear it. `#757478` would, at 4.64:1 |
+| Dark: white on the lifted Eco Green `#1f8791` | **4.26:1** | 4.5:1 | `dark.css` still claims 4.6:1. It is not. `#1e818a` would clear it at 4.60:1 |
+| Dark: `--ui-border-color` `#5a595c` on the surface | **2.28:1** | 3:1 | A control boundary has to be distinguishable from its surface. `#706f72` would clear it at 3.17:1 |
 
-One further claim is wrong but harmless: `dark.css` says ink on Crisp Orange is 8.1:1 in
-dark. `--primary-color` is not redefined for dark, so the pairing is identical to light's —
-**6.75:1**, which still clears AA comfortably.
+**The first two need a decision, not a hex.** The brand rule forbids the accessible ink, and
+the design system's own remedy — fill with `--lofty-orange-pressed` `#c2543c` where AA text
+is required — would, applied to Vibe's filled primary buttons, mean the app's buttons are
+the pressed step while `--primary-color` stays Crisp Orange for focus rings, tints, accents
+and data series. That is a deliberate divergence from the mirror, so it is Amber's call and
+not one this repo should make quietly. Until it is made, primary button labels sit at
+2.62:1.
+
+**Three of the five are design-side fixes with known values.** The replacement hexes above
+were solved by holding hue and saturation and moving only HSL lightness, then proved against
+`check-contrast.mjs` with the known-shortfall hatches removed: all twenty pairings clear.
+They are not applied here, because the mirror is a copy and the design project is where a
+palette changes.
+
+**Numbers in the design system that do not match measurement.** Its `a11y-contrast.html`
+overstates six pairings. Five are overstated in the safe direction — Foundation Black on
+white is 10.31:1 not 8.9, white on Foundation Black 10.31 not 8.9, black on the selected
+tint 8.41 not 7.4, white on Eco Green 9.18 not 8.3, black on warning **6.77 not 9.5** — all
+still above their floors. One is overstated in the unsafe direction and is the dark green
+above: claimed 4.6:1, measured 4.26:1.
 
 ## Iconography
 
