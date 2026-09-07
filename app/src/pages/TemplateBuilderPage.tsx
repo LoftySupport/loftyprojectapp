@@ -206,6 +206,16 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
   const [reloadKey, setReloadKey] = useState(0);
   const bump = useCallback(() => setReloadKey(k => k + 1), []);
   const [open, setOpen] = useState<OpenTarget | null>(null);
+  /**
+   * What is open, readable from inside `ctx` without `ctx` depending on it.
+   *
+   * Exactly the reasoning behind `ctxRef`: `ctx` is memoised because a fresh identity
+   * re-resolves every block, which makes typing in a text block feel broken. Adding
+   * `open` to the dependency list would rebuild it on every autosave — the row comes back
+   * as a new object each time it saves — so the upload reads the ref instead.
+   */
+  const openRef = useRef<OpenTarget | null>(null);
+  openRef.current = open;
   const [preview, setPreview] = useState<{ model: CompiledReport; theme: string } | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -407,7 +417,27 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
          * one nobody finds again in a menu.
          */
         textSnippets,
-        saveTextSnippet: askToSaveSnippet
+        saveTextSnippet: askToSaveSnippet,
+        /**
+         * Put an image in the bucket and hand back the URL the block renders.
+         *
+         * Host-supplied for the same reason everything else here is: the module knows a
+         * File goes in and a URL comes back, and nothing about buckets or who may write
+         * to them. Absent when nothing is open, which makes the settings control fall
+         * back to the URL box rather than offering an upload with nowhere to file it.
+         *
+         * The owner is what the object path is filed under (`documents/<id>/…`), not a
+         * second record of what the document carries — the layout is that, which is what
+         * "stores in the document only" meant (0100).
+         */
+        uploadImage: openRef.current
+          ? (file: File) => repo.uploadReportImage({
+              file,
+              owner: openRef.current!.lane === "document"
+                ? { kind: "document", id: openRef.current!.row.id }
+                : { kind: "library", id: openRef.current!.row.id }
+            })
+          : undefined
       };
     },
     [projects, jobs, teams, stageNames, people, processes,

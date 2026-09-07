@@ -2056,6 +2056,38 @@ block additionally refuses to apply if a superseded policy is still attached —
 policies OR together, so leaving `0096`'s in place would have made `0097` look applied while
 changing nothing.
 
+### 7 September — images a document carries (`0100`)
+
+Amber: *"upload to public bucket that stores in the document only"*. The Image block took
+a URL and nothing else, so putting a site photo in a report meant hosting it first.
+
+**Public, and asked for after the trade was put.** The alternative offered was a signed URL
+written into the share snapshot with the same expiry as the link, so revoking a shared
+document revoked its pictures; Claude recommended it, because `0095` had already decided a
+shared document is a snapshot with an end date. Amber chose the public bucket, and the
+consequence is recorded rather than buried: **an image in a shared document stays fetchable
+at its URL after the link expires.** What that costs is bounded by what goes in — a logo, a
+site photo, a diagram, things somebody is deliberately putting in front of a client. It is
+not a hole in RLS; nothing derived from a job, a property or a person lives in the bucket.
+The way back, if it is revisited, is two moves: flip `public` to false, and sign each image
+URL in `compileForShare` with the link's expiry. The layout stores a URL either way.
+
+**No attachments table, which is what "stores in the document only" means.** `0062` needed
+`feedback_attachments` because storage.objects has no column saying which report a
+screenshot belongs to. A report image does not have that problem: the block holds the URL
+and the block is in `report_document_layout`. A row here as well would be a second record
+of the same fact, disagreeing the first time somebody deleted the block. The cost accepted
+is that an image whose block was deleted is orphaned in the bucket — housekeeping, not
+correctness.
+
+The object path (`documents/<id>/…`, `library/<id>/…`) is a convenience for auditing and
+prefix-listing, **not** a source of truth. Nothing reads it to decide anything. Uploading is
+floored at `user` rather than at the specific document's editability: every user can create
+a document anyway, so the cross-table lookup would buy a slower upload and a policy to
+rewrite whenever the document rules move. The path *shape* is enforced, so the bucket cannot
+become a flat dumping ground — matched with a regex and not a cast, because `'x'::uuid`
+raises inside a policy and an error is not a refusal.
+
 ### 7 September — what the security advisor still says, and why most of it stays (`0099`)
 
 `get_advisors` was run against the live project after `0098`. Five findings; **one was

@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 172 changes since then —
+Unreleased: 173 changes since then —
+- Added: Drop an image straight into a report, or pick one from your machine, instead of hosting it somewhere and pasting a link
 - Fixed: A document can be put on a project as easily as on a job — the choice is now asked before the list, instead of every project sorting below every job in one long picker
 - Added: New document on a job or project starts with that record already chosen
 - Added: Text snippets — save wording once and drop it into any letter from the editor, as a copy you can then edit
 - Added: A Snippet Library under Tools, where a manager signs off, renames or retires saved wording
-- Added: A job's report reads the properties recorded on its project as well as its own, and the job's own value wins where both are set
-- …and 167 more.
+- …and 168 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

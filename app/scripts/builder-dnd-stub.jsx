@@ -57,7 +57,16 @@ const ctx = {
   textSnippets: [
     { value: "sn_signoff", label: "Standard sign-off", html: "<p>Kind regards,<br><b>Lofty</b></p>" }
   ],
-  saveTextSnippet: (html) => { window.__savedSnippet = html; }
+  saveTextSnippet: (html) => { window.__savedSnippet = html; },
+  /**
+   * Stands in for the bucket. Records what it was handed and returns a URL, because the
+   * check is about the control — does a dropped file reach the host, and does the URL it
+   * gives back become the block's image — and not about Supabase Storage.
+   */
+  uploadImage: async (file) => {
+    window.__uploaded = { name: file.name, type: file.type };
+    return `https://example.invalid/${encodeURIComponent(file.name)}`;
+  }
 };
 
 createRoot(document.getElementById("root")).render(

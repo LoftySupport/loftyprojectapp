@@ -122,7 +122,7 @@ const WIRED: RepositoryMethod[] = [
   "listStages", "listTeams", "updateTeam", "createTeam", "listTemplatePhases", "updateStageSla",
   "listSavedViews", "saveView", "deleteSavedView", "shareSavedView",
   "submitFeedback", "listFeedback", "setFeedbackStage", "setFeedbackPhase", "setFeedbackKind",
-  "setFeedbackVote", "attachmentUrl",
+  "setFeedbackVote", "attachmentUrl", "uploadReportImage",
   "listRoadmapPhases", "createRoadmapPhase", "updateRoadmapPhase", "deleteRoadmapPhase",
   "moveRoadmapPhase", "listReleases", "createRelease", "deleteRelease",
   "cloneJob", "listRecordActivity",
@@ -209,6 +209,14 @@ const TEAM_COLUMNS = "team_id, team_name, team_position, team_is_active";
  * asked for at the moment a card is opened — there is no permanent link to hold.
  */
 const SCREENSHOT_BUCKET = "feedback-screenshots";
+
+/**
+ * The PUBLIC bucket report images go into (0100). Public, so the URL is permanent and
+ * needs no session — which is what lets a client open a shared document and see the
+ * pictures, and equally what means those pictures outlive the link. Amber chose that
+ * trade with the alternative in front of her; 0100 records it.
+ */
+const REPORT_IMAGE_BUCKET = "report-images";
 
 /**
  * What the tracker reads off `feedback_display` (0061, widened by 0068).
@@ -2757,6 +2765,31 @@ export function createSupabaseRepository(): Repository {
       // guard_comment_standing() raises 42501 below admin — the author's own edit policy
       // would otherwise have let them pin their own comment.
       if (error) throw error;
+    },
+
+    async uploadReportImage(input: {
+      file: File;
+      owner: { kind: "document" | "library"; id: string };
+    }): Promise<string> {
+      // The same sanitising as attachScreenshots, and for the same reason: a filename
+      // arrives from somebody's machine and `../` in an object path is the oldest trick
+      // there is. Anything that is not a letter, number, dot or dash becomes a dash, and
+      // the uuid in front keeps two files called "site.jpg" apart.
+      const safe = input.file.name.replace(/[^a-zA-Z0-9.-]/g, "-").slice(-80) || "image";
+      const folder = input.owner.kind === "document" ? "documents" : "library";
+      const path = `${folder}/${input.owner.id}/${crypto.randomUUID()}-${safe}`;
+
+      const { error } = await db.storage
+        .from(REPORT_IMAGE_BUCKET)
+        .upload(path, input.file, { contentType: input.file.type || undefined, upsert: false });
+      // Thrown rather than swallowed into a null. An image that silently did not upload
+      // is a block that stays empty with nothing saying why — and the two failures worth
+      // telling apart, too big and wrong type, both arrive here with their own message.
+      if (error) throw error;
+
+      const { data } = db.storage.from(REPORT_IMAGE_BUCKET).getPublicUrl(path);
+      if (!data?.publicUrl) throw new Error("The image uploaded but has no public URL.");
+      return data.publicUrl;
     },
 
     async attachmentUrl(path: string): Promise<string | null> {

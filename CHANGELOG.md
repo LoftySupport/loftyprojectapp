@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Drop an image straight into a report, or pick one from your machine, instead of hosting it somewhere and pasting a link
 - New document on a job or project starts with that record already chosen
 - Text snippets — save wording once and drop it into any letter from the editor, as a copy you can then edit
 - A Snippet Library under Tools, where a manager signs off, renames or retires saved wording
