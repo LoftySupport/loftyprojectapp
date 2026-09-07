@@ -265,7 +265,7 @@ export const LOFTY_THEME_SPECS: Record<string, ReportTheme>;
  * document store also implements `saveTemplate`, which is how "Save as template" becomes
  * a proposal into the library rather than a second kind of save.
  */
-export function createLibraryStore(repo: unknown, kind?: "template" | "section"): ReportStore;
+export function createLibraryStore(repo: unknown, kind?: "template" | "section" | "snippet"): ReportStore;
 export function createDocumentStore(
   repo: unknown,
   subject?: { jobId?: string | null; projectId?: number | null },

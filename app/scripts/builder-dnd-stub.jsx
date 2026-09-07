@@ -42,7 +42,23 @@ const base = {
   propertyOptions: [], people: [],
   subject: { jobId: "1042-001", projectId: null }
 };
-const ctx = { ...base, textTokens: tokensFor(base), fillTokens: makeFillTokens(base) };
+/**
+ * The snippet half, stubbed the way the page supplies it.
+ *
+ * `saveTextSnippet` records rather than stores — the page opens a naming panel and writes
+ * a library row, neither of which this check is about. What it IS about is WHICH html the
+ * editor decides to hand over: the selection when there is one, the whole block when
+ * there is not. So the last call is parked on `window` for the assertion to read.
+ */
+const ctx = {
+  ...base,
+  textTokens: tokensFor(base),
+  fillTokens: makeFillTokens(base),
+  textSnippets: [
+    { value: "sn_signoff", label: "Standard sign-off", html: "<p>Kind regards,<br><b>Lofty</b></p>" }
+  ],
+  saveTextSnippet: (html) => { window.__savedSnippet = html; }
+};
 
 createRoot(document.getElementById("root")).render(
   <ReportBuilder

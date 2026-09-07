@@ -82,6 +82,21 @@ export default function RichTextEditor({
    * the app's business.
    */
   tokens = [],
+  /**
+   * What "Insert snippet" offers: `[{ value, label, html, group }]`, supplied by the host.
+   *
+   * Same rule as `tokens`: empty or absent hides the control. This component knows a
+   * snippet is a piece of html to drop in at the caret and nothing else — where they are
+   * kept, who may see one and whether a manager has signed it off are the app's business.
+   */
+  snippets = [],
+  /**
+   * Called with the html the author wants to keep, if the host offers snippet-saving.
+   *
+   * Absent hides the button. The host does the naming and the storing; all this decides
+   * is WHICH html — the selection when there is one, the whole block when there is not.
+   */
+  onSaveSnippet = null,
 }) {
   const editorRef = useRef(null);
   const lastSavedRef = useRef(value || '');
@@ -169,6 +184,69 @@ export default function RichTextEditor({
     scheduleSave();
   };
 
+  /**
+   * Drop a snippet's wording in at the caret.
+   *
+   * `insertHTML` and not `insertText`, because the whole point of a snippet is that it
+   * keeps its formatting — a sign-off with a bolded name arrives bolded. It goes through
+   * the same sanitiser as everything else on the way in: a snippet is html that came from
+   * the app's own store, which is exactly the sort of provenance that feels trustworthy
+   * right up until somebody writes a row by hand.
+   *
+   * A COPY, NOT A REFERENCE. That is the difference between a snippet and a library
+   * section, and it is a decision rather than an implementation detail — see 0098. Once
+   * this lands the text is the document's own, and editing the snippet afterwards leaves
+   * every letter already written exactly as it was sent.
+   */
+  const insertSnippet = (id) => {
+    if (!id) return;
+    const found = snippets.find(sn => sn.value === id);
+    if (!found?.html) return;
+    const el = editorRef.current;
+    if (!el) return;
+    el.focus();
+    document.execCommand('insertHTML', false, sanitizeHtml(found.html));
+    scheduleSave();
+  };
+
+  /**
+   * WHAT GETS SAVED: the selection, or the whole block when there is none.
+   *
+   * Selecting a paragraph and keeping that is the common case; but somebody who has just
+   * written a two-line sign-off and wants to keep it should not have to select it first,
+   * and a button that silently did nothing on an empty selection would look broken.
+   *
+   * `onMouseDown` with `preventDefault` on the button is NOT what makes the first case
+   * work, and the comment here said it was until the mutation was run. A DOM Selection is
+   * document-wide and survives focus moving to a button, so removing the handler leaves
+   * "saving one keeps the selection" green — the selection is still readable from here.
+   *
+   * What it does earn is the line after it in `check:builder-dnd`: without it the click
+   * focuses the button, and the next thing the author types goes nowhere. Somebody who
+   * keeps a sign-off and carries on writing should not have to click back into the text
+   * first. Watched both ways.
+   */
+  const saveSnippet = () => {
+    const el = editorRef.current;
+    if (!el || !onSaveSnippet) return;
+    const sel = typeof window !== 'undefined' ? window.getSelection() : null;
+    let html = '';
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+      const range = sel.getRangeAt(0);
+      // Only a selection that is actually inside THIS editor. Two blocks open at once
+      // and a selection left in the other one would otherwise be saved from here.
+      if (el.contains(range.commonAncestorContainer)) {
+        const holder = document.createElement('div');
+        holder.appendChild(range.cloneContents());
+        html = holder.innerHTML;
+      }
+    }
+    if (!html) html = el.innerHTML;
+    const clean = sanitizeHtml(html);
+    if (!clean.trim()) return;
+    onSaveSnippet(clean);
+  };
+
   const tbBtn = 'px-2 py-1 text-xs rounded text-neutral-700 hover:bg-neutral-100 border border-transparent hover:border-neutral-200';
 
   return (
@@ -208,6 +286,39 @@ export default function RichTextEditor({
               </optgroup>
             ))}
           </select>
+        )}
+
+        {/* Same rule as the field menu: only when the host has snippets to offer. */}
+        {snippets.length > 0 && (
+          <select
+            className={`${tbBtn} max-w-[150px]`}
+            value=""
+            aria-label="Insert a snippet"
+            title="Insert saved wording — a copy, yours to edit"
+            onChange={e => { insertSnippet(e.target.value); e.target.value = ''; }}
+          >
+            <option value="">Insert snippet…</option>
+            {[...new Set(snippets.map(sn => sn.group || 'Snippets'))].map(group => (
+              <optgroup key={group} label={group}>
+                {snippets.filter(sn => (sn.group || 'Snippets') === group).map(sn => (
+                  <option key={sn.value} value={sn.value}>{sn.label}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        )}
+        {onSaveSnippet && (
+          <button
+            type="button"
+            className={tbBtn}
+            title="Save the selected wording as a snippet you can reuse"
+            aria-label="Save as snippet"
+            data-save-snippet
+            onMouseDown={e => e.preventDefault()}
+            onClick={saveSnippet}
+          >
+            Save snippet
+          </button>
         )}
         <div className="h-4 w-px bg-neutral-200 mx-1" />
         {/* Alignment, size and colour were missing entirely — and even if they

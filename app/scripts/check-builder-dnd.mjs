@@ -187,6 +187,74 @@ try {
       /A\$18[,.]?400/.test(canvas), JSON.stringify(canvas.slice(0, 160)));
   }
 
+  // ── Snippets: saved wording, inserted and kept ────────────────────────
+  //
+  // Two claims, and they fail for different reasons, so they are two assertions.
+  //
+  // The block is re-selected first: the token half above deselected it to read the
+  // resolved preview, and a deselected text block is not an editor.
+  await pg.locator('main [data-block="text"]').last().click();
+  await pg.waitForTimeout(300);
+  const rte = pg.locator('main [contenteditable="true"]').first();
+
+  const snipMenu = pg.locator('main select[aria-label="Insert a snippet"]');
+  ok("the editor offers the host's saved wording", await snipMenu.count() === 1,
+    `${await pg.locator('select[aria-label="Insert a snippet"]').count()} on the page`);
+
+  if (await snipMenu.count()) {
+    // Broken by making insertSnippet use insertText: the tags arrive as visible
+    // characters and `<b>` never becomes an element, so this reports.
+    await snipMenu.selectOption("sn_signoff");
+    await pg.waitForTimeout(400);
+    const html = await rte.innerHTML();
+    ok("inserting one brings its formatting with it",
+      html.includes("Kind regards") && /<b>\s*Lofty\s*<\/b>/i.test(html),
+      JSON.stringify(html.slice(-140)));
+  }
+
+  // WHICH HTML "Save snippet" HANDS OVER.
+  //
+  // Select the word "Lofty" only, then click the button, and the host should be handed
+  // that word rather than the whole block.
+  //
+  // This is what proves `onMouseDown={e => e.preventDefault()}` on the button is
+  // load-bearing rather than decoration. Watched both ways: with the handler removed,
+  // the real click moves focus, the contenteditable's selection collapses before the
+  // click handler runs, and `saveSnippet` falls through to the whole-block branch —
+  // `__savedSnippet` comes back with "Booked for" in it and this reports.
+  await pg.evaluate(() => {
+    const el = document.querySelector('main [contenteditable="true"]');
+    const bold = el?.querySelector("b");
+    if (!bold) return;
+    const range = document.createRange();
+    range.selectNodeContents(bold);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  });
+  await pg.locator("main [data-save-snippet]").first().click();
+  await pg.waitForTimeout(300);
+  const saved = await pg.evaluate(() => window.__savedSnippet ?? null);
+  ok("saving one keeps the selection, not the whole block",
+    typeof saved === "string" && saved.includes("Lofty") && !saved.includes("Booked for"),
+    JSON.stringify(saved));
+
+  // AND THE CARET IS STILL IN THE EDITOR AFTERWARDS.
+  //
+  // This is the claim `onMouseDown={e => e.preventDefault()}` on the button actually
+  // earns. Reading the selection does NOT need it — a DOM Selection is document-wide and
+  // survives focus moving to a button, which is why removing the handler leaves the
+  // assertion above green. What it earns is this: without it the click focuses the
+  // button, and the next thing the author types goes nowhere.
+  //
+  // Watched both ways: with the handler removed, "!" lands outside the editor and this
+  // reports.
+  await pg.keyboard.type("!");
+  await pg.waitForTimeout(300);
+  const afterSave = await rte.innerText();
+  ok("and the caret stays in the editor, so typing carries on",
+    afterSave.trimEnd().endsWith("!"), JSON.stringify(afterSave.slice(-60)));
+
   ok("nothing threw while doing it", crashes.length === 0, crashes[0]?.slice(0, 200));
 } finally {
   await browser?.close().catch(() => {});
@@ -195,6 +263,6 @@ try {
 }
 
 console.log(failures === 0
-  ? "\nthe builder accepts blocks: dragged in, and clicked in"
+  ? "\nthe builder accepts blocks: dragged in, clicked in, and its editor keeps wording"
   : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

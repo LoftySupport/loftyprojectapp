@@ -203,6 +203,11 @@ function SortableWidget({ widget, engine, ctx, allWidgets, theme, selected, onSe
                page. Wiring the menu into one and not the other meant "Insert field"
                existed and was nowhere near the writing. */
             tokens={ctx?.textTokens || []}
+            /* And the saved wording, from the same place. `onSaveSnippet` is absent when
+               the host has nowhere to put one, which hides the button rather than
+               offering a save that goes nowhere. */
+            snippets={ctx?.textSnippets || []}
+            onSaveSnippet={ctx?.saveTextSnippet}
           />
         </div>
       ) : (

@@ -31,6 +31,7 @@ import { createReportEngine } from "../src/features/reports/core/widgetEngine.js
 import { LOFTY_THEME, LOFTY_THEME_QUIET } from "../src/features/reports/adapters/lofty/theme.js";
 import { makeFillTokens, tokensFor } from "../src/features/reports/adapters/lofty/tokens.js";
 import { HOUSE_COLOURS } from "../src/data/export/houseFormat.ts";
+import { snippetHtml, snippetLayout } from "../src/data/types.ts";
 import { execFileSync } from "node:child_process";
 // Dev-only, and dependency-free itself. It is here to answer the one question none of the
 // assertions below could: not "do the two drawings agree" but "does a phone read it".
@@ -929,6 +930,48 @@ console.log("--- the Lofty theme is the house document format, role for role");
     menu.some(t => t.value === "job_number") && menu.some(t => t.value === "address")
     && menu.some(t => t.value === "slab_cost"),
     `${menu.length} fields`);
+}
+
+// ── A snippet's wording, in and out of the layout it hides in ──────────────
+//
+// A snippet is one text widget (0098), which means every reader has to reach into
+// `widgets[0].options.html`. `snippetHtml` is that reach, written once — and the reason
+// it is worth asserting is that EVERY WAY OF GETTING IT WRONG RETURNS UNDEFINED rather
+// than throwing. A snippet saved through a typo'd path is a menu entry that inserts
+// nothing, with no error anywhere to say why.
+{
+  const wording = '<p>Kind regards,<br><b>Lofty</b></p>';
+
+  // The round trip, which is the only path the app actually uses.
+  ok("a snippet's wording survives the layout it is stored in",
+    snippetHtml(snippetLayout(wording)) === wording);
+
+  // The shape the CHECK constraint requires is the shape this writes. Broken by returning
+  // `widgets` as an object rather than an array of one: the round trip above breaks too,
+  // but this is the one that names WHY — `report_templates_layout_has_widgets` refuses
+  // the row, at save time, which is the harder place to work out what went wrong.
+  //
+  // It does NOT catch html written at the top level instead of in `options` — that shape
+  // is a perfectly legal layout and the database takes it happily. The round trip above
+  // is what catches that one. Both mutations were run.
+  const made = snippetLayout(wording);
+  ok("and it is written as a layout the database will accept",
+    Array.isArray(made.widgets) && made.widgets.length === 1
+    && made.widgets[0].kind === "text",
+    JSON.stringify(made));
+
+  // The four ways it is not a snippet, all of which must be "" rather than undefined —
+  // the page filters on `.trim() !== ""`, and `undefined.trim()` is the crash that would
+  // take the whole builder down when one bad row arrives.
+  const notSnippets = [
+    ["null", null],
+    ["no widgets", { widgets: [] }],
+    ["a widget of another kind", { widgets: [{ id: "w", kind: "table", options: {} }] }],
+    ["html that is not a string", { widgets: [{ id: "w", kind: "text", options: { html: 42 } }] }]
+  ];
+  ok("anything that is not a snippet reads as empty, not as undefined",
+    notSnippets.every(([, layout]) => snippetHtml(layout) === ""),
+    notSnippets.map(([name, l]) => `${name}: ${JSON.stringify(snippetHtml(l))}`).join(", "));
 }
 
 console.log(failures === 0

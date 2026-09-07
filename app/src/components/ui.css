@@ -2578,6 +2578,23 @@ code { overflow-wrap: anywhere; }
   .get-started-grid { grid-template-columns: 1fr; }
 }
 
+/* What a snippet is about to keep, shown rather than described.
+   Capped and scrollable: somebody who caught the whole block instead of one paragraph
+   should see that, and a panel that grew to the length of the selection would push its
+   own Save button off the screen. */
+.snippet-preview {
+  border: 1px solid var(--border-subtle, #d0d4e4);
+  border-radius: var(--radius-4, 4px);
+  padding: var(--space-8, 8px);
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--surface-subtle, #f6f7fb);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.snippet-preview > :first-child { margin-top: 0; }
+.snippet-preview > :last-child { margin-bottom: 0; }
+
 /* ── A record's documents ─────────────────────────────────────────────────
    The list on a job or a project. Plain rows: the title is the whole of what
    somebody is scanning for, and a table of one column with a header is furniture. */

@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 168 changes since then —
+Unreleased: 170 changes since then —
+- Added: Text snippets — save wording once and drop it into any letter from the editor, as a copy you can then edit
+- Added: A Snippet Library under Tools, where a manager signs off, renames or retires saved wording
 - Added: A job's report reads the properties recorded on its project as well as its own, and the job's own value wins where both are set
 - Added: Team membership is edited from the team's own row, rather than one person at a time
 - Added: Property placeholders in text blocks, so a letter can carry a job's fields and fill them in when it is exported
-- Changed: The Jobs and Projects filters are the same fields as Group by, always on the bar, with everything else in one Advanced row instead of chips added one at a time
-- Added: A job or project number can be typed straight into the filters
-- …and 163 more.
+- …and 165 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

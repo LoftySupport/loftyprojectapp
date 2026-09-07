@@ -1851,6 +1851,32 @@ end $$;
 reset role;
 reset request.jwt.claim.sub;
 
+-- ─────────────────────────────────────────────────────────────────────────
+-- EVERY KIND IS COVERED BY THE SAME FOUR POLICIES, AND THAT IS LOAD-BEARING.
+--
+-- 0098 added `snippet` as a third kind with one value on one CHECK and no policy work at
+-- all. That was only correct because none of the four policies on this table look at
+-- `report_template_kind` — a snippet therefore inherits the visibility bands, the
+-- sign-off and the delete rules already proved above, rather than arriving unguarded.
+--
+-- The assumption is invisible in the diff that relies on it, so it is asserted here. The
+-- day somebody writes "…and templates may also be read by…", the next kind added the
+-- 0098 way is a row nothing protects, and this is what says so.
+do $$
+declare kinded text;
+begin
+  select string_agg(polname, ', ') into kinded
+    from pg_policy
+   where polrelid = 'report_templates'::regclass
+     and (coalesce(pg_get_expr(polqual, polrelid), '') like '%report_template_kind%'
+       or coalesce(pg_get_expr(polwithcheck, polrelid), '') like '%report_template_kind%');
+  if kinded is null then
+    raise notice 'ok  no policy on report_templates branches on kind, so a new kind inherits the sign-off';
+  else
+    raise warning 'FAIL: these policies branch on kind, so a new kind is not covered by what was proved above: %', kinded;
+  end if;
+end $$;
+
 \echo '=== documents: a user makes and edits one; deleting somebody else''s is not theirs ==='
 -- Somebody else's document, planted as the owner for the same reason as above.
 insert into report_documents (report_document_title, report_document_created_by)
