@@ -4,6 +4,7 @@ import { changeSentence } from "../data/auditNarrative";
 import { useQuery } from "../data/DataProvider";
 import { LoadProblem } from "./SearchNotices";
 import "./ui.css";
+import { CappedList } from "./CappedList";
 
 /**
  * A record's history, as the prototype drew it (Amber, 28 Aug: "projects also need to
@@ -58,7 +59,7 @@ export function ActivityFeed({
 
       {entries.length > 0 && (
         <ol className="activity-feed">
-          {entries.map(e => (
+          <CappedList items={entries} noun="events">{e => (
             <li key={e.id}>
               {/* The date first, in the prototype's ISO form. It sorts, it is
                   unambiguous between AU and US readers, and it lines up down the
@@ -92,7 +93,7 @@ export function ActivityFeed({
                 )}
               </Text>
             </li>
-          ))}
+          )}</CappedList>
         </ol>
       )}
     </section>

@@ -2306,6 +2306,12 @@ export interface NewJob {
   address?: NewAddress;
   stage?: StageName;
   status?: RecordStatus;
+  /**
+   * The number this job has in SiteBook, when it already exists there — the same column
+   * the split's per-lot rows and the drawer write (`jobs.job_number_old`). Optional and
+   * blank-as-null, because a job that is new here has none.
+   */
+  jobNumberOld?: string | null;
 }
 
 // ---------------------------------------------------------------------------

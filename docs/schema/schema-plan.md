@@ -9,9 +9,13 @@ dependencies, properties and checklists, `process_runs`, and the workbook seed o
 processes and 174 properties. See *1 September — the workbook lands* at the end of this
 file.
 
-**Phase B (the import) has not run** — the 9 projects and 66 jobs on the live database were
-created in the app. `HANDOFF.md` carries the running order, including which kinds of change
-are cheaper before it than after.
+**Phase B (the import) is closed and never ran** — the 9 projects and 66 jobs on the live
+database were created in the app, and that is now the only way they will be. Amber,
+7 September: *"i don't need any jobs imported from spreadsheets. all jobs that need to be
+created from now on will be created from the projects in the app"*. The staging table, its
+801 rows and `import_spine()` stay applied and inert, because *"if I need to import other
+areas I will let you know"* — just not jobs or projects. `app/supabase/import/README.md`
+carries the closure and its reasoning.
 
 **What changed against this plan while building it**, each with its reasoning in the
 migration header: teams became a lookup table before the rest rather than in Phase C, since
@@ -1697,9 +1701,12 @@ The unique key on `job_number_old` earned its place here: it is the one constrai
 noticed. Five of the seven carry no old number the app already holds, and nothing else in
 the schema would have objected to the same house existing twice.
 
-**Not decided.** Whether the workbook or the app is the record for those seven sites is
-Amber's call, and the load waits on it; the three ways are set out in
-`app/supabase/import/README.md` → *What stopped the live load*. Worth knowing while
+**Decided, 7 September — by closing the import rather than by choosing.** The app is the
+record, for those seven and for everything else: no jobs or projects will ever be loaded
+from a spreadsheet, so there is no second copy to reconcile. The three ways are still set
+out in `app/supabase/import/README.md` → *What stopped the live load*, because they are the
+clearest statement of what the collision was, and the same hazard now belongs to whoever
+creates those jobs by hand. Worth knowing while
 deciding: between them the seven hold two comments ("Job cancelled", "here is a test
 update") and nothing else — no tasks, parties, documents, property values or process runs.
 
@@ -1955,19 +1962,58 @@ The paths did not swap. `/settings` is the personal screen and has been for week
 them would break every bookmark and Teams link in the company to save a word in a URL
 nobody reads. So the rename is a label and a permission, not an address.
 
-### Open, for Amber
+### Answered by Amber, 7 September — all three
 
-1. **Should a manager see the Bugs and Ideas triage tabs?** They are on Admin now, and a
-   manager still reads the same queue on Updates — which is the screen built for it. If
-   triage is a manager's job too, the tabs move and no policy changes (`0060` already opens
-   the read to everybody).
-2. **Roadmap and Changelog appear in two places** — the cog for admins, the footer for
-   everybody. Same component, same rows, no second implementation; but if that reads as
-   doubling up the way the notifications tab did, the Admin tabs come out and the cog links
-   to `/updates` instead.
-3. **Notification *types* went down to manager with the *rules*.** A rule is who hears a
-   thing; a type is whether that kind of notification exists at all. If creating a type
-   should stay admin's, that is a second policy, not a second screen.
+1. **Should a manager see the Bugs and Ideas triage tabs?** **No.** *"Only admins and super
+   admin get to see the bug manager."* Already how it behaved, so no code changed — but the
+   half that is easy to get backwards is now written down beside the tabs: **filing is not
+   triage.** `ReportForm` carries no permission gate, so anybody with app access, viewers
+   included, can send one.
+2. **Roadmap and Changelog appear in two places.** **Removed from Admin.** *"there is
+   duplication on footer and other page."* The cog links to `/updates`, and
+   `/admin/roadmap` and `/admin/changelog` forward there rather than falling through to the
+   section guard — those URLs were shareable, so some are in bookmarks. Being one component
+   underneath was a fact about the code, not about the experience.
+3. **Notification *types* went down to manager with the *rules*.** **Types come back to
+   admin; the rules stay a manager's** — `0097`.
+
+#### `0097` — and why it is three policies, not one
+
+The obvious change is to swap `0096`'s `for all … >= 'manager'` on `notification_types` for
+`for all … >= 'admin'`. **That would have broken Settings → Automations for every manager**,
+and the reason is worth keeping: `for all` covers UPDATE, and a manager's only type write
+today *is* an update — `saveNotificationType()` sets default channels, default timing and
+the active flag on an existing row. Amber was asked about **creating** a type and answered
+about creating a type, so the policy splits by command:
+
+| Command | Who | Why |
+| --- | --- | --- |
+| `insert` | **admin** | Inventing a kind of notification is defining the vocabulary |
+| `delete` | **admin** | Gating creation while leaving destruction open makes no sense |
+| `update` | manager | Changing an existing type's defaults is configuring it |
+| `select` | every active user | `0083`, untouched — what will happen to you is not a secret |
+
+A type is a row that `notification_rules`, `notification_preferences`, `notifications` and
+`notification_deliveries` all point at by foreign key, which is what puts it on the "what
+the app IS" side of the line Admin and Settings were split on. `0096` is not wrong and is
+not being corrected: it bundled two tables under one argument, and only one of them was
+load-bearing for that argument. **The bundling is what `0097` undoes.**
+
+**One edge deliberately not assumed.** Deactivating a type through that UPDATE stays a
+manager's, even though `notification_type_is_active` is close to "does this exist". Making
+it admin's needs a column guard like `0096`'s `guard_stage_shape_change()`, not a policy,
+and nobody asked for it.
+
+**No app change accompanies it.** There is no create-a-type or delete-a-type control and no
+repository method for either — today a type is only ever created by a migration. `0097`
+tightens the database boundary so that stays true when somebody builds the screen.
+
+Proved in `verify/rls.sql`, manager block, probes 6–8, each watched failing first: a manager
+writes a rule (6), is refused a new type (7), and still sets an existing type's defaults
+(8). Probe 8 is the one that catches the `for all` mistake. The migration's own structural
+block additionally refuses to apply if a superseded policy is still attached — permissive
+policies OR together, so leaving `0096`'s in place would have made `0097` look applied while
+changing nothing.
 
 ## Verification
 

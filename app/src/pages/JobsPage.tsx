@@ -7,7 +7,8 @@ import {
 import {
   LINEAR_STAGES, PROJECT_TYPES, PROJECT_TYPE_LABELS, RECORD_STATUS_LABELS, RECORD_STATUSES
 } from "../data/types";
-import { useProcesses, usePropertyAccess, usePropertyDefs, useStages, useTeams, useTemplatePhases } from "../data/useLookups";
+import { useProcesses, usePropertyAccess, usePropertyDefs, usePropertyOptions, useStages, useTeams, useTemplatePhases } from "../data/useLookups";
+import { propertyColumnDefs } from "../data/propertyColumns";
 import { useAuth } from "../data/AuthProvider";
 import { useBoardRecords, type BoardJob } from "../data/boardModel";
 import { jobMatchesQuery, matchedOnPreviousAddress, useSearch } from "../data/SearchProvider";
@@ -40,6 +41,7 @@ import { readPrefs } from "../data/preferences";
 import { Token, token } from "../components/Token";
 import { Toolbar } from "../components/Toolbar";
 import { Problem, Result } from "../components/Form";
+import { PersonSelect } from "../components/PersonSelect";
 import { Select, toOptions } from "../components/Select";
 import "../components/ui.css";
 
@@ -61,6 +63,10 @@ export function JobsPage() {
   const { processes } = useProcesses();
   const { propertyDefs } = usePropertyDefs();
   const { access: filterAccess } = usePropertyAccess();
+  // For the property columns: a select's labels, and a person-format value's name.
+  const { byProperty: optionsByProperty } = usePropertyOptions();
+  const { data: profiles } = useQuery(r => r.listProfiles(), []);
+  const people = useMemo(() => profiles.map(p => ({ id: p.id, name: p.fullName })), [profiles]);
   const { expectedDaysByStage } = useTemplatePhases();
   // No create state and no project list any more: nothing is created from this page, so
   // there is nothing to re-read after and no picker to feed. Both went with the New job
@@ -69,7 +75,7 @@ export function JobsPage() {
   // column rather than where the stale list left it — the same mechanism the create
   // dialogs use on the projects page.
   const [reloadKey, setReloadKey] = useState(0);
-  const { jobs: all, loading, error } = useBoardRecords(reloadKey);
+  const { jobs: all, projects: allProjects, loading, error } = useBoardRecords(reloadKey);
   const { can } = usePermission();
   const repo = useRepository();
 
@@ -209,6 +215,9 @@ export function JobsPage() {
       case "Process health": return PROCESS_HEALTH_FILTER_OPTIONS;
       case "Property": return propertyDefs.filter(d => d.isActive && filterAccess(d.key).canRead).map(d => ({ value: d.key, label: `${d.label} (${d.scope})` }));
       case "Recorded": return RECORDED_FILTER_OPTIONS;
+      // The board groups by project, so it filters by one too — number and address, so
+      // it can be found by either.
+      case "Project": return allProjects.map(p => ({ value: p.projectNumber, label: `${p.projectNumber} · ${p.currentAddress ?? "no address yet"}` }));
       default: return [];
     }
   };
@@ -239,7 +248,6 @@ export function JobsPage() {
     [jobKey]
   );
 
-  const { data: profiles } = useQuery(r => r.listProfiles(), []);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkNote, setBulkNote] = useState<{ ok: string | null; err: string | null }>({ ok: null, err: null });
@@ -486,8 +494,14 @@ export function JobsPage() {
     // The pill has no text in it at all — this column is the reason `text` is
     // required rather than derived from the cell.
     { key: "status", label: "Status", sort: j => RECORD_STATUS_LABELS[j.status],
-      cell: j => <StatusPill status={j.status} />, text: j => RECORD_STATUS_LABELS[j.status] }
-  ], [viewStages, processes, pipelineOrder]);
+      cell: j => <StatusPill status={j.status} />, text: j => RECORD_STATUS_LABELS[j.status] },
+    // Every property the reader may see, job's own and the project's it inherits — off
+    // until asked for, in the picker (Amber, 7 Sep). See data/propertyColumns.tsx.
+    ...propertyColumnDefs<BoardJob>({
+      defs: propertyDefs, scopes: ["job", "project"], canRead: k => filterAccess(k).canRead,
+      optionsByProperty, people, labelScope: true
+    })
+  ], [viewStages, processes, pipelineOrder, propertyDefs, filterAccess, optionsByProperty, people]);
 
   const jobLayout = useColumnLayout("jobs", jobColumnDefs);
 
@@ -620,6 +634,10 @@ export function JobsPage() {
         filters={filters}
         onFiltersChange={setFilters}
         optionsFor={optionsFor}
+        /* The same fields as Group by (Amber, 7 Sep). Team member is deliberately not a
+           filter: the Team filter matches membership (26 Aug). */
+        primary={["Stage", "Team", "Status", "Process"]}
+        advanced={["Number", "Project", "Type", "Date", "Process health", "Property", "Recorded"]}
         count={`Showing ${rows.length} of ${inView.length} jobs`}
         actions={
           <>
@@ -864,21 +882,26 @@ export function JobsPage() {
                     if (v) bulkApply("moved to the team", selectedJobs, j => repo.updateJob(j.jobNumber, { owningTeam: v as TeamId }));
                   }}
                 />
-                <Select
+                <PersonSelect
                   aria-label="Assign the selected jobs to a person"
                   placeholder="Assign to…"
-                  options={[
-                    { value: "— nobody —", label: "— nobody —" },
-                    ...profiles.map(p => ({ value: p.id, label: p.fullName }))
-                  ]}
+                  clearable={false}
                   value={null}
                   onChange={v => {
                     if (!v) return;
-                    const id = v === "— nobody —" ? null : v;
-                    bulkApply(id ? "assigned" : "unassigned", selectedJobs,
-                      j => repo.updateJob(j.jobNumber, { assigneeId: id }));
+                    bulkApply("assigned", selectedJobs,
+                      j => repo.updateJob(j.jobNumber, { assigneeId: v }));
                   }}
                 />
+                <Button
+                  size="small"
+                  kind="tertiary"
+                  disabled={selectedJobs.every(j => !j.assigneeId)}
+                  onClick={() => bulkApply("unassigned", selectedJobs,
+                    j => repo.updateJob(j.jobNumber, { assigneeId: null }))}
+                >
+                  Unassign
+                </Button>
               </div>
               {bulkBusy && <Text type="text3" color="secondary">Saving…</Text>}
               {bulkNote.ok && <Result>{bulkNote.ok}</Result>}

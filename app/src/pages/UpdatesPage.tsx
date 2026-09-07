@@ -8,6 +8,7 @@ import { usePermission } from "../data/PermissionProvider";
 import { useFeedback } from "../components/Feedback";
 import { Field, Problem } from "../components/Form";
 import { Select } from "../components/Select";
+import { PersonSelect } from "../components/PersonSelect";
 import { SidePanel } from "../components/SidePanel";
 import { LoadProblem } from "../components/SearchNotices";
 import {
@@ -678,7 +679,6 @@ function RequestPanel({
   const [shots, setShots] = useState<Record<string, string>>({});
   const [note, setNote] = useState("");
   const [showVoters, setShowVoters] = useState(false);
-  const { data: people } = useQuery(r => r.listProfiles(), [], []);
   /**
    * Opening it IS having seen it — the same rule the bell uses for a mention.
    *
@@ -839,16 +839,12 @@ function RequestPanel({
               {canPlan && (
                 <li>
                   <div className="select-wrap">
-                    <Select
-                      options={people
-                        .filter(p => p.active && !voters.some(v => v.profileId === p.id))
-                        .map(p => ({ value: p.id, label: p.fullName }))}
+                    <PersonSelect
+                      exclude={voters.map(v => v.profileId)}
                       value={null}
-                      clearable
                       placeholder="Add somebody who asked for this…"
                       onChange={v => v && void run(() => repo.addVoteFor(item.id, v))}
                       aria-label="Add a voter"
-                      size="small"
                     />
                   </div>
                   <Text type="text3" color="secondary" element="div" ellipsis={false}>
@@ -869,6 +865,7 @@ function RequestPanel({
                 options={FEEDBACK_STAGES.map(s => ({ value: s, label: FEEDBACK_STAGE_LABELS[s] }))}
                 value={item.stage}
                 onChange={v => void run(async () => {
+                  // Undoable from the header — the repository records the step.
                   const result = await repo.setFeedbackStage(item.id, v as FeedbackStage, note);
                   setNote("");
                   return result;
@@ -904,6 +901,31 @@ function RequestPanel({
                 placeholder="Not planned into a phase"
                 onChange={v => void run(() => repo.setFeedbackPhase(item.id, v))}
                 aria-label="Roadmap phase"
+                className={busy ? "is-busy" : undefined}
+              />
+            </Field>
+          )}
+
+          {canPlan && (
+            <Field
+              label="Filed as"
+              hint="A bug is something that does not work; an idea is something that would. Re-file it when the reporter picked the other one."
+            >
+              {/* Amber, 7 Sep: "you can't change an idea to a bug in updates". The radio
+                  on the report form is the reporter's guess; this is the triage call, at
+                  the rung that already plans the request. `ordered` because bug-then-idea
+                  is the form's order, and a two-item list sorted a–z would swap them. */}
+              <Select
+                ordered
+                options={[
+                  { value: "bug", label: "A bug or an error" },
+                  { value: "idea", label: "An idea or a feature request" }
+                ]}
+                value={item.kind}
+                onChange={v => void run(async () => {
+                  if (v !== item.kind) await repo.setFeedbackKind(item.id, v as FeedbackKind);
+                })}
+                aria-label="Filed as"
                 className={busy ? "is-busy" : undefined}
               />
             </Field>

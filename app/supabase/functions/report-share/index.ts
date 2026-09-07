@@ -26,9 +26,10 @@ const supabase = createClient(
 /**
  * Which origins may call this, as a comma-separated secret rather than a constant.
  *
- * Configuration and not code, because the answer differs per deployment — the Vercel
- * production domain, the Netlify one while the migration finishes, and a preview URL
- * somebody is testing on — and none of those should need a commit and a redeploy.
+ * Configuration and not code, because the answer differs per deployment — the production
+ * domain `hub.lofty.au`, the `loftyprojectapp.vercel.app` name it also answers on, and a
+ * per-PR preview URL somebody is testing on — and none of those should need a commit and
+ * a redeploy.
  *
  * EMPTY IS STILL THE SAFE DEFAULT. With the secret unset the function refuses every
  * browser, so deploying it before deciding gets an endpoint that answers nothing. A

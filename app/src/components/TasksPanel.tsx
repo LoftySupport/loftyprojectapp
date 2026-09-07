@@ -3,6 +3,7 @@ import { Button, Text, TextField } from "@vibe/core";
 import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { useTeams } from "../data/useLookups";
+import { PersonSelect } from "../components/PersonSelect";
 import { Select } from "./Select";
 import { Problem } from "./Form";
 import { LoadProblem } from "./SearchNotices";
@@ -12,6 +13,8 @@ import {
 } from "../data/types";
 import "./ui.css";
 import "./processes.css";
+import { CollapsiblePanel } from "./CollapsiblePanel";
+import { CappedList } from "./CappedList";
 
 /**
  * What has to be done on this job or this project — tasks, their sub-tasks, and the
@@ -52,7 +55,6 @@ export function TasksPanel({
   const { data: lines } = useQuery<TaskChecklistItem[]>(
     r => r.listTaskChecklist({ jobId, projectId }), [], [reload, jobId, projectId]
   );
-  const { data: profiles } = useQuery(r => r.listProfiles(), []);
 
   const [draft, setDraft] = useState("");
   const [draftDue, setDraftDue] = useState("");
@@ -135,17 +137,14 @@ export function TasksPanel({
   const fmt = (iso: string) => new Date(iso.length === 10 ? iso + "T00:00:00" : iso).toLocaleDateString();
 
   return (
-    <section className="panel">
-      <div className="panel-head">
-        <Text type="text2" weight="bold">{title}</Text>
-        {counted.length > 0 && (
-          <Text type="text3" color="secondary">
-            {done} of {counted.length} done
-            {overdue > 0 && ` · ${overdue} overdue`}
-            {atRisk > 0 && ` · ${atRisk} at risk`}
-          </Text>
-        )}
-      </div>
+    <CollapsiblePanel
+      id="job-tasks"
+      title={title}
+      defaultOpen={false}
+      summary={counted.length > 0
+        ? <>{done} of {counted.length} done{overdue > 0 && ` · ${overdue} overdue`}{atRisk > 0 && ` · ${atRisk} at risk`}</>
+        : undefined}
+    >
 
       {error && <LoadProblem error={error} />}
       {problem && <Problem>{problem}</Problem>}
@@ -184,7 +183,7 @@ export function TasksPanel({
 
       {tasks.length > 0 && (
         <ul className="task-list">
-          {ordered.map(({ task: t, child }) => {
+          <CappedList items={ordered} noun="tasks">{({ task: t, child }) => {
             const taskLines = linesByTask.get(t.id) ?? [];
             const isOpen = open === t.id;
             const live = isTaskLive(t.status);
@@ -280,12 +279,11 @@ export function TasksPanel({
 
                 {can("user") && isOpen && (
                   <div className="task-more">
-                    <Select
+                    <PersonSelect
                       className="task-control"
-                      clearable
                       placeholder="Nobody"
                       aria-label={`Who is doing ${t.name}`}
-                      options={profiles.filter(p => p.active).map(p => ({ value: p.id, label: p.fullName }))}
+                      teamId={t.owningTeam}
                       value={t.assigneeId}
                       onChange={v => run(() => repo.updateTask(t.id, { assigneeId: v }))}
                     />
@@ -402,9 +400,9 @@ export function TasksPanel({
                 )}
               </li>
             );
-          })}
+          }}</CappedList>
         </ul>
       )}
-    </section>
+    </CollapsiblePanel>
   );
 }

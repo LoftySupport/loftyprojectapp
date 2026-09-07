@@ -36,8 +36,8 @@ optional password.
 **`SHARE_ALLOWED_ORIGINS` is a comma-separated list and there is no default.** With the
 secret unset every request is refused with *"Sharing is not switched on."*, so deploying
 before deciding gets an endpoint that answers nothing. Set it to the origins the app is
-actually served from — during the Netlify → Vercel migration that is both, plus any
-preview URL somebody is testing on.
+actually served from: `https://hub.lofty.au`, `https://loftyprojectapp.vercel.app`, and any
+per-PR preview URL somebody is testing on.
 
 The origin is checked twice on purpose. CORS headers tell a *browser* not to read a
 response; they do not stop the request being made or answered. So there is also a plain

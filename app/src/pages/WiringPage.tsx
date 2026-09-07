@@ -45,7 +45,7 @@ export function WiringPage() {
         <Text type="text2">
           {configured
             ? "Supabase is configured. Methods still marked stub fall through to empty results."
-            : "Supabase is not configured — set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in .env.local, or let Netlify's Supabase extension supply VITE_SUPABASE_DATABASE_URL and VITE_SUPABASE_ANON_KEY. Both spellings are read, at build time. Until then every method returns empty and the app renders its structure only."}
+            : "Supabase is not configured — set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in .env.local, or set them in the Vercel project. They are read at build time. Until then every method returns empty and the app renders its structure only."}
         </Text>
       </div>
 

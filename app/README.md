@@ -1,10 +1,10 @@
-# Lofty Job Oversight Board — React app
+# Lofty Hub — the React app
 
 The real build. React + [Vibe](https://vibe.monday.com) + Supabase.
 
-Lives in its own repo and deploys to its own Netlify site (`loftyprojectapp`), so the
-prototype at `loftyprojectboard.netlify.app` is never touched and nobody arrives here
-by accident.
+Deployed by **Vercel** to `hub.lofty.au`, from the repository root rather than from this
+directory — `../build.sh` assembles the app and the two prototypes into `dist/` together.
+See **Deploying** in [`../README.md`](../README.md).
 
 Structure first, data second. Every screen already renders its real chrome; tables come
 online one at a time behind a data seam, and nothing above the seam changes when they do.
@@ -62,28 +62,36 @@ VITE_SUPABASE_URL=https://<project>.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_<...>
 ```
 
-**Or let the Netlify Supabase extension supply them.** A site connected to Supabase with
-the Vite framework selected gets `VITE_SUPABASE_DATABASE_URL` and `VITE_SUPABASE_ANON_KEY`
-— the project URL and the legacy anon key, under the extension's names. The app reads
-either pair and prefers the two above when both are set, so adding a publishable key later
-supersedes the anon key without anyone deleting anything. `src/data/supabaseEnv.ts` is
-where that is decided.
+**These two names are the only ones read.** `src/data/supabaseEnv.ts` once carried a
+fallback to `VITE_SUPABASE_DATABASE_URL` and `VITE_SUPABASE_ANON_KEY`, the names a host
+integration provisioned when it was told the framework was something other than Vite. That
+fallback was removed on 6 September, after checking the live production bundle rather than
+assuming: both fell through to `void 0`, so neither was set and the branch was dead code.
+If an integration ever provisions names of its own again, tell it the framework is **Vite**
+rather than adding a third spelling.
 
-On Netlify these are project environment variables rather than a file, set on the
-`loftyprojectapp` project for all deploy contexts and all scopes. Vite reads them at
-build time and inlines them, so nothing needs them at runtime — but set them with all
-scopes anyway: writing one scoped to `builds` alone through the Netlify API reports
-success and silently fails to persist, which is a build that quietly produces an
-unconfigured bundle. Read the variable back after writing it.
+**On Vercel these are Environment Variables on the project, not a file.** The prefix is the
+FRAMEWORK's and not Supabase's, and this is the trap worth knowing about: Vercel's Supabase
+integration assumes Next.js unless told otherwise, so it provisions
+`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. `vite.config.ts` sets no
+`envPrefix`, so Vite's default of `VITE_` applies and a `NEXT_PUBLIC_*` variable is not
+merely wrong — it is absent from the bundle entirely. The build goes green, the site
+serves, and sign-in reports *Not configured* while the dashboard shows the variables
+sitting right there. Tell the integration the framework is **Vite**. See **Deploying** in
+[`../README.md`](../README.md) for the three ways out of it.
+
+Vite reads them at build time and inlines them, so nothing needs them at runtime — which
+also means **a deploy made before they were set keeps showing "Not configured" until it is
+built again.**
 
 The `VITE_` prefix is what makes them visible to client code, and it is also what makes
 them **public**: Vite writes the value straight into the JavaScript the browser
 downloads. Only ever the publishable key here. The service role key bypasses RLS
-entirely and must never be given a `VITE_` name — it is not in the Netlify environment at
-all, deliberately; see HANDOFF.md.
+entirely and must never be given a `VITE_` name — it is not in the deploy environment at
+all, deliberately; see [`../HANDOFF.md`](../HANDOFF.md).
 
-For the same reason, never mark these two as secret in Netlify. It fails any build whose
-output contains a secret value, and inlining them into the bundle is exactly what they
+For the same reason, never mark these two as **Sensitive** in Vercel. That is for values
+that must not reach the browser, and inlining these into the bundle is exactly what they
 are for.
 
 The migrations are already applied to the project (`gmekuqdjemrfuurxhuib`). Regenerate
@@ -127,7 +135,7 @@ Lofty's two hero colours sit in Vibe's `--primary-*` slots via `ThemeProvider`
 (`src/theme/loftyTheme.ts`). `ThemeProvider` only themes 11 primary/brand tokens, so
 everything else — the accessible orange sibling, the semantic inks — lives in
 `src/theme/tokens.css`. Those are the values with contrast decisions behind them; the
-numbers are in `../design-system-evaluation.md`.
+numbers are in `docs/history/design-system-evaluation.md`.
 
 Two rules that are easy to lose in a rewrite: **nothing below 12px**, and **`#f47e63`
 never carries text** (2.6:1 — use `--lofty-orange-strong`).
@@ -193,7 +201,7 @@ See `scripts/export-check.ts`.
 
 The prototype at `../index.html` is the reference for every screen. Ported so far: the
 shell, navigation, themes and the board's structure. Still to come — in the order set out
-in `../react-migration.md`: Table view, Board cards and drag-and-drop, the job panel,
+in `docs/history/react-migration.md`: Table view, Board cards and drag-and-drop, the job panel,
 Projects, Dashboard, Reports, Templates, Admin, Settings, then Gantt and Calendar.
 
 Gantt, Calendar and drag-and-drop have no Vibe component; they are the only genuinely

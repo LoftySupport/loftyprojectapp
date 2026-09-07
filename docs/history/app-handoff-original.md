@@ -1,7 +1,7 @@
 > ## Superseded
 >
 > This is the **first** handoff, written the day the app moved out of the prototype repo.
-> The root [`HANDOFF.md`](../HANDOFF.md) is the current one — `CLAUDE.md` sends people
+> The root [`HANDOFF.md`](../../HANDOFF.md) is the current one — `CLAUDE.md` sends people
 > there and this file is what they find instead if they open the nearest one. It is wrong
 > on almost everything a reader would act on:
 >
@@ -75,7 +75,7 @@ All documented with the numbers behind them in `design-system-evaluation.md`:
 
 ## Next step
 
-Phase 1 in `../react-migration.md`: stand up Supabase — schema, auth via the Microsoft
+Phase 1 in `react-migration.md`: stand up Supabase — schema, auth via the Microsoft
 provider, RLS with the scope model — before porting any more UI. The trap to get right
 first is `team_hierarchy`: a recursive CTE inside an RLS policy runs per row unless it is
 wrapped in a `stable security definer` function.

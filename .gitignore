@@ -3,9 +3,18 @@ dist
 .env
 .env.local
 .env*.local
-.netlify
 
 # Impeccable's copies for other tools, and Claude's local-only hook settings
-.agents/
 .codex/
 .claude/settings.local.json
+
+# .agents/ holds Impeccable's copies for other tools — EXCEPT .agents/skills/, which is
+# checked in: .claude/skills/supabase and .claude/skills/supabase-postgres-best-practices
+# are symlinks into it, so a clone that ignored it would get two dangling links.
+# skills-lock.json records what those two are pinned to.
+#
+# `.agents/*` and not `.agents/`: git cannot re-include anything inside an excluded
+# DIRECTORY, so the trailing-slash form would defeat the negation below silently. Tested
+# with an untracked probe file, not assumed.
+.agents/*
+!.agents/skills/

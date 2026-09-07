@@ -1,0 +1,154 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A second push to the same branch cancels the run still going for the first one. A PR
+# that gets three pushes in five minutes should cost one green tick, not three queues.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: lint · typecheck · build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      # `npm ci` and not `npm install`: it installs the lockfile as written and fails when
+      # package.json and the lockfile disagree, which is the disagreement worth catching.
+      - run: npm ci
+        working-directory: app
+
+      - run: npm run lint
+        working-directory: app
+
+      - run: npm run typecheck
+        working-directory: app
+
+      - run: npm run build
+        working-directory: app
+
+      # data-dictionary.md is generated from src/data/dictionary.ts. Regenerating it and
+      # finding a diff means somebody edited the generated file, or changed the array and
+      # did not regenerate — the two failures the "never edit it by hand" rule exists for.
+      - name: the data dictionary matches dictionary.ts
+        run: |
+          npm run dictionary --prefix app
+          git diff --exit-code -- docs/schema/data-dictionary.md
+
+      # ThemeProvider needs the brand hexes as literals, so loftyTheme.ts repeats eight of
+      # them. This is the guard on that duplication: sync the design system, forget this
+      # file, and Vibe's wrapper paints last month's brand while portals paint the new one.
+      - name: loftyTheme.ts matches the design-system mirror
+        run: npm run check:design-tokens
+        working-directory: app
+
+      # The palette moved from green-primary to orange-primary on 6 September, and white on
+      # Crisp Orange is 2.6:1. This turns DESIGN.md's contrast numbers into assertions so
+      # that "the button text should be white, it looks cleaner" fails here and not in an
+      # accessibility audit six months on.
+      - name: the contrast claims in DESIGN.md hold
+        run: npm run check:contrast
+        working-directory: app
+
+      # Four lines of slicing, every one of them an off-by-one waiting to happen — and it
+      # could not be proved through the app, because the responsive stub carries no comments
+      # and no tasks, so every capped list rendered zero rows and looked like a pass.
+      - name: lists longer than five offer the rest
+        run: npm run check:capped-list
+        working-directory: app
+
+  docs:
+    name: documentation links resolve
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - run: node scripts/check-links.mjs
+
+  # CHANGELOG.md, the ticks in ROADMAP.md and the generated blocks in README.md and
+  # HANDOFF.md come from commit trailers. The post-commit hook regenerates them locally,
+  # but a hook is opt-in: a commit made without it (7 September, this very check's own
+  # PR) lands with the four files stale and nothing notices. Same shape as the dictionary
+  # step above — regenerate, and a difference is somebody who edited a generated file or
+  # forgot to run the generator.
+  #
+  # Pull requests only, on the PR's OWN head. The generator walks `git log`, so on the
+  # merge ref it would see main's newer trailers and fail a branch for entries it never
+  # had; and after a merge, main carries the last-merged branch's file, which lacks any
+  # PR merged in between until the next commit's hook repairs it. That drift is the
+  # hook's to fix, not a reason to fail main.
+  generated:
+    name: changelog, roadmap, README and handoff are current
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          # The whole history: every trailer ever written is an input.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: node scripts/changelog.mjs --check
+
+  # Does every page still fit a phone? Two assertions, both objective: the page does not
+  # scroll sideways, and nothing tappable is under 24x24. It caught a real regression on
+  # 7 September — a link written into a sentence was 16px tall on all five sizes — and
+  # only because somebody ran it by hand. Against the BUILT app, with the network blocked,
+  # so it measures the CSS that ships and needs nothing off the runner. About three
+  # minutes; see app/scripts/responsive.mjs for why it is not the dev server.
+  responsive:
+    name: every page fits a phone and a tablet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+        working-directory: app
+      # Only Chromium, and the version the lockfile's Playwright expects — `install`
+      # without a browser name pulls three.
+      - run: npx playwright install --with-deps chromium
+        working-directory: app
+      - run: npm run responsive
+        working-directory: app
+
+  deploy:
+    name: the deploy assembles
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      # What Vercel runs, run here. A build that only ever succeeds on Vercel is a build
+      # nobody can debug: this proves build.sh still finds prototypes/ and app/dist.
+      - run: ./build.sh
+
+      - name: every file the deploy promises is in dist/
+        run: |
+          for f in index.html binding-template.html prototype.html \
+                   lofty_logo_orange.png faivcon.png; do
+            test -f "dist/$f" || { echo "missing from dist/: $f"; exit 1; }
+          done
+          echo "dist/ carries all five."

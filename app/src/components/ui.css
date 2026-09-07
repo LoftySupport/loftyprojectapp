@@ -198,6 +198,98 @@
   margin-bottom: var(--space-12);
 }
 
+/* ---- a panel whose heading collapses it ----------------------------------
+   See CollapsiblePanel.tsx for why. The heading is a real <button> filling the
+   panel's width, so the whole row is the hit target rather than a 12px chevron —
+   at 460px in a docked drawer, a small target is the difference between using
+   this and not. */
+.panel-head-h { margin: 0; font: inherit; }
+.panel-toggle {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-8);
+  width: 100%;
+  /* Eats the panel's own padding so the row is edge to edge and the hit target
+     matches what looks clickable. Without this the button stops 16px short on
+     each side and the gap between two closed panels is dead space. */
+  margin: calc(var(--space-16) * -1);
+  padding: var(--space-16);
+  background: none;
+  border: 0;
+  border-radius: var(--border-radius-medium);
+  text-align: start;
+  cursor: pointer;
+  color: inherit;
+  transition: background-color var(--motion-productive-medium) var(--motion-timing-transition);
+}
+.panel-toggle:hover { background: var(--primary-background-hover-color); }
+.panel-toggle:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.panel-toggle-title { flex: 1 1 auto; min-width: 0; }
+/* Baseline-aligned with the title, and it wraps under it rather than truncating —
+   the same reasoning as .panel-head: half a count is worse than two lines. */
+.panel-toggle-summary {
+  flex: 0 1 auto;
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+}
+.panel-toggle-chevron {
+  display: inline-flex;
+  flex: 0 0 auto;
+  /* Nudged to sit on the text baseline rather than the line box's top. */
+  align-self: center;
+  color: var(--icon-color);
+  transition: transform var(--motion-productive-medium) var(--motion-timing-transition);
+}
+.panel-toggle[aria-expanded="true"] .panel-toggle-chevron { transform: rotate(90deg); }
+/* Collapse all / Expand all, at the top of the drawer body. Quiet by default — it is a
+   tool, not a heading — and right-aligned so it reads as belonging to the list below it
+   rather than to the record above. */
+.drawer-bulk {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-8);
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+}
+.drawer-bulk-btn {
+  background: none;
+  border: 0;
+  padding: var(--space-4) var(--space-8);
+  border-radius: var(--border-radius-small);
+  font: inherit;
+  color: var(--link-color);
+  cursor: pointer;
+}
+.drawer-bulk-btn:hover { background: var(--primary-background-hover-color); text-decoration: underline; }
+.drawer-bulk-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* "Show all (N)" — see CappedList.tsx. Same quiet treatment as the bulk controls: it is
+   the last row of a list, not a call to action competing with the content above it. */
+.capped-more {
+  display: block;
+  width: 100%;
+  margin-top: var(--space-8);
+  padding: var(--space-8);
+  background: none;
+  border: 1px dashed var(--layout-border-color);
+  border-radius: var(--border-radius-small);
+  font: var(--font-text3-medium);
+  color: var(--link-color);
+  cursor: pointer;
+}
+.capped-more:hover { background: var(--primary-background-hover-color); border-style: solid; }
+.capped-more:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+/* Restores the gap the negative margin above removed, but only when there is a body
+   to separate from. A closed panel is just its heading and needs no bottom gap. */
+.panel-collapsible-body { margin-top: var(--space-16); padding-top: var(--space-16); border-top: 1px solid var(--layout-border-color); }
+/* A closed panel is a single row, so it should not carry the visual weight of a card
+   with content in it. */
+.panel-collapsible:has(> .panel-head-h > [aria-expanded="false"]) { padding-bottom: var(--space-16); }
+@media (prefers-reduced-motion: reduce) {
+  .panel-toggle, .panel-toggle-chevron { transition: none; }
+}
+
 .stack { display: flex; flex-direction: column; gap: var(--space-16); }
 .stack-tight { display: flex; flex-direction: column; gap: var(--space-8); }
 .muted { color: var(--secondary-text-color); }
@@ -250,6 +342,14 @@
   margin-bottom: var(--space-12);
 }
 .board-column-empty { padding: var(--space-16) 0; text-align: center; }
+/* Cards were direct siblings with no gap, so they touched and read as one striped block
+   instead of as separate records — Amber, 7 September. The cards are block-level, so
+   adjacent margins COLLAPSE: the column head and .drag-hint already carry a 12px
+   margin-bottom, and this margin-top collapses against them to 12px rather than stacking
+   to 24px. One rule therefore spaces every board — Jobs and Projects both render their
+   cards as direct children of .board-column — without touching either page's markup or
+   double-spacing the head. */
+.board-column > * + * { margin-top: var(--space-12); }
 
 /* The board's scrollbar, moved to the bottom of the screen.
    ---------------------------------------------------------------------------
@@ -1156,6 +1256,30 @@ code { overflow-wrap: anywhere; }
 [class*="circleText"] { background: var(--primary-color) !important; }
 [class*="circleText"] [class*="contentText"] { color: var(--text-color-on-primary) !important; }
 
+/* Vibe's tooltip eats the first letter of its own label.
+   Measured on the collapsed nav rail, where the tooltip IS the label and losing a
+   character makes it unreadable: "Projects" rendered as "rojects" and "Expand
+   navigation" as "xpand navigation".
+
+   The cause is paint order, not overflow — nothing clips the tooltip. Vibe builds it as
+
+       <div class="contentComponent right_…">   padding 6px
+         <div class="tooltip_… dark_…"><div class="content_…">Projects</div></div>
+         <div class="arrow_… dark_…" data-placement="right">        absolute, 12x12, rot 45deg
+
+   The arrow is a 12px square rotated 45°, so it measures 17px across and spans
+   x 62.5→79.5 while the text starts at x 70. Its inner half is MEANT to be hidden
+   behind the bubble, leaving only the pointer outside — but it is a later sibling with
+   no z-index, so it paints on top instead, in the same #323338 as the bubble. The first
+   glyph is not clipped or shifted; it is painted over in its own background colour.
+
+   So the fix is z-order, not geometry: lift the bubble above the arrow. Nothing moves,
+   the pointer still points, and the arrow's inner half goes back behind the bubble where
+   it was always supposed to be. Applied to every placement, because the same overlap
+   happens on each side — right is simply where this app puts a tooltip that has to be
+   read rather than glanced at. */
+[class*="contentComponent"] > [class*="tooltip_"] { position: relative; z-index: 1; }
+
 /* ---- the inline add row --------------------------------------------------
    "+ New project" as the last row of the table, monday-style. Only possible since
    0037: a project may sit at a locality, which is five inputs rather than seven.
@@ -1776,7 +1900,15 @@ code { overflow-wrap: anywhere; }
   color: inherit;
   cursor: pointer;
 }
-.notif-bell-trigger:hover { background: var(--primary-selected-color); }
+/* The hover reads from the bar it is on. This used to be --primary-selected-color, the
+   peach selection tint (#fae4d5) — which is a LIGHT-surface token, and the header is dark
+   in every theme, so hovering the bell, the Ask button or the cog put a pale pink patch on
+   a near-black bar. Amber, 7 September: "remove the pale pink hover over icons from above".
+   Every other control on that bar already uses a white alpha (.app-nav-item,
+   .app-menu-button, .user-menu-trigger, .app-side-toggle), so the header now publishes
+   that value as --header-control-hover and this reads it. The fallback keeps the class
+   usable on a light surface if it is ever reused off the header. */
+.notif-bell-trigger:hover { background: var(--header-control-hover, var(--primary-background-hover-color)); }
 .notif-panel { width: min(400px, 80vw); padding: var(--space-4); }
 .notif-panel-head {
   display: flex;
@@ -2464,3 +2596,110 @@ code { overflow-wrap: anywhere; }
   text-transform: uppercase;
   color: var(--secondary-text-color);
 }
+
+/* ---- the typeahead --------------------------------------------------------
+   `TypeaheadSelect`: the suburb field's list, for any closed set. It borrows the
+   suburb classes for the list and the rows so the two cannot drift apart, and adds
+   only what the suburb field never needed — a group heading, an empty line, a ×. */
+.typeahead { position: relative; min-width: 0; }
+.typeahead-list { z-index: 6; }
+.typeahead-group {
+  padding: var(--space-8) var(--space-8) var(--space-4);
+  font: var(--font-text3-medium);
+  color: var(--secondary-text-color);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.typeahead li + li .typeahead-group { border-top: 1px solid var(--layout-border-color); margin-top: var(--space-4); }
+.typeahead-empty { padding: var(--space-8); font: var(--font-text3-normal); color: var(--secondary-text-color); }
+/* Name first and whole; the team gives way. "Sam Adams" must not wrap to two lines
+   because "Design, Scheduling" sits beside it. */
+.typeahead-list .suburb-suggestion > span:first-child { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.typeahead-sub { flex: 0 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
+.typeahead-clear {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--border-radius-small);
+  background: none;
+  color: var(--secondary-text-color);
+  font: var(--font-text1-normal);
+  line-height: 1;
+  cursor: pointer;
+}
+.typeahead-clear:hover { background: var(--primary-background-hover-color); color: var(--primary-text-color); }
+/* Room for the × so the last letters of a long name are not under it. */
+.typeahead:has(.typeahead-clear) input { padding-right: 32px; }
+
+/* ---- undo / redo in the header -------------------------------------------- */
+.undo-bar { display: inline-flex; align-items: center; gap: var(--space-4); }
+.app-header .undo-btn, .app-header .undo-btn * { color: var(--fixed-light-color); }
+.undo-btn:disabled { opacity: 0.4; cursor: default; }
+.undo-btn:disabled:hover { background: transparent; }
+/* On a phone the header is the search box and four icons already; two more arrows left
+   the search 70px wide. Ctrl+Z has no phone equivalent either way, so below 600px the
+   pair steps aside and the toasts' "Undone" still names what the keyboard cannot. */
+@media (max-width: 600px) { .undo-bar { display: none; } }
+
+/* A link inside a sentence that still meets the 24px target floor (WCAG 2.2, 2.5.8) —
+   the padding grows the box and the negative margin gives the line its height back. */
+.text-link { display: inline-block; padding: 4px 0; margin: -4px 0; }
+
+/* ---- user settings: two columns ------------------------------------------
+   Your details and where you land stacked on the left; the notifications table, which
+   is the wide thing on the page, beside them. One column below 900px. */
+.settings-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+  gap: var(--space-16);
+  align-items: start;
+}
+.settings-grid > * { min-width: 0; }
+.settings-you { display: flex; flex-direction: column; gap: var(--space-16); min-width: 0; }
+@media (max-width: 900px) {
+  .settings-grid { grid-template-columns: minmax(0, 1fr); }
+}
+/* The notifications matrix fits its column: cells wrap, the two timing controls stack,
+   and the per-cell width cap comes off so the "When" column can take what is left. */
+.notif-table { width: 100%; }
+.notif-table th { white-space: normal; }
+.notif-table td { max-width: none; }
+.notif-timing { display: flex; flex-direction: column; gap: var(--space-4); min-width: 150px; }
+
+/* ---- the users table, editing --------------------------------------------- */
+.row-editing-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  flex-wrap: wrap;
+  /* Pinned to the left edge of whatever is in view. The editing row is wider than the
+     table's wrapper, so the wrapper scrolls — and Save must not scroll away with it. */
+  position: sticky;
+  left: 0;
+  width: fit-content;
+  max-width: 100%;
+}
+.notif-table .notif-timing { min-width: 130px; }
+.notif-table td { padding-left: var(--space-8); padding-right: var(--space-8); }
+/* The actions under a person's details in the edit panel. */
+.user-actions { display: flex; gap: var(--space-8); flex-wrap: wrap; margin-top: var(--space-8); }
+
+/* ---- the toolbar's two rows (7 September) --------------------------------
+   The Group-by fields are filters in the first row, always there; everything else is
+   one "Advanced" row that opens whole rather than one chip at a time. */
+.toolbar-advanced {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  flex-wrap: wrap;
+  padding-top: var(--space-8);
+  border-top: 1px dashed var(--layout-border-color);
+}
+.toolbar-text { width: 160px; }
+.toolbar-text input { font-variant-numeric: tabular-nums; }
+.toolbar-advanced-btn.is-on { background: var(--primary-selected-color); }

@@ -1,5 +1,5 @@
 /**
- * Writes data-dictionary.md from src/data/dictionary.ts.
+ * Writes docs/schema/data-dictionary.md from src/data/dictionary.ts.
  *
  * The file is generated rather than hand-maintained so it cannot drift from the page —
  * there is one array, and both read it. Run `npm run dictionary` after editing the
@@ -13,7 +13,7 @@ import ts from "typescript";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..", "..");
-const out = resolve(repoRoot, "data-dictionary.md");
+const out = resolve(repoRoot, "docs/schema/data-dictionary.md");
 const srcPath = resolve(here, "..", "src", "data", "dictionary.ts");
 
 // Transpile with TypeScript itself rather than stripping annotations by regex — the
@@ -130,4 +130,4 @@ for (const table of DICTIONARY_TABLES) {
 }
 
 writeFileSync(out, lines.join("\n"));
-console.log(`data-dictionary.md — ${DICTIONARY.length} properties, ${DICTIONARY_TABLES.length} tables`);
+console.log(`docs/schema/data-dictionary.md — ${DICTIONARY.length} properties, ${DICTIONARY_TABLES.length} tables`);

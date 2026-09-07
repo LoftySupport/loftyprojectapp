@@ -97,7 +97,7 @@ export function SharedDocumentPage() {
   }, []);
 
   useEffect(() => {
-    if (state.kind === "ready" && state.title) document.title = `${state.title} — Lofty`;
+    if (state.kind === "ready" && state.title) document.title = `${state.title} — Lofty Hub`;
   }, [state]);
 
   if (state.kind === "loading") {

@@ -240,10 +240,10 @@ const RECORD_ROUTES = new Map([
 /**
  * Speed Insights, and only where its endpoint exists.
  *
- * Vercel is the host (Amber, 4 September: "it is using vercel now"), and it serves
- * `/_vercel/speed-insights/script.js`; Netlify does not. The gate stays anyway — the
- * Netlify configuration is still in the repository, so a build from it is still possible,
- * and mounting this there would put a 404 in the console and collect nothing for it.
+ * Vercel is the host, and it serves `/_vercel/speed-insights/script.js`. The gate is not
+ * about which host — it is about whether that endpoint exists: `npm run dev` and
+ * `npm run preview` do not serve it, and mounting this there would put a 404 in the
+ * console and collect nothing for it.
  *
  * The full URL reaches Vercel either way — it is the host, and its access log already
  * has every path — so `route` is about the dashboard being readable, not about holding
@@ -270,6 +270,12 @@ export default function App() {
     // off the same class, so mirror it on <body> for anything outside that tree.
     document.body.classList.toggle("dark-app-theme", theme !== "light");
     document.body.classList.toggle("black-app-theme", theme === "black");
+    // And the design system's own switch, on <html>: its dark.css declares the whole
+    // --lofty-dark-* palette under [data-theme="dark"], and tokens.css references those
+    // names. Without this stamp they are undefined and the dark theme silently falls back
+    // to the light values. Body classes cannot do this job on their own — they win the
+    // specificity fight against Vibe, but they are not where the mirror declares its palette.
+    document.documentElement.dataset.theme = theme === "light" ? "light" : "dark";
   }, [theme]);
 
   return (

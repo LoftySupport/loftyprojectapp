@@ -1,28 +1,36 @@
 # Handoff
 
-Everything a new session needs to pick this up. Read this first, then `schema-plan.md`.
+Everything a new session needs to pick this up. Read this first, then `docs/schema/schema-plan.md`.
 
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 134 changes since then —
-- Fixed: The privacy policy named Netlify as the host serving the app; Vercel serves it
-- Fixed: The changelog generator no longer reports "Changelog: skip" as a mistake, so its check can pass again
-- Added: A table of contents block, listing the document's section headings in order
-- Added: A block can be pointed at particular jobs, projects or teams instead of covering everything
-- Added: Long dropdowns in a block's settings narrow as you type
-- …and 129 more.
+Unreleased: 165 changes since then —
+- Changed: The Jobs and Projects filters are the same fields as Group by, always on the bar, with everything else in one Advanced row instead of chips added one at a time
+- Added: A job or project number can be typed straight into the filters
+- Added: Any property, including the project properties a job inherits, can be shown as a column on the Jobs and Projects tables
+- Changed: On the Projects board, Stage now filters by the project's own phase and a separate Job stage filter finds projects with a job in that stage
+- Changed: Sections in the job panel fold away, and Collapse all shuts the lot at once
+- …and 160 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
 
-**Phase A is done and applied, and so is the property-and-process half of Phase C (`0076`–`0079`, 1 September).
-The spine review is done too — Amber, 4 September — so the one thing that had to happen before
-any data was loaded has happened.
+**Phase A is done and applied, and so is the property-and-process half of Phase C (`0076`–`0079`, 1 September).**
 
-Next job: [Phase B, the import](#next-phase-b-the-import), and nothing is in front of it now.**
-It starts with a person-checked spreadsheet of the ~200 live jobs, grouped into projects and
-sequenced by lot; the order of work is set out in that section.
+**Phase B — the import — is CLOSED, 7 September, without ever running.** Amber: *"i don't
+need any jobs imported from spreadsheets. all jobs that need to be created from now on will
+be created from the projects in the app"*, and *"everything that is in supabase now is
+correct"*. Jobs and projects are created in the app, from the project, by the people who
+own them. There is no spreadsheet load coming, so the seven colliding sites that stopped
+the load on 3 September stopped mattering rather than getting resolved.
+
+**Nothing was removed from the database, deliberately.** `import_staging_jobs` and its 801
+rows, `import_spine()`, `unimport_spine()` and `private.import_team_for_person()` are all
+still there, inert. Amber: *"if I need to import other areas I will let you know as
+properties may change between now and then"* — so the machinery has a plausible future job
+even though jobs and projects are not it. It never ran: the load rolled back whole on its
+first write, so no project, job or address in the app came from it.
 
 ### Two standing decisions, so nobody spends an afternoon reopening them
 
@@ -42,7 +50,84 @@ Project Settings → Edge Functions → Secrets and the Share button starts prod
 open. Until then it produces links that do not, so it is worth doing before anybody is shown
 the feature.
 
-Last updated: 2026-09-04.
+Last updated: 2026-09-07.
+
+---
+
+## Session of 2026-09-07 — eight bugs from Amber's first week on it
+
+Amber's list, in her order, and what each turned out to be. None of it touched the schema —
+every fix is in `app/src`, and the one repository method added (`setFeedbackKind`) writes a
+column that already existed under a policy that already allowed it.
+
+| she said | it was | now |
+|---|---|---|
+| "new job creation not working on project tab" | The split-into-jobs panel rendered BEFORE the project's panel in the tree; same z-index, so it opened behind the project. Escape also closed both. | Rendered after, so it stacks on top; `SidePanel` keeps a stack and only the topmost hears Escape. "Jobs on this project" is the first section of the drawer, **+ Create jobs** in its head. A SiteBook number can be typed per lot at creation (the column was already there as "old job number"; it is named for what people call it). |
+| "all drop downs alphabetical … typing a name auto selects … team first, then people with their team" | `Select` sorted; `MultiSelect` did not. The people pickers were Vibe dropdowns — filter, but no auto-select, no team. | `MultiSelect` sorts. New `TypeaheadSelect` (the suburb field's shape for any closed list) and `PersonSelect` on it: every name with their team beside it; the record's own team first under its name, then "Other teams"; one unambiguous match is taken on Tab or on leaving the field. Used for every assignee/owner/person control. |
+| "sidebar text not persisting" | The report panel closes on any click outside it — including the nav — and unmounted the form. | `FeedbackProvider` owns the draft (kind, title, detail, requested-by in `sessionStorage`; files in memory). Sending clears it. |
+| "updates page is duplicated with the bugs/ideas/roadmap/changelog pages in admin" | Four Admin tabs rendering Updates' components and a second triage table. | Gone, with `FeedbackList.tsx`. `/admin/{bugs,ideas,roadmap,changelog}` redirect to the matching Updates view. Admin's head says where they went. |
+| "user settings notifications cut off" | A six-column table in one third of an auto-fit grid. | Two-column page: details with "where you land" beneath on the left, notifications beside. The toggles lost their "Off"/"On" words, which were a third of the table's width. |
+| "add the undo and redo bar to the top navigation" | There was no undo anywhere. | `UndoProvider` + two header arrows, Ctrl/⌘+Z and Shift+Z. A screen registers a step with its inverse at the moment it writes; the drawer's team/assignee/title/SiteBook number, a project's team/assignee, property values, inline user edits, restore/let-in, and a request's stage/phase/kind do. Lifecycle moves and deactivation do not — the first is forwards-only by rule, the second confirms. Hidden below 600px. |
+| "users settings row cut off, can't edit or save; name should open the side panel" | Save sat in the last column of a row wider than the screen; the panel held a stale `Profile` object. | Save/Cancel in the spanning row beneath, sticky to the left edge. The name opens the edit panel, with View activity / Deactivate / Hold at gate under the form. The panel resolves the person by id from the latest read, so an inline save shows in it. |
+| "can't change an idea to a bug in updates" | No control wrote `feedback_kind`. | "Filed as" in the request panel, admin+, under the existing UPDATE policy; undoable. |
+
+**Seen rendered this time**, against a fixture build (the responsive harness's signed-in stub
+with six people and three notification types added): Settings, Admin → Users reading and
+editing, the person panel, the project drawer with the split panel over it, the assignee
+typeahead grouped by team, the request panel with "Filed as", and the draft surviving a page
+change. Not seen: a real write going through, since there is no database in the harness — the
+undo steps were exercised only as far as the toast.
+
+**Undo moved to the repository seam the same evening.** Amber, an hour after the bar shipped:
+*"the undo and redo doesn't work when i made an update it didn't let me undo it"*. The first
+version registered a step at six call sites; the app has fifty places that write, and her edit
+was one of the forty-four that recorded nothing. `undoableRepository.ts` now wraps every
+patch-shaped write — read the record, write the patch, record the inverse — and
+`DataProvider` bumps a version every `useQuery` depends on, so the screen re-reads after an
+undo without knowing which screen it is. Lifecycle moves, creates and deletes stay out on
+purpose. Seen working in the fixture harness: assign → undo → redo → Ctrl+Z, with the writes
+logged to prove the inverse carried the OLD value (the first cut built it after the write and
+re-applied the new one; the harness caught it).
+
+**The toolbar's filters are the Group-by fields, and the rest is one Advanced row.** Amber,
+later the same day: *"filters on jobs and projects should be same as the group ones and then you
+can add in the extra detail like an advanced not clicking a million times to get new filters up.
+you also need to be able to enter a job number and columns should be able to add any property in
+the job (including project properties as they are inherited by the job) to the column."* Three
+changes, all in `Toolbar`, `filtering.ts`, `boardModel.ts` and the two pages:
+
+- **Filters.** The chips and "+ Add filter" are gone. Jobs shows Stage, Team, Status and Process
+  from the start; Projects shows Stage, Job stage, Type and Status. One **Advanced** button opens
+  a second row with every other filter at once — number, project, type, moved date, process
+  health, property, recorded — and carries a count when one of them is narrowing the board while
+  folded. A filter reading "Any" is not in the URL.
+- **Job stage is its own filter on Projects.** The projects board groups by the project's phase
+  and by its jobs' stages, so it now filters by both: `?stage=` is the project's own
+  (`project_stage`, 0039) and `?jobstage=` is "has a job in this stage", which is what `?stage=`
+  used to mean there. A saved projects view carrying `?stage=` changes meaning accordingly.
+- **A number box.** "Job or project number", prefix-matched against the job number, the old
+  SiteBook number and the project number — `1042` is every job on the project, `1042-003` is one.
+- **Property columns.** `BoardJob.properties` and `BoardProject.properties` carry every recorded
+  value the reader may see (the job's own over its project's, exactly as the drawer reads
+  through), and `propertyColumnDefs` turns every active readable definition into a column, off by
+  default, labelled "(project)" on the jobs table where the two scopes mix. Cells are
+  `formatValue`, the drawer's and the reports' sentence; figures and dates sort as what they are.
+
+**Two checks CI now runs that it did not** (Amber, same day: *"should there be a check for
+this"*): the responsive sweep, because it caught the 16px link and nobody but a person at a
+terminal would have; and `changelog.mjs --check` on every PR's own head, because this PR's
+first commit landed with the four generated files stale and only the post-commit hook —
+which is opt-in — noticed. The check runs on pull requests only; see the comment in
+`.github/workflows/ci.yml` for why a red `main` after a merge is the hook's to repair.
+
+**Open, and hers to decide:**
+
+- The undo bar is hidden below 600px to keep the phone header usable. If phone undo matters,
+  it needs a home — a long-press on the toast is the obvious one.
+- `PersonSelect` lists active people only. A job already assigned to somebody deactivated still
+  shows their name read-only; whether the picker should offer them too was not asked.
+- The old `Admin → Bugs/Ideas` export (page, error, screenshot count in one file) is now the
+  Requests table's export, which carries the same columns except the screenshot count.
 
 ---
 
@@ -59,17 +144,30 @@ changelog/bugs and everything else in setup that isn't in the manager settings".
 people. It carries the before/after of the chrome, the full tab-by-tab table with each write
 floor, the same rule seen as Deanna (manager) and as Ketan (admin), the SLA column-split
 diagram, and the three questions still open at the end. The decision log entry is
-`schema-plan.md` → *4 September — Settings is the managers', Admin is the administrators'*.
+`docs/schema/schema-plan.md` → *4 September — Settings is the managers', Admin is the administrators'*.
 
 ### The cut is by who asks, not by subject
 
 | Settings — `/setup`, manager+ | Admin — `/admin`, admin+ |
 |---|---|
-| Properties, Processes, Contacts, Maintenance, Automations | Users, Teams, Permissions, Dictionary, Wiring, Bugs, Ideas, Roadmap, Changelog |
+| Properties, Processes, Contacts, Maintenance, Automations | Users, Teams, Permissions, Dictionary, Wiring, ~~Bugs, Ideas, Roadmap, Changelog~~ |
 
-Ten tabs became five and nine. Roadmap and Changelog on Admin are the **same components**
-Updates renders, imported rather than copied — Updates stays in the footer for everybody,
-because `0060`'s whole point is that the people who filed a request can read the queue.
+Ten tabs became five and nine, and on 7 September five and **five**. Roadmap and Changelog on
+Admin were the **same components** Updates renders, imported rather than copied — Amber:
+*"there is duplication on footer and other page"*, so they came out (#48). Bugs and Ideas
+followed the same day, in a second session — *"the updates page is duplicated with the
+bugs/ideas/roadmap/changelog pages in admin. this only needs to be one page"*. Being one
+component underneath was a fact about the code, not about the experience: two doors to
+identical rows is still a thing a person has to check. All four old addresses forward to the
+matching view of Updates, because those URLs were shareable and somebody has shared them.
+Updates itself stays in the footer for everybody, because `0060`'s whole point is that the
+people who filed a request can read the queue.
+
+**The bug manager is still admin's**, which is the other sentence from that day — *"only
+admins and super admin get to see the bug manager"*. The manager is the controls: stage,
+phase, kind, merge, planning, and those are `can("admin")` and superadmin inside Updates
+exactly as they were on the Admin tabs. Filing is not triage — `ReportForm` has no permission
+gate, so anybody with app access including a viewer can send one.
 
 ### 0096 is the half that stops the rename being decoration
 
@@ -111,7 +209,7 @@ placement, the rail with eight items, and the two tab strips have not been seen 
 
 Amber asked for the report builder from `amberbeaumont/modules` as a **Tools** section
 with a **Template Builder** tab, then set out what it has to do. The spec is in
-`schema-plan.md` → *4 September*, quoted rather than paraphrased, because it is the
+`docs/schema/schema-plan.md` → *4 September*, quoted rather than paraphrased, because it is the
 design.
 
 **One correction worth carrying forward: `amberbeaumont/modules` is a generic template
@@ -222,7 +320,9 @@ palette, so they cannot drift apart again.
 - **Nothing has been saved from a browser to the real database.** The stores are proved
   through the repository seam and the policies are proved in `verify/`; the round trip
   between them is not.
-- **Every data block is in its empty state until Phase B lands.** Correct, not broken.
+- **Every data block is in its empty state until real jobs exist.** Correct, not broken. They
+  now arrive as people create them in the app, a project at a time, rather than all at once
+  from an import — so the empty states matter for longer and are seen by more people.
 
 ---
 
@@ -300,10 +400,11 @@ behind signed URLs; the file carries the count and says where to look.
   a re-parse of the bytes (and the `.docx` is recognised by `file` as a Word 2007+ document
   with every XML part well-formed), which is a different claim from "Excel and Word on
   Amber's laptop are happy". First thing to do with a real machine.
-- **The empty tables are the ones that will look wrong first.** With Phase B unimported,
-  most screens have nothing to export and the button is disabled. The shapes to check after
-  the import are the grouped exports on Jobs (a sheet per stage, empty groups dropped) and
-  the job report's four sections.
+- **The empty tables are the ones that will look wrong first.** With no jobs yet, most
+  screens have nothing to export and the button is disabled. The shapes to check once real
+  jobs exist are the grouped exports on Jobs (a sheet per stage, empty groups dropped) and
+  the job report's four sections. There is no longer a single import moment to check them
+  after, so check them as soon as the first project has a few jobs in it.
 
 ---
 
@@ -416,7 +517,7 @@ Admin → Users, Updates.
 | Admin → Permissions | permission, capability | — |
 | Admin → Dictionary | name, table, column, status | table, status |
 | Admin → Wiring | method, table, wired | wired / not wired |
-| Updates → Bugs / Ideas (`FeedbackList`) | title, stage, votes, comments, reported | stage, kind, reporter |
+| Updates → Requests, table view | title, kind, stage, phase, votes, from, moved — sorts already | stage, kind, reporter |
 | Reports | whatever each report's table holds | the report's own controls |
 
 The date-range picker is the one piece with no shared component yet: Jobs and Projects
@@ -545,7 +646,7 @@ numbered 1001–1121, sequences `01`…), `Estimating & Scheduling Jobs to Site 
 and `Sitebook Schedule 09.07.xlsx`. The first is the Phase B source and is checked in as
 `app/supabase/import/lofty-jobs-grouped-by-project-2026-08-31.xlsx`. What profiling it
 found, and what the import cannot decide for itself, is under *What needs Amber* below and,
-in full, in `schema-plan.md`, *Phase B — what the workbook forces* (the import branch,
+in full, in `docs/schema/schema-plan.md`, *Phase B — what the workbook forces* (the import branch,
 `0086`–`0087`).
 
 ### What needs Amber
@@ -727,1385 +828,11 @@ database** (see *The platform layer* below).
   repositories (above) is the second thing that turns on the same switch, if it recurs.
 
 ---
-
-## Session of 2026-09-01, later — the workbook lands: properties, processes, and the locks
-
-Amber's one message, with `Import_process_and_properties.xlsx` attached: add the properties
-and processes, link them, make them editable at job and project level, security levels per
-property, restricted opt-in, push project properties to jobs, processes editable by managers,
-rename the fourth phase to Maintenance, filter and report on it all, mobile first.
-
-**`0076`–`0079` are applied to the live database.** `verify/check.sh` is green at 56
-constraint checks, 27 new RLS probes (the property locks walked rung by rung, each watched
-failing against a permissive policy first), embeds resolve across both repository modules,
-seeds agree. The full decision record is in `schema-plan.md`, *1 September — the workbook
-lands*; the short version:
-
-- **Maintenance** replaces Handover & Maintenance (`0076`). Handover is Construction's
-  last process. Only the name moved; `lifecycle_position()` retaught; six app files and
-  two verify probes followed.
-- **Property values exist** (`0077`): typed columns, composite FK to the definition's
-  format, `unknown` as a format that can hold nothing, `property_options`,
-  `property_access` (team or person, one verb per column), `property_value_history`
-  (append-only, readable by whoever may read the value). Four rungs + `restricted` on
-  the definition; `private.property_keys(verb)` is the whole permission model, evaluated
-  once per statement inside every policy; `my_property_access()` gives the app the same
-  answer so no control is drawn the database would refuse. **Manager and admin do not
-  bypass restricted.** `push_project_properties()` copies a project's values onto its
-  live jobs as the jobs' own rows — security invoker, so the locks decide.
-- **Processes exist** (`0078`): `processes`, `process_dependencies` (cycle-guarded),
-  `process_properties`, `process_tasks` + `process_task_dependencies`, `process_runs`
-  (one process, one record, one attempt; not_applicable is a status), and
-  `process_run_display` deriving due, at-risk and health from `started + expected_days`.
-  `instantiate_process_tasks()` copies a checklist onto a run once. `tasks` gained
-  `process_run_id` / `process_task_id`. The lifecycle `pipelines` row stays; nesting is
-  gone as an idea.
-- **The workbook is seeded** (`0079`, generated by
-  `app/supabase/import/generate-processes-and-properties.py` from the checked-in copy of
-  the sheet): 49 processes, 174 properties (87 with format `unknown`, 130 with no team),
-  48 process dependencies, 107 template tasks, 99 task dependencies. Every decision the
-  script made is listed at the end of the file and under `--report`; the rules are in
-  `schema-plan.md`. It refused to guess a format, a team, a duration, a milestone or a
-  restriction.
-
-### In the app
-
-- **Properties are editable on every record.** `PropertySlots` renders values, grouped by
-  stage then process, through `PropertyField` — one control per format. A date is a tick
-  box that records today beside a date for when it happened earlier. Every control is
-  gated by `myPropertyAccess()`; an unreadable property is absent, not locked. A job sees
-  its project's values read through ("from project", read-only) or its own pushed copy
-  ("pushed", and "differs from project" when the two disagree).
-- **Processes on every record** (`ProcessesPanel`): stage by stage, the record's own stage
-  open, each process with its latest run — Start / N/A / status / waiting-on / note / New
-  attempt — health as a word, the properties it collects inline, and "Create the checklist"
-  where a process has one. The stage header counts milestones and says "ready to move on";
-  nobody is moved automatically. Replaced the drawer's Milestones panel of disabled
-  checkboxes.
-- **Push to jobs is real** (`PushToJobs`): a preview of the project's recorded values, tick
-  which, push, and the toast says how many job rows moved.
-- **Setup → Properties** is the editor Amber asked for: label, level, team, format (the 87
-  without one filter to the top), SLA days, required, active; and under More — description,
-  the four security rungs (admin), the team/person grants with per-verb ticks (admin;
-  superadmin on a restricted property), the restricted flag (superadmin), the choices of a
-  select property, delete.
-- **Setup → Processes**: a stage-grouped list beside an editor — name, stage, group, level,
-  team, expected days, at-risk lead, milestone, external, position, description,
-  automation, SharePoint subfolder, retire/restore; *Order* (what it waits on, with lag,
-  and what waits on it); *Properties collected* (ordered, required-to-complete); *Checklist*
-  (template tasks with team, days, parent and dependencies).
-- **Filters**: Process + Process health, Property + Recorded — read as pairs
-  (`filtering.ts`), in the URL as `process`, `health`, `property`, `recorded`. The absence
-  filter is only offered for readable properties, and `recordedKeys` is built from rows RLS
-  already let through.
-- **Reports → Processes**: per process across the jobs in view (runs, open, waiting, at
-  risk, overdue, complete, N/A, average days, repeats); the runs at risk or overdue, each a
-  link; how many jobs have each property recorded.
-- **Nav: Templates → Processes** (`/processes`; `/templates` redirects). The page lists the
-  processes inside each phase with team, duration and field count.
-- Dictionary: 104 new entries and 11 new table descriptions; `data-dictionary.md`
-  regenerated.
-
-### The Impeccable pass over the new screens
-
-Amber asked for the Impeccable design skills (impeccable.style) on the UI, so the skill is
-installed under `.claude/skills/impeccable/` (its subagents under `.claude/agents/`) and its
-audit and polish playbooks were run over the eight new files. The detector found one thing
-— the 4px coloured left border marking a record's current stage, the classic AI-UI tell — and
-reading the code against the craft floor found the rest:
-
-- **Colour.** Health chips, the "differs from project" chip and the restricted badge were
-  mixing their own tints with `color-mix` and carrying hex fallbacks that disagreed with
-  `tokens.css`. They now use the same Vibe `-selected` tints and contrast-checked inks as the
-  status pills, so a process's health and a job's status are the same red.
-- **The current stage** is a tinted header and a chip that says *current stage* — a word,
-  not a stripe.
-- **Keyboard.** The overdue-runs report navigated on a row click, which a keyboard cannot
-  reach; the job number is now a link. Focus rings on the property inputs, the process
-  list and the stage headers are the palette's ring, not the browser's.
-- **Numbers** in the process report are right-aligned tabular figures (`.num`).
-- **Read-only** dates and tick boxes render as text, like every other read-only format —
-  no disabled controls beside a value.
-- **Deleting a property definition** takes two clicks, the second one named *Delete for
-  good*; retiring is the recommended path and stays one click.
-- Drawn arrows from `@vibe/icons` replace the ↑↓ glyphs on the property-order buttons;
-  the *N/A* button says *Not applicable*; a panel says *Loading…* rather than *0 of 0
-  recorded* while its values arrive.
-
-Re-verified after: `tsc -b`, lint, build, the detector (clean), and the responsive sweep —
-95 page/size combinations green. `.claude/settings.local.json` (the Impeccable edit hook) and
-the `.agents/` and `.codex/` copies for other tools are ignored, not committed; re-create the
-hook with `npx -y impeccable install` if wanted. `/impeccable init` (a PRODUCT.md and
-DESIGN.md) has not been run — that is an interview with Amber, not a guess.
-
-### The platform layer — `0080`–`0084` built, the sync to go
-
-Amber answered the nine questions on 2 September (recorded in `schema-plan.md`, *Amber's
-answers, 2 September*) and sent the Phase B import data with them —
-`Lofty_Jobs_Grouped_by_Project.xlsx`, 801 jobs across 121 projects — plus cost centres,
-products, the SiteBook schedule and the 57-step pre-construction schedule with predecessor
-IDs. **The import has not been run**; it is the next big job after the platform batches.
-
-`0080`–`0083` are built and green: every table audited and the audit readable by everyone
-except restricted fields; tasks with sub-tasks, checklists, start and expected days, at-risk
-and a `task_display` / `stage_completion` pair of views; contacts, companies, classifications,
-employment with job role, parties on records, and SiteBook's project roles; notifications end to end in the database with the in-app channel
-live and the email/Teams worker written but **not deployed** (see
-`app/supabase/functions/deliver-notifications/README.md` — it needs an Entra app registration
-and secrets). `0084` maintenance is built and green too (`schema-plan.md`, *Built so far*):
-the Maintenance tab, Setup → Maintenance, the warranty on every job drawer, and three Edge
-Functions — `maintenance-accept`, `maintenance-inbound`, and the delivery worker extended to
-the maintenance thread — all **written and not deployed** (steps in
-`app/supabase/functions/deliver-notifications/README.md`). PR #2 was merged by Amber on
-2 September at the design commit; `0080`–`0084` are on the same branch, rebased onto main,
-in a new PR. `0085` is taken by a one-row data correction (Ben Johnson's address — see *Session of
-2026-09-02* above); the sync is next and will be `0086`. Local verify:
-`LOFTY_PG_PORT=5432 LOFTY_PG_HOST=/var/run/postgresql ./check.sh` from `app/supabase/verify`
-(Postgres 16 started with `service postgresql start`). **`0080`–`0084` are not yet applied to the
-live database** — the Supabase MCP server needs re-authorising in this session; apply
-`0080`–`0084` in order through the dashboard SQL editor or a re-authorised session before the app that
-reads the new column names is deployed, because the renamed columns and the app move
-together.
-
-### The platform layer, designed and not built
-
-Amber's next brief, the same evening: audit of every change readable in the app, tasks with
-checklists, notifications on every channel, a Maintenance tab, contacts and companies with
-job roles, two-way sync by API and MCP, a hundred concurrent users — with normalisation and
-`tablename_attribute` as binding rules. The design is `schema-plan.md`, *1 September,
-evening — the platform layer*, and the artifact it links. Six batches, `0080`–`0085`, one
-PR each; **none is written yet**, and nine decisions listed at the end of that section are
-hers. Three answers she has already given are recorded there (staff-only logins designed
-for a later portal; every maintenance intake channel; all four notification channels chosen
-per person). The naming audit ran against a local replay of all 79 migrations: three old
-tables off the convention, renamed in `0080`.
-
-### Still open — Amber's, listed in `schema-plan.md` under *What this leaves for Amber*
-
-87 formats to set; durations and at-risk leads on processes; the seven unmapped predecessor
-names from the older schedule; which properties are restricted (nothing is yet); which
-processes are milestones (none yet); whether Maintenance genuinely has no processes.
-
-### Not done, and said so
-
-- Documents attached to a process (SharePoint) — the process carries a subfolder name;
-  attaching files waits on the documents batch. Automation — a note column, no hooks.
-- Due dates on instantiated checklist tasks are not computed; nothing not yet started has a
-  date, and a forecast needs a schedule (`schema-plan.md`, *Health, finally defined*).
-- The `pipelines` / `pipeline_stages` tables remain as the lifecycle's home.
-
----
-
-## Session of 2026-09-01 — the tracker gets a front door, and one date picker for the app
-
-Amber, 1 Sep, in one message of eight numbered asks. What is worth carrying forward is
-the two that changed a decision rather than adding a control.
-
-### The gantt and the calendar are gone, one day after being built
-
-*"remove the gantt chart and calendar"*. Built 31 Aug, removed 1 Sep, and the reason is
-the argument against building them again — it is written at the top of `UpdatesViews.tsx`:
-
-**A request has no dates of its own.** The only dates in reach were its phase's, so every
-bar on that gantt was a phase's window borrowed by whatever sat in it: forty requests in
-Phase 1 drew forty identical bars. It was an honest chart of a fact the roadmap already
-showed once. The calendar had the opposite problem — its two real dates, reported and last
-moved, are facts about administration, so a month grid of them answered "when did people
-type things".
-
-The lesson is not "no charts". It is that **a time view needs a duration belonging to the
-thing being drawn**. If requests ever gain start and target dates, a gantt becomes worth
-building, and it will be a different chart.
-
-### One date picker, and it is now the app's
-
-*"include date range that looks like the screenshot… this is the default way for every
-date picker in the app"*. `components/DateRange.tsx`: today · yesterday · last 7 days ·
-last 30 days · next 30 days · custom, with a start/end picker, Clear dates and Done.
-
-**Both directions on purpose.** A tracker filters backwards, a roadmap forwards, and a
-picker with only past presets makes the forward question a custom range every time.
-
-**The end of a range is EXCLUSIVE**, and that is the whole correctness of it: "today" has
-to include something stamped at 23:59, and an inclusive end at midnight silently drops the
-last day of every range. That is the classic off-by-one in date filtering and it is
-invisible, because the control still looks right. Twenty-two cases are checked, including
-that one from both sides.
-
-**The jobs board was swapped onto it too**, which is what makes the claim true rather than
-aspirational — otherwise two screens keep two vocabularies. One thing had to be preserved
-doing it: `saved_views` stores a query string **verbatim** (0048), so a saved board may
-carry `?date=month`, which is not one of the new presets. A value that stops parsing does
-not error — **it silently stops filtering**, which is the worst way for a saved view to
-break — so `month` is still parsed in `filtering.ts` and says why.
-
-### `/report` — a page you can send someone
-
-*"a standalone page (as well as slide out) so that I can share it with people who are not
-able to access the account (still signed into the app even in demo mode)"*.
-
-**Checked first, because half the ask needed no work:** a **viewer** could always file a
-request — `anyone active reports` (0052) asks only for an active profile. A **demo
-account** could not: 0049 taught `is_active_user()` about `profile_is_demo`, so every
-policy hanging off it refuses at once. Forty-two of forty-seven profiles carry the tick,
-so "nobody being trained can send feedback" was the common case.
-
-`0075` adds `is_signed_in_staff()` — `is_active_user()` **minus the demo clause and
-nothing else** — and two narrow policies: send your own report (never on somebody's
-behalf, which is 0070's admin path), and read back **only what you sent**. Reading back
-follows 0049's own precedent, which widened the `profiles` SELECT so a held account may
-read its own row.
-
-**It is deliberately not an anonymous page.** That needs `anon` INSERT, which puts a
-writable table on the public internet and loses the one fact that makes a request
-actionable — who asked — to serve people who are already signed in. Screenshots are also
-deliberately out: 0062's storage policies still hang off `is_active_user()`, and the form
-hides the control rather than offering an upload that fails.
-
-Watched on the live database, rolled back: a demo account sent a request, read back
-**exactly its own one row**, read 0 jobs, 0 votes and 0 roadmap phases, was refused a
-report under another profile and refused the on-behalf path — and a **deactivated** account
-was still refused everything, which is the case separating the new function from "is
-signed in".
-
-`RequireSignedIn` in `App.tsx` is `RequireAuth` minus its last line. That hole is exactly
-one page wide and must stay that way.
-
-### The rest
-
-- **The board and the detail view are Canny-shaped** (their screenshots attached): the
-  vote box leads each card and the detail head, the column heading is a dot and a word,
-  and one capitalised line under each title says which kind it is. The stage captions
-  moved to the heading's `title` rather than being deleted.
-- **"Report something" is now "+ New"** — the form takes an idea as readily as a bug, and
-  a button that says "report" asks people with a suggestion whether they are in the right
-  place.
-- **Search, a phase filter and the date range** ride the query string like everything
-  else. The filter is on **phase** rather than stage, because the board groups by stage
-  and a stage filter would be a filter on the columns.
-- **The table is the app's table** — `panel` + `data-table-wrap` + `data-table` +
-  `SortHeader`, the same four things the jobs table is made of, rather than the bespoke
-  `.updates-table` it carried. A second table style is a second set of paddings and hover
-  colours to keep in step, and they do not stay in step.
-- **`ReportForm` is one component in two places.** Two copies would have been the quick
-  way to add a page; the first thing to drift is always the copy nobody uses daily. The
-  slide-out drives it with `requestSubmit()` because the footer is rendered outside the
-  form and Vibe's `Button` has no `form` prop.
-
----
-
-## Session of 2026-08-31, second half — four views, drag and drop, and a CHECK that was wrong
-
-Amber, 31 Aug, in a run of asks: drag ideas between phases · see it in table, gantt and
-calendar · *"roadmap should be in these 4 default views as well"* · *"change log should
-pull in latest Pull requests as well as when a request has been complete"* · *"requested
-by if an admin or super admin is logged in as they may enter it on behalf of someone
-else"* · *"the roadmap phase should default to the highest phase"* · *"change shipped to
-Live in the app and have it as last column"*.
-
-### The two decisions she made, and why they were asked
-
-- **The phase default is "the phase we are in now"** — the one marked In progress, else the
-  earliest not delivered. Asked rather than guessed because "highest" could equally have
-  meant the last phase in the list, and a request landing in the wrong phase is a guess
-  that gets quoted back as agreed.
-- **The PR feed is `@changelog` in the description**, everything after it on that row being
-  the entry. Her wording, and a good rule: the line reads as a sentence in the pull request
-  as well as in the changelog, so nobody writes markup for a machine.
-
-### Dates decide what a gantt and a calendar can honestly draw
-
-A request carries no duration. What exists is `feedback_created_at`,
-`feedback_stage_entered_at`, and the phase's nullable `starts_on`/`ends_on`. So:
-
-| | |
-| --- | --- |
-| Requests gantt | each bar is its **phase's** window, borrowed and labelled as borrowed |
-| No phase | **no bar** — listed by name underneath as unscheduled, never estimated |
-| Requests calendar | the two real dates: reported, and moved |
-| Roadmap gantt | the phase's own window — the one chart whose dates belong to what it draws |
-| One date only | a **marker**, not a bar: a phase starting in March with no agreed end has no length to draw |
-
-Month-scaled, not day-scaled like `JobsGantt` — a day grid over six months is four hundred
-columns. That gantt is a different instrument for a different question and was left alone.
-
-### Drag and drop, at two different rungs — because the database has two
-
-- **Between stage columns** → superadmin, because 0060's trigger raises 42501 for anybody
-  below it, admins included.
-- **Between roadmap phases** → admin, because `roadmap_phase_id` rides the ordinary
-  `admins triage feedback` UPDATE policy.
-
-The attribute is only set when the rung is held, so the board never offers a gesture that
-ends in a refusal. A **Not planned yet** bucket exists so the drag has somewhere to go
-back to — a one-way gesture is one people are afraid to try.
-
-**"Live in the app" is now the last column** (`shipped` stays the stored value: it is a
-CHECK value and the changelog generator's vocabulary, so renaming it would be a migration
-to fix a word on a screen). It left the pair under the board because it is the destination
-everybody is trying to reach, and a queue whose end is printed below the queue does not
-read as a queue. Declined stays underneath — nobody is moving towards it.
-
-### `0072` — the CHECK that was right on one table and wrong on the next
-
-`0070` copied `0067`'s predicate, `feedback_added_by is distinct from profile_id`. That is
-exactly right on `feedback_votes`, where `profile_id` is NOT NULL. **`feedback.profile_id`
-is nullable** — 0052 made it `ON DELETE SET NULL` so a report outlives its reporter — and
-`is distinct from` answers *false* for two nulls. So the line said: *a report with no
-reporter and no typist is refused.*
-
-The consequence was worse than a rejected insert. `ON DELETE SET NULL` performs an UPDATE,
-the CHECK is re-evaluated, and it fails — so **deleting a profile would have failed for
-anybody who had ever filed a request**, with an error naming a column nobody touched.
-Watched on the live database before the fix, and again after.
-
-**`check.sh` found it, not review.** The constraint probes plant a fixture request with no
-reporter; that insert began failing the moment 0070 applied, and four later probes act on
-that fixture — so one cause reported as five failures. The harness extended in 0069 earned
-its keep the same day.
-
-The general shape: **a predicate is only as portable as the nullability of the columns it
-names.** Copying a proven line to a neighbouring table is exactly when to re-check that.
-
-### The sweep was passing by not looking
-
-Two faults, found in that order, and the second only because the first was fixed.
-
-**The view was component state, so the sweep could not reach it.** `responsive-check.mjs`
-visits routes; three of the four views were behind a `useState`, so six new URLs would all
-have rendered the board. The view now lives in the query string (`?view=gantt`) — which is
-also the convention the jobs board already set, and the reason `saved_views` stores a query
-string verbatim: **the URL is the app's serialisation of "what am I looking at"**, so a
-gantt somebody is looking at can be linked to and saved.
-
-**Then it was still passing, because `stubRepository` answers empty by design.** The six
-routes each drew one line of "nothing to place yet" and reported green without ever laying
-out a wide table, a multi-month timeline or a full month grid. `scripts/tracker-fixtures.ts`
-now populates those three reads for the responsive build only, aliased the same way
-`AuthProvider` already is. The fixtures are shaped to stress the layout rather than to look
-real: a title longer than any column, phases spanning eight months, one phase with a start
-and no end, one with no dates, several requests sharing a day, and half of them in no phase.
-
-**It failed immediately: 21 of 95 combinations, three separate tap targets under the 24px
-WCAG floor** — the calendar's month stepper at 21px wide, the request titles in a phase at
-18px tall, and the gantt's labels at 16px. All three were mine, and all three had been
-"green" ten minutes earlier. A fourth surfaced after the first fix: the *unscheduled* list
-under the gantt is a different button from the bar label, and only the fixtures' deliberate
-split between planned and unplanned requests drew both. Now 95 of 95.
-
-**The lesson is the one this repo keeps relearning**: a check that cannot reach the thing it
-names is worse than no check, because it reports confidence. Note the alias gotcha if this
-is ever extended — `tracker-fixtures.ts` imports the real stub to wrap it, so the alias is
-anchored on the exact specifier `./stubRepository` and not the `.*` shape used for
-`AuthProvider`, which would rewrite that import to the fixtures file itself and produce an
-import cycle rather than an error.
-
-### Also worth knowing
-
-- **`0071` closed a hole nobody had cause to notice.** The insert policy on `feedback`
-  checks the reporter and `is_active_user()`, and **RLS cannot restrict which columns a row
-  carries** — the lesson 0018 paid for on `profiles.permission`. So any signed-in person
-  could have filed a request already planned into whichever phase they liked. Below admin
-  the phase is now decided by the trigger and whatever the client sent is discarded.
-- **The PR feed needs no token because the repo is public**, which is the constraint that
-  decided the design rather than a happy accident. The price is GitHub's 60/hour per IP, so
-  it is cached for ten minutes in sessionStorage and a rate-limit answer **says so** rather
-  than rendering an empty changelog — an error drawn as an ordinary empty state is the
-  "your account is not set up" fault again.
-- **Nothing in the repo declares `@changelog` yet** (checked: 55 merged PRs, zero). The
-  empty state says how to join the list rather than looking broken.
-- Amber has created four real roadmap phases; Phase 1 is In progress. Probes that touched
-  them ran in rolled-back transactions and the statuses were re-read afterwards to prove it.
-
----
-
-## Session of 2026-08-31 — the tracker is live, and a view that had no policy
-
-**`0060`–`0068` are applied to the live database.** PR #54 merged with them written and
-unapplied, which meant `main` was deployed and reading `feedback_display` for columns
-production did not have — `/updates` was broken in production, so this was repair rather
-than a next step. Applied in order, then verified against the live database rather than
-against the success messages: six new tables all with RLS on, six new `feedback` columns,
-four new `comments` columns, the private `feedback-screenshots` bucket with its three
-object policies, and `feedback_display` carrying `security_invoker=on`.
-
-The `feedback` table was empty, so 0060's rename and backfill moved no rows.
-
-Full `check.sh` is green on a clean replay of all sixty-nine migrations: 51 constraint
-checks biting, RLS holding, embeds resolving, seeds agreeing.
-
-### `job_display` had been executing as its owner since 28 August
-
-**The security advisor reported one ERROR, and it was real.** `0055` rewrote the view as
-
-```sql
-create or replace view job_display as …
-```
-
-with no `with (security_invoker = true)`. Every earlier rewrite of that view carried it —
-`0028`, `0035`, `0036`, `0040` — and `create or replace view` does not preserve
-`reloptions`. It is the identical fault `0020` found on `profile_display` and that `0001`
-warns about in its own comment.
-
-**Measured on the live database, as a real account held at the demo gate, in a rolled-back
-transaction** — not inferred from the advisor:
-
-| | before `0069` | after |
-| --- | --- | --- |
-| `jobs` through RLS | 0 | 0 |
-| `job_display` | **60** | 0 |
-| `projects` / `project_display` | 0 / 0 | 0 / 0 |
-
-`project_display` held because it kept its invoker. **Forty-two of the forty-seven
-profiles carry `profile_is_demo` today**, so this was the common case, not the edge one:
-an account Amber is deliberately holding at the door read the whole jobs board through
-PostgREST. The gate screen does not close it — `RequireAuth` hides the UI, and hiding a
-control is not security. An ordinary active account still reads 60 through both the table
-and the view, checked after the fix so the repair is not a new outage.
-
-`0069` is `alter view … set (security_invoker = true)` rather than another rewrite: it
-changes exactly the option and cannot get the body wrong.
-
-### The real fix is the check, not the line
-
-The rule — *any migration touching a view must re-apply `security_invoker` and assert on
-`pg_class.reloptions`* — has been written down since `0020` **and was never mechanised**.
-Nothing in `verify/` mentioned `reloptions` at all, which is how `check.sh` stayed green
-through `0055` and the thirteen migrations after it.
-
-`behaviour.sql` now asserts it over **every** view in `public` in one statement, so a view
-added next month is covered without anybody remembering. Watched failing first, against
-the pre-`0069` replay: `FAIL: view(s) executing as owner, past every policy underneath:
-job_display`. Then passing.
-
-**The general shape, worth carrying: a rule that lives only in prose is not a rule.** This
-one was stated clearly, in two places, by the session that had been bitten by it — and the
-next rewrite of a view broke it anyway.
-
-Security advisors are back to **0 errors**.
-
-Still open: the five product questions PR #54 put to Amber (votable bugs, who may decline,
-notification channels beyond the bell, product-area tags, the first roadmap phases and
-their dates). Nothing is seeded on `roadmap_phases` or `releases`, on purpose.
-
----
-
-## Session of 2026-08-31 — the new project form asks for four things
-
-Amber, on the create-project form: the lot number hint reads *"as it appears on the plan of
-division"* and nothing else; there is a **Total lots** box, *"which is the number of
-community title plus torrens title lots but can also be manually entered"*; and *"the only
-thing required is suburb, state, postcode and project type. the rest are optional."*
-
-**`0069` is applied to the live database.** It was not, for the first part of this
-session — the Supabase connector was down, and `0060`–`0068` were reported unapplied on
-the same evidence when in fact they had landed. The gap was found the way these are:
-Amber created a project with a street and no street number and got
-`400` on `POST /rest/v1/addresses`, which is `addresses_street_needs_a_number` refusing
-the shape the form had just stopped asking for. **A form relaxed ahead of its migration
-does not degrade, it breaks** — the Create button greys out on the app's copy of the
-rules, so when the two disagree the person meets a Postgres error instead.
-
-Verified on production straight after, in a deliberately-aborted transaction: a street
-with no number, a suburb with no council and a lot number with no street are all accepted;
-a council outside SA and a three-digit postcode are still refused; a job still cannot take
-a street with no number on it; and the migration's own proof block left nothing behind.
-
-**The live database carries four migrations that are in no branch here** —
-`the_view_that_lost_its_invoker`, `the_request_somebody_else_typed`,
-`a_new_request_lands_in_the_phase_we_are_in`, `two_nulls_are_not_the_same_person`, all
-applied 31 Aug. Another session applied them without merging. Nothing is broken by it,
-but the repo cannot rebuild that database from its own migrations until they land, and
-`replay.sh` is proving a schema production no longer has.
-
-| | |
-| --- | --- |
-| `0069` | Drops `addresses_council_required_in_sa` (0025) and both halves of 0037's shape rule — `addresses_street_needs_a_number`, `addresses_numbers_need_a_street`. On a plan of division "Lot 7" **is** the address; the lots are numbered before the roads are named. `guard_job_address_is_a_street` takes over the whole of the old guarantee — a street **and** a number — because `address_precision` only looks at the street, so dropping the check alone would have halved it silently |
-
-**Total lots** is `project_proposed_dwellings`, which the repository has been writing as the
-sum since 0053 with nothing on screen admitting to it. The box follows the split until
-somebody types over it, and clearing it hands it back — so "blank" can never mean "a known
-split with no total". Two constraints are mirrored on the field rather than met as an error
-after the insert: `project_lot_split_adds_up`, and the `> 0` on the column that 0 + 0 in
-the two title boxes used to walk straight into.
-
-### Still open
-
-- **The inline "+ New project" row has a Project name box that goes nowhere.** `createProject`
-  ignores `input.name` — it composes the name from the number and the address, which is what
-  Amber asked for on 28 Aug — so whatever is typed there is silently dropped. Left alone
-  because removing a visible field is a product decision, not a tidy-up. It should go.
-- **`addresses.address_precision` has no data dictionary entry.** Added by 0037, never
-  entered in `dictionary.ts`, so it is missing from `data-dictionary.md`.
-
----
-
-## Session of 2026-08-30, second half — the Canny round
-
-Amber, pointing at Canny: *"Like https://canny.io"*. What their portal does that the
-tracker did not, read off their own feature pages rather than remembered: a discussion
-under every post with a **pinned** answer and an **internal** lane, **status updates that
-close the loop** with the people who voted, **merging duplicates**, and **voting on
-behalf** of somebody whose request never reached the portal.
-
-**`0064`–`0068` are written and replay cleanly. They are NOT applied to the live
-database** — same reason as the first half: the Supabase connector needs a browser
-sign-in. Apply `0060`–`0068` in order, then run `verify/check.sh`.
-
-| | |
-| --- | --- |
-| `0064` | The discussion. A **fifth parent on `comments`** rather than a `feedback_comments` table — the reuse is the whole argument: @mentions (`comment_mentions` has a FK to `comments`), the edited-at trigger, the author stamp and CommentsPanel all already exist, and a new table re-grows every one of them. Plus `comment_is_pinned`, `comment_is_internal` (admin-only by the read policy) and `comment_feedback_stage`, the note that comes with a move |
-| `0065` | `feedback_follows`. Voting and reporting follow you **by trigger**, not by the app — the same rows are written by an import, a merge and an on-behalf vote, and a follow created in the repository would exist for one of those and silently not for the others. Unread is **derived** (`feedback_stage_entered_at` vs a seen stamp), so no notification can outlive or contradict the move it describes |
-| `0066` | Merging. `feedback_merged_into_id`, and a **SECURITY DEFINER** trigger moves the votes and followers: they belong to other people, and 0061 rightly refuses the app the right to write them. No chains — a duplicate always points at a live request |
-| `0067` | Vote on behalf. `feedback_vote_added_by`, admin-only, **attributed and shown on screen** |
-| `0068` | `feedback_display` rebuilt with the duplicate link, the comment count, and the two follow facts. `drop` + `create`, not `create or replace`, because that drops `security_invoker` — 0020's fault, and this is a view rewrite |
-
-### The bell has a second real signal
-
-A request you follow has moved. It passes the same test @mentions passed: no health model,
-no SLA, nothing derived from a definition nobody has written. Voting subscribes you, so most
-people get it without pressing anything — which is the behaviour that closes Canny's loop,
-in-app rather than by email (Amber's Q4 order: in-app this phase, Teams and email later).
-
-### Three probes that were lying, and what each taught
-
-This round found more in the probes than in the code, which is the point of writing them.
-
-1. **A policy clause that was OR'd away.** 0067's insert policy said `added_by` must differ
-   from the voter. It did nothing: 0061's own-vote policy already admits a row whose
-   `profile_id` is yours, so an admin could add their own vote stamped as their own adder
-   and never meet the new policy at all. The probe reported
-   `FAIL: an admin added their OWN vote through the on-behalf path`. Fixed with a **CHECK**,
-   which is not OR'd with anything. **The general shape: a narrow policy beside a broad one
-   does not narrow anything.**
-2. **Two probes passing for the wrong reason.** "Voting follows you" asserted a follow on
-   the prober's *own* report — which `follow_on_report()` had already created — so it passed
-   with the vote trigger dropped. And "reporting follows you" was checked *after* a vote
-   probe had run on the same request, so it passed with the report trigger dropped. Both now
-   act on a request nobody has voted on, and the ordering is commented at the assertion.
-3. **A plpgsql subtransaction eating the setup.** In `constraints.sql`, `BEGIN…EXCEPTION`
-   opens a subtransaction: when a probe is refused — which is the *pass* — the rollback took
-   the fixture row inserted in the same block with it, and every probe after it acted on
-   nothing. The planted row now lives in a block of its own.
-
-### `verify/check.sh` is green for the first time
-
-The two demo-account probes that have been red on `main` are fixed, and the cause is the
-same class as the above: **the probe's own setup was silently refused.** It ran
-`update profiles set profile_is_demo = true` as `authenticated`, which cannot write
-`profiles` — so the flag was never set, the reads that followed were ordinary reads, and the
-failure it reported was true about the probe and false about the gate. 0049 was never wrong;
-it was proved against the live database when it landed.
-
-The flag is now flipped as the owner, outside the role, and **the probe asserts its own
-setup** before testing anything. It was watched failing with 0049's clause removed from
-`is_active_user()`. Note the second bite: leaving the session as `authenticated` afterwards
-broke the manager probes further down, because setting a permission level is an admin write.
-
-### In the app
-
-- **"Someone may have asked this already"** — the report form searches the tracker from
-  three characters, debounced, and offers `+1` on each hit. Voting there adds you to the
-  count *and* follows you, instead of adding a second request to the queue. This is the
-  feature Amber's brief actually asks for; merging is the tidy-up for when it does not work.
-- The request panel grew: follow, who voted (with "added by" beside anybody entered on
-  their behalf), add-a-voter, duplicate-of, a note beside the stage control, and the
-  discussion.
-- The board hides merged duplicates, and cards carry a comment count, a "+N merged" chip
-  where a vote count grew by absorbing others, and a "Moved" chip only the follower sees.
-
-### Still open, and now sharper
-
-- **Labels / product areas.** Canny has tags and categories, and filtering by them is how a
-  long list stays usable. Deliberately not built: the categories would have to be invented,
-  and an invented taxonomy on a shared board is the house rule's worst case. Amber's list,
-  when there is one.
-- **Email or Teams delivery.** The loop closes in-app only. Canny emails; that stays behind
-  Q4's ordering.
-- **Prioritisation scoring** (Canny ranks by impact and by revenue). Nothing here computes a
-  priority, and it should not until somebody says what it would be made of.
-
----
-
-## Session of 2026-08-30 — the tracker: a queue people can see
-
-**`0060`–`0063` are written and replay cleanly. They are NOT applied to the live
-database** — the Supabase MCP connector needs a browser OAuth this session could not run.
-Applying them is the first job next session, in file order, and `verify/check.sh` is what
-proves it landed.
-
-Amber, 30 Aug, and the sentence the whole design turns on: *"to have a feature request and
-bug tracker so users can see where their requests are in the queue… **This will help stop
-people saying I want this to happen when it is already planned.** Also when managers help
-plan next phase it is clear and ordered."*
-
-### The reversal, and why it is the feature
-
-`0052` made the feedback SELECT policy **admin-only**, argued it at length, and the app was
-built around it: `submitFeedback` returned void precisely because asking for the row back
-would have failed for exactly the people the form is for.
-
-`0060` reverses it. Every active person reads the whole tracker, bugs included. The
-reasoning is in the migration and worth keeping here too, because "the sender cannot read
-their own report back" reads like a security decision and was not: it was right for a
-private triage list for one person, and it is wrong for the thing Amber asked for two days
-later. A queue nobody can see cannot answer *"that is already planned"*.
-
-**What it costs, stated plainly:** everyone signed in can now read every report anyone has
-filed, with the reporter's name on it. That is the intended change — 47 people, an internal
-app, and a report is about the app rather than about a record. If a report ever needs to be
-private that is a `feedback_is_private` column and a narrowed predicate, not a reason to
-darken the whole queue.
-
-What did **not** widen: writing. Anyone reports; **only superadmin moves a request between
-stages**; admin edits the words and plans a request into a phase.
-
-### The four tables
-
-| | |
-| --- | --- |
-| `0060` | `feedback` becomes the tracker. `feedback_status` → `feedback_stage`, with Amber's four (requested, in review, planned, in development) plus **shipped** and **declined**. Adds `feedback_stage_entered_at`, `feedback_error_text`, `feedback_user_agent`. The stage rule is a **trigger**, `guard_feedback_stage_change()`, because RLS decides rows and never columns — and it bites at *admin*, a rung the UPDATE policy has to keep letting through |
-| `0061` | `feedback_votes`, whose **primary key is the rule**: `(feedback_id, profile_id)` cannot hold a second vote, whatever the app sends. No `vote_count` column — a counter can be told to go up but cannot know who voted, and un-voting comes free with rows. Plus `feedback_display`, `security_invoker`, carrying the count and whether *you* voted |
-| `0062` | `feedback_attachments` and a **private** `feedback-screenshots` bucket. The object path starts with the uploader's profile id, because that is the only thing a storage policy can compare — `storage.objects` has no column saying which report a file belongs to, and giving it one would be a second link that can disagree with the table |
-| `0063` | `roadmap_phases` (dates **nullable** — an unscheduled phase is real, and a guessed date gets quoted back as a commitment) and `releases` + `release_entries`. Deliberately **not** one table with a flag: a plan that slips must never rewrite what the changelog said happened |
-
-`0062` guards its bucket insert on `to_regclass('storage.buckets')`, because the verify
-harness replays into a plain Postgres with no storage schema. On a replayed database the
-bucket does not exist and the upload fails visibly rather than writing nowhere.
-
-### What was watched failing before it was trusted
-
-Every new assertion, against the replay database, by breaking the thing it guards:
-
-| Broken | Reported |
-| --- | --- |
-| read policy put back to admin-only | "an ordinary person could not read the tracker they just wrote to" |
-| `feedback_votes` primary key dropped | "the same person voted twice" |
-| stage trigger dropped | "an ADMIN moved a request between stages — the trigger did not bite" |
-| trigger stamping unconditionally | "a no-op stage write restamped feedback_stage_entered_at" |
-| phase FK switched to CASCADE | "deleting a roadmap phase took its requests with it" |
-| six constraints dropped one by one | each named its own refusal |
-
-**One of those needed a second attempt, and the reason is worth carrying forward.** The
-no-op probe first compared the stamp before and after — and *passed* against a trigger that
-stamped unconditionally, because `now()` is transaction time, so the "new" value was the
-value already there. It parks the stamp in 2020 first now. A before/after comparison inside
-one transaction cannot see a rewrite to the same instant.
-
-### Not from this branch, and still red
-
-`verify/rls.sql`'s two demo-account probes — *"a demo account read 2 job(s)"* and *"read 48
-profile(s)"* — **fail on `main` in this harness too** (checked on a clean worktree). The
-0049 gate was proved against the live database; something about the replay database's
-`auth.uid()` path means the flag does not take there. It is not this branch's, and it is
-worth an hour: a probe that has been red for a while is a probe nobody reads.
-
-### In the app
-
-- **One report form, not two footer buttons** (`components/Feedback.tsx`). Amber: *"it
-  should just be one as bugs and Wishlist but have a radio select."* The split asked the
-  wrong question at the wrong moment — whether something is a defect or a missing feature
-  is a triage judgement, and the person who just hit it is the worst placed to make it.
-- **The error is captured, not typed**: `error` and `unhandledrejection` listeners hold the
-  last one for fifteen minutes. Older than that it is dropped — an error from an hour ago
-  attached to an unrelated report sends whoever reads it somewhere wrong, confidently.
-- **`/updates`, in the main nav**: Requests (the board, four columns and the two endings
-  underneath), Roadmap (phases, dates, what is planned into each, ticks that are facts and
-  never a percentage) and Changelog.
-- **Setup → Bugs / Ideas stays** as the triage table it always was — the page, the error,
-  the browser, the screenshots. Note that its `adminOnly` flag no longer mirrors a database
-  rule; it is a routing choice now, and the file says so. (4 September: both tabs are
-  **Admin → Bugs / Ideas**, and the flag is gone — the whole screen is admin's, so the
-  routing choice became the route's.)
-
-### The repository half
-
-`scripts/changelog.mjs` reads `Changelog:`, `Roadmap:` and `Release:` trailers out of
-`git log` and rewrites `CHANGELOG.md`, ticks `ROADMAP.md`, and refreshes a generated block
-in this file and the README. `.githooks/post-commit` runs it; `scripts/install-hooks.sh`
-points git at it (once per clone).
-
-It **never stages, amends or pushes**. A hook that amends rewrites a commit somebody may
-already have pushed.
-
-`ROADMAP.md` owns the phase **names and order**; `roadmap_phases` owns the **dates and
-status**, because a date is Amber's decision. `--seed` prints idempotent SQL so the
-database follows the file instead of drifting from it.
-
-### What needs Amber
-
-1. **Voting on bugs.** She said *"all users can vote on ideas"*, so the thumb is offered on
-   everything the board shows — the database permits a vote on either kind. If a "me too"
-   on a bug is not wanted, it is a filter on one component.
-2. **Who may decline.** Declining is a stage, so it is superadmin's, like every other move.
-   If admins should be able to say no without being able to promise yes, that is a second
-   clause in the trigger.
-3. **Whether the tracker should notify.** Nothing tells a person their request reached
-   Planned. `comment_mentions` is the only notification the app can honestly deliver today;
-   a stage change is the obvious second one and it needs the delivery question answered.
-4. **The first roadmap phases.** None are seeded, on purpose — an invented "Phase 2 —
-   costings, October" would be read as the plan. `ROADMAP.md` carries the repo's own A/B/C
-   with no dates on them; the app's roadmap is empty until she writes it.
-
----
-
-## Session of 2026-08-26 — the lifecycle grows Completed, Closed and Cancelled
-
-**`0045` and `0046` are applied to the live database** (verified: the seven-stage
-pipeline, the `lifecycle_archive` cron entry and the cascade trigger all present).
-The database also now holds real rows — 5 projects, 44 jobs — that Amber created;
-treat writes accordingly.
-
-- **Seven lifecycle positions** (Amber, 25 Aug): the four working phases, then
-  **Completed** (what 0035 called Closed — done, won), **Closed** (the archive —
-  reached 12 months after Completed or Cancelled by the `lifecycle_archive()` clock,
-  scheduled daily where pg_cron exists; hidden by default, shown by the Closed saved
-  view), and **Cancelled** (stopped without completing; fires no notifications,
-  automations or health alerts while there). This reverses `schema-plan.md`'s
-  "cancellation is a status, not a phase" — the reversal and its reasoning are logged
-  there, next to the original.
-
-  > **Superseded on 28 Aug by `0057`.** This entry said Cancelled was "the one backward
-  > move the lifecycle allows — revival". It is not, any more. Amber: *"cancelled will
-  > not be revived — if revived, it will need a new job number as a lot of the initial
-  > info will be outdated."* What restarts is the work, not the record: by the time a
-  > cancelled job comes back its dates, selections and costings are stale, and its
-  > number is on contracts. Cancelled is now terminal like Closed, and coming back is a
-  > **clone** with its own number. Left in place rather than rewritten, because
-  > "cancelled can be revived" is the obvious-looking simplification somebody will
-  > otherwise reintroduce.
-- **The guards carry the carve-outs** (`guard_lifecycle_is_linear`): Closed is
-  terminal for people; anything live may move to Cancelled; and — since `0057` —
-  nothing leaves Cancelled either. `project_stage_from_jobs()` excludes cancelled jobs,
-  so a project neither waits for nor follows them.
-- **The drawer's stage control grew the verbs**: Move (forwards, linear run only) and
-  **Cancel…** (working phases only — a completed job isn't cancellable). It had a third,
-  **Revive to…**, which `0057` removed along with the backward move; at Cancelled the
-  control now says so, the way it always has at Closed.
-- **Assignee is bound** — `job_assignee_id` existed since 0028; `boardModel` now
-  resolves it to a name and to the person's teams, so cards, the table, the drawer
-  and Team-member grouping show real names, and an em dash when nobody is assigned.
-- **The Team filter matches membership** (Amber, 26 Aug): one filter named Team; a
-  job shows when the team owns it *or* its assignee sits in that team, however many
-  teams the person is in. There is deliberately no separate person filter.
-- **Panels cover the main area, not the app**: the header is sticky with a fixed
-  height, the shell publishes `--shell-rail-w`/`--shell-header-h`, and the drawer,
-  create panel and their scrims key off both — expand no longer hides the nav.
-- **Modal padding fixed at its cause**: Vibe's padding lives in `ModalBasicLayout`,
-  which neither modal used; both wrap it now. And Vibe portals modals and dropdown
-  menus to `document.body`, *outside* ThemeProvider's wrapper — the move dialog's
-  primary button was monday-blue. The brand tokens are now also declared at body
-  level in `tokens.css` (as `body.light-app-theme` etc., because Vibe's own palette
-  sits on those classes and out-specifies a bare `body`).
-- The responsive sweep is green again — the `/setup/dictionary` "N values" toggles
-  were failing the 24px tap-target check on `main` (93×16); the summary now carries
-  a 24px min-height. Note for this container: run the sweep with
-  `executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'` — the
-  pinned Playwright wants a browser build the image doesn't carry.
-
-Added later the same day, on Amber's follow-ups:
-- **A project move carries its jobs** (`0046`): moving a project forward brings every
-  job behind the new phase up to it; jobs already at or past it, cancelled or archived
-  stay put. With 0041 the pair is closed both ways and cannot loop — the cascade lands
-  the minimum exactly on the project's stage, and 0041's clamp only fires on
-  *strictly ahead*.
-- **Bulk edit on the jobs table**: checkboxes + a bar with Move to… (manager+, one
-  confirmation for the batch that says how many actually move), Set team… and Assign
-  to… — the last two via the new patch-shaped `updateJob` (owning team, assignee;
-  `user`+ by the existing policy). Writes go one at a time so a refusal names its job.
-- **The projects list stopped hiding what it knew**: cards now show the project's
-  stage, real suburb, and each job's own lot address (capped at 8 with an
-  "open the project" line — project 1006 has 30); the table gained a Stage column.
-  The data was resolved all along (G26's join); the components hadn't been updated
-  to render it.
-
-Later the same day: **every table in the dictionary now carries a purpose
-description** (`TABLE_DESCRIPTIONS` in `dictionary.ts` — rendered at the top of each
-card on the Tables tab and under each heading in `data-dictionary.md`). The generator
-refuses to write the file if the map and `DICTIONARY_TABLES` differ in either
-direction, and that refusal was watched firing before it was trusted.
-
-A fourth batch, after PR #39 merged (the branch was restarted from `main`):
-- **Checkpoints are milestones now** (Amber, 26 Aug: "change the name of checkpoints
-  to milestones throughout"). Identifiers, UI copy, the dictionary (the proposed
-  table is `template_milestones`, rename logged in its entry) and forward-looking
-  docs all say milestones; genuinely historical text — the 36 invented ones the old
-  seed showed — keeps the old word, because that is what they were called.
-- **The drawer edits who holds the job**: Team and Assigned to selects in "Who it's
-  with", through the same `updateJob` the bulk bar uses, at the same `user`+ rung.
-  Below `user` it reads as before.
-- **Projects say who holds them too**: `BoardProject` and `ProjectPatch` carry
-  owning team and assignee; the detail page gained the same two selects
-  (`WhoHoldsIt`), and `createProject` writes Acquisition & Development outright —
-  Amber's Q2: every new record opens with A&D. Jobs already did (the dialogs'
-  pre-selected `FIRST_TEAM`, now aliased to `OPENING_TEAM` in `types.ts`).
-- **The SLA editor exists** (Setup → Automations; Amber's Q1). `0047` added
-  `pipeline_stage_at_risk_lead_days` beside the expectation — CHECKed to need an
-  expectation and be shorter than it, both proved biting in the migration — and the
-  tab edits expected days + at-risk lead for the four working phases. Superadmin, by
-  0029's policy: the SLA is part of what the stages are. Overdue is past the
-  expected days; there is no third number. **Applied to the live database.**
-  `pipeline_stages` thereby got its first two dictionary entries.
-  **Superseded 4 September: `0096` gives the two SLA columns to managers** and keeps the
-  rest of the stage superadmin's with a trigger — the tab is Settings → Automations now.
-  Everything else in this bullet still holds.
-
-A fifth batch — the prototype-parity shells (Amber: match the prototype, placeholders
-where the data is not real yet; every placeholder names itself):
-- **Phase accents on the board** (`theme/accents.ts`): the prototype's two-family ramp
-  re-cut for seven positions — teal office pair, rust site pair, Completed green,
-  Closed grey, Cancelled negative — as per-column CSS vars with ink-on-tint count
-  chips. Plus the drag-hint pill, shown only when dragging is actually enabled.
-- **Drawer fullscreen tabs**: Main info · All properties · Activity & comments ·
-  Departments, prototype-style, docked staying one scroll. All-properties and Activity
-  carry the real components plus coming-soon notes; Departments is a labelled
-  placeholder until handoffs write the activity feed.
-- **Ask Lofty dock** (`AskDock.tsx`): FAB + 380px dock with scope line, preview
-  questions and a disabled input, all saying coming soon; "Ask about this job" in the
-  drawer opens it pre-scoped. One assistant, not two.
-- **Notifications bell** (`NotificationsBell.tsx`): header bell, no badge (no real
-  count exists), panel naming the seven signals and what each waits on.
-- **Dashboard**: your actual assigned jobs as cards (it counted every job in the
-  company as yours before), real Assigned count, em dashes for Need you/Overdue, and
-  right-rail panels that say what will fill them. No invented numbers anywhere.
-- Responsive sweep back to 50/50 (the bell had squeezed the avatar button to 16px at
-  320; icons no longer shrink and the right cluster's gap tightened).
-
-A sixth batch — the A-class polish:
-- **Toasts** (`Toasts.tsx`), fired only where success is otherwise invisible: job
-  removed, user saved/added/deactivated. Bottom-centre; note the gotcha — Vibe's Toast
-  is already `position: fixed; top: 0`, so overriding `bottom` without `top: auto`
-  stretches it the full height of the screen (watched happening).
-- **Working preferences** (`data/preferences.ts`, G39): landing page and default jobs
-  view are real, localStorage for now with the hint owning up to it; Amber's Q9
-  roaming/saved-views layers still need their Phase C home.
-- **Report rows open the job** (G38), and the report tables stopped rendering tokens
-  for the address and assignee the board model already resolves.
-- **New-project preview** (G32) states consequences without guessing the number; the
-  header search widens on focus (G4).
-
-A seventh batch:
-- **The jobs table sorts** (G12) — the SortableTable idiom applied within each group,
-  stage by pipeline position, no default sort so the natural order survives.
-  `sortRows` extracted from `useTableSort` for the grouped case.
-- **Teams are manageable** (G44): rename + retire/restore on Admin → Teams through a
-  new `updateTeam` seam method (admin+, the 0026 policy), with the jobs-held guard
-  and retired teams listed dimmed for restoring. **Create-team deferred**: the
-  `TeamId` union is closed over the seeded slugs and `verify/seeds.sh` asserts stub
-  and database agree — opening that is its own change, not a side effect.
-- Tooltip sweep (G3) deferred: this Vibe build doesn't export `Tooltip` in the core
-  type bundle. Native titles stand; revisit on the next Vibe upgrade.
-
-An eighth batch — **the Gantt and the calendar are real** (G13/G14):
-- `JobsGantt.tsx`: a day-grid over real facts only — each bar is the job's stay in its
-  current stage (solid elapsed, tinted SLA window, rust past due), phase-tinted band
-  rows, weekend shading, orange today line, sticky left column. The prototype's
-  invented duration model was NOT ported. Dependencies wait on task wiring.
-- `MonthCalendar.tsx`: Monday-start month grid with today ring, ‹/Today/› nav,
-  "+N more" overflow, click-to-drawer, and the jump-to-nearest-month empty state.
-  Entries are the two dates a job really has — stage entered, and SLA due where set.
-- `BoardJob` gained `stageEnteredAt` so both can place time.
-
-A ninth batch:
-- **The Date filter is real** (G46): "moved stage in last 7/30 days / this month",
-  matched on `job_stage_entered_at`, in the URL as `?date=7d`, riding the same filters
-  array as the chips. The inert select is gone.
-- **The drawer shows both folders** (G24): job subfolder + project folder, honest
-  "no folder linked yet" when unset; `BoardJob` carries both URLs.
-- **The job report prints** (G37): Print button + print CSS dropping the chrome, a
-  print-only date/count line, rows kept whole across pages.
-- **Filtering is audible** (G48): "Showing N of M" mirrored into a hidden
-  `role=status` live region.
-
-A tenth batch:
-- **The Type filter is back** (G47) — the project's type rides every job, so it
-  narrows for real on Jobs, Projects and Reports. The zero-result state also stopped
-  blaming a search nobody typed ("no jobs match the current filters").
-- **Report stage bars wear the board's ramp** (G35); **project cards carry real
-  progress** — jobs completed over jobs total (G26).
-- **Projects gained a Gantt view** (G28): start → target from the two real date
-  columns, month ticks, today line, rust past target; undated projects listed, not
-  estimated.
-- **Esc is a two-step in the fullscreen drawer** (G20); **the notification matrix
-  saves** (G40, device-local, quiet defaults, panel owns up to when delivery starts).
-- **Variations entry points ship** (G30/G25): "Push to jobs…" on the project page and
-  "Request changes" in the drawer, each answering with what is coming rather than
-  doing nothing silently.
-
-An eleventh batch:
-- **Column drill-down as navigation** (G8): a stage column's heading filters to the
-  phase and regroups by team, in one URL. This surfaced and fixed a real
-  `useBoardParams` bug — two writes in one handler were two navigations, the second
-  erasing the first (`setMany` composes them now; `write` also went functional).
-- **In-drawer job search** (G19): find another job, jump without closing.
-- **Reports declare their gaps** (G34/G36): the missing blocked/conflict counts and
-  the overruns-and-bottlenecks panel each say what they wait for.
-
-**Where the parity work now stands**: every one of the 48 comparison-doc gaps is
-shipped, shipped-as-shell with a self-naming placeholder, or explicitly
-parked with its reason recorded in the doc (G10 mirror
-scrollbar until boards are wide · G22 scheduling checklists until the real process ·
-G31 single-add until variations · G45 permissions matrix until permission_grants).
-The artifact carries a shipped/shell badge per gap and six open questions for Amber.
-
-A twelfth batch:
-- **Styled tooltips unparked** (G3): `@vibe/tooltip` ships full types — pinned as a
-  direct dependency at the exact version core already carries — and swept over the
-  icon-only controls (collapsed rail, rail toggle, bell, Ask FAB, expand button).
-  On focus as well as hover.
-- **Session-persistent view state** (Amber's Q9, layer two): board/view/filter choices
-  hold across page switches; a link naming its own state always wins; sessionStorage
-  so a new day starts clean.
-- **The dictionary covers every live table now** — the 0029 pipeline machinery
-  (pipelines, pipeline_stages completed, job_pipeline_positions, job_stage_events)
-  and dictionary_overrides joined with key-column entries and purpose descriptions:
-  248 properties, 42 tables. The uncovered-tables note is retired.
-
-**`0048` is applied to the live database** — `saved_views`, Q9's third and last layer:
-a person saves the board they are looking at under a name and gets it back anywhere
-they sign in. The row stores the **query string verbatim**, because the URL is already
-the app's serialisation of "what am I looking at" and a second schema for the same fact
-could only disagree with it. Private by RLS (owner-only, all four verbs). The three
-built-in tabs stay in code and render first; a person's own follow after a rule, with
-"Save this view…" at the end of the row — visible exactly when the current board is not
-already saved, which makes its presence the answer to "is this kept?".
-The RLS probe in `verify/rls.sql` was **watched failing**: with the policy swapped for
-a permissive `using (true)` against the live database (rolled back), it reported another
-person's view as readable and let one be written onto them.
-
-**`0051` is applied to the live database** — `saved_view_shared_with_team`, the column
-0048 promised ("a column, not a redesign"). Amber, 27 Aug: *"team views matter, plan for
-them."* Private stays the default; sharing is a deliberate act on one view.
-
-**The read and write policies are now separate, and that split is the whole safety.**
-Read: your own, plus anything shared with a team you are in. Write: your own, always. A
-widened `for all` would have let anybody in Construction delete Deanna's view. Watched
-live, rolled back: a teammate sees the shared view, cannot see the private one, cannot
-edit or delete the shared one, and the owner can still stop sharing.
-
-The unique `(profile, board, name)` deliberately did **not** widen: two people may both
-call a view "Site this week", which is two people using the same words rather than a
-collision. The tab row carries whose it is instead.
-
-**`0050` is applied to the live database** — `user_preferences`, Q9's last layer.
-Landing page and default jobs view now follow the person to any machine they sign in on.
-
-**Why a table and not a column on `profiles`, checked rather than assumed:**
-`authenticated` holds UPDATE on *every* profiles column, `profile_permission` included —
-what stops self-promotion is the RLS policy, which admits only admins. A preferences
-column there would have needed a second policy saying "…or it's my own row", and
-policies are OR'd: that one sentence would have handed everybody write access to their
-own permission level. The separate table needs no such policy and profiles is untouched.
-
-localStorage stays, and is not a leftover: the landing route is decided on the first
-render, and waiting on a round trip there would flash the wrong page at somebody whose
-default is Jobs. The device's copy answers immediately, the profile's is the true one,
-`adoptPrefs` pulls it down on sign-in, and every change writes to both. RLS probe
-watched failing against a permissive policy before passing (it saw 2 rows including
-somebody else's).
-
-**`0049` is applied to the live database** — `profile_is_demo`, the tick that holds an
-account at the door (Amber, 27 Aug). A demo account signs in, reaches a gate screen and
-reads nothing. The gate says one thing, in her words (27 Aug): **"You do not have
-permission to access this page. Please contact admin for approval."** An earlier draft
-softened it into "you're all set up — it just opens when somebody walks you through it",
-which reads as a delay somebody else is already handling, so the person waits instead of
-asking and the one action that opens the door never happens. Nobody is named on it: a
-greeting on a refusal reads as sarcasm. Her reason, worth keeping because it explains why this is neither
-deactivation nor a permission level: *"I don't want them in the app unless I am there
-with them training them. That way they can't test and trial without me by logging in,
-but I don't have to deactivate them."*
-
-**It is enforced in one place, not on the screen.** Every read policy hangs off
-`is_active_user()`; that function now also requires `not profile_is_demo`, so every
-table refuses at once — including tables nobody has written yet. The one exception is
-deliberate: the `profiles` SELECT policy is widened so a demo account may read **its own
-row**, because `RequireAuth` has to read that row to know the account is held at all.
-Without it the app cannot tell "held at the gate" from "not set up" and everybody lands on
-"your account is not set up" — the exact wording this project already lost an hour to.
-
-Watched live in a rolled-back transaction before any app code: the same account read
-6 projects · 60 jobs · 15 teams · 47 people, then **0 · 0 · 0 and exactly 1 profile**
-with the tick on, then 60 jobs again with it off. `verify/rls.sql` carries the standing
-probe (it flips the flag on the test person mid-run and restores it, including on error).
-
-**Amber's answers, second round (27 Aug)**, each binding:
-- **The house icons swap**: Projects wears the *pair* (a project holds many houses),
-  Jobs wears the *pin* (a job is one site). Shipped; the reasoning is at the icons.
-- **Preferences get their own table, not a column on `profiles`** — and the reason is
-  checked rather than assumed: `authenticated` holds UPDATE on *every* profiles column,
-  including `profile_permission`, with only the RLS policy holding the line. A
-  "…or it's your own row" policy for preferences would be OR'd with the admin one and
-  hand everybody write access to their own permission level. Draft at
-  `scratchpad/0049_preferences_draft.sql`; ships as its own PR once #44 merges.
-- **Team-shared saved views are wanted** — not now, but designed for: a `shared_with_team`
-  column on `saved_views` plus a widened policy, planned in the same draft file. Private
-  stays the default; sharing is a deliberate act.
-
-**Amber's answers to the open questions (27 Aug)**, each now binding:
-- **One colour family, not two** — the board's ramp is Lofty's teal deepening across
-  all seven lifecycle positions (`theme/accents.ts` re-cut, contrast re-verified).
-  Trade-off flagged: Cancelled no longer reads red; one-line change if wanted.
-- **The dashboard hero is a count** — "3 need your attention", not "67% on track" —
-  when health lands. Recorded here; nothing computes health yet.
-- **The bell stays visible** as a labelled coming-soon preview.
-- **Creating a team from the app is wanted next** — the closed `TeamId` union opens
-  up, `createTeam` joins the seam, and the seed-agreement check gets revisited.
-
-A fifteenth batch, from Amber's next asks (27 Aug):
-- **The old Lofty number is first-class** ("it is what everything is linked to and
-  they will look it up"): `jobs.job_number_old` already existed; now the header
-  search and the in-drawer find match it, the drawer subtitle shows "Lofty #12345",
-  and a **Numbers & addresses** panel sits first in the drawer — job number, the
-  Lofty number **editable** (`user`+, through `updateJob`; the unique refusal comes
-  back as "already on another job — search it"), current address, and previous
-  address (honest "never renamed" when there is none).
-- **Lofty's own nav icons** — her three house drawings redrawn as strokes in
-  `theme/houseIcons.tsx`: Projects = house in a map pin, Jobs = two houses,
-  Reports = house with rising bars. Same size/currentColor contract as @vibe/icons.
-- **An unknown URL says so now** — there was no catch-all route, so a typo or stale
-  bookmark rendered a blank white page with no shell and no way back. `NotFound`
-  renders inside the shell, names the path, and links home.
-- **`npx tsc --noEmit` was a no-op all along** — the root tsconfig is solution-style
-  (`files: []`), so it type-checked nothing and exited 0. `npx tsc -b` is the real
-  check; this batch was the one that noticed, when a missing import sailed through.
-
-A fourteenth batch, from those answers:
-- **The board ramp is one family** — `theme/accents.ts` re-cut to teal deepening
-  across the seven positions (verified ≥ 8.7:1 per chip).
-- **Create-team shipped** (G44 closed): `TeamId` opened to `string` — the closed
-  union could only name compile-time teams — with the reasoning kept at the type;
-  `createTeam` on the seam cuts the slug once via `teamSlug()` (shared with the
-  Admin preview) and slots after the last active position, under 0026's existing
-  `admins add teams` policy; Admin → Teams grows name-in/slug-previewed/Add, with
-  the taken-slug case disabled and explained. `verify/seeds.sh` now asserts the
-  seeded slugs are an **ordered subset** of the live table (app-created extras
-  allowed; missing or reordered seeds still fail — watched both ways).
-
-A thirteenth batch:
-- **The docked drawer head stacks** — four controls beside a full street address left
-  the title reading "Lot 1, 28…" in a 460px panel. Docked, the actions get their own
-  line under the title (`ui.css`, keyed off `.drawer:not(.is-expanded)`); expanded,
-  one row fits and stays. Verified both ways with a seeded screenshot.
-
-Still open from Q9, each a schema change for its own PR after this one merges:
-**profile-roaming preferences** (a preferences home on the profile) and
-**user-saved views** (a saved_views table + RLS + the tabs grow a user section).
-
-Still open from this session: nothing yet *consumes* the SLA numbers — the
-at-risk/overdue flags on boards wait on the health calculation (see the parked
-`health_statuses`).
-
-**A session note for PR #37 (25 Aug — stage moves, comments, property_defs, project
-editing, address history) was never written**; `prototype-app-comparison.md` §1.5
-carries the full delta ledger for it.
-
----
-
-## Session of 2026-08-24 — forms, tables, and one invisible dropdown
-
-### The bug worth carrying forward
-
-**Every dropdown inside the create panel was painted behind it, and looked like a field
-that did not work.** Amber reported it as "I can't add project type to the new project
-form". The field was fine. Vibe renders a Dropdown's menu through a portal into `<body>`
-in a wrapper whose whole ancestor chain computes `z-index: auto`, and an auto-stacked
-positioned element paints *before* anything with a positive z-index — so the menu landed
-under `.create-panel` (41). Measured rather than reasoned about: with the menu open its
-`[role="option"]` elements sat at x 957–1380 while the panel covered 940–1400.
-
-One line in `ui.css` fixes it, above Vibe's own Modal (10000) rather than merely above our
-panels, because a popover has to clear whatever opened it. State, Council and Owning team
-had it too. **Anything new that opens a layer over the page needs to check this**, and the
-check is "open a dropdown inside it", not "read the CSS".
-
-### What else changed
-
-- **The user form was the one form never swept forward.** It rendered
-  `.create-field / .create-label / .create-hint` — three class names `ui.css` has no rule
-  for — inside a centred `Modal`. That is the whole explanation for "the edit user one is
-  weird". `Field`, `Problem` and `Result` now live in `components/Form.tsx` and both files
-  import them; New job and Split project moved onto `CreatePanel` alongside New project.
-  Deactivate stays a modal on purpose — a confirmation is supposed to interrupt.
-- **Sorting** — `components/SortableTable.tsx`, applied to Users and Teams. Blanks sort
-  last in both directions; permission sorts by the ladder, not alphabetically.
-- **Inline editing of a user row**, covering exactly the columns the table shows. Only
-  changed fields are sent. `login_email` stays in the panel — an editor that reached
-  further than the table displays would be invisible until it had changed something.
-- **`profiles.teams` rendered as slugs** on the dashboard greeting, in Settings and in the
-  Admin table. `boardModel` had resolved a job's owning team through `teamName()` for a
-  while; nothing did the same for a person's memberships. `useTeamLabels()` now does.
-- **The dictionary lists a constrained column's values**, and says where they live, which
-  is what decides who can change them: rows in a lookup are an ordinary write, an enum or
-  a CHECK is a migration. Checking the migrations to write that down turned up four
-  entries recording enums Postgres no longer has — `projects.project_type`,
-  `projects.project_status`, `jobs.job_status` (all `0028`) and `jobs.job_stage` (`0035`).
-  Those are corrected.
-
-### The team-name fix needed a second pass
-
-The first one resolved `profiles.teams` through `teamName()` and stopped there, and Amber
-reported the dashboard **still** showing `lofty_general`. It was not a stale deploy —
-production had the merged bundle and it was calling the resolver.
-
-`teamName(id, from)` falls back to the id when the lookup has no row for it. That fallback
-is right where it was written: a job owned by a retired team must render *something*. It is
-wrong as a loading state, and the dashboard is where that bites hardest — the page's
-loading gate waits on `listJobs()`, so somebody with **no jobs** clears it instantly while
-the teams read is still in flight, and the slug gets painted as though it were the name.
-If the read fails outright, it stays there forever.
-
-Reproduced both, against a build of the merge commit, before changing anything:
-
-| teams read | before | after |
-| --- | --- | --- |
-| slow (3s) | `lofty_general`, then the name | blank, then the name |
-| fails | `lofty_general` **permanently** | "Team names unavailable" |
-
-`useTeamLabels().labels()` now returns **null** rather than a slug when the lookup cannot
-answer, which forces every caller to say so. `boardModel` already had this right — it puts
-the teams query in its own loading gate, *"without them every owning team renders as its
-slug"* — and the three screens that read a person's memberships did not.
-
-**The general rule, worth keeping:** a foreign key on screen is a stand-in, and the house
-rule against inventing a value covers it. Anywhere a slug is resolved through a lookup, the
-unresolved case needs its own answer — not the raw key.
-
-### Still open
-
-**Amber asked to be able to add and edit enum values from the app.** For `teams` that
-already works — it is a table. For the rest it is DDL (`ALTER TYPE`, or dropping and
-recreating a CHECK), which PostgREST cannot issue and no policy can grant. The page says
-so per property rather than offering a control that would fail on save. Making it true
-would mean either an edge function holding a service-role key that runs vetted DDL, or
-converting the remaining enums to lookup tables the way `teams` and the stage vocabulary
-already went. That is a decision, not an implementation detail.
-
----
-
-## Session of 2026-08-21 — Phase A built, applied and proved
-
-### Where it actually stands
-
-Verified against `gmekuqdjemrfuurxhuib` on 21 August, not remembered:
-
-| | |
-| --- | --- |
-| Tables | **24**, every one with RLS enabled |
-| Policies | **70**, none missing a `WITH CHECK` on an UPDATE |
-| Views | **10**, every one `security_invoker` |
-| Security advisors | **0 errors** (72 warnings, all understood — 68 are pg_graphql discoverability, 3 are the `SECURITY DEFINER` helpers the policies need, 1 is leaked-password protection, irrelevant behind Entra) |
-| Migrations | **35 applied**, 33 files |
-| People | 47 profiles, 45 team memberships, 15 teams, 9 lifecycle stages |
-| Records | **0 projects, 0 jobs** — Phase B has not run |
-| Repository methods reading Supabase | **15 of 18** |
-
-**The two migrations with no file are both accounted for**, which is worth recording
-because "the repo cannot rebuild production" was a live worry:
-
-- `0014_revoke_recreated_audit_function` — its content was folded into the repo's
-  `0013`, which carries both revokes. Checked rather than assumed: replaying the repo
-  files alone produces `log_activity_audit` with no EXECUTE for `anon`, `authenticated`
-  or `PUBLIC`, which is what production has.
-- `move_profiles_backup_out_of_the_api` — moved an ad-hoc backup table out of `public`.
-  A rebuild from empty never creates that table, so there is nothing for a file to do.
-
-### What was built
-
-Migrations `0024`–`0033`. Teams became a lookup table; the stage enum was reconciled to
-the nine live values; `projects` and `jobs` moved to natural keys under the
-prefix-everything naming convention; then pipelines and position, tasks and dependencies,
-variations, and documents/comments/tags.
-
-The four axes are separate tables, deliberately, and merging any pair destroys something
-that cannot be recovered afterwards — see `schema-plan.md`.
-
-### The sign-in outage, and what it taught
-
-Sign-in broke twice on the same day and both causes are worth carrying forward.
-
-1. **PGRST201.** `profile_teams` has three foreign keys to `profiles` — `profile_id`
-   plus `created_by`/`updated_by` from the audit quartet — so an unqualified
-   `profile_teams(...)` embed is ambiguous and PostgREST refuses it. The query deciding
-   whether you are signed in went through that embed. **Every table with the audit
-   quartet has this shape**, so every future embed of one must name its constraint.
-2. **A trigger on `auth.users`.** `log_login_activity_from_auth_users()` still wrote
-   `profiles.last_login_at` and matched `auth_user_id`, both renamed in `0028`. It fires
-   on every sign-in, so the trigger raised, the update rolled back, and there was no
-   session at all.
-
-The lesson from the second is in `0033`'s header: *"which functions reference this table"
-is a question to ask the database, not one to answer from a function's name.* The rewrite
-list for `0028` was built by reading names out of `pg_proc`; this one reads like a logging
-helper and the write to `profiles` is four lines into the body.
-
-Neither could have been caught by the harness as it stood — `0008` explains that no
-migration here can create a trigger on `auth.users`, so the throwaway database differed
-from production in exactly the place that broke. `replay.sh` now creates it afterwards,
-where it is superuser and may, and `behaviour.sql` simulates a full sign-in.
-
-Both outages presented as *"your account is not set up"* because two `catch` blocks
-swallowed the error. `AuthProvider` now fails closed **and** reports.
-
-### The placeholder sweep
-
-Every page and form was audited against the live database. Four different things were
-occupying the screen while their table was unavailable, and they all looked identical:
-
-| | |
-| --- | --- |
-| `{{table.column}}` tokens | Working as designed — they announce themselves |
-| Invented records | 5 projects and 11 jobs generated at render time. `PRJ-001-02` read as a decision the app had made, and every figure on Reports was arithmetic over a fixed array — "45% on track" counted positions in an 11-item status cycle |
-| Correct but not live | Stages and teams, right but read from a TypeScript seed while real tables held the rows |
-| Invented process | 36 checkpoints, 11 property definitions and a team-per-phase mapping that **disagreed with the database** — none of it from Lofty |
-
-All four are resolved: the boards read real records, the lookups query, and the two that
-have no table (`pipeline_stage_tasks`, `property_defs`) return empty with the screens
-saying so. The eleven property definitions are preserved in `schema-plan.md` as the
-Phase C starting point rather than deleted.
-
-Two defects fixed along the way, both live at the time:
-
-- **Creating a project lost it.** `createProject` wrote to Supabase; `listProjects` still
-  answered from a stub that returns `[]`. The row was inserted, the number was issued,
-  and neither the board nor the New job picker could see it.
-- **Five property definitions never rendered.** They named a stage that does not exist
-  (`"Sales & acquisition"` with a lowercase a), so Setup → Properties counted eleven in
-  its heading above a table of six.
-
-### `verify/seeds.sh` — the class of bug behind most of the above
-
-Two lists that must agree, written in two places, with nothing noticing when they stop.
-Three got past review in a week: the property definitions above, a commented-out query in
-`listProjects` naming five pre-`0028` columns, and eight data-dictionary entries marked
-`created` for view columns renamed by `0028`.
-
-`seeds.sh` asserts all of it — seeded stages and teams against their tables, every column
-in each `*_COLUMNS` select list, every `created` dictionary entry, and the six dropdown
-lists in `import/build_template.py` against the lifecycle's stages, the `au_state` and
-`sa_council` enums, the check constraints on `job_status` and `project_type`, and the
-active teams. **Each assertion was watched failing before being trusted.** It also
-reports, without failing, that 188 real columns have no dictionary entry: everything from
-`0030`–`0032`.
-
-The spreadsheet lists were added after the sheet was found still offering the nine
-lifecycle stages `0035` had replaced with five — seven values the database would refuse on
-insert, in a dropdown, which reads as the list of permitted answers. The script's own
-docstring already said `seeds.sh` was what caught it drifting; it was not, until now.
-
----
-
-## Session of 2026-08-16 — what changed, and what is still open
-
-> **Superseded in places.** Kept for its reasoning. Anything it calls "next" was
-> done in the 21 August session above, and the schema it describes predates `0024`–`0033`.
-
-### Applied to the live database
-
-`0020`–`0023` are **applied** to `gmekuqdjemrfuurxhuib`, not just written. `supabase
-migration list` is the check if that ever looks doubtful.
-
-| | |
-| --- | --- |
-| `0020` | Backfills `auth_user_id` for anyone whose auth user predates their profile. A no-op now; kept for the case below. |
-| `0021` | Drops `profiles.preferred_name`. `profile_display.greeting_name` is `first_name`. |
-| `0022` | Folds `profile_teams` into `profiles.teams team[]`, normalised on write, GIN indexed. |
-| `0023` | Requires `original_address_id`, `created_by` and `job_number`; adds `jobs.old_job_number`; fixes project numbering. |
-
-### Six faults found, all fixed — the shapes are worth knowing
-
-1. **`create or replace view` does not preserve `reloptions`.** Rewriting `profile_display`
-   silently dropped the `security_invoker = on` from `0001`, which would have left the view
-   executing as its owner and returning every name in the company past the policies on
-   `profiles`. Exactly what `0001`'s own comment warns about. **Any migration touching a
-   view must re-apply `security_invoker` and assert on `pg_class.reloptions` afterwards.**
-2. **`created_by` was never populated.** Not by the app, not by a trigger — every row ever
-   written left it null. `stamp_created_by()` fills it now, falling back to a system
-   account when there is no JWT.
-3. **Project numbers were not sequential** — 1000, 1002, 1004. `bump_project_no_seq` asked
-   its question with `nextval`, which consumes rather than reads. It uses
-   `pg_sequence_last_value` now.
-4. **The toolbar filters filtered nothing.** The chips rendered and were never applied to
-   any row; only the header search narrowed results. `FILTERABLE` is now only the fields
-   the data actually carries — "Team member", "Type" and "Tag" came off it and go back when
-   their columns exist.
-5. **A backfill that claimed to be re-runnable was not.** Caught by running it twice against
-   fixtures, not by reading it.
-6. **The team picker labelled the first chip "(primary)"** after `0022` had made
-   `profiles.teams` a sorted set. The database reorders on write, so that label had stopped
-   being able to be true.
-
-### App changes
-
-Records have URLs (`/jobs/:jobNumber`, `/projects/:projectNumber`, flat — a job number
-already carries its project). Board state — view, grouping, filters, saved view — is in the
-query string, defaults omitted, writes replacing rather than pushing. Saved views are the
-phases of the build. Nav moved to a collapsible left rail that becomes a drawer below
-900px. Dashboard, User settings and the Admin picker read the profile instead of showing
-tokens.
-
-**The binding template's rule got sharper and is worth keeping:** a `{{table.column}}` token
-means *the app cannot answer yet*. An empty value from a wired column is a different answer
-and gets a message — "No team assigned — ask an administrator to add you to one" — because
-only one of those two is the reader's to act on.
-
-**The yellow banner that explained that rule is gone**, at Lofty's request, 23 August — and
-the "Unbound" chip in the header went with it. They were one thing: the chip was the badge
-and the band was its caption, so keeping the badge without the caption would have left an
-unexplained word in the header. The chip had also stopped being true — its text was the
-hardcoded string `"Unbound"`, not `repo.name`, so it read the same on a build with eighteen
-methods reading live Supabase as on one reading nothing.
-
-The rule itself stands and the tokens still render. What no longer exists is a line on
-screen explaining them, which is fine while the audience is Lofty rather than the public,
-and worth remembering if that changes. **Setup → Wiring is where the honest answer lives**
-now: it counts the methods actually reading from Supabase, per table, and it is generated
-rather than typed.
-
-### Open, in rough priority order
-
-1. **The preconstruction pipeline.** Lofty tracks stage 4 through ~10 positions plus three
-   terminal states (`Initial Documents` … `Build Commences [Closed Won]`, `Not Proceeding
-   [Closed Lost]`, `In Doubt / On Hold`), and jobs should land there by default. Three
-   things block building it, and guessing any of them is how the phase split got done twice:
-   whether those values are a roll-up of the 57 steps in `preconstruction-process.md` or a
-   separate list; whether "stage 4" means the app's stage 4 alone or 4 and 5 together, since
-   Lofty's own numbering merges them; and where the three terminal states live, given
-   `record_status` already has `on_hold` and `cancelled` and two places recording the same
-   fact will drift.
-2. **The 57 preconstruction steps have no home.** `template_milestones` (renamed from
-   `template_checkpoints`, 26 Aug — Lofty's word is milestones) is the nearest
-   structure and its seeded rows are **four invented placeholders per stage** — not Lofty's.
-   Mapping the steps onto stages, deciding which are skippable, and deciding whether their
-   SLA days should drive the board's "days in stage" are all business decisions.
-3. **`0007` fails on a fresh database.** It comments on `activity_audit`, which `0008`
-   creates. One `comment on` statement, so the cost is a missing comment — but a clean
-   rebuild does not apply without reordering.
-4. **"Not set up yet" misreports a dead session.** When the session's auth user has been
-   deleted, `getUser()` fails, the catch treats it as "no profile", and the page says the
-   account is not on the Lofty team list. It is neither true nor actionable, and it cost an
-   hour of debugging. It should detect an invalid session and clear it.
-5. **Linking is not self-healing.** `0015`'s trigger is `after insert on auth.users`, so it
-   fires once per person. Anyone added to `profiles` *after* they have signed in never
-   links, and `0020` has to be re-run. Fixing it properly means a trigger on `auth.users`,
-   which per `0015` can be created and never dropped — so it is a decision, not a chore.
-6. **"Post-construction" is an inferred name.** The business named preconstruction and
-   construction. What stages 7–8 are called, and whether they are one phase or two, has not
-   been said. `app/src/data/savedViews.ts` says so at the point of definition.
-7. **A naming collision.** The *phase* Preconstruction contains a *stage* also called
-   Preconstruction, so a saved-view tab and one of its five columns share a name. Lofty's
-   own vocabulary, left alone.
-8. **Two profiles have no team**, so they exercise the empty state rather than the value.
-   The dashboard's three teammate avatars are still hardcoded — deriving them needs a query
-   and a decision about what "your team" means when somebody is in several.
-
-### What is actually wired
-
-`profiles` (47 rows) is the only business table with data. `addresses`, `projects` and
-`jobs` exist and are empty. `property_defs`, `property_values`, `comments`, `activity`,
-`permission_grants`, `template_phases` and `template_milestones` **do not exist yet** — the
-lookups fall back to the seed in `stubRepository.ts`, which is why boards render columns
-with nothing in them. Every remaining token on screen is one of those two cases.
+## Earlier sessions — 2026-08-16 to 2026-09-01
+
+Moved verbatim to [`docs/history/handoff-2026-08.md`](docs/history/handoff-2026-08.md)
+on 6 September. Nothing was reworded or dropped: the reasoning that reversed a decision
+is kept there for the same reason it was kept here.
 
 ---
 
@@ -2134,7 +861,7 @@ smaller problem behind; **neither can be fixed from inside this repository**:
 
 | | What is wrong | Who fixes it, and where |
 | --- | --- | --- |
-| **The Netlify build source** | **Resolved and deployed 2 September** — `loftyprojectapp.netlify.app` is a *new* Netlify site (new site id, new team) building from `LoftySupport/loftyprojectapp` on `main`; first deploy `0d84e59`. The sign-in page said *Not configured* on it, which read like missing environment variables and was not: the site is connected to Supabase and the extension sets `VITE_SUPABASE_DATABASE_URL` and `VITE_SUPABASE_ANON_KEY`, names the app did not read | **Closed** — `app/src/data/supabaseEnv.ts` reads either spelling, nothing was added in Netlify, and the deploy after merging put a configured bundle on the production URL. Reasoning in *Session of 2026-09-02, later* |
+| **The build source** | **Superseded 6 September.** This row tracked a Netlify site that has since been disconnected; the history is in [`docs/history/handoff-2026-08.md`](docs/history/handoff-2026-08.md) and *Session of 2026-09-02, later*. What survives it is the lesson: the sign-in page said *Not configured* on a fully populated environment, because the integration wrote the values under names the app did not read | **Closed** — Vercel is the only host, `hub.lofty.au` is the domain, and `app/src/data/supabaseEnv.ts` reads exactly `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`. The fix for a name mismatch is to tell the integration the framework is Vite, never a third spelling in the app |
 | **Repository visibility** | This repository is **private**; the old one is public. The Updates changelog reads merged pull requests from the browser with no token — see `app/src/data/github.ts` for why a token cannot go there — and GitHub answers an unauthenticated read of a private repository with 404 | A decision, not a fix. Make `LoftySupport/loftyprojectapp` public and the feed works exactly as before. Keep it private and the feed has to be generated at build time instead, which is a different piece of work and has not been done |
 
 That deploy has gone out and the site signs in. Until the second is decided, Updates → *Merged from the build* renders its error state saying the
@@ -2163,7 +890,7 @@ The link was proved against the live database rather than reasoned about: insert
 stayed at 45. Run inside a transaction and rolled back.
 
 The client is wired too: `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` are set
-on the Netlify project for every deploy context, so `supabaseRepository.ts` builds a real
+on the Vercel project for every environment, so `supabaseRepository.ts` builds a real
 client instead of returning null. Locally they come from `app/.env.local`.
 
 **Auth has landed, and the data path is open.** Reads are gated on `is_active_user()`,
@@ -2172,38 +899,45 @@ reads none. Where a table is not wired yet the repository still falls back to se
 deliberately: a half-built database should degrade to the structure, not to a blank
 screen.
 
-### The Netlify environment, and what is deliberately not in it
+### The build environment, and what is deliberately not in it
 
-The Supabase Netlify extension provisions four variables of its own —
+**The prefix is the framework's, not Supabase's, and it has cost this app its data
+twice.** Vite exposes only variables prefixed `VITE_`. A Supabase integration provisions
 `SUPABASE_DATABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_JWT_SECRET` and
-`SUPABASE_SERVICE_ROLE_KEY`. None of them reach the browser, because **Vite only exposes
-variables prefixed `VITE_`**. That is the whole reason the app sat on mock data with a
-fully populated environment: it was a prefix mismatch, not a missing value.
+`SUPABASE_SERVICE_ROLE_KEY` — none of which reach the browser. That is the whole reason
+the app once sat on mock data with a fully populated environment: a prefix mismatch, not
+a missing value.
 
-**And then it happened again, one layer up.** Told the site is a Vite site, the extension
-also writes `VITE_SUPABASE_DATABASE_URL` and `VITE_SUPABASE_ANON_KEY` — correctly
-prefixed, correctly public, and named nothing like the `VITE_SUPABASE_URL` and
-`VITE_SUPABASE_PUBLISHABLE_KEY` the app read. Same outage, same screen, different half of
-the variable name. `app/src/data/supabaseEnv.ts` now accepts either pair and prefers this
-app's own, so neither spelling is a trap; see *Session of 2026-09-02, later*.
+**And then it happened again, one layer up.** The integration also wrote correctly
+prefixed, correctly public variables under names of its own —
+`VITE_SUPABASE_DATABASE_URL` and `VITE_SUPABASE_ANON_KEY`, nothing like the
+`VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` the app read. Same outage, same
+screen, different half of the variable name.
 
-**`SUPABASE_JWT_SECRET` and `SUPABASE_SERVICE_ROLE_KEY` have been deleted from Netlify.
-Do not put them back.** This is a static Vite build — no Netlify Functions, no edge
-functions, nothing in this repo reads either one. The service role key bypasses RLS
-entirely and the JWT secret mints tokens for any user, so an unused copy sitting in a
-build environment is pure risk: the only thing separating it from the public bundle was
-the convention that nobody types `VITE_` in front of it. If a Netlify Function ever
-genuinely needs one, add it back scoped to functions only — never to builds.
+**On Vercel the same trap wears a third face:** its Supabase integration assumes Next.js
+unless told otherwise and provisions `NEXT_PUBLIC_SUPABASE_URL` and
+`NEXT_PUBLIC_SUPABASE_ANON_KEY`, which `import.meta.env` cannot see at all. **Tell the
+integration the framework is Vite.** That is the fix, every time — not another spelling in
+the app.
 
-Two gotchas worth knowing before touching that screen:
+`app/src/data/supabaseEnv.ts` reads exactly two names and no fallback. The old
+either-spelling fallback was removed on 6 September after the live production bundle was
+checked rather than assumed: both fallback names compiled to `void 0`, so neither was set
+and the branch was dead code.
 
-- **Set env vars with all scopes.** Writing one scoped to `builds` alone through the
-  Netlify API reports success and then does not persist. Always read the variable back
-  after writing it; the success message is not proof.
-- **Never mark a `VITE_` variable as secret.** Netlify fails any build whose output
-  contains a secret value, and Vite inlines these into the bundle by design — so the flag
-  turns every build red. They are public keys, and that is correct: RLS is the boundary,
-  not the key.
+**`SUPABASE_JWT_SECRET` and `SUPABASE_SERVICE_ROLE_KEY` must never be in the build
+environment.** This is a static Vite build and nothing in it reads either one. The service
+role key bypasses RLS entirely and the JWT secret mints tokens for any user, so an unused
+copy sitting in a build environment is pure risk: the only thing separating it from the
+public bundle is the convention that nobody types `VITE_` in front of it. The Supabase
+edge functions that genuinely need a privileged key read it from **Supabase's own function
+secrets**, which the build environment never sees.
+
+One gotcha worth knowing before touching that screen:
+
+- **Never mark a `VITE_` variable as sensitive.** That setting is for values that must not
+  reach the browser, and Vite inlines these into the bundle by design. They are public
+  keys, and that is correct: **RLS is the boundary, not the key.**
 
 
 **The prototype it grew from is a different repo** — `amberbeaumont/loftyprojectboard`,
@@ -2212,7 +946,7 @@ this work touches it. Its PR #11 was closed unmerged as superseded.
 
 That one is **correctly** still under `amberbeaumont` and should stay there: it is a
 frozen artefact, not the live build, and moving it would break the links in
-`prototype-app-comparison.md` that cite it by line number. It is the app repository that
+`docs/history/prototype-app-comparison.md` that cite it by line number. It is the app repository that
 moved, not the prototype.
 
 ## Sign-in: what was built, and the one thing still open
@@ -2238,8 +972,8 @@ the window next to it.
 
 Fix: **Authentication → Sign In / Providers → Email → off.** Lofty has no
 email-and-password users and never will; the directory is the source of truth. Then
-re-run the curl above and confirm `email` is gone — the same read-it-back rule as the
-Netlify variables.
+re-run the curl above and confirm `email` is gone. Read it back: a dashboard that says it
+saved is not proof that it did.
 
 **What actually stops it today, and why that is not luck.** 0009 moved every read policy
 off `using (true)` and onto `is_active_user()`:
@@ -2321,7 +1055,7 @@ registrations** → **New registration**:
 
 Single-tenant is the point: it is what stops any Microsoft account on earth signing in.
 The redirect URI is Supabase's callback, not the app's — a common early mistake is
-putting the Netlify URL here. It goes in the redirect allow list instead.
+putting the app's own URL here. That goes in the redirect allow list instead.
 
 #### 2. Client ID and secret
 
@@ -2360,18 +1094,26 @@ App registration → **Manifest** → back up the JSON → set `optionalClaims`:
 
 ### The redirect allow list — now at the root
 
-Supabase → **Authentication** → **URL Configuration**. **The app moved out of `/app/`,
-so these changed.** Site URL `https://loftyprojectapp.netlify.app/`, and under *Redirect
-URLs* the deploy previews too or every PR preview fails to complete sign-in:
+Supabase → **Authentication** → **URL Configuration**. Site URL
+`https://hub.lofty.au/`, and under *Redirect URLs* the preview deployments too, or every
+PR preview fails to complete sign-in:
 
 ```
-https://loftyprojectapp.netlify.app/**
-https://deploy-preview-*--loftyprojectapp.netlify.app/**
+https://hub.lofty.au/**
+https://loftyprojectapp.vercel.app/**
+https://loftyprojectapp-*-loftygroup.vercel.app/**
 http://localhost:5173/**
 ```
 
-A stale `/app/**` entry here is harmless but no longer matched; the old paths 301 to the
-root at the CDN, and Supabase compares against the URL the browser was sent to.
+The third line is the shape Vercel gives a branch deployment — the preview for PR #38 was
+`loftyprojectapp-git-claude-lofty-hub-repo-set-103bf1-loftygroup.vercel.app`, so the
+wildcard has to sit in the middle, not only at the end.
+
+**A domain that serves the app is not a domain that can sign in.** `hub.lofty.au` needs to
+be in THREE places and all three are separate: added in Vercel, listed here, and — because
+Supabase's callback is the Entra redirect URI — nothing extra in Entra, which points at
+Supabase rather than at the app. Missing from this list, the app loads and sign-in bounces.
+Any stale `*.netlify.app` or `/app/**` entry here is inert and can be deleted.
 
 ### The client call
 
@@ -2508,15 +1250,16 @@ Then replace the placeholder policies. Right now they are `using (true)` for
 `authenticated` — **any signed-in person reads every project, job and address.** Fine
 against an empty database, wrong the day real data lands, and the reason the email
 provider above matters. `profile_teams` and `permission_level` exist to drive the real
-scope model; the shape is in `supabase-schema.md`.
+scope model; the shape is in `docs/schema/supabase-schema.md`.
 
 ## Admin and Setup are different screens — SUPERSEDED 4 September
 
 **This split was by SUBJECT, and the 4 September one is by WHO ASKS.** Setup is now
 **Settings**, manager and above, holding Properties, Processes, Contacts, Maintenance and
 Automations; Admin is behind the header cog, admin and above, and took Permissions,
-Dictionary, Wiring, Bugs, Ideas, Roadmap and Changelog with it. See *Session of
-2026-09-04 (later)* at the top, and `schema-plan.md` → *4 September — Settings is the
+Dictionary, Wiring, Bugs, Ideas, Roadmap and Changelog with it — **Roadmap and Changelog
+came back out again on 7 September as duplication; see the top of this file.** See *Session of
+2026-09-04 (later)* at the top, and `docs/schema/schema-plan.md` → *4 September — Settings is the
 managers', Admin is the administrators'*. The reasoning below is kept because it explains
 why the tabs sit where they do at all; the table is no longer what the app does.
 
@@ -2545,13 +1288,13 @@ seed definitions, and the migration to create and populate it is the next schema
 
 Each schema decision touches four things that must move together:
 
-1. `supabase-schema.md` — the doc
+1. `docs/schema/supabase-schema.md` — the doc
 2. `app/supabase/migrations/0001_core.sql` — the migration
 3. `app/src/data/types.ts` — the TypeScript
 4. `app/src/data/dictionary.ts` — the dictionary (then `npm run dictionary`)
 
 Landing those on `main` separately is how they drift. So: a branch per table, all four in
-one PR, Netlify builds a deploy preview, merge when it looks right.
+one PR, Vercel builds a deploy preview, merge when it looks right.
 
 ```bash
 git checkout -b claude/<table>-schema
@@ -2563,9 +1306,21 @@ git commit && git push -u origin claude/<table>-schema
 
 ## Where it is deployed
 
+**Vercel, and only Vercel, since 4 September. The custom domain is `hub.lofty.au`.**
+`netlify.toml` was removed on 6 September; the two Netlify site names had been answering
+404 for two days, and a second host configuration nobody deploys from is a file that
+contradicts the live one the first time either changes. The subsections below that were
+written against Netlify have been swept forward to Vercel and to `hub.lofty.au`; what
+belongs where, and why, did not change, only the host it is set on.
+
+The one Netlify thing left in these documents is **not this app**:
+`loftyprojectboard.netlify.app` is the frozen stakeholder prototype, in the separate
+`amberbeaumont/loftyprojectboard` repository. It is still live and it stays that way.
+
 | URL | What |
 | --- | --- |
-| `loftyprojectapp.netlify.app` | The build — **the app is the site now**, not a subfolder |
+| `hub.lofty.au` | **Lofty Hub.** The build — the app is the site, not a subfolder |
+| `loftyprojectapp.vercel.app` | The same deployment on its Vercel-assigned name |
 | `…/dictionary` | The data dictionary, permission-gated |
 | `…/signin` | The only route reachable without a session |
 | `…/binding-template` | The tokenised prototype — **layout** reference only |
@@ -2573,41 +1328,47 @@ git commit && git push -u origin claude/<table>-schema
 | `…/app/*` | 301 → the same path at the root, for old bookmarks |
 
 The app moved out of `/app/`. Three things had to agree for that, and they still do:
-`base` in `vite.config.ts`, the catch-all in `netlify.toml`, and where `build.sh` copies
-the build. The router basename and the OAuth `redirectTo` both read
+`base` in `vite.config.ts`, the catch-all rewrite in `vercel.json`, and where `build.sh`
+copies the build. The router basename and the OAuth `redirectTo` both read
 `import.meta.env.BASE_URL`, so they follow `base` on their own — that is the one value
 to change if it ever moves again.
 
-The catch-all is deliberately **not** `force`d. Without `force`, Netlify serves a real
-file when one exists, which is what stops `/assets/*`, `/prototype.html` and the images
-from being swallowed by the SPA fallback.
+**The catch-all must stay last.** Vercel takes the first `rewrites` entry that matches, so
+`/binding-template` is listed above `/(.*)`, and real files in `dist/` — `/assets/*`,
+`/prototype.html`, the images — are served before the rewrite is consulted at all. Adding
+a rule above the catch-all is safe; adding one below it is dead.
 
-`app/netlify.toml` is **gone**. Netlify reads the `netlify.toml` at the site's base
-directory and nothing else, and this site's base is the repo root — so that file had been
-dead since the app stopped publishing from `app/`. Everything in it (the SPA catch-all,
-the noindex and frame headers, `NODE_VERSION`) is in the root file already. It was kept
-around as a second source of truth for a setting only one file decides, which is the
-shape of a config that eventually contradicts the live one.
+**A custom domain is two things, not one.** Adding `hub.lofty.au` in Vercel serves the app
+there, but sign-in keeps failing until the same origin is added to **Supabase → Auth → URL
+Configuration** as a redirect URL, and to the **Entra app registration's** redirect URIs.
+An origin that serves the app but is not in both of those gets a sign-in page that bounces.
+The same applies to `SHARE_ALLOWED_ORIGINS` on the `report-share` edge function — a share
+link opened from a domain not in that allowlist is refused.
 
 ### The environment variables, and where the security actually comes from
 
-> **Stale as of 2 September.** The site this was verified against is gone; the site now at
-> `loftyprojectapp.netlify.app` is new and has **none** of these set — see *Session of
-> 2026-09-02*. Kept because what belongs where, and why, has not changed.
+> **The host this was first verified against is gone.** The table below was read off a
+> Netlify site in August; that site is disconnected and the deploy is Vercel's. Kept
+> because **what belongs where, and why, has not changed** — and re-verified on 6 September
+> against the live `hub.lofty.au` bundle, which is the only check that cannot be fooled by
+> a dashboard.
 
-Verified against the live site, 23 August:
+What the production bundle proves, 6 September — read out of `hub.lofty.au`'s own
+JavaScript, not off a settings screen:
 
 | key | set | read by |
 | --- | --- | --- |
-| `VITE_SUPABASE_URL` | ✅ | the app |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | ✅ `sb_publishable_…` | the app |
-| `SUPABASE_ANON_KEY` | ✅ | **nothing** — added by the Supabase Netlify extension |
-| `SUPABASE_DATABASE_URL` | ✅ | **nothing** — same |
+| `VITE_SUPABASE_URL` | ✅ inlined | the app |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | ✅ inlined, `sb_publishable_…` | the app |
+| `VITE_SUPABASE_DATABASE_URL` | ✗ compiles to `void 0` | nothing — the fallback that read it is now removed |
+| `VITE_SUPABASE_ANON_KEY` | ✗ compiles to `void 0` | nothing — same |
 
-**There is no `service_role` key on the site**, which is the check that actually matters.
+**No `service_role` key appears anywhere in the bundle**, which is the check that actually
+matters. Grep it and see: an unset `VITE_` variable becomes the literal `void 0`, so the
+bundle answers the question a dashboard only claims to.
 
-Keeping these in Netlify rather than in the repo is right and worth doing — a key in git
-is a key in every clone, every fork and every screen share forever. But it is worth being
+Keeping these in the host's environment rather than in the repo is right and worth doing —
+a key in git is a key in every clone, every fork and every screen share forever. But it is worth being
 exact about what it does *not* do: **a `VITE_`-prefixed variable is inlined into the
 JavaScript bundle at build time and shipped to every browser.** Built with a probe value,
 the string appears verbatim in `dist/assets/*.js`. Anyone who opens the site can read the
@@ -2619,32 +1380,32 @@ a matching policy. The one thing that would be catastrophic is a `service_role` 
 a `VITE_` prefix, because that key bypasses RLS entirely and would be published the same
 way. Never add one.
 
-Both `VITE_` variables are scoped to context `all`, so **deploy previews point at
-production Supabase**. Fine while there are no jobs; scope them per context at Phase B,
-when a preview branch can write to real records.
+Both `VITE_` variables are set for every environment, so **preview deployments point at
+production Supabase**. This was going to be fixed "at Phase B", which is now never — so it
+needs its own moment. Scope them per environment **before real jobs accumulate**, because
+from now on data arrives gradually and there is no longer a load date to schedule it
+against. Every preview branch can already write to real records.
 
 ### `SUPABASE_ACCESS_TOKEN`, and the environment it has to be in
 
-**Netlify is the wrong place for this one, and the distinction is not obvious.** Every
-other variable on this page is read by a Netlify *build* — the app's two `VITE_` keys, and
-the two the Supabase extension adds. `SUPABASE_ACCESS_TOKEN` is read by the **Supabase MCP
-server**, which runs in the Claude Code session's own container. Netlify's environment
-never reaches that container, so a token stored there authenticates nothing and is only a
-credential sitting somewhere nothing reads — which is precisely why
-`SUPABASE_JWT_SECRET` and `SUPABASE_SERVICE_ROLE_KEY` were deleted from Netlify above.
-It belongs in the **Claude Code remote environment's** variables instead.
+**The host's environment is the wrong place for this one, and the distinction is not
+obvious.** Every other variable on this page is read by a *build* — the app's two `VITE_`
+keys. `SUPABASE_ACCESS_TOKEN` is read by the **Supabase MCP server**, which runs in the
+Claude Code session's own container. The deploy environment never reaches that container,
+so a token stored there authenticates nothing and is only a credential sitting somewhere
+nothing reads — which is precisely why `SUPABASE_JWT_SECRET` and
+`SUPABASE_SERVICE_ROLE_KEY` do not belong in a build environment either. It goes in the
+**Claude Code remote environment's** variables instead.
 
 Asserted once and then actually checked, because the two environments are easy to
-conflate. Four variables that *are* set on the Netlify project, read from inside a
-session container:
+conflate. The variables that *are* set on the deploy project, read from inside a session
+container:
 
 ```
 VITE_SUPABASE_URL              (absent)
 VITE_SUPABASE_PUBLISHABLE_KEY  (absent)
-SUPABASE_ANON_KEY              (absent)
-SUPABASE_DATABASE_URL          (absent)
 
-env vars matching /netlify|supabase/i:  0
+env vars matching /vercel|supabase/i:  0
 ```
 
 Not one of them crosses. `env` in a session mentions neither service.
@@ -2739,11 +1500,11 @@ layout reference. The React app is the field reference.
 ## Schema: what is decided
 
 > **Written before `0024`–`0033`.** The reasoning holds; several of the shapes do not —
-> keys, naming, stages, teams and parties all changed. `schema-plan.md` and the migrations
+> keys, naming, stages, teams and parties all changed. `docs/schema/schema-plan.md` and the migrations
 > are the current record. Kept because a schema decision without its reasoning gets
 > "simplified" back into a bug by the next person.
 
-Three tables are designed and in the migration. Full detail in `data-dictionary.md`;
+Three tables are designed and in the migration. Full detail in `docs/schema/data-dictionary.md`;
 this is the reasoning, which is the part that does not survive in a column list.
 
 ### `profiles` — not `users`
@@ -2849,10 +1610,19 @@ re-asked in six months:
 
 ---
 
-## Next: Phase B, the import
+## Phase B, the import — closed 7 September without running
 
-Phase A is structure. Phase B is the first real data, and it is also the **checkpoint** —
-anything structurally wrong surfaces here, while changing it is still cheap.
+> **This section is a record, not a plan.** Amber closed the import on 7 September:
+> *"i don't need any jobs imported from spreadsheets. all jobs that need to be created from
+> now on will be created from the projects in the app"*. Nothing below is work anybody is
+> going to do. It is kept because the reasoning is still load-bearing — the spine review it
+> forced was done and applied, and the two hazards it names (projects reconstructed from
+> addresses; sequence following lot order, not old-number order) are now **things a person
+> gets right in the app, by hand, one project at a time**, rather than things a generator
+> gets right in bulk. The hazard did not go away with the importer.
+
+Phase A is structure. Phase B was to be the first real data, and also the **checkpoint** —
+anything structurally wrong would surface there, while changing it was still cheap.
 
 ### What the import actually is
 
@@ -3404,7 +2174,7 @@ Carried forward and still open. The first two block real screens.
 | --- | --- |
 | Permissions | Permission sets, the `private` schema and its helpers, entity grants |
 | Property types | The property enums **alone** — never used in the migration that creates them (the `0014` lesson) |
-| Properties | `property_defs` seeded from the eleven in `schema-plan.md`; `property_options`; `property_values`; `property_grants`; `property_value_history` |
+| Properties | `property_defs` seeded from the eleven in `docs/schema/schema-plan.md`; `property_options`; `property_values`; `property_grants`; `property_value_history` |
 | Wiring | `pipeline_stage_properties`, `pipeline_stage_tasks`, required-to-exit and required-to-create triggers |
 | Process import | Team processes as pipelines; the map's steps mapped to teams by hand |
 | Automations | `pg_cron` 1.6.4 and `pg_net` 0.20.4 are already installed |

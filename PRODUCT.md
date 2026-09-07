@@ -201,9 +201,9 @@ an open question with Amber rather than a handle nobody added.
   projects with 66 jobs; no imported data yet.
 - `app/supabase/import/lofty-jobs-grouped-by-project-2026-08-31.xlsx` — the 801 old-system
   jobs, staged but not loaded.
-- `design-system-evaluation.md` — the July 2026 evaluation of the prototype against Vibe,
+- `docs/history/design-system-evaluation.md` — the July 2026 evaluation of the prototype against Vibe,
   with the contrast numbers behind every colour decision.
-- `schema-plan.md`, `HANDOFF.md` — the design record and state of play.
+- `docs/schema/schema-plan.md`, `HANDOFF.md` — the design record and state of play.
 - **Absent, not to be fabricated:** health inputs, SLA values (Amber sets them in the
   app), maintenance categories, testimonials or metrics of any kind.
 
@@ -223,7 +223,7 @@ an open question with Amber rather than a handle nobody added.
 ## Accessibility & Inclusion
 
 No formal standard was adopted (Amber, 2 September). What is committed in code: every
-text-on-tint pair clears 4.5:1 and every indicator 3:1 (`design-system-evaluation.md`),
+text-on-tint pair clears 4.5:1 and every indicator 3:1 (`docs/history/design-system-evaluation.md`),
 dark theme inks are re-cut for the same, touch targets on the drawer are 40px minimum,
 `prefers-reduced-motion` is honoured, and the responsive sweep runs 115 route-and-width
 combinations. Bright-daylight legibility on a phone is a product need, not a standard.

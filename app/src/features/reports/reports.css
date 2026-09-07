@@ -58,6 +58,24 @@
 }
 
 /*
+ * The builder is a white sheet whatever theme the app is in — every panel, card and menu
+ * in `components/` is `bg-white` and every field is inked `#00393f`, and the module ships
+ * no dark variant. `index.html` declares `color-scheme: light dark` for the app, so on a
+ * dark OS the browser paints any native control that sets no background of its own with
+ * its dark field colour: watched in Chromium, `rgb(59, 59, 59)` under `#00393f` text in
+ * every settings-panel input, textarea and select — black on black, unreadable. Declaring
+ * the light scheme on the builder's root tells the browser what the panels already say,
+ * and native fields, `<option>` lists and scrollbars inside it render for a white ground.
+ *
+ * Not `bg-white` on each input: that would fix the ones listed today, in the vendored
+ * files, and miss the next control the module adds. Not on `body`: the rest of the app
+ * has a real dark theme and wants dark controls.
+ */
+.nokey {
+  color-scheme: light;
+}
+
+/*
  * Preflight also normalises the elements the module's classes assume have been
  * normalised: headings and paragraphs with no browser margin or size of their own, form
  * controls inheriting the page's font, bare buttons.

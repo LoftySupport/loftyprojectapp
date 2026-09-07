@@ -1,0 +1,13 @@
+/* Minimal element defaults so any page linking styles.css inherits the brand voice. */
+body{font:var(--font-text1-normal);color:var(--primary-text-color);background:var(--primary-background-color);-webkit-font-smoothing:var(--font-smoothing-webkit);-moz-osx-font-smoothing:var(--font-smoothing-moz)}
+h1,h2,h3,h4,h5{font-family:var(--title-font-family);color:var(--primary-text-color);margin:0}
+h1{font:var(--font-h1-bold);letter-spacing:var(--letter-spacing-h1-bold)}
+h2{font:var(--font-h2-bold);letter-spacing:var(--letter-spacing-h2-bold)}
+h3{font:var(--font-h3-bold);letter-spacing:var(--letter-spacing-h3-bold)}
+p{margin:0;text-wrap:pretty}
+a{color:var(--link-color);text-decoration:none}
+a:hover{color:var(--link-hover-color);text-decoration:underline}
+:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+button,[role="button"],[role="tab"],[role="menuitem"],[role="option"],input,select,textarea,a{touch-action:manipulation}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+@media (forced-colors:active){:focus-visible{outline:3px solid CanvasText;outline-offset:2px}}

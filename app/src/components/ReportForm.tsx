@@ -6,7 +6,7 @@ import { useAuth } from "../data/AuthProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { useToasts } from "./Toasts";
 import { Field, Problem } from "./Form";
-import { Select } from "./Select";
+import { PersonSelect } from "./PersonSelect";
 import { FEEDBACK_STAGE_LABELS, type FeedbackItem, type FeedbackKind } from "../data/types";
 import "./ui.css";
 
@@ -53,6 +53,33 @@ const COPY: Record<FeedbackKind, { label: string; placeholder: string; hint: str
     hint: "What you are trying to do, and what would make it quicker."
   }
 };
+
+/**
+ * What has been typed and not yet sent.
+ *
+ * Held by whoever mounts the form when it has to outlive the form itself — the slide-out
+ * (Amber, 7 Sep: *"when creating a new bug/error in the sidebar if you change screens you
+ * lose the text. it should persist when moving pages"*). The panel closes on a click
+ * outside it, which is also how you reach the nav; the form unmounted with it and took
+ * the paragraph somebody had just written. `FeedbackProvider` now keeps the draft and
+ * hands it back in, so closing the panel is putting the form down, not tearing it up.
+ *
+ * Files are part of it, in memory only: a `File` cannot be serialised, so a page reload
+ * keeps the words and drops the screenshots — which the form makes visible by listing
+ * what is attached, so nothing is silently missing at send.
+ */
+export interface ReportDraft {
+  kind: FeedbackKind;
+  title: string;
+  detail: string;
+  /** Profile id, or "" for "me". */
+  onBehalfOf: string;
+  files: File[];
+}
+
+// Defaults to a bug, and that is a considered default rather than the first value in
+// the list: most things sent from a footer are sent because something did not work.
+export const EMPTY_DRAFT: ReportDraft = { kind: "bug", title: "", detail: "", onBehalfOf: "", files: [] };
 
 /** How many screenshots one report may carry, and why it is capped at all. */
 const MAX_SCREENSHOTS = 4;
@@ -152,11 +179,16 @@ function useSimilar(title: string, open: boolean) {
  * `SidePanel`'s footer, rendered past the form in the tree, so it submits by
  * `form="..."` — plain HTML across a boundary a prop cannot cross.
  */
-export function ReportForm({ formId, onSent, showActions = false }: {
+export function ReportForm({ formId, onSent, onLeave, showActions = false, draft, onDraftChange }: {
   formId?: string;
   onSent?: () => void;
+  /** Following a link out of the form — the panel closes itself; the page has nothing to do. */
+  onLeave?: () => void;
   /** The page draws its own Send; the panel's lives in the SidePanel footer. */
   showActions?: boolean;
+  /** Controlled draft, when the caller keeps it across mounts. Absent, the form keeps its own. */
+  draft?: ReportDraft;
+  onDraftChange?: (draft: ReportDraft) => void;
 }) {
   const repo = useRepository();
   const { toast } = useToasts();
@@ -171,12 +203,21 @@ export function ReportForm({ formId, onSent, showActions = false }: {
    * is not drawn for them, rather than offered and refused on save.
    */
   const canAttach = !profile?.isDemo;
-  // Defaults to a bug, and that is a considered default rather than the first value in
-  // the list: most things sent from a footer are sent because something did not work.
-  const [kind, setKind] = useState<FeedbackKind>("bug");
-  const [title, setTitle] = useState("");
-  const [detail, setDetail] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
+  // One draft, controlled from outside when the caller wants it to survive the form, and
+  // local otherwise. The five fields below read from it either way.
+  const [local, setLocal] = useState<ReportDraft>(EMPTY_DRAFT);
+  const d = draft ?? local;
+  const setD = (patch: Partial<ReportDraft>) => {
+    const next = { ...d, ...patch };
+    if (onDraftChange) onDraftChange(next); else setLocal(next);
+  };
+  const { kind, title, detail, files, onBehalfOf } = d;
+  const setKind = (k: FeedbackKind) => setD({ kind: k });
+  const setTitle = (t: string) => setD({ title: t });
+  const setDetail = (t: string) => setD({ detail: t });
+  const setFiles = (f: File[] | ((cur: File[]) => File[])) =>
+    setD({ files: typeof f === "function" ? f(d.files) : f });
+  const setOnBehalfOf = (v: string) => setD({ onBehalfOf: v });
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [voted, setVoted] = useState<string | null>(null);
@@ -198,8 +239,6 @@ export function ReportForm({ formId, onSent, showActions = false }: {
     [],
     [canFileForOthers]
   );
-  const [onBehalfOf, setOnBehalfOf] = useState("");
-
   const addFiles = (list: FileList | null) => {
     if (!list) return;
     const picked = [...list];
@@ -246,14 +285,10 @@ export function ReportForm({ formId, onSent, showActions = false }: {
           : "Request sent — it's in the tracker as Requested."
       );
       // Cleared only on success: a refusal that also wiped what somebody typed would cost
-      // them the report itself.
-      setTitle("");
-      setDetail("");
-      setFiles([]);
-      // Cleared with the rest. A "requested by" left standing would silently file the
-      // NEXT report under the last person named, which is the one mistake on this form
-      // nobody would notice they had made.
-      setOnBehalfOf("");
+      // them the report itself. The whole draft goes, including "requested by" — one left
+      // standing would silently file the NEXT report under the last person named, which
+      // is the one mistake on this form nobody would notice they had made.
+      setD(EMPTY_DRAFT);
       lastError.clear();
       onSent?.();
     } catch (e) {
@@ -311,17 +346,11 @@ export function ReportForm({ formId, onSent, showActions = false }: {
                   : "Leave as yourself unless somebody told you about this — on site, on a call, in a meeting."
               }
             >
-              <Select
-                options={[
-                  { value: "", label: "Me" },
-                  ...people
-                    .filter(p => p.fullName)
-                    .map(p => ({ value: p.id, label: p.fullName }))
-                ]}
-                value={onBehalfOf}
-                onChange={v => setOnBehalfOf(v as string)}
+              <PersonSelect
+                value={onBehalfOf || null}
+                onChange={v => setOnBehalfOf(v ?? "")}
+                placeholder="Me"
                 aria-label="Requested by"
-                size="small"
               />
             </Field>
           )}
@@ -447,7 +476,7 @@ export function ReportForm({ formId, onSent, showActions = false }: {
             <button
               type="button"
               className="link-button"
-              onClick={() => { close(); navigate("/updates"); }}
+              onClick={() => { onLeave?.(); navigate("/updates"); }}
             >
               what's already planned
             </button>{" "}
