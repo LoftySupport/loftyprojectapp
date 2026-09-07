@@ -535,6 +535,12 @@ export interface Repository {
 
   /** Plan a request into a roadmap phase, or take it out of one. Admin+, by policy. */
   setFeedbackPhase(id: string, phaseId: string | null): Promise<FeedbackItem[]>;
+  /**
+   * Re-file a request as a bug or as an idea (Amber, 7 Sep: "you can't change an idea to
+   * a bug in updates"). Admin's, under the same UPDATE policy as the phase — the kind is
+   * a triage judgement, and the person who filed it is the one most often wrong about it.
+   */
+  setFeedbackKind(id: string, kind: FeedbackKind): Promise<FeedbackItem[]>;
 
   /**
    * Thumbs up, or take it back. One per person per request, and the primary key on
@@ -925,6 +931,7 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "listFeedback",
   "setFeedbackStage",
   "setFeedbackPhase",
+  "setFeedbackKind",
   "setFeedbackVote",
   "setCommentStanding",
   "mergeFeedback",
@@ -1125,6 +1132,7 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   listFeedback: "feedback_display",
   setFeedbackStage: "feedback",
   setFeedbackPhase: "feedback",
+  setFeedbackKind: "feedback",
   setFeedbackVote: "feedback_votes",
   setCommentStanding: "comments",
   mergeFeedback: "feedback",

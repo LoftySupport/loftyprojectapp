@@ -37,6 +37,8 @@ import { SidePanel } from "../components/SidePanel";
 import { Toolbar } from "../components/Toolbar";
 import { accentStyle, columnAccent } from "../theme/accents";
 import { Select, toOptions } from "../components/Select";
+import { PersonSelect } from "../components/PersonSelect";
+import { useUndo } from "../data/UndoProvider";
 import { NewProjectDialog, SplitProjectDialog } from "../components/CreateDialogs";
 import { InlineNewProjectRow } from "../components/InlineNewProjectRow";
 import { ProjectsGantt } from "../components/ProjectsGantt";
@@ -550,9 +552,14 @@ export function ProjectsPage() {
           setSplitting({ id, count, community, torrens, nextLot: 1 })}
       />
 
-      {splitDialog}
       {/* Over the board, the way the job drawer is — the board stays mounted behind it. */}
       {projectPanel}
+      {/* AFTER the project's panel, deliberately. Both are `SidePanel`s at the same
+          z-index, so document order decides which is on top — and with the split rendered
+          first it opened BEHIND the project it was creating jobs for. Nothing appeared to
+          happen on "+ Create jobs" until you closed the project (Amber, 7 Sep: "when
+          clicked it should open the interface not have to close out to create"). */}
+      {splitDialog}
 
       {stale && <PreviousAddressNote />}
 
@@ -674,6 +681,7 @@ function WhoHoldsIt({ project, onChanged, onError }: {
 }) {
   const repo = useRepository();
   const { can } = usePermission();
+  const { record } = useUndo();
   const { teams } = useTeams();
   const { data: profiles } = useQuery(r => r.listProfiles(), []);
 
@@ -681,6 +689,18 @@ function WhoHoldsIt({ project, onChanged, onError }: {
     onError(null);
     try {
       await repo.updateProject(project.projectId, patch);
+      // The inverse: the same keys, with what the project held before this write.
+      const before: typeof patch = {};
+      if ("owningTeam" in patch) before.owningTeam = project.owningTeam ?? undefined;
+      if ("assigneeId" in patch) before.assigneeId = project.assigneeId ?? null;
+      const who = "assigneeId" in patch
+        ? (patch.assigneeId ? profiles.find(p => p.id === patch.assigneeId)?.fullName ?? "somebody" : "nobody")
+        : teams.find(t => t.id === patch.owningTeam)?.name ?? "a team";
+      record({
+        label: `${"assigneeId" in patch ? "Assigned" : "Moved"} project ${project.projectNumber} to ${who}`,
+        undo: async () => { await repo.updateProject(project.projectId, before); onChanged(); },
+        redo: async () => { await repo.updateProject(project.projectId, patch); onChanged(); }
+      });
       onChanged();
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
@@ -712,11 +732,11 @@ function WhoHoldsIt({ project, onChanged, onError }: {
       <div className="field-row">
         <div className="field-label"><Text type="text2">Assigned to</Text></div>
         {can("user") ? (
-          <Select
+          /* The project's own team first, everybody else under "Other teams" — pick the
+             team and the likely people rise to the top (Amber, 7 Sep). */
+          <PersonSelect
             aria-label="Assignee"
-            placeholder="— nobody —"
-            clearable
-            options={profiles.map(p => ({ value: p.id, label: p.fullName }))}
+            teamId={project.owningTeam}
             value={project.assigneeId}
             onChange={v => { if (v !== project.assigneeId) save({ assigneeId: v }); }}
           />
@@ -839,6 +859,140 @@ function ProjectDetail({
       </div>
 
       <div className="stack">
+        {/* FIRST, above the properties (Amber, 7 Sep: "create a job should be at the
+            top"). A project exists to hold its jobs, and the act this drawer is opened
+            for most is adding them; it sat under eleven other panels, below the fold of
+            a 460px drawer, with the create button the last control on the page. */}
+        <section className="panel">
+          <div className="panel-head">
+            <Text type="text2" weight="bold">Jobs on this project ({project.jobs.length})</Text>
+            <div className="panel-actions">
+              {project.proposedDwellings != null && (
+                <Text type="text3" color="secondary">
+                  {project.proposedDwellings} proposed
+                  {/* The mix, when the project has one (0053). Said as counts rather
+                      than as a ratio, because "3 community" is what somebody checks
+                      against the plan of division. */}
+                  {(project.communityTitleLots != null || project.torrensTitleLots != null) && (
+                    <>
+                      {" "}({project.communityTitleLots ?? 0} community,{" "}
+                      {project.torrensTitleLots ?? 0} Torrens)
+                    </>
+                  )}
+                  {project.jobs.length !== project.proposedDwellings &&
+                    ` · ${project.jobs.length} created`}
+                </Text>
+              )}
+              {/* Amber, 1 Sep: a project property is pushed to all jobs from here. The
+                  button opens a preview of what would move; the function does the copy. */}
+              <Button size="small" kind="secondary" onClick={() => setPushing(true)} disabled={pushing}>
+                Push to jobs…
+              </Button>
+              <Button size="small" onClick={onSplit}>+ Create jobs</Button>
+            </div>
+          </div>
+
+          {removeError && (
+            <div className="create-problem" role="alert">
+              <Text type="text2" ellipsis={false}>{removeError}</Text>
+            </div>
+          )}
+
+          {pushing && (
+            <PushToJobs
+              projectId={project.projectId}
+              jobCount={project.jobs.filter(j => j.stage !== "Closed" && j.stage !== "Cancelled").length}
+              onClose={() => setPushing(false)}
+              onDone={n => {
+                setPushing(false);
+                setPropsReload(k => k + 1);
+                toast(n === 0 ? "Nothing was pushed — the jobs already carry these values, or none is live." : `Pushed ${n} value${n === 1 ? "" : "s"} onto the jobs.`, "normal");
+              }}
+            />
+          )}
+
+          {project.jobs.length === 0 && (
+            <Text type="text3" color="secondary" ellipsis={false}>
+              No jobs yet. <strong>Create jobs</strong> splits this project into one per lot,
+              each with its own lot address.
+            </Text>
+          )}
+          {/* Search inside one project (Amber, 28 August: *"being able to search at a
+              job level or project level for a job or word is essential"*). The header
+              search narrows the whole portfolio, which is the wrong instrument once you
+              are standing on a thirty-lot project and want lot 17: it would take you off
+              this page and back to a filtered board. This one stays here and narrows
+              only what is in front of you.
+
+              Shown from four jobs up. On a project with two, a search box is furniture. */}
+          {project.jobs.length > 3 && (
+            <div className="panel-search">
+              <TextField
+                size="small"
+                id={`find-job-${project.projectId}`}
+                placeholder="Find a job on this project — number, lot, address, stage, team"
+                inputAriaLabel={`Find a job on project ${project.projectNumber}`}
+                value={jobQuery}
+                onChange={v => setJobQuery(v)}
+              />
+              {jobTerms.length > 0 && (
+                <Text type="text3" color="secondary">
+                  {shownJobs.length} of {project.jobs.length}
+                </Text>
+              )}
+            </div>
+          )}
+
+          {/* A search that matches nothing says so, rather than showing an empty table
+              that reads as "this project has no jobs". */}
+          {jobTerms.length > 0 && shownJobs.length === 0 && (
+            <Text type="text3" color="secondary" ellipsis={false}>
+              No job on this project matches “{jobQuery.trim()}”.
+            </Text>
+          )}
+
+          <div className="data-table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Job</th><th>Address</th><th>Stage</th><th>Team</th><th>Status</th>
+                  {/* `admins delete jobs` is the policy. The column is hidden below that
+                      level so nobody is offered a button the database will refuse — but
+                      the hiding is courtesy, not security: RLS is what actually stops it. */}
+                  {can("admin") && <th aria-label="Remove"></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {shownJobs.map(j => (
+                  // Now that a job has an address of its own, this list is a set of links
+                  // rather than a printout — same click as a row on the Jobs table.
+                  <tr
+                    key={j.jobNumber}
+                    onClick={() => navigate(`/jobs/${encodeURIComponent(j.jobNumber)}`)}
+                  >
+                    <td>{j.jobNumber}</td>
+                    <td>{j.currentAddress ?? <Token>addresses.consolidated_address</Token>}</td>
+                    <td>{j.stage}</td>
+                    <td>{j.team}</td>
+                    <td><StatusPill status={j.status} /></td>
+                    {can("admin") && (
+                      <td onClick={e => e.stopPropagation()}>
+                        <Button
+                          kind="tertiary"
+                          size="small"
+                          disabled={removing === j.jobNumber}
+                          onClick={() => removeJob(j.jobNumber)}
+                        >
+                          {removing === j.jobNumber ? "Removing…" : "Remove"}
+                        </Button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
         <section className="panel">
           <div className="panel-head">
             <Text type="text2" weight="bold">Project properties</Text>
@@ -1066,136 +1220,6 @@ function ProjectDetail({
             one lot — a feasibility, a whole-project summary. */}
         <RecordDocuments projectId={project.projectId} />
 
-        <section className="panel">
-          <div className="panel-head">
-            <Text type="text2" weight="bold">Jobs on this project ({project.jobs.length})</Text>
-            <div className="panel-actions">
-              {project.proposedDwellings != null && (
-                <Text type="text3" color="secondary">
-                  {project.proposedDwellings} proposed
-                  {/* The mix, when the project has one (0053). Said as counts rather
-                      than as a ratio, because "3 community" is what somebody checks
-                      against the plan of division. */}
-                  {(project.communityTitleLots != null || project.torrensTitleLots != null) && (
-                    <>
-                      {" "}({project.communityTitleLots ?? 0} community,{" "}
-                      {project.torrensTitleLots ?? 0} Torrens)
-                    </>
-                  )}
-                  {project.jobs.length !== project.proposedDwellings &&
-                    ` · ${project.jobs.length} created`}
-                </Text>
-              )}
-              {/* Amber, 1 Sep: a project property is pushed to all jobs from here. The
-                  button opens a preview of what would move; the function does the copy. */}
-              <Button size="small" kind="secondary" onClick={() => setPushing(true)} disabled={pushing}>
-                Push to jobs…
-              </Button>
-              <Button size="small" onClick={onSplit}>+ Create jobs</Button>
-            </div>
-          </div>
-
-          {removeError && (
-            <div className="create-problem" role="alert">
-              <Text type="text2" ellipsis={false}>{removeError}</Text>
-            </div>
-          )}
-
-          {pushing && (
-            <PushToJobs
-              projectId={project.projectId}
-              jobCount={project.jobs.filter(j => j.stage !== "Closed" && j.stage !== "Cancelled").length}
-              onClose={() => setPushing(false)}
-              onDone={n => {
-                setPushing(false);
-                setPropsReload(k => k + 1);
-                toast(n === 0 ? "Nothing was pushed — the jobs already carry these values, or none is live." : `Pushed ${n} value${n === 1 ? "" : "s"} onto the jobs.`, "normal");
-              }}
-            />
-          )}
-
-          {project.jobs.length === 0 && (
-            <Text type="text3" color="secondary" ellipsis={false}>
-              No jobs yet. <strong>Create jobs</strong> splits this project into one per lot,
-              each with its own lot address.
-            </Text>
-          )}
-          {/* Search inside one project (Amber, 28 August: *"being able to search at a
-              job level or project level for a job or word is essential"*). The header
-              search narrows the whole portfolio, which is the wrong instrument once you
-              are standing on a thirty-lot project and want lot 17: it would take you off
-              this page and back to a filtered board. This one stays here and narrows
-              only what is in front of you.
-
-              Shown from four jobs up. On a project with two, a search box is furniture. */}
-          {project.jobs.length > 3 && (
-            <div className="panel-search">
-              <TextField
-                size="small"
-                id={`find-job-${project.projectId}`}
-                placeholder="Find a job on this project — number, lot, address, stage, team"
-                inputAriaLabel={`Find a job on project ${project.projectNumber}`}
-                value={jobQuery}
-                onChange={v => setJobQuery(v)}
-              />
-              {jobTerms.length > 0 && (
-                <Text type="text3" color="secondary">
-                  {shownJobs.length} of {project.jobs.length}
-                </Text>
-              )}
-            </div>
-          )}
-
-          {/* A search that matches nothing says so, rather than showing an empty table
-              that reads as "this project has no jobs". */}
-          {jobTerms.length > 0 && shownJobs.length === 0 && (
-            <Text type="text3" color="secondary" ellipsis={false}>
-              No job on this project matches “{jobQuery.trim()}”.
-            </Text>
-          )}
-
-          <div className="data-table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Job</th><th>Address</th><th>Stage</th><th>Team</th><th>Status</th>
-                  {/* `admins delete jobs` is the policy. The column is hidden below that
-                      level so nobody is offered a button the database will refuse — but
-                      the hiding is courtesy, not security: RLS is what actually stops it. */}
-                  {can("admin") && <th aria-label="Remove"></th>}
-                </tr>
-              </thead>
-              <tbody>
-                {shownJobs.map(j => (
-                  // Now that a job has an address of its own, this list is a set of links
-                  // rather than a printout — same click as a row on the Jobs table.
-                  <tr
-                    key={j.jobNumber}
-                    onClick={() => navigate(`/jobs/${encodeURIComponent(j.jobNumber)}`)}
-                  >
-                    <td>{j.jobNumber}</td>
-                    <td>{j.currentAddress ?? <Token>addresses.consolidated_address</Token>}</td>
-                    <td>{j.stage}</td>
-                    <td>{j.team}</td>
-                    <td><StatusPill status={j.status} /></td>
-                    {can("admin") && (
-                      <td onClick={e => e.stopPropagation()}>
-                        <Button
-                          kind="tertiary"
-                          size="small"
-                          disabled={removing === j.jobNumber}
-                          onClick={() => removeJob(j.jobNumber)}
-                        >
-                          {removing === j.jobNumber ? "Removing…" : "Remove"}
-                        </Button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
       </div>
     </>
   );

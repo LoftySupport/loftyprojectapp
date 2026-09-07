@@ -708,6 +708,7 @@ export function NewJobDialog({
   const [owningTeam, setOwningTeam] = useState<TeamId | null>(FIRST_TEAM);
   const [ownAddress, setOwnAddress] = useState(false);
   const [address, setAddress] = useState<NewAddress>(EMPTY_ADDRESS);
+  const [siteBookNo, setSiteBookNo] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<string | null>(null);
@@ -720,6 +721,7 @@ export function NewJobDialog({
     setOwningTeam(FIRST_TEAM);
     setOwnAddress(false);
     setAddress(EMPTY_ADDRESS);
+    setSiteBookNo("");
     setError(null);
     setCreated(null);
     setSaving(false);
@@ -733,7 +735,8 @@ export function NewJobDialog({
       const job = await repo.createJob({
         projectId: Number(projectId),
         owningTeam,
-        address: ownAddress ? address : undefined
+        address: ownAddress ? address : undefined,
+        jobNumberOld: siteBookNo.trim() || null
       });
       setCreated(job.id);
       onCreated?.();
@@ -786,6 +789,17 @@ export function NewJobDialog({
               onChange={setOwningTeam}
               hint="who is accountable for this job"
             />
+
+            {/* At creation, not only afterwards in the drawer (Amber, 7 Sep: "you should
+                be able to add a sitebook number as well at the time"). */}
+            <Field label="SiteBook number" hint="the number this job already has in SiteBook or Trello — leave blank for a job that is new here">
+              <TextField
+                value={siteBookNo}
+                onChange={setSiteBookNo}
+                id="job-sitebook"
+                inputAriaLabel="SiteBook number"
+              />
+            </Field>
 
             {/* Most jobs sit at the project's address, so that is the default and the
                 fields stay out of the way until someone says otherwise. */}
@@ -1038,16 +1052,16 @@ export function SplitProjectDialog({
                     {rows.length} job{rows.length === 1 ? "" : "s"}, each at the project's address
                   </Text>
                   <Text type="text3" color="secondary" ellipsis={false}>
-                    A lot number can be anything on the plan — 2B as readily as 2. The old
-                    job number is the one this job has in SiteBook or Trello; leave it
-                    blank for a job that is new here. Job numbers themselves are issued by
-                    the database, continuing from any that already exist. Title type is
-                    seeded from the project's mix — check it per lot, since nothing says
-                    which lots take which title.
+                    A lot number can be anything on the plan — 2B as readily as 2. The
+                    SiteBook number is the one this job already has in SiteBook or Trello;
+                    leave it blank for a job that is new here. Job numbers themselves are
+                    issued by the database, continuing from any that already exist. Title
+                    type is seeded from the project's mix — check it per lot, since nothing
+                    says which lots take which title.
                   </Text>
                 </div>
                 <div className="split-row split-row-head" aria-hidden="true">
-                  <span>Lot</span><span>Old job number</span><span>Title</span>
+                  <span>Lot</span><span>SiteBook number</span><span>Title</span>
                 </div>
                 {rows.map((row, i) => (
                   <div className="split-row" key={i}>
@@ -1070,7 +1084,7 @@ export function SplitProjectDialog({
                       onChange={v => editRow(i, { jobNumberOld: v })}
                       size="small"
                       id={`split-old-${i}`}
-                      inputAriaLabel={`Old job number for job ${i + 1}`}
+                      inputAriaLabel={`SiteBook number for job ${i + 1}`}
                     />
                     {/* Clearable: "not decided yet" is a real state, and a job that
                         carries the wrong title type is worse than one that carries

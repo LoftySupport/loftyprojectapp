@@ -14,6 +14,9 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- A SiteBook number can be given to each job as it is created
+- A request on Updates can be re-filed as a bug or as an idea
+- Undo and redo in the header, for the edits that save as you make them
 - A table of contents block, listing the document's section headings in order
 - A block can be pointed at particular jobs, projects or teams instead of covering everything
 - Long dropdowns in a block's settings narrow as you type
@@ -93,6 +96,12 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- Creating jobs from a project opens over the project instead of behind it, and the jobs list sits at the top of the drawer
+- Every dropdown lists its options alphabetically, including the multi-selects
+- A half-written bug report is kept when the panel is closed or the page changes
+- User settings shows notifications beside your details instead of cut off in a narrow column
+- Editing a person in the Users table keeps Save in view, and the name opens their panel with settings and actions
+- In dark mode, the fields in the document and report builder showed black text on a black background; they are readable again
 - The privacy policy named Netlify as the host serving the app; Vercel serves it
 - The changelog generator no longer reports "Changelog: skip" as a mistake, so its check can pass again
 - Setting a document to landscape now shows a landscape page in the builder, not only in the export
@@ -122,6 +131,14 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- Choosing a person is a type-ahead — names with their team, the record's own team first, and a single match is taken as you tab away
+- Bugs, ideas, the roadmap and the changelog live only on Updates; the copies under Admin are gone
+- The roadmap and changelog now live in one place instead of two
+- Buttons in Lofty orange are now a deeper shade, so their labels are easier to read
+- Buttons and labels on Lofty orange now use white text, never black
+- The app takes Lofty's brand colours from the design system — orange is now the primary action colour, with green kept for small accents
+- The app is called Lofty Hub in the sidebar logo and in the browser tab of a shared document
+- Sign-in and Wiring no longer mention a second pair of Supabase variable names that the app stopped reading
 - Setup is now Settings, and managers and above can open it — properties, processes, contacts, maintenance, the stage SLAs and the notification rules
 - Admin has moved off the sidebar to a cog in the top bar, and appears only for admins and super admins
 - Users, teams, permissions, the dictionary, the wiring, the bug and idea queues, the roadmap and the changelog are all now under the cog

@@ -5,9 +5,11 @@ import { Search, ThumbsUp } from "@vibe/icons";
 import { CommentsPanel } from "../components/CommentsPanel";
 import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
+import { useUndo } from "../data/UndoProvider";
 import { useFeedback } from "../components/Feedback";
 import { Field, Problem } from "../components/Form";
 import { Select } from "../components/Select";
+import { PersonSelect } from "../components/PersonSelect";
 import { SidePanel } from "../components/SidePanel";
 import { LoadProblem } from "../components/SearchNotices";
 import {
@@ -673,12 +675,12 @@ function RequestPanel({
   busyVote: string | null;
 }) {
   const repo = useRepository();
+  const { record } = useUndo();
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [shots, setShots] = useState<Record<string, string>>({});
   const [note, setNote] = useState("");
   const [showVoters, setShowVoters] = useState(false);
-  const { data: people } = useQuery(r => r.listProfiles(), [], []);
   /**
    * Opening it IS having seen it — the same rule the bell uses for a mention.
    *
@@ -839,16 +841,12 @@ function RequestPanel({
               {canPlan && (
                 <li>
                   <div className="select-wrap">
-                    <Select
-                      options={people
-                        .filter(p => p.active && !voters.some(v => v.profileId === p.id))
-                        .map(p => ({ value: p.id, label: p.fullName }))}
+                    <PersonSelect
+                      exclude={voters.map(v => v.profileId)}
                       value={null}
-                      clearable
                       placeholder="Add somebody who asked for this…"
                       onChange={v => v && void run(() => repo.addVoteFor(item.id, v))}
                       aria-label="Add a voter"
-                      size="small"
                     />
                   </div>
                   <Text type="text3" color="secondary" element="div" ellipsis={false}>
@@ -869,8 +867,17 @@ function RequestPanel({
                 options={FEEDBACK_STAGES.map(s => ({ value: s, label: FEEDBACK_STAGE_LABELS[s] }))}
                 value={item.stage}
                 onChange={v => void run(async () => {
-                  const result = await repo.setFeedbackStage(item.id, v as FeedbackStage, note);
+                  const from = item.stage;
+                  const to = v as FeedbackStage;
+                  const result = await repo.setFeedbackStage(item.id, to, note);
                   setNote("");
+                  // The note is not re-sent on undo: the move back is its own event, and
+                  // a comment saying why it went forward would be wrong on the way back.
+                  record({
+                    label: `Moved “${item.title}” to ${FEEDBACK_STAGE_LABELS[to]}`,
+                    undo: async () => { await repo.setFeedbackStage(item.id, from); onChanged(); },
+                    redo: async () => { await repo.setFeedbackStage(item.id, to); onChanged(); }
+                  });
                   return result;
                 })}
                 aria-label="Stage"
@@ -902,8 +909,50 @@ function RequestPanel({
                 value={item.roadmapPhaseId}
                 clearable
                 placeholder="Not planned into a phase"
-                onChange={v => void run(() => repo.setFeedbackPhase(item.id, v))}
+                onChange={v => void run(async () => {
+                  const from = item.roadmapPhaseId;
+                  await repo.setFeedbackPhase(item.id, v);
+                  const name = (id: string | null) => phases.find(p => p.id === id)?.name ?? "no phase";
+                  record({
+                    label: `Planned “${item.title}” into ${name(v)}`,
+                    undo: async () => { await repo.setFeedbackPhase(item.id, from); onChanged(); },
+                    redo: async () => { await repo.setFeedbackPhase(item.id, v); onChanged(); }
+                  });
+                })}
                 aria-label="Roadmap phase"
+                className={busy ? "is-busy" : undefined}
+              />
+            </Field>
+          )}
+
+          {canPlan && (
+            <Field
+              label="Filed as"
+              hint="A bug is something that does not work; an idea is something that would. Re-file it when the reporter picked the other one."
+            >
+              {/* Amber, 7 Sep: "you can't change an idea to a bug in updates". The radio
+                  on the report form is the reporter's guess; this is the triage call, at
+                  the rung that already plans the request. `ordered` because bug-then-idea
+                  is the form's order, and a two-item list sorted a–z would swap them. */}
+              <Select
+                ordered
+                options={[
+                  { value: "bug", label: "A bug or an error" },
+                  { value: "idea", label: "An idea or a feature request" }
+                ]}
+                value={item.kind}
+                onChange={v => void run(async () => {
+                  const from = item.kind;
+                  const to = v as FeedbackKind;
+                  if (to === from) return;
+                  await repo.setFeedbackKind(item.id, to);
+                  record({
+                    label: `Re-filed “${item.title}” as ${to === "bug" ? "a bug" : "an idea"}`,
+                    undo: async () => { await repo.setFeedbackKind(item.id, from); onChanged(); },
+                    redo: async () => { await repo.setFeedbackKind(item.id, to); onChanged(); }
+                  });
+                })}
+                aria-label="Filed as"
                 className={busy ? "is-busy" : undefined}
               />
             </Field>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button, Text, TextField, Toggle } from "@vibe/core";
 import { MultiSelect, Select, toOptions } from "./Select";
 import { useRepository } from "../data/DataProvider";
+import { useUndo } from "../data/UndoProvider";
 import { useTeamLabels, useTeams } from "../data/useLookups";
 import {
   PERMISSION_LEVELS, profileStatus,
@@ -42,6 +43,7 @@ export function UserRow({
   onEdit,
   onDone,
   onActivity,
+  onOpen,
   onFullEdit,
   onDeactivate,
   onToggleDemo,
@@ -55,6 +57,8 @@ export function UserRow({
   /** Called after a successful save, and on cancel with `false`. */
   onDone: (saved: boolean) => void;
   onActivity: () => void;
+  /** The name was clicked: open the person — their details and actions in the panel. */
+  onOpen: () => void;
   onFullEdit: () => void;
   /** Asked for a change of status. Deactivating confirms first; restoring is immediate. */
   onDeactivate: () => void;
@@ -70,6 +74,7 @@ export function UserRow({
         profile={profile}
         onEdit={onEdit}
         onActivity={onActivity}
+        onOpen={onOpen}
         onDeactivate={onDeactivate}
         onToggleDemo={onToggleDemo}
         canEdit={canEdit}
@@ -80,11 +85,12 @@ export function UserRow({
 }
 
 function ReadingRow({
-  profile: p, onEdit, onActivity, onDeactivate, onToggleDemo, canEdit, selected, onToggleSelect
+  profile: p, onEdit, onActivity, onOpen, onDeactivate, onToggleDemo, canEdit, selected, onToggleSelect
 }: {
   profile: Profile;
   onEdit: () => void;
   onActivity: () => void;
+  onOpen: () => void;
   onDeactivate: () => void;
   /** Ticked = held at the gate (0049). Same asymmetry: restricting confirms, releasing does not. */
   onToggleDemo?: () => void;
@@ -111,9 +117,11 @@ function ReadingRow({
         </td>
       )}
       <td>
-        {/* The name is the way in to their history, which is the thing somebody is
-            usually after when they look a person up. */}
-        <button type="button" className="link-button" onClick={onActivity}>{p.fullName}</button>
+        {/* The name opens the person — details, and the actions beside them (Amber,
+            7 Sep: "when you click on the name it should open the side panel with
+            settings and actions"). It opened their activity before; that is one of the
+            actions now, a button inside the panel, and still one click from here. */}
+        <button type="button" className="link-button" onClick={onOpen}>{p.fullName}</button>
       </td>
       <td className="muted">{p.jobTitle ?? "—"}</td>
       <td className="muted">{p.email}</td>
@@ -170,6 +178,7 @@ function ReadingRow({
       <td>
         <span className="row-actions">
           <Button size="xs" kind="tertiary" onClick={onEdit} disabled={!canEdit}>Edit</Button>
+          <Button size="xs" kind="tertiary" onClick={onActivity}>Activity</Button>
         </span>
       </td>
     </tr>
@@ -186,6 +195,7 @@ function EditingRow({
   selectable?: boolean;
 }) {
   const repo = useRepository();
+  const { record } = useUndo();
   const { teams } = useTeams();
   const active = teams.filter(t => t.isActive);
 
@@ -221,6 +231,17 @@ function EditingRow({
     setError(null);
     try {
       await repo.updateProfile(p.id, patch);
+      // The inverse is the same patch with the values the row had — every key in `patch`
+      // has a "before" on `p`, so undo writes exactly the columns this write did.
+      const before: Partial<NewProfile> = {};
+      (Object.keys(patch) as (keyof NewProfile)[]).forEach(k => {
+        (before as Record<string, unknown>)[k] = p[k as keyof Profile];
+      });
+      record({
+        label: `Edited ${p.fullName}`,
+        undo: async () => { await repo.updateProfile(p.id, before); },
+        redo: async () => { await repo.updateProfile(p.id, patch); }
+      });
       onDone(true);
     } catch (e) {
       // Verbatim, for the reason every other form in this app shows it verbatim: an RLS
@@ -275,27 +296,34 @@ function EditingRow({
         <td><span className={`status-pill is-${st}`}>{st}</span></td>
         <td />
         <td className="muted">{p.lastLoginAt ? new Date(p.lastLoginAt).toLocaleDateString() : "Never"}</td>
-        <td>
-          <span className="row-actions">
-            <Button size="xs" onClick={save} disabled={!valid || saving}>
-              {saving ? "Saving…" : "Save"}
-            </Button>
-            <Button size="xs" kind="tertiary" onClick={() => onDone(false)} disabled={saving}>
-              Cancel
-            </Button>
-          </span>
-        </td>
+        <td />
       </tr>
+      {/* Save and Cancel sit HERE, in the row that spans the table, not in the actions
+          column. Six controls across an editing row are wider than most windows, so the
+          table scrolls sideways and the last column — where Save was — is off the right
+          edge: "the row is cut off and you can't edit or save it" (Amber, 7 Sep). This
+          row starts at the left edge whatever the scroll, so the buttons are always in
+          view. */}
       <tr className="is-editing">
         <td colSpan={selectable ? 10 : 9}>
           {error && <div className="create-problem row-editing-problem" role="alert">{error}</div>}
-          <Text type="text3" color="secondary" ellipsis={false}>
-            Editing the columns you can see.{" "}
-            <button type="button" className="link-button" onClick={onFullEdit}>
-              Open the full form
-            </button>{" "}
-            for the Microsoft sign-in address, which is what their login is matched on.
-          </Text>
+          <div className="row-editing-foot">
+            <span className="row-actions">
+              <Button size="small" onClick={save} disabled={!valid || saving}>
+                {saving ? "Saving…" : "Save"}
+              </Button>
+              <Button size="small" kind="tertiary" onClick={() => onDone(false)} disabled={saving}>
+                Cancel
+              </Button>
+            </span>
+            <Text type="text3" color="secondary" ellipsis={false}>
+              Editing the columns you can see.{" "}
+              <button type="button" className="link-button" onClick={onFullEdit}>
+                Open the full form
+              </button>{" "}
+              for the Microsoft sign-in address, which is what their login is matched on.
+            </Text>
+          </div>
         </td>
       </tr>
     </>

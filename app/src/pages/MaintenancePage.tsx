@@ -7,6 +7,7 @@ import { useAuth } from "../data/AuthProvider";
 import { supabaseUrl } from "../data/supabaseEnv";
 import { SidePanel } from "../components/SidePanel";
 import { Field, Problem } from "../components/Form";
+import { PersonSelect } from "../components/PersonSelect";
 import { Select } from "../components/Select";
 import { LoadProblem } from "../components/SearchNotices";
 import {
@@ -170,7 +171,6 @@ function NewRequest({ jobId, onDone }: { jobId: string | null; onDone: (id: stri
   const { data: jobs } = useQuery(r => r.listJobs(), []);
   const { data: contacts } = useQuery(r => r.listContacts(), []);
   const { data: categories } = useQuery(r => r.listMaintenanceCategories(), []);
-  const { data: profiles } = useQuery(r => r.listProfiles(), []);
   const [job, setJob] = useState<string | null>(jobId);
   const [summary, setSummary] = useState("");
   const [description, setDescription] = useState("");
@@ -222,7 +222,7 @@ function NewRequest({ jobId, onDone }: { jobId: string | null; onDone: (id: stri
         <Select aria-label="Priority" value={priority} onChange={v => setPriority(v as MaintenancePriority)} options={MAINTENANCE_PRIORITIES.map(p => ({ value: p, label: MAINTENANCE_PRIORITY_LABELS[p] }))} />
       </Field>
       <Field label="Owner">
-        <Select aria-label="Owner" clearable placeholder="Lofty person…" value={owner} onChange={setOwner} options={profiles.filter(p => p.active).map(p => ({ value: p.id, label: p.fullName }))} />
+        <PersonSelect aria-label="Owner" placeholder="Lofty person…" value={owner} onChange={setOwner} />
       </Field>
       <div className="field-inline" style={{ justifyContent: "flex-end" }}>
         <Button size="small" disabled={busy || !job || !summary.trim()} onClick={submit}>Log request</Button>
@@ -241,7 +241,6 @@ function RequestDetail({ id, onChanged }: { id: string; onChanged: () => void })
   const { data: items } = useQuery<MaintenanceItem[]>(r => r.listMaintenanceItems(id), [], [id, reload]);
   const { data: messages } = useQuery<MaintenanceMessage[]>(r => r.listMaintenanceMessages(id), [], [id, reload]);
   const { data: categories } = useQuery(r => r.listMaintenanceCategories(), []);
-  const { data: profiles } = useQuery(r => r.listProfiles(), []);
   const [problem, setProblem] = useState<string | null>(null);
   const [closeReason, setCloseReason] = useState("");
   const [note, setNote] = useState("");
@@ -302,8 +301,7 @@ function RequestDetail({ id, onChanged }: { id: string; onChanged: () => void })
           </label>
           <label className="field-inline"><Text type="text3" element="span">Owner</Text>
             {canWrite ? (
-              <Select aria-label="Owner" clearable placeholder="Lofty person…" value={r.ownerProfileId} onChange={v => run(() => repo.updateMaintenanceRequest(r.id, { ownerProfileId: v }))}
-                options={profiles.filter(p => p.active).map(p => ({ value: p.id, label: p.fullName }))} />
+              <PersonSelect aria-label="Owner" placeholder="Lofty person…" value={r.ownerProfileId} onChange={v => run(() => repo.updateMaintenanceRequest(r.id, { ownerProfileId: v }))} />
             ) : <Text type="text3" element="span">{r.ownerName ?? "—"}</Text>}
           </label>
           {canWrite && (

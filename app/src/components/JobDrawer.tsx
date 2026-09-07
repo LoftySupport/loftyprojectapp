@@ -22,6 +22,8 @@ import { CommentsPanel } from "./CommentsPanel";
 import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { Select } from "./Select";
+import { PersonSelect } from "./PersonSelect";
+import { useUndo } from "../data/UndoProvider";
 import { Problem } from "./Form";
 import { useAskDock } from "./AskDock";
 import { useToasts } from "./Toasts";
@@ -94,6 +96,7 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
   // the same rung (`user`+, backed by the `users update jobs` policy). One record here,
   // so the write saves on change and the board reloads behind the drawer.
   const { can } = usePermission();
+  const { record } = useUndo();
   const { teams } = useTeams();
   const { data: profiles } = useQuery(r => r.listProfiles(), []);
   const [cloning, setCloning] = useState(false);
@@ -109,6 +112,21 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
     setWhoErr(null);
     try {
       await repo.updateJob(job.jobNumber, patch);
+      // What the job held before, for the same keys — the undo step (see UndoProvider).
+      const before: typeof patch = {};
+      if ("owningTeam" in patch) before.owningTeam = job.teamId as TeamId;
+      if ("assigneeId" in patch) before.assigneeId = job.assigneeId ?? null;
+      if ("titleType" in patch) before.titleType = job.titleType ?? null;
+      const said = "assigneeId" in patch
+        ? `Assigned ${job.jobNumber} to ${patch.assigneeId ? profiles.find(p => p.id === patch.assigneeId)?.fullName ?? "somebody" : "nobody"}`
+        : "owningTeam" in patch
+          ? `Moved ${job.jobNumber} to ${teams.find(t => t.id === patch.owningTeam)?.name ?? "a team"}`
+          : `Set ${job.jobNumber}'s title type`;
+      record({
+        label: said,
+        undo: async () => { await repo.updateJob(job.jobNumber, before); onMoved(); },
+        redo: async () => { await repo.updateJob(job.jobNumber, patch); onMoved(); }
+      });
       onMoved();
     } catch (err) {
       setWhoErr(err instanceof Error ? err.message : String(err));
@@ -131,7 +149,14 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
     setOldNoBusy(true);
     setOldNoErr(null);
     try {
-      await repo.updateJob(job.jobNumber, { jobNumberOld: oldNoDraft.trim() || null });
+      const before = job.jobNumberOld ?? null;
+      const after = oldNoDraft.trim() || null;
+      await repo.updateJob(job.jobNumber, { jobNumberOld: after });
+      record({
+        label: after ? `Set ${job.jobNumber}'s SiteBook number to ${after}` : `Cleared ${job.jobNumber}'s SiteBook number`,
+        undo: async () => { await repo.updateJob(job.jobNumber, { jobNumberOld: before }); onMoved(); },
+        redo: async () => { await repo.updateJob(job.jobNumber, { jobNumberOld: after }); onMoved(); }
+      });
       onMoved();
     } catch (err) {
       setOldNoErr(err instanceof Error ? err.message : String(err));
@@ -295,8 +320,8 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
             </div>
             <div className="field-row">
               <div className="field-label">
-                <Text type="text2">Lofty number</Text>
-                <div className="field-hint">the old number — SiteBook and Trello use it</div>
+                <Text type="text2">SiteBook number</Text>
+                <div className="field-hint">the old Lofty number — SiteBook and Trello use it</div>
               </div>
               {can("user") ? (
                 <div className="field-inline">
@@ -391,11 +416,11 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
                   <div className="field-label">
                     <Text type="text2">Assigned to</Text>
                   </div>
-                  <Select
+                  {/* The job's team first, everybody else under "Other teams", each
+                      name with their team beside it (Amber, 7 Sep). */}
+                  <PersonSelect
                     aria-label="Assignee"
-                    placeholder="— nobody —"
-                    clearable
-                    options={profiles.map(p => ({ value: p.id, label: p.fullName }))}
+                    teamId={job.teamId}
                     value={job.assigneeId}
                     onChange={v => { if (v !== job.assigneeId) saveWho({ assigneeId: v }); }}
                   />

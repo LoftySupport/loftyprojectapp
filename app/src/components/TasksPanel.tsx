@@ -3,6 +3,7 @@ import { Button, Text, TextField } from "@vibe/core";
 import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { useTeams } from "../data/useLookups";
+import { PersonSelect } from "../components/PersonSelect";
 import { Select } from "./Select";
 import { Problem } from "./Form";
 import { LoadProblem } from "./SearchNotices";
@@ -52,7 +53,6 @@ export function TasksPanel({
   const { data: lines } = useQuery<TaskChecklistItem[]>(
     r => r.listTaskChecklist({ jobId, projectId }), [], [reload, jobId, projectId]
   );
-  const { data: profiles } = useQuery(r => r.listProfiles(), []);
 
   const [draft, setDraft] = useState("");
   const [draftDue, setDraftDue] = useState("");
@@ -280,12 +280,11 @@ export function TasksPanel({
 
                 {can("user") && isOpen && (
                   <div className="task-more">
-                    <Select
+                    <PersonSelect
                       className="task-control"
-                      clearable
                       placeholder="Nobody"
                       aria-label={`Who is doing ${t.name}`}
-                      options={profiles.filter(p => p.active).map(p => ({ value: p.id, label: p.fullName }))}
+                      teamId={t.owningTeam}
                       value={t.assigneeId}
                       onChange={v => run(() => repo.updateTask(t.id, { assigneeId: v }))}
                     />
