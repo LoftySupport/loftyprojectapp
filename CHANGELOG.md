@@ -133,6 +133,9 @@ says shipped and what the app shows people cannot use different words for it.
 
 - Choosing a person is a type-ahead — names with their team, the record's own team first, and a single match is taken as you tab away
 - Bugs, ideas, the roadmap and the changelog live only on Updates; the copies under Admin are gone
+- Buttons in Lofty orange are now a deeper shade, so their labels are easier to read
+- Buttons and labels on Lofty orange now use white text, never black
+- The app takes Lofty's brand colours from the design system — orange is now the primary action colour, with green kept for small accents
 - The app is called Lofty Hub in the sidebar logo and in the browser tab of a shared document
 - Sign-in and Wiring no longer mention a second pair of Supabase variable names that the app stopped reading
 - Setup is now Settings, and managers and above can open it — properties, processes, contacts, maintenance, the stage SLAs and the notification rules
