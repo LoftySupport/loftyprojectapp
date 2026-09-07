@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { Text } from "@vibe/core";
 import { useQuery, useRepository } from "../data/DataProvider";
-import { useUndo } from "../data/UndoProvider";
 import {
   useProcessProperties, useProcesses, usePropertyAccess, usePropertyDefs, usePropertyOptions, useStages
 } from "../data/useLookups";
@@ -70,7 +69,6 @@ export function PropertySlots({
   const { data: values, loading: valuesLoading } = useQuery(
     r => r.listPropertyValues(target), [], [target.jobId, target.projectId, key]
   );
-  const { record } = useUndo();
   const { data: profiles } = useQuery(r => r.listProfiles(), []);
   const people = useMemo(
     () => profiles.filter(p => p.active).map(p => ({ id: p.id, name: p.fullName })),
@@ -141,19 +139,9 @@ export function PropertySlots({
     setBusyKey(def.key);
     setError(null);
     try {
-      const write = async (v: PropertyValueData | null) => {
-        if (v == null) await repo.clearPropertyValue(target, def.key);
-        else await repo.setPropertyValue(target, def.key, v);
-      };
-      // What the slot held before — the record's OWN value, not one read through from the
-      // project, because clearing a borrowed value would be writing on the wrong record.
-      const before = own.get(def.key)?.value ?? null;
-      await write(value);
-      record({
-        label: `${value == null ? "Cleared" : "Set"} ${def.label}`,
-        undo: async () => { await write(before); setLocalReload(n => n + 1); onChanged?.(); },
-        redo: async () => { await write(value); setLocalReload(n => n + 1); onChanged?.(); }
-      });
+      // Undoable from the header — the repository records the step (undoableRepository).
+      if (value == null) await repo.clearPropertyValue(target, def.key);
+      else await repo.setPropertyValue(target, def.key, value);
       setLocalReload(n => n + 1);
       onChanged?.();
     } catch (e) {

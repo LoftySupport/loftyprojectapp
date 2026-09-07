@@ -18,11 +18,10 @@ import { JobMaintenancePanel } from "./JobMaintenancePanel";
 import { JobTimeline } from "./JobTimeline";
 import { TasksPanel } from "./TasksPanel";
 import { CommentsPanel } from "./CommentsPanel";
-import { useQuery, useRepository } from "../data/DataProvider";
+import { useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { Select } from "./Select";
 import { PersonSelect } from "./PersonSelect";
-import { useUndo } from "../data/UndoProvider";
 import { Problem } from "./Form";
 import { useAskDock } from "./AskDock";
 import { useToasts } from "./Toasts";
@@ -96,9 +95,7 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
   // the same rung (`user`+, backed by the `users update jobs` policy). One record here,
   // so the write saves on change and the board reloads behind the drawer.
   const { can } = usePermission();
-  const { record } = useUndo();
   const { teams } = useTeams();
-  const { data: profiles } = useQuery(r => r.listProfiles(), []);
   const [whoBusy, setWhoBusy] = useState(false);
   const [whoErr, setWhoErr] = useState<string | null>(null);
   const saveWho = async (patch: {
@@ -110,22 +107,8 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
     setWhoBusy(true);
     setWhoErr(null);
     try {
+      // Undoable from the header — the repository records the step (undoableRepository).
       await repo.updateJob(job.jobNumber, patch);
-      // What the job held before, for the same keys — the undo step (see UndoProvider).
-      const before: typeof patch = {};
-      if ("owningTeam" in patch) before.owningTeam = job.teamId as TeamId;
-      if ("assigneeId" in patch) before.assigneeId = job.assigneeId ?? null;
-      if ("titleType" in patch) before.titleType = job.titleType ?? null;
-      const said = "assigneeId" in patch
-        ? `Assigned ${job.jobNumber} to ${patch.assigneeId ? profiles.find(p => p.id === patch.assigneeId)?.fullName ?? "somebody" : "nobody"}`
-        : "owningTeam" in patch
-          ? `Moved ${job.jobNumber} to ${teams.find(t => t.id === patch.owningTeam)?.name ?? "a team"}`
-          : `Set ${job.jobNumber}'s title type`;
-      record({
-        label: said,
-        undo: async () => { await repo.updateJob(job.jobNumber, before); onMoved(); },
-        redo: async () => { await repo.updateJob(job.jobNumber, patch); onMoved(); }
-      });
       onMoved();
     } catch (err) {
       setWhoErr(err instanceof Error ? err.message : String(err));
@@ -148,14 +131,7 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
     setOldNoBusy(true);
     setOldNoErr(null);
     try {
-      const before = job.jobNumberOld ?? null;
-      const after = oldNoDraft.trim() || null;
-      await repo.updateJob(job.jobNumber, { jobNumberOld: after });
-      record({
-        label: after ? `Set ${job.jobNumber}'s SiteBook number to ${after}` : `Cleared ${job.jobNumber}'s SiteBook number`,
-        undo: async () => { await repo.updateJob(job.jobNumber, { jobNumberOld: before }); onMoved(); },
-        redo: async () => { await repo.updateJob(job.jobNumber, { jobNumberOld: after }); onMoved(); }
-      });
+      await repo.updateJob(job.jobNumber, { jobNumberOld: oldNoDraft.trim() || null });
       onMoved();
     } catch (err) {
       setOldNoErr(err instanceof Error ? err.message : String(err));

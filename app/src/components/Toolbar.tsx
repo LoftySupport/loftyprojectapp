@@ -1,4 +1,5 @@
-import { Button, Text } from "@vibe/core";
+import { useState } from "react";
+import { Button, Text, TextField } from "@vibe/core";
 import { Select, toOptions, type SelectOption } from "./Select";
 import { DateRangeFilter, parseRange, serialiseRange } from "./DateRange";
 import "./ui.css";
@@ -9,9 +10,19 @@ import "./ui.css";
  * View   Board / Table / Gantt / Calendar
  * Group  Stage / Project / Team / Team member / Status  (Project is dropped on the
  *        project board — a project cannot be grouped by itself)
- * Date   one control holding the whole range, not two fields to keep in step
- * Filter chips you add and remove, each arriving unset so adding one never silently
- *        narrows the result set to whatever happened to be first in its list
+ * Filter the Group-by fields, always on show, each reading "Any" until chosen — and one
+ *        Advanced row holding every other filter at once
+ *
+ * WHY THE CHIPS WENT (7 September). Filters were chips: "+ Add filter" put the next
+ * unused field on the bar as an unset select, and you chose a value, and repeated. Amber:
+ * *"filters on jobs and projects should be same as the group ones and then you can add in
+ * the extra detail like an advanced not clicking a million times to get new filters up."*
+ * She is describing two things. The fields you group by — stage, team, status, process —
+ * are the fields you filter by, so they are on the bar from the start, no adding. The
+ * rest — a number typed in, the date moved, process health, a property recorded or not —
+ * are one Advanced row that opens whole, so the third filter costs the same one click as
+ * the first. A filter that is "Any" is not in the URL; a filter with a value is, so the
+ * links people paste still carry exactly what narrowed the board.
  */
 
 export const VIEWS = ["Board", "Table", "Gantt", "Calendar"] as const;
@@ -22,7 +33,7 @@ export type View = (typeof VIEWS)[number];
  * "the filters on the job board need a clear all option so i don\'t have to see it
  * grouped by anything"). A board grouped by nothing is one list, which is what somebody
  * scanning for a single job actually wants — the columns are an answer to "how is the
- * work distributed", not to "where is 1042-03".
+ * work distributed", not to "where is 1042-003".
  */
 export const GROUPINGS = [
   "None", "Stage", "Project", "Team", "Team member", "Status",
@@ -50,7 +61,17 @@ export type Grouping = (typeof GROUPINGS)[number];
  * it narrows for real. Tag returns with tag wiring; there is deliberately no separate
  * Team-member filter — the Team filter matches membership (Amber, 26 Aug).
  */
-export const FILTERABLE = ["Stage", "Team", "Status", "Type", "Process", "Process health", "Property", "Recorded"] as const;
+export const FILTERABLE = [
+  "Stage", "Job stage", "Team", "Status", "Type", "Project", "Process", "Process health",
+  "Property", "Recorded", "Number", "Date"
+] as const;
+
+/** Fields that are a box you type into rather than a list you choose from. */
+const TYPED = new Set<string>(["Number"]);
+/** Sequences, not sets — alphabetical would put Cancelled second and "at risk" before "on track". */
+const ORDERED = new Set<string>(["Stage", "Job stage", "Process", "Process health"]);
+/** What the box is called, where the field name alone would not say. */
+const LABELS: Record<string, string> = { Number: "Job or project number", Date: "Moved" };
 
 /** `field` is the identity — a field appears at most once, so a separate id is a second
  *  way to say the same thing, and the query string keys off the field anyway. */
@@ -69,6 +90,8 @@ export function Toolbar({
   filters,
   onFiltersChange,
   optionsFor,
+  primary,
+  advanced,
   count,
   actions
 }: {
@@ -81,16 +104,73 @@ export function Toolbar({
   filters: ToolbarFilter[];
   onFiltersChange: (f: ToolbarFilter[]) => void;
   optionsFor: (field: string) => SelectOption[];
+  /** The filters on the bar from the start — the same fields the board groups by. */
+  primary: readonly string[];
+  /** The rest, in the Advanced row. Every one is drawn at once when the row is open. */
+  advanced: readonly string[];
   count?: string;
   actions?: React.ReactNode;
 }) {
-  const addFilter = () => {
-    const used = filters.map(f => f.field);
-    const field = FILTERABLE.find(f => !used.includes(f));
-    if (!field) return;
-    // Arrives unset. A filter that defaults to its first option looks like it did
-    // nothing while quietly hiding most of the board.
-    onFiltersChange([...filters, { field, value: null }]);
+  const valueOf = (field: string) => filters.find(f => f.field === field)?.value ?? null;
+  /** Set is upsert; clear is remove — so an "Any" filter leaves no trace in the URL. */
+  const setValue = (field: string, value: string | null) => {
+    const rest = filters.filter(f => f.field !== field);
+    onFiltersChange(value ? [...rest, { field, value }] : rest);
+  };
+  const advancedActive = advanced.filter(f => valueOf(f)).length;
+  // Open from the start when a link arrived with an advanced filter set — a narrowed
+  // board whose narrowing is hidden behind a closed row would read as missing jobs.
+  const [advancedOpen, setAdvancedOpen] = useState(advancedActive > 0);
+  const anySet = filters.some(f => f.value);
+
+  const control = (field: string) => {
+    const label = LABELS[field] ?? field;
+    if (field === "Date") {
+      // The app's standard date control since 1 September (Amber: *"this is the default
+      // way for every date picker in the app"*). It filters on `job_stage_entered_at`,
+      // the one real date every job carries; the label says which date it is about,
+      // because a bare "Date" on a board of jobs reads as a due date.
+      return (
+        <DateRangeFilter
+          key={field}
+          label={label}
+          ariaLabel="Filter by when a job entered its stage"
+          value={parseRange(valueOf("Date"))}
+          onChange={v => setValue("Date", serialiseRange(v))}
+        />
+      );
+    }
+    if (TYPED.has(field)) {
+      return (
+        <div className="toolbar-field" key={field}>
+          <span className="toolbar-label">{label}</span>
+          <TextField
+            className="toolbar-text"
+            size="small"
+            id={`filter-${field.toLowerCase()}`}
+            inputAriaLabel={`Filter by ${label.toLowerCase()}`}
+            placeholder="e.g. 1042-003"
+            value={valueOf(field) ?? ""}
+            onChange={v => setValue(field, v.trim() ? v : null)}
+          />
+        </div>
+      );
+    }
+    return (
+      <div className="toolbar-field" key={field}>
+        <span className="toolbar-label">{label}</span>
+        <Select
+          className="toolbar-control"
+          clearable
+          ordered={ORDERED.has(field)}
+          aria-label={`Filter by ${label.toLowerCase()}`}
+          placeholder="Any"
+          options={optionsFor(field)}
+          value={valueOf(field)}
+          onChange={v => setValue(field, v)}
+        />
+      </div>
+    );
   };
 
   return (
@@ -125,66 +205,28 @@ export function Toolbar({
         </div>
       )}
 
-      {/* The app's standard date control since 1 September (Amber: *"this is the default
-          way for every date picker in the app"*). It replaced a three-option select whose
-          options were written here and whose arithmetic was written in `filtering.ts` —
-          two places to change to add "yesterday", which is why it never grew one.
-
-          The semantics are unchanged: this filters on `job_stage_entered_at`, the one
-          real date every job carries. `DateRangeFilter` is the control; the label below
-          says which date it is about, because a bare "Date" on a board of jobs reads as a
-          due date. */}
-      <DateRangeFilter
-        label="Moved"
-        ariaLabel="Filter by when a job entered its stage"
-        value={parseRange(filters.find(f => f.field === "Date")?.value ?? null)}
-        onChange={v => {
-          const rest = filters.filter(f => f.field !== "Date");
-          const raw = serialiseRange(v);
-          onFiltersChange(raw ? [...rest, { field: "Date", value: raw }] : rest);
-        }}
-      />
+      {/* The Group-by fields, as filters, always here. */}
+      {primary.map(control)}
 
       <div className="toolbar-field filter-chips">
-        <span className="toolbar-label">Filter by</span>
-        {/* Date is rendered by its own labelled select above, not as a chip. */}
-        {filters.filter(f => f.field !== "Date").map(f => (
-          <span className="toolbar-field" key={f.field}>
-            <Select
-              className="toolbar-control"
-              clearable
-              /* Stage, Process and Process health are sequences — the lifecycle, a
-                 stage's run, and on-track → at-risk → overdue. Alphabetical would put
-                 Cancelled second and "at risk" before "on track", which reads as noise.
-                 Every other field is a set of names and sorts. */
-              ordered={f.field === "Stage" || f.field === "Process" || f.field === "Process health"}
-              aria-label={`Filter by ${f.field}`}
-              placeholder={`${f.field}: Any`}
-              options={optionsFor(f.field)}
-              value={f.value}
-              onChange={v =>
-                onFiltersChange(filters.map(x => (x.field === f.field ? { ...x, value: v } : x)))
-              }
-            />
-            <Button
-              kind="tertiary"
-              size="small"
-              aria-label={`Remove the ${f.field} filter`}
-              onClick={() => onFiltersChange(filters.filter(x => x.field !== f.field))}
-            >
-              ×
-            </Button>
-          </span>
-        ))}
-        <Button kind="tertiary" size="small" onClick={addFilter}>
-          + Add filter
+        <Button
+          kind="tertiary"
+          size="small"
+          className={"toolbar-advanced-btn" + (advancedOpen ? " is-on" : "")}
+          aria-expanded={advancedOpen}
+          aria-controls="toolbar-advanced"
+          onClick={() => setAdvancedOpen(o => !o)}
+        >
+          {/* The count says an advanced filter is narrowing the board even when the
+              row is folded away — a hidden filter is how "where did my jobs go" starts. */}
+          Advanced{advancedActive ? ` (${advancedActive})` : ""}
         </Button>
         {/* Clear ALL — the filters and the grouping together. They are one state in
             somebody's head ("stop narrowing this"), and clearing half of it left a
             board still split into columns by whatever was chosen ten minutes ago.
             Shown whenever either is set, so the control appears exactly when it would
             do something. */}
-        {(filters.length > 0 || (grouping && grouping !== "None")) && (
+        {(anySet || (grouping && grouping !== "None")) && (
           <Button
             kind="tertiary"
             size="small"
@@ -208,6 +250,14 @@ export function Toolbar({
               reader; role=status makes count changes audible without a focus move. */}
           <span role="status" aria-live="polite" className="visually-hidden">{count}</span>
         </>
+      )}
+
+      {/* Every advanced filter at once, on its own row under the first. Not one at a
+          time: the whole complaint was the clicking. */}
+      {advancedOpen && (
+        <div className="toolbar-advanced" id="toolbar-advanced">
+          {advanced.map(control)}
+        </div>
       )}
     </div>
   );

@@ -204,6 +204,8 @@ export function ReportsPage() {
         filters={filters}
         onFiltersChange={setFilters}
         optionsFor={optionsFor}
+        primary={["Stage", "Team", "Type"]}
+        advanced={["Number", "Process", "Date", "Process health", "Property", "Recorded"]}
         count={`Showing ${jobs.length} of ${all.length} jobs`}
         /* Named for the tab, because that is what it downloads. The Processes tab carries
            its own Export button, next to the figures it exports, so nothing here. */
