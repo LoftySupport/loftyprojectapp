@@ -5,6 +5,7 @@ import { usePermission } from "../data/PermissionProvider";
 import { MAINTENANCE_HEALTH_LABELS, type JobWarranty, type MaintenanceRequest } from "../data/types";
 import "./ui.css";
 import "./processes.css";
+import { CollapsiblePanel } from "./CollapsiblePanel";
 
 /**
  * The job's maintenance, in its drawer (0084): the warranty line and the requests on it,
@@ -21,13 +22,12 @@ export function JobMaintenancePanel({ jobId }: { jobId: string }) {
   const open = requests.filter(r => r.status !== "closed" && r.status !== "rejected");
 
   return (
-    <section className="panel">
-      <div className="panel-head">
-        <Text type="text2" weight="bold">Maintenance</Text>
-        <div className="panel-actions">
-          <Link to={`/maintenance?job=${encodeURIComponent(jobId)}&queue=all`} className="tap-link">Open in Maintenance</Link>
-          {can("user") && <Link to={`/maintenance?job=${encodeURIComponent(jobId)}&new=1`} className="tap-link">+ New request</Link>}
-        </div>
+    <CollapsiblePanel id="job-maintenance" title="Maintenance" defaultOpen={false}>
+      {/* Links live in the body: the heading is a <button>, and nesting a <Link> in it is
+          invalid HTML — unreachable by keyboard and inconsistent on click. */}
+      <div className="panel-actions">
+        <Link to={`/maintenance?job=${encodeURIComponent(jobId)}&queue=all`} className="tap-link">Open in Maintenance</Link>
+        {can("user") && <Link to={`/maintenance?job=${encodeURIComponent(jobId)}&new=1`} className="tap-link">+ New request</Link>}
       </div>
       <Text type="text3" color="secondary" ellipsis={false} element="p">
         {warranty?.handoverAt
@@ -48,6 +48,6 @@ export function JobMaintenancePanel({ jobId }: { jobId: string }) {
         </ul>
       )}
       {open.length > 0 && <div className="slot-sub">{open.length} open</div>}
-    </section>
+    </CollapsiblePanel>
   );
 }

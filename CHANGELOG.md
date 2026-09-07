@@ -16,6 +16,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 - A job or project number can be typed straight into the filters
 - Any property, including the project properties a job inherits, can be shown as a column on the Jobs and Projects tables
+- Lists longer than five items show the first five and offer the rest
 - A SiteBook number can be given to each job as it is created
 - A request on Updates can be re-filed as a bug or as an idea
 - Undo and redo in the header, for the edits that save as you make them
@@ -99,6 +100,9 @@ says shipped and what the app shows people cannot use different words for it.
 ### Fixed
 
 - Undo and redo take back every edit that saves as you make it — dates, tasks, maintenance, process runs and properties included, not only a job's team and assignee
+- Cards on the board no longer touch each other
+- The icons in the top bar no longer flash pink when you hover them
+- Menu labels no longer lose their first letter when the sidebar is collapsed
 - Creating jobs from a project opens over the project instead of behind it, and the jobs list sits at the top of the drawer
 - Every dropdown lists its options alphabetically, including the multi-selects
 - A half-written bug report is kept when the panel is closed or the page changes
@@ -136,6 +140,10 @@ says shipped and what the app shows people cannot use different words for it.
 
 - The Jobs and Projects filters are the same fields as Group by, always on the bar, with everything else in one Advanced row instead of chips added one at a time
 - On the Projects board, Stage now filters by the project's own phase and a separate Job stage filter finds projects with a job in that stage
+- Sections in the job panel fold away, and Collapse all shuts the lot at once
+- Activity and comments now sit at the bottom of the job panel instead of behind a tab
+- Sections in the job panel now fold away, and stay folded how you leave them
+- Only admins can create a new kind of notification; managers still decide who hears each one
 - Choosing a person is a type-ahead — names with their team, the record's own team first, and a single match is taken as you tab away
 - Bugs, ideas, the roadmap and the changelog live only on Updates; the copies under Admin are gone
 - The roadmap and changelog now live in one place instead of two
@@ -176,6 +184,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Removed
 
+- Clone is no longer on the job panel — cloning belongs to the project
 - Notifications is no longer a Setup tab; your own channels stay in User settings and the audience rules moved under Automations
 - Processes is no longer a destination in the main navigation — it is part of Setup; /processes and /templates forward there
 - The tracker's gantt and calendar

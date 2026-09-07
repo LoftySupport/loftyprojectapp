@@ -17,7 +17,6 @@ import { WatchButton } from "./WatchButton";
 import { JobMaintenancePanel } from "./JobMaintenancePanel";
 import { JobTimeline } from "./JobTimeline";
 import { TasksPanel } from "./TasksPanel";
-import { CloneJobDialog } from "./CloneDialog";
 import { CommentsPanel } from "./CommentsPanel";
 import { useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
@@ -28,6 +27,7 @@ import { useAskDock } from "./AskDock";
 import { useToasts } from "./Toasts";
 import { Token } from "./Token";
 import "./ui.css";
+import { CollapsiblePanel, PanelGroup } from "./CollapsiblePanel";
 
 /**
  * The job record, opened beside the board rather than on a page of its own — you keep
@@ -96,7 +96,6 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
   // so the write saves on change and the board reloads behind the drawer.
   const { can } = usePermission();
   const { teams } = useTeams();
-  const [cloning, setCloning] = useState(false);
   const [whoBusy, setWhoBusy] = useState(false);
   const [whoErr, setWhoErr] = useState<string | null>(null);
   const saveWho = async (patch: {
@@ -227,15 +226,16 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
             <Button kind="secondary" size="small" onClick={() => openAsk(`job ${job.jobNumber}`)}>
               Ask about this job
             </Button>
-            {/* Clone (0057). On every job, not only cancelled ones: a second dwelling
-                on the same plan is the other reason to reach for it. Manager+, the same
-                rung that may create a job at all — the database decides, this only
-                hides the button. */}
-            {can("manager") && (
-              <Button kind="tertiary" size="small" onClick={() => setCloning(true)}>
-                Clone…
-              </Button>
-            )}
+            {/* NO CLONE HERE. Amber, 7 September: "remove clone off the job sidepanel..
+                cloning jobs can only be done on projects". A clone makes a NEW job in a
+                project, so it is an act on the project, not on the job you happen to have
+                open — and offering it here invited "clone this job" to mean "duplicate it
+                where it is", which is not what 0057 does.
+
+                CloneDialog.tsx and repository.cloneJob() are deliberately KEPT and are now
+                referenced by no screen: the capability is unchanged, only its entry point
+                moved, and the project-side control does not exist yet. Do not delete them
+                as dead code — see docs/open-questions.md. */}
             {canExpand && <ExpandButton expanded={expanded} onToggle={toggle} />}
             <Button kind="tertiary" size="small" onClick={onClose} aria-label="Close">
               ×
@@ -251,13 +251,23 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
             <TabList activeTabId={tab} onTabChange={setTab}>
               <Tab>Main info</Tab>
               <Tab>All properties</Tab>
-              <Tab>Activity &amp; comments</Tab>
               <Tab>Departments</Tab>
             </TabList>
           </div>
         )}
 
+        <PanelGroup>{bulk => (
         <div className="drawer-body stack">
+          {/* Amber, 7 September: "you can't find anything on it". Shut everything and the
+              drawer becomes a contents page you can read in one look — which is what the
+              reference designs do. Two buttons rather than one toggle: after a "collapse
+              all" a single toggle reads "expand all", and with nine sections in mixed
+              states there is no honest label for what one button would do next. */}
+          <div className="drawer-bulk">
+            <button type="button" className="drawer-bulk-btn" onClick={bulk.collapseAll}>Collapse all</button>
+            <span aria-hidden>·</span>
+            <button type="button" className="drawer-bulk-btn" onClick={bulk.expandAll}>Expand all</button>
+          </div>
           {onJump && siblings.length > 1 && (
             <div className="drawer-find">
               <input
@@ -285,11 +295,7 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
           {/* First, because it is how a job is looked up (Amber, 27 Aug): the old
               Lofty number is what SiteBook, Trello and the paperwork link by, and the
               addresses are what people say on the phone. */}
-          <section className="panel">
-            <div className="panel-head">
-              <Text type="text2" weight="bold">Numbers &amp; addresses</Text>
-              <Text type="text3" color="secondary">how this job is looked up</Text>
-            </div>
+          <CollapsiblePanel id="job-numbers" title={<>Numbers &amp; addresses</>} summary="how this job is looked up">
             <div className="field-row">
               <div className="field-label"><Text type="text2">Job number</Text></div>
               <Text type="text2" weight="medium">{job.jobNumber}</Text>
@@ -365,13 +371,18 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
                 <Text type="text3" color="secondary">never renamed — always this address</Text>
               )}
             </div>
-          </section>
+          </CollapsiblePanel>
 
-          <section className="panel">
-            <div className="panel-head">
-              <Text type="text2" weight="bold">Who it’s with</Text>
-              <StatusPill status={job.status} />
-            </div>
+          {/* The status pill is the summary, so it stays readable with the section shut —
+              "who it's with" closed but "On hold" visible is the useful half. Guarded:
+              StatusPill renders an empty pill for an absent status, and an empty pill in a
+              heading reads as a rendering fault rather than as missing data. */}
+          <CollapsiblePanel
+            id="job-who"
+            title={<>Who it’s with</>}
+            defaultOpen={false}
+            summary={job.status ? <StatusPill status={job.status} /> : undefined}
+          >
             {/* Same facts as the card, editable from `user` up — the rung the database
                 already enforces on this write. Below that, read-only, and an em dash
                 stays the honest answer when nobody is assigned. */}
@@ -412,13 +423,9 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
                 </div>
               </div>
             )}
-          </section>
+          </CollapsiblePanel>
 
-          <section className="panel">
-            <div className="panel-head">
-              <Text type="text2" weight="bold">Folders</Text>
-              <Text type="text3" color="secondary">the job&apos;s subfolder, inside its project&apos;s</Text>
-            </div>
+          <CollapsiblePanel id="job-folders" title="Folders" defaultOpen={false} summary={<>the job&apos;s subfolder, inside its project&apos;s</>}>
             {/* Both links, per Lofty's rule — a job's page shows its own folder and its
                 project's, never its siblings'. An unlinked folder is a real state and
                 says so rather than hiding the row. */}
@@ -442,12 +449,9 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
                 <Text type="text3" color="secondary">no folder linked yet — set it on the project</Text>
               )}
             </div>
-          </section>
+          </CollapsiblePanel>
 
-          <section className="panel">
-            <div className="panel-head">
-              <Text type="text2" weight="bold">Phase &amp; stage</Text>
-            </div>
+          <CollapsiblePanel id="job-phase" title={<>Phase &amp; stage</>} defaultOpen={false} summary={job.stage}>
             <div className="field-row">
               <div className="field-label">
                 <Text type="text2">Phase</Text>
@@ -477,7 +481,7 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
               </div>
               <Text type="text2" weight="medium">{job.daysInStage}</Text>
             </div>
-          </section>
+          </CollapsiblePanel>
 
           {/* The processes of every stage, this one open — with their properties to
               record and their checklists to create. Milestones are the processes flagged
@@ -511,13 +515,7 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
 
           </>)}
 
-          {(!expanded || tab === 2) && (<>
-          {/* Real since 0058. This said "coming soon" for as long as `activity_audit`
-              was admin-only — the events were being recorded the whole time, and nobody
-              below admin could read one. Two panels rather than one merged stream:
-              comments are user-authored and editable, activity is append-only, and
-              interleaving them makes a feed where half the entries can be rewritten
-              after the fact. */}
+          {(!expanded || tab === 0) && (<>
           {/* What has to be done on this job. Above the timeline because a checklist is
               worked from, and a history is read — the thing you act on goes first. */}
           <TasksPanel jobId={job.jobNumber} />
@@ -535,18 +533,10 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
               the activity because it is the same history read a different way — every
               bar on it is a stage change this feed also carries as a line. */}
           {expanded && <JobTimeline jobId={job.jobNumber} />}
-          {expanded && <ActivityFeed jobId={job.jobNumber} title="Activity" />}
-          {/* The job's own thread — the same shape the project has, because Amber's
-              "latest update" is one rule for both kinds of record. */}
-          <CommentsPanel jobId={job.jobNumber} title="Updates & comments" />
           </>)}
 
-          {expanded && tab === 3 && (
-            <section className="panel">
-              <div className="panel-head">
-                <Text type="text2" weight="bold">Departments</Text>
-                <Text type="text3" color="secondary">handoff view — coming soon</Text>
-              </div>
+          {expanded && tab === 2 && (
+            <CollapsiblePanel id="job-departments" title="Departments" summary="handoff view — coming soon">
               <Text type="text2" color="secondary" ellipsis={false}>
                 Where every team stands on this job, in the order it passes through them —
                 who had it, who has it, who is next, with the fields each team works with.
@@ -558,20 +548,24 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
                 <div className="dept-block is-current">Current owner — team b</div>
                 <div className="dept-block">Not started — team c</div>
               </div>
-            </section>
+            </CollapsiblePanel>
           )}
+
+          {/* LAST, AND NOT IN A TAB. Amber, 7 September: "activity logging and comments
+              need to be at the bottom as not as important in tabs". A tab implies you
+              might come to the drawer FOR the history; you come for the job and read the
+              history if something looks wrong. Untabbed also means it is in the same place
+              docked and fullscreen, so "scroll to the bottom" is one instruction.
+
+              Two panels rather than one merged stream: comments are user-authored and
+              editable, activity is append-only (0058), and interleaving them makes a feed
+              where half the entries can be rewritten after the fact. */}
+          {expanded && <ActivityFeed jobId={job.jobNumber} title="Activity" />}
+          <CommentsPanel jobId={job.jobNumber} title="Updates & comments" />
         </div>
+        )}</PanelGroup>
       </aside>
 
-      {/* Outside the drawer's <aside>, so the clone panel is a sibling of it rather
-          than a panel inside a panel — two nested dialogs fight over Escape, and the
-          inner one loses. */}
-      <CloneJobDialog
-        show={cloning}
-        jobNumber={cloning ? job.jobNumber : null}
-        onClose={() => setCloning(false)}
-        onCloned={onMoved}
-      />
     </>
   );
 }
