@@ -10,6 +10,7 @@ import type {
 import { PropertyField, formatValue, hasValue } from "./PropertyField";
 import "./ui.css";
 import "./processes.css";
+import { CollapsiblePanel } from "./CollapsiblePanel";
 
 /**
  * The field slots, with their values.
@@ -160,13 +161,12 @@ export function PropertySlots({
   const heading = title ?? (scope === "project" ? "Project properties" : "Job properties");
 
   return (
-    <section className="panel" aria-label={heading}>
-      <div className="panel-head">
-        <Text type="text2" weight="bold">{heading}</Text>
-        <Text type="text3" color="secondary">
-          {loading ? "Loading…" : `${recorded} of ${total} recorded`}
-        </Text>
-      </div>
+    <CollapsiblePanel
+      id={`props-${scope}`}
+      title={heading}
+      defaultOpen={false}
+      summary={loading ? "Loading…" : `${recorded} of ${total} recorded`}
+    >
       {note && (
         <Text type="text3" color="secondary" element="p" ellipsis={false} className="slot-note">{note}</Text>
       )}
@@ -247,7 +247,7 @@ export function PropertySlots({
           </ul>
         </div>
       )}
-    </section>
+    </CollapsiblePanel>
   );
 }
 

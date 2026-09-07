@@ -65,11 +65,25 @@ moves (forwards-only by your rule), creating, deleting, votes, follows or commen
 the right line, or should a lifecycle move be undoable within, say, a minute of making it?
 (The database refuses the way back today; allowing it is a migration, not a UI change.)
 
-### 6. Should creating a notification *type* stay with admins?
+### 6. Where does "clone a job" live now?
 
-Left unanswered when the other two of the 4 September trio were settled. Types went down to
-manager along with the rules. A rule is who hears a thing; a type is whether that kind of
-notification exists at all. Pulling types back up is a second policy, not a second screen.
+**Blocked:** nothing is broken, but the app currently has no way to clone a job at all.
+
+Amber, 7 September: *"remove clone off the job sidepanel.. cloning jobs can only be done on
+projects"*. Done — the button is off the job drawer. But **there is no clone control on the
+Projects side yet**, and there never was: `CloneDialog.tsx` and `repository.cloneJob()` were
+only ever reached from that one button. Both are kept on purpose and are now referenced by
+no screen, so the capability is intact and only its entry point is missing.
+
+What is not decided is what it should look like there:
+
+- **A row action on each job listed inside a project** — closest to the old behaviour, and
+  it keeps "which job am I copying" obvious.
+- **One "add a job like…" control on the project**, which picks the job to copy from a list.
+  Reads better as an act on the project, which is the reasoning for moving it.
+
+Either way `cloneJob(id, copy)` is unchanged and manager+ still gates it. Do not delete
+`CloneDialog.tsx` as dead code before this is answered.
 
 ### 7. Is the placeholder at 3.47:1 accepted, or does it get fixed?
 
@@ -117,6 +131,7 @@ is worse for reporting than no column.
 | 7 Sep | How many digits is a job number? | **Three** — *"the job numbers are 3 digits"*. Migration 0073 had already made it so; the toolbar's example read `1042-03` and now reads `1042-003`. Older two-digit examples remain in earlier sessions' notes and in `dictionary.ts` |
 | 7 Sep | Should there be a CI check for the generated files and the responsive sweep? | **Yes** — *"ok"*. Both are jobs now; the generated-files check caught two real faults on its first day |
 | 7 Sep | Filters, a number box, property columns | *"filters on jobs and projects should be same as the group ones … an advanced … enter a job number … columns should be able to add any property in the job (including project properties …)"* — **done in #51** |
+| 7 Sep | Should creating a notification *type* stay with admins? | **Yes** — `0097`. Insert and delete are admin's; a manager keeps every rule and may still change an existing type's default channels, timing and active flag, which is what Settings → Automations edits. Three policies by command, not one `for all`, because `for all` would have taken that screen off managers |
 | 7 Sep | What does "mark as complete" mean for the seven import sites? | **The question dissolved.** *"i don't need any jobs imported from spreadsheets. all jobs that need to be created from now on will be created from the projects in the app"* — so there is no import, no second copy, and nothing to reconcile. Phase B is closed without ever running |
 | 7 Sep | What happens to the import machinery on the live database? | **Nothing — leave it.** *"everything that is in supabase now is correct. If I need to import other areas I will let you know as properties may change between now and then. No new importing for job or projects"*. The staging table, its 801 rows and the three functions stay applied and inert |
 | 7 Sep | Should filled primary buttons use the pressed orange? | **Yes.** Filled buttons paint `--primary-action-color` `#c2543c` (4.54:1 with white); `--primary-color` stays `#f47e63` for focus rings, tints, accents and chart series. Hover `#9a4330` is derived here and should go back into the design project |

@@ -803,6 +803,49 @@ begin
      where notification_type_id = 'task_overdue' and notification_rule_audience = 'managers';
   exception when others then raise warning 'FAIL: a manager could not write a notification rule (%)', sqlerrm;
   end;
+
+  -- 7. But NOT what kinds of notification exist. 0097 split what 0096 had bundled: a rule
+  --    is who hears a thing (probe 6, a manager's), a type is whether that kind of thing
+  --    exists at all (this one, admin's). These two probes are the whole of 0097 — 6 must
+  --    keep passing while 7 refuses, and a single policy change that moved both would
+  --    break one of them whichever way it went.
+  begin
+    insert into notification_types (notification_type_id, notification_type_name, notification_type_position)
+    values ('__rls_probe_type__', 'RLS probe type', 999);
+    raise warning 'FAIL: a manager invented a notification type — that is the vocabulary, not the automation';
+    delete from notification_types where notification_type_id = '__rls_probe_type__';
+  exception
+    when insufficient_privilege then raise notice 'ok  a manager writes notification rules but cannot create a type (0097)';
+    when others then raise warning 'FAIL: unexpected creating a notification type as manager (%)', sqlerrm;
+  end;
+
+  -- 8. And a manager CAN still change an existing type's defaults. This is the probe that
+  --    guards against the obvious wrong version of 0097: one `for all ... >= 'admin'`
+  --    policy instead of three split by command. `saveNotificationType()` is an UPDATE and
+  --    it is what Settings -> Automations is made of, so a single admin-only policy would
+  --    have taken that screen away from every manager with nobody asking for it.
+  declare
+    timing_before text;
+    timing_after  text;
+  begin
+    select notification_type_default_timing into timing_before
+      from notification_types where notification_type_id = 'task_overdue';
+    update notification_types
+       set notification_type_default_timing = case when timing_before = 'digest' then 'immediate' else 'digest' end
+     where notification_type_id = 'task_overdue';
+    select notification_type_default_timing into timing_after
+      from notification_types where notification_type_id = 'task_overdue';
+    if timing_after is distinct from timing_before then
+      raise notice 'ok  a manager still sets an existing type''s defaults (0097 keeps UPDATE at manager)';
+    else
+      raise warning 'FAIL: a manager''s update to a notification type did not take';
+    end if;
+    -- Put it back: a probe that leaves a real type reconfigured is a side effect, not a test.
+    update notification_types set notification_type_default_timing = timing_before
+     where notification_type_id = 'task_overdue';
+  exception when others then
+    raise warning 'FAIL: a manager could not change a notification type''s defaults — 0097 is too tight (%)', sqlerrm;
+  end;
 end $$;
 reset role;
 update pipeline_stages ps

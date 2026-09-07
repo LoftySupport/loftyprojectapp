@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 156 changes since then —
+Unreleased: 165 changes since then —
 - Changed: The Jobs and Projects filters are the same fields as Group by, always on the bar, with everything else in one Advanced row instead of chips added one at a time
 - Added: A job or project number can be typed straight into the filters
 - Added: Any property, including the project properties a job inherits, can be shown as a column on the Jobs and Projects tables
 - Changed: On the Projects board, Stage now filters by the project's own phase and a separate Job stage filter finds projects with a job in that stage
-- Fixed: Undo and redo take back every edit that saves as you make it — dates, tasks, maintenance, process runs and properties included, not only a job's team and assignee
-- …and 151 more.
+- Changed: Sections in the job panel fold away, and Collapse all shuts the lot at once
+- …and 160 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -41,6 +41,9 @@ responsive sweep included, now that it runs there):**
 - #49 — Amber's eight first-week fixes; the responsive sweep and the generated-files check in CI.
 - #51 — undo at the repository seam; filters mirror Group by with one Advanced row; a job or
   project number box; any property as a table column.
+- #50 — nine more from the same list, in a parallel session: the drawer collapses and is
+  findable, the board's cards separate, the header loses its pink, the rail tooltip stops
+  eating its first letter, and `0097` makes a notification *type* admin's again.
 
 **Next, in order.** Nothing here needs a schema change.
 
@@ -50,10 +53,11 @@ responsive sweep included, now that it runs there):**
    request's stage on Updates and undo it; turn on a property column with real values on the
    Jobs table. If any of them misbehaves, the seam (`undoableRepository.ts`) is where undo
    lives now — there is no longer a per-screen registration to look for.
-2. **Work the open-questions queue**, top question first — `docs/open-questions.md`. Five
-   questions were added today (they are numbered 1–5 there; the five older ones follow).
-   Three of them are cheap confirmations of decisions made under time pressure; asked once,
-   they stop being risks.
+2. **Work the open-questions queue**, top question first — `docs/open-questions.md`. Six
+   questions were added today (numbered 1–6 there; the four older ones follow). Three are
+   cheap confirmations of decisions made under time pressure; asked once, they stop being
+   risks. Number 6 is the one that BLOCKS something: cloning a job has no entry point since
+   the button left the drawer (#50) and nothing on the Projects side has taken it yet.
 3. **Small follow-ups that fell out of today, none blocking:**
    - The column picker will list every property — eighty-odd once the definitions are all
      active. It has no search box. Add one when it gets unwieldy, not before.
