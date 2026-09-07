@@ -54,10 +54,12 @@ responsive sweep included, now that it runs there):**
    Jobs table. If any of them misbehaves, the seam (`undoableRepository.ts`) is where undo
    lives now — there is no longer a per-screen registration to look for.
 2. **Work the open-questions queue**, top question first — `docs/open-questions.md`. Six
-   questions were added today (numbered 1–6 there; the four older ones follow). Three are
-   cheap confirmations of decisions made under time pressure; asked once, they stop being
-   risks. Number 6 is the one that BLOCKS something: cloning a job has no entry point since
-   the button left the drawer (#50) and nothing on the Projects side has taken it yet.
+   questions were added today by this line of work; the first (Bugs and Ideas off Admin) was
+   asked and answered the same evening, and #54 put three security-advisor questions at the
+   top, so twelve remain. Numbers 4–7 are the cheap confirmations of decisions made under
+   time pressure; asked once, they stop being risks. Number 8 is the one that BLOCKS
+   something: cloning a job has no entry point since the button left the drawer (#50) and
+   nothing on the Projects side has taken it yet.
 3. **Small follow-ups that fell out of today, none blocking:**
    - The column picker will list every property — eighty-odd once the definitions are all
      active. It has no search box. Add one when it gets unwieldy, not before.
@@ -199,6 +201,8 @@ bugs/ideas/roadmap/changelog pages in admin. this only needs to be one page"*. B
 component underneath was a fact about the code, not about the experience: two doors to
 identical rows is still a thing a person has to check. All four old addresses forward to the
 matching view of Updates, because those URLs were shareable and somebody has shared them.
+Asked that evening whether taking Bugs and Ideas off too was the intent, Amber confirmed it:
+Updates only.
 Updates itself stays in the footer for everybody, because `0060`'s whole point is that the
 people who filed a request can read the queue.
 
