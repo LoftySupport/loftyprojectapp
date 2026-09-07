@@ -21,7 +21,70 @@ invent a value, and `CLAUDE.md` is explicit that an invented default is worse th
 
 ## Open — next question first
 
-### 1. Bugs and Ideas came off Admin as well — is that right?
+### 1. How should an image get into a document?
+
+**Blocked:** the Image block takes a URL and nothing else, so "put our site photo in this
+report" means hosting the photo somewhere else first. This is the older of the two report-
+builder items still open (7 September) and it is the one with a real fork in it.
+
+The block needs somewhere to put the file. Two shapes, and they differ on what happens when
+a client opens a share link:
+
+- **A public Supabase bucket.** Simplest: upload, take the public URL, done. But a share
+  link's images then live on a URL anybody can guess or keep, for as long as the bucket
+  does — outliving the link's own expiry, which `0095` made mandatory precisely so nothing
+  is forever.
+- **Signed URLs, with the expiry baked into the share snapshot.** The image URL is signed
+  when the snapshot is built and expires when the link does, so revoking a link revokes its
+  pictures too. More moving parts, and a snapshot older than its signature shows broken
+  images rather than a clean "this link has expired".
+
+**Claude's recommendation is the second**, because `0095` already decided that a shared
+document is a snapshot with an end date, and the first option quietly exempts the images
+from that decision. But it is a trade against simplicity and it is yours.
+
+### 2. "Import a document as a template" — Word, or Markdown?
+
+**Blocked, and cheaply unblocked:** the second report-builder item from 7 September. The
+work is completely different depending on the answer, which is why nothing has been built.
+
+- **Word (`.docx`)** — `mammoth` converts to html, which the text block already takes.
+  Realistic if the letters being imported are the ones already sitting in SharePoint.
+  Formatting arrives approximately; tables and images need decisions of their own.
+- **Markdown or plain text** — a few dozen lines and no dependency, but only useful if
+  somebody is going to write the source in Markdown, which nobody at Lofty currently does.
+
+Which one is the document you actually have?
+
+### 3. Should the tables stop being visible to `anon` in the GraphQL schema?
+
+Not a hole, which is why it is a question rather than a fix. The security advisor reports 93
+tables as `anon`-visible; **that means discoverable, not readable.** Every one has RLS on
+with no policy reaching `anon`, and reading as `anon` returns 0 rows from `profiles`,
+`teams`, `addresses` and `activity_audit` — watched, not assumed. What leaks is the *shape*:
+somebody unauthenticated can introspect the GraphQL schema and learn that Lofty has a
+`maintenance_message_secrets` table and what its columns are called.
+
+Revoking `SELECT` from `anon` across `public` would close it. Nothing in the app signs in as
+`anon` — the share endpoint uses the service role — so the expected blast radius is zero,
+but "expected" is doing work in that sentence and it is 93 tables.
+
+### 4. Turn on leaked-password protection?
+
+One dashboard toggle. Supabase checks new passwords against HaveIBeenPwned and refuses
+known-breached ones. The reason it has not been flipped is that it changes what happens to a
+real person setting a password, and that is a change to make deliberately rather than
+because an advisor asked. Any objection to it going on?
+
+### 5. Two of the three share-link origins point at nothing
+
+`SHARE_ALLOWED_ORIGINS` holds `https://loftyprojectapp.vercel.app`,
+`https://loftyprojectapp.netlify.app` and `https://app.lofty.au`. The app answers at
+`hub.lofty.au`, Netlify was removed entirely on 6 September, and `app.lofty.au` is a
+different application. Tidying it to just the live origin is one secret edit — but it is
+your secret and an allowlist is a security control, so it is not one to trim on a guess.
+
+### 6. Bugs and Ideas came off Admin as well — is that right?
 
 Two sentences the same day, to two sessions. *"There is duplication on footer and other
 page"* took Roadmap and Changelog off Admin (#48) and kept Bugs and Ideas as the admin-only
@@ -33,7 +96,7 @@ still admin's and superadmin's inside Updates; only the second door went. If Bug
 should come back as Admin tabs, say so and they are two lines to restore; the triage list
 component (`FeedbackList.tsx`) was deleted and would come back from history.
 
-### 2. Saved projects views carrying `?stage=` — leave them, or rewrite them?
+### 7. Saved projects views carrying `?stage=` — leave them, or rewrite them?
 
 Since #51 the projects board has two stage filters: **Stage** is the project's own phase (as
 the Stage grouping is) and **Job stage** is "has a job in this stage". Before, `?stage=` on
@@ -43,21 +106,21 @@ are no shared saved views of that shape that Claude can see, but Claude cannot s
 Options: leave it (the new meaning matches the grouping, which was the point), or run a
 one-off `UPDATE saved_views SET … 'stage=' → 'jobstage='` for projects views only.
 
-### 3. Does undo need a home on a phone?
+### 8. Does undo need a home on a phone?
 
 The header bar is hidden below 600px because two more 32px targets left the search box 70px
 wide, and Ctrl+Z does not exist on a phone — so a phone has no undo at all. Is that
 acceptable for now, or does it need one (a long-press on the "saved" toast is the obvious
 place)?
 
-### 4. Should the person picker offer deactivated people?
+### 9. Should the person picker offer deactivated people?
 
 `PersonSelect` lists active people only, and every assignee, owner and "who is doing this"
 control uses it. A job already assigned to somebody who has since been deactivated still
 shows their name read-only. Nobody asked for the other behaviour; this records that it was a
 choice.
 
-### 5. What is "undo" allowed to reach?
+### 10. What is "undo" allowed to reach?
 
 Today it reaches every field write that saves as you make it — team, assignee, dates, tasks,
 process runs, property values, a request's stage. It deliberately does NOT reach lifecycle
@@ -65,7 +128,7 @@ moves (forwards-only by your rule), creating, deleting, votes, follows or commen
 the right line, or should a lifecycle move be undoable within, say, a minute of making it?
 (The database refuses the way back today; allowing it is a migration, not a UI change.)
 
-### 6. Where does "clone a job" live now?
+### 11. Where does "clone a job" live now?
 
 **Blocked:** nothing is broken, but the app currently has no way to clone a job at all.
 
@@ -85,14 +148,14 @@ What is not decided is what it should look like there:
 Either way `cloneJob(id, copy)` is unchanged and manager+ still gates it. Do not delete
 `CloneDialog.tsx` as dead code before this is answered.
 
-### 7. Is the placeholder at 3.47:1 accepted, or does it get fixed?
+### 12. Is the placeholder at 3.47:1 accepted, or does it get fixed?
 
 The design system now labels it *"example text only, never a label"*, which narrows the
 exposure but does not clear it — placeholder text is still text under WCAG 1.4.3. `#757478`
 would clear it at 4.64:1 as a new `--lofty-black-70` step, leaving `--ui-border-color` at
 the 3.47:1 it was deliberately chosen for.
 
-### 8. What should five missing roadmap items say?
+### 13. What should five missing roadmap items say?
 
 Five commits carry a `Roadmap:` trailer whose text matches no checkbox in `ROADMAP.md`, so
 work that was finished has no line to tick:
@@ -107,7 +170,7 @@ They are real and shipped. What is missing is which phase each belongs to and wh
 wording above is the wording you want, and inventing roadmap text is exactly the thing
 `CLAUDE.md` forbids.
 
-### 9. How is health status worked out?
+### 14. How is health status worked out?
 
 Long-standing, from the schema plan's own risk list. *"Status is what someone sets. Health
 is what the system works out"* — from inputs nobody has defined. Kanban-by-status and
@@ -115,7 +178,7 @@ kanban-by-team work today; **kanban-by-health cannot be built until this is answ
 job at risk because it is past `expected_days`, because a required field is empty, because a
 dependency is blocked, or some combination?
 
-### 10. Does Acquisition & Development want a `project_stage` vocabulary?
+### 15. Does Acquisition & Development want a `project_stage` vocabulary?
 
 `project_stage` is nullable and costs nothing empty. Do not seed a vocabulary until they
 confirm they want one — a half-filled stage column that some projects use and others ignore
@@ -138,7 +201,7 @@ is worse for reporting than no column.
 | 7 Sep | Text colour on Crisp Orange | **Never black on orange.** Filled orange carries Finisher White. Reversed the previous day's ink decision; the design system was updated to match |
 | 7 Sep | Where do the three contrast fixes live? | Amber fixes them in the Claude Design project; Claude supplies exact hexes and re-syncs. Sync stays one-way into this repository |
 | 7 Sep | PR #47 — merge, or hold? | Held as a draft while Amber looked, then **merged** (`3d218d0`). She marked it ready for review and confirmed the merge; it deployed the rebrand to `hub.lofty.au` |
-| 7 Sep | Who sees Bugs and Ideas triage? | *"Only admins and super admin get to see the bug manager."* The **form** is open to everyone with app access, viewers included. Both already behaved that way. *(Later the same day the Bugs and Ideas tabs left Admin too — see open question 1)* |
+| 7 Sep | Who sees Bugs and Ideas triage? | *"Only admins and super admin get to see the bug manager."* The **form** is open to everyone with app access, viewers included. Both already behaved that way. *(Later the same day the Bugs and Ideas tabs left Admin too — see open question 6)* |
 | 7 Sep | Is Roadmap/Changelog duplicated? | Yes — *"there is duplication on footer and other page"*. **Done:** the Admin tabs came out, the cog links to `/updates`, and `/admin/roadmap` and `/admin/changelog` forward there |
 | 7 Sep | The seven colliding import sites | The app is the record; ignore those workbook rows. *(Superseded the same day by closing the import altogether — see the two rows above)* |
 | 6 Sep | Primary colour | Follow the design system: **Crisp Orange**, inverting the app's previous green primary |

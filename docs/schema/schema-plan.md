@@ -2056,6 +2056,43 @@ block additionally refuses to apply if a superseded policy is still attached —
 policies OR together, so leaving `0096`'s in place would have made `0097` look applied while
 changing nothing.
 
+### 7 September — what the security advisor still says, and why most of it stays (`0099`)
+
+`get_advisors` was run against the live project after `0098`. Five findings; **one was
+fixed, and the rest are recorded here so nobody re-investigates them next month.**
+
+`0099` — **fixed.** `function_search_path_mutable` on `private.audit_exempt_tables()` and
+`public.stage_sla_columns()`. Both are now pinned to `pg_catalog, pg_temp`. Worth being
+honest about the size of it: the danger this warning usually names is a SECURITY DEFINER
+function resolving an unqualified table name against a caller-controlled path, and neither
+of these is that — neither is DEFINER, and each is one `select array[…]` of string
+literals. It is hygiene. The reason to do it anyway is that an advisor carrying permanent
+warnings is an advisor nobody reads, and the next real finding lands in the same list.
+
+`pg_graphql_anon_table_exposed` (93) and `pg_graphql_authenticated_table_exposed` (94) —
+**left, and checked rather than assumed.** These say the tables are visible in the GraphQL
+schema because those roles hold `SELECT`. Visible is not readable: every one of the 93 has
+RLS on with no policy reaching `anon`, and `set role anon; select count(*)` returns **0**
+from `profiles`, `teams`, `addresses` and `activity_audit`. `report_documents` is stronger
+still — `0095` revoked the grant outright, so anon cannot even reach it to be refused. What
+IS exposed is the shape: table and column names are discoverable by introspection. Whether
+that matters is a decision, and it is in `docs/open-questions.md` rather than guessed at.
+
+`authenticated_security_definer_function_executable` (4) — **left, and correct as it is.**
+`current_permission()`, `current_profile_id()`, `is_active_user()` and `is_signed_in_staff()`
+are the RLS helpers. They are SECURITY DEFINER on purpose: they read `profiles`, which RLS
+on `profiles` would otherwise block, and that would deadlock the policies that call them.
+Reachable over `/rest/v1/rpc/`, each tells a caller a fact about *themselves* — their own
+permission, their own id. There is nothing there to leak.
+
+`rls_enabled_no_policy` on `maintenance_message_secrets` (INFO) — **left, and deliberate.**
+RLS on with no policy is deny-all, which is exactly what a parked reply token should be.
+`verify/rls.sql` already proves it: *"the parked token is invisible to a user"*.
+
+`auth_leaked_password_protection` — **not decided.** Turning it on is a dashboard setting
+that changes what happens to a real person choosing a password, so it is a question rather
+than a change Claude makes on its own.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in
