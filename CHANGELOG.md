@@ -133,6 +133,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 - Choosing a person is a type-ahead — names with their team, the record's own team first, and a single match is taken as you tab away
 - Bugs, ideas, the roadmap and the changelog live only on Updates; the copies under Admin are gone
+- The roadmap and changelog now live in one place instead of two
 - Buttons in Lofty orange are now a deeper shade, so their labels are easier to read
 - Buttons and labels on Lofty orange now use white text, never black
 - The app takes Lofty's brand colours from the design system — orange is now the primary action colour, with green kept for small accents
