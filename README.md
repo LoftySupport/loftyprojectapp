@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 165 changes since then —
+Unreleased: 168 changes since then —
+- Added: A job's report reads the properties recorded on its project as well as its own, and the job's own value wins where both are set
+- Added: Team membership is edited from the team's own row, rather than one person at a time
+- Added: Property placeholders in text blocks, so a letter can carry a job's fields and fill them in when it is exported
 - Changed: The Jobs and Projects filters are the same fields as Group by, always on the bar, with everything else in one Advanced row instead of chips added one at a time
 - Added: A job or project number can be typed straight into the filters
-- Added: Any property, including the project properties a job inherits, can be shown as a column on the Jobs and Projects tables
-- Changed: On the Projects board, Stage now filters by the project's own phase and a separate Job stage filter finds projects with a job in that stage
-- Changed: Sections in the job panel fold away, and Collapse all shuts the lot at once
-- …and 160 more.
+- …and 163 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

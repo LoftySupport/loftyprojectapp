@@ -14,6 +14,9 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- A job's report reads the properties recorded on its project as well as its own, and the job's own value wins where both are set
+- Team membership is edited from the team's own row, rather than one person at a time
+- Property placeholders in text blocks, so a letter can carry a job's fields and fill them in when it is exported
 - A job or project number can be typed straight into the filters
 - Any property, including the project properties a job inherits, can be shown as a column on the Jobs and Projects tables
 - Lists longer than five items show the first five and offer the rest
