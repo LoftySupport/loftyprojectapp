@@ -255,6 +255,47 @@ try {
   ok("and the caret stays in the editor, so typing carries on",
     afterSave.trimEnd().endsWith("!"), JSON.stringify(afterSave.slice(-60)));
 
+  // ── Dropping an image in, instead of pasting a URL ────────────────────
+  //
+  // The block took a URL and nothing else, so putting a site photo in a report meant
+  // hosting it somewhere first. Three claims, and they break for different reasons.
+  await pg.locator("aside button", { hasText: "Image" }).first().click();
+  await pg.waitForTimeout(400);
+  await pg.locator('main [data-block="image"]').last().click();
+  await pg.waitForTimeout(400);
+
+  const dropZone = pg.locator("[data-image-drop]").first();
+  // Broken by leaving the field as `type: 'text'` in the registry: the settings panel
+  // renders the plain URL box and there is nothing to drop onto.
+  ok("selecting an image block offers somewhere to drop a file",
+    await dropZone.count() === 1,
+    `${await pg.locator("[data-image-drop]").count()} drop targets`);
+
+  if (await dropZone.count()) {
+    // A real file on a real DataTransfer, dispatched as a real drop. Building the event
+    // by hand is the only way — Playwright cannot drag a file in from the desktop, and
+    // asserting against a click-to-choose input would test a different code path from
+    // the one the feature is named after.
+    await dropZone.evaluate(el => {
+      const dt = new DataTransfer();
+      dt.items.add(new File([new Uint8Array([137, 80, 78, 71])], "site-photo.png", { type: "image/png" }));
+      el.dispatchEvent(new DragEvent("drop", { dataTransfer: dt, bubbles: true, cancelable: true }));
+    });
+    await pg.waitForTimeout(600);
+
+    // It reached the host with the file intact. Broken by passing `e.target.files` from
+    // the drop handler, which is undefined — a drop carries dataTransfer.files.
+    const got = await pg.evaluate(() => window.__uploaded ?? null);
+    ok("the dropped file reaches the host's uploader",
+      got?.name === "site-photo.png" && got?.type === "image/png", JSON.stringify(got));
+
+    // And the URL it gave back is now the block's image. Broken by not calling `set`:
+    // the file uploads and the block stays empty, which looks like the upload failed.
+    const src = await pg.locator('main [data-block="image"] img').last().getAttribute("src").catch(() => null);
+    ok("and the URL it returns becomes the block's image",
+      typeof src === "string" && src.includes("site-photo.png"), JSON.stringify(src));
+  }
+
   ok("nothing threw while doing it", crashes.length === 0, crashes[0]?.slice(0, 200));
 } finally {
   await browser?.close().catch(() => {});

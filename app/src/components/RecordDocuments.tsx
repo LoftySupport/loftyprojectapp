@@ -54,7 +54,17 @@ export function RecordDocuments({
           Nothing is lost: you open a section before you act on it. */}
       {can("user") && (
         <div className="panel-actions">
-          <Link to="/tools/document-builder"><Text type="text3">New document</Text></Link>
+          {/* The record travels with the link. Without it you land on the builder and
+              have to find this same job or project again in a list of every one of
+              them — which is how 117 projects ended up with no documents between
+              them (see subjectOptions in TemplateBuilderPage). */}
+          <Link
+            to={`/tools/document-builder?for=${encodeURIComponent(
+              jobId ? `job:${jobId}` : `project:${projectId}`
+            )}`}
+          >
+            <Text type="text3">New document</Text>
+          </Link>
         </div>
       )}
 

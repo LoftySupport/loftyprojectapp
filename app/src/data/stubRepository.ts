@@ -323,6 +323,9 @@ export function createStubRepository(): Repository {
       throw new Error("Voting needs Supabase.");
     },
     async attachmentUrl(): Promise<null> { return null; },
+    // Throws rather than returning a fake URL: a stub that handed back a plausible
+    // link would put a broken image in the document and look like a working upload.
+    async uploadReportImage(): Promise<never> { throw new Error("Uploading an image needs Supabase."); },
 
     // The Canny round (0064–0068). Reads answer empty, writes say what they need.
     async searchFeedback(): Promise<never[]> { return []; },

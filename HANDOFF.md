@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 170 changes since then —
+Unreleased: 174 changes since then —
+- Added: Import a Word document or a PDF and it becomes a template or a document — headings, prose and Word tables become blocks you can edit, and it tells you up front what it could not bring across
+- Added: Drop an image straight into a report, or pick one from your machine, instead of hosting it somewhere and pasting a link
+- Fixed: A document can be put on a project as easily as on a job — the choice is now asked before the list, instead of every project sorting below every job in one long picker
+- Added: New document on a job or project starts with that record already chosen
 - Added: Text snippets — save wording once and drop it into any letter from the editor, as a copy you can then edit
-- Added: A Snippet Library under Tools, where a manager signs off, renames or retires saved wording
-- Added: A job's report reads the properties recorded on its project as well as its own, and the job's own value wins where both are set
-- Added: Team membership is edited from the team's own row, rather than one person at a time
-- Added: Property placeholders in text blocks, so a letter can carry a job's fields and fill them in when it is exported
-- …and 165 more.
+- …and 169 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

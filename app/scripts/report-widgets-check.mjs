@@ -32,6 +32,7 @@ import { LOFTY_THEME, LOFTY_THEME_QUIET } from "../src/features/reports/adapters
 import { makeFillTokens, tokensFor } from "../src/features/reports/adapters/lofty/tokens.js";
 import { HOUSE_COLOURS } from "../src/data/export/houseFormat.ts";
 import { snippetHtml, snippetLayout } from "../src/data/types.ts";
+import { parseSubject, subjectOptionsFor } from "../src/pages/documentSubject.ts";
 import { execFileSync } from "node:child_process";
 // Dev-only, and dependency-free itself. It is here to answer the one question none of the
 // assertions below could: not "do the two drawings agree" but "does a phone read it".
@@ -972,6 +973,70 @@ console.log("--- the Lofty theme is the house document format, role for role");
   ok("anything that is not a snippet reads as empty, not as undefined",
     notSnippets.every(([, layout]) => snippetHtml(layout) === ""),
     notSnippets.map(([name, l]) => `${name}: ${JSON.stringify(snippetHtml(l))}`).join(", "));
+}
+
+// ── Which record a document is about ───────────────────────────────────────
+//
+// The bug this guards is not a crash. Every mechanical part was right and the feature
+// was simply unreachable: one list of 75 jobs and 117 projects, sorted by label, with
+// every project below every job. 8 documents existed; 0 were on a project.
+{
+  // The real shape of the live database on 7 September, which is the whole point —
+  // at 3 jobs and 2 projects nothing about this is visible.
+  const jobs = Array.from({ length: 75 }, (_, i) =>
+    ({ number: `1042-${String(i + 1).padStart(3, "0")}`, currentAddress: "28 Corner Street" }));
+  const projects = Array.from({ length: 117 }, (_, i) =>
+    ({ number: String(1002 + i), currentAddress: "28 Corner Street" }));
+
+  // THE REGRESSION ITSELF, reproduced rather than described.
+  //
+  // `Select` sorts by label with numeric collation unless told not to. Under the old
+  // labels — projects prefixed "Project " — that comparator puts every project after
+  // every job, so the 117th project is 192 rows down. This asserts the bug was real;
+  // if it ever stops holding, the note above is wrong and should be corrected.
+  const collate = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+  const oldLabels = [
+    ...jobs.map(j => j.number),
+    ...projects.map(p => `Project ${p.number}`)
+  ].sort(collate);
+  const firstProjectAt = oldLabels.findIndex(l => l.startsWith("Project"));
+  ok("the old single list really did bury every project below every job",
+    firstProjectAt === jobs.length,
+    `first project sat at index ${firstProjectAt} of ${oldLabels.length}`);
+
+  // And the fix: one kind per list, all of it, nothing of the other.
+  const projectOpts = subjectOptionsFor("project", jobs, projects);
+  ok("choosing Project offers every project and no jobs",
+    projectOpts.length === 117 && projectOpts.every(o => o.value.startsWith("project:")),
+    `${projectOpts.length} options`);
+
+  const jobOpts = subjectOptionsFor("job", jobs, projects);
+  ok("choosing Job offers every job and no projects",
+    jobOpts.length === 75 && jobOpts.every(o => o.value.startsWith("job:")),
+    `${jobOpts.length} options`);
+
+  // The label no longer carries the word that caused the sort. Broken by putting
+  // "Project " back on the front: it sorts away from the number people search by.
+  ok("a project is labelled by its number, not by the word Project",
+    projectOpts[0].label.startsWith("1002"), JSON.stringify(projectOpts[0].label));
+
+  // What the picker emits has to survive the round trip into what the insert wants.
+  // A project id is a NUMBER — project_id is `integer` and a string would be refused
+  // by the foreign key rather than silently linking to nothing.
+  const asProject = parseSubject("project:1042");
+  ok("a picked project becomes a numeric project id and no job id",
+    asProject?.projectId === 1042 && asProject.jobId === null, JSON.stringify(asProject));
+
+  const asJob = parseSubject("job:1042-001");
+  ok("a picked job keeps its full number, colons and all",
+    asJob?.jobId === "1042-001" && asJob.projectId === null, JSON.stringify(asJob));
+
+  // `?for=` arrives from a URL, so it is somebody else's input. Null, not a half-filled
+  // subject that would create a document attached to nothing.
+  const junk = ["", null, undefined, "project:", "nonsense:1042", "1042", "project:abc"];
+  ok("anything that is not one of ours parses to null rather than a broken subject",
+    junk.every(v => parseSubject(v) === null),
+    junk.map(v => `${JSON.stringify(v)}→${JSON.stringify(parseSubject(v))}`).join(" "));
 }
 
 console.log(failures === 0

@@ -9,6 +9,7 @@ import { useProcesses, usePropertyDefs, usePropertyOptions, useStages, useTeams 
 import { LoadProblem, NothingYet } from "../components/SearchNotices";
 import { Problem } from "../components/Form";
 import { Select, toOptions } from "../components/Select";
+import { parseSubject, subjectOptionsFor, type SubjectKind } from "./documentSubject";
 import { SidePanel } from "../components/SidePanel";
 import { useToasts } from "../components/Toasts";
 import {
@@ -174,6 +175,37 @@ function GetStartedCard(
  * "an empty one" would be the kind of copy that is technically correct and tells nobody
  * anything.
  */
+/**
+ * What an import could not carry, shown before it becomes a document.
+ *
+ * NOT a warning and not an error — it is a receipt. A .docx says how many images it left
+ * out; a .pdf says its headings were inferred from text size rather than read from the
+ * file, and that its tables arrived as text. All three are true and none of them means
+ * the import failed.
+ *
+ * It is here, above the Create button, rather than in a toast afterwards, because the
+ * useful moment to learn a PDF's tables did not survive is while deciding whether to
+ * import it — not once it is already a document with somebody's name on it.
+ */
+function ImportNotes({ fileName, notes }: { fileName: string; notes: string[] }) {
+  return (
+    <div className="import-notes">
+      <Text type="text3" weight="bold" ellipsis={false}>Read from {fileName}</Text>
+      {notes.length === 0 ? (
+        <Text type="text3" color="secondary" ellipsis={false}>
+          Everything in it came across.
+        </Text>
+      ) : (
+        <ul>
+          {notes.map((n, i) => (
+            <li key={i}><Text type="text3" color="secondary" ellipsis={false}>{n}</Text></li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 const LANE_WORDS: Record<ReportTemplateKind, {
   one: string; One: string; many: string; egName: string; scratchHint: string;
 }> = {
@@ -205,6 +237,16 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
   const [reloadKey, setReloadKey] = useState(0);
   const bump = useCallback(() => setReloadKey(k => k + 1), []);
   const [open, setOpen] = useState<OpenTarget | null>(null);
+  /**
+   * What is open, readable from inside `ctx` without `ctx` depending on it.
+   *
+   * Exactly the reasoning behind `ctxRef`: `ctx` is memoised because a fresh identity
+   * re-resolves every block, which makes typing in a text block feel broken. Adding
+   * `open` to the dependency list would rebuild it on every autosave — the row comes back
+   * as a new object each time it saves — so the upload reads the ref instead.
+   */
+  const openRef = useRef<OpenTarget | null>(null);
+  openRef.current = open;
   const [preview, setPreview] = useState<{ model: CompiledReport; theme: string } | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -221,7 +263,7 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
    * it"* — and the order that lets the three cards be live buttons rather than three
    * controls greyed out behind a field nobody has filled in yet.
    */
-  const [starting, setStarting] = useState<{ how: "template" | "clone" | "scratch" } | null>(null);
+  const [starting, setStarting] = useState<{ how: "template" | "clone" | "scratch" | "import" } | null>(null);
   /**
    * The record the new document is ABOUT, as one value rather than two.
    *
@@ -232,6 +274,14 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
    */
   const [subjectPick, setSubjectPick] = useState<string | null>(null);
   /**
+   * Job or project — asked before the list, not buried inside it.
+   *
+   * See `subjectOptions` for the number that made this its own control. It defaults to
+   * "job" because that is still the common case; what changed is that "project" is now
+   * one click away instead of 75 rows down.
+   */
+  const [subjectKind, setSubjectKind] = useState<SubjectKind>("job");
+  /**
    * The same thing for the library lanes: which card was clicked, so the panel knows
    * whether to ask for a source as well as a name.
    *
@@ -240,7 +290,7 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
    * covering both would need a lane check at every read — the kind of condition that is
    * right until somebody adds a fourth way in.
    */
-  const [startingLib, setStartingLib] = useState<{ how: "clone" | "scratch" } | null>(null);
+  const [startingLib, setStartingLib] = useState<{ how: "clone" | "scratch" | "import" } | null>(null);
   const libKind: ReportTemplateKind =
     lane === "section" ? "section" : lane === "snippet" ? "snippet" : "template";
 
@@ -348,6 +398,20 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
    * panel — by the time somebody has typed a name the selection they saved is long gone,
    * and re-reading it then would save whatever happens to be selected now.
    */
+  /**
+   * A parsed import, held between choosing the file and naming what it becomes.
+   *
+   * The parse happens on the file picker's change, not on Create, and that is the point:
+   * a Word document with an unreadable table or a scanned PDF with no text at all should
+   * say so BEFORE somebody has typed a name and pressed a button, not after. `notes` is
+   * what the conversion could not carry, and the panel shows it.
+   */
+  const [imported, setImported] =
+    useState<{ widgets: ReportWidget[]; notes: string[]; fileName: string } | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+  /** Which lane asked, so the file picker knows which naming panel to open afterwards. */
+  const importLaneRef = useRef<"documents" | "library">("documents");
+
   const [savingSnippet, setSavingSnippet] = useState<string | null>(null);
   const [snippetName, setSnippetName] = useState("");
 
@@ -398,7 +462,27 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
          * one nobody finds again in a menu.
          */
         textSnippets,
-        saveTextSnippet: askToSaveSnippet
+        saveTextSnippet: askToSaveSnippet,
+        /**
+         * Put an image in the bucket and hand back the URL the block renders.
+         *
+         * Host-supplied for the same reason everything else here is: the module knows a
+         * File goes in and a URL comes back, and nothing about buckets or who may write
+         * to them. Absent when nothing is open, which makes the settings control fall
+         * back to the URL box rather than offering an upload with nowhere to file it.
+         *
+         * The owner is what the object path is filed under (`documents/<id>/…`), not a
+         * second record of what the document carries — the layout is that, which is what
+         * "stores in the document only" meant (0100).
+         */
+        uploadImage: openRef.current
+          ? (file: File) => repo.uploadReportImage({
+              file,
+              owner: openRef.current!.lane === "document"
+                ? { kind: "document", id: openRef.current!.row.id }
+                : { kind: "library", id: openRef.current!.row.id }
+            })
+          : undefined
       };
     },
     [projects, jobs, teams, stageNames, people, processes,
@@ -497,33 +581,43 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
   /**
    * Every job and every project, in one list, jobs first.
    *
-   * Jobs first because a document is usually about one — a progress report for
-   * 1042-001, a client letter about that lot. A project-wide document (a feasibility, a
-   * whole-site summary) is the rarer case and sits below.
+   * ONE LIST OF ONE KIND, chosen above it — and the reason is a number.
+   *
+   * This was a single list of every job AND every project, jobs first on the reasoning
+   * that a document is usually about one. On 7 September the live database had 75 jobs
+   * and 117 projects, and of the 8 documents anybody had made, **6 were on a job and 0
+   * were on a project.** Not one, ever.
+   *
+   * Nothing was broken: the column, the foreign key, the RLS policy and the value this
+   * picker emits were all correct, and a project-linked document rendered on the project
+   * perfectly well once one existed. What was wrong was that you could not get to it.
+   * 192 options in one control, and `Select` sorts by label unless told not to — job
+   * labels start with a digit and project labels started with the word "Project", so
+   * every project sorted below every job. Reaching one meant scrolling past 75 jobs or
+   * guessing that "Project" was the word to type.
+   *
+   * "Rarer" was the wrong thing to optimise for. Rare is not the same as hidden, and a
+   * list that is technically complete but practically unreachable produces exactly this:
+   * a feature that works and that nobody has ever used. So the kind is its own control
+   * now, and each list holds one kind and is as long as that kind is.
    *
    * The label carries the address as well as the number, because "1042-001" is what
    * somebody types and "28 Corner Street" is what they remember, and the Select searches
-   * the label.
+   * the label. "Project" is no longer prefixed onto it — the control above already says
+   * which kind you are looking at, and repeating it in all 117 labels only made them
+   * sort away from the numbers people search by.
    */
-  const subjectOptions = useMemo(() => [
-    ...jobs.map(j => ({
-      value: `job:${j.jobNumber}`,
-      label: `${j.jobNumber}${j.currentAddress ? ` — ${j.currentAddress}` : ""}`
-    })),
-    ...projects.map(p => ({
-      value: `project:${p.projectNumber}`,
-      label: `Project ${p.projectNumber}${p.currentAddress ? ` — ${p.currentAddress}` : ""}`
-    }))
-  ], [jobs, projects]);
+  const subjectOptions = useMemo(
+    () => subjectOptionsFor(
+      subjectKind,
+      jobs.map(j => ({ number: j.jobNumber, currentAddress: j.currentAddress })),
+      projects.map(p => ({ number: p.projectNumber, currentAddress: p.currentAddress }))
+    ),
+    [subjectKind, jobs, projects]
+  );
 
-  /** `job:1042-001` → what createReportDocument wants. */
-  const pickedSubject = useMemo(() => {
-    if (!subjectPick) return null;
-    const [kind, id] = subjectPick.split(/:(.*)/s);
-    return kind === "project"
-      ? { jobId: null, projectId: Number(id) }
-      : { jobId: id, projectId: null };
-  }, [subjectPick]);
+  /** `job:1042-001` → what createReportDocument wants. See `documentSubject.ts`. */
+  const pickedSubject = useMemo(() => parseSubject(subjectPick), [subjectPick]);
 
   // ── Documents ────────────────────────────────────────────────────────────
 
@@ -552,12 +646,19 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
         title,
         layout: from
           ? { ...from.layout, widgets: engine.remapIds((from.layout?.widgets ?? []) as ReportWidget[]) }
-          : { widgets: [] },
+          // An import brings its own blocks. `remapIds` here too, for the same reason it
+          // is used on a clone: the importer generates ids, and importing the same file
+          // twice must not produce two documents whose blocks collide in the builder's
+          // drag-and-drop, which keys on block id.
+          : imported
+            ? { widgets: engine.remapIds(imported.widgets) }
+            : { widgets: [] },
         templateId: from?.id ?? null,
         ...subject
       });
       setDocTitle("");
       setDocFrom(null);
+      setImported(null);
       setSubjectPick(null);
       setStarting(null);
       bump();
@@ -619,6 +720,7 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
     setDocFrom(null);
     setCloneFrom(null);
     setSubjectPick(null);
+    setImported(null);
   };
 
   /**
@@ -629,9 +731,38 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
    * the subject a clone keeps are all decisions with reasons written where they are made,
    * and a second copy here would be a second place for them to drift.
    */
+  /**
+   * Read the chosen file, then open the naming panel with what came out of it.
+   *
+   * The parsers are loaded by `documentToWidgets` on demand — mammoth and pdfjs together
+   * are larger than the rest of the builder, and nobody who is not importing should wait
+   * for them. The name is suggested from the file's own, minus the extension, because
+   * "Site Report.docx" is what the thing is called and retyping it is a chore.
+   */
+  const takeImport = (file: File | undefined, lane: "documents" | "library") =>
+    run(async () => {
+      if (!file) return;
+      importLaneRef.current = lane;
+      const { documentToWidgets } = await import("../features/reports/index.js");
+      const { widgets, notes } = await documentToWidgets(file);
+      if (!widgets.length) {
+        throw new Error(`Nothing could be read out of ${file.name}.`);
+      }
+      const suggested = file.name.replace(/\.[^.]+$/, "");
+      setImported({ widgets: widgets as ReportWidget[], notes, fileName: file.name });
+      if (lane === "documents") {
+        setDocTitle(suggested);
+        setStarting({ how: "import" });
+      } else {
+        setLibName(suggested);
+        setStartingLib({ how: "import" });
+      }
+    });
+
   const confirmStart = () => {
     if (!starting) return;
     if (starting.how === "clone") cloneDocument();
+    else if (starting.how === "import") createDocument(null);
     else createDocument(starting.how === "template" ? docFrom : null);
   };
 
@@ -681,6 +812,38 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wanted, open, documentStore, repo]);
 
+  /**
+   * `?for=project:1042` — arriving from a record, with that record already chosen.
+   *
+   * The other half of the same problem `subjectOptions` describes. "New document" on a
+   * project used to drop you on the builder with an empty picker, so the first thing you
+   * did was hunt for the project you had just been looking at. Now the link carries it.
+   *
+   * It opens the naming panel too, because coming from that link IS the decision to make
+   * a document; stopping at the Get Started cards would be one more click to say what you
+   * have already said. "Start from scratch" is the assumption — the record is known, the
+   * template is not, and a template can be chosen on the next document.
+   *
+   * The parameter is cleared once read, exactly as `?open=` is and for the same reason:
+   * cancel the panel and it must stay cancelled, rather than springing back on the next
+   * render from a URL nobody updated.
+   */
+  const wantedFor = params.get("for");
+  useEffect(() => {
+    if (!wantedFor || open || starting) return;
+    const [kind, id] = wantedFor.split(/:(.*)/s);
+    if ((kind === "job" || kind === "project") && id) {
+      setSubjectKind(kind);
+      setSubjectPick(`${kind}:${id}`);
+      setStarting({ how: "scratch" });
+    }
+    const next = new URLSearchParams(params);
+    next.delete("for");
+    setParams(next, { replace: true });
+    // Same reasoning as the effect above: it clears the parameter it reads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantedFor, open, starting]);
+
   // NO `openDocument` AND NO `removeDocument` ON THIS SCREEN, AND THAT IS DELIBERATE.
   //
   // Both existed for the table that used to sit under the cards. Amber, 4 September:
@@ -703,8 +866,12 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
       const name = libName.trim();
       if (!name) return;
       const store = libraryStoreFor(libKind);
-      const row = await store.create({ title: name, layout: { widgets: [] } });
+      const row = await store.create({
+        title: name,
+        layout: imported ? { widgets: engine.remapIds(imported.widgets) } : { widgets: [] }
+      });
       setLibName("");
+      setImported(null);
       setStartingLib(null);
       bump();
       setOpen({ lane: "library", row, kind: libKind });
@@ -771,11 +938,14 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
     setStartingLib(null);
     setLibName("");
     setCloneFrom(null);
+    setImported(null);
   };
 
   const confirmStartLib = () => {
     if (!startingLib) return;
     if (startingLib.how === "clone") cloneLibraryEntry();
+    // "scratch" and "import" both go to createLibraryEntry — it reads `imported` for the
+    // layout, so the only difference between them is whether that is set.
     else createLibraryEntry();
   };
 
@@ -890,6 +1060,11 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
                 hint="An empty page. Drag blocks in from the palette on the left of the builder."
                 onClick={() => setStarting({ how: "scratch" })}
               />
+              <GetStartedCard
+                title="Import A Document"
+                hint="A Word file or a PDF you already have. Its headings, prose and tables become blocks you can edit."
+                onClick={() => { importLaneRef.current = "documents"; importInputRef.current?.click(); }}
+              />
             </div>
           </div>
         ) : (
@@ -940,6 +1115,11 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
                 disabled={!ofKind.length}
                 disabledNote={`No ${words.many} to copy yet`}
                 onClick={() => setStartingLib({ how: "clone" })}
+              />
+              <GetStartedCard
+                title="Import A Document"
+                hint="A Word file or a PDF you already have. Its headings, prose and tables become blocks you can edit."
+                onClick={() => { importLaneRef.current = "library"; importInputRef.current?.click(); }}
               />
             </div>
             {!canApprove && (
@@ -1074,6 +1254,7 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
         title={
           starting?.how === "template" ? "New document from a template"
           : starting?.how === "clone" ? "Copy an existing document"
+          : starting?.how === "import" ? "New document from a file"
           : "New empty document"
         }
         onClose={closeStarting}
@@ -1094,6 +1275,9 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
         }
       >
         <div className="get-started-card-fields">
+          {starting?.how === "import" && imported && (
+            <ImportNotes fileName={imported.fileName} notes={imported.notes} />
+          )}
           <TextField
             id="new-document-title"
             title="Name"
@@ -1117,13 +1301,36 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
               without a record to attach. What is required is the ANSWER on this screen,
               which is where somebody is choosing freely and could otherwise leave it
               blank without noticing. */}
-          <Select
-            aria-label="The job or project this document is about"
-            placeholder={subjectOptions.length ? "Which job or project…" : "No jobs or projects yet"}
-            options={subjectOptions}
-            value={subjectPick}
-            onChange={v => setSubjectPick(v)}
-          />
+          <div className="subject-pick">
+            <div className="subject-kind" role="radiogroup" aria-label="Is this document about a job or a project?">
+              {(["job", "project"] as const).map(k => (
+                <button
+                  key={k}
+                  type="button"
+                  role="radio"
+                  aria-checked={subjectKind === k}
+                  className={`subject-kind-option${subjectKind === k ? " is-on" : ""}`}
+                  /* Clearing the pick is the point, not tidiness: `job:1042-001` left in
+                     state while the Project list is showing would create a document
+                     against a job the panel is no longer offering. */
+                  onClick={() => { setSubjectKind(k); setSubjectPick(null); }}
+                >
+                  {k === "job" ? "A job" : "A project"}
+                </button>
+              ))}
+            </div>
+            <Select
+              aria-label={subjectKind === "project" ? "The project this document is about" : "The job this document is about"}
+              placeholder={
+                subjectOptions.length
+                  ? (subjectKind === "project" ? "Which project…" : "Which job…")
+                  : (subjectKind === "project" ? "No projects yet" : "No jobs yet")
+              }
+              options={subjectOptions}
+              value={subjectPick}
+              onChange={v => setSubjectPick(v)}
+            />
+          </div>
 
           {starting?.how === "template" && (
             <Select
@@ -1154,6 +1361,24 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
           </Text>
         </div>
       </SidePanel>
+
+      {/* ONE file input for both lanes, outside either panel.
+          Inside a SidePanel it would unmount with the panel — and the panel is exactly
+          what the file picker OPENS, so the element that fired the change would be gone
+          before the change was handled. `importLaneRef` is what remembers which card
+          asked, because the input cannot know. */}
+      <input
+        ref={importInputRef}
+        type="file"
+        accept=".docx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        hidden
+        onChange={e => {
+          const file = e.target.files?.[0];
+          // Cleared immediately, so picking the SAME file twice still fires a change.
+          e.target.value = "";
+          takeImport(file, importLaneRef.current);
+        }}
+      />
 
       {/* Naming a snippet. The wording is already decided — this asks the one thing the
           editor cannot: what to call it in the menu. */}
@@ -1210,6 +1435,7 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
         title={
           startingLib?.how === "clone"
             ? `Copy an existing ${words.one}`
+            : startingLib?.how === "import" ? `New ${words.one} from a file`
             : `New empty ${words.one}`
         }
         onClose={closeStartingLib}
@@ -1226,6 +1452,9 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
         }
       >
         <div className="get-started-card-fields">
+          {startingLib?.how === "import" && imported && (
+            <ImportNotes fileName={imported.fileName} notes={imported.notes} />
+          )}
           <TextField
             id="new-library-name"
             title="Name"

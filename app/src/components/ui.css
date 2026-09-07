@@ -2578,6 +2578,52 @@ code { overflow-wrap: anywhere; }
   .get-started-grid { grid-template-columns: 1fr; }
 }
 
+/* Job or project, asked before the list rather than buried inside it.
+   See subjectOptions in TemplateBuilderPage for the count that made this its own
+   control. Two real buttons in a radiogroup, so it is reachable by keyboard and says
+   which one is chosen to a screen reader — a pair of styled divs would look identical
+   and be neither. */
+.subject-pick { display: flex; flex-direction: column; gap: var(--space-8, 8px); }
+.subject-kind { display: flex; gap: var(--space-4, 4px); }
+.subject-kind-option {
+  flex: 1 1 0;
+  /* 36px, not the 32 the row would otherwise take: this is a primary choice on a panel
+     people use on a tablet on site, and the responsive sweep floors tap targets at 24. */
+  min-height: 36px;
+  padding: var(--space-4, 4px) var(--space-12, 12px);
+  border: 1px solid var(--ui-border-color, #d0d4e4);
+  border-radius: var(--radius-4, 4px);
+  background: var(--primary-background-color, #fff);
+  color: var(--primary-text-color, #00393f);
+  font: inherit;
+  cursor: pointer;
+}
+.subject-kind-option:hover { background: var(--primary-background-hover-color, #f5f6f8); }
+.subject-kind-option.is-on {
+  /* The filled orange, per DESIGN.md: --primary-action-color is the 4.54:1 step that
+     carries white text. --primary-color is for rings and tints and would not. */
+  background: var(--primary-action-color, #c2543c);
+  border-color: var(--primary-action-color, #c2543c);
+  color: #fff;
+}
+.subject-kind-option:focus-visible {
+  outline: 2px solid var(--primary-color, #f47e63);
+  outline-offset: 2px;
+}
+
+/* An import's receipt: what came across and what did not. Informational, so it is a
+   quiet panel and not the red of an error — a PDF whose tables arrived as text is a
+   successful import with a caveat, not a failure. */
+.import-notes {
+  border: 1px solid var(--ui-border-color, #d0d4e4);
+  border-radius: var(--radius-4, 4px);
+  padding: var(--space-8, 8px) var(--space-12, 12px);
+  background: var(--surface-subtle, #f6f7fb);
+}
+.import-notes ul { margin: var(--space-4, 4px) 0 0; padding-left: var(--space-16, 16px); }
+.import-notes li { margin-bottom: var(--space-4, 4px); }
+.import-notes li:last-child { margin-bottom: 0; }
+
 /* What a snippet is about to keep, shown rather than described.
    Capped and scrollable: somebody who caught the whole block instead of one paragraph
    should see that, and a panel that grew to the length of the selection would push its

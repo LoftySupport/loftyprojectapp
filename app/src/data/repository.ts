@@ -595,6 +595,31 @@ export interface Repository {
    */
   attachmentUrl(path: string): Promise<string | null>;
 
+  /**
+   * Put an image in the report-images bucket and give back the URL to render it by.
+   *
+   * A PERMANENT PUBLIC URL, and that is the decision rather than an accident. Amber,
+   * 7 September, after the alternative was put to her: *"upload to public bucket that
+   * stores in the document only"*. The alternative was a signed URL written into the
+   * share snapshot with the link's own expiry, so revoking a shared document revoked its
+   * pictures. **The consequence of the choice made: an image in a shared document stays
+   * fetchable after the link expires.** `0100` records why that was accepted.
+   *
+   * Contrast `attachmentUrl` above, which signs every read because that bucket is
+   * private. These two are the app's only two storage paths and they behave oppositely
+   * on purpose; neither is the pattern to copy without reading which is which.
+   *
+   * `owner` says which record the file is filed under — the object path becomes
+   * `documents/<id>/…` or `library/<id>/…`. That is for auditing and prefix-listing only.
+   * **The document's layout is the record of what images it carries**, which is what
+   * "stores in the document only" means: there is no attachments table here, because the
+   * block already holds the URL and a second copy of that fact could disagree with it.
+   */
+  uploadReportImage(input: {
+    file: File;
+    owner: { kind: "document" | "library"; id: Uuid };
+  }): Promise<string>;
+
   // ---- the roadmap (0063) -------------------------------------------------
   /** The phases, in their stored order. Everybody reads; superadmin writes. */
   listRoadmapPhases(): Promise<RoadmapPhase[]>;
@@ -942,6 +967,7 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "listFeedbackVoters",
   "searchFeedback",
   "attachmentUrl",
+  "uploadReportImage",
   "listRoadmapPhases",
   "createRoadmapPhase",
   "updateRoadmapPhase",
@@ -1143,6 +1169,7 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   listFeedbackVoters: "feedback_votes",
   searchFeedback: "feedback_display",
   attachmentUrl: "storage: feedback-screenshots",
+  uploadReportImage: "storage: report-images",
   listRoadmapPhases: "roadmap_phases",
   createRoadmapPhase: "roadmap_phases",
   updateRoadmapPhase: "roadmap_phases",
