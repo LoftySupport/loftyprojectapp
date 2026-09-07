@@ -70,6 +70,13 @@ typeahead grouped by team, the request panel with "Filed as", and the draft surv
 change. Not seen: a real write going through, since there is no database in the harness — the
 undo steps were exercised only as far as the toast.
 
+**Two checks CI now runs that it did not** (Amber, same day: *"should there be a check for
+this"*): the responsive sweep, because it caught the 16px link and nobody but a person at a
+terminal would have; and `changelog.mjs --check` on every PR's own head, because this PR's
+first commit landed with the four generated files stale and only the post-commit hook —
+which is opt-in — noticed. The check runs on pull requests only; see the comment in
+`.github/workflows/ci.yml` for why a red `main` after a merge is the hook's to repair.
+
 **Open, and hers to decide:**
 
 - The undo bar is hidden below 600px to keep the phone header usable. If phone undo matters,
