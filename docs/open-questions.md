@@ -21,35 +21,20 @@ invent a value, and `CLAUDE.md` is explicit that an invented default is worse th
 
 ## Open — next question first
 
-### 1. What does "mark as complete" mean for the seven import sites?
-
-**Blocked:** the tail of Phase B. The safe half is already settled — the app is the record
-for those seven, their workbook rows are skipped, nothing is deleted.
-
-Amber, 7 September: *"I am creating jobs from project tso ignore and mark as comete"*. The
-"ignore" half is clear. "Mark as complete" is not, and the two readings are very different:
-
-- **A stage change on live records** — set those seven projects to a completed lifecycle
-  stage in the database, or
-- **Closing the decision out in the docs** — the import README and `schema-plan.md` stop
-  listing it as undecided.
-
-One writes to live data and one edits a paragraph, so it is not a thing to assume.
-
-### 2. Should creating a notification *type* stay with admins?
+### 1. Should creating a notification *type* stay with admins?
 
 Left unanswered when the other two of the 4 September trio were settled. Types went down to
 manager along with the rules. A rule is who hears a thing; a type is whether that kind of
 notification exists at all. Pulling types back up is a second policy, not a second screen.
 
-### 3. Is the placeholder at 3.47:1 accepted, or does it get fixed?
+### 2. Is the placeholder at 3.47:1 accepted, or does it get fixed?
 
 The design system now labels it *"example text only, never a label"*, which narrows the
 exposure but does not clear it — placeholder text is still text under WCAG 1.4.3. `#757478`
 would clear it at 4.64:1 as a new `--lofty-black-70` step, leaving `--ui-border-color` at
 the 3.47:1 it was deliberately chosen for.
 
-### 4. What should five missing roadmap items say?
+### 3. What should five missing roadmap items say?
 
 Five commits carry a `Roadmap:` trailer whose text matches no checkbox in `ROADMAP.md`, so
 work that was finished has no line to tick:
@@ -64,7 +49,7 @@ They are real and shipped. What is missing is which phase each belongs to and wh
 wording above is the wording you want, and inventing roadmap text is exactly the thing
 `CLAUDE.md` forbids.
 
-### 5. How is health status worked out?
+### 4. How is health status worked out?
 
 Long-standing, from the schema plan's own risk list. *"Status is what someone sets. Health
 is what the system works out"* — from inputs nobody has defined. Kanban-by-status and
@@ -72,7 +57,7 @@ kanban-by-team work today; **kanban-by-health cannot be built until this is answ
 job at risk because it is past `expected_days`, because a required field is empty, because a
 dependency is blocked, or some combination?
 
-### 6. Does Acquisition & Development want a `project_stage` vocabulary?
+### 5. Does Acquisition & Development want a `project_stage` vocabulary?
 
 `project_stage` is nullable and costs nothing empty. Do not seed a vocabulary until they
 confirm they want one — a half-filled stage column that some projects use and others ignore
@@ -84,13 +69,15 @@ is worse for reporting than no column.
 
 | Date | Question | Answer |
 | --- | --- | --- |
+| 7 Sep | What does "mark as complete" mean for the seven import sites? | **The question dissolved.** *"i don't need any jobs imported from spreadsheets. all jobs that need to be created from now on will be created from the projects in the app"* — so there is no import, no second copy, and nothing to reconcile. Phase B is closed without ever running |
+| 7 Sep | What happens to the import machinery on the live database? | **Nothing — leave it.** *"everything that is in supabase now is correct. If I need to import other areas I will let you know as properties may change between now and then. No new importing for job or projects"*. The staging table, its 801 rows and the three functions stay applied and inert |
 | 7 Sep | Should filled primary buttons use the pressed orange? | **Yes.** Filled buttons paint `--primary-action-color` `#c2543c` (4.54:1 with white); `--primary-color` stays `#f47e63` for focus rings, tints, accents and chart series. Hover `#9a4330` is derived here and should go back into the design project |
 | 7 Sep | Text colour on Crisp Orange | **Never black on orange.** Filled orange carries Finisher White. Reversed the previous day's ink decision; the design system was updated to match |
 | 7 Sep | Where do the three contrast fixes live? | Amber fixes them in the Claude Design project; Claude supplies exact hexes and re-syncs. Sync stays one-way into this repository |
 | 7 Sep | PR #47 — merge, or hold? | Held as a draft while Amber looked, then **merged** (`3d218d0`). She marked it ready for review and confirmed the merge; it deployed the rebrand to `hub.lofty.au` |
 | 7 Sep | Who sees Bugs and Ideas triage? | *"Only admins and super admin get to see the bug manager."* The **form** is open to everyone with app access, viewers included. Both already behaved that way |
 | 7 Sep | Is Roadmap/Changelog duplicated? | Yes — *"there is duplication on footer and other page"*. **Done:** the Admin tabs came out, the cog links to `/updates`, and `/admin/roadmap` and `/admin/changelog` forward there |
-| 7 Sep | The seven colliding import sites | The app is the record; ignore those workbook rows. *(The "mark as complete" half is question 1 above)* |
+| 7 Sep | The seven colliding import sites | The app is the record; ignore those workbook rows. *(Superseded the same day by closing the import altogether — see the two rows above)* |
 | 6 Sep | Primary colour | Follow the design system: **Crisp Orange**, inverting the app's previous green primary |
 | 6 Sep | How much of the design system to take? | Tokens, icons and brand assets only — not the ~50 JSX components, the 276 Vibe icons, the Fieldwork fonts or the brand silhouettes |
 | 6 Sep | The domain | `hub.lofty.au`, on **Vercel** |

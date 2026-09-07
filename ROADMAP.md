@@ -46,12 +46,20 @@ pipelines, tasks, variations, documents, comments and tags. `HANDOFF.md` has the
 
 ## Phase B — the import
 
-Not started. The 200 live jobs and their projects, from the spreadsheet into the schema.
-The spine review comes first: the changes that get expensive once real records exist.
+**Closed 7 September, without running.** Amber: *"i don't need any jobs imported from
+spreadsheets. all jobs that need to be created from now on will be created from the projects
+in the app"*. Jobs and projects are created in the app, by the people who own them.
 
-- [ ] The spine review — what must change before 200 jobs make it expensive
-- [ ] The import template, checked against the database's own vocabularies
-- [ ] The projects and jobs themselves, with their addresses and history
+The three items below are **not ticked, because they were not done — they were retired.**
+Ticking them would claim an import happened. The spine review it forced *was* done and
+applied (Amber, 4 September), which is the part of this phase that still matters.
+
+The phase name is kept so `roadmap_phases` in the database does not drift from this file;
+only the description changed, so no `--seed` run is needed.
+
+- [ ] ~~The spine review — what must change before 200 jobs make it expensive~~ — done 4 Sep, outside this phase's tooling
+- [ ] ~~The import template, checked against the database's own vocabularies~~ — retired
+- [ ] ~~The projects and jobs themselves, with their addresses and history~~ — retired; created in the app instead
 
 ## Phase C — the property model
 

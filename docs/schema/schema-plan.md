@@ -9,9 +9,13 @@ dependencies, properties and checklists, `process_runs`, and the workbook seed o
 processes and 174 properties. See *1 September — the workbook lands* at the end of this
 file.
 
-**Phase B (the import) has not run** — the 9 projects and 66 jobs on the live database were
-created in the app. `HANDOFF.md` carries the running order, including which kinds of change
-are cheaper before it than after.
+**Phase B (the import) is closed and never ran** — the 9 projects and 66 jobs on the live
+database were created in the app, and that is now the only way they will be. Amber,
+7 September: *"i don't need any jobs imported from spreadsheets. all jobs that need to be
+created from now on will be created from the projects in the app"*. The staging table, its
+801 rows and `import_spine()` stay applied and inert, because *"if I need to import other
+areas I will let you know"* — just not jobs or projects. `app/supabase/import/README.md`
+carries the closure and its reasoning.
 
 **What changed against this plan while building it**, each with its reasoning in the
 migration header: teams became a lookup table before the rest rather than in Phase C, since
@@ -1697,9 +1701,12 @@ The unique key on `job_number_old` earned its place here: it is the one constrai
 noticed. Five of the seven carry no old number the app already holds, and nothing else in
 the schema would have objected to the same house existing twice.
 
-**Not decided.** Whether the workbook or the app is the record for those seven sites is
-Amber's call, and the load waits on it; the three ways are set out in
-`app/supabase/import/README.md` → *What stopped the live load*. Worth knowing while
+**Decided, 7 September — by closing the import rather than by choosing.** The app is the
+record, for those seven and for everything else: no jobs or projects will ever be loaded
+from a spreadsheet, so there is no second copy to reconcile. The three ways are still set
+out in `app/supabase/import/README.md` → *What stopped the live load*, because they are the
+clearest statement of what the collision was, and the same hazard now belongs to whoever
+creates those jobs by hand. Worth knowing while
 deciding: between them the seven hold two comments ("Job cancelled", "here is a test
 update") and nothing else — no tasks, parties, documents, property values or process runs.
 
