@@ -15,7 +15,7 @@
  */
 
 export interface UndoStep {
-  /** What the bar says it will take back — "Job 1042-01: assignee". Short, no verb. */
+  /** What the bar says it will take back — "Job 1042-001: assignee". Short, no verb. */
   label: string;
   undo: () => Promise<void>;
   redo: () => Promise<void>;

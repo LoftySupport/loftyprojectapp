@@ -10,7 +10,7 @@ import "./ui.css";
  * The same 32px trigger the bell, Ask and the cog use, so the header reads as one row
  * of identical targets. Disabled rather than hidden when there is nothing to take back:
  * a control that appears only after your first edit is a control nobody learns is there.
- * The tooltip names the step — "Undo: Assigned 1042-01 to Deanna" — because an arrow
+ * The tooltip names the step — "Undo: Assigned 1042-001 to Deanna" — because an arrow
  * on its own asks you to remember what you did last, and the whole point is that you
  * might not.
  *

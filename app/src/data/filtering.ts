@@ -15,6 +15,13 @@ import type { BoardJob, BoardProject } from "./boardModel";
  * for a filter.
  */
 
+/** Prefix match on an identifier, tolerant of case and stray spaces. */
+export function matchesNumber(typed: string, numbers: (string | null | undefined)[]): boolean {
+  const q = typed.trim().toLowerCase();
+  if (!q) return true;
+  return numbers.some(n => n != null && n.toLowerCase().startsWith(q));
+}
+
 function jobMatchesOne(j: BoardJob, f: ToolbarFilter): boolean {
   if (f.value == null || f.value === "") return true;
   switch (f.field) {
@@ -30,6 +37,13 @@ function jobMatchesOne(j: BoardJob, f: ToolbarFilter): boolean {
     case "Status": return j.status === f.value;
     // The project's type, inherited by the job — the enum as the value, labels free.
     case "Type": return j.projectType === f.value;
+    // A number typed in (Amber, 7 Sep: "you also need to be able to enter a job number").
+    // Prefix, not equality: "1042" finds every job on the project, "1042-00" the first
+    // nine, "1042-003" the one. The old SiteBook number counts too, for the same reason
+    // the search matches it — it is what everything outside the app links by.
+    case "Number": return matchesNumber(f.value, [j.jobNumber, j.jobNumberOld, j.projectNumber]);
+    case "Project": return j.projectNumber === f.value;
+    case "Job stage": return j.stage === f.value;
     // "When did it move" — matched against job_stage_entered_at, the one real date every
     // job carries. The prototype filtered on a fabricated latest-activity date; this is
     // the honest nearest fact, and the option labels say exactly what they mean.
@@ -106,20 +120,32 @@ export function jobMatchesFilters(j: BoardJob, filters: ToolbarFilter[]): boolea
 }
 
 /**
- * A project matches when *one of its jobs* does.
+ * A project matches on its OWN facts where it has them, and through its jobs otherwise.
  *
- * Stage and Team are properties of a job, not of a project, so the alternative would be
- * a Stage filter that empties the project board every time — the project itself has no
- * stage to match. Status is the exception: a project has its own, derived from its worst
- * job, so that one is compared directly.
+ * Since 7 September the filters mirror the groupings (Amber: "filters on jobs and
+ * projects should be same as the group ones"), and the projects board groups by two
+ * different stages — the project's own lifecycle phase, and the stages its jobs are in.
+ * So the two filters are two fields: **Stage** is the project's (`project_stage`, 0039),
+ * as the Stage grouping is, and **Job stage** is "has a job in this stage", which is what
+ * the old Stage filter meant here. Status and Type are the project's own too. Team,
+ * Process and the paired chips are still properties of a job, so a project matches when
+ * one of its jobs does — the alternative is a Team filter that empties the board.
  */
 export function projectMatchesFilters(p: BoardProject, filters: ToolbarFilter[]): boolean {
   const paired = filters.filter(f => PAIRED.has(f.field));
   return filters.every(f => {
     if (f.value == null || f.value === "") return true;
     if (PAIRED.has(f.field)) return true;
-    if (f.field === "Status") return p.status === f.value;
-    return p.jobs.some(j => jobMatchesOne(j, f));
+    switch (f.field) {
+      case "Status": return p.status === f.value;
+      case "Stage": return p.stage === f.value;
+      case "Type": return p.projectType === f.value;
+      case "Job stage": return p.jobs.some(j => j.stage === f.value);
+      case "Number":
+        return matchesNumber(f.value, [p.projectNumber])
+          || p.jobs.some(j => matchesNumber(f.value!, [j.jobNumber, j.jobNumberOld]));
+      default: return p.jobs.some(j => jobMatchesOne(j, f));
+    }
   }) && (paired.every(f => !f.value) || p.jobs.some(j => jobMatchesPairs(j, paired)));
 }
 

@@ -39,7 +39,12 @@ const KEY_BY_FIELD: Record<string, string> = {
   "Process": "process",
   "Process health": "health",
   "Property": "property",
-  "Recorded": "recorded"
+  "Recorded": "recorded",
+  // 7 September: a number typed straight in, a job's project, and — on the projects
+  // board — the stage of the jobs as distinct from the project's own.
+  "Number": "no",
+  "Project": "project",
+  "Job stage": "jobstage"
 };
 const FIELD_BY_KEY: Record<string, string> = Object.fromEntries(
   Object.entries(KEY_BY_FIELD).map(([field, key]) => [key, field])

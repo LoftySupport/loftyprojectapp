@@ -2555,3 +2555,19 @@ code { overflow-wrap: anywhere; }
 .notif-table td { padding-left: var(--space-8); padding-right: var(--space-8); }
 /* The actions under a person's details in the edit panel. */
 .user-actions { display: flex; gap: var(--space-8); flex-wrap: wrap; margin-top: var(--space-8); }
+
+/* ---- the toolbar's two rows (7 September) --------------------------------
+   The Group-by fields are filters in the first row, always there; everything else is
+   one "Advanced" row that opens whole rather than one chip at a time. */
+.toolbar-advanced {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  flex-wrap: wrap;
+  padding-top: var(--space-8);
+  border-top: 1px dashed var(--layout-border-color);
+}
+.toolbar-text { width: 160px; }
+.toolbar-text input { font-variant-numeric: tabular-nums; }
+.toolbar-advanced-btn.is-on { background: var(--primary-selected-color); }

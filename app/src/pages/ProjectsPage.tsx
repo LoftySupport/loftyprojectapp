@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { Button, Heading, Text, TextField } from "@vibe/core";
-import { useProcesses, usePropertyAccess, usePropertyDefs, useStages, useTeams } from "../data/useLookups";
+import { useProcesses, usePropertyAccess, usePropertyDefs, usePropertyOptions, useStages, useTeams } from "../data/useLookups";
+import { propertyColumnDefs } from "../data/propertyColumns";
 import { useAuth } from "../data/AuthProvider";
 import { useBoardRecords, type BoardProject } from "../data/boardModel";
 import {
@@ -107,6 +108,9 @@ export function ProjectsPage() {
   const { processes } = useProcesses();
   const { propertyDefs } = usePropertyDefs();
   const { access: filterAccess } = usePropertyAccess();
+  const { byProperty: optionsByProperty } = usePropertyOptions();
+  const { data: pageProfiles } = useQuery(r => r.listProfiles(), []);
+  const people = useMemo(() => pageProfiles.map(p => ({ id: p.id, name: p.fullName })), [pageProfiles]);
   // The inline add row is hidden below `user`, matching the insert policy on `projects`.
   // A control that offers to do what RLS will refuse is worse than no control — this is
   // the app's can() hiding it, and the policy is what actually decides.
@@ -238,8 +242,13 @@ export function ProjectsPage() {
     { key: "jobs", label: "Jobs", className: "num",
       sort: p => p.jobs.length, cell: p => p.jobs.length, text: p => p.jobs.length },
     { key: "status", label: "Status", sort: p => RECORD_STATUS_LABELS[p.status],
-      cell: p => <StatusPill status={p.status} />, text: p => RECORD_STATUS_LABELS[p.status] }
-  ], [viewStages]);
+      cell: p => <StatusPill status={p.status} />, text: p => RECORD_STATUS_LABELS[p.status] },
+    // Every project-scope property the reader may see, off until asked for (Amber, 7 Sep).
+    ...propertyColumnDefs<BoardProject>({
+      defs: propertyDefs, scopes: ["project"], canRead: k => filterAccess(k).canRead,
+      optionsByProperty, people
+    })
+  ], [viewStages, propertyDefs, filterAccess, optionsByProperty, people]);
 
   const projectLayout = useColumnLayout("projects", projectColumnDefs);
 
@@ -381,7 +390,10 @@ export function ProjectsPage() {
 
   const optionsFor = (field: string) => {
     switch (field) {
+      // The project's own phase and its jobs' stages are the same list of names — the
+      // one lifecycle — but two different questions; see projectMatchesFilters.
       case "Stage": return toOptions(viewStages);
+      case "Job stage": return toOptions(viewStages);
       case "Team": return toOptions(teamNames);
       case "Status": return statusOptions();
       case "Type": return PROJECT_TYPES.map(t => ({ value: t, label: PROJECT_TYPE_LABELS[t] }));
@@ -519,6 +531,10 @@ export function ProjectsPage() {
         filters={filters}
         onFiltersChange={setFilters}
         optionsFor={optionsFor}
+        /* The same fields as Group by (Amber, 7 Sep): the project's phase, its jobs'
+           stages, its type and its status. "Job process" groups; Process filters. */
+        primary={["Stage", "Job stage", "Type", "Status"]}
+        advanced={["Number", "Team", "Process", "Date", "Process health", "Property", "Recorded"]}
         count={`Showing ${rows.length} of ${inView.length} projects`}
         actions={
           <>
