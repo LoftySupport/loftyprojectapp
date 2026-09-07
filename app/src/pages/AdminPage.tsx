@@ -7,7 +7,7 @@ import {
 import { useQuery } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { ActivityDialog, DeactivateDialog, UserDialog } from "../components/UserDialogs";
-import { Select, toOptions } from "../components/Select";
+import { MultiSelect, Select, toOptions } from "../components/Select";
 import { SortHeader, useTableSort } from "../components/SortableTable";
 import { UserRow } from "../components/UserRow";
 import { Problem } from "../components/Form";
@@ -603,6 +603,9 @@ function Teams() {
   // Rename state: which team, and the draft label.
   const [renaming, setRenaming] = useState<TeamId | null>(null);
   const [draft, setDraft] = useState("");
+  /** Which team's members are being edited, and the draft list of people. */
+  const [editingMembers, setEditingMembers] = useState<TeamId | null>(null);
+  const [memberDraft, setMemberDraft] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -614,6 +617,59 @@ function Teams() {
       await repo.updateTeam(id, patch);
       toast(done);
       setRenaming(null);
+      setReloadKey(k => k + 1);
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * Membership, edited from the TEAM rather than from each person.
+   *
+   * Amber, 5 September: *"the teams board should allwo you to select team members"*.
+   * It showed a count and a list of names and nothing else, so putting four people in
+   * Construction meant opening four profiles and adding the same team to each.
+   *
+   * MEMBERSHIP LIVES ON THE PROFILE, and that does not change here — `profiles.teams` is
+   * still the one place it is stored, so this writes the same column the People screen
+   * writes. What is different is only which end you hold it by.
+   *
+   * That means N writes for N changes, so only the DIFFERENCE is written: adding one
+   * person to a team of six is one update, not six. Sequential rather than in parallel —
+   * they are separate rows, but a half-applied change is easier to reason about when the
+   * failure is "these succeeded, then this one did not" than when six requests fail in an
+   * order nobody can reconstruct.
+   */
+  const saveMembers = async (teamId: TeamId, teamName: string) => {
+    if (busy) return;
+    const before = profiles.filter(pr => pr.active && pr.teams.includes(teamId)).map(pr => pr.id);
+    const after = memberDraft;
+    const added = after.filter(id => !before.includes(id));
+    const removed = before.filter(id => !after.includes(id));
+    if (!added.length && !removed.length) { setEditingMembers(null); return; }
+
+    setBusy(true);
+    setProblem(null);
+    try {
+      for (const id of added) {
+        const person = profiles.find(pr => pr.id === id);
+        if (!person || person.teams.includes(teamId)) continue;
+        await repo.updateProfile(id, { teams: [...person.teams, teamId] });
+      }
+      for (const id of removed) {
+        const person = profiles.find(pr => pr.id === id);
+        if (!person) continue;
+        await repo.updateProfile(id, { teams: person.teams.filter(t => t !== teamId) });
+      }
+      // Said as a count rather than a list: "3 added, 1 removed" is what somebody wants
+      // to confirm, and a toast naming six people is a toast nobody reads.
+      const parts = [];
+      if (added.length) parts.push(`${added.length} added`);
+      if (removed.length) parts.push(`${removed.length} removed`);
+      toast(`${teamName}: ${parts.join(", ")}.`);
+      setEditingMembers(null);
       setReloadKey(k => k + 1);
     } catch (e) {
       setProblem(e instanceof Error ? e.message : String(e));
@@ -750,11 +806,34 @@ function Teams() {
                 <td className="muted">{r.owned.join(", ") || "—"}</td>
                 <td className="num">{r.held}</td>
                 {/* Active members only: a deactivated person is not on the team any more
-                    in any sense that matters to somebody reading this column. */}
+                    in any sense that matters to somebody reading this column — and they
+                    are not offerable either, because adding somebody who has left is not
+                    a thing anybody means to do. */}
                 <td>
-                  {r.members.length
-                    ? r.members.map(m => m.fullName).join(", ")
-                    : <span className="muted">No members</span>}
+                  {editingMembers === r.id ? (
+                    <div className="field-inline">
+                      <MultiSelect
+                        aria-label={`Members of ${r.team}`}
+                        className="cell-edit-wide"
+                        options={profiles
+                          .filter(pr => pr.active)
+                          .map(pr => ({ value: pr.id, label: pr.fullName }))}
+                        value={memberDraft}
+                        onChange={setMemberDraft}
+                        placeholder="Nobody yet"
+                      />
+                      <Button size="small" disabled={busy} onClick={() => saveMembers(r.id, r.team)}>
+                        Save
+                      </Button>
+                      <Button size="small" kind="tertiary" disabled={busy} onClick={() => setEditingMembers(null)}>
+                        Cancel
+                      </Button>
+                    </div>
+                  ) : (
+                    r.members.length
+                      ? r.members.map(m => m.fullName).join(", ")
+                      : <span className="muted">No members</span>
+                  )}
                 </td>
                 {canEdit && (
                   <td className="num">
@@ -762,6 +841,21 @@ function Teams() {
                       {renaming !== r.id && (
                         <Button size="small" kind="tertiary" onClick={() => { setRenaming(r.id); setDraft(r.team); }}>
                           Rename
+                        </Button>
+                      )}
+                      {/* Offered on a retired team too. Somebody is still recorded in it
+                          until they are taken out, and the way to take them out should
+                          not be to restore the team first. */}
+                      {editingMembers !== r.id && (
+                        <Button
+                          size="small"
+                          kind="tertiary"
+                          onClick={() => {
+                            setEditingMembers(r.id);
+                            setMemberDraft(r.members.map(m => m.id));
+                          }}
+                        >
+                          Members
                         </Button>
                       )}
                       {r.isActive ? (
