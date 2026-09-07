@@ -26,6 +26,23 @@ What made it work, and should be repeated:
 Keep the chat reply short when an artifact carries the detail: what changed, what to look
 at first, what needs a decision.
 
+## Asking Amber things — one question at a time
+
+**[`docs/open-questions.md`](docs/open-questions.md) is the queue, and the record.** Amber,
+7 September: *"ask me questions on what I should fix one at a time … if you want a question,
+ask it here and then record updates"*.
+
+- **One at a time.** Ask the top open question in the chat. Not four at once, not a survey.
+- **Ask, then record.** The answer goes into that file's *Answered* table the same session,
+  with the date and her own words where they are shorter than a paraphrase. A decision that
+  only exists in a chat log has to be made again.
+- **Do the unblocked work first.** Everything that does not depend on the answer gets
+  finished before the question is asked, and the question says what is blocked.
+- **Never guess ahead of an answer** — see *Never fill a gap with a plausible value* below.
+  A question in that file is a gap somebody deliberately left open.
+- **A row leaves the file only when it is answered or stops mattering**, and if it stops
+  mattering, say why rather than deleting it.
+
 ## The seven files at the root, and what each owns
 
 Nothing else belongs at the root. If a document does not fit one of these, it goes under
