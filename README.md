@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 151 changes since then —
-- Fixed: Creating jobs from a project opens over the project instead of behind it, and the jobs list sits at the top of the drawer
-- Added: A SiteBook number can be given to each job as it is created
-- Changed: Choosing a person is a type-ahead — names with their team, the record's own team first, and a single match is taken as you tab away
-- Fixed: Every dropdown lists its options alphabetically, including the multi-selects
-- Fixed: A half-written bug report is kept when the panel is closed or the page changes
-- …and 146 more.
+Unreleased: 160 changes since then —
+- Changed: Sections in the job panel fold away, and Collapse all shuts the lot at once
+- Changed: Activity and comments now sit at the bottom of the job panel instead of behind a tab
+- Added: Lists longer than five items show the first five and offer the rest
+- Removed: Clone is no longer on the job panel — cloning belongs to the project
+- Changed: Sections in the job panel now fold away, and stay folded how you leave them
+- …and 155 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
