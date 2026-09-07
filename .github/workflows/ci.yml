@@ -61,6 +61,13 @@ jobs:
         run: npm run check:contrast
         working-directory: app
 
+      # Four lines of slicing, every one of them an off-by-one waiting to happen — and it
+      # could not be proved through the app, because the responsive stub carries no comments
+      # and no tasks, so every capped list rendered zero rows and looked like a pass.
+      - name: lists longer than five offer the rest
+        run: npm run check:capped-list
+        working-directory: app
+
   docs:
     name: documentation links resolve
     runs-on: ubuntu-latest

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import { Text } from "@vibe/core";
 
 /**
@@ -29,6 +29,30 @@ import { Text } from "@vibe/core";
  * The head is a real `<button>`, not a div with an onClick: it needs to be reachable by
  * keyboard and to announce its state, and `aria-expanded` on a div announces nothing.
  */
+
+/**
+ * "Collapse all" / "Expand all", for the panels inside one `<PanelGroup>`.
+ *
+ * Amber, 7 September: the drawer is *"a disaster, you can't find anything on it"*. Per-section
+ * folding fixes the scroll but not the finding — with nine sections in unknown states you
+ * still have to look at each one. Shutting the lot turns the drawer into a nine-line contents
+ * page you can read at a glance, which is the thing the reference designs she sent all do.
+ *
+ * A `seq` counter rather than a boolean: the command has to fire again even when `want` has
+ * not changed. Two "collapse all" clicks in a row are two commands, and a plain boolean
+ * would make the second one a no-op — leaving any section reopened in between still open.
+ */
+interface Bulk { seq: number; want: boolean }
+const BulkContext = createContext<Bulk | null>(null);
+
+export function PanelGroup({ children }: { children: (bulk: { collapseAll: () => void; expandAll: () => void }) => ReactNode }) {
+  const [cmd, setCmd] = useState<Bulk>({ seq: 0, want: true });
+  const api = useMemo(() => ({
+    collapseAll: () => setCmd(c => ({ seq: c.seq + 1, want: false })),
+    expandAll: () => setCmd(c => ({ seq: c.seq + 1, want: true }))
+  }), []);
+  return <BulkContext.Provider value={cmd}>{children(api)}</BulkContext.Provider>;
+}
 interface CollapsiblePanelProps {
   /** Stable key for remembering open/closed. Not the visible title — renaming a heading
    *  should not silently reset everybody's layout. */
@@ -61,6 +85,15 @@ export function CollapsiblePanel({ id, title, summary, defaultOpen = true, child
   // If the id changes (a different job's drawer reusing this component), re-read rather
   // than keeping the previous section's state.
   useEffect(() => { setOpen(remembered(id, defaultOpen)); }, [id, defaultOpen]);
+
+  // Collapse-all / expand-all. Skips seq 0, which is the provider's initial value and not a
+  // command — obeying it would override every section's remembered state on first paint.
+  const bulk = useContext(BulkContext);
+  useEffect(() => {
+    if (!bulk || bulk.seq === 0) return;
+    setOpen(bulk.want);
+    try { localStorage.setItem(KEY(id), bulk.want ? "1" : "0"); } catch { /* ignore */ }
+  }, [bulk, id]);
 
   const toggle = useCallback(() => {
     setOpen(prev => {

@@ -7,6 +7,7 @@ import { Token } from "./Token";
 import { FEEDBACK_STAGE_LABELS, type CommentEntry } from "../data/types";
 import "./ui.css";
 import { CollapsiblePanel } from "./CollapsiblePanel";
+import { CappedList } from "./CappedList";
 
 /**
  * The comment thread on one record, and the composer that adds to it.
@@ -199,7 +200,7 @@ export function CommentsPanel({
         </div>
       )}
 
-      {earlier.map(c => (
+      <CappedList items={earlier} noun="earlier updates">{c => (
         <div className="comment" key={c.id}>
           <div className="comment-meta">
             <Text type="text3" weight="medium">
@@ -214,7 +215,7 @@ export function CommentsPanel({
           </div>
           <Text type="text3" ellipsis={false}>{c.body}</Text>
         </div>
-      ))}
+      )}</CappedList>
     </CollapsiblePanel>
   );
 }

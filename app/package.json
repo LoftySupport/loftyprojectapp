@@ -19,6 +19,7 @@
     "check:share-password": "node --import ./scripts/register-ts.mjs scripts/share-password-check.mjs",
     "check:builder-dnd": "node scripts/check-builder-dnd.mjs",
     "check:design-tokens": "node scripts/check-design-tokens.mjs",
+    "check:capped-list": "node scripts/check-capped-list.mjs",
     "check:contrast": "node scripts/check-contrast.mjs"
   },
   "dependencies": {

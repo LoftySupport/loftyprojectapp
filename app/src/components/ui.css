@@ -241,6 +241,45 @@
   transition: transform var(--motion-productive-medium) var(--motion-timing-transition);
 }
 .panel-toggle[aria-expanded="true"] .panel-toggle-chevron { transform: rotate(90deg); }
+/* Collapse all / Expand all, at the top of the drawer body. Quiet by default — it is a
+   tool, not a heading — and right-aligned so it reads as belonging to the list below it
+   rather than to the record above. */
+.drawer-bulk {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-8);
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+}
+.drawer-bulk-btn {
+  background: none;
+  border: 0;
+  padding: var(--space-4) var(--space-8);
+  border-radius: var(--border-radius-small);
+  font: inherit;
+  color: var(--link-color);
+  cursor: pointer;
+}
+.drawer-bulk-btn:hover { background: var(--primary-background-hover-color); text-decoration: underline; }
+.drawer-bulk-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* "Show all (N)" — see CappedList.tsx. Same quiet treatment as the bulk controls: it is
+   the last row of a list, not a call to action competing with the content above it. */
+.capped-more {
+  display: block;
+  width: 100%;
+  margin-top: var(--space-8);
+  padding: var(--space-8);
+  background: none;
+  border: 1px dashed var(--layout-border-color);
+  border-radius: var(--border-radius-small);
+  font: var(--font-text3-medium);
+  color: var(--link-color);
+  cursor: pointer;
+}
+.capped-more:hover { background: var(--primary-background-hover-color); border-style: solid; }
+.capped-more:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 /* Restores the gap the negative margin above removed, but only when there is a body
    to separate from. A closed panel is just its heading and needs no bottom gap. */
 .panel-collapsible-body { margin-top: var(--space-16); padding-top: var(--space-16); border-top: 1px solid var(--layout-border-color); }

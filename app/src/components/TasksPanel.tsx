@@ -13,6 +13,7 @@ import {
 import "./ui.css";
 import "./processes.css";
 import { CollapsiblePanel } from "./CollapsiblePanel";
+import { CappedList } from "./CappedList";
 
 /**
  * What has to be done on this job or this project — tasks, their sub-tasks, and the
@@ -182,7 +183,7 @@ export function TasksPanel({
 
       {tasks.length > 0 && (
         <ul className="task-list">
-          {ordered.map(({ task: t, child }) => {
+          <CappedList items={ordered} noun="tasks">{({ task: t, child }) => {
             const taskLines = linesByTask.get(t.id) ?? [];
             const isOpen = open === t.id;
             const live = isTaskLive(t.status);
@@ -400,7 +401,7 @@ export function TasksPanel({
                 )}
               </li>
             );
-          })}
+          }}</CappedList>
         </ul>
       )}
     </CollapsiblePanel>
