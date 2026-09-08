@@ -99,3 +99,4 @@ that is the whole reason the tracker exists.
 - [ ] Notifications that actually deliver, beyond @mentions
 - [x] The 57 pre-construction steps, once it is settled which are processes and which are properties
 - [ ] Variations: pushing a change from a project down to its jobs
+- [ ] An API and an MCP server, so external systems and AI clients read and write the board as the caller — planned in `docs/integrations/api-and-mcp-plan.md`

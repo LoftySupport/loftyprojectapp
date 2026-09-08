@@ -148,6 +148,53 @@ where the design system says Mid Grey still belongs. So: do exported documents f
 app onto Flint, or is the house format its own record? Not changed on the sync, because the
 export palette is written down as a decision (0026) and this file is where decisions change.
 
+### 14. Which AI vendors may receive Lofty's data — through Ask, and through an MCP connection?
+
+From `docs/integrations/api-and-mcp-plan.md`. The in-app **Ask** box sends a person's
+question, plus the tool results *that person could already see on screen*, to Anthropic; a
+staff member connecting ChatGPT to `hub.lofty.au/mcp` sends the same to OpenAI; Copilot
+sends it to Microsoft inside the tenant. Restricted properties are restricted for a reason,
+and once a sentence has left it is a vendor's retention policy, not RLS, that governs it.
+Options: **Anthropic only** (API terms, 30-day retention, or Claude on Microsoft Foundry so
+it stays in Lofty's Azure tenant); **Anthropic and Microsoft**; **any vendor a staff member
+chooses**; **none yet**. **Blocks the Ask box and the ChatGPT connection.** Blocks nothing
+else in Phase 1 — the gateway, the tools and an MCP server for Copilot ship regardless.
+
+### 15. "Microsoft cowork" — which product?
+
+Amber, 8 September: *"connect ai to the app to (Claude via api or Microsoft cowork)"*. Two
+readings: **Microsoft 365 Copilot** (a Copilot Studio agent in Teams that connects to the
+MCP server), or **Claude Cowork** used alongside its Microsoft 365 connector. The build is
+the same server either way; the sign-in story and question 14's answer differ.
+
+### 16. Xero — one organisation or several, and does an invoice belong to a job or a project?
+
+One organisation means a Xero *custom connection* (client credentials, no refresh-token
+expiry); several means a standard OAuth app and a tenant picker. And the `invoices` table
+needs one parent: a deposit invoice reads as a job's, but a land or development invoice may
+be the project's. **Blocks Phase 4's schema.**
+
+### 17. SiteBook — does it have an API, a scheduled export, or neither?
+
+The `sitebook_id` property (0081) is the join key. Whether SiteBook exposes anything to join
+*to* is not known to anyone in this repository. An API means a worker; an export means the
+import endpoint and staging table; neither means the id stays a typed field. **Blocks
+Phase 5.**
+
+### 18. Who may connect an AI client, and who may create an integration key?
+
+Recommended: **every active user may connect their own AI client** (it runs as them, reads
+what they read, dies when they are deactivated), and **admins create integration keys** (a
+key is an identity on the ladder with a rung, so making one is the same act as adding a
+person). The alternative — managers and above for both — is one policy clause either way.
+
+### 19. Is Ask read-only in its first version?
+
+Recommended **yes**: a question on the phone never writes. Adding a comment from the ladder is
+the first write worth having and is Phase 2; holding it back a phase is the prompt-injection
+defence (a comment on a record could read as an instruction, and a read must never trigger a
+write). The alternative is `hub_add_comment` in Phase 1 with a "post this?" confirmation.
+
 ---
 
 ## Answered

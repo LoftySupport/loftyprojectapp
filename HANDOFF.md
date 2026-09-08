@@ -80,6 +80,10 @@ the new values rather than recording them as shortfalls.
      Every screen today lists before it edits, so nothing hits this; the fallback is honest.
 4. **Still queued from earlier sessions**, unchanged: `SHARE_ALLOWED_ORIGINS` (below), the
    sortable-header table further down this file, and the notification worker.
+5. **Planned, not built — an API, an MCP server and an in-app Ask box.** Amber asked for the
+   plan on 8 September; it is `docs/integrations/api-and-mcp-plan.md`; the readable version is
+   <https://claude.ai/code/artifact/0a1cfce5-b719-426c-819f-4dd12352453d>. Its six decisions are questions 14–19 in
+   `docs/open-questions.md`; Phase 0 also wants question 1 (the `anon` GraphQL shape) answered.
 
 ### Two standing decisions, so nobody spends an afternoon reopening them
 

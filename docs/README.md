@@ -24,6 +24,12 @@ The authority above all four is `app/supabase/migrations/` and the live database
 `app/supabase/verify/check.sh` replays every migration into a throwaway database and proves
 the schema *behaves*.
 
+## `integrations/` — connecting the outside
+
+| File | What it is |
+| --- | --- |
+| [`integrations/api-and-mcp-plan.md`](integrations/api-and-mcp-plan.md) | **The plan for an API, an MCP server and an in-app Ask box** — one gateway, three doors, every call running as the caller under RLS. Recommendations, the phases, and a review of its own pitfalls. Nothing in it is built; its six open decisions are questions 14–19 in `open-questions.md` |
+
 ## `history/` — the record
 
 Kept, not deleted. A schema or design choice without its reasoning gets "simplified" back
