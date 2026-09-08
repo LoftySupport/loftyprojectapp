@@ -91,7 +91,7 @@ for (const [name, width, height] of SIZES) {
   process.stdout.write(`${name} (${width}x${height}) `);
   const ctx = await browser.newContext({ viewport: { width, height }, hasTouch: true });
 
-  // Nothing off this machine. index.html pulls Figtree and Poppins from Google Fonts, and
+  // Nothing off this machine. index.html pulls Figtree and Montserrat from Google Fonts, and
   // waiting on them cost 12 seconds per page here — fifty pages is ten minutes of network
   // for a check that measures geometry. A check that needs the internet is a check that
   // fails in CI for reasons that have nothing to do with the code.

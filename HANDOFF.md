@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 175 changes since then —
+Unreleased: 178 changes since then —
 - Added: Import an HTML page as well as a Word document or a PDF
+- Changed: The app takes the design system's Flint neutrals for its page and rules, Montserrat for titles, and dark mode's green and control borders now clear their contrast floors
+- Fixed: The bug-and-idea form at /report opens again for people held at the demo gate — it had been blank since it was added
+- Fixed: A link you were sent takes you there after signing in, instead of dropping you on the dashboard
 - Added: Import a Word document or a PDF and it becomes a template or a document — headings, prose and Word tables become blocks you can edit, and it tells you up front what it could not bring across
-- Added: Drop an image straight into a report, or pick one from your machine, instead of hosting it somewhere and pasting a link
-- Fixed: A document can be put on a project as easily as on a job — the choice is now asked before the list, instead of every project sorting below every job in one long picker
-- Added: New document on a job or project starts with that record already chosen
-- …and 170 more.
+- …and 173 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -45,6 +45,14 @@ responsive sweep included, now that it runs there):**
   findable, the board's cards separate, the header loses its pink, the rail tooltip stops
   eating its first letter, and `0097` makes a notification *type* admin's again.
 
+**In review: the design-system sync of 7 September, evening.** The design project moved
+under the app during the day and the mirror was re-synced: **Flint** replaces the cool greys
+and the warm tones as the one neutral family (Flint 100 page, Flint 300 rules), **Montserrat**
+replaces Poppins for titles, and two of the three dark-mode contrast shortfalls are closed
+from the design side — the dark Eco Green fill and the dark control boundary — leaving the
+placeholder as open question 9. `DESIGN.md` carries the detail; `check-contrast.mjs` asserts
+the new values rather than recording them as shortfalls.
+
 **Next, in order.** Nothing here needs a schema change.
 
 1. **Amber clicks through what the harness could not.** Every check today ran against a
@@ -54,10 +62,12 @@ responsive sweep included, now that it runs there):**
    Jobs table. If any of them misbehaves, the seam (`undoableRepository.ts`) is where undo
    lives now — there is no longer a per-screen registration to look for.
 2. **Work the open-questions queue**, top question first — `docs/open-questions.md`. Six
-   questions were added today (numbered 1–6 there; the four older ones follow). Three are
-   cheap confirmations of decisions made under time pressure; asked once, they stop being
-   risks. Number 6 is the one that BLOCKS something: cloning a job has no entry point since
-   the button left the drawer (#50) and nothing on the Projects side has taken it yet.
+   questions were added today by this line of work; the first (Bugs and Ideas off Admin) was
+   asked and answered the same evening, and #54 put three security-advisor questions at the
+   top, so twelve remain. Numbers 4–7 are the cheap confirmations of decisions made under
+   time pressure; asked once, they stop being risks. Number 8 is the one that BLOCKS
+   something: cloning a job has no entry point since the button left the drawer (#50) and
+   nothing on the Projects side has taken it yet.
 3. **Small follow-ups that fell out of today, none blocking:**
    - The column picker will list every property — eighty-odd once the definitions are all
      active. It has no search box. Add one when it gets unwieldy, not before.
@@ -199,6 +209,8 @@ bugs/ideas/roadmap/changelog pages in admin. this only needs to be one page"*. B
 component underneath was a fact about the code, not about the experience: two doors to
 identical rows is still a thing a person has to check. All four old addresses forward to the
 matching view of Updates, because those URLs were shareable and somebody has shared them.
+Asked that evening whether taking Bugs and Ideas off too was the intent, Amber confirmed it:
+Updates only.
 Updates itself stays in the footer for everybody, because `0060`'s whole point is that the
 people who filed a request can read the queue.
 

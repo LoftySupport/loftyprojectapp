@@ -7,12 +7,19 @@
   --lofty-eco-green:#005058;         /* Pantone 2216U · R0 G80 B88 */
   --lofty-foundation-black:#414042;  /* R65 G64 B66 */
   --lofty-finisher-white:#ffffff;
-  --lofty-mid-gray:#d1d3d4;          /* R209 G211 B212 */
+  --lofty-mid-gray:#d1d3d4;          /* R209 G211 B212 — logo, print and brand-led surfaces only. Never a UI border or fill. */
 
-  /* ---- Softening neutrals (warm, for large calm areas — never text) ---- */
-  --lofty-paper:#fcfaee;             /* warmest page tint */
-  --lofty-mineral:#eae3df;           /* mid warm surface */
-  --lofty-stone:#dbd0be;             /* deepest warm surface / rule */
+  /* ---- Flint: the neutral family. One material, numbered steps.
+     Replaces Paper / Mineral / Stone, and replaces Mid Grey everywhere in the UI
+     (Mid Grey is a cool grey and stays a brand colour for the logo and print). ---- */
+  --lofty-flint-50:#f9f9f6;          /* softer page — dense tables, long forms */
+  --lofty-flint-100:#f4f3ee;         /* page */
+  --lofty-flint-200:#e1e1d9;         /* recessed fills, tracks, quiet chips */
+  --lofty-flint-300:#c6c5ba;         /* borders and dividers */
+  --lofty-flint-400:#b6b6ac;         /* mid-tone fill, chart neutral, disabled — never a text ground */
+  --lofty-flint-700:#3a3a33;         /* dark rule */
+  --lofty-flint-800:#24241f;         /* dark surface */
+  --lofty-flint-900:#1a1a18;         /* dark page */
 
   /* Derived brand steps (tints/shades of the five above — no new hues) */
   --lofty-orange-hover:#d9634a;
@@ -20,14 +27,15 @@
   --lofty-orange-selected:#fae4d5;
   --lofty-orange-selected-hover:#f6d3bf;
   --lofty-orange-tint:#fdf6f0;
+  --lofty-orange-70:#f8a48c;
+  --lofty-orange-40:#fbd8cd;
   --lofty-green-hover:#003c42;
   --lofty-green-selected:#b8d0d2;
   --lofty-green-tint:#eef4f4;
   --lofty-black-80:#67666a;
   --lofty-black-60:#8a898d;
-  --lofty-gray-light:#e7e8e9;
-  --lofty-gray-surface:#f6f7f7;
-  --lofty-paper-border:#efe9d6;
+/* Retired: --lofty-gray-light #e7e8e9 and --lofty-gray-surface #f6f7f7 were cool greys
+     outside the palette. Use the Flint steps instead. */
   --lofty-ink:#191819;               /* deepest brand black — dark-mode base. Never used on Crisp Orange. */
 
   /* ---- Semantic: primary / brand ---- */
@@ -36,7 +44,7 @@
   --primary-selected-color:var(--lofty-orange-selected);
   --primary-selected-hover-color:var(--lofty-orange-selected-hover);
   --primary-highlighted-color:var(--lofty-orange-tint);
-  --primary-surface-color:var(--lofty-gray-surface);
+  --primary-surface-color:var(--lofty-flint-50);
   --brand-color:var(--lofty-crisp-orange);
   --brand-hover-color:var(--lofty-orange-hover);
   --brand-selected-color:var(--lofty-orange-selected);
@@ -46,7 +54,7 @@
      Eco Green is NOT a secondary: it is a minimal highlight only (see --highlight-color). */
   --secondary-color:var(--lofty-foundation-black);
   --secondary-hover-color:var(--lofty-black-80);
-  --secondary-selected-color:var(--lofty-gray-light);
+  --secondary-selected-color:var(--lofty-flint-200);
 
   /* Minimal highlight (Eco Green) — small decorative accents and data series only */
   --highlight-color:var(--lofty-eco-green);
@@ -64,7 +72,7 @@
   --text-color-on-primary:var(--lofty-finisher-white);
   --text-color-on-brand:var(--lofty-finisher-white);
   --text-color-on-inverted:var(--lofty-finisher-white);
-  --text-color-on-status:var(--lofty-finisher-white);  /* white on positive 4.6:1 / negative 4.5:1 */
+  --text-color-on-status:var(--lofty-finisher-white);  /* white on positive 4.7:1 / negative 4.5:1 */
   --text-color-on-warning:var(--lofty-foundation-black);
   --disabled-text-color:rgba(65,64,66,.4);
   --link-color:var(--lofty-foundation-black);
@@ -74,26 +82,26 @@
   --primary-background-color:var(--lofty-finisher-white);
   --secondary-background-color:var(--lofty-finisher-white);
   --primary-background-hover-color:rgba(65,64,66,.08);
-  --allgrey-background-color:var(--lofty-gray-surface);
-  --warm-background-color:var(--lofty-paper);
-  --warm-surface-color:var(--lofty-mineral);
-  --warm-border-color:var(--lofty-stone);
-  --grey-background-color:var(--lofty-gray-surface);
-  --dark-background-color:var(--lofty-gray-surface);
+  --allgrey-background-color:var(--lofty-flint-100);
+  --page-tint-color:var(--lofty-flint-100);
+  --page-tint-soft-color:var(--lofty-flint-50);
+  --surface-recessed-color:var(--lofty-flint-200);
+  --grey-background-color:var(--lofty-flint-100);
+  --dark-background-color:var(--lofty-flint-100);
   --inverted-color-background:var(--lofty-foundation-black);
   --modal-background-color:var(--lofty-finisher-white);
   --dialog-background-color:var(--lofty-finisher-white);
   --backdrop-color:rgba(65,64,66,.7);
-  --disabled-background-color:var(--lofty-gray-light);
+  --disabled-background-color:var(--lofty-flint-200);
   --fixed-dark-color:var(--lofty-foundation-black);
   --fixed-light-color:var(--lofty-finisher-white);
 
   /* ---- Semantic: lines & icons ---- */
   --ui-border-color:var(--lofty-black-60);       /* control boundaries need 3:1 on white — Mid Gray is 1.5:1, black-60 is 3.5:1 */
-  --ui-border-subtle-color:var(--lofty-mid-gray); /* decorative rules inside controls (e.g. stepper divider) */
-  --layout-border-color:var(--lofty-gray-light);
-  --ui-background-color:var(--lofty-gray-light);
-  --ui-background-hover-color:#dcdddd;
+  --ui-border-subtle-color:var(--lofty-flint-200); /* decorative rules inside controls (e.g. stepper divider) */
+  --layout-border-color:var(--lofty-flint-300);     /* card, panel and table rules */
+  --ui-background-color:var(--lofty-flint-200);
+  --ui-background-hover-color:var(--lofty-flint-300);
   --icon-color:var(--lofty-black-80);
 
   /* ---- Semantic: status (Vibe values, kept for contrast/readability) ---- */
@@ -119,11 +127,13 @@
   --z-dialog:40;      /* @kind other */ /* dialogs, modals + backdrop */
   --z-toast:50;       /* @kind other */ /* toasts, alert banners */
 
-  /* ---- Data-viz ramp: brand-only, ordered for categorical series ---- */
+  /* ---- Data-viz ramp: SINGLE ACCENT. Orange carries the series, the rest is value.
+     Crisp Orange and Eco Green are accents and never appear together, so Eco Green is
+     not in this ramp — a green chart is green plus neutrals, with no orange in the view. ---- */
   --data-1:var(--lofty-crisp-orange);
-  --data-2:var(--lofty-foundation-black);
-  --data-3:var(--lofty-eco-green);
-  --data-4:var(--lofty-mid-gray);
-  --data-5:var(--lofty-orange-selected);
-  --data-6:var(--lofty-green-selected);
+  --data-2:var(--lofty-orange-70);
+  --data-3:var(--lofty-orange-hover);/* Orange deep — flips to Orange 40 on dark */
+  --data-4:var(--lofty-foundation-black);
+  --data-5:var(--lofty-flint-400);
+  --data-6:var(--lofty-flint-200);
 }

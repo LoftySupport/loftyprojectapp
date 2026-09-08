@@ -108,6 +108,8 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- The bug-and-idea form at /report opens again for people held at the demo gate — it had been blank since it was added
+- A link you were sent takes you there after signing in, instead of dropping you on the dashboard
 - A document can be put on a project as easily as on a job — the choice is now asked before the list, instead of every project sorting below every job in one long picker
 - Undo and redo take back every edit that saves as you make it — dates, tasks, maintenance, process runs and properties included, not only a job's team and assignee
 - Cards on the board no longer touch each other
@@ -148,6 +150,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- The app takes the design system's Flint neutrals for its page and rules, Montserrat for titles, and dark mode's green and control borders now clear their contrast floors
 - The Jobs and Projects filters are the same fields as Group by, always on the bar, with everything else in one Advanced row instead of chips added one at a time
 - On the Projects board, Stage now filters by the project's own phase and a separate Job stage filter finds projects with a job in that stage
 - Sections in the job panel fold away, and Collapse all shuts the lot at once

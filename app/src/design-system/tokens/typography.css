@@ -1,11 +1,12 @@
-/* Type scale — Vibe's screen scale (Figtree body, Poppins titles), plus Lofty's
+/* Type scale — Vibe's screen scale (Figtree body, Montserrat titles), plus Lofty's
    Fieldwork brand families for brand-led surfaces (decks, print, marketing heroes). */
 :root{
-  --font-family:Figtree,"Fieldwork Hum",Roboto,sans-serif;
-  --title-font-family:Poppins,"Fieldwork Geo",Roboto,sans-serif;
+  /* Screen stack: Figtree body, Montserrat titles. Helvetica is the digital fallback only. */
+  --font-family:Figtree,Montserrat,Helvetica,"Fieldwork Hum",sans-serif;
+  --title-font-family:Montserrat,Helvetica,"Fieldwork Geo",sans-serif;
   --h1-font-family:var(--title-font-family);
-  --brand-font-family:"Fieldwork Geo","Fieldwork",Poppins,sans-serif;
-  --brand-body-font-family:"Fieldwork Hum","Fieldwork",Figtree,sans-serif;
+  --brand-font-family:"Fieldwork Geo","Fieldwork",Montserrat,Helvetica,sans-serif;
+  --brand-body-font-family:"Fieldwork Hum","Fieldwork",Montserrat,Helvetica,sans-serif;
 
   --font-smoothing-webkit:antialiased;
   --font-smoothing-moz:grayscale;
@@ -58,6 +59,7 @@
   --font-display-xl:600 64px/1.02 var(--brand-font-family);
   --font-display-l:600 48px/1.05 var(--brand-font-family);
   --font-display-m:600 32px/1.1 var(--brand-font-family);
+  --font-display-s:600 24px/1.15 var(--brand-font-family);
   --font-brand-body:300 18px/1.5 var(--brand-body-font-family);
 
   --letter-spacing-h1-bold:-0.5px;
