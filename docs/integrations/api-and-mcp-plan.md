@@ -10,8 +10,10 @@ lives while looking at the app from a phone up a ladder.*
 
 A readable version with the diagrams is published at
 <https://claude.ai/code/artifact/0a1cfce5-b719-426c-819f-4dd12352453d> — show that one to
-people; edit this file. The questions this plan cannot answer are in
-[`../open-questions.md`](../open-questions.md), numbers 14–19, asked one at a time.
+people; edit this file. The six questions this plan could not answer were **asked and
+answered on 8 September** — the *Answered* table in [`../open-questions.md`](../open-questions.md),
+rows 14–19 — and this version of the plan takes those answers. Two narrower questions they left
+behind are 20 and 21 there.
 
 Nothing in this document is built. Where it says "exists", it means a migration that is
 applied today; where it says "planned", it means the sync design in
@@ -51,9 +53,11 @@ This plan keeps that order.
 Build **one gateway with three doors**. The gateway is a small TypeScript service on Vercel,
 at `hub.lofty.au`, that holds the only code allowed to answer an outside caller. Door one is
 a **REST API** (`/api/v1/…`) for programs — Power Automate, Excel, a Xero webhook, a script.
-Door two is an **MCP server** (`/mcp`) for AI clients — Claude, Microsoft Copilot, ChatGPT,
-anything that speaks the protocol. Door three is **Ask**, a box in the app itself, which
-sends the person's question and the same tools to Claude and streams the answer back onto
+Door two is an **MCP server** (`/mcp`) for the AI clients a superadmin approves and connects
+once for the whole organisation — Microsoft 365 Copilot in Teams first (Amber, 8 September);
+nobody connects a personal client of their own. Door three is **Ask**, a box in the app
+itself, which sends the person's question and the same tools to Claude — Anthropic is the
+one AI vendor Lofty's data may reach (Amber, 8 September) — and streams the answer back onto
 the phone. All three doors call the same dozen **tools**, and every tool runs **as the
 caller**: a person's token or an integration's key becomes a Postgres session with that
 identity's claims, and row-level security does the rest. Conclusions — overdue, at risk, days
@@ -155,26 +159,46 @@ repository's *types and narrative code* are shared; its query code is rewritten 
 
 | Caller | Proves identity with | Becomes | Rung |
 | --- | --- | --- | --- |
-| **A person, through an AI client** (Claude, Copilot, ChatGPT) | OAuth 2.1 — the MCP client is sent to sign in; they sign in with Entra as they do today; the token that comes back is a Supabase JWT | their own profile | their own |
+| **A person, through an approved AI client** (Copilot in Teams; any other client a superadmin later approves) | **SSO through a connection a superadmin registered once, organisation-wide.** The person signs in with Entra as they do today; the token that reaches the gateway names *them*, not the connection | their own profile | their own |
 | **A person, in the app** (Ask) | the session they already have | their own profile | their own |
-| **A program** (Xero webhook, Power Automate, Excel, a script) | an API key, `lh_live_…`, created by an admin and stored hashed | an **integration profile** — a `profiles` row of kind *integration*, named `Xero`, `Power BI`, `SiteBook import` | set at creation, usually `viewer` or `user`; never `admin` |
+| **A program** (Xero, SiteBook, Power Automate, Excel, a script) | an API key, `lh_live_…`, created by a **superadmin** and stored hashed | an **integration profile** — a `profiles` row of kind *integration*, named `Xero`, `SiteBook`, `Power BI` | set at creation, usually `viewer` or `user`; never `admin` |
 
-The point of the first row: nobody gets a *new* identity to talk to the AI. Deanna asking
-Claude about 1042-001 is Deanna, reads what Deanna reads, and is audited as Deanna. When
-Deanna is deactivated, `is_active_user()` goes false and her Claude connection stops
-answering the same minute her sign-in does.
+**One connection, never one identity.** Amber, 8 September: *"I don't want users to connect
+their own. This is done by superadmin"* — and *"Can this be done with a single organisation
+wide key?"* The answer is yes to one **connection** and no to one **identity**, and the
+difference is the whole security model:
+
+- **One connection.** A superadmin registers the Copilot Studio agent once. Nobody configures a
+  personal Claude Desktop or ChatGPT against `hub.lofty.au/mcp`: the gateway's authorization
+  server accepts only the client ids the superadmin registered, so an unregistered client is
+  refused before it can ask for a token. There is no per-user setup step, which is what
+  "organisation wide" buys.
+- **Never one identity.** If every question ran as a single "Copilot" profile, RLS would hand
+  everyone what that profile sees, a restricted property would reach whoever asked, and the
+  Activity tab would say "Copilot" where it should say "Deanna". So the person's own identity
+  rides through: Copilot passes the signed-in Teams user to the connector, the gateway turns
+  that into the person's claims, and Postgres decides exactly as it does when they open the
+  app. Deanna asking Copilot about 1042-001 is Deanna, reads what Deanna reads, and is
+  audited as Deanna. When she is deactivated, `is_active_user()` goes false and Copilot stops
+  answering her the same minute her sign-in does.
+- **Email is the one thing each person connects for themselves** — *"I want people to be able
+  to connect their own email"*. That is delegated Microsoft Graph on their own mailbox,
+  consented once by the tenant admin so nobody sees a prompt, and every send and read is as
+  that person (§8).
 
 The point of the third row: an integration is a person-shaped thing with a name on the
-ladder. "Xero changed the invoice total on 1042-001" appears in the Activity tab the same
-way "Ketan changed the assignee" does, because it *is* the same mechanism.
+ladder. "SiteBook linked purchase order 4471 to 1042-001" appears in the Activity tab the
+same way "Ketan changed the assignee" does, because it *is* the same mechanism.
 
-**OAuth server.** Supabase Auth now offers an OAuth 2.1 authorization server (the
-`oauth_server` feature) with dynamic client registration, which is what Claude and ChatGPT
-need to connect without a hand-registered client id. Recommended, because the token it
-issues is a Supabase JWT and RLS understands it with no exchange step. This is the one
-platform assumption in the plan that has to be *checked before Phase 1 starts* (§10, first
-row); the fallback is a small authorization endpoint on the gateway that fronts Entra
-directly and mints the same JWT, which is more code and one more secret.
+**What the Phase 1 spike has to prove.** Because only registered clients connect, dynamic
+client registration — the largest uncertainty in the first draft of this plan — is no longer
+needed. What remains: that Copilot Studio's MCP connector carries the Teams user's Entra
+identity through to the gateway (its OAuth 2.0 authentication mode against the tenant's own
+Entra app registration), and that the gateway can turn that Entra token into Supabase
+claims. Two ways, and the spike picks the shorter: Supabase Auth's OAuth 2.1 server issues a
+token for the same person, or the gateway verifies the Entra token itself against the
+tenant's keys and looks the person up by their Entra object id — which `profiles` already
+links to `auth.users` (0015, 0020). Both end in the same claims; a day, not a phase.
 
 ---
 
@@ -212,9 +236,9 @@ role, with one forgotten filter, hands somebody the whole book of work. So:
    descriptions and SharePoint filenames all reach Claude through tools, and any of them
    could contain "ignore your instructions and…". The system prompt says so; **write tools
    are never reachable from a read result** — a write happens only when the *person* asked
-   for it in their own turn, and the in-app Ask is read-only until Amber says otherwise
-   (question 19). This is the prompt-injection defence, and it is a design rule rather than
-   a filter.
+   for it in their own turn, and the in-app Ask is **read-only in its first version** (Amber, 8 September:
+   *"Read-only first"*). This is the prompt-injection defence, and it is a design rule rather
+   than a filter.
 9. **Restricted properties stay restricted.** RLS withholds the row; the tool answers "no
    value you can see" rather than a blank, so an empty field and a hidden field read the
    same to the model and it cannot infer the second from the first.
@@ -226,12 +250,12 @@ role, with one forgotten filter, hands somebody the whole book of work. So:
     introspection) is a curiosity while the only client is the app. It stops being one when
     an API is advertised. Revoking `SELECT` from `anon` on `public` is the first migration
     of this work, once Amber says yes to that question.
-13. **Data leaving Lofty is Amber's decision, asked before it happens** (question 14). Ask
-    sends the question, the tool results the person could already see, and nothing else to
-    Anthropic; an MCP connection from ChatGPT sends the same to OpenAI. Anthropic's API
-    retention terms, or Claude on Microsoft Foundry if the answer is "it must stay in our
-    Azure tenant", are the two shapes the decision takes. Until it is made, Phase 1 builds
-    the gateway and the tools, and the Ask box stays hidden.
+13. **Data leaving Lofty — decided.** Amber, 8 September: **Anthropic only**, chosen with
+    Claude on Microsoft Foundry, "any vendor" and "none yet" in front of her. Ask sends the
+    question and the tool results the person could already see, and nothing else, to
+    Anthropic's API (no training on the data; 30-day retention). No ChatGPT connection. The
+    vendor sits behind one configuration value, so if a client contract ever forbids offshore
+    processing the move to Foundry is a setting and a re-test, not a rebuild.
 
 ---
 
@@ -348,9 +372,9 @@ makes that true, and `hub_job` returning the drawer in one call is what keeps it
 **The honesty mechanism is the link.** Every answer opens the drawer that shows the same
 facts. An answer that cannot be checked in one tap is not an answer this app gives.
 
-**Without AI, the same tools still pass the test.** `hub_job` *is* the drawer; if Amber
-decides against sending data to an AI vendor (question 14), the gateway, the API and an MCP
-server for Copilot inside the Microsoft tenant all still ship, and the Ask box waits.
+**Without AI, the same tools still pass the test.** `hub_job` *is* the drawer. The Ask box
+ships in Phase 1 because the vendor question is answered (Anthropic only), but if that answer
+ever changes the gateway, the API and the Copilot connection stand on their own.
 
 **Ten questions to try on a phone before calling Phase 1 done**, with the tool that answers
 each — the acceptance test, written now so it cannot be softened later:
@@ -382,50 +406,77 @@ each — the acceptance test, written now so it cannot be softened later:
   drawings live in SharePoint, so that is where the change is seen.
 - **Outlook and Teams.** Already the notification channels and the maintenance intake.
   Added: "email me this job's summary" as an Ask follow-up, through the existing outbox.
+- **Each person's own mailbox** — Amber, 8 September: *"I want people to be able to connect
+  their own email"*. Delegated Graph on the person's mailbox, **admin-consented once for the
+  tenant** so nobody sees a prompt, every send and read as that person. First use: send a
+  job's summary or a comment from the person's own address so replies land in their Outlook.
+  Later: surface the person's own mail that mentions a job number on that job — their mail,
+  their permissions, never a shared mailbox read. This is the one connection that is
+  per-person by design, and it is a Graph permission, not a Lofty Hub key.
 - **Excel and Power BI.** Read the API. An admin creates a read-only integration key; Power
   Query points at `/api/v1/jobs?format=csv` (and `tasks`, `projects`, `measures`). Every
   endpoint is a `security_invoker` view, so a spreadsheet sees what a `viewer` sees — the
   risk note in `schema-plan.md` about Power BI and `property_values` is honoured by
   construction, not by care.
-- **Copilot.** Copilot Studio connects to MCP servers; a Lofty Hub agent in Teams is a
-  configuration, not a build, once `/mcp` exists. (If "Microsoft cowork" meant *Claude*
-  Cowork with the Microsoft 365 connector, the answer is the same server — question 15.)
+- **Copilot — the approved AI client.** Amber, 8 September: "Microsoft cowork" is
+  **Microsoft 365 Copilot**. A superadmin registers one Copilot Studio agent against `/mcp`;
+  it is in Phase 1, beside Ask, because it is the client staff already have in Teams. The
+  person's identity rides through (§3).
 - **The delegated-token trap.** Supabase stores the Entra `provider_token` at sign-in and
   does not refresh it. `hub_where_is_file` listing files *as the person* needs a Graph token
   that outlives the hour — the `provider_refresh_token`, stored encrypted and refreshed by
   the gateway, or a one-time extra consent. Decided in Phase 3, flagged now.
 
-### Xero — second, and money facts stay in Xero
+### SiteBook — second now, because the purchase orders come from it
 
-- **Connection.** Lofty is one organisation, so a Xero *custom connection* (client
-  credentials, no 60-day refresh-token dance) is the simple shape; a standard OAuth app if
-  there are ever two organisations (question 16).
-- **What comes across.** Invoices, contacts, purchase orders, and the cost-centre and
-  product vocabularies the schema plan already assigned to "the Xero batch". Invoices get a
-  **table** (`invoices`, keyed to Xero's id, linked to a job or project through
-  `external_links`) rather than being folded into the `invoice_deposit_1_paid` and
-  `invoice_amount_paid` properties — a job has *several* invoices, and a property holds one
-  value. Those two properties can then be **derived and locked** (0077's locks): the app
-  shows Xero's figure and nobody can type over it.
-- **Direction.** Xero → Hub for money facts, read-only, on webhook and a nightly
-  reconcile. Hub → Xero is *out of scope for this plan* — two systems each allowed to write
-  an invoice total is the conflict the sync design's `sync_conflicts` table exists to catch,
-  and the cheaper answer is not to create the conflict. Revisit when there is a concrete
-  case.
-- **Matching.** ABN ↔ `company_abn` for contacts; a job number in the reference or the
-  line items for invoices; the review queue for everything else (§6, tier 3).
-- **Limits to design around.** 60 calls a minute, 5,000 a day, per tenant; webhook
-  signature and the intent-to-receive handshake; GST-inclusive vs exclusive amounts, both
-  stored.
+Amber, 8 September: SiteBook *"has an mcp and api but don't know details yet. This is
+important to know"*; what Hub needs from it is *"job details, purchase order documents,
+contact details"*; and *"right now I just want to pull info from SiteBook but going forward
+we want to eventually replace SiteBook so will need to push to xero"*. That moves SiteBook
+ahead of Xero in the order Amber gave on 2 September — the purchase orders Xero reconciles
+are SiteBook's, so Xero has nothing to match until they are here.
 
-### SiteBook — third, and unverified
+- **Direction now: SiteBook → Hub, read-only.** A worker (service role, pg_cron, the
+  established pattern) pulls per job: the trades and bookings onto process runs and parties;
+  each **purchase order** into a `purchase_orders` table — SiteBook's id, the job, the
+  contractor company (matched by ABN, else the review queue), amount ex and inc GST, status,
+  raised and due dates; and contact details into `contacts` and `companies` through the
+  approval queue Amber already set (contacts created with manager sign-off).
+- **The PO document is a file, so it lives with the files**: the worker saves it into the
+  job's SharePoint folder (0040) via Graph, and the row carries the link.
+- **The join** is `sitebook_id` on the job (0081) and `external_links` for everything else.
+- **Designed for the day Hub replaces SiteBook.** `purchase_order_source` (`sitebook` |
+  `hub`) from the first migration, and the Xero push columns below, so replacing SiteBook is
+  a new source of rows into a table that already exists, not a new table.
+- **What gates the design, and is not known**: SiteBook's API authentication, rate limits,
+  whether PO documents are downloadable by API, and whether its MCP server is the vendor's
+  own or third-party. **First task of Phase 4: the developer documentation and a test
+  login.** Nothing about SiteBook is guessed before then.
+- **SiteBook's own MCP server** can be connected to Copilot by a superadmin beside Hub's, so
+  one question spans both — useful, and not a substitute for the pull: Hub's own tables are
+  what the ladder test and Xero need.
 
-The `sitebook_id` property is the join. Whether SiteBook exposes an API, a scheduled export,
-or nothing is **not known to this plan** (question 17). If there is an API, a worker mirrors
-bookings and trades onto process runs and parties, one way. If there is only an export, the
-API's `POST /api/v1/import` endpoint takes the file into a staging table — the machinery
-`import_staging_jobs` proved — and the review queue takes the rest. Nothing is guessed about
-a product whose interface nobody here has seen.
+### Xero — third; read bills now, push purchase orders later
+
+- **Connection.** One organisation (Amber, 8 September) → a Xero **custom connection**:
+  client credentials, no 60-day refresh token that expires when nobody has used it over
+  Christmas, a small monthly Xero fee.
+- **Now: Xero → Hub, read-only.** Bills and contacts, matched to `purchase_orders` (Xero's
+  bill reference against the PO number) and to `companies` by ABN; the review queue for the
+  rest. Cost centres and products become tables here, as the earlier design assigned.
+- **Later: Hub → Xero.** Amber: *"going forward we want to eventually replace SiteBook so will
+  need to push to xero"*. Designed for now, built when Hub creates purchase orders:
+  `purchase_order_xero_id`, `_xero_pushed_at`, `_xero_push_state` (`not_sent` | `sent` |
+  `failed` | `superseded`), an idempotency key per push, `sync_conflicts` for a PO changed on
+  both sides. **While SiteBook exists, Hub writes nothing to Xero** — two systems each
+  allowed to write the same number is the conflict `sync_conflicts` exists to catch, and the
+  switch is the PO's source, one row at a time.
+- **The two invoice properties** — `invoice_deposit_1_paid` and `invoice_amount_paid` —
+  become derived and **locked** (0077): Xero's figure, un-typeable.
+- **An invoice with no purchase order** (land, development, a consultant on the whole site)
+  needs a parent that is a job *or* a project — question 20.
+- **Limits to design around.** 60 calls a minute, 5,000 a day; webhook signature and the
+  intent-to-receive handshake; GST-inclusive and exclusive amounts, both stored.
 
 ### Asana, AutoCAD, and the next request
 
@@ -451,12 +502,13 @@ Migration numbering starts at `0101`.
 
 | Phase | Ships | Migrations | Amber can try |
 | --- | --- | --- | --- |
-| **0 — decisions and ground** | Questions 14–19 asked and recorded; `anon` GraphQL closed; `api_v1` schema; `activity_audit_origin` widened; `external_systems`, `external_links`, `sync_inbox`, `sync_cursors`, `sync_conflicts`; integration profiles; `api_keys`; `api_requests` | 0101–0105 | Nothing yet — but Admin → Integrations lists an empty table honestly |
-| **1 — read, and the ladder test** | The gateway on Vercel; OAuth 2.1 against Supabase Auth; the ten read tools; `/mcp` answering Claude (Desktop, claude.ai, Code) for staff; the **Ask** box (if 14 is yes) read-only; the ten questions in §7 passing on a phone | none beyond 0 | Connect Claude to `hub.lofty.au/mcp`, sign in, ask about 1042-001. Ask the same on the phone |
-| **2 — writes and keys** | The four write tools, with the confirmation rule; API keys with scopes; `/api/v1` read endpoints with CSV; Admin → Integrations showing keys, calls and last use; a Power Query workbook that reads the board | 0106 (keys, scopes) | Add a comment from the ladder; open the board in Excel |
-| **3 — Microsoft 365 depth** | Folder creation on job creation; file listing and search in `hub_where_is_file`; drawings change subscription → the existing notification rule; the delegated-token decision | 0107 (folder ids on links) | "Where's the plumbing quote?" returns the file |
-| **4 — Xero** | Custom connection; invoices, contacts, purchase orders, cost centres, products; webhook + nightly reconcile; the review queue; the two invoice properties derived and locked | 0108–0110 | See Xero's deposit figure on 1042-001, un-typeable; match an unmatched invoice from the queue |
-| **5 — the next systems** | SiteBook (once 17 is answered); Copilot Studio agent; ChatGPT connection (if 14 allows); Asana links if asked | as needed | Ask Copilot in Teams |
+| **0 — ground** | `anon` GraphQL closed (once question 1 is answered); `api_v1` schema; `activity_audit_origin` widened; `external_systems`, `external_links`, `sync_inbox`, `sync_cursors`, `sync_conflicts`; integration profiles; `api_keys`; `api_requests` | 0101–0105 | Nothing yet — but Admin → Integrations lists an empty table honestly |
+| **1 — read, and the ladder test** | The gateway on Vercel; the ten read tools; the **Copilot Studio agent** registered by a superadmin against `/mcp`, the person's identity riding through; the **Ask** box, read-only, on Anthropic's API; the ten questions in §7 passing on a phone | none beyond 0 | Ask Copilot in Teams about 1042-001. Ask the same on the phone |
+| **2 — writes and keys** | The four write tools, with the confirmation rule; API keys with scopes, created by a superadmin; `/api/v1` read endpoints with CSV; Admin → Integrations showing connections, keys, calls and last use; a Power Query workbook that reads the board | 0106 (keys, scopes) | Add a comment from the ladder; open the board in Excel |
+| **3 — Microsoft 365 depth** | Folder creation on job creation; file listing and search in `hub_where_is_file`; each person's own mailbox (admin-consented); drawings change subscription → the existing notification rule | 0107 (folder ids on links) | "Where's the plumbing quote?" returns the file; "email me this" arrives from your own address |
+| **4 — SiteBook** | Developer docs and a test login first; then the pull: job details, purchase orders and their documents into SharePoint, contacts through the approval queue; `purchase_orders` with its source and Xero push columns from day one | 0108–0109 | See 1042-001's purchase orders and contractors in the drawer, each linking to its document |
+| **5 — Xero** | Custom connection; bills and contacts matched to purchase orders and companies; cost centres and products; webhook + nightly reconcile; the review queue; the two invoice properties derived and locked | 0110–0112 | See Xero's deposit figure on 1042-001, un-typeable; match an unmatched bill from the queue |
+| **6 — the next systems** | Hub → Xero push, when Hub creates purchase orders; SiteBook's MCP beside Hub's in Copilot; Asana links if asked | as needed | Raise a PO in Hub and see it in Xero |
 
 **What each phase proves before it is called done** — assertions for `verify/`, each to be
 watched failing first:
@@ -481,22 +533,22 @@ the recommendations.
 
 | # | The pitfall | Why it is real here | What the plan does about it |
 | --- | --- | --- | --- |
-| 1 | **The OAuth server may not do what Phase 1 needs.** Dynamic client registration, PKCE, resource indicators — MCP clients differ in which they insist on | Supabase's OAuth 2.1 server is recent; ChatGPT and Claude have each had their own quirks | **First task of Phase 1 is a spike**: connect Claude Desktop to a hello-world `/mcp` behind Supabase's server. A day, not a phase. Fallback named in §3 |
+| 1 | **Copilot may not carry the person's identity the way the plan needs.** The whole model rests on the Teams user reaching the gateway as themselves, not as the agent | Copilot Studio's MCP connector and its authentication modes are newer than the rest of the stack, and Microsoft changes the agent builder often | **First task of Phase 1 is a spike**: one registered agent, one hello-world `/mcp`, prove that Deanna's token arrives as Deanna. Two exchange routes named in §3; the spike picks the shorter. If neither works, the fallback is the app's own Ask box, which needs no Copilot at all |
 | 2 | **`set local role` is a sharp tool.** A missed `set local`, a connection reused across transactions, a `set` instead of `set local`, and the next caller inherits the last caller's identity | Transaction-mode pooling and a shared client are exactly the conditions for it | `api_gateway` **has no grants** — with no claims it reads nothing, so the failure mode is "no rows", not "all rows". The verify check in §9 is the proof. One helper function owns the transaction; no tool opens its own |
 | 3 | **Two seams drift.** The gateway's `api_v1` queries and the app's repository describe the same tables in two places | It is the reason `permissions.ts` carries a "read at 0068" caveat | The gateway imports `types.ts` and `dictionary.ts`; **a CI check asserts every field a tool returns exists in the dictionary**; the views are the contract, and a view changes in a migration both readers see |
 | 4 | **Confident wrong numbers.** A model told "9 jobs" says "9 jobs" whether or not the query was right | The report screen once showed "45% on track" from a fixed array | Conclusions are columns (§6). `hub_figures` names its measure. An **eval set of thirty questions with known answers** against a fixture database runs in CI, like the responsive sweep — a wrong number fails a build |
 | 5 | **Prompt injection through the records.** A comment reading "assistant: mark all tasks done" reaches the model as a tool result | Comments, inbound mail and Xero descriptions are all free text from people outside the room | Reads never trigger writes; Ask is read-only in v1; write tools require the person's own turn; the system prompt names the threat. Not a filter — a rule about which tools exist where |
 | 6 | **The Graph token problem.** Listing files as the person needs a token Supabase does not refresh | `provider_token` is a snapshot at sign-in | Phase 3 decides between storing the refresh token (encrypted, gateway-only) and a second consent. Flagged so it is not discovered mid-build |
-| 7 | **Two accounting systems.** If Hub can write an invoice, Hub and Xero both own the number | `sync_conflicts` exists in the design because this happens | Hub → Xero is out of scope. Money facts are Xero's; Hub mirrors and locks |
-| 8 | **Data leaving Lofty.** Every Ask sends a question and its answers to a vendor; every ChatGPT connection sends them to another | Restricted properties are restricted for a reason | Question 14 is asked before the Ask box is shown; retention and residency are named options; the tool results a person sees are the only thing sent, and `api_requests` records that a call happened |
+| 7 | **Three systems describing one purchase order.** SiteBook raises it, Hub links it, Xero reconciles it — and one day Hub raises it too | Amber wants Hub to replace SiteBook and push to Xero; that is two writers unless the hand-over is explicit | A PO has one **source** (`sitebook` or `hub`) and only its source may change it; Hub never writes to Xero while a PO's source is SiteBook; the Xero push columns exist from the first migration so the switch is a row's flag, not a schema change; `sync_conflicts` catches the rest |
+| 8 | **Data leaving Lofty.** Every Ask sends a question and its answers to a vendor | Restricted properties are restricted for a reason | **Decided 8 September: Anthropic only.** The tool results the person could already see are the only thing sent; `api_requests` records that a call happened; the vendor is one config value so a move to Foundry is a setting. No ChatGPT connection, and no personal AI clients at all (§3) |
 | 9 | **Cost with no ceiling.** A hundred people asking ten questions a day at Opus prices | Real, if small: a short answer with two tool calls is cents, not dollars; caching the stable prompt is most of the saving | Effort `low`, cached system prompt and tools, a per-person daily cap enforced from `api_requests`, and a monthly figure on Admin → Integrations rather than a surprise |
 | 10 | **Vercel's runtime limits.** Function duration, cold starts, the connection count to Supavisor | A streaming Ask answer needs a live connection for several seconds | Streaming responses and a raised `maxDuration` are configuration; one connection per function instance, transaction mode. On the Phase 1 spike checklist with #1 |
 | 11 | **Too many tools, or too clever ones.** Sixty endpoints wrapped as sixty tools; or one `hub_query` that takes anything | The first makes the model guess; the second is #4 and #5 with a friendlier name | Twelve, named for what a person asks, each over a view |
 | 12 | **Secrets multiply.** Anthropic, Xero, Graph, the gateway's database password, API-key hashing salt | Five services, two runtimes | The table below. Nothing new is `VITE_`; the app bundle stays as it is |
 | 13 | **The phone does not have signal.** No AI rescues a page that will not load on site | The drawer already has to pass at phone width | Answers are small (a card, not a table); the drawer remains the surface of record; Ask is a shortcut to it, not a replacement |
 | 14 | **A public API is a public surface.** Scanning, credential stuffing against keys, enumeration | `hub.lofty.au/api/v1` will be found | Keys are long, prefixed (`lh_live_`) so secret-scanning tools recognise them, hashed at rest; rate limits per key and per IP at the edge; `anon` closed (open question 1); every 401 and 403 counted |
-| 15 | **"Microsoft cowork" is two products.** Microsoft 365 Copilot, or Claude Cowork with the Microsoft 365 connector | The two connect to an MCP server the same way, so the build is the same — but the sign-in story and the data-leaving answer differ | Question 15 |
-| 16 | **Deactivation and keys.** A person leaves; their Claude connection is a refresh token in somebody's laptop | `is_active_user()` covers people. An integration key created by that person is not theirs — it is the integration's | Person tokens die with `profile_active`; integration keys belong to the integration profile and are listed with who created them, so a departure prompts a review rather than an outage |
+| 15 | **SiteBook is designed around before it is seen.** Its API and MCP server exist (Amber) but nothing about auth, limits or document access is known | Phase 5 (Xero) depends on Phase 4's purchase orders, so a wrong assumption about SiteBook delays both | Phase 4 opens with the developer documentation and a test login; the `purchase_orders` table is designed from what Xero and the drawer need, not from SiteBook's shape; the SiteBook worker is the adapter that translates |
+| 16 | **Deactivation and keys.** A person leaves; the organisation-wide Copilot connection outlives them, and so do the keys they created | `is_active_user()` covers people. A key is the integration's, not its creator's | Copilot answers nobody whose `profile_active` is false, because the identity that reaches Postgres is the person's; keys belong to the integration profile and are listed with who created them, so a departure prompts a review rather than an outage. **A single organisation-wide identity would have failed this row** — the reason §3 refuses it |
 | 17 | **The plan assumes `api_v1` views can express every tool.** `hub_recent_changes` needs the narrative code, not a view | `auditNarrative.ts` is TypeScript for a reason | Shared, not rewritten — the reason the gateway is TypeScript (§3). The view supplies rows; the narrative supplies sentences |
 
 ### Where every secret lives
@@ -513,23 +565,28 @@ the recommendations.
 
 ---
 
-## 11. What this plan does not decide
+## 11. What was decided on 8 September, and what is still open
 
-Six things, each a row in [`../open-questions.md`](../open-questions.md) so they are asked
-one at a time and recorded when answered:
+Amber answered all six questions the first draft of this plan left open, in one sitting,
+with the options and their future problems in front of her. Recorded with her words in
+[`../open-questions.md`](../open-questions.md) → *Answered*, rows 14–19:
 
-- **14.** Which AI vendors may receive Lofty's data through Ask and MCP — Anthropic, OpenAI,
-  Microsoft, or only inside the tenant. **Blocks the Ask box and the ChatGPT connection**;
-  blocks nothing else in Phase 1.
-- **15.** "Microsoft cowork" — Microsoft 365 Copilot, or Claude Cowork with the Microsoft 365
-  connector.
-- **16.** Xero: one organisation or several, and does an invoice belong to a job or to a
-  project. **Blocks Phase 4's schema.**
-- **17.** SiteBook: does it expose an API, a scheduled export, or neither. **Blocks Phase 5.**
-- **18.** Who may connect their own AI client (recommended: every active user, for
-  themselves), and who may create an integration key (recommended: admins).
-- **19.** Is Ask read-only in its first version (recommended), or may it add a comment from
-  the phone from day one.
+| # | Decision | What it changed here |
+| --- | --- | --- |
+| 14 | **Anthropic only** may receive Lofty's data | Ask ships in Phase 1; no ChatGPT connection; vendor behind one config value |
+| 15 | "Microsoft cowork" is **Microsoft 365 Copilot** | The Copilot Studio agent is Phase 1's approved client |
+| 16 | **One Xero organisation**; the money shape is **purchase orders from SiteBook, per contractor, linked to jobs, reconciled in Xero**; pull from SiteBook now, push to Xero later when Hub replaces SiteBook | SiteBook moves ahead of Xero; `purchase_orders` with source and push columns from day one; Hub → Xero is a later phase, designed for now, rather than out of scope |
+| 17 | SiteBook **has an API and an MCP server, details unknown**; Hub needs job details, PO documents, contact details | Phase 4 opens with the documentation and a test login |
+| 18 | **A superadmin connects approved sources organisation-wide; nobody connects a personal AI client; each person connects their own email** | One connection, never one identity (§3); dynamic client registration dropped; per-person mailbox in Phase 3 |
+| 19 | **Ask is read-only first** | Comment from the phone is Phase 2 |
 
-Nothing in Phase 0 or Phase 1 waits on 15–19. Phase 1's gateway and tools do not wait on
-14 either — only the box that sends a question to a vendor does.
+Two narrower questions those answers left behind, queued as 20 and 21:
+
+- **20.** A Xero invoice with **no** purchase order — land, development, a consultant on the
+  whole site — belongs to a job or to a project? Recommended: one of the two, checked, with the
+  review queue for anything matching neither. **Blocks the `invoices` table in Phase 5**, and
+  nothing before it.
+- **21.** Question 18's answer said *"only managers can connect it to approved sources"* and
+  *"this is done by superadmin"*. Read as: superadmin registers, managers use. If managers
+  should register sources themselves, Admin → Integrations opens to managers for that one act.
+  Not blocking.

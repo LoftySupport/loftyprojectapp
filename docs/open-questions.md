@@ -148,52 +148,23 @@ where the design system says Mid Grey still belongs. So: do exported documents f
 app onto Flint, or is the house format its own record? Not changed on the sync, because the
 export palette is written down as a decision (0026) and this file is where decisions change.
 
-### 14. Which AI vendors may receive Lofty's data — through Ask, and through an MCP connection?
+### 20. A Xero invoice with no purchase order — job or project?
 
-From `docs/integrations/api-and-mcp-plan.md`. The in-app **Ask** box sends a person's
-question, plus the tool results *that person could already see on screen*, to Anthropic; a
-staff member connecting ChatGPT to `hub.lofty.au/mcp` sends the same to OpenAI; Copilot
-sends it to Microsoft inside the tenant. Restricted properties are restricted for a reason,
-and once a sentence has left it is a vendor's retention policy, not RLS, that governs it.
-Options: **Anthropic only** (API terms, 30-day retention, or Claude on Microsoft Foundry so
-it stays in Lofty's Azure tenant); **Anthropic and Microsoft**; **any vendor a staff member
-chooses**; **none yet**. **Blocks the Ask box and the ChatGPT connection.** Blocks nothing
-else in Phase 1 — the gateway, the tools and an MCP server for Copilot ship regardless.
+Purchase orders belong to a job and a contractor (answered 8 September, question 16). A
+contractor's bill reconciles against its purchase order, so it inherits the job. What is not
+decided is the invoice that has **no** purchase order — a land purchase, a development cost, a
+consultant on the whole site. Recommended: the `invoices` table carries a job **or** a project
+(one of the two, checked), and the review queue holds anything Xero sends that matches neither.
+The alternative — everything on a job — leaves project-level money with nowhere to go.
 
-### 15. "Microsoft cowork" — which product?
+### 21. "Only managers can connect it to approved sources … this is done by superadmin"
 
-Amber, 8 September: *"connect ai to the app to (Claude via api or Microsoft cowork)"*. Two
-readings: **Microsoft 365 Copilot** (a Copilot Studio agent in Teams that connects to the
-MCP server), or **Claude Cowork** used alongside its Microsoft 365 connector. The build is
-the same server either way; the sign-in story and question 14's answer differ.
-
-### 16. Xero — one organisation or several, and does an invoice belong to a job or a project?
-
-One organisation means a Xero *custom connection* (client credentials, no refresh-token
-expiry); several means a standard OAuth app and a tenant picker. And the `invoices` table
-needs one parent: a deposit invoice reads as a job's, but a land or development invoice may
-be the project's. **Blocks Phase 4's schema.**
-
-### 17. SiteBook — does it have an API, a scheduled export, or neither?
-
-The `sitebook_id` property (0081) is the join key. Whether SiteBook exposes anything to join
-*to* is not known to anyone in this repository. An API means a worker; an export means the
-import endpoint and staging table; neither means the id stays a typed field. **Blocks
-Phase 5.**
-
-### 18. Who may connect an AI client, and who may create an integration key?
-
-Recommended: **every active user may connect their own AI client** (it runs as them, reads
-what they read, dies when they are deactivated), and **admins create integration keys** (a
-key is an identity on the ladder with a rung, so making one is the same act as adding a
-person). The alternative — managers and above for both — is one policy clause either way.
-
-### 19. Is Ask read-only in its first version?
-
-Recommended **yes**: a question on the phone never writes. Adding a comment from the ladder is
-the first write worth having and is Phase 2; holding it back a phase is the prompt-injection
-defence (a comment on a record could read as an instruction, and a read must never trigger a
-write). The alternative is `hub_add_comment` in Phase 1 with a "post this?" confirmation.
+Question 18's answer (8 September) says both. Read as: a **superadmin registers** each approved
+source once, organisation-wide (the Copilot Studio agent, the Xero and SiteBook connections),
+and **managers may use** what is registered, alongside everyone else who signs in. If instead
+managers should be able to register a new source themselves, the Admin → Integrations page
+opens to managers for that one act and the plan's §3 changes one word. Not blocking: Phase 1
+has one source to register and a superadmin registers it either way.
 
 ---
 
@@ -201,6 +172,12 @@ write). The alternative is `hub_add_comment` in Phase 1 with a "post this?" conf
 
 | Date | Question | Answer |
 | --- | --- | --- |
+| 8 Sep | 14 — Which AI vendors may receive Lofty's data through Ask and MCP? | **Anthropic only**, via the Claude API — chosen with Claude on Microsoft Foundry, "any vendor" and "none yet" in front of her. The Ask box ships in Phase 1; no ChatGPT connection; the vendor sits behind one config value so a later move is a setting, not a rebuild |
+| 8 Sep | 15 — "Microsoft cowork": which product? | **Microsoft 365 Copilot** — a Copilot Studio agent in Teams over the MCP server |
+| 8 Sep | 16 — Xero: one organisation, and what does an invoice belong to? | **One organisation** → a custom connection. And the shape is purchase orders before invoices: *"Each job has many purchase orders created in SiteBook belonging to contractors that need to be linked to jobs and pushed into xero for reconciling"*, then *"Right now I just want to pull info from SiteBook but going forward we want to eventually replace SiteBook so will need to push to xero"*. So SiteBook → Hub now, Hub → Xero later and designed for from the first migration. The invoice with no purchase order is question 20 |
+| 8 Sep | 17 — SiteBook: API, export, or neither? | *"They have an mcp and api but don't know details yet. This is important to know."* What Hub needs from it: *"job details, purchase order documents, contact details"*. **SiteBook moves ahead of Xero** in the phase order, because the purchase orders Xero reconciles come from it. First task of that phase: the developer documentation and a test login |
+| 8 Sep | 18 — Who connects an AI client, and who creates a key? | *"Only managers can connect it to approved sources but I want people to be able to connect their own email. Can this be done with a single organisation wide key. I don't want users to connect their own. This is done by superadmin."* Read as: a **superadmin connects approved sources once, organisation-wide**; **nobody connects a personal AI client**; **each person connects their own mailbox**. The single-key question is answered in the plan §3 — yes to one organisation-wide *connection*, no to one organisation-wide *identity*: the person rides through on SSO so RLS still decides row by row and the Activity tab still says who. "Managers" versus "superadmin" is question 21 |
+| 8 Sep | 19 — Is Ask read-only in its first version? | **Yes** — *"Read-only first"*. Adding a comment from the phone is Phase 2 |
 | 7 Sep | Bugs and Ideas came off Admin as well — is that right? | **Yes — Updates only.** Asked in chat and answered the same evening: one page at `/updates`, the stage/phase/kind/merge controls admin-only inside it. Nothing to restore; `FeedbackList.tsx` stays deleted |
 | 7 Sep | "Import a document as a template" — Word, or Markdown? | **Both Word and PDF** — *"Import template as word or pdf"*, which answered the question by rejecting its premise: Markdown was never the point, and PDF had not been offered. `.docx` goes through `mammoth` and is a translation between two structures. **PDF is not**: a PDF records glyphs at coordinates, so headings are inferred from text size and paragraphs from vertical gaps, and tables are deliberately not inferred at all — column detection from spacing gets a merged cell wrong silently, and a table one column out is worse than prose somebody can see is wrong. Every import returns notes saying what it could not carry, shown before the document is created |
 | 7 Sep | How should an image get into a document? | **A public bucket** — *"upload to public bucket that stores in the document only"*, chosen with the alternative in front of her. The alternative was signed URLs written into the share snapshot with the link's own expiry, which Claude recommended; the trade accepted is that **an image in a shared document stays fetchable after the link expires**. "Stores in the document only" is why there is no attachments table: the block holds the URL and the layout is the record of what a document carries. `0100`, and the way back if it is ever revisited is one flag plus signing in `compileForShare` |
