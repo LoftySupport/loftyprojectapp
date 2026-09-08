@@ -2109,6 +2109,7 @@ from `profiles`, `teams`, `addresses` and `activity_audit`. `report_documents` i
 still — `0095` revoked the grant outright, so anon cannot even reach it to be refused. What
 IS exposed is the shape: table and column names are discoverable by introspection. Whether
 that matters is a decision, and it is in `docs/open-questions.md` rather than guessed at.
+*(Decided the same evening — `0101`, below.)*
 
 `authenticated_security_definer_function_executable` (4) — **left, and correct as it is.**
 `current_permission()`, `current_profile_id()`, `is_active_user()` and `is_signed_in_staff()`
@@ -2124,6 +2125,32 @@ RLS on with no policy is deny-all, which is exactly what a parked reply token sh
 `auth_leaked_password_protection` — **not decided.** Turning it on is a dashboard setting
 that changes what happens to a real person choosing a password, so it is a question rather
 than a change Claude makes on its own.
+
+### 7 September, evening — anon sees no shape (`0101`)
+
+Amber, asked the question the section above left open: **"yes"**. `0101` revokes every
+table privilege from `anon` across `public` — `all tables` covers the 21 views as well as the
+74 tables — and revokes the default privilege too, so the next `create table` does not
+quietly put one object back on the map. Sequences are left alone: the advisor does not name
+them, and `USAGE` on a sequence `anon` cannot insert into is not a capability.
+
+Two things are worth keeping straight about it:
+
+- **It closes discoverability, not a read.** RLS was already refusing `anon` everywhere,
+  and the proof had watched it refuse. What changes is the *kind* of refusal — a query as
+  `anon` now fails on privilege before RLS gets a say — and that is what removes the table
+  from the schema pg_graphql builds for that role. `verify/rls.sql` probes exactly that
+  difference: a table that answers `anon` with zero rows is now a FAIL, because zero rows
+  means it is back in the GraphQL schema.
+- **Nothing runs as `anon`.** Every app read and write is a signed-in session; the one thing
+  a person with no account reaches (`/shared/:token`) is an edge function holding the
+  service role, as are the other three functions. The `postgres` role is what creates every
+  table here, so revoking *its* default is the one that matters; Supabase's parallel default
+  under `supabase_admin` applies only to tables that role creates, and no migration is one.
+
+`pg_graphql_anon_table_exposed` should read 0 on the next `get_advisors` run;
+`pg_graphql_authenticated_table_exposed` (94) is unchanged and correct — signed-in staff are
+meant to see the schema they query.
 
 ## Verification
 

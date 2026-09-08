@@ -21,27 +21,14 @@ invent a value, and `CLAUDE.md` is explicit that an invented default is worse th
 
 ## Open — next question first
 
-### 1. Should the tables stop being visible to `anon` in the GraphQL schema?
-
-Not a hole, which is why it is a question rather than a fix. The security advisor reports 93
-tables as `anon`-visible; **that means discoverable, not readable.** Every one has RLS on
-with no policy reaching `anon`, and reading as `anon` returns 0 rows from `profiles`,
-`teams`, `addresses` and `activity_audit` — watched, not assumed. What leaks is the *shape*:
-somebody unauthenticated can introspect the GraphQL schema and learn that Lofty has a
-`maintenance_message_secrets` table and what its columns are called.
-
-Revoking `SELECT` from `anon` across `public` would close it. Nothing in the app signs in as
-`anon` — the share endpoint uses the service role — so the expected blast radius is zero,
-but "expected" is doing work in that sentence and it is 93 tables.
-
-### 2. Turn on leaked-password protection?
+### 1. Turn on leaked-password protection?
 
 One dashboard toggle. Supabase checks new passwords against HaveIBeenPwned and refuses
 known-breached ones. The reason it has not been flipped is that it changes what happens to a
 real person setting a password, and that is a change to make deliberately rather than
 because an advisor asked. Any objection to it going on?
 
-### 3. Two of the three share-link origins point at nothing
+### 2. Two of the three share-link origins point at nothing
 
 `SHARE_ALLOWED_ORIGINS` holds `https://loftyprojectapp.vercel.app`,
 `https://loftyprojectapp.netlify.app` and `https://app.lofty.au`. The app answers at
@@ -49,7 +36,7 @@ because an advisor asked. Any objection to it going on?
 different application. Tidying it to just the live origin is one secret edit — but it is
 your secret and an allowlist is a security control, so it is not one to trim on a guess.
 
-### 4. Saved projects views carrying `?stage=` — leave them, or rewrite them?
+### 3. Saved projects views carrying `?stage=` — leave them, or rewrite them?
 
 Since #51 the projects board has two stage filters: **Stage** is the project's own phase (as
 the Stage grouping is) and **Job stage** is "has a job in this stage". Before, `?stage=` on
@@ -59,21 +46,21 @@ are no shared saved views of that shape that Claude can see, but Claude cannot s
 Options: leave it (the new meaning matches the grouping, which was the point), or run a
 one-off `UPDATE saved_views SET … 'stage=' → 'jobstage='` for projects views only.
 
-### 5. Does undo need a home on a phone?
+### 4. Does undo need a home on a phone?
 
 The header bar is hidden below 600px because two more 32px targets left the search box 70px
 wide, and Ctrl+Z does not exist on a phone — so a phone has no undo at all. Is that
 acceptable for now, or does it need one (a long-press on the "saved" toast is the obvious
 place)?
 
-### 6. Should the person picker offer deactivated people?
+### 5. Should the person picker offer deactivated people?
 
 `PersonSelect` lists active people only, and every assignee, owner and "who is doing this"
 control uses it. A job already assigned to somebody who has since been deactivated still
 shows their name read-only. Nobody asked for the other behaviour; this records that it was a
 choice.
 
-### 7. What is "undo" allowed to reach?
+### 6. What is "undo" allowed to reach?
 
 Today it reaches every field write that saves as you make it — team, assignee, dates, tasks,
 process runs, property values, a request's stage. It deliberately does NOT reach lifecycle
@@ -81,7 +68,7 @@ moves (forwards-only by your rule), creating, deleting, votes, follows or commen
 the right line, or should a lifecycle move be undoable within, say, a minute of making it?
 (The database refuses the way back today; allowing it is a migration, not a UI change.)
 
-### 8. Where does "clone a job" live now?
+### 7. Where does "clone a job" live now?
 
 **Blocked:** nothing is broken, but the app currently has no way to clone a job at all.
 
@@ -101,14 +88,14 @@ What is not decided is what it should look like there:
 Either way `cloneJob(id, copy)` is unchanged and manager+ still gates it. Do not delete
 `CloneDialog.tsx` as dead code before this is answered.
 
-### 9. Is the placeholder at 3.47:1 accepted, or does it get fixed?
+### 8. Is the placeholder at 3.47:1 accepted, or does it get fixed?
 
 The design system now labels it *"example text only, never a label"*, which narrows the
 exposure but does not clear it — placeholder text is still text under WCAG 1.4.3. `#757478`
 would clear it at 4.64:1 as a new `--lofty-black-70` step, leaving `--ui-border-color` at
 the 3.47:1 it was deliberately chosen for.
 
-### 10. What should five missing roadmap items say?
+### 9. What should five missing roadmap items say?
 
 Five commits carry a `Roadmap:` trailer whose text matches no checkbox in `ROADMAP.md`, so
 work that was finished has no line to tick:
@@ -123,7 +110,7 @@ They are real and shipped. What is missing is which phase each belongs to and wh
 wording above is the wording you want, and inventing roadmap text is exactly the thing
 `CLAUDE.md` forbids.
 
-### 11. How is health status worked out?
+### 10. How is health status worked out?
 
 Long-standing, from the schema plan's own risk list. *"Status is what someone sets. Health
 is what the system works out"* — from inputs nobody has defined. Kanban-by-status and
@@ -131,7 +118,7 @@ kanban-by-team work today; **kanban-by-health cannot be built until this is answ
 job at risk because it is past `expected_days`, because a required field is empty, because a
 dependency is blocked, or some combination?
 
-### 12. Does Acquisition & Development want a `project_stage` vocabulary?
+### 11. Does Acquisition & Development want a `project_stage` vocabulary?
 
 `project_stage` is nullable and costs nothing empty. Do not seed a vocabulary until they
 confirm they want one — a half-filled stage column that some projects use and others ignore
@@ -143,6 +130,7 @@ is worse for reporting than no column.
 
 | Date | Question | Answer |
 | --- | --- | --- |
+| 7 Sep | Should the tables stop being visible to `anon` in the GraphQL schema? | **Yes.** `0101` revokes every table privilege from `anon` in `public`, present and future. Visible was never readable — RLS held, and the proof watched it hold — but the shape was discoverable; now a read as `anon` is refused at the privilege rather than answered with zero rows. Sequences left as they were. Nothing runs as `anon`: the share endpoint and the other three edge functions hold the service role |
 | 7 Sep | Bugs and Ideas came off Admin as well — is that right? | **Yes — Updates only.** Asked in chat and answered the same evening: one page at `/updates`, the stage/phase/kind/merge controls admin-only inside it. Nothing to restore; `FeedbackList.tsx` stays deleted |
 | 7 Sep | "Import a document as a template" — Word, or Markdown? | **Both Word and PDF** — *"Import template as word or pdf"*, which answered the question by rejecting its premise: Markdown was never the point, and PDF had not been offered. `.docx` goes through `mammoth` and is a translation between two structures. **PDF is not**: a PDF records glyphs at coordinates, so headings are inferred from text size and paragraphs from vertical gaps, and tables are deliberately not inferred at all — column detection from spacing gets a merged cell wrong silently, and a table one column out is worse than prose somebody can see is wrong. Every import returns notes saying what it could not carry, shown before the document is created |
 | 7 Sep | How should an image get into a document? | **A public bucket** — *"upload to public bucket that stores in the document only"*, chosen with the alternative in front of her. The alternative was signed URLs written into the share snapshot with the link's own expiry, which Claude recommended; the trade accepted is that **an image in a shared document stays fetchable after the link expires**. "Stores in the document only" is why there is no attachments table: the block holds the URL and the layout is the record of what a document carries. `0100`, and the way back if it is ever revisited is one flag plus signing in `compileForShare` |

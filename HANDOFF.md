@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 176 changes since then —
+Unreleased: 177 changes since then —
+- Changed: Somebody without a Lofty account can no longer discover the names of the tables and columns behind the app
 - Fixed: The bug-and-idea form at /report opens again for people held at the demo gate — it had been blank since it was added
 - Fixed: A link you were sent takes you there after signing in, instead of dropping you on the dashboard
 - Added: Import a Word document or a PDF and it becomes a template or a document — headings, prose and Word tables become blocks you can edit, and it tells you up front what it could not bring across
 - Added: Drop an image straight into a report, or pick one from your machine, instead of hosting it somewhere and pasting a link
-- Fixed: A document can be put on a project as easily as on a job — the choice is now asked before the list, instead of every project sorting below every job in one long picker
-- …and 171 more.
+- …and 172 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -56,10 +56,11 @@ responsive sweep included, now that it runs there):**
 2. **Work the open-questions queue**, top question first — `docs/open-questions.md`. Six
    questions were added today by this line of work; the first (Bugs and Ideas off Admin) was
    asked and answered the same evening, and #54 put three security-advisor questions at the
-   top, so twelve remain. Numbers 4–7 are the cheap confirmations of decisions made under
-   time pressure; asked once, they stop being risks. Number 8 is the one that BLOCKS
-   something: cloning a job has no entry point since the button left the drawer (#50) and
-   nothing on the Projects side has taken it yet.
+   top, of which the first (anon and the GraphQL schema) was answered and became `0101`, so
+   eleven remain. Numbers 3–6 are the cheap confirmations of decisions made under time
+   pressure; asked once, they stop being risks. Number 7 is the one that BLOCKS something:
+   cloning a job has no entry point since the button left the drawer (#50) and nothing on
+   the Projects side has taken it yet.
 3. **Small follow-ups that fell out of today, none blocking:**
    - The column picker will list every property — eighty-odd once the definitions are all
      active. It has no search box. Add one when it gets unwieldy, not before.

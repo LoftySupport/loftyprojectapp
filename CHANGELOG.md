@@ -149,6 +149,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- Somebody without a Lofty account can no longer discover the names of the tables and columns behind the app
 - The Jobs and Projects filters are the same fields as Group by, always on the bar, with everything else in one Advanced row instead of chips added one at a time
 - On the Projects board, Stage now filters by the project's own phase and a separate Job stage filter finds projects with a job in that stage
 - Sections in the job panel fold away, and Collapse all shuts the lot at once
