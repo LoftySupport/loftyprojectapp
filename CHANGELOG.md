@@ -150,6 +150,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- The merged-pull-requests feed on Updates → Changelog shows every finalised pull request by default, using its title when it declared no @changelog line
 - Somebody without a Lofty account can no longer discover the names of the tables and columns behind the app
 - The app takes the design system's Flint neutrals for its page and rules, Montserrat for titles, and dark mode's green and control borders now clear their contrast floors
 - The Jobs and Projects filters are the same fields as Group by, always on the bar, with everything else in one Advanced row instead of chips added one at a time

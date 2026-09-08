@@ -18,20 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 177 changes since then —
-- Changed: Somebody without a Lofty account can no longer discover the names of the tables and columns behind the app
-- Fixed: The bug-and-idea form at /report opens again for people held at the demo gate — it had been blank since it was added
-- Fixed: A link you were sent takes you there after signing in, instead of dropping you on the dashboard
-- Added: Import a Word document or a PDF and it becomes a template or a document — headings, prose and Word tables become blocks you can edit, and it tells you up front what it could not bring across
-- Added: Drop an image straight into a report, or pick one from your machine, instead of hosting it somewhere and pasting a link
-- …and 172 more.
-Unreleased: 178 changes since then —
+Unreleased: 180 changes since then —
+- Changed: The merged-pull-requests feed on Updates → Changelog shows every finalised pull request by default, using its title when it declared no @changelog line
 - Added: Import an HTML page as well as a Word document or a PDF
+- Changed: Somebody without a Lofty account can no longer discover the names of the tables and columns behind the app
 - Changed: The app takes the design system's Flint neutrals for its page and rules, Montserrat for titles, and dark mode's green and control borders now clear their contrast floors
 - Fixed: The bug-and-idea form at /report opens again for people held at the demo gate — it had been blank since it was added
-- Fixed: A link you were sent takes you there after signing in, instead of dropping you on the dashboard
-- Added: Import a Word document or a PDF and it becomes a template or a document — headings, prose and Word tables become blocks you can edit, and it tells you up front what it could not bring across
-- …and 173 more.
+- …and 175 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
