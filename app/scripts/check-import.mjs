@@ -132,9 +132,46 @@ try {
   // Neither a zip nor a %PDF — the file somebody picks by mistake.
   await writeFile(join(out, "fixture.txt"), "just some text, not a document at all");
 
+  /**
+   * The .html fixture, shaped like html actually is rather than like mammoth's output.
+   *
+   * NESTED THREE DEEP ON PURPOSE. That is the whole reason the walker descends: the old
+   * one read `body.children`, which here is a single <div>, and would have produced one
+   * text block holding the entire letter. Every other assertion in this group would
+   * still have passed on a flat fixture.
+   *
+   * It also carries a <script> and a <style> whose text must never appear as prose, an
+   * absolute image URL that should survive as an Image block, and a relative one that
+   * cannot.
+   */
+  await writeFile(join(out, "fixture.html"), `<!doctype html>
+<html><head>
+  <title>Should not appear</title>
+  <style>.letterhead { color: red; }</style>
+</head>
+<body>
+  <div class="page"><div class="content"><section>
+    <style>.in-the-body { color: blue; }</style>
+    <h1>Site Report</h1>
+    <p>First paragraph of the letter.</p>
+    <p>Second paragraph, same run of prose.</p>
+    <h4>A fourth-level heading</h4>
+    <div>A bare div is how a lot of html writes a paragraph.</div>
+    <img src="https://example.invalid/logo.png" alt="Our logo">
+    <img src="./photo-next-to-the-file.png" alt="Site photo">
+    <table>
+      <tr><th>Item</th><th>Cost</th></tr>
+      <tr><td>Slab</td><td>18400</td></tr>
+    </table>
+    <hr>
+    <p>After the rule.</p>
+  </section></div></div>
+  <script>window.SHOULD_NOT_APPEAR = 1;</script>
+</body></html>`);
+
   const TYPES = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript",
                   ".css": "text/css", ".json": "application/json", ".txt": "text/plain",
-                  ".pdf": "application/pdf",
+                  ".pdf": "application/pdf", ".html": "text/html",
                   ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document" };
   const page = await readFile(join(out, "scripts", "import.html")).catch(
     () => readFile(join(out, "import.html")));
@@ -174,9 +211,10 @@ try {
   // PDF parser and fails with a message about PDFs, which sends them the wrong way.
   const kinds = await pg.evaluate(async () =>
     [await window.__sniff("/fixture.docx"), await window.__sniff("/fixture.pdf"),
-     await window.__sniff("/fixture.txt")]);
+     await window.__sniff("/fixture.txt"), await window.__sniff("/fixture.html")]);
   ok("the format is read from the bytes, not the file name",
-    kinds[0] === "docx" && kinds[1] === "pdf" && kinds[2] === null, JSON.stringify(kinds));
+    kinds[0] === "docx" && kinds[1] === "pdf" && kinds[2] === null && kinds[3] === "html",
+    JSON.stringify(kinds));
 
   // ── Word ─────────────────────────────────────────────────────────────
   const docx = await pg.evaluate(async () => window.__import("/fixture.docx"));
@@ -248,13 +286,71 @@ try {
     pdf.notes.some(n => /inferred/i.test(n)) && pdf.notes.some(n => /table/i.test(n)),
     JSON.stringify(pdf.notes));
 
+  // ── HTML ─────────────────────────────────────────────────────────────
+  const htm = await pg.evaluate(async () => window.__import("/fixture.html"));
+  const hKinds = htm.widgets.map(w => w.kind);
+
+  // THE ONE THE WALKER EXISTS FOR. The fixture nests three deep; the old walker read
+  // body.children, found one <div>, and would have produced a single text block holding
+  // the whole letter. Broken by removing the CONTAINERS descent: this collapses to 1.
+  ok("nested wrappers are descended, not treated as one paragraph",
+    htm.widgets.length >= 6, `${htm.widgets.length} blocks: ${JSON.stringify(hKinds)}`);
+
+  // h1 and h4 both. Broken by keeping the old /^h[1-3]$/ test: the h4 arrives as prose.
+  ok("headings at any level become headings",
+    htm.widgets.filter(w => w.kind === "heading").map(w => w.options.text)
+      .join("|") === "Site Report|A fourth-level heading",
+    JSON.stringify(hKinds));
+
+  const hTable = htm.widgets.find(w => w.kind === "freeTable");
+  ok("an HTML table becomes a table",
+    hTable?.options.headers.join(",") === "Item,Cost"
+    && hTable.options.rows[0].join(",") === "Slab,18400",
+    JSON.stringify(hTable?.options));
+
+  // An html image is a URL, unlike a Word one which is bytes. Broken by passing
+  // keepImageUrls: false for the html path — the logo silently disappears.
+  const img = htm.widgets.find(w => w.kind === "image");
+  ok("an absolute image URL survives as an Image block",
+    img?.options.url === "https://example.invalid/logo.png" && img.options.caption === "Our logo",
+    JSON.stringify(img?.options));
+
+  // …and the relative one cannot, so it is COUNTED rather than dropped in silence.
+  // Broken by lumping it in with droppedImages: the note then blames the wrong thing.
+  ok("a relative image is reported rather than silently lost",
+    htm.notes.some(n => /pointed at a file next to the document/.test(n)),
+    JSON.stringify(htm.notes));
+
+  // A bare <div> of text is a paragraph — that is how a lot of html writes one.
+  ok("a bare div of text is read as prose",
+    htm.widgets.some(w => w.kind === "text" && /bare div/.test(w.options.html)),
+    JSON.stringify(htm.widgets.filter(w => w.kind === "text").map(w => w.options.html)));
+
+  // NOTHING FROM <script>, <style> OR <title> ANYWHERE — including a <style> inside the
+  // body, which is the case that could plausibly leak.
+  //
+  // WHAT BREAKS THIS, AND WHAT DOES NOT. Dropping the IGNORED removal in import.js does
+  // NOT break it, which was a surprise and is why the fixture now carries a body-level
+  // <style>: DOMPurify removes script and style along with their CONTENTS, so the
+  // sanitiser is what guards this, not the strip. What breaks it is widening the editor's
+  // ALLOWED_TAGS, or sanitising per block being replaced by trusting the source.
+  const allHtml = JSON.stringify(htm.widgets);
+  ok("script, style and title text never become content",
+    !/SHOULD_NOT_APPEAR/.test(allHtml) && !/letterhead/.test(allHtml)
+    && !/Should not appear/.test(allHtml) && !/in-the-body/.test(allHtml),
+    allHtml.slice(0, 200));
+
+  ok("a horizontal rule becomes a divider",
+    htm.widgets.some(w => w.kind === "divider"), JSON.stringify(hKinds));
+
   // ── Neither ──────────────────────────────────────────────────────────
   const refused = await pg.evaluate(async () => {
     try { await window.__import("/fixture.txt"); return null; }
     catch (e) { return String(e.message ?? e); }
   });
-  ok("anything that is not one of the two is refused by name",
-    typeof refused === "string" && /Word|PDF/.test(refused), JSON.stringify(refused));
+  ok("anything that is not one of the three is refused by name",
+    typeof refused === "string" && /Word/.test(refused) && /PDF/.test(refused)
+    && /HTML/.test(refused), JSON.stringify(refused));
 
   ok("nothing threw while doing it", crashes.length === 0, crashes[0]?.slice(0, 200));
 } finally {
@@ -264,6 +360,6 @@ try {
 }
 
 console.log(failures === 0
-  ? "\nimport: a Word document and a PDF both become blocks, and say what they lost"
+  ? "\nimport: Word, PDF and HTML all become blocks, and say what they lost"
   : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

@@ -21,7 +21,9 @@
  *
  * Every pairing below is one this repo has written down as a reason. The numbers come out
  * of `src/design-system/tokens/`, not out of this file, so changing the mirror changes what
- * is measured — and the `"fail"` rows are the load-bearing ones. They assert that a pairing
+ * is measured — the 7 September sync is the proof: two recorded shortfalls became passes
+ * because the design project moved, and this file only had to stop calling them shortfalls.
+ * The `"fail"` rows are the load-bearing ones. They assert that a pairing
  * we deliberately do NOT use is still as bad as we said it was; if one of them ever passes,
  * the palette moved and the reasoning in DESIGN.md needs revisiting.
  *
@@ -144,13 +146,31 @@ const PAIRS = [
   ["--warning-ink", "--warning-color-selected", 4.5, light, "warning INK on its tint"],
   ["--negative-color", "--negative-color-selected", "fail", light, "negative at full strength on its own tint — why the ink exists"],
 
-  // Dark.
-  ["--primary-text-color", "--primary-background-color", 8.0, dark, "dark: body text on the surface"],
-  ["--secondary-text-color", "--primary-background-color", 8.0, dark, "dark: muted text on the surface"],
+  // The page, since Flint replaced the cool greys (7 September): the body paints Flint 100,
+  // cards sit on it with a Flint 300 rule. The rule is layout, carries no information and is
+  // exempt from the 3:1 boundary floor — which is why it is not asserted, and why a control
+  // boundary is still Black-60 rather than Flint 300.
+  ["--secondary-text-color", "--allgrey-background-color", 4.5, light, "muted text on the Flint 100 page"],
+
+  // Dark. The surface is Flint 800 now, a step lighter than the #232224 it replaced, so the
+  // muted text that cleared 8:1 there measures 7.9:1 here — still above the 7:1 AAA floor,
+  // which is the floor asserted. 8.0 was never a standard; it was the old measurement.
+  ["--primary-text-color", "--primary-background-color", 7.0, dark, "dark: body text on the surface"],
+  ["--secondary-text-color", "--primary-background-color", 7.0, dark, "dark: muted text on the surface"],
   ["--text-color-on-primary", "--primary-color", 4.5, dark, "dark: white on filled Crisp Orange (NOT buttons)", 2.62],
-  ["--lofty-finisher-white", "--highlight-color", 4.5, dark, "dark: white on the lifted Eco Green", 4.26],
-  ["--primary-text-color", "--allgrey-background-color", 8.0, dark, "dark: body text on the base"],
-  ["--ui-border-color", "--primary-background-color", 3.0, dark, "dark: a control boundary", 2.28]
+  // Two shortfalls this file used to record were closed in the design project on 7 September
+  // and arrived on the sync: white on the lifted Eco Green was 4.26:1 at #1f8791 and is
+  // 5.74:1 at #20707a; the control boundary was 2.28:1 at #5a595c and is 3.86:1 at #807f74.
+  // They are ordinary assertions now. If either drops below its floor again, the design
+  // project moved and the fix belongs there, not here.
+  ["--lofty-finisher-white", "--highlight-color", 4.5, dark, "dark: white on the lifted Eco Green fill"],
+  ["--lofty-green-dark-ink", "--primary-background-color", 4.5, dark, "dark: Eco Green as TEXT on the surface"],
+  ["--primary-text-color", "--allgrey-background-color", 7.0, dark, "dark: body text on the base"],
+  ["--ui-border-color", "--primary-background-color", 3.0, dark, "dark: a control boundary"],
+  // Dark status fills are lifted, so the design system flips the ink on them to the dark
+  // page. Measure the pairing the mirror declares, not the light one.
+  ["--text-color-on-status", "--positive-color", 4.5, dark, "dark: status ink on the lifted positive"],
+  ["--text-color-on-status", "--negative-color", 4.5, dark, "dark: status ink on the lifted negative"]
 ];
 
 let failures = 0;

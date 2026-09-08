@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { BrowserRouter, Navigate, NavLink, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { Heading, Loader, Text, ThemeProvider } from "@vibe/core";
 import { SpeedInsights } from "@vercel/speed-insights/react";
+import { Analytics } from "@vercel/analytics/react";
 import { loftyTheme, type SystemTheme } from "./theme/loftyTheme";
 import { AuthProvider, useAuth } from "./data/AuthProvider";
 import { LegalPage } from "./pages/LegalPage";
@@ -349,6 +350,7 @@ export default function App() {
           {/* Inside the router because it needs the current path; a sibling of <Routes>
               rather than inside one, so it mounts once and survives navigation. */}
           <SpeedInsightsOnVercel />
+          <Analytics />
           <Routes>
             <Route path="signin" element={<RedirectIfSignedIn />} />
             {/* Public, and outside RequireAuth on purpose: a policy that cannot be read

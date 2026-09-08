@@ -12,6 +12,13 @@ Unreleased: 177 changes since then —
 - Added: Import a Word document or a PDF and it becomes a template or a document — headings, prose and Word tables become blocks you can edit, and it tells you up front what it could not bring across
 - Added: Drop an image straight into a report, or pick one from your machine, instead of hosting it somewhere and pasting a link
 - …and 172 more.
+Unreleased: 178 changes since then —
+- Added: Import an HTML page as well as a Word document or a PDF
+- Changed: The app takes the design system's Flint neutrals for its page and rules, Montserrat for titles, and dark mode's green and control borders now clear their contrast floors
+- Fixed: The bug-and-idea form at /report opens again for people held at the demo gate — it had been blank since it was added
+- Fixed: A link you were sent takes you there after signing in, instead of dropping you on the dashboard
+- Added: Import a Word document or a PDF and it becomes a template or a document — headings, prose and Word tables become blocks you can edit, and it tells you up front what it could not bring across
+- …and 173 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -44,6 +51,14 @@ responsive sweep included, now that it runs there):**
 - #50 — nine more from the same list, in a parallel session: the drawer collapses and is
   findable, the board's cards separate, the header loses its pink, the rail tooltip stops
   eating its first letter, and `0097` makes a notification *type* admin's again.
+
+**In review: the design-system sync of 7 September, evening.** The design project moved
+under the app during the day and the mirror was re-synced: **Flint** replaces the cool greys
+and the warm tones as the one neutral family (Flint 100 page, Flint 300 rules), **Montserrat**
+replaces Poppins for titles, and two of the three dark-mode contrast shortfalls are closed
+from the design side — the dark Eco Green fill and the dark control boundary — leaving the
+placeholder as open question 9. `DESIGN.md` carries the detail; `check-contrast.mjs` asserts
+the new values rather than recording them as shortfalls.
 
 **Next, in order.** Nothing here needs a schema change.
 

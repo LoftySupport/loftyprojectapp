@@ -46,7 +46,7 @@ Nothing outside these except status.
 | **Eco Green** | `#005058` | **Minimal highlight only.** Small decorative accents and later data series. **Never a shell, a panel fill, or a link colour** |
 | **Foundation Black** | `#414042` | Text, inverted surfaces, brand panels. The secondary |
 | **Finisher White** | `#ffffff` | Pages, shells, cards |
-| **Mid Grey** | `#d1d3d4` | Borders and rules |
+| **Mid Grey** | `#d1d3d4` | **The logo, print and brand-led surfaces only.** A cool grey that fought Crisp Orange, so since 7 September it draws nothing in the UI — Flint does |
 
 > **This inverted what the app did before 6 September**, when Eco Green sat in Vibe's
 > primary slot and orange was decorative. Every primary button, focus ring, link and
@@ -103,17 +103,35 @@ keeps the ramp monotonic. It should go back into the design project as a real br
 **One brand-kit contradiction, resolved.** The kit prints `HEX #000000` next to
 `RGB 65 64 66` for Foundation Black. The RGB is authoritative, so the token is `#414042`.
 
-### Derived steps, and the warm neutrals
+### Derived steps, and Flint — the one neutral family
 
 Tints and shades of the five above — no new hues. Hover `#d9634a`, pressed `#c2543c`,
-selected `#fae4d5`. Selection is **tinted, not filled**, and the tints lean warm peach:
+selected `#fae4d5`, and two lighter orange steps for charts, Orange 70 `#f8a48c` and
+Orange 40 `#fbd8cd`. Selection is **tinted, not filled**, and the tints lean warm peach:
 earlier magenta-leaning values were retired because a selected state read as a different
 colour family.
 
-Three warm tones widen the palette for large calm areas without adding a hue — Paper
-`#fcfaee`, Mineral `#eae3df`, Stone `#dbd0be`. **Surfaces only**: never text, never a
-control fill, and never in the same view as the cool `#f6f7f7` grey. The app shell stays
-white and grey; these belong to brand-led surfaces, proposals and print.
+**Flint is the neutral: one material, numbered steps** (design system, 7 September).
+
+| Step | Hex | Draws |
+| --- | --- | --- |
+| Flint 50 | `#f9f9f6` | A softer page — dense tables, long forms |
+| Flint 100 | `#f4f3ee` | **The page.** What the app shell paints behind everything |
+| Flint 200 | `#e1e1d9` | Recessed fills, tracks, quiet chips, disabled fills |
+| Flint 300 | `#c6c5ba` | **Every card, panel and table rule** |
+| Flint 400 | `#b6b6ac` | Chart neutrals and disabled states — never a text ground |
+| Flint 700 · 800 · 900 | `#3a3a33` · `#24241f` · `#1a1a18` | Dark mode's rule, surface and page |
+
+One page tint per screen. Flint 300 is a layout rule: it carries no information, so it is
+exempt from the 3:1 boundary floor (it is 1.74:1 on white), and a control boundary still
+uses Black-60 `#8a898d`.
+
+**What Flint retired.** The three warm tones — Paper `#fcfaee`, Mineral `#eae3df`, Stone
+`#dbd0be` — and the two cool greys the shell used to be drawn in, `#f6f7f7` and `#e7e8e9`.
+The cool greys fought Crisp Orange; the warm tones were a second neutral family. All five
+are gone from the mirror, so a reference to `--lofty-gray-light` or `--lofty-gray-surface`
+is a dangling `var()` now, not a fallback — `theme/tokens.css` moved to Flint 300 and Flint
+100 in the same sync.
 
 ### Status
 
@@ -122,6 +140,15 @@ because the brand palette has no legible status greens or reds. Vibe ships `-sel
 tints but no ink to sit on them, so three inks are derived as the darkest member of each
 family that clears 4.5:1 on its own tint: `--positive-ink`, `--negative-ink`,
 `--warning-ink`.
+
+### Charts
+
+**One accent per view.** The data ramp `--data-1` to `--data-6` is Crisp Orange, Orange 70,
+the orange hover step, Foundation Black, Flint 400, Flint 200 — orange carries the series,
+the rest is value. Eco Green is not in it: the two accents never appear together, so a green
+chart is green plus Flint with no orange in the view. On dark the third step flips to Orange
+40 and the neutrals invert so nothing melts into the panel. No screen draws from the ramp
+yet.
 
 ### The board's colour rule
 
@@ -138,14 +165,16 @@ What it gives up is Cancelled shouting in red; if it should, that is a one-line 
 ## Dark mode
 
 `data-theme="dark"` on `<html>`, which `App.tsx` stamps alongside the body classes Vibe
-needs. Grounds are three shades of Foundation Black — base `#191819`, surface `#232224`,
-raised `#2e2d2f` — with `#414042` demoted to the border. Text lifts to `#f2f1f2` and muted
-`#b9b8bc`, both above 8:1. Crisp Orange keeps its hex **and its white ink** — dark does not
-redefine `--primary-color`, so white on orange is the same 2.62:1 pairing in both themes,
-not a separate one. Eco Green lifts to
-`#1f8791` — the design system says that clears 4.5:1 for white; measured, it is **4.26:1**,
-and it is one of the three shortfalls below. **Elevation is shown by the surface stepping
-lighter as much as by shadow.**
+needs. Grounds are the dark Flint steps — page `#1a1a18`, surface `#24241f`, raised
+`#2f2e28` — with Flint 700 `#3a3a33` as the rule and `#807f74` as a control boundary
+(3.86:1 on the surface). Text lifts to `#f2f1f2` and muted `#b9b8bc`: 13.8:1 and 7.9:1 on
+the surface, both above the 7:1 AAA floor. Crisp Orange keeps its hex **and its white ink** —
+dark does not redefine `--primary-color`, so white on orange is the same 2.62:1 pairing in
+both themes, not a separate one. Eco Green lifts to `#20707a` as a fill (white on it
+**5.74:1**); green as text or an icon uses `--lofty-green-dark-ink` `#57c3cc` (7.48:1) and
+is never a fill. Status fills lift too, so their ink flips to the dark page
+(`--text-color-on-status`): 6.6:1 on positive, 5.8:1 on negative. **Elevation is shown by
+the surface stepping lighter as much as by shadow.**
 
 The app has three themes — light, dark and black — and the design system has one dark, which
 both of the latter take.
@@ -154,12 +183,12 @@ both of the latter take.
 
 | | The rule |
 | --- | --- |
-| **Type** | Vibe's screen scale: h1 32/40, h2 24/30, h3 18/24; text1 16/22, text2 14/20, text3 12/16. **Poppins** titles, **Figtree** body. Tracking negative on headings only (−0.5px h1, −0.1px h2/h3). **No text below 12px** |
-| **Brand type** | **Fieldwork Geo** display, **Fieldwork Hum** body, for brand-led surfaces only — decks, print, proposals. Product screens use Figtree and Poppins. Supplied in six cuts at 300 and 600 only, so the brand scale uses those two weights. Not shipped in the app bundle; the token chain falls back to Poppins |
+| **Type** | Vibe's screen scale: h1 32/40, h2 24/30, h3 18/24; text1 16/22, text2 14/20, text3 12/16. **Montserrat** titles, **Figtree** body, Helvetica the fallback for both. Tracking negative on headings only (−0.5px h1, −0.1px h2/h3). **No text below 12px** |
+| **Brand type** | **Fieldwork Geo** display, **Fieldwork Hum** body, for brand-led surfaces only — decks, print, proposals. Product screens use Figtree and Montserrat, which is also the brand kit's own print substitute. Supplied in six cuts at 300 and 600 only, so the brand scale uses those two weights. Not shipped in the app bundle; the token chain falls back to Montserrat |
 | **Case** | **Sentence case everywhere.** No Title Case, no ALL CAPS except the 12px navigation eyebrow |
 | **Spacing** | 2/4/8/12/16/20/24/32/40/48/64/80. Nothing off it, ever — no 6, no 10, no 14. Controls on an 8px rhythm; cards pad 24, compact tiles 16; page gutters 32 |
 | **Radius** | 2 checkbox · 4 buttons, inputs, chips, tabs · 8 cards, menus, dialogs · 12 panels · 16 the full-view modal only · pill toggles, tracks, counters · 50% avatars, radios, loaders. **Never a literal** |
-| **Borders** | 1px solid, always. Black-60 `#8a898d` on controls (Mid Grey is 1.5:1 on white and fails the 3:1 a boundary needs); `#e7e8e9` on layout rules. **No coloured left-border accent strips** |
+| **Borders** | 1px solid, always. Black-60 `#8a898d` on controls (Mid Grey is 1.5:1 on white and fails the 3:1 a boundary needs); Flint 300 `#c6c5ba` on card, panel and table rules, Flint 200 on decorative rules inside a control. The border goes Foundation Black on input hover and Crisp Orange on focus. **No coloured left-border accent strips** |
 | **Elevation** | xs row hover · small dropdowns · medium menus, toasts, tooltips · large modals. Neutral Foundation Black at 10–30%, **never tinted orange**. Cards have no shadow at rest |
 | **Motion** | Productive 70/100/150ms for what the user drives; expressive 250/400ms for entrances. Vibe's easings. **Nothing bounces** except the chip pop. No parallax, no scroll-triggered animation |
 | **Press** | Buttons `scale(0.95)`, icon buttons `scale(0.9)`, over 70ms. This is why the system feels physical rather than flat |
@@ -191,35 +220,35 @@ not a preference.
 
 ### Where the palette falls short
 
-Four pairings do **not** meet the floor. They are recorded in
-`app/scripts/check-contrast.mjs` at their measured value, so the check fails if any of them
+Two pairings do **not** meet the floor. They are recorded in
+`app/scripts/check-contrast.mjs` at their measured value, so the check fails if either
 gets worse, and prints them on every run so they stay visible rather than becoming normal.
-None is a value this repo chose.
+Neither is a value this repo chose.
 
 | Pairing | Measured | Needs | |
 | --- | --- | --- | --- |
 | **White on filled Crisp Orange** (both themes) | **2.62:1** | 4.5:1 | The brand rule. Below the 3:1 large-text floor too. **Buttons no longer use this** — what is left is toasts, tipseens and filled labels |
-| `--placeholder-color` `#8a898d` on white | **3.47:1** | 4.5:1 | The design system now calls this "example text only, never a label", which narrows the exposure but does not clear it. `#757478` would, at 4.64:1 |
-| Dark: white on the lifted Eco Green `#1f8791` | **4.26:1** | 4.5:1 | `dark.css` still claims 4.6:1. It is not. `#1e818a` would clear it at 4.60:1 |
-| Dark: `--ui-border-color` `#5a595c` on the surface | **2.28:1** | 3:1 | A control boundary has to be distinguishable from its surface. `#706f72` would clear it at 3.17:1 |
+| `--placeholder-color` `#8a898d` on white | **3.47:1** | 4.5:1 | The design system calls this "example text only, never a label", which narrows the exposure but does not clear it. `#757478` would, at 4.64:1. Open question 9 in `docs/open-questions.md` |
 
 **The first one no longer covers buttons.** Amber took the pressed step for filled buttons
 on 7 September, so a button label is now 4.54:1. What remains at 2.62:1 is every *other*
 filled-orange surface that carries text — toasts, tipseens, filled labels. Those either take
 the pressed step too, or the design project gives them a ground that white survives on.
 
-**Three of the five are design-side fixes with known values.** The replacement hexes above
-were solved by holding hue and saturation and moving only HSL lightness, then proved against
-`check-contrast.mjs` with the known-shortfall hatches removed: all twenty pairings clear.
-They are not applied here, because the mirror is a copy and the design project is where a
-palette changes.
+**Two dark-mode shortfalls closed on 7 September, from the design side.** White on the
+lifted Eco Green was 4.26:1 at `#1f8791`; the design project moved the fill to `#20707a`
+(5.74:1) and added a separate ink step for green as text. The dark control boundary was
+2.28:1 at `#5a595c`; it is `#807f74` now (3.86:1). Both were fixed where a palette changes —
+in the design project, then synced into the mirror — which is the arrangement Amber chose
+(*Answered*, 7 September, in `docs/open-questions.md`), and both are ordinary assertions in
+`check-contrast.mjs` now rather than recorded shortfalls. The placeholder is the one of the
+three still open.
 
-**Numbers in the design system that do not match measurement.** Its `a11y-contrast.html`
-overstates six pairings. Five are overstated in the safe direction — Foundation Black on
-white is 10.31:1 not 8.9, white on Foundation Black 10.31 not 8.9, black on the selected
-tint 8.41 not 7.4, white on Eco Green 9.18 not 8.3, black on warning **6.77 not 9.5** — all
-still above their floors. One is overstated in the unsafe direction and is the dark green
-above: claimed 4.6:1, measured 4.26:1.
+**The design system's contrast card now agrees with measurement.** Its `a11y-contrast.html`
+used to overstate six pairings, one of them in the unsafe direction. On this sync every
+figure it prints — 10.3:1 for Foundation Black on white, 6.8:1 for black on warning, 5.7:1
+for white on the dark green, 3.9:1 for the dark boundary, 7.9:1 for muted text on the dark
+surface — matches what `check-contrast.mjs` measures, to one decimal place.
 
 ## Iconography
 
@@ -235,9 +264,10 @@ the action; status colours only inside status contexts.
 anywhere else.
 
 Seven further Lofty glyphs exist in the design project but are **not usable**: they are SVG
-wrappers around a PNG (`<image href="Projects.png">`) rather than vectors, so they render
-nothing and cannot take `currentColor`. They need re-exporting. `houseIcons.tsx` covers the
-three the app actually uses in the meantime.
+wrappers around a PNG rather than vectors — checked again on the 7 September sync, when
+`Projects.svg` and `JobHouse.svg` were still a single `<image>` element, by then with no
+`href` at all — so they render nothing and cannot take `currentColor`. They need
+re-exporting. `houseIcons.tsx` covers the three the app actually uses in the meantime.
 
 ## Words are design material
 
