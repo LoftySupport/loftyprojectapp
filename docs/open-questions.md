@@ -124,7 +124,7 @@ dependency is blocked, or some combination?
 confirm they want one — a half-filled stage column that some projects use and others ignore
 is worse for reporting than no column.
 
-### 13. Do exported documents take Flint for their greys?
+### 12. Do exported documents take Flint for their greys?
 
 The design system retired the two cool greys on 7 September: `#f6f7f7` and `#e7e8e9` are
 gone from the mirror, and in the app Flint 100 `#f4f3ee` is the page and Flint 300 `#c6c5ba`
@@ -135,12 +135,36 @@ where the design system says Mid Grey still belongs. So: do exported documents f
 app onto Flint, or is the house format its own record? Not changed on the sync, because the
 export palette is written down as a decision (0026) and this file is where decisions change.
 
+### 13. A Xero invoice with no purchase order — job or project?
+
+Purchase orders belong to a job and a contractor (answered 8 September, question 16). A
+contractor's bill reconciles against its purchase order, so it inherits the job. What is not
+decided is the invoice that has **no** purchase order — a land purchase, a development cost, a
+consultant on the whole site. Recommended: the `invoices` table carries a job **or** a project
+(one of the two, checked), and the review queue holds anything Xero sends that matches neither.
+The alternative — everything on a job — leaves project-level money with nowhere to go.
+
+### 14. "Only managers can connect it to approved sources … this is done by superadmin"
+
+Question 18's answer (8 September) says both. Read as: a **superadmin registers** each approved
+source once, organisation-wide (the Copilot Studio agent, the Xero and SiteBook connections),
+and **managers may use** what is registered, alongside everyone else who signs in. If instead
+managers should be able to register a new source themselves, the Admin → Integrations page
+opens to managers for that one act and the plan's §3 changes one word. Not blocking: Phase 1
+has one source to register and a superadmin registers it either way.
+
 ---
 
 ## Answered
 
 | Date | Question | Answer |
 | --- | --- | --- |
+| 8 Sep | (asked as 14) Which AI vendors may receive Lofty's data through Ask and MCP? | **Anthropic only**, via the Claude API — chosen with Claude on Microsoft Foundry, "any vendor" and "none yet" in front of her. The Ask box ships in Phase 1; no ChatGPT connection; the vendor sits behind one config value so a later move is a setting, not a rebuild |
+| 8 Sep | (asked as 15) "Microsoft cowork": which product? | **Microsoft 365 Copilot** — a Copilot Studio agent in Teams over the MCP server |
+| 8 Sep | (asked as 16) Xero: one organisation, and what does an invoice belong to? | **One organisation** → a custom connection. And the shape is purchase orders before invoices: *"Each job has many purchase orders created in SiteBook belonging to contractors that need to be linked to jobs and pushed into xero for reconciling"*, then *"Right now I just want to pull info from SiteBook but going forward we want to eventually replace SiteBook so will need to push to xero"*. So SiteBook → Hub now, Hub → Xero later and designed for from the first migration. The invoice with no purchase order is question 13 (open, below) |
+| 8 Sep | (asked as 17) SiteBook: API, export, or neither? | *"They have an mcp and api but don't know details yet. This is important to know."* What Hub needs from it: *"job details, purchase order documents, contact details"*. **SiteBook moves ahead of Xero** in the phase order, because the purchase orders Xero reconciles come from it. First task of that phase: the developer documentation and a test login |
+| 8 Sep | (asked as 18) Who connects an AI client, and who creates a key? | *"Only managers can connect it to approved sources but I want people to be able to connect their own email. Can this be done with a single organisation wide key. I don't want users to connect their own. This is done by superadmin."* Read as: a **superadmin connects approved sources once, organisation-wide**; **nobody connects a personal AI client**; **each person connects their own mailbox**. The single-key question is answered in the plan §3 — yes to one organisation-wide *connection*, no to one organisation-wide *identity*: the person rides through on SSO so RLS still decides row by row and the Activity tab still says who. "Managers" versus "superadmin" is question 14 (open, below) |
+| 8 Sep | (asked as 19) Is Ask read-only in its first version? | **Yes** — *"Read-only first"*. Adding a comment from the phone is Phase 2 |
 | 7 Sep | Should the tables stop being visible to `anon` in the GraphQL schema? | **Yes.** `0101` revokes every table privilege from `anon` in `public`, present and future. Visible was never readable — RLS held, and the proof watched it hold — but the shape was discoverable; now a read as `anon` is refused at the privilege rather than answered with zero rows. Sequences left as they were. Nothing runs as `anon`: the share endpoint and the other three edge functions hold the service role |
 | 7 Sep | Bugs and Ideas came off Admin as well — is that right? | **Yes — Updates only.** Asked in chat and answered the same evening: one page at `/updates`, the stage/phase/kind/merge controls admin-only inside it. Nothing to restore; `FeedbackList.tsx` stays deleted |
 | 7 Sep | "Import a document as a template" — Word, or Markdown? | **Both Word and PDF** — *"Import template as word or pdf"*, which answered the question by rejecting its premise: Markdown was never the point, and PDF had not been offered. `.docx` goes through `mammoth` and is a translation between two structures. **PDF is not**: a PDF records glyphs at coordinates, so headings are inferred from text size and paragraphs from vertical gaps, and tables are deliberately not inferred at all — column detection from spacing gets a merged cell wrong silently, and a table one column out is worse than prose somebody can see is wrong. Every import returns notes saying what it could not carry, shown before the document is created |

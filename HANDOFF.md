@@ -81,6 +81,14 @@ the new values rather than recording them as shortfalls.
      Every screen today lists before it edits, so nothing hits this; the fallback is honest.
 4. **Still queued from earlier sessions**, unchanged: `SHARE_ALLOWED_ORIGINS` (below), the
    sortable-header table further down this file, and the notification worker.
+5. **Planned, not built — an API, an MCP server and an in-app Ask box.** Amber asked for the
+   plan on 8 September; it is `docs/integrations/api-and-mcp-plan.md`; the readable version is
+   <https://claude.ai/code/artifact/0a1cfce5-b719-426c-819f-4dd12352453d>. Its six decisions were **asked and answered the same day** (open-questions.md → Answered,
+   rows 14–19): Anthropic only; Microsoft 365 Copilot; one Xero organisation with purchase
+   orders pulled from SiteBook now and pushed to Xero later; SiteBook has an API and an MCP
+   server, details unknown; a superadmin connects approved sources organisation-wide and
+   nobody connects a personal AI client; Ask is read-only first. Two narrower questions are open
+   questions 13 and 14. The `anon` GraphQL shape (`0101`) is closed, so Phase 0 waits on nothing.
 
 ### Two standing decisions, so nobody spends an afternoon reopening them
 
