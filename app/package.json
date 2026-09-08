@@ -30,6 +30,7 @@
     "@supabase/server": "^1.5.2",
     "@supabase/ssr": "^0.12.5",
     "@supabase/supabase-js": "^2.114.0",
+    "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
     "@vibe/core": "^4.5.30",
     "@vibe/icons": "^4.1.0",

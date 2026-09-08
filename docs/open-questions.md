@@ -21,27 +21,14 @@ invent a value, and `CLAUDE.md` is explicit that an invented default is worse th
 
 ## Open — next question first
 
-### 1. Should the tables stop being visible to `anon` in the GraphQL schema?
-
-Not a hole, which is why it is a question rather than a fix. The security advisor reports 93
-tables as `anon`-visible; **that means discoverable, not readable.** Every one has RLS on
-with no policy reaching `anon`, and reading as `anon` returns 0 rows from `profiles`,
-`teams`, `addresses` and `activity_audit` — watched, not assumed. What leaks is the *shape*:
-somebody unauthenticated can introspect the GraphQL schema and learn that Lofty has a
-`maintenance_message_secrets` table and what its columns are called.
-
-Revoking `SELECT` from `anon` across `public` would close it. Nothing in the app signs in as
-`anon` — the share endpoint uses the service role — so the expected blast radius is zero,
-but "expected" is doing work in that sentence and it is 93 tables.
-
-### 2. Turn on leaked-password protection?
+### 1. Turn on leaked-password protection?
 
 One dashboard toggle. Supabase checks new passwords against HaveIBeenPwned and refuses
 known-breached ones. The reason it has not been flipped is that it changes what happens to a
 real person setting a password, and that is a change to make deliberately rather than
 because an advisor asked. Any objection to it going on?
 
-### 3. Two of the three share-link origins point at nothing
+### 2. Two of the three share-link origins point at nothing
 
 `SHARE_ALLOWED_ORIGINS` holds `https://loftyprojectapp.vercel.app`,
 `https://loftyprojectapp.netlify.app` and `https://app.lofty.au`. The app answers at
@@ -49,7 +36,7 @@ because an advisor asked. Any objection to it going on?
 different application. Tidying it to just the live origin is one secret edit — but it is
 your secret and an allowlist is a security control, so it is not one to trim on a guess.
 
-### 4. Saved projects views carrying `?stage=` — leave them, or rewrite them?
+### 3. Saved projects views carrying `?stage=` — leave them, or rewrite them?
 
 Since #51 the projects board has two stage filters: **Stage** is the project's own phase (as
 the Stage grouping is) and **Job stage** is "has a job in this stage". Before, `?stage=` on
@@ -59,21 +46,21 @@ are no shared saved views of that shape that Claude can see, but Claude cannot s
 Options: leave it (the new meaning matches the grouping, which was the point), or run a
 one-off `UPDATE saved_views SET … 'stage=' → 'jobstage='` for projects views only.
 
-### 5. Does undo need a home on a phone?
+### 4. Does undo need a home on a phone?
 
 The header bar is hidden below 600px because two more 32px targets left the search box 70px
 wide, and Ctrl+Z does not exist on a phone — so a phone has no undo at all. Is that
 acceptable for now, or does it need one (a long-press on the "saved" toast is the obvious
 place)?
 
-### 6. Should the person picker offer deactivated people?
+### 5. Should the person picker offer deactivated people?
 
 `PersonSelect` lists active people only, and every assignee, owner and "who is doing this"
 control uses it. A job already assigned to somebody who has since been deactivated still
 shows their name read-only. Nobody asked for the other behaviour; this records that it was a
 choice.
 
-### 7. What is "undo" allowed to reach?
+### 6. What is "undo" allowed to reach?
 
 Today it reaches every field write that saves as you make it — team, assignee, dates, tasks,
 process runs, property values, a request's stage. It deliberately does NOT reach lifecycle
@@ -81,7 +68,7 @@ moves (forwards-only by your rule), creating, deleting, votes, follows or commen
 the right line, or should a lifecycle move be undoable within, say, a minute of making it?
 (The database refuses the way back today; allowing it is a migration, not a UI change.)
 
-### 8. Where does "clone a job" live now?
+### 7. Where does "clone a job" live now?
 
 **Blocked:** nothing is broken, but the app currently has no way to clone a job at all.
 
@@ -101,14 +88,14 @@ What is not decided is what it should look like there:
 Either way `cloneJob(id, copy)` is unchanged and manager+ still gates it. Do not delete
 `CloneDialog.tsx` as dead code before this is answered.
 
-### 9. Is the placeholder at 3.47:1 accepted, or does it get fixed?
+### 8. Is the placeholder at 3.47:1 accepted, or does it get fixed?
 
 The design system now labels it *"example text only, never a label"*, which narrows the
 exposure but does not clear it — placeholder text is still text under WCAG 1.4.3. `#757478`
 would clear it at 4.64:1 as a new `--lofty-black-70` step, leaving `--ui-border-color` at
 the 3.47:1 it was deliberately chosen for.
 
-### 10. What should five missing roadmap items say?
+### 9. What should five missing roadmap items say?
 
 Five commits carry a `Roadmap:` trailer whose text matches no checkbox in `ROADMAP.md`, so
 work that was finished has no line to tick:
@@ -123,7 +110,7 @@ They are real and shipped. What is missing is which phase each belongs to and wh
 wording above is the wording you want, and inventing roadmap text is exactly the thing
 `CLAUDE.md` forbids.
 
-### 11. How is health status worked out?
+### 10. How is health status worked out?
 
 Long-standing, from the schema plan's own risk list. *"Status is what someone sets. Health
 is what the system works out"* — from inputs nobody has defined. Kanban-by-status and
@@ -131,13 +118,13 @@ kanban-by-team work today; **kanban-by-health cannot be built until this is answ
 job at risk because it is past `expected_days`, because a required field is empty, because a
 dependency is blocked, or some combination?
 
-### 12. Does Acquisition & Development want a `project_stage` vocabulary?
+### 11. Does Acquisition & Development want a `project_stage` vocabulary?
 
 `project_stage` is nullable and costs nothing empty. Do not seed a vocabulary until they
 confirm they want one — a half-filled stage column that some projects use and others ignore
 is worse for reporting than no column.
 
-### 13. Do exported documents take Flint for their greys?
+### 12. Do exported documents take Flint for their greys?
 
 The design system retired the two cool greys on 7 September: `#f6f7f7` and `#e7e8e9` are
 gone from the mirror, and in the app Flint 100 `#f4f3ee` is the page and Flint 300 `#c6c5ba`
@@ -148,7 +135,7 @@ where the design system says Mid Grey still belongs. So: do exported documents f
 app onto Flint, or is the house format its own record? Not changed on the sync, because the
 export palette is written down as a decision (0026) and this file is where decisions change.
 
-### 20. A Xero invoice with no purchase order — job or project?
+### 13. A Xero invoice with no purchase order — job or project?
 
 Purchase orders belong to a job and a contractor (answered 8 September, question 16). A
 contractor's bill reconciles against its purchase order, so it inherits the job. What is not
@@ -157,7 +144,7 @@ consultant on the whole site. Recommended: the `invoices` table carries a job **
 (one of the two, checked), and the review queue holds anything Xero sends that matches neither.
 The alternative — everything on a job — leaves project-level money with nowhere to go.
 
-### 21. "Only managers can connect it to approved sources … this is done by superadmin"
+### 14. "Only managers can connect it to approved sources … this is done by superadmin"
 
 Question 18's answer (8 September) says both. Read as: a **superadmin registers** each approved
 source once, organisation-wide (the Copilot Studio agent, the Xero and SiteBook connections),
@@ -172,12 +159,13 @@ has one source to register and a superadmin registers it either way.
 
 | Date | Question | Answer |
 | --- | --- | --- |
-| 8 Sep | 14 — Which AI vendors may receive Lofty's data through Ask and MCP? | **Anthropic only**, via the Claude API — chosen with Claude on Microsoft Foundry, "any vendor" and "none yet" in front of her. The Ask box ships in Phase 1; no ChatGPT connection; the vendor sits behind one config value so a later move is a setting, not a rebuild |
-| 8 Sep | 15 — "Microsoft cowork": which product? | **Microsoft 365 Copilot** — a Copilot Studio agent in Teams over the MCP server |
-| 8 Sep | 16 — Xero: one organisation, and what does an invoice belong to? | **One organisation** → a custom connection. And the shape is purchase orders before invoices: *"Each job has many purchase orders created in SiteBook belonging to contractors that need to be linked to jobs and pushed into xero for reconciling"*, then *"Right now I just want to pull info from SiteBook but going forward we want to eventually replace SiteBook so will need to push to xero"*. So SiteBook → Hub now, Hub → Xero later and designed for from the first migration. The invoice with no purchase order is question 20 |
-| 8 Sep | 17 — SiteBook: API, export, or neither? | *"They have an mcp and api but don't know details yet. This is important to know."* What Hub needs from it: *"job details, purchase order documents, contact details"*. **SiteBook moves ahead of Xero** in the phase order, because the purchase orders Xero reconciles come from it. First task of that phase: the developer documentation and a test login |
-| 8 Sep | 18 — Who connects an AI client, and who creates a key? | *"Only managers can connect it to approved sources but I want people to be able to connect their own email. Can this be done with a single organisation wide key. I don't want users to connect their own. This is done by superadmin."* Read as: a **superadmin connects approved sources once, organisation-wide**; **nobody connects a personal AI client**; **each person connects their own mailbox**. The single-key question is answered in the plan §3 — yes to one organisation-wide *connection*, no to one organisation-wide *identity*: the person rides through on SSO so RLS still decides row by row and the Activity tab still says who. "Managers" versus "superadmin" is question 21 |
-| 8 Sep | 19 — Is Ask read-only in its first version? | **Yes** — *"Read-only first"*. Adding a comment from the phone is Phase 2 |
+| 8 Sep | (asked as 14) Which AI vendors may receive Lofty's data through Ask and MCP? | **Anthropic only**, via the Claude API — chosen with Claude on Microsoft Foundry, "any vendor" and "none yet" in front of her. The Ask box ships in Phase 1; no ChatGPT connection; the vendor sits behind one config value so a later move is a setting, not a rebuild |
+| 8 Sep | (asked as 15) "Microsoft cowork": which product? | **Microsoft 365 Copilot** — a Copilot Studio agent in Teams over the MCP server |
+| 8 Sep | (asked as 16) Xero: one organisation, and what does an invoice belong to? | **One organisation** → a custom connection. And the shape is purchase orders before invoices: *"Each job has many purchase orders created in SiteBook belonging to contractors that need to be linked to jobs and pushed into xero for reconciling"*, then *"Right now I just want to pull info from SiteBook but going forward we want to eventually replace SiteBook so will need to push to xero"*. So SiteBook → Hub now, Hub → Xero later and designed for from the first migration. The invoice with no purchase order is question 13 (open, below) |
+| 8 Sep | (asked as 17) SiteBook: API, export, or neither? | *"They have an mcp and api but don't know details yet. This is important to know."* What Hub needs from it: *"job details, purchase order documents, contact details"*. **SiteBook moves ahead of Xero** in the phase order, because the purchase orders Xero reconciles come from it. First task of that phase: the developer documentation and a test login |
+| 8 Sep | (asked as 18) Who connects an AI client, and who creates a key? | *"Only managers can connect it to approved sources but I want people to be able to connect their own email. Can this be done with a single organisation wide key. I don't want users to connect their own. This is done by superadmin."* Read as: a **superadmin connects approved sources once, organisation-wide**; **nobody connects a personal AI client**; **each person connects their own mailbox**. The single-key question is answered in the plan §3 — yes to one organisation-wide *connection*, no to one organisation-wide *identity*: the person rides through on SSO so RLS still decides row by row and the Activity tab still says who. "Managers" versus "superadmin" is question 14 (open, below) |
+| 8 Sep | (asked as 19) Is Ask read-only in its first version? | **Yes** — *"Read-only first"*. Adding a comment from the phone is Phase 2 |
+| 7 Sep | Should the tables stop being visible to `anon` in the GraphQL schema? | **Yes.** `0101` revokes every table privilege from `anon` in `public`, present and future. Visible was never readable — RLS held, and the proof watched it hold — but the shape was discoverable; now a read as `anon` is refused at the privilege rather than answered with zero rows. Sequences left as they were. Nothing runs as `anon`: the share endpoint and the other three edge functions hold the service role |
 | 7 Sep | Bugs and Ideas came off Admin as well — is that right? | **Yes — Updates only.** Asked in chat and answered the same evening: one page at `/updates`, the stage/phase/kind/merge controls admin-only inside it. Nothing to restore; `FeedbackList.tsx` stays deleted |
 | 7 Sep | "Import a document as a template" — Word, or Markdown? | **Both Word and PDF** — *"Import template as word or pdf"*, which answered the question by rejecting its premise: Markdown was never the point, and PDF had not been offered. `.docx` goes through `mammoth` and is a translation between two structures. **PDF is not**: a PDF records glyphs at coordinates, so headings are inferred from text size and paragraphs from vertical gaps, and tables are deliberately not inferred at all — column detection from spacing gets a merged cell wrong silently, and a table one column out is worse than prose somebody can see is wrong. Every import returns notes saying what it could not carry, shown before the document is created |
 | 7 Sep | How should an image get into a document? | **A public bucket** — *"upload to public bucket that stores in the document only"*, chosen with the alternative in front of her. The alternative was signed URLs written into the share snapshot with the link's own expiry, which Claude recommended; the trade accepted is that **an image in a shared document stays fetchable after the link expires**. "Stores in the document only" is why there is no attachments table: the block holds the URL and the layout is the record of what a document carries. `0100`, and the way back if it is ever revisited is one flag plus signing in `compileForShare` |

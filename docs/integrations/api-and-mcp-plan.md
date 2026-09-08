@@ -13,7 +13,7 @@ A readable version with the diagrams is published at
 people; edit this file. The six questions this plan could not answer were **asked and
 answered on 8 September** — the *Answered* table in [`../open-questions.md`](../open-questions.md),
 rows 14–19 — and this version of the plan takes those answers. Two narrower questions they left
-behind are 20 and 21 there.
+behind are open questions 13 and 14 there.
 
 Nothing in this document is built. Where it says "exists", it means a migration that is
 applied today; where it says "planned", it means the sync design in
@@ -246,10 +246,11 @@ role, with one forgotten filter, hands somebody the whole book of work. So:
     discarded. A shared cache of `hub_job` answers would be a shared cache of who may see
     what.
 11. **Secrets have one home each** — see the table in §10. Nothing new is ever `VITE_`.
-12. **Close the GraphQL shape leak first.** Open question 1 (93 tables visible to `anon` by
-    introspection) is a curiosity while the only client is the app. It stops being one when
-    an API is advertised. Revoking `SELECT` from `anon` on `public` is the first migration
-    of this work, once Amber says yes to that question.
+12. **The GraphQL shape leak is closed — done before this plan starts.** `0101` (merged 8
+    September, Amber's answer to the then-question 1) revokes every table privilege from
+    `anon` in `public`, present and future. An advertised API on a database whose shape an
+    unauthenticated caller could introspect would have been the wrong order; it is the right
+    one now.
 13. **Data leaving Lofty — decided.** Amber, 8 September: **Anthropic only**, chosen with
     Claude on Microsoft Foundry, "any vendor" and "none yet" in front of her. Ask sends the
     question and the tool results the person could already see, and nothing else, to
@@ -474,7 +475,7 @@ are SiteBook's, so Xero has nothing to match until they are here.
 - **The two invoice properties** — `invoice_deposit_1_paid` and `invoice_amount_paid` —
   become derived and **locked** (0077): Xero's figure, un-typeable.
 - **An invoice with no purchase order** (land, development, a consultant on the whole site)
-  needs a parent that is a job *or* a project — question 20.
+  needs a parent that is a job *or* a project — open question 13.
 - **Limits to design around.** 60 calls a minute, 5,000 a day; webhook signature and the
   intent-to-receive handshake; GST-inclusive and exclusive amounts, both stored.
 
@@ -498,16 +499,16 @@ are SiteBook's, so Xero has nothing to match until they are here.
 
 Every phase ships behind the same rule as every other change here: one branch and PR per
 table, four files moving together, a verify check watched failing, a `Changelog:` trailer.
-Migration numbering starts at `0101`.
+Migration numbering starts at `0102` — `0101` is the `anon` revoke already on `main`.
 
 | Phase | Ships | Migrations | Amber can try |
 | --- | --- | --- | --- |
-| **0 — ground** | `anon` GraphQL closed (once question 1 is answered); `api_v1` schema; `activity_audit_origin` widened; `external_systems`, `external_links`, `sync_inbox`, `sync_cursors`, `sync_conflicts`; integration profiles; `api_keys`; `api_requests` | 0101–0105 | Nothing yet — but Admin → Integrations lists an empty table honestly |
+| **0 — ground** | `api_v1` schema; `activity_audit_origin` widened; `external_systems`, `external_links`, `sync_inbox`, `sync_cursors`, `sync_conflicts`; integration profiles; `api_keys`; `api_requests` | 0102–0106 | Nothing yet — but Admin → Integrations lists an empty table honestly |
 | **1 — read, and the ladder test** | The gateway on Vercel; the ten read tools; the **Copilot Studio agent** registered by a superadmin against `/mcp`, the person's identity riding through; the **Ask** box, read-only, on Anthropic's API; the ten questions in §7 passing on a phone | none beyond 0 | Ask Copilot in Teams about 1042-001. Ask the same on the phone |
-| **2 — writes and keys** | The four write tools, with the confirmation rule; API keys with scopes, created by a superadmin; `/api/v1` read endpoints with CSV; Admin → Integrations showing connections, keys, calls and last use; a Power Query workbook that reads the board | 0106 (keys, scopes) | Add a comment from the ladder; open the board in Excel |
-| **3 — Microsoft 365 depth** | Folder creation on job creation; file listing and search in `hub_where_is_file`; each person's own mailbox (admin-consented); drawings change subscription → the existing notification rule | 0107 (folder ids on links) | "Where's the plumbing quote?" returns the file; "email me this" arrives from your own address |
-| **4 — SiteBook** | Developer docs and a test login first; then the pull: job details, purchase orders and their documents into SharePoint, contacts through the approval queue; `purchase_orders` with its source and Xero push columns from day one | 0108–0109 | See 1042-001's purchase orders and contractors in the drawer, each linking to its document |
-| **5 — Xero** | Custom connection; bills and contacts matched to purchase orders and companies; cost centres and products; webhook + nightly reconcile; the review queue; the two invoice properties derived and locked | 0110–0112 | See Xero's deposit figure on 1042-001, un-typeable; match an unmatched bill from the queue |
+| **2 — writes and keys** | The four write tools, with the confirmation rule; API keys with scopes, created by a superadmin; `/api/v1` read endpoints with CSV; Admin → Integrations showing connections, keys, calls and last use; a Power Query workbook that reads the board | 0107 (keys, scopes) | Add a comment from the ladder; open the board in Excel |
+| **3 — Microsoft 365 depth** | Folder creation on job creation; file listing and search in `hub_where_is_file`; each person's own mailbox (admin-consented); drawings change subscription → the existing notification rule | 0108 (folder ids on links) | "Where's the plumbing quote?" returns the file; "email me this" arrives from your own address |
+| **4 — SiteBook** | Developer docs and a test login first; then the pull: job details, purchase orders and their documents into SharePoint, contacts through the approval queue; `purchase_orders` with its source and Xero push columns from day one | 0109–0110 | See 1042-001's purchase orders and contractors in the drawer, each linking to its document |
+| **5 — Xero** | Custom connection; bills and contacts matched to purchase orders and companies; cost centres and products; webhook + nightly reconcile; the review queue; the two invoice properties derived and locked | 0111–0113 | See Xero's deposit figure on 1042-001, un-typeable; match an unmatched bill from the queue |
 | **6 — the next systems** | Hub → Xero push, when Hub creates purchase orders; SiteBook's MCP beside Hub's in Copilot; Asana links if asked | as needed | Raise a PO in Hub and see it in Xero |
 
 **What each phase proves before it is called done** — assertions for `verify/`, each to be
@@ -546,7 +547,7 @@ the recommendations.
 | 11 | **Too many tools, or too clever ones.** Sixty endpoints wrapped as sixty tools; or one `hub_query` that takes anything | The first makes the model guess; the second is #4 and #5 with a friendlier name | Twelve, named for what a person asks, each over a view |
 | 12 | **Secrets multiply.** Anthropic, Xero, Graph, the gateway's database password, API-key hashing salt | Five services, two runtimes | The table below. Nothing new is `VITE_`; the app bundle stays as it is |
 | 13 | **The phone does not have signal.** No AI rescues a page that will not load on site | The drawer already has to pass at phone width | Answers are small (a card, not a table); the drawer remains the surface of record; Ask is a shortcut to it, not a replacement |
-| 14 | **A public API is a public surface.** Scanning, credential stuffing against keys, enumeration | `hub.lofty.au/api/v1` will be found | Keys are long, prefixed (`lh_live_`) so secret-scanning tools recognise them, hashed at rest; rate limits per key and per IP at the edge; `anon` closed (open question 1); every 401 and 403 counted |
+| 14 | **A public API is a public surface.** Scanning, credential stuffing against keys, enumeration | `hub.lofty.au/api/v1` will be found | Keys are long, prefixed (`lh_live_`) so secret-scanning tools recognise them, hashed at rest; rate limits per key and per IP at the edge; `anon` already revoked (`0101`); every 401 and 403 counted |
 | 15 | **SiteBook is designed around before it is seen.** Its API and MCP server exist (Amber) but nothing about auth, limits or document access is known | Phase 5 (Xero) depends on Phase 4's purchase orders, so a wrong assumption about SiteBook delays both | Phase 4 opens with the developer documentation and a test login; the `purchase_orders` table is designed from what Xero and the drawer need, not from SiteBook's shape; the SiteBook worker is the adapter that translates |
 | 16 | **Deactivation and keys.** A person leaves; the organisation-wide Copilot connection outlives them, and so do the keys they created | `is_active_user()` covers people. A key is the integration's, not its creator's | Copilot answers nobody whose `profile_active` is false, because the identity that reaches Postgres is the person's; keys belong to the integration profile and are listed with who created them, so a departure prompts a review rather than an outage. **A single organisation-wide identity would have failed this row** — the reason §3 refuses it |
 | 17 | **The plan assumes `api_v1` views can express every tool.** `hub_recent_changes` needs the narrative code, not a view | `auditNarrative.ts` is TypeScript for a reason | Shared, not rewritten — the reason the gateway is TypeScript (§3). The view supplies rows; the narrative supplies sentences |
@@ -580,13 +581,13 @@ with the options and their future problems in front of her. Recorded with her wo
 | 18 | **A superadmin connects approved sources organisation-wide; nobody connects a personal AI client; each person connects their own email** | One connection, never one identity (§3); dynamic client registration dropped; per-person mailbox in Phase 3 |
 | 19 | **Ask is read-only first** | Comment from the phone is Phase 2 |
 
-Two narrower questions those answers left behind, queued as 20 and 21:
+Two narrower questions those answers left behind, queued as open questions 13 and 14:
 
-- **20.** A Xero invoice with **no** purchase order — land, development, a consultant on the
+- **13.** A Xero invoice with **no** purchase order — land, development, a consultant on the
   whole site — belongs to a job or to a project? Recommended: one of the two, checked, with the
   review queue for anything matching neither. **Blocks the `invoices` table in Phase 5**, and
   nothing before it.
-- **21.** Question 18's answer said *"only managers can connect it to approved sources"* and
+- **14.** Question 18's answer said *"only managers can connect it to approved sources"* and
   *"this is done by superadmin"*. Read as: superadmin registers, managers use. If managers
   should register sources themselves, Admin → Integrations opens to managers for that one act.
   Not blocking.

@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Import an HTML page as well as a Word document or a PDF
 - Import a Word document or a PDF and it becomes a template or a document — headings, prose and Word tables become blocks you can edit, and it tells you up front what it could not bring across
 - Drop an image straight into a report, or pick one from your machine, instead of hosting it somewhere and pasting a link
 - New document on a job or project starts with that record already chosen
@@ -149,6 +150,8 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- The merged-pull-requests feed on Updates → Changelog shows every finalised pull request by default, using its title when it declared no @changelog line
+- Somebody without a Lofty account can no longer discover the names of the tables and columns behind the app
 - The app takes the design system's Flint neutrals for its page and rules, Montserrat for titles, and dark mode's green and control borders now clear their contrast floors
 - The Jobs and Projects filters are the same fields as Group by, always on the bar, with everything else in one Advanced row instead of chips added one at a time
 - On the Projects board, Stage now filters by the project's own phase and a separate Job stage filter finds projects with a job in that stage

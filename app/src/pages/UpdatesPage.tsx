@@ -18,6 +18,7 @@ import {
   DateRangeFilter, matchesRange, parseRange, serialiseRange
 } from "../components/DateRange";
 import { SortHeader, useTableSort } from "../components/SortableTable";
+import { CappedList } from "../components/CappedList";
 import { ExportMenu } from "../components/ExportMenu";
 import { tableFromFields, type ExportDocument } from "../data/export";
 import { useChangelogPulls } from "../data/github";
@@ -1309,14 +1310,22 @@ function PhasesTable({ phases, items }: { phases: RoadmapPhase[]; items: Feedbac
 /**
  * What has been merged, straight from GitHub (Amber, 31 Aug).
  *
- * Only pull requests carrying a `@changelog` line in their description, which is the
- * filter she chose and the right one: the repository has had fifty-odd pull requests and
- * most are refactors, typo fixes and work in progress. A feed of all of them would be a
- * git log on a page people came to for "what changed for me".
+ * WAS only pull requests carrying an explicit `@changelog` line — the filter she asked for
+ * first, on the reasoning that most of fifty-odd merged pull requests are refactors, typo
+ * fixes and work in progress. THE DEFAULT NOW is every finalised pull request: one still
+ * uses its own `@changelog` line where it wrote one, but a merge that declared nothing is
+ * reported using its title rather than dropped, so nothing that shipped goes unrecorded
+ * because nobody remembered the marker. `github.ts` explains why that costs no extra
+ * GitHub call — this repository squashes on merge, so the title and description it already
+ * fetched are the same text the merge commit carries.
  *
  * Deliberately BELOW the published releases and separately headed. A merged pull request
  * is a developer saying what they did; a release is Amber saying what Lofty shipped. They
  * are different claims and the page should not blur them into one list.
+ *
+ * Capped at five, like every other list here past that count (Amber, 7 Sep) — this feed no
+ * longer stops at the pull requests worth reading about, so nothing else stops it growing
+ * past a screen.
  */
 function MergedPullRequests() {
   const pulls = useChangelogPulls();
@@ -1348,9 +1357,7 @@ function MergedPullRequests() {
       <section className="updates-ended">
         <Text type="text2" weight="bold" element="div">Merged from the build</Text>
         <Text type="text3" color="secondary" element="div" ellipsis={false}>
-          Nothing merged recently declared a changelog line. A pull request joins this list
-          by putting <code>@changelog</code> at the start of a row in its description — the
-          rest of that row is what appears here.
+          Nothing has been merged yet.
         </Text>
       </section>
     );
@@ -1360,24 +1367,28 @@ function MergedPullRequests() {
     <section className="updates-ended">
       <Text type="text2" weight="bold" element="div">Merged from the build</Text>
       <Text type="text3" color="secondary" element="div" ellipsis={false}>
-        Pull requests that declared a <code>@changelog</code> line, newest first. Read live
-        from GitHub — this is the work itself, not a release Amber has published.
+        Every finalised pull request, newest first — its own <code>@changelog</code> line
+        where it wrote one, its title otherwise. Read live from GitHub — this is the work
+        itself, not a release Amber has published.
       </Text>
       <ul className="updates-ended-list">
-        {pulls.pulls.map(p => (
-          <li key={p.number}>
-            {p.notes.map((n, i) => (
-              <div key={i}>
-                <Text type="text2" element="span" ellipsis={false}>{n}</Text>
-              </div>
-            ))}
-            <Text type="text3" color="secondary" element="span">
-              <a href={p.url} target="_blank" rel="noreferrer">#{p.number}</a>
-              {" "}· merged {shortDate(p.mergedAt)}
-              {p.author ? ` · ${p.author}` : ""}
-            </Text>
-          </li>
-        ))}
+        <CappedList items={pulls.pulls} noun="merged pull requests">
+          {p => (
+            <li key={p.number}>
+              {p.notes.map((n, i) => (
+                <div key={i}>
+                  <Text type="text2" element="span" ellipsis={false}>{n}</Text>
+                </div>
+              ))}
+              <Text type="text3" color="secondary" element="span">
+                <a href={p.url} target="_blank" rel="noreferrer">#{p.number}</a>
+                {" "}· merged {shortDate(p.mergedAt)}
+                {p.author ? ` · ${p.author}` : ""}
+                {!p.declared && " · from the title, no @changelog line"}
+              </Text>
+            </li>
+          )}
+        </CappedList>
       </ul>
     </section>
   );

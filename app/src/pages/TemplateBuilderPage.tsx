@@ -1062,7 +1062,7 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
               />
               <GetStartedCard
                 title="Import A Document"
-                hint="A Word file or a PDF you already have. Its headings, prose and tables become blocks you can edit."
+                hint="A Word file, a PDF or an HTML page you already have. Its headings, prose and tables become blocks you can edit."
                 onClick={() => { importLaneRef.current = "documents"; importInputRef.current?.click(); }}
               />
             </div>
@@ -1118,7 +1118,7 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
               />
               <GetStartedCard
                 title="Import A Document"
-                hint="A Word file or a PDF you already have. Its headings, prose and tables become blocks you can edit."
+                hint="A Word file, a PDF or an HTML page you already have. Its headings, prose and tables become blocks you can edit."
                 onClick={() => { importLaneRef.current = "library"; importInputRef.current?.click(); }}
               />
             </div>
@@ -1370,7 +1370,7 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
       <input
         ref={importInputRef}
         type="file"
-        accept=".docx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        accept=".docx,.pdf,.html,.htm,text/html,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         hidden
         onChange={e => {
           const file = e.target.files?.[0];

@@ -58,13 +58,43 @@ insert into comments (feedback_id, comment_body, comment_is_internal)
 select feedback_id, '__rls_probe_internal__', true
   from feedback where feedback_title = '__rls_probe_parent__';
 
-\echo '=== an ANONYMOUS visitor sees nothing ==='
-set role anon;
-select 'jobs: '     || count(*) from jobs;
-select 'projects: ' || count(*) from projects;
-select 'profiles: ' || count(*) from profiles;
-select 'teams: '    || count(*) from teams;
-reset role;
+\echo '=== an ANONYMOUS visitor is refused, not answered ==='
+-- These used to print `jobs: 0`, `projects: 0` and so on — RLS on, no policy reaching anon,
+-- zero rows. Since 0101 anon holds no privilege on any table in `public`, so the same
+-- statement is refused before RLS gets a say, and a probe that expects an answer of zero
+-- would abort this file on the first `permission denied`. The distinction is the point:
+-- "0 rows" left the table's name and columns discoverable through pg_graphql; "refused"
+-- does not. Each probe below prints ok on the refusal and FAIL on an answer of any size.
+do $$
+declare
+  n int;
+  t text;
+begin
+  foreach t in array array['jobs', 'projects', 'profiles', 'teams', 'maintenance_message_secrets']
+  loop
+    begin
+      set local role anon;
+      execute format('select count(*) from public.%I', t) into n;
+      reset role;
+      raise warning 'FAIL: anon was answered on % (% rows) — the table is back on the map', t, n;
+    exception
+      when insufficient_privilege then
+        reset role;
+        raise notice 'ok  anon is refused on % at the privilege, not by RLS', t;
+    end;
+  end loop;
+
+  -- The whole schema, not four names: one table with a stray grant is one table
+  -- discoverable, and a probe over a fixed list would not notice the eighty-ninth.
+  select string_agg(table_name || ':' || privilege_type, ', ' order by table_name) into t
+    from information_schema.role_table_grants
+   where grantee = 'anon' and table_schema = 'public';
+  if t is null then
+    raise notice 'ok  anon holds no privilege on any table or view in public';
+  else
+    raise warning 'FAIL: anon still holds a privilege in public: %', t;
+  end if;
+end $$;
 
 -- Deliberately at `user`, not admin: these probes are about what an ORDINARY signed-in
 -- person can do, and the test profile is seeded as an admin, which would pass several of

@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 177 changes since then —
+Unreleased: 180 changes since then —
+- Changed: The merged-pull-requests feed on Updates → Changelog shows every finalised pull request by default, using its title when it declared no @changelog line
+- Added: Import an HTML page as well as a Word document or a PDF
+- Changed: Somebody without a Lofty account can no longer discover the names of the tables and columns behind the app
 - Changed: The app takes the design system's Flint neutrals for its page and rules, Montserrat for titles, and dark mode's green and control borders now clear their contrast floors
 - Fixed: The bug-and-idea form at /report opens again for people held at the demo gate — it had been blank since it was added
-- Fixed: A link you were sent takes you there after signing in, instead of dropping you on the dashboard
-- Added: Import a Word document or a PDF and it becomes a template or a document — headings, prose and Word tables become blocks you can edit, and it tells you up front what it could not bring across
-- Added: Drop an image straight into a report, or pick one from your machine, instead of hosting it somewhere and pasting a link
-- …and 172 more.
+- …and 175 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -64,10 +64,11 @@ the new values rather than recording them as shortfalls.
 2. **Work the open-questions queue**, top question first — `docs/open-questions.md`. Six
    questions were added today by this line of work; the first (Bugs and Ideas off Admin) was
    asked and answered the same evening, and #54 put three security-advisor questions at the
-   top, so twelve remain. Numbers 4–7 are the cheap confirmations of decisions made under
-   time pressure; asked once, they stop being risks. Number 8 is the one that BLOCKS
-   something: cloning a job has no entry point since the button left the drawer (#50) and
-   nothing on the Projects side has taken it yet.
+   top, of which the first (anon and the GraphQL schema) was answered and became `0101`, so
+   eleven remain. Numbers 3–6 are the cheap confirmations of decisions made under time
+   pressure; asked once, they stop being risks. Number 7 is the one that BLOCKS something:
+   cloning a job has no entry point since the button left the drawer (#50) and nothing on
+   the Projects side has taken it yet.
 3. **Small follow-ups that fell out of today, none blocking:**
    - The column picker will list every property — eighty-odd once the definitions are all
      active. It has no search box. Add one when it gets unwieldy, not before.
@@ -86,8 +87,8 @@ the new values rather than recording them as shortfalls.
    rows 14–19): Anthropic only; Microsoft 365 Copilot; one Xero organisation with purchase
    orders pulled from SiteBook now and pushed to Xero later; SiteBook has an API and an MCP
    server, details unknown; a superadmin connects approved sources organisation-wide and
-   nobody connects a personal AI client; Ask is read-only first. Two narrower questions are 20
-   and 21. Phase 0 also wants question 1 (the `anon` GraphQL shape) answered.
+   nobody connects a personal AI client; Ask is read-only first. Two narrower questions are open
+   questions 13 and 14. The `anon` GraphQL shape (`0101`) is closed, so Phase 0 waits on nothing.
 
 ### Two standing decisions, so nobody spends an afternoon reopening them
 
