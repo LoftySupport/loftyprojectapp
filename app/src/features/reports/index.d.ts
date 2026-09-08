@@ -224,7 +224,7 @@ export function reportFilename(title: string): string;
 export function sanitizeHtml(html: string): string;
 
 /**
- * A Word or PDF file turned into builder blocks.
+ * A Word, PDF or HTML file turned into builder blocks.
  *
  * `notes` is not decoration — it is what the conversion could not carry, and the screen
  * shows it. A PDF's headings are inferred from text size rather than read from the file,
@@ -234,7 +234,20 @@ export function documentToWidgets(file: File): Promise<{
   widgets: ReportWidget[];
   notes: string[];
 }>;
-export function sniffKind(file: File): Promise<"docx" | "pdf" | null>;
+
+/**
+ * The html half on its own, for a host that already has markup rather than a file.
+ *
+ * `keepImageUrls` decides what an `<img>` becomes: an Image block when the src is an
+ * absolute URL (html), or a counted omission (a .docx, whose images are embedded bytes
+ * that would otherwise land in the layout as base64).
+ */
+export function htmlToWidgets(html: string, opts?: { keepImageUrls?: boolean }): {
+  widgets: ReportWidget[];
+  notes: string[];
+};
+
+export function sniffKind(file: File): Promise<"docx" | "pdf" | "html" | null>;
 
 // ─── Serialisers ─────────────────────────────────────────────────────
 
