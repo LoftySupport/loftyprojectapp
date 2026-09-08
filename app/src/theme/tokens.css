@@ -24,14 +24,14 @@
 
 /* Deliberately NOT imported from the mirror:
 
-   tokens/fonts.css — it @imports Figtree and Poppins from Google Fonts, which index.html
+   tokens/fonts.css — it @imports Figtree and Montserrat from Google Fonts, which index.html
    already loads with a <link> and two preconnects (faster: a <link> starts fetching during
    HTML parse, a CSS @import waits for the stylesheet). It also declares @font-face for the
    six Fieldwork cuts against ../assets/fonts/, which this app does not ship — Fieldwork is
    for brand-led surfaces (decks, print, proposals), and the design system is explicit that
-   product screens use Figtree + Poppins. The `--brand-font-family` chain in the mirror ends
-   in Poppins, so a brand token used here degrades to the product face rather than to a
-   system serif.
+   product screens use Figtree + Montserrat. The `--brand-font-family` chain in the mirror
+   ends in Montserrat, then Helvetica, so a brand token used here degrades to the product
+   face rather than to a system serif.
 
    tokens/base.css — its `body{font:…}` and heading rules would fight Vibe's own base layer.
    The three parts of it worth having are re-stated at the bottom of this file. */
@@ -86,10 +86,23 @@ body, body.light-app-theme {
   --secondary-text-color: var(--lofty-black-80);
   --link-color: var(--lofty-foundation-black);
   --link-hover-color: var(--lofty-orange-pressed);
+
+  /* Type. Vibe declares --font-family and --title-font-family on :root (Figtree and
+     Poppins), and so does the mirror (Figtree and Montserrat) — same specificity, so which
+     wins depends on the order two stylesheets happen to land in the bundle. Re-stating them
+     here takes the order out of it. Bare `body` is in this selector, so the dark and black
+     themes get the same faces without a second declaration. */
+  --font-family: Figtree, Montserrat, Helvetica, "Fieldwork Hum", sans-serif;
+  --title-font-family: Montserrat, Helvetica, "Fieldwork Geo", sans-serif;
+
   --ui-border-color: var(--lofty-black-60);
-  --layout-border-color: var(--lofty-gray-light);
+  /* Flint, the design system's one neutral family (7 September): Flint 300 draws every card,
+     panel and table rule and Flint 100 is the page. The cool greys these replaced —
+     --lofty-gray-light #e7e8e9 and --lofty-gray-surface #f6f7f7 — are retired from the
+     mirror, so a reference to either is now a dangling var(), not a fallback. */
+  --layout-border-color: var(--lofty-flint-300);
   --icon-color: var(--lofty-black-80);
-  --allgrey-background-color: var(--lofty-gray-surface);
+  --allgrey-background-color: var(--lofty-flint-100);
   --primary-background-color: var(--lofty-finisher-white);
   --primary-background-hover-color: rgba(65, 64, 66, .08);
 }
@@ -179,7 +192,8 @@ body.black-app-theme {
 
 html, body, #root { height: 100%; margin: 0; }
 body {
-  font-family: Figtree, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  /* The mirror's screen stack: Figtree, then Montserrat, then Helvetica. */
+  font-family: var(--font-family);
   background: var(--allgrey-background-color);
   color: var(--primary-text-color);
   -webkit-font-smoothing: antialiased;

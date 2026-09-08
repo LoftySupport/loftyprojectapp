@@ -32,10 +32,10 @@ sync — the whole point of the mirror is that those two can be compared.
   glyphs — the ones Vibe does not ship — are worth copying, and they live in
   [`../theme/loftyIcons.tsx`](../theme/loftyIcons.tsx).
 - **The six Fieldwork `.woff` files.** Fieldwork is for brand-led surfaces: decks, print,
-  proposals. The design system is explicit that product screens use Figtree and Poppins,
+  proposals. The design system is explicit that product screens use Figtree and Montserrat,
   so shipping ~300 KB of fonts no screen asks for would cost every visitor for nothing.
-  `--brand-font-family` falls back to Poppins, so a brand token used here degrades to the
-  product face rather than to a system serif.
+  `--brand-font-family` falls back to Montserrat, so a brand token used here degrades to
+  the product face rather than to a system serif.
 - **The brand logo colourways and the lines/shapes silhouettes.** Real, and available — but
   the app has no surface that uses them yet, and a decorative asset nobody renders is
   weight in the bundle and a thing to keep in step. Pull them when a screen needs them.
