@@ -150,6 +150,13 @@ chart is green plus Flint with no orange in the view. On dark the third step fli
 40 and the neutrals invert so nothing melts into the panel. No screen draws from the ramp
 yet.
 
+**Quantity is a second ramp.** `--data-scale-1` to `--data-scale-5` (9 September) is for a
+continuous value — heat, load, density, a progress fill — and climbs the orange ladder only:
+the orange tint, Orange 40, Orange 70, Crisp Orange, the pressed step. One hue, so it reads
+as a single scale; `--data-gradient` is the same five as a fill. On dark it starts at Flint
+700 so the low end lifts off the panel, and climbs to the light tint. Category takes
+`--data-1…6`; quantity takes the scale — never the categorical ramp for a heat map.
+
 ### The board's colour rule
 
 **Colour on containers encodes phase. Colour on records encodes health. Never both on one
@@ -183,8 +190,8 @@ both of the latter take.
 
 | | The rule |
 | --- | --- |
-| **Type** | Vibe's screen scale: h1 32/40, h2 24/30, h3 18/24; text1 16/22, text2 14/20, text3 12/16. **Montserrat** titles, **Figtree** body, Helvetica the fallback for both. Tracking negative on headings only (−0.5px h1, −0.1px h2/h3). **No text below 12px** |
-| **Brand type** | **Fieldwork Geo** display, **Fieldwork Hum** body, for brand-led surfaces only — decks, print, proposals. Product screens use Figtree and Montserrat, which is also the brand kit's own print substitute. Supplied in six cuts at 300 and 600 only, so the brand scale uses those two weights. Not shipped in the app bundle; the token chain falls back to Montserrat |
+| **Type** | Vibe's screen scale: h1 32/40, h2 24/30, h3 18/24; text1 16/22, text2 14/20, text3 12/16. **Montserrat** titles, **Figtree** body, Arial the last fallback for both (Helvetica until 9 September). Tracking negative on headings only (−0.5px h1, −0.1px h2/h3). **No text below 12px** |
+| **Brand type** | **Fieldwork Geo** display, **Fieldwork Hum** body, for brand-led surfaces only — decks, print, proposals. Product screens use Figtree and Montserrat, which is also the brand kit's own print substitute. Supplied in six cuts at 300 and 600 only, so the brand scale uses those two weights. Not shipped in the app bundle; the token chain falls back to Montserrat, then Arial |
 | **Case** | **Sentence case everywhere.** No Title Case, no ALL CAPS except the 12px navigation eyebrow |
 | **Spacing** | 2/4/8/12/16/20/24/32/40/48/64/80. Nothing off it, ever — no 6, no 10, no 14. Controls on an 8px rhythm; cards pad 24, compact tiles 16; page gutters 32 |
 | **Radius** | 2 checkbox · 4 buttons, inputs, chips, tabs · 8 cards, menus, dialogs · 12 panels · 16 the full-view modal only · pill toggles, tracks, counters · 50% avatars, radios, loaders. **Never a literal** |

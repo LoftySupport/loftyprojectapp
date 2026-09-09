@@ -30,7 +30,7 @@
    six Fieldwork cuts against ../assets/fonts/, which this app does not ship — Fieldwork is
    for brand-led surfaces (decks, print, proposals), and the design system is explicit that
    product screens use Figtree + Montserrat. The `--brand-font-family` chain in the mirror
-   ends in Montserrat, then Helvetica, so a brand token used here degrades to the product
+   ends in Montserrat, then Arial, so a brand token used here degrades to the product
    face rather than to a system serif.
 
    tokens/base.css — its `body{font:…}` and heading rules would fight Vibe's own base layer.
@@ -92,8 +92,8 @@ body, body.light-app-theme {
      wins depends on the order two stylesheets happen to land in the bundle. Re-stating them
      here takes the order out of it. Bare `body` is in this selector, so the dark and black
      themes get the same faces without a second declaration. */
-  --font-family: Figtree, Montserrat, Helvetica, "Fieldwork Hum", sans-serif;
-  --title-font-family: Montserrat, Helvetica, "Fieldwork Geo", sans-serif;
+  --font-family: Figtree, Montserrat, Arial, sans-serif;
+  --title-font-family: Montserrat, Arial, sans-serif;
 
   --ui-border-color: var(--lofty-black-60);
   /* Flint, the design system's one neutral family (7 September): Flint 300 draws every card,
@@ -192,7 +192,9 @@ body.black-app-theme {
 
 html, body, #root { height: 100%; margin: 0; }
 body {
-  /* The mirror's screen stack: Figtree, then Montserrat, then Helvetica. */
+  /* The mirror's screen stack: Figtree, then Montserrat, then Arial (9 September — Arial
+     replaced Helvetica as the last fallback in every stack; the brand faces left the screen
+     stacks altogether, since a product screen never has Fieldwork to fall back to). */
   font-family: var(--font-family);
   background: var(--allgrey-background-color);
   color: var(--primary-text-color);

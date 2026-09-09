@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 180 changes since then —
+Unreleased: 181 changes since then —
+- Changed: the design-system mirror is back in step with the brand repository — a sequential orange data scale for continuous values, and Arial is now the last font fallback on every screen (Helvetica before)
 - Changed: The merged-pull-requests feed on Updates → Changelog shows every finalised pull request by default, using its title when it declared no @changelog line
 - Added: Import an HTML page as well as a Word document or a PDF
 - Changed: Somebody without a Lofty account can no longer discover the names of the tables and columns behind the app
 - Changed: The app takes the design system's Flint neutrals for its page and rules, Montserrat for titles, and dark mode's green and control borders now clear their contrast floors
-- Fixed: The bug-and-idea form at /report opens again for people held at the demo gate — it had been blank since it was added
-- …and 175 more.
+- …and 176 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

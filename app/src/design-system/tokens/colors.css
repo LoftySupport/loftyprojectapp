@@ -136,4 +136,14 @@
   --data-4:var(--lofty-foundation-black);
   --data-5:var(--lofty-flint-400);
   --data-6:var(--lofty-flint-200);
+
+  /* ---- Sequential gradient: for continuous quantity, not category (heat, load, density,
+     progress fills). Climbs the orange ladder only — no second hue, so it stays readable
+     as a single scale. Use --data-gradient for a fill; the numbered stops for a legend. ---- */
+  --data-scale-1:var(--lofty-orange-tint);
+  --data-scale-2:var(--lofty-orange-40);
+  --data-scale-3:var(--lofty-orange-70);
+  --data-scale-4:var(--lofty-crisp-orange);
+  --data-scale-5:var(--lofty-orange-pressed);
+  --data-gradient:linear-gradient(90deg,var(--data-scale-1),var(--data-scale-2),var(--data-scale-3),var(--data-scale-4),var(--data-scale-5));
 }

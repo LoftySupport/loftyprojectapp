@@ -153,6 +153,23 @@ managers should be able to register a new source themselves, the Admin → Integ
 opens to managers for that one act and the plan's §3 changes one word. Not blocking: Phase 1
 has one source to register and a superadmin registers it either way.
 
+### 15. Exported documents: Helvetica, or the brand's new Arial?
+
+The brand repository changed its fallback on 9 September: every token stack now ends
+`Montserrat, Arial, sans-serif`, and the document template's own instructions say *"Fallback
+order is Montserrat first, then Arial. Do not substitute Helvetica, Calibri or Aptos."* The
+app's Word and PDF writers (`app/src/data/export/docx.ts`, `pdf.ts`) set **Helvetica** as the
+document face, on the earlier template's rule that Helvetica was the only approved fallback
+and Arial never was — and the style guide in the same brand repository still shows *"Substitute
+Calibri, Arial or Aptos"* as the bad example, so the brand sources disagree with each other.
+Screens moved to Arial on this sync (a screen never has Helvetica to fall back to on Windows
+anyway; the two are metric-compatible, so nothing reflowed). Documents did not, for the same
+reason as question 12: the export palette and face are written down as a decision (0026). So:
+do the Word and PDF exports follow the template onto Arial — which also means the style
+guide's example wants correcting — or does Helvetica stay for documents? A PDF can name
+Helvetica as one of the fourteen built-in faces without embedding it; Arial it cannot, so the
+answer decides whether the PDF writer keeps its two-kilobyte files.
+
 ---
 
 ## Answered

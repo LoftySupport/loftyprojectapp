@@ -150,6 +150,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- the design-system mirror is back in step with the brand repository — a sequential orange data scale for continuous values, and Arial is now the last font fallback on every screen (Helvetica before)
 - The merged-pull-requests feed on Updates → Changelog shows every finalised pull request by default, using its title when it declared no @changelog line
 - Somebody without a Lofty account can no longer discover the names of the tables and columns behind the app
 - The app takes the design system's Flint neutrals for its page and rules, Montserrat for titles, and dark mode's green and control borders now clear their contrast floors
