@@ -64,6 +64,14 @@
   --data-4:var(--lofty-flint-200);
   --data-5:var(--lofty-flint-400);
   --data-6:var(--lofty-flint-700);
+
+  /* sequential scale on dark: the low end lifts off the panel instead of fading into it,
+     so the scale starts at Flint 700 and climbs to the light orange tint */
+  --data-scale-1:var(--lofty-flint-700);
+  --data-scale-2:var(--lofty-orange-pressed);
+  --data-scale-3:var(--lofty-crisp-orange);
+  --data-scale-4:var(--lofty-orange-70);
+  --data-scale-5:var(--lofty-orange-40);
   --inverted-color-background:var(--lofty-dark-text);
   --modal-background-color:var(--lofty-dark-raised);
   --dialog-background-color:var(--lofty-dark-raised);

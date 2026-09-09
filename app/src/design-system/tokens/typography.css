@@ -1,12 +1,12 @@
 /* Type scale — Vibe's screen scale (Figtree body, Montserrat titles), plus Lofty's
    Fieldwork brand families for brand-led surfaces (decks, print, marketing heroes). */
 :root{
-  /* Screen stack: Figtree body, Montserrat titles. Helvetica is the digital fallback only. */
-  --font-family:Figtree,Montserrat,Helvetica,"Fieldwork Hum",sans-serif;
-  --title-font-family:Montserrat,Helvetica,"Fieldwork Geo",sans-serif;
+  /* Screen stack: Figtree body, Montserrat titles. Fallback order: brand font, then Montserrat, then Arial. */
+  --font-family:Figtree,Montserrat,Arial,sans-serif;
+  --title-font-family:Montserrat,Arial,sans-serif;
   --h1-font-family:var(--title-font-family);
-  --brand-font-family:"Fieldwork Geo","Fieldwork",Montserrat,Helvetica,sans-serif;
-  --brand-body-font-family:"Fieldwork Hum","Fieldwork",Montserrat,Helvetica,sans-serif;
+  --brand-font-family:"Fieldwork Geo","Fieldwork",Montserrat,Arial,sans-serif;
+  --brand-body-font-family:"Fieldwork Hum","Fieldwork",Montserrat,Arial,sans-serif;
 
   --font-smoothing-webkit:antialiased;
   --font-smoothing-moz:grayscale;

@@ -103,8 +103,8 @@ Two blocks are worth knowing about because neither is in the module:
 `adapters/lofty/theme.js` builds the Lofty theme from **`src/data/export/houseFormat.ts`**
 — the same palette the app's PDF and Word writers have used since 0026 (Foundation Black
 ink, Eco Green headings, the Crisp Orange Level 2 rule, the `#f6f7f7` table header) and
-the same font rule (Helvetica first; the brand face Fieldwork Geo cannot be embedded in a
-`.docx`, and Arial is never the fallback).
+the same font rule (Montserrat first, since 9 September; the brand face Fieldwork Geo
+cannot be embedded in a `.docx`, and Helvetica, Calibri and Aptos are never substituted).
 
 The first version of this file read `theme/tokens.css` instead and produced a teal-inked
 document. It looked like Lofty and was wrong: a document built here and a table exported

@@ -117,12 +117,17 @@ function ratio(a, b) {
 const PAIRS = [
   // The decision the whole palette turns on. The brand rule (never black on Crisp Orange)
   // costs contrast, and this is where that cost is recorded rather than argued away.
-  ["--text-color-on-primary", "--primary-color", 4.5, light, "white on filled Crisp Orange — toasts, tipseens, labels (NOT buttons)", 2.62],
-  // The filled action surface Amber chose on 7 September. These two are what actually make
-  // a primary button label legible, so they are assertions rather than recorded shortfalls.
-  ["--lofty-finisher-white", "--primary-action-color", 4.5, light, "white on a filled primary BUTTON"],
-  ["--lofty-finisher-white", "--primary-action-hover-color", 4.5, light, "white on a filled primary button, hovered"],
-  ["--lofty-finisher-white", "--primary-action-color", 4.5, dark, "dark: white on a filled primary BUTTON"],
+  ["--text-color-on-primary", "--primary-color", 4.5, light, "white on filled Crisp Orange — toasts, tipseens, labels", 2.62],
+  // The filled button. 7 September it took the pressed step (4.54:1); 9 September Amber
+  // reversed that with the number in front of her — "Make sure buttons are crisp orange" —
+  // so both of its states are recorded shortfalls: held at 2.62, never allowed to get worse,
+  // printed on every run, and the remedy (--lofty-orange-pressed) stays one line away.
+  ["--lofty-finisher-white", "--primary-action-color", 4.5, light, "white on a filled primary BUTTON (Crisp Orange, by decision)", 2.62],
+  // Hovered, the fill drops out: Crisp Orange becomes the ink and the line on the button's
+  // own ground. On dark that ground is Flint 800 and the same ink clears AA comfortably.
+  ["--primary-action-hover-ink", "--primary-action-hover-ground", 4.5, light, "a hovered primary button: Crisp Orange ink on its dropped-out ground", 2.62],
+  ["--primary-action-hover-ink", "--primary-action-hover-ground", 4.5, dark, "dark: a hovered primary button's ink on its dropped-out ground"],
+  ["--lofty-finisher-white", "--primary-action-color", 4.5, dark, "dark: white on a filled primary BUTTON (Crisp Orange, by decision)", 2.62],
 
   // Text on the page.
   ["--primary-text-color", "--primary-background-color", 4.5, light, "body text on white"],
@@ -157,7 +162,7 @@ const PAIRS = [
   // which is the floor asserted. 8.0 was never a standard; it was the old measurement.
   ["--primary-text-color", "--primary-background-color", 7.0, dark, "dark: body text on the surface"],
   ["--secondary-text-color", "--primary-background-color", 7.0, dark, "dark: muted text on the surface"],
-  ["--text-color-on-primary", "--primary-color", 4.5, dark, "dark: white on filled Crisp Orange (NOT buttons)", 2.62],
+  ["--text-color-on-primary", "--primary-color", 4.5, dark, "dark: white on filled Crisp Orange — toasts, tipseens, labels", 2.62],
   // Two shortfalls this file used to record were closed in the design project on 7 September
   // and arrived on the sync: white on the lifted Eco Green was 4.26:1 at #1f8791 and is
   // 5.74:1 at #20707a; the control boundary was 2.28:1 at #5a595c and is 3.86:1 at #807f74.
