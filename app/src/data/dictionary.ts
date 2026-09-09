@@ -424,6 +424,7 @@ export const DICTIONARY: DictionaryEntry[] = [
     "text", "Not null, default 'open'. CHECK on the five values, and CHECK tasks_done_has_a_time ties it to the completion time in both directions.",
     "The open three drive every partial index on this table, because a done task is in nobody's queue and those rows will outnumber the open ones many times over.", "created"),
   e("tasks.task_due_date", "Due", "When it should be finished.", "date", "Nullable.", "Indexed with the open statuses, for the overdue report.", "created"),
+  e("tasks.task_scheduled_date", "Scheduled", "When it is planned to be worked, as distinct from task_due_date (0102) — the Tasks board's own column, for a task typed in with a plan but no deadline yet.", "date", "Nullable.", "Does not feed task_health — health stays anchored to task_due_date.", "created"),
   e("tasks.task_completed_at", "Completed on",
     "When it was finished, and the single source of truth for whether it was. There is deliberately no boolean beside this: two columns for one fact can disagree, and then one of them is wrong without anything noticing.",
     "timestamptz",

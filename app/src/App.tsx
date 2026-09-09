@@ -19,6 +19,7 @@ import { AppShell } from "./shell/AppShell";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { JobsPage } from "./pages/JobsPage";
+import { TasksPage } from "./pages/TasksPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { ToolsPage } from "./pages/ToolsPage";
 import { ContactsPage } from "./pages/ContactsPage";
@@ -386,6 +387,9 @@ export default function App() {
               <Route path="projects/:projectNumber" element={<ProjectsPage />} />
               <Route path="jobs" element={<JobsPage />} />
               <Route path="jobs/:jobNumber" element={<JobsPage />} />
+              {/* Tasks (0102): every task across every job and project, one board — the
+                  "my work" query the schema plan indexed for, given a screen. */}
+              <Route path="tasks" element={<TasksPage />} />
               <Route path="reports" element={<ReportsPage />} />
               <Route path="contacts" element={<ContactsPage />} />
               {/* Tools: things you use to make something, as opposed to the records you

@@ -381,14 +381,17 @@ export interface Repository {
 
   // ---- tasks (built in Phase A, wired now) -------------------------------
   /**
-   * What has to be done on one job or one project, in order.
+   * What has to be done — on one job or one project, in order; or across every record
+   * at once, for the Tasks board (0102).
    *
-   * The `tasks` table has existed since the first migration and no screen has ever read
-   * it — name, description, owning team, assignee, status, due date, sub-tasks, and a
-   * completion the database stamps. Empty until somebody adds one, which is a different
-   * statement from "not built" and is what the empty state says.
+   * Exactly one of five scopes, never none: a job, a project, an assignee, a team, or
+   * `all` said explicitly. Asking with nothing would quietly return every task in the
+   * company — fine for the board's "All tasks" tab, which is why it exists, but not a
+   * thing any caller should reach by omission.
    */
-  listTasks(opts: { jobId?: string; projectId?: number }): Promise<TaskEntry[]>;
+  listTasks(opts: {
+    jobId?: string; projectId?: number; assigneeId?: string; teams?: TeamId[]; all?: boolean;
+  }): Promise<TaskEntry[]>;
 
   /**
    * Add one. Only the name is required — a checklist that demands six fields per line
