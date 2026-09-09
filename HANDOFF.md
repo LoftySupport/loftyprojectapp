@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 180 changes since then —
-- Changed: The merged-pull-requests feed on Updates → Changelog shows every finalised pull request by default, using its title when it declared no @changelog line
-- Added: Import an HTML page as well as a Word document or a PDF
-- Changed: Somebody without a Lofty account can no longer discover the names of the tables and columns behind the app
-- Changed: The app takes the design system's Flint neutrals for its page and rules, Montserrat for titles, and dark mode's green and control borders now clear their contrast floors
-- Fixed: The bug-and-idea form at /report opens again for people held at the demo gate — it had been blank since it was added
-- …and 175 more.
+Unreleased: 186 changes since then —
+- Added: A Tasks board, in the main navigation, with every task across every job and project — filtered by team, status and process, and sliced into my tasks, my team's tasks, all tasks, overdue, due today and due this week
+- Changed: filled buttons are Crisp Orange again, and drop their fill on hover for a Crisp Orange text and line — the brand colour, chosen over the darker step that cleared the contrast floor
+- Changed: a filled button now drops its fill on hover and focus — the pressed orange becomes the text and a thin line — instead of darkening
+- Changed: exported Word and PDF documents are set in Montserrat, the brand's document face, in place of Helvetica — the PDF now carries the font, so it looks the same on every machine
+- Added: `npm run build:montserrat` regenerates the embedded font subset and its width tables from Google Fonts
+- …and 181 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

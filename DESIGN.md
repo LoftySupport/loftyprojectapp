@@ -42,7 +42,7 @@ Nothing outside these except status.
 
 | Token | Hex | Role |
 | --- | --- | --- |
-| **Crisp Orange** | `#f47e63` | **Primary.** The active tab underline, the selected nav item, focus rings, the first data series. A *filled button* uses the pressed step `#c2543c` — see below |
+| **Crisp Orange** | `#f47e63` | **Primary.** The active tab underline, the selected nav item, focus rings, the first data series, and the *filled button* — see below |
 | **Eco Green** | `#005058` | **Minimal highlight only.** Small decorative accents and later data series. **Never a shell, a panel fill, or a link colour** |
 | **Foundation Black** | `#414042` | Text, inverted surfaces, brand panels. The secondary |
 | **Finisher White** | `#ffffff` | Pages, shells, cards |
@@ -74,19 +74,25 @@ reach AA either. Restricting the size reduces the exposure; it does not remove i
 itself as an identity — because a check optimising for the ratio alone would put the ink
 back, and the rule outranks the ratio.
 
-**Amber took that remedy for filled buttons, 7 September.** So:
+**Amber took that remedy for filled buttons on 7 September, and reversed it on 9 September.**
+Shown the 2.62:1 twice and offered the pressed step, she chose the brand: *"Make sure buttons
+are crisp orange."* A filled button is therefore Crisp Orange and behaves as the design
+system's Button does — **on hover the fill drops out, and Crisp Orange becomes the ink and
+the line.** So:
 
-| Surface | Fill | White on it |
+| Surface | Paint | Contrast |
 | --- | --- | --- |
-| **Filled primary button** | `--primary-action-color` `#c2543c` | **4.54:1** ✓ |
-| …hovered | `--primary-action-hover-color` `#9a4330` | **6.52:1** ✓ |
+| **Filled primary button** | white on `--primary-action-color` `#f47e63` | **2.62:1** ✗ recorded |
+| …hovered or focused | `--primary-action-hover-ink` `#f47e63` ink and 1px line on `--primary-action-hover-ground` (the card white) | **2.62:1** ✗ recorded |
+| …hovered, dark theme | `#f47e63` ink and line on the dark panel | **5.95:1** ✓ |
 | Focus rings, selected tints, accents, chart series | `--primary-color` `#f47e63` | *carries no text* |
-| Toasts, tipseens, filled labels | `--primary-color` `#f47e63` | **2.62:1** ✗ |
+| Toasts, tipseens, filled labels | `--primary-color` `#f47e63` | **2.62:1** ✗ recorded |
 
-`--primary-color` stays Crisp Orange, because everywhere else it is used it carries no text
-and is doing its actual job — being the brand. **The last row is what is left of the
-problem:** a filled orange label or toast with small text is the thing this palette still
-cannot make accessible, and it is recorded as a shortfall rather than solved.
+The button rows are the owner's decision, made with the number in front of her, and they are
+held the way every other shortfall here is held: measured in `check-contrast.mjs`, never
+allowed to get worse, printed on every run. The remedy has not gone anywhere —
+`--primary-action-color` is the one place the fill is decided, and the pressed step is a
+one-line change if the decision is ever revisited.
 
 **How the override works, and why it is shaped that way.** Vibe is the layout system; the
 brand system overrides it. Vibe's filled button is `.kindPrimary.colorPrimary { background:
@@ -96,9 +102,13 @@ against it means hover, focus and active follow for free and there is no specifi
 lose. The class hashes move between Vibe versions, so the selector matches the stable part
 of the name.
 
-`--primary-action-hover-color` `#9a4330` is **derived in this repo, not mirrored** — the
-pressed step darkened by the same 10.2% lightness the existing crisp→hover step uses, which
-keeps the ramp monotonic. It should go back into the design project as a real brand step.
+**Why the hover inverts rather than darkens.** The design system's `Button.jsx` draws its one
+filled orange action inverting on hover — *"fill drops out, orange becomes ink and line"* —
+and Amber chose that component as the truth. The derived hover `#9a4330` that stood between
+7 and 9 September is gone; nothing in this repo darkens an orange any more. The pressed-step
+version of the same motion (fill `#c2543c`, ink `#c2543c`, both 4.54:1) was built, probed and
+offered on 9 September, and declined in favour of the brand colour; it is in the history of
+`theme/tokens.css` if wanted.
 
 **One brand-kit contradiction, resolved.** The kit prints `HEX #000000` next to
 `RGB 65 64 66` for Foundation Black. The RGB is authoritative, so the token is `#414042`.
@@ -150,6 +160,13 @@ chart is green plus Flint with no orange in the view. On dark the third step fli
 40 and the neutrals invert so nothing melts into the panel. No screen draws from the ramp
 yet.
 
+**Quantity is a second ramp.** `--data-scale-1` to `--data-scale-5` (9 September) is for a
+continuous value — heat, load, density, a progress fill — and climbs the orange ladder only:
+the orange tint, Orange 40, Orange 70, Crisp Orange, the pressed step. One hue, so it reads
+as a single scale; `--data-gradient` is the same five as a fill. On dark it starts at Flint
+700 so the low end lifts off the panel, and climbs to the light tint. Category takes
+`--data-1…6`; quantity takes the scale — never the categorical ramp for a heat map.
+
 ### The board's colour rule
 
 **Colour on containers encodes phase. Colour on records encodes health. Never both on one
@@ -183,8 +200,8 @@ both of the latter take.
 
 | | The rule |
 | --- | --- |
-| **Type** | Vibe's screen scale: h1 32/40, h2 24/30, h3 18/24; text1 16/22, text2 14/20, text3 12/16. **Montserrat** titles, **Figtree** body, Helvetica the fallback for both. Tracking negative on headings only (−0.5px h1, −0.1px h2/h3). **No text below 12px** |
-| **Brand type** | **Fieldwork Geo** display, **Fieldwork Hum** body, for brand-led surfaces only — decks, print, proposals. Product screens use Figtree and Montserrat, which is also the brand kit's own print substitute. Supplied in six cuts at 300 and 600 only, so the brand scale uses those two weights. Not shipped in the app bundle; the token chain falls back to Montserrat |
+| **Type** | Vibe's screen scale: h1 32/40, h2 24/30, h3 18/24; text1 16/22, text2 14/20, text3 12/16. **Montserrat** titles, **Figtree** body, Arial the last fallback for both (Helvetica until 9 September). Tracking negative on headings only (−0.5px h1, −0.1px h2/h3). **No text below 12px** |
+| **Brand type** | **Fieldwork Geo** display, **Fieldwork Hum** body, for brand-led surfaces only — decks, print, proposals. Product screens use Figtree and Montserrat, which is also the brand kit's own print substitute. Supplied in six cuts at 300 and 600 only, so the brand scale uses those two weights. Not shipped in the app bundle; the token chain falls back to Montserrat, then Arial |
 | **Case** | **Sentence case everywhere.** No Title Case, no ALL CAPS except the 12px navigation eyebrow |
 | **Spacing** | 2/4/8/12/16/20/24/32/40/48/64/80. Nothing off it, ever — no 6, no 10, no 14. Controls on an 8px rhythm; cards pad 24, compact tiles 16; page gutters 32 |
 | **Radius** | 2 checkbox · 4 buttons, inputs, chips, tabs · 8 cards, menus, dialogs · 12 panels · 16 the full-view modal only · pill toggles, tracks, counters · 50% avatars, radios, loaders. **Never a literal** |
@@ -220,20 +237,25 @@ not a preference.
 
 ### Where the palette falls short
 
-Two pairings do **not** meet the floor. They are recorded in
-`app/scripts/check-contrast.mjs` at their measured value, so the check fails if either
-gets worse, and prints them on every run so they stay visible rather than becoming normal.
-Neither is a value this repo chose.
+Four pairings do **not** meet the floor — six measurements, since three are checked in both
+themes. They are recorded in `app/scripts/check-contrast.mjs` at their measured value, so the
+check fails if any gets worse, and prints them on every run so they stay visible rather than
+becoming normal. None is a value this repo chose: two are the owner's brand decision, two are
+the design system's.
 
 | Pairing | Measured | Needs | |
 | --- | --- | --- | --- |
-| **White on filled Crisp Orange** (both themes) | **2.62:1** | 4.5:1 | The brand rule. Below the 3:1 large-text floor too. **Buttons no longer use this** — what is left is toasts, tipseens and filled labels |
+| **White on filled Crisp Orange** (both themes) | **2.62:1** | 4.5:1 | The brand rule. Below the 3:1 large-text floor too. Toasts, tipseens, filled labels |
+| **White on a filled primary button** (both themes) | **2.62:1** | 4.5:1 | Amber, 9 September: *"Make sure buttons are crisp orange"*, chosen with this number in front of her. The pressed step (4.54:1) held this row from 7 to 9 September and is one line away |
+| **A hovered button's Crisp Orange ink on white** (light) | **2.62:1** | 4.5:1 | The same decision, other state: the fill drops out and Crisp Orange is the text and line. On dark the same ink is 5.95:1 |
 | `--placeholder-color` `#8a898d` on white | **3.47:1** | 4.5:1 | The design system calls this "example text only, never a label", which narrows the exposure but does not clear it. `#757478` would, at 4.64:1. Open question 9 in `docs/open-questions.md` |
 
-**The first one no longer covers buttons.** Amber took the pressed step for filled buttons
-on 7 September, so a button label is now 4.54:1. What remains at 2.62:1 is every *other*
-filled-orange surface that carries text — toasts, tipseens, filled labels. Those either take
-the pressed step too, or the design project gives them a ground that white survives on.
+**The button rows are a decision, not an oversight.** The pressed step was applied on
+7 September and the button cleared AA for two days; on 9 September, offered the pressed step
+again with the inverted hover on it, Amber chose Crisp Orange. So every filled-orange surface
+that carries text — buttons, toasts, tipseens, filled labels — sits at 2.62:1, and the palette
+has one honest answer for all of them: the pressed step, or a ground that white survives on,
+if the owner ever asks.
 
 **Two dark-mode shortfalls closed on 7 September, from the design side.** White on the
 lifted Eco Green was 4.26:1 at `#1f8791`; the design project moved the fill to `#20707a`

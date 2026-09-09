@@ -608,10 +608,11 @@ console.log("--- the Lofty theme is the house document format, role for role");
     LOFTY_THEME_QUIET.colors.ink.toLowerCase() === HOUSE_COLOURS.ink.toLowerCase()
     && LOFTY_THEME_QUIET.colors.heading.toLowerCase() === HOUSE_COLOURS.green.toLowerCase(),
     `${LOFTY_THEME_QUIET.colors.ink} / ${LOFTY_THEME_QUIET.colors.heading}`);
-  // Helvetica first, never Arial — the Word writer's rule, and core/docx.js takes the
-  // first family in the stack and writes it into the file.
-  ok("the document font is Helvetica first, and Arial appears nowhere",
-    /^Helvetica\b/.test(LOFTY_THEME.fonts.body) && !/Arial/i.test(LOFTY_THEME.fonts.body),
+  // Montserrat first — the house font since 9 September, and core/docx.js takes the first
+  // family in the stack and writes it into the file. Helvetica, Calibri and Aptos are the
+  // faces the brand says are never substituted, so none may appear anywhere in the stack.
+  ok("the document font is Montserrat first, and Helvetica appears nowhere",
+    /^Montserrat\b/.test(LOFTY_THEME.fonts.body) && !/Helvetica|Calibri|Aptos/i.test(LOFTY_THEME.fonts.body),
     LOFTY_THEME.fonts.body);
 }
 
