@@ -72,11 +72,13 @@ body, body.light-app-theme {
   /* The filled action surface. Amber, 7 September: filled primary buttons take the pressed
      step, so a button label clears AA while --primary-color stays Crisp Orange everywhere
      the brand actually shows — focus rings, selected tints, accents, chart series.
-     --primary-action-hover-color is DERIVED here, not mirrored: it is the pressed step
-     darkened by the same 10.2% lightness the existing crisp→hover step uses, which keeps
-     the ramp monotonic. It should go back into the design project as a real brand step. */
-  --primary-action-color: var(--lofty-orange-pressed);        /* #c2543c — white 4.54:1 */
-  --primary-action-hover-color: #9a4330;                      /* white 6.52:1 */
+     And 9 September, taking the design system's Button behaviour on that step: hovered or
+     focused, THE FILL DROPS OUT and the pressed orange becomes the ink and a 1px line. So
+     there is no darker hover step any more (a derived #9a4330 stood here for two days);
+     there is a hover GROUND — the card white the button sits on — and a hover INK. */
+  --primary-action-color: var(--lofty-orange-pressed);              /* #c2543c — white 4.54:1 */
+  --primary-action-hover-ground: var(--primary-background-color);   /* the fill, dropped out */
+  --primary-action-hover-ink: var(--lofty-orange-pressed);          /* #c2543c on white 4.54:1 */
 
   /* Eco Green is a minimal highlight, never a shell, a panel fill or a link colour. */
   --highlight-color: var(--lofty-eco-green);
@@ -125,9 +127,12 @@ body.black-app-theme {
   --text-color-on-brand: var(--lofty-finisher-white);
 
   /* Same filled action surface in dark: the pairing is white on #c2543c either way, because
-     the button paints its own ground rather than the theme's. */
+     the button paints its own ground rather than the theme's. Hovered, the ground is the
+     dark surface and the ink lifts to the step the system uses for a hovered link on dark —
+     #c2543c on the dark panel is 3.7:1, #f79a84 is 7.4:1. */
   --primary-action-color: var(--lofty-orange-pressed);
-  --primary-action-hover-color: #9a4330;
+  --primary-action-hover-ground: var(--primary-background-color);
+  --primary-action-hover-ink: var(--lofty-orange-dark-hover);
 
   --highlight-color: var(--lofty-green-dark);
   --highlight-hover-color: var(--lofty-green-dark-hover);
@@ -201,19 +206,29 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ---------------------------------------------------------------------------
-   Filled primary buttons take the pressed orange.
-   ---------------------------------------------------------------------------
+/* THE FILLED BUTTON, IN TWO STATES.
+
    Vibe is the layout system; the brand system overrides it. Vibe's filled button is
 
+       .kindPrimary                     { color: var(--text-color-on-primary) }
        .kindPrimary.colorPrimary        { background: var(--primary-color) }
-       .kindPrimary.colorPrimary:hover  { background: var(--primary-hover-color) }
+       .kindPrimary.colorPrimary:hover,
+       .kindPrimary.colorPrimary:focus,
+       .kindPrimary.colorPrimaryActive  { background: var(--primary-hover-color) }
 
-   so this REBINDS those two variables on the button rather than overriding `background`.
-   Working with Vibe's own cascade instead of against it means hover, focus and the active
-   colour all follow for free, and there is no specificity race to lose when Vibe changes a
-   rule. The class hashes move between Vibe versions, so the selector matches on the stable
-   part of the name — the same `[class*=]` approach `ui.css` already uses.
+   so this REBINDS those variables on the button rather than overriding `background` or
+   `color`. Working with Vibe's own cascade instead of against it means hover, focus and the
+   active colour all follow for free, and there is no specificity race to lose when Vibe
+   changes a rule. The class hashes move between Vibe versions, so the selector matches on
+   the stable part of the name — the same `[class*=]` approach `ui.css` already uses.
+
+   At rest: white on the pressed step (Amber, 7 September). Hovered, focused or active: the
+   fill drops out to the button's ground and the pressed step becomes the ink and a 1px line
+   (Amber, 9 September — the design system's Button behaviour, one step darker so both
+   states clear 4.5:1). The line is an inset shadow because Vibe's button has no border, so
+   nothing shifts; on :focus-visible it rides inside the orange focus ring. Vibe's own
+   `:focus` rule means a clicked button stays inverted while it keeps focus, which is also
+   how the design system's Button treats `active`.
 
    Why buttons and not the whole palette: white on Crisp Orange is 2.62:1, which fails AA at
    every size, and a button label is text. Repainting --primary-color globally would have
@@ -223,6 +238,20 @@ body {
 [class*="kindPrimary"][class*="colorBrand"] {
   --primary-color: var(--primary-action-color);
   --brand-color: var(--primary-action-color);
-  --primary-hover-color: var(--primary-action-hover-color);
-  --brand-hover-color: var(--primary-action-hover-color);
+  --primary-hover-color: var(--primary-action-hover-ground);
+  --brand-hover-color: var(--primary-action-hover-ground);
+}
+[class*="kindPrimary"][class*="colorPrimary"]:hover,
+[class*="kindPrimary"][class*="colorPrimary"]:focus,
+[class*="kindPrimary"][class*="colorPrimaryActive"],
+[class*="kindPrimary"][class*="colorBrand"]:hover,
+[class*="kindPrimary"][class*="colorBrand"]:focus,
+[class*="kindPrimary"][class*="colorBrandActive"] {
+  --text-color-on-primary: var(--primary-action-hover-ink);
+  --text-color-on-brand: var(--primary-action-hover-ink);
+  box-shadow: inset 0 0 0 1px var(--primary-action-hover-ink);
+}
+[class*="kindPrimary"][class*="colorPrimary"]:focus-visible,
+[class*="kindPrimary"][class*="colorBrand"]:focus-visible {
+  box-shadow: 0 0 0 3px rgba(244, 126, 99, 0.5), inset 0 0 0 1px var(--primary-action-hover-ink);
 }

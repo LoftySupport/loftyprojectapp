@@ -74,12 +74,15 @@ reach AA either. Restricting the size reduces the exposure; it does not remove i
 itself as an identity — because a check optimising for the ratio alone would put the ink
 back, and the rule outranks the ratio.
 
-**Amber took that remedy for filled buttons, 7 September.** So:
+**Amber took that remedy for filled buttons, 7 September**, and on 9 September took the
+design system's Button behaviour on top of it: **on hover the fill drops out, and the pressed
+orange becomes the ink and the line.** So:
 
-| Surface | Fill | White on it |
+| Surface | Paint | Contrast |
 | --- | --- | --- |
-| **Filled primary button** | `--primary-action-color` `#c2543c` | **4.54:1** ✓ |
-| …hovered | `--primary-action-hover-color` `#9a4330` | **6.52:1** ✓ |
+| **Filled primary button** | white on `--primary-action-color` `#c2543c` | **4.54:1** ✓ |
+| …hovered or focused | `--primary-action-hover-ink` `#c2543c` ink and 1px line on `--primary-action-hover-ground` (the card white) | **4.54:1** ✓ |
+| …hovered, dark theme | `#f79a84` ink and line on the dark panel | **7.4:1** ✓ |
 | Focus rings, selected tints, accents, chart series | `--primary-color` `#f47e63` | *carries no text* |
 | Toasts, tipseens, filled labels | `--primary-color` `#f47e63` | **2.62:1** ✗ |
 
@@ -96,9 +99,14 @@ against it means hover, focus and active follow for free and there is no specifi
 lose. The class hashes move between Vibe versions, so the selector matches the stable part
 of the name.
 
-`--primary-action-hover-color` `#9a4330` is **derived in this repo, not mirrored** — the
-pressed step darkened by the same 10.2% lightness the existing crisp→hover step uses, which
-keeps the ramp monotonic. It should go back into the design project as a real brand step.
+**Why the hover inverts rather than darkens.** The design system's `Button.jsx` draws its one
+filled orange action inverting on hover — *"fill drops out, orange becomes ink and line"* —
+but on Crisp Orange, so both states sit at 2.62:1. Amber's 9 September choice, with the two in
+front of her, was the Button's behaviour on the pressed step: the same motion, one step darker,
+and both states clear AA. The derived hover `#9a4330` that stood between 7 and 9 September is
+gone with it; nothing in this repo darkens the pressed step any more. On dark the hover ink is
+`--lofty-orange-dark-hover` `#f79a84`, the step the design system already uses for a hovered
+link on dark, because `#c2543c` on the dark panel is 3.7:1.
 
 **One brand-kit contradiction, resolved.** The kit prints `HEX #000000` next to
 `RGB 65 64 66` for Foundation Black. The RGB is authoritative, so the token is `#414042`.
@@ -238,7 +246,8 @@ Neither is a value this repo chose.
 | `--placeholder-color` `#8a898d` on white | **3.47:1** | 4.5:1 | The design system calls this "example text only, never a label", which narrows the exposure but does not clear it. `#757478` would, at 4.64:1. Open question 9 in `docs/open-questions.md` |
 
 **The first one no longer covers buttons.** Amber took the pressed step for filled buttons
-on 7 September, so a button label is now 4.54:1. What remains at 2.62:1 is every *other*
+on 7 September, so a button label is now 4.54:1, and the hover that inverts it (9 September)
+holds the same ratio. What remains at 2.62:1 is every *other*
 filled-orange surface that carries text — toasts, tipseens, filled labels. Those either take
 the pressed step too, or the design project gives them a ground that white survives on.
 

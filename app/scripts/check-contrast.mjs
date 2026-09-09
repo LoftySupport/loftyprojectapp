@@ -121,7 +121,10 @@ const PAIRS = [
   // The filled action surface Amber chose on 7 September. These two are what actually make
   // a primary button label legible, so they are assertions rather than recorded shortfalls.
   ["--lofty-finisher-white", "--primary-action-color", 4.5, light, "white on a filled primary BUTTON"],
-  ["--lofty-finisher-white", "--primary-action-hover-color", 4.5, light, "white on a filled primary button, hovered"],
+  // Hovered, the fill drops out (Amber, 9 September): the pressed orange becomes the ink and
+  // the line on the button's own ground, so the pairing to hold is ink on that ground.
+  ["--primary-action-hover-ink", "--primary-action-hover-ground", 4.5, light, "a hovered primary button: pressed orange ink on its dropped-out ground"],
+  ["--primary-action-hover-ink", "--primary-action-hover-ground", 4.5, dark, "dark: a hovered primary button's ink on its dropped-out ground"],
   ["--lofty-finisher-white", "--primary-action-color", 4.5, dark, "dark: white on a filled primary BUTTON"],
 
   // Text on the page.
