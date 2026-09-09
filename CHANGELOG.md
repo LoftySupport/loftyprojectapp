@@ -151,6 +151,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- filled buttons are Crisp Orange again, and drop their fill on hover for a Crisp Orange text and line — the brand colour, chosen over the darker step that cleared the contrast floor
 - a filled button now drops its fill on hover and focus — the pressed orange becomes the text and a thin line — instead of darkening
 - exported Word and PDF documents are set in Montserrat, the brand's document face, in place of Helvetica — the PDF now carries the font, so it looks the same on every machine
 - the design-system mirror is back in step with the brand repository — a sequential orange data scale for continuous values, and Arial is now the last font fallback on every screen (Helvetica before)

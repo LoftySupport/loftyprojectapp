@@ -56,10 +56,11 @@ body, body.light-app-theme {
      The brand rule wins, and it costs contrast — white on #f47e63 clears neither the 4.5:1
      normal-text floor nor the 3:1 large-text one. The design system's own remedy is to fill
      with --lofty-orange-pressed (#c2543c, 4.54:1 with white) wherever AA text on orange is
-     required, and Amber took that remedy for filled buttons on 7 September — see
+     required. Amber took that remedy for filled buttons on 7 September and REVERSED it on
+     9 September — "Make sure buttons are crisp orange" — with the 2.62:1 in front of her, so
+     a filled button is Crisp Orange and the shortfall is recorded, not fixed. See
      --primary-action-color below and the rebinding rule at the bottom of this file.
-     --primary-color itself stays Crisp Orange, because everywhere else it is used it carries
-     no text. Do not "fix" this back to a dark ink: it is a decision, not an oversight. */
+     Do not "fix" this back to a dark ink: it is a decision, not an oversight. */
   --primary-color: var(--lofty-crisp-orange);
   --primary-hover-color: var(--lofty-orange-hover);
   --primary-selected-color: var(--lofty-orange-selected);
@@ -69,16 +70,17 @@ body, body.light-app-theme {
   --brand-hover-color: var(--lofty-orange-hover);
   --text-color-on-brand: var(--lofty-finisher-white);
 
-  /* The filled action surface. Amber, 7 September: filled primary buttons take the pressed
-     step, so a button label clears AA while --primary-color stays Crisp Orange everywhere
-     the brand actually shows — focus rings, selected tints, accents, chart series.
-     And 9 September, taking the design system's Button behaviour on that step: hovered or
-     focused, THE FILL DROPS OUT and the pressed orange becomes the ink and a 1px line. So
-     there is no darker hover step any more (a derived #9a4330 stood here for two days);
-     there is a hover GROUND — the card white the button sits on — and a hover INK. */
-  --primary-action-color: var(--lofty-orange-pressed);              /* #c2543c — white 4.54:1 */
+  /* The filled action surface, as the design system's Button draws it (Amber, 9 September:
+     "Make sure buttons are crisp orange"). At rest, white on Crisp Orange. Hovered or
+     focused, THE FILL DROPS OUT and Crisp Orange becomes the ink and a 1px line. Both states
+     are 2.62:1 and both are recorded shortfalls in check-contrast.mjs — the brand rule
+     outranks the ratio, and the owner chose it knowing the number. The pressed step
+     (#c2543c, 4.54:1) stood here from 7 to 9 September and is still the remedy if that
+     changes. There is no darker hover step; there is a hover GROUND — the card white the
+     button sits on — and a hover INK. */
+  --primary-action-color: var(--lofty-crisp-orange);                /* #f47e63 — white 2.62:1, known */
   --primary-action-hover-ground: var(--primary-background-color);   /* the fill, dropped out */
-  --primary-action-hover-ink: var(--lofty-orange-pressed);          /* #c2543c on white 4.54:1 */
+  --primary-action-hover-ink: var(--lofty-crisp-orange);            /* #f47e63 on white 2.62:1, known */
 
   /* Eco Green is a minimal highlight, never a shell, a panel fill or a link colour. */
   --highlight-color: var(--lofty-eco-green);
@@ -126,13 +128,13 @@ body.black-app-theme {
   --brand-hover-color: var(--lofty-orange-dark-hover);
   --text-color-on-brand: var(--lofty-finisher-white);
 
-  /* Same filled action surface in dark: the pairing is white on #c2543c either way, because
-     the button paints its own ground rather than the theme's. Hovered, the ground is the
-     dark surface and the ink lifts to the step the system uses for a hovered link on dark —
-     #c2543c on the dark panel is 3.7:1, #f79a84 is 7.4:1. */
-  --primary-action-color: var(--lofty-orange-pressed);
+  /* Same filled action surface in dark: white on Crisp Orange either way, because the
+     button paints its own ground rather than the theme's. Hovered, the ground is the dark
+     surface and Crisp Orange is the ink — 5.95:1 on Flint 800, so the dark hover is the one
+     state of the four that clears AA. */
+  --primary-action-color: var(--lofty-crisp-orange);
   --primary-action-hover-ground: var(--primary-background-color);
-  --primary-action-hover-ink: var(--lofty-orange-dark-hover);
+  --primary-action-hover-ink: var(--lofty-crisp-orange);
 
   --highlight-color: var(--lofty-green-dark);
   --highlight-hover-color: var(--lofty-green-dark-hover);
@@ -222,18 +224,20 @@ body {
    changes a rule. The class hashes move between Vibe versions, so the selector matches on
    the stable part of the name — the same `[class*=]` approach `ui.css` already uses.
 
-   At rest: white on the pressed step (Amber, 7 September). Hovered, focused or active: the
-   fill drops out to the button's ground and the pressed step becomes the ink and a 1px line
-   (Amber, 9 September — the design system's Button behaviour, one step darker so both
-   states clear 4.5:1). The line is an inset shadow because Vibe's button has no border, so
-   nothing shifts; on :focus-visible it rides inside the orange focus ring. Vibe's own
-   `:focus` rule means a clicked button stays inverted while it keeps focus, which is also
-   how the design system's Button treats `active`.
+   At rest: white on Crisp Orange. Hovered, focused or active: the fill drops out to the
+   button's ground and Crisp Orange becomes the ink and a 1px line — the design system's
+   Button, as drawn (Amber, 9 September: "Make sure buttons are crisp orange", chosen with
+   the 2.62:1 in front of her; the pressed step stood here 7–9 September). The line is an
+   inset shadow because Vibe's button has no border, so nothing shifts; on :focus-visible it
+   rides inside the orange focus ring. Vibe's own `:focus` rule means a clicked button stays
+   inverted while it keeps focus, which is also how the design system's Button treats
+   `active`.
 
-   Why buttons and not the whole palette: white on Crisp Orange is 2.62:1, which fails AA at
-   every size, and a button label is text. Repainting --primary-color globally would have
-   taken the brand hue off focus rings, selected tints, accents and chart series too, where
-   it carries no text and is doing its actual job. */
+   Why the indirection survives when the value equals Vibe's default: --primary-action-color
+   is the one place the button's fill is decided, so the 7 September remedy is a one-line
+   change if the owner ever wants it back, and check-contrast.mjs measures the button's
+   pairing by these names rather than by --primary-color, which also paints focus rings,
+   selected tints, accents and chart series where it carries no text. */
 [class*="kindPrimary"][class*="colorPrimary"],
 [class*="kindPrimary"][class*="colorBrand"] {
   --primary-color: var(--primary-action-color);

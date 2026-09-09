@@ -42,7 +42,7 @@ Nothing outside these except status.
 
 | Token | Hex | Role |
 | --- | --- | --- |
-| **Crisp Orange** | `#f47e63` | **Primary.** The active tab underline, the selected nav item, focus rings, the first data series. A *filled button* uses the pressed step `#c2543c` — see below |
+| **Crisp Orange** | `#f47e63` | **Primary.** The active tab underline, the selected nav item, focus rings, the first data series, and the *filled button* — see below |
 | **Eco Green** | `#005058` | **Minimal highlight only.** Small decorative accents and later data series. **Never a shell, a panel fill, or a link colour** |
 | **Foundation Black** | `#414042` | Text, inverted surfaces, brand panels. The secondary |
 | **Finisher White** | `#ffffff` | Pages, shells, cards |
@@ -74,22 +74,25 @@ reach AA either. Restricting the size reduces the exposure; it does not remove i
 itself as an identity — because a check optimising for the ratio alone would put the ink
 back, and the rule outranks the ratio.
 
-**Amber took that remedy for filled buttons, 7 September**, and on 9 September took the
-design system's Button behaviour on top of it: **on hover the fill drops out, and the pressed
-orange becomes the ink and the line.** So:
+**Amber took that remedy for filled buttons on 7 September, and reversed it on 9 September.**
+Shown the 2.62:1 twice and offered the pressed step, she chose the brand: *"Make sure buttons
+are crisp orange."* A filled button is therefore Crisp Orange and behaves as the design
+system's Button does — **on hover the fill drops out, and Crisp Orange becomes the ink and
+the line.** So:
 
 | Surface | Paint | Contrast |
 | --- | --- | --- |
-| **Filled primary button** | white on `--primary-action-color` `#c2543c` | **4.54:1** ✓ |
-| …hovered or focused | `--primary-action-hover-ink` `#c2543c` ink and 1px line on `--primary-action-hover-ground` (the card white) | **4.54:1** ✓ |
-| …hovered, dark theme | `#f79a84` ink and line on the dark panel | **7.4:1** ✓ |
+| **Filled primary button** | white on `--primary-action-color` `#f47e63` | **2.62:1** ✗ recorded |
+| …hovered or focused | `--primary-action-hover-ink` `#f47e63` ink and 1px line on `--primary-action-hover-ground` (the card white) | **2.62:1** ✗ recorded |
+| …hovered, dark theme | `#f47e63` ink and line on the dark panel | **5.95:1** ✓ |
 | Focus rings, selected tints, accents, chart series | `--primary-color` `#f47e63` | *carries no text* |
-| Toasts, tipseens, filled labels | `--primary-color` `#f47e63` | **2.62:1** ✗ |
+| Toasts, tipseens, filled labels | `--primary-color` `#f47e63` | **2.62:1** ✗ recorded |
 
-`--primary-color` stays Crisp Orange, because everywhere else it is used it carries no text
-and is doing its actual job — being the brand. **The last row is what is left of the
-problem:** a filled orange label or toast with small text is the thing this palette still
-cannot make accessible, and it is recorded as a shortfall rather than solved.
+The button rows are the owner's decision, made with the number in front of her, and they are
+held the way every other shortfall here is held: measured in `check-contrast.mjs`, never
+allowed to get worse, printed on every run. The remedy has not gone anywhere —
+`--primary-action-color` is the one place the fill is decided, and the pressed step is a
+one-line change if the decision is ever revisited.
 
 **How the override works, and why it is shaped that way.** Vibe is the layout system; the
 brand system overrides it. Vibe's filled button is `.kindPrimary.colorPrimary { background:
@@ -101,12 +104,11 @@ of the name.
 
 **Why the hover inverts rather than darkens.** The design system's `Button.jsx` draws its one
 filled orange action inverting on hover — *"fill drops out, orange becomes ink and line"* —
-but on Crisp Orange, so both states sit at 2.62:1. Amber's 9 September choice, with the two in
-front of her, was the Button's behaviour on the pressed step: the same motion, one step darker,
-and both states clear AA. The derived hover `#9a4330` that stood between 7 and 9 September is
-gone with it; nothing in this repo darkens the pressed step any more. On dark the hover ink is
-`--lofty-orange-dark-hover` `#f79a84`, the step the design system already uses for a hovered
-link on dark, because `#c2543c` on the dark panel is 3.7:1.
+and Amber chose that component as the truth. The derived hover `#9a4330` that stood between
+7 and 9 September is gone; nothing in this repo darkens an orange any more. The pressed-step
+version of the same motion (fill `#c2543c`, ink `#c2543c`, both 4.54:1) was built, probed and
+offered on 9 September, and declined in favour of the brand colour; it is in the history of
+`theme/tokens.css` if wanted.
 
 **One brand-kit contradiction, resolved.** The kit prints `HEX #000000` next to
 `RGB 65 64 66` for Foundation Black. The RGB is authoritative, so the token is `#414042`.
@@ -235,21 +237,25 @@ not a preference.
 
 ### Where the palette falls short
 
-Two pairings do **not** meet the floor. They are recorded in
-`app/scripts/check-contrast.mjs` at their measured value, so the check fails if either
-gets worse, and prints them on every run so they stay visible rather than becoming normal.
-Neither is a value this repo chose.
+Four pairings do **not** meet the floor — six measurements, since three are checked in both
+themes. They are recorded in `app/scripts/check-contrast.mjs` at their measured value, so the
+check fails if any gets worse, and prints them on every run so they stay visible rather than
+becoming normal. None is a value this repo chose: two are the owner's brand decision, two are
+the design system's.
 
 | Pairing | Measured | Needs | |
 | --- | --- | --- | --- |
-| **White on filled Crisp Orange** (both themes) | **2.62:1** | 4.5:1 | The brand rule. Below the 3:1 large-text floor too. **Buttons no longer use this** — what is left is toasts, tipseens and filled labels |
+| **White on filled Crisp Orange** (both themes) | **2.62:1** | 4.5:1 | The brand rule. Below the 3:1 large-text floor too. Toasts, tipseens, filled labels |
+| **White on a filled primary button** (both themes) | **2.62:1** | 4.5:1 | Amber, 9 September: *"Make sure buttons are crisp orange"*, chosen with this number in front of her. The pressed step (4.54:1) held this row from 7 to 9 September and is one line away |
+| **A hovered button's Crisp Orange ink on white** (light) | **2.62:1** | 4.5:1 | The same decision, other state: the fill drops out and Crisp Orange is the text and line. On dark the same ink is 5.95:1 |
 | `--placeholder-color` `#8a898d` on white | **3.47:1** | 4.5:1 | The design system calls this "example text only, never a label", which narrows the exposure but does not clear it. `#757478` would, at 4.64:1. Open question 9 in `docs/open-questions.md` |
 
-**The first one no longer covers buttons.** Amber took the pressed step for filled buttons
-on 7 September, so a button label is now 4.54:1, and the hover that inverts it (9 September)
-holds the same ratio. What remains at 2.62:1 is every *other*
-filled-orange surface that carries text — toasts, tipseens, filled labels. Those either take
-the pressed step too, or the design project gives them a ground that white survives on.
+**The button rows are a decision, not an oversight.** The pressed step was applied on
+7 September and the button cleared AA for two days; on 9 September, offered the pressed step
+again with the inverted hover on it, Amber chose Crisp Orange. So every filled-orange surface
+that carries text — buttons, toasts, tipseens, filled labels — sits at 2.62:1, and the palette
+has one honest answer for all of them: the pressed step, or a ground that white survives on,
+if the owner ever asks.
 
 **Two dark-mode shortfalls closed on 7 September, from the design side.** White on the
 lifted Eco Green was 4.26:1 at `#1f8791`; the design project moved the fill to `#20707a`
