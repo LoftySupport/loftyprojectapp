@@ -153,22 +153,20 @@ managers should be able to register a new source themselves, the Admin → Integ
 opens to managers for that one act and the plan's §3 changes one word. Not blocking: Phase 1
 has one source to register and a superadmin registers it either way.
 
-### 15. Exported documents: Helvetica, or the brand's new Arial?
+### 15. Fieldwork in a printed PDF — is the licence settled?
 
-The brand repository changed its fallback on 9 September: every token stack now ends
-`Montserrat, Arial, sans-serif`, and the document template's own instructions say *"Fallback
-order is Montserrat first, then Arial. Do not substitute Helvetica, Calibri or Aptos."* The
-app's Word and PDF writers (`app/src/data/export/docx.ts`, `pdf.ts`) set **Helvetica** as the
-document face, on the earlier template's rule that Helvetica was the only approved fallback
-and Arial never was — and the style guide in the same brand repository still shows *"Substitute
-Calibri, Arial or Aptos"* as the bad example, so the brand sources disagree with each other.
-Screens moved to Arial on this sync (a screen never has Helvetica to fall back to on Windows
-anyway; the two are metric-compatible, so nothing reflowed). Documents did not, for the same
-reason as question 12: the export palette and face are written down as a decision (0026). So:
-do the Word and PDF exports follow the template onto Arial — which also means the style
-guide's example wants correcting — or does Helvetica stay for documents? A PDF can name
-Helvetica as one of the fourteen built-in faces without embedding it; Arial it cannot, so the
-answer decides whether the PDF writer keeps its two-kilobyte files.
+Amber's rule for documents (9 September, answered below): Montserrat, *"unless it has fonts
+embedded in it for print then it will be brand font"*. The PDF writer now embeds Montserrat,
+so by that rule it could embed Fieldwork instead. It does not yet, for one reason: the brand
+repository's own `NOTICE.md` says Fieldwork is a commercial face whose distribution beyond
+the private repository is unconfirmed. Embedding it in a PDF puts a subset of the font
+program in every file a client receives, and shipping it in the app puts the whole face on
+`hub.lofty.au` for anyone to fetch. Montserrat is under the SIL Open Font License and has
+neither problem. So: does Lofty's Fieldwork licence permit embedding in documents sent to
+clients, and web-serving the face? If yes, the PDF's two faces become Fieldwork Geo Demibold
+(600) for headings and Fieldwork Hum Light (300) for cells — the six `.woff` cuts are in the
+brand repository — and the Word file stays Montserrat, since Word cannot embed without the
+reader's cooperation.
 
 ---
 
@@ -176,6 +174,14 @@ answer decides whether the PDF writer keeps its two-kilobyte files.
 
 | Date | Question | Answer |
 | --- | --- | --- |
+| 9 Sep | (asked as 15) Exported documents: Helvetica, or the brand's new Arial? | **Neither — Montserrat.** *"exported documents in monteserat unless it has fonts embedded in it for print then it will be brand font"*. The Word file names Montserrat; the PDF embeds a WinAnsi subset of Montserrat Regular and SemiBold (~41 kB each, `scripts/build-montserrat.mjs`) since it cannot name a face that is not one of the fourteen. The "brand font when embedded" half is question 15 above, held on the licence |
+| 9 Sep | Which orange carries text — the mockups' split, or `Button.jsx`? | Amber chose **`Button.jsx`**: *"The one filled orange action inverts on hover — fill drops out, orange becomes ink and line."* Recorded as her answer; **not yet applied**, because white on `#f47e63` at 14px is 2.9:1 against DESIGN.md's 4.5:1 contract and reverses the 7 Sep pressed-orange decision — the one question in the chat is which of the two gives |
+| 9 Sep | Arial as the fallback, or the style guide's "never Arial"? | **Arial** — *"Fallback order is Montserrat first, then Arial. Do not substitute Helvetica, Calibri or Aptos."* The style guide's bad example in the brand repository is the one that is wrong |
+| 9 Sep | Icon count 276 or 274? | **274** plus the 14 Lofty glyphs — readme and changelog are right, `SKILL.md` in the brand repository is stale |
+| 9 Sep | Is Mid Grey still a colour? | **Yes** — it is in the design project's `guidelines/colors-brand.html`. Brand only; it draws no UI and no token file declares it, which is why the mirror has no `--lofty-mid-grey` |
+| 9 Sep | Board phase colour — the mockups' orange strip, the guideline's none, or the app's teal? | *"happy to do whatever looks best.. green is fine to stay"* — **the teal ramp stays**. Off the palette by name, accepted by the owner |
+| 9 Sep | Rail selection and the 56/224 shell from the mockups? | *"the mockups of sidebar and shell is mainly for concepts for slideout draw with the way it presents"* — **concept only**; the app's shell, white pill and 64/232 are not asked to change |
+| 9 Sep | The eight PNG-wrapped domain icons? | *"The real vectors are uploaded in the repository as well"* — **not found**: as of brand `main` @ 447b873 and the design project on 9 Sep, Design, Drawings, FloorPlan, JobHouse, JobSite, Maintenance, Projects and Reports are each an SVG wrapping a PNG. Re-check on the next sync |
 | 8 Sep | (asked as 14) Which AI vendors may receive Lofty's data through Ask and MCP? | **Anthropic only**, via the Claude API — chosen with Claude on Microsoft Foundry, "any vendor" and "none yet" in front of her. The Ask box ships in Phase 1; no ChatGPT connection; the vendor sits behind one config value so a later move is a setting, not a rebuild |
 | 8 Sep | (asked as 15) "Microsoft cowork": which product? | **Microsoft 365 Copilot** — a Copilot Studio agent in Teams over the MCP server |
 | 8 Sep | (asked as 16) Xero: one organisation, and what does an invoice belong to? | **One organisation** → a custom connection. And the shape is purchase orders before invoices: *"Each job has many purchase orders created in SiteBook belonging to contractors that need to be linked to jobs and pushed into xero for reconciling"*, then *"Right now I just want to pull info from SiteBook but going forward we want to eventually replace SiteBook so will need to push to xero"*. So SiteBook → Hub now, Hub → Xero later and designed for from the first migration. The invoice with no purchase order is question 13 (open, below) |

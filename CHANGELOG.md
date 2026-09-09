@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- `npm run build:montserrat` regenerates the embedded font subset and its width tables from Google Fonts
 - Import an HTML page as well as a Word document or a PDF
 - Import a Word document or a PDF and it becomes a template or a document — headings, prose and Word tables become blocks you can edit, and it tells you up front what it could not bring across
 - Drop an image straight into a report, or pick one from your machine, instead of hosting it somewhere and pasting a link
@@ -150,6 +151,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- exported Word and PDF documents are set in Montserrat, the brand's document face, in place of Helvetica — the PDF now carries the font, so it looks the same on every machine
 - the design-system mirror is back in step with the brand repository — a sequential orange data scale for continuous values, and Arial is now the last font fallback on every screen (Helvetica before)
 - The merged-pull-requests feed on Updates → Changelog shows every finalised pull request by default, using its title when it declared no @changelog line
 - Somebody without a Lofty account can no longer discover the names of the tables and columns behind the app
