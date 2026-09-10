@@ -49,7 +49,30 @@ export type AuState = (typeof AU_STATES)[number];
  */
 export interface Address {
   id: Uuid;
-  lotNumber: string | null;
+  /**
+   * The residence number on the plan. Leads the consolidated address when set:
+   * "Res 1, Lot 3, 13 Tester Street, Testville, SA, 5000".
+   *
+   * A number, like the lot number and unlike the street number — Amber, 10 September:
+   * *"a lot number or res number is only a number … however a street number can be
+   * something like 100-105 (as text) or 12B"* (`0110`).
+   *
+   * Usually null on a project's address and never forbidden on one: `0105` offered the
+   * field on a job only and Amber corrected it the same day — *"on a project you might
+   * update the res number there as well"*.
+   */
+  resNumber: number | null;
+  /**
+   * The lot as it appears on the plan of division.
+   *
+   * **A number since `0110`**, and the reason it was text before is worth knowing so
+   * nobody reinstates it: `0034` and the dictionary both claimed *"12A, 5-7 and Lot 3
+   * are as common as 12"*, and the split dialog said *"2B as readily as 2"* on screen.
+   * All three were wrong about which number carries the letters. Every one of the 13
+   * lot numbers in the database is digits only; all twelve ranged or suffixed values
+   * are STREET numbers.
+   */
+  lotNumber: number | null;
   streetNumber: string | null;
   street1: string;
   street2: string | null;
@@ -413,6 +436,24 @@ export interface Job {
   currentAddress: string;
   originalAddress: string | null;
   projectCurrentAddress: string;
+
+  /**
+   * The council of the job's OWN current address — `job_display.job_council`, added by
+   * 0108, and read off `cur` rather than `pcur`: a job that has been moved off its
+   * project's site can sit in a different LGA, and that is exactly the case worth being
+   * able to see.
+   *
+   * NOT part of `currentAddress`. Amber, 10 September: *"the council area still needs
+   * to be recorded, but just not in the full address line. it stays as a property
+   * field."* `build_consolidated_address()` has never composed it in, and this field is
+   * how the drawer shows it beside the address instead. Until 0108 the app could SET a
+   * job's council — the change-address form carries the picker — and had nowhere to
+   * show it back.
+   *
+   * Null is real: the council is optional since 0073, because four SA suburbs span two
+   * of them and a guess on a lodged application is worse than a blank.
+   */
+  council: SaCouncil | null;
 
   // + fields
   createdAt: IsoDateTime;
@@ -2081,7 +2122,9 @@ export interface ProcessRunPatch {
  * would be the app leaking its own schema into a form.
  */
 export interface NewAddress {
-  lotNumber?: string | null;
+  /** The residence number — see `Address.resNumber`. Offered on every address form. */
+  resNumber?: number | null;
+  lotNumber?: number | null;
   streetNumber?: string | null;
   /**
    * Optional since `0037`, and that is the whole point of it.
@@ -2265,7 +2308,12 @@ export const MAX_SPLIT = 60;
  * rather than a number and why the batch is a list rather than a count and a start.
  */
 export interface SplitLot {
-  /** As it appears on the plan of division — "1", "2B", "14A". */
+  /**
+   * As typed into the row — a string, because that is what a text input holds, and the
+   * seam parses it. The COLUMN is an integer since `0110`: a lot number is only ever a
+   * number, and "2B" is a street number, not a lot (Amber, 10 Sep). Anything that is
+   * not digits is refused at the seam with a message rather than sent and rejected.
+   */
   lotNumber: string;
   /**
    * The number this job has in the old system, when it is a job that already exists
@@ -3067,7 +3115,7 @@ export interface ReportDocument {
    */
   publishedUrl: string | null;
   /**
-   * PUBLISHED TO THE JOB, rather than to a link (0106).
+   * PUBLISHED TO THE JOB, rather than to a link (0110).
    *
    * Amber, 10 September: *"until Documents are integrated to Sharepoint, please allow the
    * option of saving to Job in the system and/or downloading it and adding a link to that
@@ -3112,7 +3160,7 @@ export function reportDocumentState(d: {
   // watermark and neither is safe to send, but only this one means there is a stale copy
   // somebody may still be reading — sitting in SharePoint, or saved on the job here.
   //
-  // Both are asked about (0106). A document published by saving the file to the job and
+  // Both are asked about (0110). A document published by saving the file to the job and
   // then edited is in exactly the same position as one published to a link and then
   // edited, and reading only the URL would have called it a plain draft — quietly the
   // wrong answer for the half of the documents that never go near SharePoint.

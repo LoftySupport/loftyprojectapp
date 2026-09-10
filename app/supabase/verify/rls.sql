@@ -2029,7 +2029,7 @@ begin
   if pub is not null then raise notice 'ok  sharing a published document does not revert it';
   else raise warning 'FAIL: sharing took the publication back'; end if;
 
-  -- 0106. Amber, 10 Sep: "allow the option of saving to Job in the system and/or
+  -- 0110. Amber, 10 Sep: "allow the option of saving to Job in the system and/or
   -- downloading it and adding a link". Published as a FILE and nothing else — the case
   -- 0104's constraint refused outright, proved here as a real signed-in user rather than
   -- as the owner, because that is who will be doing it.
@@ -2066,7 +2066,7 @@ begin
   if still_named is not null then raise notice 'ok  the saved file survives the revert, as the address does';
   else raise warning 'FAIL: the revert threw away the file the document was published as'; end if;
 
-  -- 0107. Amber, 10 Sep: *"only onver version of the document. if they want another copy
+  -- 0111. Amber, 10 Sep: *"only onver version of the document. if they want another copy
   -- they can download it"*. Publishing again replaces the copy on the record rather than
   -- adding one beside it — and as an ORDINARY USER, which is the half that cannot be
   -- proved in the migration: deleting a documents row is admin-only by 0032, so without
@@ -2096,7 +2096,7 @@ reset request.jwt.claim.sub;
 update profiles set profile_permission = 'admin' where profile_email = 'behaviour-test@lofty.com.au';
 set role authenticated;
 set request.jwt.claim.sub = :'uid';
--- 0106. Reaping a stored file is admin work (0032), so this is the only place the reap
+-- 0110. Reaping a stored file is admin work (0032), so this is the only place the reap
 -- trigger's real path can be watched: a signed-in admin deletes the file, and the document
 -- that was published AS it goes back to being a draft rather than the delete being refused.
 do $$

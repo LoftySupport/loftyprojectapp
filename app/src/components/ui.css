@@ -2759,7 +2759,7 @@ code { overflow-wrap: anywhere; }
 .doc-publish > div:first-of-type { flex: 1 1 240px; min-width: 180px; }
 .doc-publish-hint { flex: 1 0 100%; margin: 0; }
 
-/* Saving a copy to the record (0106). Its own full-width row above the address, because
+/* Saving a copy to the record (0110). Its own full-width row above the address, because
    the two are alternatives rather than a pair of fields to fill in together — sitting them
    side by side reads as "do both", which is exactly the requirement this half removes.
    min-height on the control for the 24px tap target `npm run responsive` asserts: a native

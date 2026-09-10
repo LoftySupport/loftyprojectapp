@@ -1,10 +1,10 @@
--- 0107 — one published copy per document, and the last one goes.
+-- 0111 — one published copy per document, and the last one goes.
 --
 -- Amber, 10 September, asked whether the copies a document leaves on a job are a version
 -- history or clutter: *"only onver version of the document. if they want another copy they
 -- can download it"*.
 --
--- 0106 let a document be published by saving the file against the record. Publish, edit,
+-- 0110 let a document be published by saving the file against the record. Publish, edit,
 -- publish again, and the job held TWO files — both under the document's title, one out of
 -- date, nothing on either row saying which was current. On a job that runs eighteen months
 -- that list is unreadable, and an unreadable list of contracts is worse than a short one.
@@ -63,7 +63,7 @@ begin
   --       FAIL: an admin could not delete a published file — 27000 / tuple to be deleted
   --       was already modified by an operation triggered by the current command
   --
-  --     An admin deleting a published file fires 0106's reap, which clears the pointer,
+  --     An admin deleting a published file fires 0110's reap, which clears the pointer,
   --     which fires THIS trigger, which tries to delete the row the outer command is
   --     already deleting. Nothing about that delete is wrong — the file is going, and
   --     there is no superseding copy to make room for. Clearing the pointer is never this
@@ -137,11 +137,11 @@ comment on function replace_previous_published_copy() is
 --   ERROR:  stack depth limit exceeded
 --
 -- The chain is short once seen. BEFORE, the row still holds the OLD pointer, so deleting
--- the superseded file fires 0106's reap — which finds a report document still naming that
+-- the superseded file fires 0110's reap — which finds a report document still naming that
 -- file and UPDATEs the pointer to null. That update fires this trigger again, which
 -- deletes again, which reaps again, all the way down.
 --
--- AFTER, the new pointer is already in the row, 0106's reap matches nothing, and the two
+-- AFTER, the new pointer is already in the row, 0110's reap matches nothing, and the two
 -- triggers never see each other. Ordering them by name would be a rule nobody can see in
 -- the schema; ordering them by phase is one the database enforces.
 create trigger report_documents_replace_published_copy
@@ -170,7 +170,7 @@ begin
   end if;
 
   insert into report_documents (report_document_title, project_id)
-  values ('__proof__ 0107', mine)
+  values ('__proof__ 0111', mine)
   returning report_document_id into made;
 
   insert into documents (document_name, document_storage_path)
@@ -199,7 +199,7 @@ begin
     raise exception 'publishing again removed the copy it had just saved';
   end if;
   -- The replacement must not disturb the publication itself. This is the assertion that
-  -- catches the trigger being written BEFORE instead of AFTER: 0106's reap then sees a
+  -- catches the trigger being written BEFORE instead of AFTER: 0110's reap then sees a
   -- published row still naming the file being deleted and takes the publication back, so
   -- the document goes to draft in the middle of being published.
   if (select report_document_published_at from report_documents where report_document_id = made) is null then
@@ -260,7 +260,7 @@ begin
 
   -- AND THE FILE ITSELF CAN STILL BE DELETED. This is the probe that found the deadlock
   -- between the two triggers, and it only bites with NO URL — which is the condition
-  -- 0106's reap needs before it clears the pointer, and the clearing is what brought this
+  -- 0110's reap needs before it clears the pointer, and the clearing is what brought this
   -- trigger down on the row the outer command was already deleting:
   --
   --   27000 / tuple to be deleted was already modified by an operation triggered by the
@@ -282,7 +282,7 @@ begin
   if exists (select 1 from documents where document_id = copy4) then
     raise exception 'the published file was not deleted';
   end if;
-  -- 0106's rule, unchanged by any of this: the file was the only answer to "where did it
+  -- 0110's rule, unchanged by any of this: the file was the only answer to "where did it
   -- go", so the document is a draft again.
   if (select report_document_published_at from report_documents where report_document_id = made) is not null then
     raise exception 'a document is still published as a file that no longer exists';

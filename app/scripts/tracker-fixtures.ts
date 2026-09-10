@@ -218,6 +218,9 @@ const FIXTURE_JOBS: Job[] = ["9001-01", "9001-02", "9001-03"].map((id, i) => ({
   currentAddress: `${28 + i} FIXTURE Corner Street, Adelaide SA 5000`,
   originalAddress: null,
   projectCurrentAddress: "FIXTURE Corner Street, Adelaide SA 5000",
+  // Left null rather than given a plausible LGA: a fixture that names a real council
+  // is a fixture somebody quotes back. Null is what the drawer shows as "—".
+  council: null,
   stageEnteredAt: ISO(2026, 8, 20 + i),
   createdAt: ISO(2026, 8, 1),
   createdBy: null,

@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { BreadcrumbsBar, BreadcrumbItem, Button, Heading, Tab, TabList, Text, TextField } from "@vibe/core";
 import { useTemplatePhases, useTeams } from "../data/useLookups";
 import type { BoardJob } from "../data/boardModel";
-import { TITLE_TYPE_LABELS, TITLE_TYPES, type TeamId, type TitleType } from "../data/types";
+import { TITLE_TYPE_LABELS, TITLE_TYPES, type NewAddress, type TeamId, type TitleType } from "../data/types";
 import { StatusPill } from "./RecordCards";
 import { PropertySlots } from "./PropertySlots";
 import { ProcessesPanel } from "./ProcessesPanel";
@@ -17,6 +17,7 @@ import { WatchButton } from "./WatchButton";
 import { JobMaintenancePanel } from "./JobMaintenancePanel";
 import { JobTimeline } from "./JobTimeline";
 import { TasksPanel } from "./TasksPanel";
+import { AddressFields } from "./CreateDialogs";
 import { CommentsPanel } from "./CommentsPanel";
 import { useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
@@ -121,6 +122,36 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
   // link a job by, so it is addable right here. Draft-then-Save rather than on-blur —
   // an identifier deserves a deliberate commit, and the unique refusal needs somewhere
   // to land before focus has already gone.
+  /**
+   * Changing the job's address (0105) — Amber, 10 September: *"A project address needs
+   * to be updatable. A Job address needs to be updatable."* The project half has
+   * existed for weeks; this is the half that did not, and it is the one that matters
+   * more, because a job's address is the one that moves: "Lot 3" becomes "13 Tester
+   * Street" when titles issue, and the res number arrives months into a build.
+   *
+   * Same shape and the same words as the project's panel, deliberately — it is the
+   * same act on a different record, and two dialects of it would be two things to
+   * learn.
+   */
+  const [newAddress, setNewAddress] = useState<NewAddress | null>(null);
+  const [addressBusy, setAddressBusy] = useState(false);
+  const [addressErr, setAddressErr] = useState<string | null>(null);
+  useEffect(() => { setNewAddress(null); setAddressErr(null); }, [job.jobNumber]);
+  const saveAddress = async () => {
+    if (!newAddress || addressBusy) return;
+    setAddressBusy(true);
+    setAddressErr(null);
+    try {
+      await repo.setJobCurrentAddress(job.jobNumber, newAddress);
+      setNewAddress(null);
+      onMoved();
+    } catch (err) {
+      setAddressErr(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAddressBusy(false);
+    }
+  };
+
   const [oldNoDraft, setOldNoDraft] = useState(job.jobNumberOld ?? "");
   const [oldNoBusy, setOldNoBusy] = useState(false);
   const [oldNoErr, setOldNoErr] = useState<string | null>(null);
@@ -357,10 +388,52 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
             </div>
             <div className="field-row">
               <div className="field-label"><Text type="text2">Current address</Text></div>
-              <Text type="text2" weight="medium">
-                {job.currentAddress ?? <Token>job_display.job_current_address</Token>}
-              </Text>
+              <div className="field-inline">
+                <Text type="text2" weight="medium">
+                  {job.currentAddress ?? <Token>job_display.job_current_address</Token>}
+                </Text>
+                {can("user") && newAddress === null && (
+                  <Button size="small" kind="tertiary" onClick={() => setNewAddress({ suburb: "", postcode: "" })}>
+                    Change
+                  </Button>
+                )}
+              </div>
             </div>
+
+            {newAddress !== null && (
+              <div className="new-address-block">
+                <div className="panel-head">
+                  <Text type="text2" weight="bold">New address</Text>
+                </div>
+                {/* The same sentence the project's panel uses, because it is the same
+                    rule: the original is what the job was created as and never moves,
+                    and every address it has had stays searchable. */}
+                <Text type="text3" color="secondary" element="p" ellipsis={false}>
+                  The original address never changes — it is what the job was created as,
+                  and what old paperwork says. Saving this makes it the current one; every
+                  previous address stays on the record and stays searchable.
+                </Text>
+                <div className="create-form">
+                  {/* `needs="street"` because a job may not sit at a locality. The res
+                      number is on every address form now, a project's included — see
+                      `AddressFields`. */}
+                  <AddressFields value={newAddress} onChange={setNewAddress} needs="street" />
+                </div>
+                <div className="field-inline" style={{ marginTop: "var(--space-8)" }}>
+                  <Button
+                    size="small"
+                    onClick={() => void saveAddress()}
+                    disabled={addressBusy || !newAddress.suburb.trim() || !newAddress.postcode.trim()}
+                  >
+                    {addressBusy ? "Saving…" : "Make this the current address"}
+                  </Button>
+                  <Button size="small" kind="tertiary" onClick={() => setNewAddress(null)}>
+                    Cancel
+                  </Button>
+                </div>
+                {addressErr && <Problem>{addressErr}</Problem>}
+              </div>
+            )}
             <div className="field-row">
               <div className="field-label">
                 <Text type="text2">Previous address</Text>
@@ -369,6 +442,27 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
                 <Text type="text2" weight="medium">{job.originalAddress}</Text>
               ) : (
                 <Text type="text3" color="secondary">never renamed — always this address</Text>
+              )}
+            </div>
+            {/* Beside the address, never inside it. Amber, 10 September: *"the council
+                area still needs to be recorded, but just not in the full address line.
+                it stays as a property field."* `build_consolidated_address()` has never
+                composed it in; what was missing was anywhere to READ it back on a job —
+                the change-address form above carries the picker, and until 0108
+                `job_display` did not select the column, so a council set here vanished.
+
+                The job's own, not the project's: a job moved off its project's site can
+                sit in a different LGA. An em dash rather than a token when it is null,
+                because optional-since-0073 is a real answer — four SA suburbs span two
+                councils and the form refuses to guess for them. */}
+            <div className="field-row">
+              <div className="field-label">
+                <Text type="text2">Council region</Text>
+              </div>
+              {job.council ? (
+                <Text type="text2" weight="medium">{job.council}</Text>
+              ) : (
+                <Text type="text3" color="secondary">—</Text>
               )}
             </div>
           </CollapsiblePanel>

@@ -286,6 +286,22 @@ export interface Repository {
    */
   setProjectCurrentAddress(id: number, address: NewAddress): Promise<Project>;
 
+  /**
+   * The same for a job — Amber, 10 September: *"A project address needs to be
+   * updatable. A Job address needs to be updatable."*
+   *
+   * Only the project half existed. A job's address could be set at creation and never
+   * changed after it, which is the wrong way round: a job's address is the one that
+   * moves, from "Lot 3" to "13 Tester Street" when titles issue, and it is where a res
+   * number is added months into a build.
+   *
+   * Same rules as the project's, and they come from the database rather than from
+   * here: `guard_original_address` leaves the original alone, the `0042` trigger files
+   * the outgoing current address in `address_history`, and
+   * `guard_job_address_is_a_street` refuses to leave a job at a locality.
+   */
+  setJobCurrentAddress(jobNumber: string, address: NewAddress): Promise<Job>;
+
   /** Every address a record has had and when it stopped applying. Newest first. */
   listAddressHistory(ref: { projectId?: number; jobId?: string }): Promise<AddressHistoryEntry[]>;
 
@@ -846,7 +862,7 @@ export interface Repository {
    * integration is in place add in the draft watermark and when ready to publish you have
    * to add in the sharepoint link which replaces the draft document"*.
    *
-   * TWO WAYS, AND AT LEAST ONE OF THEM (0106). Amber, 10 September, once 0104 had shipped:
+   * TWO WAYS, AND AT LEAST ONE OF THEM (0110). Amber, 10 September, once 0104 had shipped:
    * *"until Documents are integrated to Sharepoint, please allow the option of saving to
    * Job in the system and/or downloading it and adding a link to that document file"*.
    *
@@ -871,7 +887,7 @@ export interface Repository {
    * the panel writes and the importer writes, and a rule each of them has to remember is
    * a rule the next one will forget.
    *
-   * ONE COPY, NOT A HISTORY (0107). Amber, 10 September: *"only onver version of the
+   * ONE COPY, NOT A HISTORY (0111). Amber, 10 September: *"only onver version of the
    * document. if they want another copy they can download it"* — so a `file` given here
    * REPLACES the copy the previous publish saved on the record, rather than adding one
    * beside it. The database does the replacing, not this method: a trigger, for the same
@@ -879,7 +895,7 @@ export interface Repository {
    * record, which is left where they put it and only unpointed.
    *
    * Nor is there an unpublish hiding in the file's deletion. Deleting the saved copy takes
-   * the publication back only when it was the ONLY answer to "where did it go" (0106's
+   * the publication back only when it was the ONLY answer to "where did it go" (0110's
    * trigger) — a document that also went to SharePoint stays published, because the copy
    * people were sent is still where it was sent.
    */
@@ -889,7 +905,7 @@ export interface Repository {
   ): Promise<ReportDocument>;
 
   /**
-   * A link to open a file Lofty itself holds for a record (0106).
+   * A link to open a file Lofty itself holds for a record (0110).
    *
    * Every `documents` row with a `storagePath` rather than a URL — which today means the
    * copies saved when a document is published to the job, and will mean whatever the
@@ -999,6 +1015,7 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "moveProjectStage",
   "updateProject",
   "setProjectCurrentAddress",
+  "setJobCurrentAddress",
   "listAddressHistory",
   "listStages",
   "listTeams",
@@ -1204,6 +1221,7 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   moveProjectStage: "projects",
   updateProject: "projects",
   setProjectCurrentAddress: "projects + addresses",
+  setJobCurrentAddress: "jobs + addresses",
   listAddressHistory: "address_history",
   // Both became tables — `teams` in 0026, `pipeline_stages` in 0029. The labels
   // said "enum" long after that stopped being true, on the one screen whose entire

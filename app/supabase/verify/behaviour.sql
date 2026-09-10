@@ -15,7 +15,11 @@ on conflict (profile_email) do nothing;
 -- locality". The guard was right; the fixture was the thing that was wrong.
 insert into addresses (address_lot_number, address_street_1, address_suburb,
                        address_postcode, address_council, address_created_by)
-select 'Lot 3','Corner Street','Golden Grove','5125','City of Tea Tree Gully', profile_id from profiles where profile_email='behaviour-test@lofty.com.au';
+-- 3, not 'Lot 3'. This fixture typed the label until 0106 made `address_lot_number` an
+-- integer — Amber, 10 Sep: "a lot number or res number is only a number" — and the cast
+-- happens when the INSERT is parsed, before any trigger could strip it. The tolerance
+-- moved to the app, where input tolerance belongs; the refusal is asserted at step 36.
+select 3,'Corner Street','Golden Grove','5125','City of Tea Tree Gully', profile_id from profiles where profile_email='behaviour-test@lofty.com.au';
 
 \echo '--- 1. consolidated address includes lot number and postcode'
 select address_consolidated from addresses where address_street_1 = 'Corner Street';
@@ -415,35 +419,62 @@ order by login_activity_event_type;
 --
 -- 0034 asserts this too, at the moment it changes the function. This asserts it of the
 -- FINAL state, which is the version that survives somebody editing the function again.
+-- Rewritten for 0105 and 0106, which changed the format and two of the three types:
+--   * `Res N, ` leads when there is one, after the unit line — Amber's worked example,
+--     "Res 1, Lot 3, 13 Tester Street, Testville, SA, 5000";
+--   * the tail is comma-separated, "Golden Grove, SA, 5125", not "Golden Grove SA 5125";
+--   * ", AU" is gone — every address here is Australian and her example has no country;
+--   * the lot number is an INTEGER, so the typed "Lot 4" this fixture used to carry is
+--     no longer a thing the table can hold. It is asserted below as a REFUSAL instead,
+--     which is the stronger statement: the old row proved the trigger stripped a label,
+--     this proves the column cannot be talked into taking one.
 begin;
-insert into addresses (address_lot_number, address_street_number, address_street_2,
-                       address_street_1, address_suburb, address_state,
+insert into addresses (address_res_number, address_lot_number, address_street_number,
+                       address_street_2, address_street_1, address_suburb, address_state,
                        address_postcode, address_council)
 -- Ironbark Road, not Corner Street: step 1 already put a fixture on Corner Street, and
 -- an assertion that sweeps up rows it did not create tells you about the wrong thing.
--- "Lot 3" typed with its label is in here on purpose — that is how people enter it, and
--- prefixing a value that already says Lot produced "Lot Lot 3".
-values ('1',     null, null,     'Ironbark Road', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully'),
-       (null,   '28',  null,     'Ironbark Road', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully'),
-       ('3',    '28',  null,     'Ironbark Road', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully'),
-       ('Lot 4', null, null,     'Ironbark Road', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully'),
-       ('3',    '28',  'Unit 2', 'Ironbark Road', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully');
+values (null, 1,    null, null,     'Ironbark Road', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully'),
+       (null, null, '28', null,     'Ironbark Road', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully'),
+       (null, 3,    '28', null,     'Ironbark Road', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully'),
+       (1,    3,    '28', null,     'Ironbark Road', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully'),
+       (null, 3,    '28', 'Unit 2', 'Ironbark Road', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully');
 
+-- `collate "C"` on the ordering, not the database's own: the expected array below is
+-- written in byte order, and a locale that sorts punctuation differently would fail this
+-- for a reason that has nothing to do with addresses.
 select case
-  when array_agg(address_consolidated order by address_consolidated) =
+  when array_agg(address_consolidated order by address_consolidated collate "C") =
        array[
-         '28 Ironbark Road, Golden Grove SA 5125, AU',
-         'Lot 1, Ironbark Road, Golden Grove SA 5125, AU',
-         'Lot 3, 28 Ironbark Road, Golden Grove SA 5125, AU',
-         'Lot 4, Ironbark Road, Golden Grove SA 5125, AU',
-         'Unit 2, Lot 3, 28 Ironbark Road, Golden Grove SA 5125, AU'
+         '28 Ironbark Road, Golden Grove, SA, 5125',
+         'Lot 1, Ironbark Road, Golden Grove, SA, 5125',
+         'Lot 3, 28 Ironbark Road, Golden Grove, SA, 5125',
+         'Res 1, Lot 3, 28 Ironbark Road, Golden Grove, SA, 5125',
+         'Unit 2, Lot 3, 28 Ironbark Road, Golden Grove, SA, 5125'
        ]
-  then 'ok  lot, street, both, unit and a typed "Lot 4" all render distinguishably'
+  then 'ok  lot, street, both, a res number and a unit all render distinguishably'
   else 'FAIL: consolidated address format — ' ||
-       array_to_string(array_agg(address_consolidated order by address_consolidated), ' / ')
+       array_to_string(array_agg(address_consolidated order by address_consolidated collate "C"), ' / ')
 end
 from addresses
 where address_street_1 = 'Ironbark Road';
+
+-- And the negative 0106 is for. Without it this step would pass just as happily with the
+-- lot number still text, which is how "2B is a lot number" survived from August.
+do $$
+begin
+  begin
+    insert into addresses (address_lot_number, address_street_1, address_suburb,
+                           address_state, address_postcode, address_council)
+    values ('Lot 4', 'Ironbark Road', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully');
+    raise warning 'FAIL: the lot number accepted "Lot 4" — the column is not an integer';
+  exception
+    when invalid_text_representation then
+      raise notice 'ok  a lot number with a label in it is refused by the column';
+    when others then
+      raise warning 'FAIL: unexpected on the typed lot number (%)', sqlerrm;
+  end;
+end $$;
 rollback;
 
 \echo '--- 37. a project follows its slowest job, and only forwards'

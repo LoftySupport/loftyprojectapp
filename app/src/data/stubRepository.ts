@@ -159,6 +159,9 @@ export function createStubRepository(): Repository {
     async setProjectCurrentAddress(): Promise<Project> {
       throw new Error("Adding an address needs Supabase.");
     },
+    async setJobCurrentAddress(): Promise<Job> {
+      throw new Error("Adding an address needs Supabase.");
+    },
     async listAddressHistory(): Promise<AddressHistoryEntry[]> { return []; },
     async deleteProject(): Promise<void> {
       throw new Error("Removing a project needs Supabase.");

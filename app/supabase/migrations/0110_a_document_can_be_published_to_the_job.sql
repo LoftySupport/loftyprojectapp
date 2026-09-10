@@ -1,4 +1,4 @@
--- 0106 — a document can be published to the job, not only to a link.
+-- 0110 — a document can be published to the job, not only to a link.
 --
 -- Amber, 10 September, after 0104 shipped: *"until Documents are integrated to Sharepoint,
 -- please allow the option of saving to Job in the system and/or downloading it and adding a
@@ -131,7 +131,7 @@ begin
   -- plain Postgres with no Storage schema at all, and an unguarded insert here breaks the
   -- one check that proves this repository can rebuild production.
   if to_regclass('storage.buckets') is null then
-    raise notice '0106: no storage schema (replay harness) — bucket and object policies skipped.';
+    raise notice '0110: no storage schema (replay harness) — bucket and object policies skipped.';
     return;
   end if;
 
@@ -204,7 +204,7 @@ begin
   $p$;
 exception
   when duplicate_object then
-    raise notice '0106: storage policies already present — left as they are.';
+    raise notice '0110: storage policies already present — left as they are.';
 end
 $$;
 
@@ -227,7 +227,7 @@ begin
   values ('__proof__ published file', 'jobs/__proof__/x.docx')
   returning document_id into a_doc;
 
-  insert into report_documents (report_document_title) values ('__proof__ 0106')
+  insert into report_documents (report_document_title) values ('__proof__ 0110')
   returning report_document_id into made;
 
   -- THE NEW CASE, and the whole point of the migration: published with a FILE and no URL.

@@ -19,7 +19,7 @@ import { CollapsiblePanel } from "./CollapsiblePanel";
 /**
  * A link to a file Lofty holds, fetched at the moment somebody asks for it.
  *
- * `job-documents` is private (0106), so there is no permanent URL to put in an `href` —
+ * `job-documents` is private (0110), so there is no permanent URL to put in an `href` —
  * every read is a signed link that lasts five minutes. That is the whole reason this is a
  * button that fetches rather than an anchor: an anchor would need the URL before anybody
  * clicked, which means signing one per row on every render and having most of them expire
@@ -178,7 +178,7 @@ export function RecordDocuments({
   const [publishing, setPublishing] = useState<string | null>(null);
   const [publishUrl, setPublishUrl] = useState("");
   /**
-   * The copy being saved to the job with it (0106). Amber, 10 September: *"allow the
+   * The copy being saved to the job with it (0110). Amber, 10 September: *"allow the
    * option of saving to Job in the system and/or downloading it and adding a link to that
    * document file"* — so this and the address above are two independent halves of one
    * publish, and either alone is enough.
@@ -188,7 +188,7 @@ export function RecordDocuments({
   const total = documents.length + filed.length;
 
   /**
-   * Where the copy of a published document is held, or null (0106).
+   * Where the copy of a published document is held, or null (0110).
    *
    * Read off the filed list this panel already has: publishing a copy attaches it to this
    * record, so it is one of the rows below. A second query for a column in hand is a round
@@ -360,7 +360,7 @@ export function RecordDocuments({
                 </a>
               )}
 
-              {/* The copy saved on the job (0106). Its path is read off the filed list
+              {/* The copy saved on the job (0110). Its path is read off the filed list
                   rather than fetched: publishing attaches the copy to this record, so it
                   is already in the list beside this row — and a second query for a column
                   the panel is holding is a round trip to learn what it knows. */}
@@ -375,7 +375,7 @@ export function RecordDocuments({
               {can("user") && (
                 publishing === d.id ? (
                   <span className="doc-publish">
-                    {/* TWO WAYS, AND EITHER WILL DO (0106). Amber, 10 September: *"allow
+                    {/* TWO WAYS, AND EITHER WILL DO (0110). Amber, 10 September: *"allow
                         the option of saving to Job in the system and/or downloading it and
                         adding a link to that document file"*. Until SharePoint is
                         integrated a link means somebody has to have set a folder up and
@@ -391,7 +391,7 @@ export function RecordDocuments({
                       <Text type="text3" element="span">Save a copy to this {jobId ? "job" : "project"}</Text>
                       <input
                         type="file"
-                        // What the bucket takes (0106). An accept list is a courtesy
+                        // What the bucket takes (0110). An accept list is a courtesy
                         // rather than a guard — storage refuses the rest at the door,
                         // and the message it gives back is the one on screen.
                         accept=".pdf,.docx,.doc,.html,.htm,.md,.txt"
@@ -539,7 +539,7 @@ export function RecordDocuments({
 
               {/* CORRECTS THE NOTE ABOVE, which said a document Lofty holds the bytes for
                   "has no viewer built yet" and rendered as plain text. That was true until
-                  0106 gave the app somewhere to put bytes for a record; it is now a signed
+                  0110 gave the app somewhere to put bytes for a record; it is now a signed
                   link, and the file opens in whatever the browser or the desktop uses for
                   it — Word for a .docx, the PDF viewer for a .pdf. */}
               {!d.url && d.storagePath && (
