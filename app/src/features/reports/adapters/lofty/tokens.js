@@ -27,6 +27,83 @@ import { formatValue, hasValue } from '../../../../data/propertyFormat';
 const TOKEN = /\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g;
 
 /**
+ * The suffix a party token carries, and the whole of its syntax: `{{purchaser_name}}`.
+ *
+ * A token PER ROLE rather than one `{{owner_name}}`, and that is the design decision.
+ * Amber, 10 September, writing a letter: *"dear [Owner Name] your property [property
+ * address] has just received planning approval on [planning approval date]"* — and there
+ * is no `owner` role. The roles are the ten in `party_roles`: certifier, consultant,
+ * contractor, council, engineer, purchaser, real estate agent, supplier, surveyor, other.
+ *
+ * Guessing which one a letter opens to would have been exactly the invented default
+ * CLAUDE.md forbids. Offering one token per role asks nobody to guess: the person filing
+ * the party chose the role, and the person writing the letter picks the same word off the
+ * menu. A role added to `party_roles` later gets its token with no code change.
+ */
+const PARTY_SUFFIX = '_name';
+
+/** `Real estate agent` → `real_estate_agent_name`. The id is already snake_case; this is
+ * belt and braces for a role somebody adds by hand. */
+const partyTokenKey = (roleId) =>
+  String(roleId).trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') + PARTY_SUFFIX;
+
+function partyTokensFor(ctx) {
+  const roles = ctx?.partyRoles || [];
+  // A property definition whose key ends `_name` would collide silently and the property
+  // would win by arriving later in the list. Nothing in the schema does today; the check
+  // in report-widgets-check.mjs asserts it, so the day one does is the day it reports.
+  return [...roles]
+    .filter(r => r?.id)
+    .sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)))
+    .map(r => ({
+      value: partyTokenKey(r.id),
+      label: `${r.name || r.id} — name`,
+      // "Contacts", because that is what the app calls these people — Amber, 10 September,
+      // asked one word and it was the right one. The nav has a Contacts page, the type
+      // dictionary calls them Contacts, and the panel on the job is People & companies.
+      // "Parties" is the TABLE's name (record_parties, 0082) and appears nowhere a person
+      // reading a menu would have seen it, so a menu group called Parties would have been
+      // the schema leaking onto the screen.
+      group: 'Contacts'
+    }));
+}
+
+/**
+ * Every CURRENT party in one role, as the letter would say them.
+ *
+ * JOINED WITH "and", not just the primary one, and that is the reading that is right in
+ * both cases rather than a preference. One purchaser gives one name — the common case.
+ * Two purchasers on one house give "John Ashby and Mary Ashby", which is what the letter
+ * has to say; taking only the row marked primary would address a letter about somebody's
+ * house to one of the two people who own it.
+ *
+ * PRIMARY FIRST all the same, so where somebody has marked one the letter leads with it.
+ *
+ * A party is current when it has not ended. A purchaser who pulled out in March is not
+ * who the September letter is addressed to, and `record_party_ended_on` is the column
+ * that already says so.
+ *
+ * A company where there is no contact — the council, a supplier — because a party is one
+ * or the other and the letter wants whichever it is.
+ */
+function partyNamesFor(parties, roleId, today) {
+  const now = today || new Date().toISOString().slice(0, 10);
+  const named = (parties || [])
+    .filter(p => p?.roleId === roleId)
+    .filter(p => !p.endedOn || p.endedOn >= now)
+    .map(p => ({ primary: !!p.isPrimary, name: (p.contactName || p.companyName || '').trim() }))
+    .filter(p => p.name);
+
+  named.sort((a, b) =>
+    (a.primary === b.primary ? 0 : a.primary ? -1 : 1) || a.name.localeCompare(b.name));
+
+  const names = [...new Set(named.map(p => p.name))];
+  if (names.length === 0) return '';
+  if (names.length === 1) return names[0];
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+/**
  * The tokens somebody can insert, for the editor's menu.
  *
  * Property definitions, plus a handful of facts about the record itself that are not
@@ -39,6 +116,7 @@ export function tokensFor(ctx) {
     { value: 'job_number', label: 'Job number', group: 'The record' },
     { value: 'project_number', label: 'Project number', group: 'The record' },
     { value: 'address', label: 'Address', group: 'The record' },
+    ...partyTokensFor(ctx),
     ...[...defs]
       .sort((a, b) => (a.stageName || '').localeCompare(b.stageName || '') || a.position - b.position)
       .map(d => ({
@@ -89,10 +167,25 @@ function valuesFor(ctx) {
   rows.filter(v => v.jobId == null).forEach(v => raw.set(v.propertyKey, v.value));
   rows.filter(v => v.jobId != null).forEach(v => raw.set(v.propertyKey, v.value));
 
+  // Who is on the record, by role. Read from the parties the app already loads for this
+  // subject; nothing is fetched here, exactly as nothing is fetched for a property value.
+  const parties = ctx?.parties || [];
+  const roleByToken = new Map(
+    (ctx?.partyRoles || []).filter(r => r?.id).map(r => [partyTokenKey(r.id), r.id])
+  );
+
   return (key) => {
     if (key === 'job_number') return job?.jobNumber || (jobId || '');
     if (key === 'project_number') return String(project?.projectNumber ?? ownProject ?? '');
     if (key === 'address') return job?.currentAddress || project?.currentAddress || '';
+
+    // A role token resolves to a name or to a BLANK — never to null. Null means "no such
+    // field", which renders the token standing as a typo; a role that exists and has
+    // nobody in it is an em dash, the same as a property nobody has filled in. The two
+    // are different facts and the letter says so.
+    const roleId = roleByToken.get(key);
+    if (roleId) return partyNamesFor(parties, roleId);
+
     const def = byKey.get(key);
     if (!def) return null; // not a field at all — a typo, not a blank
     const v = raw.get(key);
@@ -118,6 +211,37 @@ const esc = (s) => String(s)
  *   is a sentence somebody sends. Left in place it is obviously unfinished, and the
  *   canvas marks it so it is caught before anybody previews.
  */
+/**
+ * The same placeholders, filled into PLAIN TEXT rather than html (table cells).
+ *
+ * Amber, 10 September: *"how do i add a single property … in rich text dropin or in a
+ * table or when creating a snippet"*. Rich text and snippets were already answered by
+ * `makeFillTokens` above — a snippet IS a text widget, so tokens inside one fill when it
+ * is dropped into a document. Table cells were not, and this is why they need their own
+ * function rather than the one above with a flag:
+ *
+ *   A cell is rendered as TEXT, not markup. `makeFillTokens` escapes its values, because
+ *   its output goes through `dangerouslySetInnerHTML` — and an address containing "Smith
+ *   & Sons" would arrive in a cell as the literal characters `Smith &amp; Sons`. It also
+ *   wraps values in a span, which a cell would print verbatim.
+ *
+ * So: no escaping, no markup, and the same three outcomes as prose — the value, an em
+ * dash where nobody has recorded one, and the token left standing where it names no
+ * field. A cell that quietly emptied itself is a table nobody can tell is wrong.
+ */
+export function makeFillTextTokens(ctx) {
+  const lookup = valuesFor(ctx);
+  return (text) => {
+    if (!text || String(text).indexOf('{{') === -1) return text;
+    return String(text).replace(TOKEN, (whole, key) => {
+      const v = lookup ? lookup(key) : null;
+      if (v == null) return whole;   // no record, or no such field — left visible
+      if (v === '') return '—';      // nobody has recorded it
+      return v;
+    });
+  };
+}
+
 export function makeFillTokens(ctx) {
   const lookup = valuesFor(ctx);
   return (html, { forExport = false } = {}) => {

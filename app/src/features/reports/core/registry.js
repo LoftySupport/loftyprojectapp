@@ -120,10 +120,22 @@ export const CORE_WIDGETS = {
     defaults: () => ({ headers: ['Column 1', 'Column 2'], rows: [['', ''], ['', '']] }),
     settings: [{ key: 'rows', type: 'table', label: 'Table contents' }],
     compactable: true,
-    resolve: (o) => {
-      const headers = o?.headers?.length ? o.headers : ['Column 1'];
-      const rows = (o?.rows || []).map(r => headers.map((_, i) => r?.[i] ?? ''));
-      return [{ type: 'table', headers, rows }];
+    // PLACEHOLDERS IN CELLS, on the same terms as the text widget above: the module
+    // does not know what a token is, only that a host may offer `ctx.fillTextTokens`.
+    // A separate hook from `fillTokens` because a cell is text and that one produces
+    // html — see the note on makeFillTextTokens in the Lofty adapter.
+    //
+    // Headers as well as cells. "Approved on {{planning_approval_date}}" is as likely to
+    // be a column title as a value, and a hook that filled one and not the other would
+    // be a rule nobody could remember.
+    resolve: (o, ctx) => {
+      const fill = typeof ctx?.fillTextTokens === 'function' ? ctx.fillTextTokens : (v) => v;
+      // The stored headers decide how many columns each row has, so they are counted
+      // before they are filled — a placeholder in a header must not change the shape of
+      // the table it titles.
+      const cols = o?.headers?.length ? o.headers : ['Column 1'];
+      const rows = (o?.rows || []).map(r => cols.map((_, i) => fill(r?.[i] ?? '')));
+      return [{ type: 'table', headers: cols.map(fill), rows }];
     },
   },
 

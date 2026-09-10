@@ -2759,6 +2759,14 @@ code { overflow-wrap: anywhere; }
 .doc-publish > div:first-of-type { flex: 1 1 240px; min-width: 180px; }
 .doc-publish-hint { flex: 1 0 100%; margin: 0; }
 
+/* Saving a copy to the record (0110). Its own full-width row above the address, because
+   the two are alternatives rather than a pair of fields to fill in together — sitting them
+   side by side reads as "do both", which is exactly the requirement this half removes.
+   min-height on the control for the 24px tap target `npm run responsive` asserts: a native
+   file input is a shade under it on Chromium at the default font size. */
+.doc-publish-file { flex: 1 0 100%; display: flex; flex-direction: column; gap: var(--space-4); }
+.doc-publish-file input[type="file"] { min-height: 24px; max-width: 100%; }
+
 /* ---- filing a document that lives in SharePoint (0103) --------------------
    Two fields and a button. Stacked below 520px rather than squeezed: a URL field
    at 120px shows nothing useful about what was pasted, which is the one thing

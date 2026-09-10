@@ -29,7 +29,7 @@ import {
 import { createReportRegistry } from "../src/features/reports/core/registry.js";
 import { createReportEngine } from "../src/features/reports/core/widgetEngine.js";
 import { LOFTY_THEME, LOFTY_THEME_QUIET } from "../src/features/reports/adapters/lofty/theme.js";
-import { makeFillTokens, tokensFor } from "../src/features/reports/adapters/lofty/tokens.js";
+import { makeFillTextTokens, makeFillTokens, tokensFor } from "../src/features/reports/adapters/lofty/tokens.js";
 import { HOUSE_COLOURS } from "../src/data/export/houseFormat.ts";
 import { snippetHtml, snippetLayout } from "../src/data/types.ts";
 import { parseSubject, subjectOptionsFor } from "../src/pages/documentSubject.ts";
@@ -178,9 +178,28 @@ const expandSection = (section, h) => {
   }
 };
 
+// Who is on the record (10 September). Two purchasers on the one house, because a letter
+// addressed to one of the two people who own it is the failure the joining rule exists to
+// prevent; a company party with no contact, because the council is a party too; and one
+// who has ENDED, because a purchaser who pulled out in March is not who September writes
+// to. Nothing here is a placeholder — these are the shapes record_parties actually holds.
+const partyRoles = [
+  { id: "purchaser", name: "Purchaser" },
+  { id: "council", name: "Council" },
+  { id: "surveyor", name: "Surveyor" },
+  { id: "real_estate_agent", name: "Real estate agent" }
+];
+const parties = [
+  { roleId: "purchaser", contactName: "Mary Ashby", companyName: null, isPrimary: false, endedOn: null },
+  { roleId: "purchaser", contactName: "John Ashby", companyName: null, isPrimary: true, endedOn: null },
+  { roleId: "purchaser", contactName: "Priya Raman", companyName: null, isPrimary: false, endedOn: "2026-03-14" },
+  { roleId: "council", contactName: null, companyName: "Tea Tree Gully Council", isPrimary: true, endedOn: null }
+];
+
 const full = {
   projects, jobs, teams, stageNames, people, processes,
   propertyDefs, propertyValues, propertyOptions,
+  partyRoles, parties,
   sections, expandSection,
   subject: { jobId: "1042-001", projectId: null },
   // The document's own widget list, which compileReport and the builder both supply.
@@ -205,6 +224,7 @@ const full = {
 const empty = {
   projects: [], jobs: [], teams, stageNames, people: [], processes: [],
   propertyDefs: [], propertyValues: [], propertyOptions: [],
+  partyRoles: [], parties: [],
   sections: [], expandSection, subject: null
 };
 /** What `expandSection` resolves against; the screen keeps this in a ref for the same reason. */
@@ -932,6 +952,116 @@ console.log("--- the Lofty theme is the house document format, role for role");
     menu.some(t => t.value === "job_number") && menu.some(t => t.value === "address")
     && menu.some(t => t.value === "slab_cost"),
     `${menu.length} fields`);
+
+  // ── who is on the record (10 September) ──────────────────────────────────
+  //
+  // Amber wrote the letter as *"dear [Owner Name] your property [property address] has
+  // just received planning approval on [planning approval date]"*. There is no `owner`
+  // role, so there is a token per role instead and nobody has to guess which one a letter
+  // opens to. Broken by dropping partyTokensFor from the menu: the field simply is not
+  // offered and the letter goes out with a name typed by hand that nobody updates.
+  ok("the insert menu offers a field for every contact role",
+    ["purchaser_name", "council_name", "surveyor_name", "real_estate_agent_name"]
+      .every(k => menu.some(t => t.value === k)),
+    menu.filter(t => t.group === "Contacts").map(t => t.value).join(", "));
+
+  // The group carries the app's own word. "Parties" is the table's name and appears on no
+  // screen; a menu that used it would be the schema leaking into the editor.
+  ok("and files them under the word the app uses for these people",
+    menu.filter(t => t.group === "Contacts").length === partyRoles.length,
+    [...new Set(menu.map(t => t.group))].join(" · "));
+
+  // TWO PURCHASERS, JOINED — the whole reason this is not "the primary one". Broken by
+  // returning only the row marked primary: the letter about somebody's house is addressed
+  // to one of the two people who own it, which reads as correct and is not.
+  ok("two purchasers are both named, primary first",
+    strip(fill("<p>Dear {{purchaser_name}},</p>", { forExport: true })) === "Dear John Ashby and Mary Ashby,",
+    strip(fill("<p>{{purchaser_name}}</p>", { forExport: true })));
+
+  // AND THE ONE WHO PULLED OUT IS NOT AMONG THEM. Broken by dropping the endedOn filter —
+  // Priya Raman comes back into a letter written six months after she left.
+  ok("a party who has ended is not in the letter",
+    !/Priya/.test(fill("<p>{{purchaser_name}}</p>", { forExport: true })),
+    strip(fill("<p>{{purchaser_name}}</p>", { forExport: true })));
+
+  // A COMPANY PARTY, where there is no contact at all.
+  ok("a company party resolves to the company's name",
+    strip(fill("<p>{{council_name}}</p>", { forExport: true })) === "Tea Tree Gully Council",
+    strip(fill("<p>{{council_name}}</p>", { forExport: true })));
+
+  // A REAL ROLE WITH NOBODY IN IT IS A BLANK, not a standing token — the same as a
+  // property nobody has filled in. The two facts are different and the letter says so:
+  // "nobody is filed as the surveyor" is not "you typed a field that does not exist".
+  ok("a role with nobody in it is an em dash, not a standing token",
+    strip(fill("<p>[{{surveyor_name}}]</p>", { forExport: true })) === "[—]",
+    strip(fill("<p>[{{surveyor_name}}]</p>", { forExport: true })));
+
+  // And a role that does not exist still reads as a typo.
+  ok("a role token naming no role is left visible",
+    strip(fill("<p>{{owner_name}}</p>", { forExport: true })) === "{{owner_name}}",
+    strip(fill("<p>{{owner_name}}</p>", { forExport: true })));
+
+  // NO TWO TOKENS MAY SHARE A KEY. A property definition ending `_name` would collide with
+  // a role token and one would silently shadow the other — the letter then says a
+  // surveyor's name where somebody meant a property, or the reverse, with nothing on
+  // screen to show it happened. Asserted rather than assumed, so the day somebody adds
+  // such a property is the day this reports.
+  const keys = menu.map(t => t.value);
+  ok("no two insertable fields share a key",
+    new Set(keys).size === keys.length,
+    keys.filter((k, i) => keys.indexOf(k) !== i).join(", ") || `${keys.length} unique`);
+
+  // ── the same placeholders in a TABLE (10 September) ──────────────────────
+  //
+  // Amber: "how do i add a single property … in rich text dropin or in a table or when
+  // creating a snippet". A cell is text and not html, which is the whole reason this is
+  // a second function: broken by pointing ctx.fillTextTokens at makeFillTokens, and the
+  // cell then prints `<span class="rb-token">A$18,400</span>` as characters.
+  const fillText = makeFillTextTokens(full);
+
+  ok("a placeholder in a table cell becomes the value",
+    /A\$18[,.]?400/.test(fillText("{{slab_cost}}")),
+    fillText("{{slab_cost}}"));
+
+  ok("and it carries no markup into the cell",
+    !/[<>]/.test(fillText("{{slab_cost}}")),
+    fillText("{{slab_cost}}"));
+
+  // NOT escaped, because a cell prints what it is given. Broken by reusing the html
+  // filler's `esc`: an address for "Smith & Sons" arrives in the table as
+  // "Smith &amp; Sons", which is what a reader sees.
+  const ampersand = makeFillTextTokens({
+    ...full,
+    jobs: [{ ...full.jobs[0], currentAddress: '28 Corner Street, Smith & Sons' }]
+  });
+  ok("a value with an ampersand in it is not html-escaped in a cell",
+    ampersand("{{address}}").endsWith("Smith & Sons"),
+    ampersand("{{address}}"));
+
+  // The same three outcomes as prose, so a table and a letter cannot disagree about
+  // what an unrecorded field looks like.
+  ok("an unfilled field is an em dash in a cell too",
+    fillText("{{never_filled_in}}") === "—", fillText("{{never_filled_in}}"));
+  ok("and a token naming no field is left standing in a cell",
+    fillText("{{slab_dat}}") === "{{slab_dat}}", fillText("{{slab_dat}}"));
+
+  // Through the widget, which is what the document actually renders — the resolver has
+  // to pass ctx down to freeTable, and it did not until this was added.
+  const tableWidget = createReportRegistry().get("freeTable").resolve(
+    { headers: ["Item", "{{address}}"], rows: [["Slab", "{{slab_cost}}"]] },
+    { ...full, fillTextTokens: fillText }
+  );
+  ok("a table resolves placeholders in its cells",
+    /A\$18[,.]?400/.test(tableWidget[0].rows[0][1]),
+    tableWidget[0].rows[0][1]);
+  ok("and in its column headers",
+    /Corner Street/.test(tableWidget[0].headers[1]),
+    tableWidget[0].headers[1]);
+
+  // A header carrying a placeholder must not change how many columns a row has.
+  ok("a placeholder in a header does not change the shape of the table",
+    tableWidget[0].headers.length === 2 && tableWidget[0].rows[0].length === 2,
+    `${tableWidget[0].headers.length} headers, ${tableWidget[0].rows[0].length} cells`);
 }
 
 // ── A snippet's wording, in and out of the layout it hides in ──────────────

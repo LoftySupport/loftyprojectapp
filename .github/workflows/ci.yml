@@ -78,6 +78,20 @@ jobs:
           node-version-file: .nvmrc
       - run: node scripts/check-links.mjs
 
+      # 10 September: two PRs merged, Vercel deployed the code, and the migrations they
+      # needed were never applied — nothing runs them and nothing checked, so Documents
+      # broke for everybody. The self-test proves the comparison on every push; the
+      # comparison against the LIVE database runs only where the two secrets exist, and
+      # says "NOT CHECKED" rather than printing a tick when they do not.
+      - name: the migration check still works
+        run: node scripts/check-migrations.mjs --self-test
+
+      - name: the database has every migration this code needs
+        run: node scripts/check-migrations.mjs
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
   # CHANGELOG.md, the ticks in ROADMAP.md and the generated blocks in README.md and
   # HANDOFF.md come from commit trailers. The post-commit hook regenerates them locally,
   # but a hook is opt-in: a commit made without it (7 September, this very check's own

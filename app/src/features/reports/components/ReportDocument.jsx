@@ -605,10 +605,15 @@ function Block({ block }) {
     case 'richText':
       // Custom-report text widget. Authored via RichTextEditor (sanitised on
       // input); sanitised again here so a stored payload can't inject markup.
+      //
+      // keepTokenMarks, because by this point fillTokens has run and the placeholders
+      // carry rb-token / rb-token-blank / rb-token-unknown. Stripping `class` here — the
+      // behaviour until 10 September — silently threw all three away, so a field nobody
+      // had recorded printed as a bare em dash and a mistyped one as ordinary text.
       return (
         <div
           className="notes-editor text-sm text-[var(--rb-ink)] leading-relaxed mb-3 break-words"
-          dangerouslySetInnerHTML={{ __html: sanitizeHtml(block.html || '') }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(block.html || '', { keepTokenMarks: true }) }}
         />
       );
     case 'board': {

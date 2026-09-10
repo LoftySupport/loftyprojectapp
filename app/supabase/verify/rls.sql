@@ -1959,6 +1959,9 @@ declare
   pub timestamptz;
   who uuid;
   url text;
+  file_doc uuid;
+  second_file uuid;
+  still_named uuid;
 begin
   insert into report_documents (report_document_title, report_document_layout)
   values ('__rls__ publication', '{"widgets": []}'::jsonb)
@@ -2026,6 +2029,65 @@ begin
   if pub is not null then raise notice 'ok  sharing a published document does not revert it';
   else raise warning 'FAIL: sharing took the publication back'; end if;
 
+  -- 0110. Amber, 10 Sep: "allow the option of saving to Job in the system and/or
+  -- downloading it and adding a link". Published as a FILE and nothing else — the case
+  -- 0104's constraint refused outright, proved here as a real signed-in user rather than
+  -- as the owner, because that is who will be doing it.
+  insert into documents (document_name, document_storage_path)
+  values ('__rls__ published file', 'jobs/1103/__rls__.docx')
+  returning document_id into file_doc;
+
+  update report_documents
+     set report_document_published_url = null,
+         report_document_published_at = now(),
+         report_document_published_document_id = file_doc
+   where report_document_id = doc;
+  select report_document_published_at, report_document_published_by
+    into pub, who from report_documents where report_document_id = doc;
+
+  if pub is null then raise warning 'FAIL: a document could not be published to the job alone';
+  else raise notice 'ok  a document is published by saving the file to the job, with no link'; end if;
+  if who = current_profile_id() then raise notice 'ok  publishing to the job stamps the publisher too';
+  else raise warning 'FAIL: published_by was % when publishing to the job', who; end if;
+
+  -- And the revert does not branch on HOW it was published. A guard that only knew about
+  -- URLs would leave a file-published document flying the published flag over content that
+  -- has changed underneath it — the one failure the watermark exists to prevent.
+  update report_documents
+     set report_document_layout = '{"widgets": [{"id": "b", "kind": "text", "options": {}}]}'::jsonb
+   where report_document_id = doc;
+  select report_document_published_at, report_document_published_document_id
+    into pub, still_named from report_documents where report_document_id = doc;
+  if pub is null then raise notice 'ok  editing reverts a job-published document too';
+  else raise warning 'FAIL: a document published to the job survived being edited'; end if;
+
+  -- The file pointer survives the revert for the same reason the URL does: re-publishing
+  -- should not make somebody find the place again.
+  if still_named is not null then raise notice 'ok  the saved file survives the revert, as the address does';
+  else raise warning 'FAIL: the revert threw away the file the document was published as'; end if;
+
+  -- 0111. Amber, 10 Sep: *"only onver version of the document. if they want another copy
+  -- they can download it"*. Publishing again replaces the copy on the record rather than
+  -- adding one beside it — and as an ORDINARY USER, which is the half that cannot be
+  -- proved in the migration: deleting a documents row is admin-only by 0032, so without
+  -- SECURITY DEFINER on the trigger this silently deletes nothing for everybody except an
+  -- admin and the job quietly accumulates copies.
+  insert into documents (document_name, document_storage_path)
+  values ('__rls__ published file 2', 'jobs/1103/__rls__2.docx')
+  returning document_id into second_file;
+
+  update report_documents
+     set report_document_published_at = now(),
+         report_document_published_document_id = second_file
+   where report_document_id = doc;
+
+  if exists (select 1 from documents where document_id = file_doc) then
+    raise warning 'FAIL: a user publishing again left the previous copy on the record';
+  else raise notice 'ok  publishing again replaces the copy a user saved last time'; end if;
+  if exists (select 1 from documents where document_id = second_file) then
+    raise notice 'ok  and keeps the one it has just saved';
+  else raise warning 'FAIL: publishing again removed the copy it had just saved'; end if;
+
   delete from report_documents where report_document_id = doc;
 end $$;
 reset role;
@@ -2034,6 +2096,58 @@ reset request.jwt.claim.sub;
 update profiles set profile_permission = 'admin' where profile_email = 'behaviour-test@lofty.com.au';
 set role authenticated;
 set request.jwt.claim.sub = :'uid';
+-- 0110. Reaping a stored file is admin work (0032), so this is the only place the reap
+-- trigger's real path can be watched: a signed-in admin deletes the file, and the document
+-- that was published AS it goes back to being a draft rather than the delete being refused.
+do $$
+declare
+  doc uuid;
+  file_doc uuid;
+  kept_doc uuid;
+  kept_file uuid;
+  pub timestamptz;
+begin
+  insert into documents (document_name, document_storage_path)
+  values ('__rls__ reap only copy', 'jobs/1103/__rls__only.docx')
+  returning document_id into file_doc;
+
+  insert into report_documents (report_document_title, report_document_layout)
+  values ('__rls__ reap', '{"widgets": []}'::jsonb)
+  returning report_document_id into doc;
+  update report_documents
+     set report_document_published_at = now(), report_document_published_document_id = file_doc
+   where report_document_id = doc;
+
+  -- The one that also went to SharePoint: its publication must NOT go, because the copy
+  -- people were sent is still where it was sent.
+  insert into documents (document_name, document_storage_path)
+  values ('__rls__ reap second copy', 'jobs/1103/__rls__both.docx')
+  returning document_id into kept_file;
+
+  insert into report_documents (report_document_title, report_document_layout)
+  values ('__rls__ reap kept', '{"widgets": []}'::jsonb)
+  returning report_document_id into kept_doc;
+  update report_documents
+     set report_document_published_at = now(),
+         report_document_published_url = 'https://lofty.sharepoint.com/sites/jobs/1103/r.docx',
+         report_document_published_document_id = kept_file
+   where report_document_id = kept_doc;
+
+  begin
+    delete from documents where document_id in (file_doc, kept_file);
+  exception when others then
+    raise warning 'FAIL: an admin could not delete a published file — % / %', sqlstate, sqlerrm;
+  end;
+
+  select report_document_published_at into pub from report_documents where report_document_id = doc;
+  if pub is null then raise notice 'ok  deleting the only copy takes a document back to draft';
+  else raise warning 'FAIL: a document is still published as a file that was deleted'; end if;
+
+  select report_document_published_at into pub from report_documents where report_document_id = kept_doc;
+  if pub is not null then raise notice 'ok  deleting Lofty''s copy leaves a SharePoint publication standing';
+  else raise warning 'FAIL: deleting the stored copy un-published a document that also went to SharePoint'; end if;
+end $$;
+
 do $$
 declare n integer;
 begin

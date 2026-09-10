@@ -1910,8 +1910,11 @@ Three things fell out of it that were not the point but are worth keeping:
   endpoint verifies from the plaintext the viewer sends. `npm run check:share-password`
   imports both real implementations and asserts they agree.
 
-What is left is not a decision: the endpoint has to be **deployed** and given
-`SHARE_ALLOWED_ORIGINS`. Until it is, the Share panel makes a link that will not open.
+What was left was not a decision: the endpoint had to be **deployed** and given
+`SHARE_ALLOWED_ORIGINS`. **Both are done** — deployed 4 September, and the secret set some
+PRs later. Confirmed against the live endpoint on 10 September: `hub.lofty.au` is allowed and
+`example.com` is refused with 403. This paragraph said the work was outstanding for longer
+than it was, because a secret set outside the repository is invisible to it.
 
 ## 4 September — Settings is the managers', Admin is the administrators'
 
@@ -2565,6 +2568,189 @@ format — `", AU"`, a space-separated tail, and a typed `"Lot 4"` the column ca
 longer hold — and now asserts `0105`'s format including a `Res` line, plus the refusal
 of `"Lot 4"` as a negative. Without that negative the step would pass just as happily
 with the lot number still text, which is how *"2B is a lot number"* survived from August.
+
+### 10 September — a document can be published to the job (`0110`)
+
+*Numbered `0105` first, then `0106`, and now `0110`. **Three collisions with the same branch
+in one day**, and the third is the one worth learning from: checking
+`supabase_migrations.schema_migrations` catches a number another branch has APPLIED, which
+is what the first two were. It does not catch a number another branch has WRITTEN and not
+yet applied, and it does not stop that branch taking three more numbers while this one is
+open. The live table is a better source than the repository and it is still not a lock.*
+
+*And it has already happened once without being noticed: `0073_job_numbers_are_three_digits`
+and `0073_only_the_locality_is_required` both sit in `app/supabase/migrations/` on `main`
+today. Two files, one number, applied in whatever order the shell sorted them. Nothing broke,
+which is exactly why nobody caught it — a duplicate only bites when the two touch the same
+table.*
+
+*What would actually settle it: a number claimed at the moment a branch is created rather
+than at the moment a migration is written, or names without numbers and an explicit order
+file. Both are changes to how this repository works, so both are Amber's call rather than
+something to do quietly inside a documents PR — recorded here as the fourth piece of evidence
+that it needs deciding.*
+
+Amber, once `0104` had shipped: *"until Documents are integrated to Sharepoint, please
+allow the option of saving to Job in the system and/or downloading it and adding a link to
+that document file"*.
+
+`0104` made publishing require a SharePoint address, which was right for the case it was
+built for and wrong as the only case. SharePoint is not integrated, so "publish" meant *go
+and save this somewhere else first, then come back and paste where you put it* — and for
+any job whose folder has not been set up yet, that is a door with no handle.
+
+So there are now **two ways to be published, and "and/or" is literal**:
+
+| `published_url` | `published_document_id` | What it means |
+| --- | --- | --- |
+| set | null | It went to SharePoint. Somebody put it there and wrote down where. |
+| null | set | It is saved on the job, in Lofty's own storage. |
+| set | set | Both, and neither makes the other a lie: the copy on the job is what was sent, the address is where the version people edit lives. |
+| null | null | Refused whenever `published_at` is set. That is the half of `0104`'s rule that had to keep biting. |
+
+The constraint `report_documents_published_names_where` is **dropped and recreated** rather
+than added beside, because as `0104` wrote it, it refuses the new case outright and two
+checks would be unsatisfiable together.
+
+**The file goes in `documents`, which is where files already go.** A pointer from
+`report_documents` into `0032`'s table, not a second place to keep files — and that choice
+is what puts the published copy in the record's own Documents list beside the contract and
+the survey, rather than somewhere only this table knows about. The bytes go in a new
+private `job-documents` bucket, read by signed URL. The opposite call to `0100`'s public
+`report-images`, and deliberately: a picture inside a report is decoration a client is
+being sent anyway, and a published document is the work product.
+
+**`on delete set null` was written first, and it does not work.** This is worth keeping
+rather than tidying away, because it looked right and reviewed clean. The FK reads as *the
+pointer goes, the publication survives*; what actually happens is that the nulling is an
+UPDATE, the UPDATE leaves a published row naming neither a file nor a link, and the check
+refuses it — so the DELETE fails. Watched on the replay database:
+
+```
+DELETE REFUSED: 23514 / new row for relation "report_documents"
+violates check constraint "report_documents_published_names_where"
+```
+
+An admin reaping a file got a message about a constraint they have never heard of and no
+way to act on it. The fix is not to weaken the check but to answer the question the FK was
+ducking: **what is a published document whose published file has been deleted?** It is a
+draft. That is `0104`'s own rule applied honestly — the state is derived from a fact
+precisely so it cannot say "published" about something that is not.
+`reap_publication_of_deleted_document()` clears the publication when the file it names goes
+and no URL is left, and leaves it alone when a URL is, because then the document really did
+go somewhere and still is there.
+
+**What was watched failing**, all six, before any of it was trusted:
+
+| Broken on purpose | What reported |
+| --- | --- |
+| The widened check replaced with `check (true)` | the migration's own probe: *a published document was allowed to name neither a file nor a link* |
+| `0104`'s narrow check left in place | the new case refused — `published_names_where` on the file-only publish |
+| The reap trigger's `published_url is null` carve-out removed | *deleting the stored copy un-published a document that also went to SharePoint* |
+| The reap trigger not created at all | the original bug, reproduced through the app's real path: `verify/rls.sql` reporting *an admin could not delete a published file — 23514* |
+| `0104`'s guard made to clear the file pointer on a revert | *the revert threw away the file the document was published as* |
+
+**What is not proved here.** The bucket and its three object policies do not exist on the
+replay database — Supabase Storage is not part of it — so the path shape, the 25MB limit
+and the six allowed types are checked by hand against the live project, exactly as `0062`
+and `0100` record for their own buckets. The policy and the app agree on the object path
+(`jobs/<job key>/…` or `projects/<number>/…`) because both were written from this
+paragraph; a policy the app does not match is a refusal nobody can read.
+
+### 10 September — one published copy per document (`0111`)
+
+Amber, asked whether the copies a document leaves on a job are a version history or
+clutter: *"only onver version of the document. if they want another copy they can download
+it"*.
+
+`0106` let a document be published by saving the file against the record. Publish, edit,
+publish again, and the job held **two** files — both under the document's title, one out of
+date, nothing on either row saying which was current.
+
+**The version chain is deliberately not used.** `documents.supersedes_id` exists for exactly
+this shape, and `0032` argues for it well: *"a version integer cannot say WHICH document a
+revision revises"*. It is the right tool for a drawing at revision C whose revision B
+somebody still needs, and the wrong one here — Amber's answer is not "show the old one
+behind the new one", it is that the old one is not wanted. The second half of her sentence
+says what to do instead.
+
+**One carve-out, and it is not a hedge.** A copy somebody has since filed on ANOTHER record
+is unpointed, not deleted: `documents` holds a file once and `document_links` says where it
+is attached, so deleting it would take a document off a job nobody was publishing to.
+
+**`SECURITY DEFINER` is load-bearing here rather than habitual.** `0032` makes deleting a
+`documents` row admin-only, while re-publishing is ordinary `user` work. Without the definer
+the delete matches no rows, silently, for everybody except an admin — the worst of the three
+possible failures, because it looks like it worked. `verify/rls.sql` proves it as a real
+signed-in user for that reason.
+
+**The bytes outlive the row, and the LIVE database is what said so.** The trigger first
+deleted the storage object beside the row. It replayed perfectly — the harness rebuilds into
+a plain Postgres with no storage schema, so the whole branch was guarded away — and
+production refused it on the first apply:
+
+```
+42501: Direct deletion from storage tables is not allowed. Use the Storage API instead.
+CONTEXT: PL/pgSQL function storage.protect_delete()
+```
+
+So a superseded copy stays in the `job-documents` bucket, unreachable from the app because
+nothing points at it, costing storage and nothing else — the same shape `0062` already lives
+with. Sweeping them needs the Storage API and is an admin or scheduled job, not a trigger's.
+Left undone deliberately: the alternative was widening the bucket's admin-only delete policy
+to every member of staff, which buys tidiness with the rule that stops somebody removing a
+published contract. **Worth keeping for its own sake** — a replay proves the DDL applies, and
+this is a rule no replay could catch, because the thing it guards does not exist there.
+
+**Three things were written the obvious way first and all three were wrong.**
+
+*The trigger as `BEFORE`.* It does not merely misbehave, it does not terminate:
+
+```
+ERROR:  stack depth limit exceeded
+```
+
+BEFORE, the row still holds the old pointer, so deleting the superseded file fires `0106`'s
+reap — which finds a document still naming that file and clears the pointer, which fires
+this trigger again, which deletes again, all the way down. AFTER, the new pointer is already
+in the row, `0110`'s reap matches nothing, and the two never see each other.
+
+*No guard on a pointer being CLEARED.* An admin deleting a published file fires `0106`'s
+reap, the reap clears the pointer, and this trigger then tried to delete the row the outer
+command was already deleting:
+
+```
+27000 / tuple to be deleted was already modified by an operation triggered by the current
+command
+```
+
+Found by `verify/rls.sql`, not by the migration — and the reason the migration missed it is
+worth keeping: its first probe left a SharePoint URL set, so `0110`'s reap declined, the
+pointer was cleared by the foreign key *after* the delete finished, and nothing collided.
+Only a **file-only** publication reproduces it. Clearing a pointer is never this trigger's
+business; only replacing one is.
+
+**Watched failing**, six:
+
+| Broken on purpose | What reported |
+| --- | --- |
+| The delete removed from the trigger | *publishing again left the previous copy on the record* |
+| The moved-pointer test written as `is not null` | *writing the pointer back unchanged deleted the copy it names* |
+| The filed-elsewhere carve-out removed | *a copy filed on another record was deleted by a re-publish* |
+| The trigger made `BEFORE` | *stack depth limit exceeded* |
+| The cleared-pointer guard removed | *27000 / tuple to be deleted was already modified…* |
+| `SECURITY DEFINER` dropped | `verify/rls.sql`: *a user publishing again left the previous copy on the record* |
+
+The seventh was not a sabotage and could not have been one: the storage delete, refused by
+the live database on apply.
+
+**And one probe that passed against a broken trigger**, which is worth more than the six.
+The first version of the delete-the-file probe left a SharePoint URL set, so `0110`'s reap
+declined, the pointer was cleared by the foreign key *after* the delete had finished, and
+nothing collided. Only a **file-only** publication reproduces the deadlock. `verify/rls.sql`
+caught it because its admin deletes exactly that; the probe was then rewritten to clear the
+URL first, and only then did it report.
+
 
 ## Verification
 

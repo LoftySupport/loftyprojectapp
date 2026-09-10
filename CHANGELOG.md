@@ -14,7 +14,12 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- a letter can open with the name of anybody on the record — a token for every party role, with two purchasers joined as "A and B"
 - a job's address shows its council region, which could be set from the drawer and never read back
+- a table's cells and headers take property placeholders, with the same Insert a field menu the text blocks have
+- a document can be published by saving a copy to the job, not only by pasting a SharePoint link
+- a document Lofty holds the file for opens from the record, through a signed link
+- CI checks that every migration this code needs has been applied to the database
 - a job's address can carry a Res number, and it leads the address once set — "Res 1, Lot 3, 13 Tester Street, Testville, SA, 5000"
 - a job's address can be changed from the job, the way a project's already could — the original stays put and every previous address stays searchable
 - each lot on the split-a-project dialog can be given its own street number — leave it blank and it takes the project's
@@ -127,6 +132,8 @@ says shipped and what the app shows people cannot use different words for it.
 
 - 64 job addresses had their lot number in the street-number column, so a job at lot 1 of 14 Brodie Road read as 1 Brodie Road — somebody else's house
 - the staged-workbook importer could not insert a row after the lot number became a number
+- a placeholder on the canvas is marked again — an unfilled field and a mistyped one had been printing as ordinary text
+- a missing migration now says the app is ahead of the database and names the column, instead of showing the database's own error
 - a job created by splitting a project now keeps the street number — every one of them read "Lot 3, Corner Street" with no number in it, because the split threw the project's street number away
 - a link naming a view a board does not have showed a blank page with an empty View control; it now opens the board's default view instead
 - the app builds again — a dependency update took Tailwind to a major version the build is not set up for, and it is pinned back until that migration is done on its own
@@ -174,6 +181,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- publishing a document again replaces the copy saved on the record instead of adding another — download the old one first if you need it
 - a lot number and a res number are whole numbers; a street number stays text, so 12B and 100-105 are kept as typed
 - the res number is offered on every address form, a project's included
 - addresses now read "Testville, SA, 5000" rather than "Testville SA 5000, AU" — the country is no longer printed on the end of every one

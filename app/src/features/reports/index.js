@@ -63,4 +63,4 @@ export { default as RichTextEditor, sanitizeHtml } from './components/RichTextEd
 export { LOFTY_WIDGETS, LOFTY_GROUPS, LOFTY_SEEDS } from './adapters/lofty/widgets.js';
 export { LOFTY_THEME, LOFTY_THEME_QUIET, LOFTY_THEME_SPECS } from './adapters/lofty/theme.js';
 export { createLibraryStore, createDocumentStore } from './adapters/lofty/store.js';
-export { makeFillTokens, tokensFor } from './adapters/lofty/tokens.js';
+export { makeFillTokens, makeFillTextTokens, tokensFor } from './adapters/lofty/tokens.js';

@@ -482,6 +482,10 @@ export function createStubRepository(): Repository {
     async shareReportDocument(): Promise<never> { throw new Error("Creating a share link needs Supabase."); },
     async unshareReportDocument(): Promise<never> { throw new Error("Revoking a share link needs Supabase."); },
     async publishReportDocument(): Promise<never> { throw new Error("Publishing a document needs Supabase."); },
+    // Null rather than a throw: the row asks for this to decide whether to offer a link,
+    // and a stub that throws would take the whole panel down on a screen that has no
+    // published documents in it anyway.
+    async jobDocumentUrl(): Promise<string | null> { return null; },
 
     // ---- what is filed on a record, and where it lives (0032 / 0103) ------
     // Same stance again: nothing to read, and a write that says what it needs. An

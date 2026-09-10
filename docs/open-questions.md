@@ -21,46 +21,58 @@ invent a value, and `CLAUDE.md` is explicit that an invented default is worse th
 
 ## Open — next question first
 
-### 1. Turn on leaked-password protection?
+### 1. "Dear [Owner Name]" — which party on the record is that? *(parked)*
 
-One dashboard toggle. Supabase checks new passwords against HaveIBeenPwned and refuses
-known-breached ones. The reason it has not been flipped is that it changes what happens to a
-real person setting a password, and that is a change to make deliberately rather than
-because an advisor asked. Any objection to it going on?
+**Parked by Amber, 10 September: _"that will be later when linking a contact or company to
+project or job"_.** The decision waits until parties are actually being attached to records
+rather than being made in the abstract — which is right, because the answer depends on what
+a real job's Parties panel turns out to hold. Nothing is guessed in the meantime and no
+token is built; a letter written today types the name by hand.
 
-### 2. Two of the three share-link origins point at nothing
+Kept in the file rather than removed, because it is unanswered rather than irrelevant, and
+it will be the first thing to settle when the linking work starts.
 
-`SHARE_ALLOWED_ORIGINS` holds `https://loftyprojectapp.vercel.app`,
-`https://loftyprojectapp.netlify.app` and `https://app.lofty.au`. The app answers at
-`hub.lofty.au`, Netlify was removed entirely on 6 September, and `app.lofty.au` is a
-different application. Tidying it to just the live origin is one secret edit — but it is
-your secret and an allowlist is a security control, so it is not one to trim on a guess.
+Amber, 10 September, writing a letter: *"dear [Owner Name] your property [property address]
+has just received planning approval on [planning approval date]"*.
 
-### 3. Saved projects views carrying `?stage=` — leave them, or rewrite them?
+Two of those three resolve today. `{{address}}` is a record fact, and
+`{{planning_approval_received}}` is a real property definition. **The name has nowhere to
+come from**, and this is the sentence it blocks.
 
-Since #51 the projects board has two stage filters: **Stage** is the project's own phase (as
-the Stage grouping is) and **Job stage** is "has a job in this stage". Before, `?stage=` on
-the projects board meant the second. `saved_views` stores query strings verbatim (0048), so
-any saved *projects* view with `?stage=` now filters by the project's phase instead. There
-are no shared saved views of that shape that Claude can see, but Claude cannot see everyone's.
-Options: leave it (the new meaning matches the grouping, which was the point), or run a
-one-off `UPDATE saved_views SET … 'stage=' → 'jobstage='` for projects views only.
+What exists: `record_parties` attaches a contact or a company to a job or a project under a
+role, with one marked primary — the Parties panel on every record. The roles are
+**certifier, consultant, contractor, council, engineer, purchaser, real estate agent,
+supplier, surveyor, other**. There is no *owner* and no *client*.
 
-### 4. Does undo need a home on a phone?
+So the question is really two:
+
+- **Is the person a letter is addressed to the `purchaser`**, or is "owner" a role Lofty
+  needs that the list does not have? (A land owner who is not the purchaser is an ordinary
+  thing in this business, which is why this is not obvious from the list.)
+- **When there are several** — two purchasers on one house — does the letter take the one
+  marked primary, or every one of them joined with "and"?
+
+Nothing is guessed until this is answered. What it unblocks: a token per role, filled from
+the record's own parties, so `Dear {{purchaser_name}}` (or `{{owner_name}}`) works the same
+way `{{address}}` does. The mechanism is the small half — `record_parties` and the Parties
+panel already exist, and `makeFillTextTokens`/`tokensFor` are where a role token would be
+added. What is missing is only the decision about which role a letter opens to.
+
+### 2. Does undo need a home on a phone?
 
 The header bar is hidden below 600px because two more 32px targets left the search box 70px
 wide, and Ctrl+Z does not exist on a phone — so a phone has no undo at all. Is that
 acceptable for now, or does it need one (a long-press on the "saved" toast is the obvious
 place)?
 
-### 5. Should the person picker offer deactivated people?
+### 3. Should the person picker offer deactivated people?
 
 `PersonSelect` lists active people only, and every assignee, owner and "who is doing this"
 control uses it. A job already assigned to somebody who has since been deactivated still
 shows their name read-only. Nobody asked for the other behaviour; this records that it was a
 choice.
 
-### 6. What is "undo" allowed to reach?
+### 4. What is "undo" allowed to reach?
 
 Today it reaches every field write that saves as you make it — team, assignee, dates, tasks,
 process runs, property values, a request's stage. It deliberately does NOT reach lifecycle
@@ -68,7 +80,7 @@ moves (forwards-only by your rule), creating, deleting, votes, follows or commen
 the right line, or should a lifecycle move be undoable within, say, a minute of making it?
 (The database refuses the way back today; allowing it is a migration, not a UI change.)
 
-### 7. Where does "clone a job" live now?
+### 5. Where does "clone a job" live now?
 
 **Blocked:** nothing is broken, but the app currently has no way to clone a job at all.
 
@@ -88,14 +100,14 @@ What is not decided is what it should look like there:
 Either way `cloneJob(id, copy)` is unchanged and manager+ still gates it. Do not delete
 `CloneDialog.tsx` as dead code before this is answered.
 
-### 8. Is the placeholder at 3.47:1 accepted, or does it get fixed?
+### 6. Is the placeholder at 3.47:1 accepted, or does it get fixed?
 
 The design system now labels it *"example text only, never a label"*, which narrows the
 exposure but does not clear it — placeholder text is still text under WCAG 1.4.3. `#757478`
 would clear it at 4.64:1 as a new `--lofty-black-70` step, leaving `--ui-border-color` at
 the 3.47:1 it was deliberately chosen for.
 
-### 9. What should five missing roadmap items say?
+### 7. What should five missing roadmap items say?
 
 Five commits carry a `Roadmap:` trailer whose text matches no checkbox in `ROADMAP.md`, so
 work that was finished has no line to tick:
@@ -110,7 +122,7 @@ They are real and shipped. What is missing is which phase each belongs to and wh
 wording above is the wording you want, and inventing roadmap text is exactly the thing
 `CLAUDE.md` forbids.
 
-### 10. How is health status worked out?
+### 8. How is health status worked out?
 
 Long-standing, from the schema plan's own risk list. *"Status is what someone sets. Health
 is what the system works out"* — from inputs nobody has defined. Kanban-by-status and
@@ -118,13 +130,13 @@ kanban-by-team work today; **kanban-by-health cannot be built until this is answ
 job at risk because it is past `expected_days`, because a required field is empty, because a
 dependency is blocked, or some combination?
 
-### 11. Does Acquisition & Development want a `project_stage` vocabulary?
+### 9. Does Acquisition & Development want a `project_stage` vocabulary?
 
 `project_stage` is nullable and costs nothing empty. Do not seed a vocabulary until they
 confirm they want one — a half-filled stage column that some projects use and others ignore
 is worse for reporting than no column.
 
-### 12. Do exported documents take Flint for their greys?
+### 10. Do exported documents take Flint for their greys?
 
 The design system retired the two cool greys on 7 September: `#f6f7f7` and `#e7e8e9` are
 gone from the mirror, and in the app Flint 100 `#f4f3ee` is the page and Flint 300 `#c6c5ba`
@@ -135,7 +147,7 @@ where the design system says Mid Grey still belongs. So: do exported documents f
 app onto Flint, or is the house format its own record? Not changed on the sync, because the
 export palette is written down as a decision (0026) and this file is where decisions change.
 
-### 13. A Xero invoice with no purchase order — job or project?
+### 11. A Xero invoice with no purchase order — job or project?
 
 Purchase orders belong to a job and a contractor (answered 8 September, question 16). A
 contractor's bill reconciles against its purchase order, so it inherits the job. What is not
@@ -144,7 +156,7 @@ consultant on the whole site. Recommended: the `invoices` table carries a job **
 (one of the two, checked), and the review queue holds anything Xero sends that matches neither.
 The alternative — everything on a job — leaves project-level money with nowhere to go.
 
-### 14. "Only managers can connect it to approved sources … this is done by superadmin"
+### 12. "Only managers can connect it to approved sources … this is done by superadmin"
 
 Question 18's answer (8 September) says both. Read as: a **superadmin registers** each approved
 source once, organisation-wide (the Copilot Studio agent, the Xero and SiteBook connections),
@@ -153,7 +165,7 @@ managers should be able to register a new source themselves, the Admin → Integ
 opens to managers for that one act and the plan's §3 changes one word. Not blocking: Phase 1
 has one source to register and a superadmin registers it either way.
 
-### 15. Fieldwork in a printed PDF — is the licence settled?
+### 13. Fieldwork in a printed PDF — is the licence settled?
 
 Amber's rule for documents (9 September, answered below): Montserrat, *"unless it has fonts
 embedded in it for print then it will be brand font"*. The PDF writer now embeds Montserrat,
@@ -168,7 +180,7 @@ clients, and web-serving the face? If yes, the PDF's two faces become Fieldwork 
 brand repository — and the Word file stays Montserrat, since Word cannot embed without the
 reader's cooperation.
 
-### 16. When the SharePoint integration lands, does Lofty Hub ever hold the file?
+### 14. When the SharePoint integration lands, does Lofty Hub ever hold the file?
 
 `0103` lets a document be a URL, so a job's contract can be filed against it today by
 pasting the link. The row that holds it (`documents`, from `0032`) has **both** a storage
@@ -187,7 +199,7 @@ It changes what has to be built and where the risk sits, so it is worth answerin
 the integration is scoped rather than during. Nothing is blocked meanwhile: filing a link
 by hand works either way.
 
-### 17. Should removing a document from a record be a manager's job?
+### 15. Should removing a document from a record be a manager's job?
 
 The Documents panel's **Remove** takes a document off *this* job or project and leaves it
 on any other record it is filed against, and leaves the file itself untouched in SharePoint.
@@ -199,7 +211,7 @@ heavier than it is. The screen already says what it does not do before it asks, 
 recording a choice rather than reporting a problem — but if the answer is *manager*, it is
 one policy line.
 
-### 18. Should a draft be openable in Word, and edit back into the app?
+### 16. Should a draft be openable in Word, and edit back into the app?
 
 Amber, 10 September: *"you can choose to open it in the app document builder or in the
 document native file (eg word, pdf. viewer etc, but it still edits and saves it)"*.
@@ -223,7 +235,7 @@ question 16.
 
 Nothing is blocked meanwhile: drafts are editable in the builder and publishing works.
 
-### 19. Do the four views and bulk edit go back onto the older screens?
+### 17. Do the four views and bulk edit go back onto the older screens?
 
 The 10 September rules say *"all **new** pages that are tables"* get board, table, gantt
 and calendar — and, separately, *"**always** allow selection and editing on a screen for
@@ -252,6 +264,10 @@ decides how much retro-fitting to schedule, and in what order.
 
 | Date | Question | Answer |
 | --- | --- | --- |
+| 10 Sep | (asked as 2) Each publish saves another copy on the job — version history, or clutter? | **One version. Replace.** *"only onver version of the document. if they want another copy they can download it"* — so publishing again removes the copy the last publish saved, and the record holds one file per document rather than a pile of them under one title. The version chain (`documents.supersedes_id`) is deliberately NOT used here: it answers "show me the current drawing and what it replaced", and Amber's answer is that the replaced one is not wanted at all. **Anybody who needs the older wording downloads it before re-publishing** — that is the whole of the second sentence, and it is the reason this loses nothing that matters. Built in `0111` as a trigger rather than a rule the panel keeps, for the reason 0104 gives about per-caller promises; SECURITY DEFINER because deleting a `documents` row is admin-only by RLS and re-publishing is ordinary `user` work. **One carve-out**, and it is not a hedge: a copy that somebody has since filed on ANOTHER record is left alone and only unpointed, because deleting it would take a document off a job nobody was publishing |
+| 10 Sep | (asked as 3) Saved projects views carrying `?stage=` — leave them, or rewrite them? | **Leave them.** *"[No preference]"* — so the recommendation stands, and this records that Claude made the call rather than Amber. The new meaning (the project's own phase) matches the Stage grouping, which was the point of #51. Anyone whose saved view shifted sees a different set once and re-saves it: one confusing moment, no lost work. The rewrite was rejected because `saved_views` stores the query string verbatim (0048) and nothing in it distinguishes a view saved BEFORE #51, where `stage=` meant "has a job in this stage", from one saved after, where the person meant the project's phase — so a blanket `UPDATE` would silently break the second kind to fix the first. **Revisit only if somebody reports a saved view behaving oddly**, at which point it is one person's view to correct rather than a migration |
+| 10 Sep | (asked as 2) What belongs in `SHARE_ALLOWED_ORIGINS`? | **Three: `hub.lofty.au`, the Vercel name, and `app.lofty.au`.** *"keep vercel, lofty and app.lofty"*, then *"hub.lofty.au is where the app is at redirected from vercel"* — so "lofty" is `hub.lofty.au`. **Netlify goes**, removed entirely on 6 September. Set to `https://hub.lofty.au,https://loftyprojectapp.vercel.app,https://app.lofty.au` — comma-separated, no spaces, no trailing slashes; the function does an exact string match on the browser's `Origin` header, so a trailing slash or `http://` fails closed and silently. **Claude cannot set it**: it is a Supabase edge-function secret (Project Settings → Edge Functions → Secrets), so this one is Amber's to paste in. Two things worth knowing about the value. Because Vercel REDIRECTS to `hub.lofty.au`, a browser on the live app always sends `https://hub.lofty.au` — the vercel.app entry is belt-and-braces for anyone who lands on the bare Vercel name before the redirect, not the origin production actually uses. And it does **not** cover preview deployments: those answer on a per-branch host like `loftyprojectapp-git-<branch>-loftygroup.vercel.app`, which is a different origin from `loftyprojectapp.vercel.app`, so share links opened from a preview will still be refused. If testing shares on a preview is ever wanted, that is a separate decision — the allowlist is exact-match with no wildcards. **CORRECTED 10 Sep, later the same day: it was already set.** Amber: *"Supabase has the share allowed origins set in edge functions secrets several prs ago"*. Confirmed against the live endpoint rather than taken on trust — `Origin: https://hub.lofty.au` is allowed and echoed back (404 on a token that does not exist, which is the endpoint working), `Origin: https://example.com` is refused with 403 *"This link cannot be opened from here."* So sharing works today, and this row's own claim that it does not was wrong, as were `HANDOFF.md`, `docs/schema/schema-plan.md` and `app/src/features/reports/README.md`, all four now fixed. **The lesson is bigger than the row**: a secret set outside the repository is invisible to it — nothing in CI, in the migrations or in these documents can read an edge-function secret — so a claim about one goes stale silently and stays stale until somebody asks the endpoint. That probe is one curl, and it is what should have been run before writing any of this down |
+| 10 Sep | (asked as 1) Turn on leaked-password protection? | **Not yet — leave it off for now.** Supabase's HaveIBeenPwned check stays off, so nothing changes for anyone setting a password. It is one dashboard toggle whenever that changes, and it only ever affects NEW and CHANGED passwords — no existing account is touched and nobody is forced to reset. **Worth putting back in front of Amber before the app opens to the wider team**, which is the point at which the friction is cheapest to absorb and the exposure largest. The security advisor will keep flagging it meanwhile, and that is expected rather than something to silence |
 | 10 Sep | Does the council belong in the address line, and does it need moving? | **No, and no.** *"ok the council area still needs to be recorded, but just not in the full address line. it stays as a property field"*, then *"the council is in the lookup table in supabase and already connected and working."* Both halves were already the case — `addresses.address_council` is the `sa_council` value filled from the LGA list, and `build_consolidated_address()` has never composed it in — so nothing was rebuilt and **no `property_defs` row was added**: the council is an attribute of an address, and a `property_values` copy would be a second place for it to disagree with the column. What *was* wrong: a job's council could be set from the drawer's change-address form and never read back, because `job_display` did not select it. `0108` appends `job_council`, off the job's own address, and the drawer shows it beside the address |
 | 10 Sep | (asked as 20) What is a Res #, and where does it live? | **A residence number on the plan, and it is one of the address details a JOB records** — *"A project needs to record … Lot # / Street Number / Street Name / Suburb / Postcode / State / Council. A Job needs to record all of that information PLUS Res #."* So it is `addresses.address_res_number` rather than a column on `jobs`, and the app offers the field on a job's address and not on a project's. Text, not an integer, for the same reason `address_lot_number` is text — she wrote "(number)" against Lot # too, and "2B" is a real lot number. It leads the consolidated address once set, and she gave the format as a worked example: *"Res 1, Lot 3, 13 Tester Street, Testville, SA, 5000"* — which also settled two things nobody had asked about, the comma between suburb/state/postcode and the removal of the trailing `, AU`. Built and applied as `0105` — **and corrected the same day on both counts**: it is an INTEGER, not text (*"a lot number or res number is only a number not a number and digitl"*, `0106`), and it is **not** job-only (*"on a project you might update the res number there as well"*), so every address form offers it |
 | 9 Sep | (asked as 15) Exported documents: Helvetica, or the brand's new Arial? | **Neither — Montserrat.** *"exported documents in monteserat unless it has fonts embedded in it for print then it will be brand font"*. The Word file names Montserrat; the PDF embeds a WinAnsi subset of Montserrat Regular and SemiBold (~41 kB each, `scripts/build-montserrat.mjs`) since it cannot name a face that is not one of the fourteen. The "brand font when embedded" half is question 15 above, held on the licence |

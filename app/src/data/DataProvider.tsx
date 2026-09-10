@@ -3,6 +3,7 @@ import type { Repository } from "./repository";
 import { createStubRepository } from "./stubRepository";
 import { createSupabaseRepository, isSupabaseConfigured } from "./supabaseRepository";
 import { withUndo } from "./undoableRepository";
+import { withSchemaDriftNotice } from "./schemaDrift";
 
 const DataContext = createContext<Repository | null>(null);
 
@@ -17,8 +18,13 @@ const RefreshContext = createContext<{ version: number; refresh: () => void }>({
 export function DataProvider({ children }: { children: ReactNode }) {
   // Supabase if it is configured, the stub otherwise. No screen needs to know which.
   // Wrapped so that every field write is undoable — see undoableRepository.ts.
+  // Two wrappers, outermost last. `withUndo` records the step; `withSchemaDriftNotice`
+  // sits OUTSIDE it so that a "column does not exist" thrown by either the write or the
+  // read-before-it comes back as a sentence a person can act on (schemaDrift.ts).
   const repo = useMemo<Repository>(
-    () => withUndo(isSupabaseConfigured() ? createSupabaseRepository() : createStubRepository()),
+    () => withSchemaDriftNotice(
+      withUndo(isSupabaseConfigured() ? createSupabaseRepository() : createStubRepository())
+    ),
     []
   );
   const [version, setVersion] = useState(0);

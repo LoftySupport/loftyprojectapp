@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 214 changes since then —
+Unreleased: 222 changes since then —
+- Added: a letter can open with the name of anybody on the record — a token for every party role, with two purchasers joined as "A and B"
+- Changed: publishing a document again replaces the copy saved on the record instead of adding another — download the old one first if you need it
 - Fixed: 64 job addresses had their lot number in the street-number column, so a job at lot 1 of 14 Brodie Road read as 1 Brodie Road — somebody else's house
 - Changed: a lot number and a res number are whole numbers; a street number stays text, so 12B and 100-105 are kept as typed
 - Added: a job's address shows its council region, which could be set from the drawer and never read back
-- Changed: the res number is offered on every address form, a project's included
-- Fixed: the staged-workbook importer could not insert a row after the lot number became a number
-- …and 209 more.
+- …and 217 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -336,8 +336,9 @@ the new values rather than recording them as shortfalls.
    - The deep-link case: a write on a record the page has not listed (tasks, runs, property
      values, feedback) goes through unrecorded, because the seam has no "before" for it.
      Every screen today lists before it edits, so nothing hits this; the fallback is honest.
-4. **Still queued from earlier sessions**, unchanged: `SHARE_ALLOWED_ORIGINS` (below), the
-   sortable-header table further down this file, and the notification worker.
+4. **Still queued from earlier sessions**: the sortable-header table further down this file,
+   and the notification worker. `SHARE_ALLOWED_ORIGINS` has come OFF this list — it was set
+   in Supabase several PRs ago and this file did not know (see below).
 5. **Planned, not built — an API, an MCP server and an in-app Ask box.** Amber asked for the
    plan on 8 September; it is `docs/integrations/api-and-mcp-plan.md`; the readable version is
    <https://claude.ai/code/artifact/0a1cfce5-b719-426c-819f-4dd12352453d>. Its six decisions were **asked and answered the same day** (open-questions.md → Answered,
@@ -356,13 +357,33 @@ table of contents and the record pickers live in `app/src/features/reports/` and
 upstream. Do not raise PRs against that repo, and do not treat the two copies as needing to
 agree.
 
-**`report-share` is deployed and inert until one secret is set.** Deployed 4 September to
-`gmekuqdjemrfuurxhuib`, `verify_jwt` off, and answering — a POST returns
-`503 "Sharing is not switched on."` because `SHARE_ALLOWED_ORIGINS` has no value yet. That is
-the designed default, not a fault: the secret is a comma-separated origin allowlist with no
-fallback, so a deploy made before somebody decides the domains answers nothing. Set it in
-Project Settings → Edge Functions → Secrets and the Share button starts producing links that
-open. Until then it produces links that do not, so it is worth doing before anybody is shown
+**`report-share` is deployed AND switched on.** Deployed 4 September to
+`gmekuqdjemrfuurxhuib`, `verify_jwt` off, and `SHARE_ALLOWED_ORIGINS` set — Amber, 10
+September: *"Supabase has the share allowed origins set in edge functions secrets several
+prs ago"*. **This paragraph said the opposite until then**, and so did three other documents,
+because the secret was set outside a session and nothing here was told.
+
+Checked rather than believed, on 10 September, by asking the live endpoint:
+
+```
+Origin: https://hub.lofty.au  → 404 {"error":"This link is not valid."}
+                                 access-control-allow-origin: https://hub.lofty.au
+Origin: https://example.com   → 403 {"error":"This link cannot be opened from here."}
+                                 access-control-allow-origin: null
+```
+
+A 404 on a token that does not exist is the endpoint working; the 503 this file used to
+describe would mean the secret was still empty. So the allowlist is live and enforcing, and
+the Share button produces links that open.
+
+**A secret set outside the repository is invisible to it**, which is the thing worth taking
+from this rather than the correction itself: nothing in CI, in the migrations or in these
+documents can see an edge-function secret, so a claim about one goes stale silently. The
+probe above is the only way to know, and it takes one curl.
+
+Historic, kept because the reasoning still applies to the next secret: the allowlist is a
+comma-separated list with no fallback, so a deploy made before somebody decides the domains
+answers nothing — which is the designed default rather than a fault. It was worth doing
 the feature.
 
 Last updated: 2026-09-07.

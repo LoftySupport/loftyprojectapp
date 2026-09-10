@@ -32,7 +32,13 @@ at first, what needs a decision.
 7 September: *"ask me questions on what I should fix one at a time … if you want a question,
 ask it here and then record updates"*.
 
+- **Interview her, in the chat.** Amber, 10 September: *"always ask open questions here in
+  interview style"*. Put the question to her as a question — the context, the options, and a
+  recommendation where there is one — and wait for the answer before moving to the next.
+  Pointing at the file and listing what is outstanding is not asking; the file is the record,
+  the chat is where the asking happens.
 - **One at a time.** Ask the top open question in the chat. Not four at once, not a survey.
+  When she answers one, record it and ask the next — that is the interview.
 - **Ask, then record.** The answer goes into that file's *Answered* table the same session,
   with the date and her own words where they are shorter than a paraphrase. A decision that
   only exists in a chat log has to be made again.

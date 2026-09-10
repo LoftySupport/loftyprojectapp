@@ -17,6 +17,72 @@ import "./ui.css";
 import { CollapsiblePanel } from "./CollapsiblePanel";
 
 /**
+ * A link to a file Lofty holds, fetched at the moment somebody asks for it.
+ *
+ * `job-documents` is private (0110), so there is no permanent URL to put in an `href` —
+ * every read is a signed link that lasts five minutes. That is the whole reason this is a
+ * button that fetches rather than an anchor: an anchor would need the URL before anybody
+ * clicked, which means signing one per row on every render and having most of them expire
+ * unused.
+ *
+ * THE WINDOW IS OPENED BEFORE THE AWAIT, and that is not stylistic. A `window.open` after
+ * a network round trip is no longer attached to the click that started it, and every
+ * browser blocks it as a pop-up — the button then does nothing at all, with no error to
+ * see. So the tab is opened empty inside the click and pointed at the file once the link
+ * comes back.
+ */
+function OpenStoredFile({
+  path,
+  label,
+  ariaLabel
+}: {
+  path: string;
+  label: string;
+  ariaLabel: string;
+}) {
+  const repo = useRepository();
+  const [problem, setProblem] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <>
+      <Button
+        size="xs"
+        kind="tertiary"
+        disabled={busy}
+        aria-label={ariaLabel}
+        onClick={async () => {
+          setProblem(null);
+          const tab = window.open("about:blank", "_blank");
+          if (!tab) {
+            setProblem("Your browser blocked the new tab. Allow pop-ups for this site and try again.");
+            return;
+          }
+          // Severed while the tab is still same-origin — once it is pointed at storage
+          // this is no longer settable, and `window.opener` is a way back into this tab.
+          tab.opener = null;
+          setBusy(true);
+          try {
+            const url = await repo.jobDocumentUrl(path);
+            if (url) {
+              tab.location.href = url;
+            } else {
+              tab.close();
+              setProblem("That file could not be opened — it may have been deleted from storage.");
+            }
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        {label}
+      </Button>
+      {problem && <Problem>{problem}</Problem>}
+    </>
+  );
+}
+
+/**
  * The documents about one job or one project, on that record's own screen.
  *
  * Amber, 4 September: *"all documents need to be associated to a job or project and they
@@ -111,8 +177,31 @@ export function RecordDocuments({
   /** Which built document is being published — its id, or null. */
   const [publishing, setPublishing] = useState<string | null>(null);
   const [publishUrl, setPublishUrl] = useState("");
+  /**
+   * The copy being saved to the job with it (0110). Amber, 10 September: *"allow the
+   * option of saving to Job in the system and/or downloading it and adding a link to that
+   * document file"* — so this and the address above are two independent halves of one
+   * publish, and either alone is enough.
+   */
+  const [publishFile, setPublishFile] = useState<File | null>(null);
 
   const total = documents.length + filed.length;
+
+  /**
+   * Where the copy of a published document is held, or null (0110).
+   *
+   * Read off the filed list this panel already has: publishing a copy attaches it to this
+   * record, so it is one of the rows below. A second query for a column in hand is a round
+   * trip to learn what the panel knows.
+   *
+   * Null is an ordinary answer and not a bug — the copy has been deleted by an admin, or
+   * detached from this record and filed on another. The row then offers no link, which is
+   * true, rather than a link that opens on a refusal.
+   */
+  function publishedCopyPath(documentId: string | null): string | null {
+    if (!documentId) return null;
+    return filed.find(f => f.id === documentId)?.storagePath ?? null;
+  }
 
   async function run(fn: () => Promise<unknown>) {
     setBusy(true);
@@ -271,9 +360,46 @@ export function RecordDocuments({
                 </a>
               )}
 
+              {/* The copy saved on the job (0110). Its path is read off the filed list
+                  rather than fetched: publishing attaches the copy to this record, so it
+                  is already in the list beside this row — and a second query for a column
+                  the panel is holding is a round trip to learn what it knows. */}
+              {publishedCopyPath(d.publishedDocumentId) && (
+                <OpenStoredFile
+                  path={publishedCopyPath(d.publishedDocumentId) as string}
+                  label="Open the copy on the job"
+                  ariaLabel={`Open the copy of ${d.title} saved on this record`}
+                />
+              )}
+
               {can("user") && (
                 publishing === d.id ? (
                   <span className="doc-publish">
+                    {/* TWO WAYS, AND EITHER WILL DO (0110). Amber, 10 September: *"allow
+                        the option of saving to Job in the system and/or downloading it and
+                        adding a link to that document file"*. Until SharePoint is
+                        integrated a link means somebody has to have set a folder up and
+                        put the file in it themselves, which for most jobs is a door with
+                        no handle — so the copy saved here is offered first, and the
+                        address second. */}
+                    {/* No "is there a record to save it to" branch here, and that is
+                        deliberate: this panel lists the documents ABOUT this job or
+                        project, so there always is one. The repository still refuses a
+                        document that is about neither — a portfolio report published from
+                        somewhere else — because the seam cannot assume its caller. */}
+                    <label className="doc-publish-file">
+                      <Text type="text3" element="span">Save a copy to this {jobId ? "job" : "project"}</Text>
+                      <input
+                        type="file"
+                        // What the bucket takes (0110). An accept list is a courtesy
+                        // rather than a guard — storage refuses the rest at the door,
+                        // and the message it gives back is the one on screen.
+                        accept=".pdf,.docx,.doc,.html,.htm,.md,.txt"
+                        aria-label={`A copy of ${d.title} to save on this record`}
+                        onChange={e => setPublishFile(e.target.files?.[0] ?? null)}
+                      />
+                    </label>
+
                     <TextField
                       id={`publish-${d.id}`}
                       title="Where it was saved in SharePoint"
@@ -285,22 +411,36 @@ export function RecordDocuments({
                     />
                     <Button
                       size="xs"
-                      disabled={busy || !publishUrl.trim()}
+                      disabled={busy || (!publishUrl.trim() && !publishFile)}
                       onClick={() => run(async () => {
-                        await repo.publishReportDocument(d.id, { url: publishUrl.trim() });
+                        await repo.publishReportDocument(d.id, {
+                          url: publishUrl.trim() || null,
+                          file: publishFile
+                        });
                         setPublishing(null);
                         setPublishUrl("");
+                        setPublishFile(null);
                       })}
                     >
                       Publish
                     </Button>
-                    <Button size="xs" kind="tertiary" onClick={() => setPublishing(null)}>
+                    <Button
+                      size="xs"
+                      kind="tertiary"
+                      onClick={() => { setPublishing(null); setPublishFile(null); }}
+                    >
                       Cancel
                     </Button>
                     <Text type="text3" color="secondary" element="p" ellipsis={false} className="doc-publish-hint">
-                      Save the document into SharePoint first, then paste the address it
-                      ends up at. {folderUrl
-                        ? "Pre-filled with this record's folder — replace it with the document's own address."
+                      Either will do, and both is fine. Export the document from the
+                      builder, then pick the file here to keep a copy on the record — it
+                      appears in this list. For SharePoint, save it there first and paste
+                      the address it ends up at.
+                      {d.publishedDocumentId
+                        ? " There is already a copy saved here, and publishing again replaces it — download it first if you need to keep it."
+                        : ""}
+                      {" "}{folderUrl
+                        ? "The address is pre-filled with this record's folder — replace it with the document's own address."
                         : "This record has no SharePoint folder linked yet, so there is nothing to pre-fill."}
                       {" "}Publishing drops the DRAFT watermark; editing it here brings the
                       watermark back and you will need to publish it again.
@@ -318,9 +458,14 @@ export function RecordDocuments({
                       // is Amber's "should default to job file". Neither is the document's
                       // final address, so both are a starting point rather than an answer.
                       setPublishUrl(d.publishedUrl ?? folderUrl ?? "");
+                      // Never carried over from the last row. A file left in the input
+                      // would be published against a document nobody chose it for.
+                      setPublishFile(null);
                     }}
                   >
-                    {state === "published" ? "Re-publish" : d.publishedUrl ? "Publish again" : "Publish"}
+                    {state === "published"
+                      ? "Re-publish"
+                      : d.publishedUrl || d.publishedDocumentId ? "Publish again" : "Publish"}
                   </Button>
                 )
               )}
@@ -332,9 +477,16 @@ export function RecordDocuments({
                 confirming === d.id ? (
                   <span className="record-documents-confirm">
                     <Text type="text3" color="secondary" element="span">
-                      Delete it? {d.publishedUrl
-                        ? "The copy in SharePoint stays."
-                        : "This is the only copy."}
+                      {/* What deleting the built document does NOT take with it. Both
+                          copies are named, because "the only copy" beside a document that
+                          has one saved on the job would be untrue. */}
+                      Delete it? {d.publishedUrl && d.publishedDocumentId
+                        ? "The copy in SharePoint and the one saved on this record both stay."
+                        : d.publishedUrl
+                          ? "The copy in SharePoint stays."
+                          : d.publishedDocumentId
+                            ? "The copy saved on this record stays."
+                            : "This is the only copy."}
                     </Text>
                     <Button
                       size="xs"
@@ -369,10 +521,11 @@ export function RecordDocuments({
 
           {filed.map(d => (
             <li key={d.linkId}>
-              {/* Three states, and only one of them is a link (0032). A document Lofty
-                  holds the bytes for has no viewer built yet, and one that has not arrived
-                  has nowhere to go at all — so those render as text rather than as an
-                  anchor that does nothing when clicked. */}
+              {/* Three states, and only the SharePoint one is an ordinary anchor (0032).
+                  A document Lofty holds the bytes for opens through a signed link, which
+                  is the button below rather than an href; one that has not arrived has
+                  nowhere to go at all, and renders as text rather than as an anchor that
+                  does nothing when clicked. */}
               {d.url ? (
                 // noreferrer noopener on every one: these point at a tenant somebody else
                 // administers, and `window.opener` is a way back into this tab.
@@ -383,6 +536,19 @@ export function RecordDocuments({
               <span className="record-documents-note">
                 {d.url ? "sharepoint" : d.storagePath ? "uploaded" : "not received"}
               </span>
+
+              {/* CORRECTS THE NOTE ABOVE, which said a document Lofty holds the bytes for
+                  "has no viewer built yet" and rendered as plain text. That was true until
+                  0110 gave the app somewhere to put bytes for a record; it is now a signed
+                  link, and the file opens in whatever the browser or the desktop uses for
+                  it — Word for a .docx, the PDF viewer for a .pdf. */}
+              {!d.url && d.storagePath && (
+                <OpenStoredFile
+                  path={d.storagePath}
+                  label="Open"
+                  ariaLabel={`Open ${d.name}`}
+                />
+              )}
 
               {can("user") && (
                 confirming === d.linkId ? (

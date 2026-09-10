@@ -185,6 +185,19 @@ try {
     const canvas = await pg.locator("main").first().innerText();
     ok("and the document shows what it resolves to",
       /A\$18[,.]?400/.test(canvas), JSON.stringify(canvas.slice(0, 160)));
+
+    // AND IT IS MARKED AS COMING FROM THE RECORD. This is the assertion that was
+    // missing on 10 September, and its absence hid a real bug for as long as the
+    // feature had existed: the sanitiser's ALLOWED_ATTR had no `class`, so every
+    // rb-token span reached the canvas stripped, the CSS in reports.css applied to
+    // nothing, and a field nobody had recorded printed as a bare em dash indistinguishable
+    // from a typed one. The Node check asserted `rb-token` on the string BEFORE the
+    // sanitiser, which is why it stayed green throughout.
+    //
+    // Broken by dropping `keepTokenMarks` at the ReportDocument call site, or by taking
+    // `class` back out of ALLOWED_ATTR_RENDER.
+    const marks = await pg.locator("main .rb-token").count();
+    ok("and marks it as a field rather than as typed text", marks >= 1, `${marks} marked`);
   }
 
   // ── Snippets: saved wording, inserted and kept ────────────────────────

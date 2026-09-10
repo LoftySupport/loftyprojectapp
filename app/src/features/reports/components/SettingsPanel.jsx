@@ -216,9 +216,35 @@ function MultiSelect({ field, value = [], options, onChange }) {
 
 // ─── Free table editor ───────────────────────────────────────────────
 
-function TableEditor({ options, onChange }) {
+function TableEditor({ options, onChange, tokens = [] }) {
   const headers = options.headers?.length ? options.headers : ['Column 1'];
   const rows = options.rows?.length ? options.rows : [['']];
+
+  // WHICH BOX THE FIELD GOES INTO. A cell is an <input>, so there is no caret to insert
+  // at once focus has moved to the dropdown — the last input touched is remembered on
+  // focus instead, and the token is spliced in at the selection it had when it was left.
+  // Without this the menu would need a cell picked from a second list, which is a worse
+  // version of the click somebody already made.
+  const lastCell = useRef(null);
+
+  const insertToken = (key) => {
+    const at = lastCell.current;
+    if (!at || !key) return;
+    const el = at.el;
+    const current = String(at.get() ?? '');
+    const start = el?.selectionStart ?? current.length;
+    const end = el?.selectionEnd ?? current.length;
+    const token = `{{${key}}}`;
+    at.set(current.slice(0, start) + token + current.slice(end));
+    // Put the caret after what was just inserted, so a second field lands after the
+    // first rather than on top of it.
+    requestAnimationFrame(() => {
+      if (!el) return;
+      el.focus();
+      const to = start + token.length;
+      el.setSelectionRange(to, to);
+    });
+  };
 
   const setHeader = (ci, v) => onChange({ headers: headers.map((h, i) => (i === ci ? v : h)) });
   const setCell = (ri, ci, v) => onChange({ rows: rows.map((r, i) => (i === ri ? r.map((c, j) => (j === ci ? v : c)) : r)) });
@@ -229,11 +255,45 @@ function TableEditor({ options, onChange }) {
 
   return (
     <div className="space-y-3">
+      {/* Amber, 10 September: *"how do i add a single property … in a table"*. The same
+          field list the rich-text toolbar offers, because a table full of hand-typed
+          addresses goes stale the moment one of them changes on the record. Hidden when
+          there is nothing to insert — a library entry has no record to read. */}
+      {tokens.length > 0 && (
+        <label className="block">
+          <span className="text-xs font-semibold text-neutral-500 mb-1.5 uppercase tracking-wide block">Insert a field</span>
+          <select
+            className={inputCls}
+            value=""
+            aria-label="Insert a field into the last cell you were editing"
+            onChange={e => { insertToken(e.target.value); e.target.value = ''; }}
+          >
+            <option value="">Choose a field…</option>
+            {[...new Set(tokens.map(t => t.group))].map(group => (
+              <optgroup key={group} label={group}>
+                {tokens.filter(t => t.group === group).map(t => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          <span className="text-[10px] text-neutral-400 mt-1 block">
+            Goes into the last cell or header you were typing in. It fills with the
+            record's value when the document renders.
+          </span>
+        </label>
+      )}
       <div>
         <p className="text-xs font-semibold text-neutral-500 mb-1.5 uppercase tracking-wide">Column headers</p>
         {headers.map((h, ci) => (
           <div key={ci} className="flex gap-1 mb-1">
-            <input value={h} onChange={e => setHeader(ci, e.target.value)} className={`${inputCls} flex-1`} placeholder={`Column ${ci + 1}`} />
+            <input
+              value={h}
+              onChange={e => setHeader(ci, e.target.value)}
+              onFocus={e => { lastCell.current = { el: e.target, get: () => headers[ci], set: v => setHeader(ci, v) }; }}
+              className={`${inputCls} flex-1`}
+              placeholder={`Column ${ci + 1}`}
+            />
             {headers.length > 1 && (
               <button onClick={() => removeCol(ci)} className="px-2 py-1 rounded text-neutral-400 hover:text-red-500 hover:bg-red-50 text-sm" aria-label={`Remove column ${ci + 1}`}>×</button>
             )}
@@ -252,7 +312,13 @@ function TableEditor({ options, onChange }) {
             {headers.map((h, ci) => (
               <div key={ci} className="flex gap-1.5 items-center mb-1">
                 <span className="text-[10px] text-neutral-400 w-16 shrink-0 truncate">{h}</span>
-                <input value={row[ci] ?? ''} onChange={e => setCell(ri, ci, e.target.value)} className={`${inputCls} flex-1`} placeholder="—" />
+                <input
+                  value={row[ci] ?? ''}
+                  onChange={e => setCell(ri, ci, e.target.value)}
+                  onFocus={e => { lastCell.current = { el: e.target, get: () => rows[ri]?.[ci] ?? '', set: v => setCell(ri, ci, v) }; }}
+                  className={`${inputCls} flex-1`}
+                  placeholder="—"
+                />
               </div>
             ))}
           </div>
@@ -437,7 +503,7 @@ function SettingsField({ field, options, ctx, onSet }) {
         </Field>
       );
     case 'table':
-      return <TableEditor options={options} onChange={onSet} />;
+      return <TableEditor options={options} onChange={onSet} tokens={ctx?.textTokens || []} />;
     case 'custom':
       // Escape hatch: an adapter supplies its own control when a field is
       // genuinely unlike the others. Keep these rare.

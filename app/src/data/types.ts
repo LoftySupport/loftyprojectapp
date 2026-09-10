@@ -55,7 +55,7 @@ export interface Address {
    *
    * A number, like the lot number and unlike the street number — Amber, 10 September:
    * *"a lot number or res number is only a number … however a street number can be
-   * something like 100-105 (as text) or 12B"* (`0106`).
+   * something like 100-105 (as text) or 12B"* (`0110`).
    *
    * Usually null on a project's address and never forbidden on one: `0105` offered the
    * field on a job only and Amber corrected it the same day — *"on a project you might
@@ -65,7 +65,7 @@ export interface Address {
   /**
    * The lot as it appears on the plan of division.
    *
-   * **A number since `0106`**, and the reason it was text before is worth knowing so
+   * **A number since `0110`**, and the reason it was text before is worth knowing so
    * nobody reinstates it: `0034` and the dictionary both claimed *"12A, 5-7 and Lot 3
    * are as common as 12"*, and the split dialog said *"2B as readily as 2"* on screen.
    * All three were wrong about which number carries the letters. Every one of the 13
@@ -2310,7 +2310,7 @@ export const MAX_SPLIT = 60;
 export interface SplitLot {
   /**
    * As typed into the row — a string, because that is what a text input holds, and the
-   * seam parses it. The COLUMN is an integer since `0106`: a lot number is only ever a
+   * seam parses it. The COLUMN is an integer since `0110`: a lot number is only ever a
    * number, and "2B" is a street number, not a lot (Amber, 10 Sep). Anything that is
    * not digits is refused at the seam with a message rather than sent and rejected.
    */
@@ -3114,6 +3114,27 @@ export interface ReportDocument {
    * SharePoint, somebody has edited it since, and what is up there is out of date.
    */
   publishedUrl: string | null;
+  /**
+   * PUBLISHED TO THE JOB, rather than to a link (0110).
+   *
+   * Amber, 10 September: *"until Documents are integrated to Sharepoint, please allow the
+   * option of saving to Job in the system and/or downloading it and adding a link to that
+   * document file"*. Until the integration lands, a link means somebody has to have a
+   * SharePoint folder set up and to have put the file there themselves — so this is the
+   * other half: the file saved against the record, in Lofty's own storage.
+   *
+   * The id of a row in `documents`, so the published file appears in this record's
+   * Documents list beside everything else filed on it rather than in a place of its own.
+   *
+   * "AND/OR" IS LITERAL. Either satisfies published, both together is an ordinary state,
+   * and neither with `publishedAt` set is refused by constraint.
+   *
+   * Survives an edit, exactly as `publishedUrl` does and for the same reason. Goes null if
+   * the file itself is deleted — and if that was the only answer to "where did it go", the
+   * publication goes with it, because a document cannot stay published as a file that no
+   * longer exists.
+   */
+  publishedDocumentId: Uuid | null;
   createdAt: IsoDateTime;
   createdBy: Uuid | null;
   updatedAt: IsoDateTime;
@@ -3132,12 +3153,18 @@ export type ReportDocumentState = "draft" | "published" | "edited-since-publishe
 export function reportDocumentState(d: {
   publishedAt: string | null;
   publishedUrl: string | null;
+  publishedDocumentId?: string | null;
 }): ReportDocumentState {
   if (d.publishedAt) return "published";
   // The third state is worth naming rather than folding into "draft": both carry the
   // watermark and neither is safe to send, but only this one means there is a stale copy
-  // sitting in SharePoint that somebody may still be reading.
-  return d.publishedUrl ? "edited-since-published" : "draft";
+  // somebody may still be reading — sitting in SharePoint, or saved on the job here.
+  //
+  // Both are asked about (0110). A document published by saving the file to the job and
+  // then edited is in exactly the same position as one published to a link and then
+  // edited, and reading only the URL would have called it a plain draft — quietly the
+  // wrong answer for the half of the documents that never go near SharePoint.
+  return d.publishedUrl || d.publishedDocumentId ? "edited-since-published" : "draft";
 }
 
 export const REPORT_DOCUMENT_STATE_LABELS: Record<ReportDocumentState, string> = {

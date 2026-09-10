@@ -23,7 +23,9 @@
     "check:design-tokens": "node scripts/check-design-tokens.mjs",
     "check:capped-list": "node scripts/check-capped-list.mjs",
     "check:contrast": "node scripts/check-contrast.mjs",
-    "check:watermark": "node scripts/check-watermark.mjs"
+    "check:watermark": "node scripts/check-watermark.mjs",
+    "check:migrations": "node ../scripts/check-migrations.mjs",
+    "check:migrations:self": "node ../scripts/check-migrations.mjs --self-test"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
