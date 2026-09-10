@@ -21,7 +21,16 @@ invent a value, and `CLAUDE.md` is explicit that an invented default is worse th
 
 ## Open — next question first
 
-### 1. "Dear [Owner Name]" — which party on the record is that?
+### 1. "Dear [Owner Name]" — which party on the record is that? *(parked)*
+
+**Parked by Amber, 10 September: _"that will be later when linking a contact or company to
+project or job"_.** The decision waits until parties are actually being attached to records
+rather than being made in the abstract — which is right, because the answer depends on what
+a real job's Parties panel turns out to hold. Nothing is guessed in the meantime and no
+token is built; a letter written today types the name by hand.
+
+Kept in the file rather than removed, because it is unanswered rather than irrelevant, and
+it will be the first thing to settle when the linking work starts.
 
 Amber, 10 September, writing a letter: *"dear [Owner Name] your property [property address]
 has just received planning approval on [planning approval date]"*.
@@ -45,7 +54,9 @@ So the question is really two:
 
 Nothing is guessed until this is answered. What it unblocks: a token per role, filled from
 the record's own parties, so `Dear {{purchaser_name}}` (or `{{owner_name}}`) works the same
-way `{{address}}` does.
+way `{{address}}` does. The mechanism is the small half — `record_parties` and the Parties
+panel already exist, and `makeFillTextTokens`/`tokensFor` are where a role token would be
+added. What is missing is only the decision about which role a letter opens to.
 
 ### 2. Each publish saves another copy on the job. Is that a version history or clutter?
 
