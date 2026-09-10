@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 209 changes since then —
-- Added: a job's address can carry a Res number, and it leads the address once set — "Res 1, Lot 3, 13 Tester Street, Testville, SA, 5000"
-- Added: a job's address can be changed from the job, the way a project's already could — the original stays put and every previous address stays searchable
-- Changed: addresses now read "Testville, SA, 5000" rather than "Testville SA 5000, AU" — the country is no longer printed on the end of every one
-- Fixed: a job created by splitting a project now keeps the street number — every one of them read "Lot 3, Corner Street" with no number in it, because the split threw the project's street number away
-- Added: each lot on the split-a-project dialog can be given its own street number — leave it blank and it takes the project's
-- …and 204 more.
+Unreleased: 214 changes since then —
+- Fixed: 64 job addresses had their lot number in the street-number column, so a job at lot 1 of 14 Brodie Road read as 1 Brodie Road — somebody else's house
+- Changed: a lot number and a res number are whole numbers; a street number stays text, so 12B and 100-105 are kept as typed
+- Added: a job's address shows its council region, which could be set from the drawer and never read back
+- Changed: the res number is offered on every address form, a project's included
+- Fixed: the staged-workbook importer could not insert a row after the lot number became a number
+- …and 209 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
