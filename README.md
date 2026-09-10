@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 185 changes since then —
+Unreleased: 188 changes since then —
+- Added: a document can now be saved as a SharePoint link on a job or a project — add one from the record's Documents panel and take it off again
+- Added: the dashboard shows recent documents and recent changes across the company
+- Changed: the search box in the top bar now finds jobs, projects, people, companies, requests and documents from any page — matches appear as you type, and Enter opens a full results page. It still narrows the board or table you are on as well
 - Changed: filled buttons are Crisp Orange again, and drop their fill on hover for a Crisp Orange text and line — the brand colour, chosen over the darker step that cleared the contrast floor
 - Changed: a filled button now drops its fill on hover and focus — the pressed orange becomes the text and a thin line — instead of darkening
-- Changed: exported Word and PDF documents are set in Montserrat, the brand's document face, in place of Helvetica — the PDF now carries the font, so it looks the same on every machine
-- Added: `npm run build:montserrat` regenerates the embedded font subset and its width tables from Google Fonts
-- Changed: the design-system mirror is back in step with the brand repository — a sequential orange data scale for continuous values, and Arial is now the last font fallback on every screen (Helvetica before)
-- …and 180 more.
+- …and 183 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
