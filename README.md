@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 190 changes since then —
-- Changed: the footer drops "What's planned" — Updates in the same row is the same page — and the bug report link loses its icon
-- Added: a document can now be saved as a SharePoint link on a job or a project — add one from the record's Documents panel and take it off again
-- Added: the dashboard shows recent documents and recent changes across the company
-- Changed: the search box in the top bar now finds jobs, projects, people, companies, requests and documents from any page — matches appear as you type, and Enter opens a full results page. It still narrows the board or table you are on as well
-- Added: A Tasks board, in the main navigation, with every task across every job and project — filtered by team, status and process, and sliced into my tasks, my team's tasks, all tasks, overdue, due today and due this week
-- …and 185 more.
+Unreleased: 197 changes since then —
+- Added: the Tasks board has four views — board, table, gantt and calendar — over the same set of tasks, so the grouping, filters, sort and search survive switching between them
+- Added: Tasks filters are inline across the top and all of them are there — status, assignee, team and process on the bar, with health, stage, job or project number, due date, scheduled date, who raised it, who it is waiting on and who created it under Advanced
+- Added: sort and group the Tasks board by any property, from the toolbar as well as by clicking a column heading — including properties whose column is switched off
+- Added: select several tasks at once, on the table or the board, and set their status, assignee, team or due date in one go
+- Added: drag a task card between columns on the Tasks board to set its status, team or assignee
+- …and 192 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
