@@ -6,6 +6,20 @@ const ALLOWED_TAGS = ['p','br','b','strong','i','em','u','s','strike','h1','h2',
 // alignment, colour and font size were all stripped on save, which is why
 // those controls appeared to do nothing.
 const ALLOWED_ATTR = ['href','target','rel','type','checked','data-checklist','style'];
+// The same list plus `class`, for RENDERING only. See sanitizeHtml below.
+const ALLOWED_ATTR_RENDER = [...ALLOWED_ATTR, 'class'];
+
+// The three marks fillTokens puts on a placeholder, and the only class values that
+// survive. Until 10 September `class` was refused outright, which made the marking dead
+// code: fillTokens' spans go through this sanitiser on the way to the canvas, so a
+// placeholder nobody had filled rendered as a bare em dash and a mistyped one as plain
+// text. The CSS for all three had never applied to anything.
+const TOKEN_CLASSES = new Set(['rb-token', 'rb-token-blank', 'rb-token-unknown']);
+
+// Set only for the duration of a render-time sanitise, because DOMPurify's hooks are
+// global and there is no per-call channel to them. Ugly, contained, and commented rather
+// than left to be rediscovered.
+let keepingTokenMarks = false;
 
 // The only CSS anyone needs to write a formatted note, and nothing that can
 // position, load or reveal anything: no url(), no background images, no
@@ -23,6 +37,13 @@ DOMPurify.addHook('uponSanitizeElement', (node) => {
 });
 
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.getAttribute && node.hasAttribute('class')) {
+    const kept = keepingTokenMarks
+      ? node.getAttribute('class').split(/\s+/).filter(c => TOKEN_CLASSES.has(c))
+      : [];
+    if (kept.length) node.setAttribute('class', kept.join(' '));
+    else node.removeAttribute('class');
+  }
   if (!node.getAttribute || !node.hasAttribute('style')) return;
   const kept = [];
   for (const decl of node.getAttribute('style').split(';')) {
@@ -40,13 +61,27 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   else node.removeAttribute('style');
 });
 
-export function sanitizeHtml(html) {
+/**
+ * `keepTokenMarks` is for RENDERING a resolved block, and nothing else.
+ *
+ * What the editor saves must never carry a token mark: the marks are produced at render
+ * time by fillTokens, and a `<span class="rb-token">` pasted out of a preview and back
+ * into a letter would be frozen text wearing the badge of a live placeholder — which
+ * reads as filled and is not. So the editor's own save path (and every other caller)
+ * strips `class`, exactly as before, and only ReportDocument asks for the marks.
+ */
+export function sanitizeHtml(html, { keepTokenMarks = false } = {}) {
   if (!html) return '';
-  return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS,
-    ALLOWED_ATTR,
-    ALLOWED_URI_REGEXP: /^(?:https?|mailto):/i,
-  });
+  keepingTokenMarks = keepTokenMarks;
+  try {
+    return DOMPurify.sanitize(html, {
+      ALLOWED_TAGS,
+      ALLOWED_ATTR: keepTokenMarks ? ALLOWED_ATTR_RENDER : ALLOWED_ATTR,
+      ALLOWED_URI_REGEXP: /^(?:https?|mailto):/i,
+    });
+  } finally {
+    keepingTokenMarks = false;
+  }
 }
 
 // execCommand's fontSize only speaks the seven legacy steps, so these are

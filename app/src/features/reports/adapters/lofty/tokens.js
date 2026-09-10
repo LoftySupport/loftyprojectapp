@@ -118,6 +118,37 @@ const esc = (s) => String(s)
  *   is a sentence somebody sends. Left in place it is obviously unfinished, and the
  *   canvas marks it so it is caught before anybody previews.
  */
+/**
+ * The same placeholders, filled into PLAIN TEXT rather than html (table cells).
+ *
+ * Amber, 10 September: *"how do i add a single property … in rich text dropin or in a
+ * table or when creating a snippet"*. Rich text and snippets were already answered by
+ * `makeFillTokens` above — a snippet IS a text widget, so tokens inside one fill when it
+ * is dropped into a document. Table cells were not, and this is why they need their own
+ * function rather than the one above with a flag:
+ *
+ *   A cell is rendered as TEXT, not markup. `makeFillTokens` escapes its values, because
+ *   its output goes through `dangerouslySetInnerHTML` — and an address containing "Smith
+ *   & Sons" would arrive in a cell as the literal characters `Smith &amp; Sons`. It also
+ *   wraps values in a span, which a cell would print verbatim.
+ *
+ * So: no escaping, no markup, and the same three outcomes as prose — the value, an em
+ * dash where nobody has recorded one, and the token left standing where it names no
+ * field. A cell that quietly emptied itself is a table nobody can tell is wrong.
+ */
+export function makeFillTextTokens(ctx) {
+  const lookup = valuesFor(ctx);
+  return (text) => {
+    if (!text || String(text).indexOf('{{') === -1) return text;
+    return String(text).replace(TOKEN, (whole, key) => {
+      const v = lookup ? lookup(key) : null;
+      if (v == null) return whole;   // no record, or no such field — left visible
+      if (v === '') return '—';      // nobody has recorded it
+      return v;
+    });
+  };
+}
+
 export function makeFillTokens(ctx) {
   const lookup = valuesFor(ctx);
   return (html, { forExport = false } = {}) => {

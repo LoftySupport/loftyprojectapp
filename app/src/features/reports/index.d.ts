@@ -243,7 +243,17 @@ export const REPORT_STYLES: Record<string, unknown>;
 export const PAGE_SIZES: Record<string, unknown>;
 export function themePresentation(theme: string | ReportTheme): Record<string, unknown>;
 export function reportFilename(title: string): string;
-export function sanitizeHtml(html: string): string;
+export function sanitizeHtml(
+  html: string,
+  opts?: {
+    /**
+     * Keep the rb-token / rb-token-blank / rb-token-unknown marks fillTokens puts on a
+     * placeholder. RENDERING ONLY — the editor's save path must strip them, or a span
+     * pasted out of a preview becomes frozen text wearing a live placeholder's badge.
+     */
+    keepTokenMarks?: boolean;
+  }
+): string;
 
 /**
  * A Word, PDF or HTML file turned into builder blocks.
@@ -362,5 +372,12 @@ export function tokensFor(ctx: unknown): { value: string; label: string; group: 
 export function makeFillTokens(
   ctx: unknown
 ): (html: string, opts?: { forExport?: boolean }) => string;
+
+/**
+ * The same placeholders filled into PLAIN TEXT — what `ctx.fillTextTokens` should be set
+ * to, and what a table cell resolves through. Separate from the html one on purpose: a
+ * cell prints what it is given, so escaping and the marking spans would both show.
+ */
+export function makeFillTextTokens(ctx: unknown): (text: string) => string;
 
 export type { ReactNode };

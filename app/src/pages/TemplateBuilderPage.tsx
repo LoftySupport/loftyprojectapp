@@ -35,6 +35,7 @@ import {
   createReportRegistry,
   createThemeSet,
   makeFillTokens,
+  makeFillTextTokens,
   resolveTheme,
   sanitizeHtml,
   tokensFor,
@@ -450,6 +451,11 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
          */
         textTokens: tokensFor(base),
         fillTokens: makeFillTokens(base),
+      // The same placeholders in a table's cells and headers (10 September). A second
+      // hook rather than a flag on the first: that one produces html for prose, this one
+      // produces text for a cell, and a cell printing `Smith &amp; Sons` is what sharing
+      // them would cost.
+      fillTextTokens: makeFillTextTokens(base),
         /**
          * Saved wording — the list the editor offers, and where a new one goes.
          *

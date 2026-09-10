@@ -29,7 +29,7 @@ import {
 import { createReportRegistry } from "../src/features/reports/core/registry.js";
 import { createReportEngine } from "../src/features/reports/core/widgetEngine.js";
 import { LOFTY_THEME, LOFTY_THEME_QUIET } from "../src/features/reports/adapters/lofty/theme.js";
-import { makeFillTokens, tokensFor } from "../src/features/reports/adapters/lofty/tokens.js";
+import { makeFillTextTokens, makeFillTokens, tokensFor } from "../src/features/reports/adapters/lofty/tokens.js";
 import { HOUSE_COLOURS } from "../src/data/export/houseFormat.ts";
 import { snippetHtml, snippetLayout } from "../src/data/types.ts";
 import { parseSubject, subjectOptionsFor } from "../src/pages/documentSubject.ts";
@@ -932,6 +932,58 @@ console.log("--- the Lofty theme is the house document format, role for role");
     menu.some(t => t.value === "job_number") && menu.some(t => t.value === "address")
     && menu.some(t => t.value === "slab_cost"),
     `${menu.length} fields`);
+
+  // ── the same placeholders in a TABLE (10 September) ──────────────────────
+  //
+  // Amber: "how do i add a single property … in rich text dropin or in a table or when
+  // creating a snippet". A cell is text and not html, which is the whole reason this is
+  // a second function: broken by pointing ctx.fillTextTokens at makeFillTokens, and the
+  // cell then prints `<span class="rb-token">A$18,400</span>` as characters.
+  const fillText = makeFillTextTokens(full);
+
+  ok("a placeholder in a table cell becomes the value",
+    /A\$18[,.]?400/.test(fillText("{{slab_cost}}")),
+    fillText("{{slab_cost}}"));
+
+  ok("and it carries no markup into the cell",
+    !/[<>]/.test(fillText("{{slab_cost}}")),
+    fillText("{{slab_cost}}"));
+
+  // NOT escaped, because a cell prints what it is given. Broken by reusing the html
+  // filler's `esc`: an address for "Smith & Sons" arrives in the table as
+  // "Smith &amp; Sons", which is what a reader sees.
+  const ampersand = makeFillTextTokens({
+    ...full,
+    jobs: [{ ...full.jobs[0], currentAddress: '28 Corner Street, Smith & Sons' }]
+  });
+  ok("a value with an ampersand in it is not html-escaped in a cell",
+    ampersand("{{address}}").endsWith("Smith & Sons"),
+    ampersand("{{address}}"));
+
+  // The same three outcomes as prose, so a table and a letter cannot disagree about
+  // what an unrecorded field looks like.
+  ok("an unfilled field is an em dash in a cell too",
+    fillText("{{never_filled_in}}") === "—", fillText("{{never_filled_in}}"));
+  ok("and a token naming no field is left standing in a cell",
+    fillText("{{slab_dat}}") === "{{slab_dat}}", fillText("{{slab_dat}}"));
+
+  // Through the widget, which is what the document actually renders — the resolver has
+  // to pass ctx down to freeTable, and it did not until this was added.
+  const tableWidget = createReportRegistry().get("freeTable").resolve(
+    { headers: ["Item", "{{address}}"], rows: [["Slab", "{{slab_cost}}"]] },
+    { ...full, fillTextTokens: fillText }
+  );
+  ok("a table resolves placeholders in its cells",
+    /A\$18[,.]?400/.test(tableWidget[0].rows[0][1]),
+    tableWidget[0].rows[0][1]);
+  ok("and in its column headers",
+    /Corner Street/.test(tableWidget[0].headers[1]),
+    tableWidget[0].headers[1]);
+
+  // A header carrying a placeholder must not change how many columns a row has.
+  ok("a placeholder in a header does not change the shape of the table",
+    tableWidget[0].headers.length === 2 && tableWidget[0].rows[0].length === 2,
+    `${tableWidget[0].headers.length} headers, ${tableWidget[0].rows[0].length} cells`);
 }
 
 // ── A snippet's wording, in and out of the layout it hides in ──────────────
