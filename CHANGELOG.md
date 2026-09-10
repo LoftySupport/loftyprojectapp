@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- each lot on the split-a-project dialog can be given its own street number — leave it blank and it takes the project's
 - the Projects board has a calendar view — it places each project's start date, target completion and end date, so a month shows what is starting and what is due
 - the Tasks board has four views — board, table, gantt and calendar — over the same set of tasks, so the grouping, filters, sort and search survive switching between them
 - Tasks filters are inline across the top and all of them are there — status, assignee, team and process on the bar, with health, stage, job or project number, due date, scheduled date, who raised it, who it is waiting on and who created it under Advanced
@@ -121,6 +122,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- a job created by splitting a project now keeps the street number — every one of them read "Lot 3, Corner Street" with no number in it, because the split threw the project's street number away
 - a link naming a view a board does not have showed a blank page with an empty View control; it now opens the board's default view instead
 - the app builds again — a dependency update took Tailwind to a major version the build is not set up for, and it is pinned back until that migration is done on its own
 - entries and month arrows on the jobs and tasks calendars were too small to tap reliably, and a month grid pushed narrow screens sideways

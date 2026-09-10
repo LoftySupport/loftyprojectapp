@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 204 changes since then —
+Unreleased: 206 changes since then —
+- Fixed: a job created by splitting a project now keeps the street number — every one of them read "Lot 3, Corner Street" with no number in it, because the split threw the project's street number away
+- Added: each lot on the split-a-project dialog can be given its own street number — leave it blank and it takes the project's
 - Changed: the number you can enter when creating a job or splitting a project is now called the old job number rather than the SiteBook number — SiteBook does not issue one until construction, and the field has always held the old system's number
 - Added: the Projects board has a calendar view — it places each project's start date, target completion and end date, so a month shows what is starting and what is due
 - Fixed: a link naming a view a board does not have showed a blank page with an empty View control; it now opens the board's default view instead
-- Fixed: the app builds again — a dependency update took Tailwind to a major version the build is not set up for, and it is pinned back until that migration is done on its own
-- Added: the Tasks board has four views — board, table, gantt and calendar — over the same set of tasks, so the grouping, filters, sort and search survive switching between them
-- …and 199 more.
+- …and 201 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
