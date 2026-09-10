@@ -300,14 +300,17 @@ html, body, #root { height: 100%; }
   outline-offset: 2px;
   border-radius: 2px;
 }
-/* The two reporting controls (0052). They are buttons, not links — they open a panel
-   rather than going anywhere — but they sit among the footer's links and must not look
-   like a different species, so they take the same underline, the same inherited colour
-   and the same 24px minimum target the links were given for WCAG 2.5.8. */
+/* The reporting control (0052). It is a button, not a link — it opens a panel rather than
+   going anywhere — but it sits among the footer's links and must not look like a different
+   species, so it takes the same underline, the same inherited colour and the same 24px
+   minimum target the links were given for WCAG 2.5.8.
+
+   `gap` went with the icon (Amber, 10 Sep: "don't use emojis or icons in links"). The
+   flex box stays: it is what centres a 24px target around a line of text that is shorter
+   than the box, and without it the underline sits a pixel off the links beside it. */
 .foot-action {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-4);
   border: none;
   background: none;
   padding: var(--space-4);
