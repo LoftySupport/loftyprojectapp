@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 203 changes since then —
+Unreleased: 204 changes since then —
+- Changed: the number you can enter when creating a job or splitting a project is now called the old job number rather than the SiteBook number — SiteBook does not issue one until construction, and the field has always held the old system's number
 - Added: the Projects board has a calendar view — it places each project's start date, target completion and end date, so a month shows what is starting and what is due
 - Fixed: a link naming a view a board does not have showed a blank page with an empty View control; it now opens the board's default view instead
 - Fixed: the app builds again — a dependency update took Tailwind to a major version the build is not set up for, and it is pinned back until that migration is done on its own
 - Added: the Tasks board has four views — board, table, gantt and calendar — over the same set of tasks, so the grouping, filters, sort and search survive switching between them
-- Added: Tasks filters are inline across the top and all of them are there — status, assignee, team and process on the bar, with health, stage, job or project number, due date, scheduled date, who raised it, who it is waiting on and who created it under Advanced
-- …and 198 more.
+- …and 199 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
