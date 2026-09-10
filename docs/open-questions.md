@@ -223,50 +223,6 @@ question 16.
 
 Nothing is blocked meanwhile: drafts are editable in the builder and publishing works.
 
-### 20. What is a Res #, and where does it live?
-
-**Blocked:** *"please add Lot #, Res # Street # at project creation type and default to
-showing Res # until Lot number assigned"* (Amber, 10 September) cannot be built without
-this, and it is a schema change rather than a form change.
-
-**Two of the three already exist.** `addresses` carries `address_lot_number` and
-`address_street_number`, and the constraint on them already states the rule Amber is
-extending — `addresses_has_a_number`: *"A site is identified by a lot number, a street
-number, or both — never neither. Before titles are issued there is only 'Lot 3';
-afterwards there is '28'."* Project creation collects the lot number per row today and
-does not collect the street number; adding that column to the split rows is a form
-change and nothing more.
-
-**Res # is new.** Nothing in the schema holds one, and it is not a rename of either
-existing column, because Amber's ordering puts three numbers in a sequence:
-
-    Res #  →  Lot #  →  Street #
-
-with the display defaulting to the Res # until a lot number is assigned. Three things
-have to be decided before a migration can be written, and each is a business fact rather
-than a preference:
-
-1. **What is it?** The reading that fits the ordering is the builder's own number for the
-   dwelling, carried before the land division registers the lots. If that is right, say
-   so; if it is something else — a council or a display-home number — it changes where it
-   belongs.
-2. **Does it belong to the address or to the job?** A lot number and a street number are
-   facts about a *place*, which is why they are on `addresses`. If a Res # is also a fact
-   about the place it joins them; if it is Lofty's number for the *dwelling being built*
-   it belongs on `jobs`, and the two are not interchangeable — the address is versioned
-   over time (`address_history`) and the job is not.
-3. **Does it replace the "lot or street number" rule?** Today an address with neither is
-   refused. If a new project has only a Res #, that CHECK has to become "res, lot or
-   street", which also means `address_consolidated` — a column a trigger generates for
-   every address in the system — has to render a Res # when it is the only number there
-   is. That is a migration touching every address row, so it is worth being sure.
-
-**What is not blocked and is already done:** the field at project creation that said
-*"SiteBook number"* now says **"Old job number"**, because *"sitebook number isn't
-created until after construction"* — it always wrote `job_number_old`, the old system's
-number, and asking for a SiteBook number on a create form asked for one that cannot
-exist yet.
-
 ### 19. Do the four views and bulk edit go back onto the older screens?
 
 The 10 September rules say *"all **new** pages that are tables"* get board, table, gantt
@@ -296,6 +252,8 @@ decides how much retro-fitting to schedule, and in what order.
 
 | Date | Question | Answer |
 | --- | --- | --- |
+| 10 Sep | Does the council belong in the address line, and does it need moving? | **No, and no.** *"ok the council area still needs to be recorded, but just not in the full address line. it stays as a property field"*, then *"the council is in the lookup table in supabase and already connected and working."* Both halves were already the case — `addresses.address_council` is the `sa_council` value filled from the LGA list, and `build_consolidated_address()` has never composed it in — so nothing was rebuilt and **no `property_defs` row was added**: the council is an attribute of an address, and a `property_values` copy would be a second place for it to disagree with the column. What *was* wrong: a job's council could be set from the drawer's change-address form and never read back, because `job_display` did not select it. `0108` appends `job_council`, off the job's own address, and the drawer shows it beside the address |
+| 10 Sep | (asked as 20) What is a Res #, and where does it live? | **A residence number on the plan, and it is one of the address details a JOB records** — *"A project needs to record … Lot # / Street Number / Street Name / Suburb / Postcode / State / Council. A Job needs to record all of that information PLUS Res #."* So it is `addresses.address_res_number` rather than a column on `jobs`, and the app offers the field on a job's address and not on a project's. Text, not an integer, for the same reason `address_lot_number` is text — she wrote "(number)" against Lot # too, and "2B" is a real lot number. It leads the consolidated address once set, and she gave the format as a worked example: *"Res 1, Lot 3, 13 Tester Street, Testville, SA, 5000"* — which also settled two things nobody had asked about, the comma between suburb/state/postcode and the removal of the trailing `, AU`. Built and applied as `0105` — **and corrected the same day on both counts**: it is an INTEGER, not text (*"a lot number or res number is only a number not a number and digitl"*, `0106`), and it is **not** job-only (*"on a project you might update the res number there as well"*), so every address form offers it |
 | 9 Sep | (asked as 15) Exported documents: Helvetica, or the brand's new Arial? | **Neither — Montserrat.** *"exported documents in monteserat unless it has fonts embedded in it for print then it will be brand font"*. The Word file names Montserrat; the PDF embeds a WinAnsi subset of Montserrat Regular and SemiBold (~41 kB each, `scripts/build-montserrat.mjs`) since it cannot name a face that is not one of the fourteen. The "brand font when embedded" half is question 15 above, held on the licence |
 | 9 Sep | Which orange carries text — the mockups' split, or `Button.jsx`? | Amber first chose **`Button.jsx`**: *"The one filled orange action inverts on hover — fill drops out, orange becomes ink and line."* Applied as drawn that is white on `#f47e63` at 2.62:1, so the follow-up put two options in front of her and she took the Button's behaviour on the pressed step (fill `#c2543c`, inverting to `#c2543c` ink and line, 4.5:1 both states) — built, probed in both themes, pushed. Then, seeing it: *"Make sure buttons are crisp orange."* **Final: Crisp Orange, as `Button.jsx` draws it.** White on `#f47e63` at rest, `#f47e63` ink and line on hover, 2.62:1 in both light states (6.1:1 on dark hover); recorded as shortfalls in `check-contrast`, never allowed to get worse. The pressed step is one line away in `theme/tokens.css` if ever wanted. The 7 Sep pressed-orange decision is superseded |
 | 9 Sep | Arial as the fallback, or the style guide's "never Arial"? | **Arial** — *"Fallback order is Montserrat first, then Arial. Do not substitute Helvetica, Calibri or Aptos."* The style guide's bad example in the brand repository is the one that is wrong |

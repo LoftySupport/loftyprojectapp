@@ -124,7 +124,7 @@ const WIRED: RepositoryMethod[] = [
   "currentProfile", "listProfiles",
   "createProfile", "updateProfile", "setProfileActive", "listActivity",
   "listComments", "addComment", "updateProject", "moveProjectStage",
-  "setProjectCurrentAddress", "listAddressHistory",
+  "setProjectCurrentAddress", "setJobCurrentAddress", "listAddressHistory",
   "listStages", "listTeams", "updateTeam", "createTeam", "listTemplatePhases", "updateStageSla",
   "listSavedViews", "saveView", "deleteSavedView", "shareSavedView",
   "submitFeedback", "listFeedback", "setFeedbackStage", "setFeedbackPhase", "setFeedbackKind",
@@ -196,7 +196,7 @@ const PROJECT_COLUMNS =
 //
 // Writes still go to `jobs` — a view is not the place to insert through.
 const JOB_COLUMNS =
-  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_sharepoint_url, job_created_at, job_created_by, job_updated_at, job_updated_by, job_current_address, job_original_address, project_current_address, project_sharepoint_url, project_type, job_title_type";
+  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_sharepoint_url, job_created_at, job_created_by, job_updated_at, job_updated_by, job_current_address, job_original_address, project_current_address, project_sharepoint_url, project_type, job_title_type, job_council";
 
 /**
  * `""` and `"   "` are how a browser reports a field somebody did not fill in, and they
@@ -431,7 +431,7 @@ function toComment(r: CommentRow): CommentEntry {
 }
 
 const ADDRESS_COLUMNS =
-  "address_id, address_lot_number, address_street_number, address_street_1, address_street_2, address_suburb, address_state, address_postcode, address_council";
+  "address_id, address_res_number, address_lot_number, address_street_number, address_street_1, address_street_2, address_suburb, address_state, address_postcode, address_council";
 
 /** One `activity_audit` row, as this file reads it (the pre-0080 shape `auditNarrative` diffs). */
 type AuditRow = {
@@ -797,7 +797,11 @@ export function createSupabaseRepository(): Repository {
     const { data, error } = await db
       .from("addresses")
       .insert({
-        address_lot_number: emptyToNull(a.lotNumber),
+        // Null on a project's address — the form does not offer it there. `0105`
+        // explains why the database does not forbid it rather than checking it.
+        // Numbers since 0106 — `emptyToNull` is for the text fields below it.
+        address_res_number: a.resNumber ?? null,
+        address_lot_number: a.lotNumber ?? null,
         address_street_number: emptyToNull(a.streetNumber),
         address_street_1: emptyToNull(a.street1),
         address_street_2: emptyToNull(a.street2),
@@ -1403,6 +1407,7 @@ export function createSupabaseRepository(): Repository {
         const { data: address, error: addressError } = await client
           .from("addresses")
           .insert({
+            address_res_number: input.address.resNumber ?? null,
             address_lot_number: input.address.lotNumber ?? null,
             address_street_number: input.address.streetNumber ?? null,
             address_street_1: input.address.street1,
@@ -1532,6 +1537,23 @@ export function createSupabaseRepository(): Repository {
       if (lots.some(l => !l.lotNumber.trim())) {
         throw new Error("Every job needs a lot number.");
       }
+      /**
+       * A lot number is only ever a number (`0106`). The column is an integer, so
+       * "2B" would come back as a Postgres cast error naming a type nobody typed —
+       * refused here instead, in the words of the thing that is wrong. A typed "Lot 3"
+       * is stripped rather than refused: people write the label, and the database can
+       * no longer clean it up on their behalf.
+       */
+      const asLot = (typed: string): number => {
+        const bare = typed.trim().replace(/^lot[\s.:#-]*/i, "").trim();
+        if (!/^\d+$/.test(bare)) {
+          throw new Error(
+            `"${typed.trim()}" is not a lot number — a lot number is only digits. ` +
+            "A number with a letter or a dash in it is a street number, not a lot."
+          );
+        }
+        return Number(bare);
+      };
       const duplicate = lots.find((l, i) => lots.findIndex(o => o.lotNumber === l.lotNumber) !== i);
       if (duplicate) {
         throw new Error(`Lot ${duplicate.lotNumber} is listed twice — each job needs its own lot number.`);
@@ -1540,7 +1562,7 @@ export function createSupabaseRepository(): Repository {
       // address_consolidated is left out: build_consolidated_address() composes it, and
       // a value sent from here would be overwritten anyway — or worse, not be.
       const rows = lots.map(lot => ({
-        address_lot_number: lot.lotNumber,
+        address_lot_number: asLot(lot.lotNumber),
         /**
          * The lot's own street number, or the project's.
          *
@@ -1589,7 +1611,7 @@ export function createSupabaseRepository(): Repository {
 
       const created: Job[] = [];
       for (const lot of lots) {
-        const addressId = byLot.get(lot.lotNumber);
+        const addressId = byLot.get(asLot(lot.lotNumber));
         if (!addressId) throw new Error(`Lot ${lot.lotNumber} did not get an address.`);
         const { data, error } = await client
           .from("jobs")
@@ -1766,6 +1788,40 @@ export function createSupabaseRepository(): Repository {
         throw new Error(`Project ${id} was not updated — it no longer exists, or you do not have permission.`);
       }
       return await readProject(id);
+    },
+
+    /**
+     * Give a job a new current address (0105).
+     *
+     * The project half of this has existed since the record page grew an "add another
+     * address"; the job half never did, so a job's address was set once at the split
+     * and frozen. That is the wrong way round — the job's address is the one that
+     * moves, from "Lot 3" to "13 Tester Street" when titles issue, and it is where the
+     * res number arrives months into a build.
+     *
+     * Deliberately the same three lines as `setProjectCurrentAddress`: insert the new
+     * address, repoint, read back. Every rule that makes it safe is a trigger rather
+     * than a check written here — `guard_original_address` protects the original,
+     * `0042` files the outgoing address in `address_history`, and
+     * `guard_job_address_is_a_street` refuses a job left at a locality, which is the
+     * one a job has and a project does not. Re-implementing any of them here would be
+     * a second opinion that can disagree with the database.
+     */
+    async setJobCurrentAddress(jobNumber: string, address: NewAddress): Promise<Job> {
+      const addressId = await insertAddress(address);
+      const { data: updated, error } = await client
+        .from("jobs")
+        .update({ job_current_address_id: addressId })
+        .eq("job_id", jobNumber)
+        .select("job_id");
+      if (error) throw error;
+      if (!updated?.length) {
+        throw new Error(`Job ${jobNumber} was not updated — it no longer exists, or you do not have permission.`);
+      }
+      const { data, error: readError } = await client
+        .from("job_display").select(JOB_COLUMNS).eq("job_id", jobNumber).single();
+      if (readError) throw readError;
+      return toJob(data as unknown as JobRow);
     },
 
     async listAddressHistory(ref: { projectId?: number; jobId?: string }): Promise<AddressHistoryEntry[]> {
@@ -2032,6 +2088,7 @@ export function createSupabaseRepository(): Repository {
         const { data: made, error: writeError } = await client
           .from("addresses")
           .insert({
+            address_res_number: from.address_res_number,
             address_lot_number: from.address_lot_number,
             address_street_number: from.address_street_number,
             address_street_1: from.address_street_1,
@@ -4112,6 +4169,7 @@ type JobRow = {
   project_current_address: string;
   project_sharepoint_url: string | null;
   project_type: Job["projectType"];
+  job_council: Job["council"];
 };
 
 function toJob(r: JobRow): Job {
@@ -4138,6 +4196,10 @@ function toJob(r: JobRow): Job {
     currentAddress: r.job_current_address,
     originalAddress: r.job_original_address,
     projectCurrentAddress: r.project_current_address,
+    // The job's OWN address's council, not its project's — 0108 widened the view for
+    // it. Amber, 10 Sep: "the council area still needs to be recorded, but just not in
+    // the full address line." It never was in the line; it was simply never read back.
+    council: r.job_council,
     projectSharepointUrl: r.project_sharepoint_url,
     // Inherited from the project through the view, never stored on the job. `job_display`
     // has exposed it since 0028; this read simply never asked for it, so every card and

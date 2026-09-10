@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 206 changes since then —
-- Fixed: a job created by splitting a project now keeps the street number — every one of them read "Lot 3, Corner Street" with no number in it, because the split threw the project's street number away
-- Added: each lot on the split-a-project dialog can be given its own street number — leave it blank and it takes the project's
-- Changed: the number you can enter when creating a job or splitting a project is now called the old job number rather than the SiteBook number — SiteBook does not issue one until construction, and the field has always held the old system's number
-- Added: the Projects board has a calendar view — it places each project's start date, target completion and end date, so a month shows what is starting and what is due
-- Fixed: a link naming a view a board does not have showed a blank page with an empty View control; it now opens the board's default view instead
-- …and 201 more.
+Unreleased: 214 changes since then —
+- Fixed: 64 job addresses had their lot number in the street-number column, so a job at lot 1 of 14 Brodie Road read as 1 Brodie Road — somebody else's house
+- Changed: a lot number and a res number are whole numbers; a street number stays text, so 12B and 100-105 are kept as typed
+- Added: a job's address shows its council region, which could be set from the drawer and never read back
+- Changed: the res number is offered on every address form, a project's included
+- Fixed: the staged-workbook importer could not insert a row after the lot number became a number
+- …and 209 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

@@ -320,12 +320,20 @@ export const DICTIONARY: DictionaryEntry[] = [
     "created"),
   e("addresses.address_lot_number", "Lot number",
     "The lot as it appears on the plan of division.",
-    "text",
-    "Nullable, and freely so since 0073: no constraint ties it to the street any more. On a plan of division the lot number is often the whole address — the lots are numbered before the roads are named — and requiring a street beside it refused the one shape the form most needed to accept. Before titles are issued a subdivided site has only \"Lot 3\"; afterwards it has \"28\". Text, not a number — \"12A\", \"5-7\" and \"Lot 3\" are as common as 12, and an integer column has to be migrated the first time one arrives.",
-    "Feeds consolidated_address since 0025 — \"Lot 3 Corner Street\" is what the job is called for months, and what people keep typing into search long after.",
+    "integer",
+    "Nullable, and freely so since 0073: no constraint ties it to the street. On a plan of division the lot number is often the whole address — the lots are numbered before the roads are named. INTEGER since 0106, correcting a claim this entry itself carried since August: it said \"Text, not a number — 12A, 5-7 and Lot 3 are as common as 12\", and the split dialog said \"2B as readily as 2\" on screen. Both were wrong about WHICH number carries the letters. Amber, 10 Sep: \"a lot number or res number is only a number ... however a street number can be something like 100-105 (as text) or 12B\", and the data agreed — all 13 lot numbers were digits, all twelve ranged or suffixed values were street numbers. Typing \"Lot 3\" still works; the app strips the label, because an integer column rejects the cast before any trigger could.",
+    "Feeds consolidated_address since 0025 — \"Lot 3, 14 Brodie Road\" is what the job is called for months. 0107 moved 64 job lot numbers out of the street-number column, where the split had been putting them.",
     "created"),
-  e("addresses.address_street_number", "Street number", "The number on the street. Text for the same reason as the lot number.",
-    "text", "Nullable. Was half of \"a street needs one of the two numbers\"; that check went in 0073 and the rule now applies only to jobs, through guard_job_address_is_a_street.",
+  e("addresses.address_res_number", "Res number",
+    "The residence number on the plan — the number Lofty gives the dwelling.",
+    "integer",
+    "Nullable, and not forbidden on a project's address: an address row is not owned by one record, so there is nothing on it to hang \"this belongs to a job\" from. 0105 offered the field on a job's address only and Amber corrected it the same day — \"it just needs to not have the option of only adding a res to jobs not projects which is a ux thing... however on a project you might update the res number there as well\" — so every address form offers it. INTEGER since 0106: \"a lot number or res number is only a number\". Not unique — res numbers repeat across sites, and whether they may repeat within one has not been stated.",
+    "Leads consolidated_address when set — \"Res 1, Lot 3, 13 Tester Street, Testville, SA, 5000\" (Amber's own example, 10 Sep).",
+    "created"),
+  e("addresses.address_street_number", "Street number",
+    "The number on the street — the one of the three numbers that is not a number.",
+    "text",
+    "Nullable. Was half of \"a street needs one of the two numbers\"; that check went in 0073 and the rule now applies only to jobs, through guard_job_address_is_a_street. TEXT, and 0106 is where that stopped being an inherited assumption and became a measured fact: 12 of 178 are not numbers — 2-4, 42-44, 60-62, 84-88, 337-339, 3&5, 4-11/9, 1a, 2A, 4a, 83a. Amber, 10 Sep: \"a street number can be something like 100-105 (as text) or 12B\". Trimmed on write since 0106, after one row was found stored as \"13 \" and rendering \"13  Awoonga Road\".",
     "Feeds consolidated_address.", "created"),
   e("addresses.address_street_1", "Street", "Street name and type — \"Ironbark Road\".", "text",
     "Nullable since 0037, which is what makes a locality address possible. Whether it is set is what address_precision reads; since 0073 it may stand with no number beside it, because \"the Mt Gambier division, Penola Road\" is a real thing to know before any lot has a frontage.",
@@ -821,6 +829,11 @@ export const DICTIONARY: DictionaryEntry[] = [
   e("job_display.job_current_address", "Job address (current)",
     "The consolidated current address, joined for the board and for search.",
     "view", "Read-only.", "jobs ⋈ addresses on job_current_address_id.", "created"),
+  e("job_display.job_council", "Council region (job)",
+    "The council of the JOB's own current address, not its project's — a job moved off its project's site can sit in a different LGA. Never part of the consolidated address line: Amber, 10 Sep, \"the council area still needs to be recorded, but just not in the full address line. it stays as a property field\", and build_consolidated_address() has never composed it in.",
+    "view", "Read-only. sa_council. Nullable — optional since 0073, because four SA suburbs span two councils and the form refuses to guess for them.",
+    "Added by 0108, off the `cur` join rather than `pcur`. Before it the app could WRITE a job's council — the drawer's change-address form carries the picker — and had nowhere to read it back, because a view's column list is frozen at creation (0055). Read as Job.council and shown on the job drawer beside the address. The project's equivalent is project_display.project_council.",
+    "created"),
 
   // ---------------------------------------------------------------- job_stages
   e("job_stages.id", "Job stage (removed)",
@@ -1713,7 +1726,7 @@ export const TABLE_DESCRIPTIONS: Record<string, string> = {
   job_address_search:
     "A search view: one row per job per address role, current and original alike, backed by the trigram index on the consolidated string — so a search on either address finds the job, and the result can say which one it hit.",
   job_display:
-    "The read view behind the boards: jobs joined to their addresses and their project, so one query returns the consolidated address, the inherited project type and whether the job is current, without each screen rebuilding the joins.",
+    "The read view behind the boards: jobs joined to their addresses and their project, so one query returns the consolidated address, the inherited project type and whether the job is current, without each screen rebuilding the joins. Also the suburb and, since 0108, the council of the job's own address — both of which sit beside the consolidated line rather than inside it.",
   job_latest_update:
     "The newest comment on each job (0059) — which is what \"latest update\" means here, per Amber on 28 August. distinct on (job_id) over comments, newest first, so the board reads one row per job instead of every comment ever written on it, and there is no stored copy to fall out of step with the thread. security_invoker is on: a reader sees an update only for a job they can already read.",
   job_stages:

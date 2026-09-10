@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 206 changes since then —
-- Fixed: a job created by splitting a project now keeps the street number — every one of them read "Lot 3, Corner Street" with no number in it, because the split threw the project's street number away
-- Added: each lot on the split-a-project dialog can be given its own street number — leave it blank and it takes the project's
-- Changed: the number you can enter when creating a job or splitting a project is now called the old job number rather than the SiteBook number — SiteBook does not issue one until construction, and the field has always held the old system's number
-- Added: the Projects board has a calendar view — it places each project's start date, target completion and end date, so a month shows what is starting and what is due
-- Fixed: a link naming a view a board does not have showed a blank page with an empty View control; it now opens the board's default view instead
-- …and 201 more.
+Unreleased: 214 changes since then —
+- Fixed: 64 job addresses had their lot number in the street-number column, so a job at lot 1 of 14 Brodie Road read as 1 Brodie Road — somebody else's house
+- Changed: a lot number and a res number are whole numbers; a street number stays text, so 12B and 100-105 are kept as typed
+- Added: a job's address shows its council region, which could be set from the drawer and never read back
+- Changed: the res number is offered on every address form, a project's included
+- Fixed: the staged-workbook importer could not insert a row after the lot number became a number
+- …and 209 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -32,7 +32,110 @@ properties may change between now and then"* — so the machinery has a plausibl
 even though jobs and projects are not it. It never ran: the load rolled back whole on its
 first write, so no project, job or address in the app came from it.
 
-## 10 September, later still — a job's address gets its street number back
+## 10 September, later still — the three numbers in an address, and 64 wrong ones
+
+Amber: *"a lot number or res number is only a number not a number and digitl. however a
+street number can be something like 100-105 (as text) or 12B"* — correcting `0105`, and
+behind it `0034` and the split dialog's own on-screen text, which had all claimed since
+August that it was the LOT number carrying the letters.
+
+The live data settled it: 13 of 13 lot numbers are digits; 12 of 178 street numbers are
+not, and they are exactly her examples (`2-4`, `337-339`, `3&5`, `4-11/9`, `83a`). So
+`0106` makes `address_lot_number` and `address_res_number` integers and leaves
+`address_street_number` text, with the measurement on file so nobody reinstates the old
+claim. Typing "Lot 3" still works — that tolerance moved from the trigger to the app,
+because an integer column rejects the cast before any trigger could run.
+
+**`0107` is the one worth knowing about.** *"check against Brodie ave project"* — project
+1002 is **14 Brodie Road** and its three jobs read `1 Brodie Road`, `2 Brodie Road`,
+`3 Brodie Road`. Those are other people's houses. It was **64 of 79 jobs**: the lot
+number was in the street-number column and the project's street number had never been
+carried down. Every affected project's jobs run 1..n from 1 — thirty consecutive
+"houses" on Awoonga Road for a project at 83a — which is what makes it a plan of
+division rather than a street. `1002-001` now reads `Lot 1, 14 Brodie Road, Reynella,
+SA, 5161`.
+
+That fix does **not** claim all 64 are subdivisions: a genuine infill of three houses at
+1, 2 and 3 grouped under a project at 14 would have been caught too. Nothing in the data
+tells them apart, and reversing it is the same statement with the columns swapped.
+
+Also settled, both previously flagged as guesses: addresses as their own table displayed
+on a job or project is *"correct"*; `street_2` *"is important"* and stays; and the res
+number is **not** job-only — *"on a project you might update the res number there as
+well"* — so every address form offers it.
+
+### The council, and two things the verify suite caught (`0108`, `0109`)
+
+Amber: *"the council area still needs to be recorded, but just not in the full address
+line. it stays as a property field"*, and *"the council is in the lookup table in
+supabase and already connected and working."* Both halves of that were already true —
+`addresses.address_council` is the `sa_council` value filled from the LGA list, and
+`build_consolidated_address()` has never composed it into the line. Nothing was rebuilt
+and no property definition was added.
+
+What was **not** true: a job's council could be set and never read. The drawer's
+change-address form carries the picker, and `job_display` never selected the column, so
+the value went in and vanished. `0108` appends `job_council` to the view — off the job's
+**own** address, since a job moved off its project's site can sit in a different LGA —
+and the job drawer shows "Council region" beside the address, never inside it.
+
+**`0109` is the one to know about.** `verify/check.sh` — not review — found that `0106`
+had left `import_spine()` unable to insert a row: it passes `sp ->> 'lot_number'`, which
+is text, into a column that became an integer. The import is closed and inert by Amber's
+7 September decision, so nothing was pending and no data is affected; the fix is one
+cast, and it matters because *"if I need to import other areas I will let you know"* is
+a call on a function that currently contradicts its own table. Two lessons already
+written down and worth repeating: a migration set that *replays* is not a schema that
+*works*, and `check.sh` needs running whenever a column changes type, not only when a
+table is added.
+
+## 10 September — a job's address carries a Res number (`0105`)
+
+Amber gave the shape of an address at each level, with a worked example that settled more
+than it looked like it would:
+
+> *"A project needs to record the following address details at a project level: Lot # /
+> Street Number / Street Name / Suburb / Postcode / State / Council. A Job needs to record
+> all of that information PLUS Res # … e.g Res 1, Lot 3, 13 Tester Street, Testville, SA,
+> 5000"*
+
+**The column is on `addresses`, not on `jobs`** — she describes it as one of the address
+details a job records, and the seven it joins are all there. Putting it on `jobs` would
+take the rendering away from `build_consolidated_address()` and make the app compose
+`"Res 1, "` in front of a database-built string everywhere an address is shown, exported
+or searched.
+
+**The database does not forbid one on a project's address**, and that is a decision: an
+address row is not owned by one record — `address_history` exists because addresses move
+between records — so there is nothing on the row to hang "this belongs to a job" from.
+The app draws the line, with `AddressFields`' `showResNumber` flag.
+
+**Text, though she wrote "(number)"** — she wrote it against Lot # too, and
+`address_lot_number` is text because "2B" is a real lot number (`0034`).
+
+**Her example settled two things nobody had asked about:** suburb, state and postcode are
+comma-separated now (they were space-separated), and the trailing `, AU` is gone. The
+country column stays; only the rendering changed. `address_street_2` — the unit line — is
+not in her list and was *not* dropped: it holds real data, and hiding a populated column
+is worse than placing it by the rule already in force.
+
+**Applied to the live database.** All 197 addresses rebuilt through the trigger: none
+still carries `, AU`, none carries a res number yet, and the five probes rolled back
+leaving nothing behind. **The migration is applied and the app code is not deployed yet**
+— that order is deliberate and forward-compatible: the column exists and nothing reads it
+until this merges. The reverse order would have broken every address read, because
+`ADDRESS_COLUMNS` now names the column.
+
+**Watched failing, and one probe earned its place.** With the res normalisation removed,
+the bare-`1` probes pass happily and only the probe that types `Res 1` catches
+`Res Res 1`. A probe set without it would have reported green on a real bug.
+
+**`setJobCurrentAddress` came with it** — *"A project address needs to be updatable. A Job
+address needs to be updatable."* Only the project half existed, which is the wrong way
+round: a job's address is the one that moves. The job drawer now has the same Change
+control, the same words and the same warning as the project panel.
+
+## 10 September — a job's address gets its street number back
 
 Amber: *"jobs are not showing the street number on the address. they are only showing
 lot number."* One line in `splitProject` did it, and it was deliberate:

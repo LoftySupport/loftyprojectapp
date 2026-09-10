@@ -2315,6 +2315,257 @@ first page only**. And Word gets a spaced stamp in the page header rather than t
 ghost behind the text, because the `docx` package exposes no VML shape and hand-writing XML
 into somebody else's document part breaks on their next release.
 
+### 10 September — a job's address carries a Res number (`0105`)
+
+Amber, giving the shape of an address at each level:
+
+> *"A project needs to record the following address details at a project level: Lot # /
+> Street Number / Street Name / Suburb / Postcode / State / Council. A Job needs to
+> record all of that information PLUS Res #.*
+>
+> *when formatting the address, it should show Lot #, Street Number, Street Name, Suburb,
+> State, Postcode. Only after a Res # is added to the job, does the It go Res #, Lot #,
+> Street Number, Suburb, State, Postcode*
+>
+> *e.g Res 1, Lot 3, 13 Tester Street, Testville, SA, 5000"*
+
+**`addresses.address_res_number`, not `jobs.job_res_number`.** She describes it as one of
+the address details a job records, and the seven it joins are all on `addresses`. Putting
+it on `jobs` would split one address across two tables and take the rendering away from
+`build_consolidated_address()` — the app would have to compose `"Res 1, "` in front of a
+string the database built, everywhere an address is shown, exported or searched. The
+generated column exists so there is one answer to "what is this address".
+
+**The database does not forbid a res number on a project's address**, and that is a
+decision rather than an omission. An address row is not owned by one record —
+`address_history` exists precisely because addresses move between records and through
+time — so there is nothing on the row to hang "this one belongs to a job" from. The app
+is where the distinction lives: `AddressFields` takes a `showResNumber` flag, and only a
+job's address passes it.
+
+**Text, though she wrote "(number)".** She wrote "(number)" against Lot # too, and
+`address_lot_number` is text on purpose: Lofty's own example of a lot number is "2B"
+(`0034`). A res number is the same kind of thing — a label off a plan, usually a numeral,
+never arithmetic — so it takes the type of the two numbers either side of it. "1" stored
+as text is still "1"; if it must be strictly numeric that is a CHECK to add, not a type
+to change back. Not unique either: res numbers repeat across sites by definition, and
+whether they may repeat *within* one has not been stated.
+
+**Three changes to the format, all read off her worked example.** `Res N, ` leads when
+set; suburb, state and postcode became comma-separated (they were space-separated); and
+the trailing `, AU` is gone. The country **column** stays — this changed what is
+rendered, not what is recorded.
+
+| | reads |
+| --- | --- |
+| lot only | `Lot 3, Tester Street, Testville, SA, 5000` |
+| street only | `13 Tester Street, Testville, SA, 5000` |
+| lot + street | `Lot 3, 13 Tester Street, Testville, SA, 5000` |
+| res + lot + street | `Res 1, Lot 3, 13 Tester Street, Testville, SA, 5000` |
+| with a unit | `Unit 2, Res 1, Lot 3, 13 Tester Street, Testville, SA, 5000` |
+
+`address_street_2` — the unit line — is not in her list and is **not** dropped: it holds
+real data, and hiding a populated column is a worse answer than placing it by the rule
+already in force, which put it outermost.
+
+**This is not a display change**, which `0034` made the point of saying: `address_consolidated`
+is the column `pg_trgm` indexes and every address search reads. Dropping `, AU` removes a
+token nobody searches for; the commas sit between tokens rather than inside them, so
+trigram matching on a suburb or a street is unaffected; and `Res 1` becomes newly
+findable, which is the point.
+
+**Watched failing before trusted.** The composition was evaluated against the live
+database with each guarded thing broken in turn:
+
+| broke | bare res | typed label | unit line |
+| --- | --- | --- | --- |
+| no res normalisation | passes | **FAILS** | passes |
+| Res placed after Lot | **FAILS** | **FAILS** | **FAILS** |
+| old space-separated tail | **FAILS** | **FAILS** | **FAILS** |
+
+The first row is why the typed-label probe exists and is not decoration: with the res
+normalisation removed, the other two pass happily — their res number is already a bare
+"1" — and only the probe that types `Res 1` catches `Res Res 1`. A probe set without it
+would have reported green on a real bug.
+
+**Applied to the live database**, and the 197 existing addresses rebuilt through the
+trigger: none still carries `, AU`, none carries a res number yet, and the five probes
+rolled back leaving nothing behind.
+
+**`setJobCurrentAddress` came with it.** Amber: *"A project address needs to be
+updatable. A Job address needs to be updatable."* Only the project half existed, which
+is the wrong way round — a job's address is the one that moves, from "Lot 3" to "13
+Tester Street" when titles issue, and it is where the res number arrives months into a
+build. Three lines, deliberately identical to `setProjectCurrentAddress`: insert,
+repoint, read back. Every rule that makes it safe is a trigger rather than a check
+written in the app — `guard_original_address`, `0042`'s history trigger, and
+`guard_job_address_is_a_street`, which is the one a job has and a project does not.
+
+### 10 September — a lot number is a number; a street number is not (`0106`, `0107`)
+
+Amber, correcting `0105` and, behind it, `0034`:
+
+> *"a lot number or res number is only a number not a number and digitl. however a
+> street number can be something like 100-105 (as text) or 12B"*
+
+`0105` had given the res number the type the lot number already had, and justified it by
+quoting `0034` — *"Text, not a number — 12A, 5-7 and Lot 3 are as common as 12"* — which
+the split dialog also said on screen as *"2B as readily as 2"*. All three were wrong
+about **which** of the three numbers carries the letters, and had been since August.
+
+**The live data settled it rather than the argument.** 13 of 13 lot numbers are digits
+only. 12 of 178 street numbers are not, and they are exactly Amber's examples: `2-4`,
+`42-44`, `60-62`, `84-88`, `337-339`, `3&5`, `4-11/9`, `1a`, `2A`, `4a`, `83a`. Not one
+lot number in the database has ever had a letter in it.
+
+| column | was | is |
+| --- | --- | --- |
+| `address_lot_number` | text | **integer** |
+| `address_res_number` | text | **integer** |
+| `address_street_number` | text | text, and now with a reason on file |
+
+**Where the input tolerance went.** `0034` taught the trigger to strip a typed "Lot 3",
+after a fixture produced "Lot Lot 3, Corner Street". An integer column cannot: the cast
+happens when the INSERT is parsed, before any BEFORE trigger runs. So the tolerance
+moved to the app, which is where input tolerance belongs — `AddressFields` and the split
+rows strip a leading label and refuse anything that is not digits, with a message,
+before sending. The database is now the thing that cannot be talked into holding "2B".
+
+**A migration ordering bug, caught by the migration.** The first run put the
+street-number trim above the function replacement and failed:
+
+```
+ERROR: 22P02: invalid input syntax for type integer: ""
+CONTEXT: PL/pgSQL function build_consolidated_address() line 3 at assignment
+```
+
+`alter table … type` does not fire row triggers, so the casts were fine alone. The trim
+is an UPDATE, and it fired the **old** trigger, whose first act was
+`coalesce(new.address_lot_number, '')` on a column that had just become an integer. The
+whole migration rolled back — the columns were still `text` afterwards and nothing was
+half-done. Cast, replace the function, and only then touch a row.
+
+**Two things Amber confirmed at the same time**, both of which `0105` had flagged as
+guesses: addresses being their own table displayed on a job or project is *"correct"*,
+and the `street_2` line *"is important"* — so it stays, leading the address. And the res
+number is **not** job-only: *"it just needs to not have the option of only adding a res
+to jobs not projects which is a ux thing... however on a project you might update the
+res number there as well."* Every address form offers it now.
+
+### `0107` — 64 jobs were living at somebody else's house
+
+Amber: *"check against Brodie ave project as that has lots and a street number and street
+number wasn't showing."*
+
+Project 1002 is **14 Brodie Road, Reynella**. Its three jobs read `1 Brodie Road`,
+`2 Brodie Road`, `3 Brodie Road` — three different houses, belonging to other people.
+This is `0034`'s bug again, except `0034` fixed the *rendering* and this is the *data*:
+the lot number was sitting in `address_street_number`, `address_lot_number` was null,
+and the project's own street number was never carried down.
+
+It was **64 of 79 jobs**, and the fingerprint is unmistakable once projects are listed
+beside their jobs — every project's jobs run 1..n from 1:
+
+| project | at | its jobs |
+| --- | --- | --- |
+| 1002 | 14 Brodie Road | 1, 2, 3 |
+| 1004 | 27 Howard Street | 1, 2, 3, 4 |
+| 1006 | 83a Awoonga Road | 1 … 30 |
+| 1007 | 2007 St clair ave | 1 … 16 |
+
+Thirty consecutive houses on Awoonga Road, when the project is at 83a, is not a street
+numbering — it is a plan of division. `1002-001` now reads
+**`Lot 1, 14 Brodie Road, Reynella, SA, 5161`**.
+
+**What it does not claim.** That all 64 are subdivisions. A genuine infill — three
+separate houses at 1, 2 and 3 grouped under a project at 14 — would be caught too and
+would be wrong. Nothing in the data distinguishes them; the 1..n run starting at 1 in
+*every* project is why this is the safer reading. Reversing it is the same statement
+with the two columns swapped, so the mapping is not lossy.
+
+The code bug behind it was fixed earlier the same day: `splitProject` hard-coded
+`address_street_number: null` on every job it created.
+
+**The guard was rewritten after `replay.sh` caught it.** The first draft ended with
+`if moved = 0 then raise exception` — and a replay from an empty database has no jobs,
+so a migration that was *correct* reported `FAILED: 0107 … nothing matched`. The
+condition worth stopping for is not "moved nothing", it is "left something behind", and
+the post-condition assertion already says that on every run. The count is now reported
+and not judged, and the whole statement is skipped when there are no jobs to judge it on.
+
+### 10 September — the council: recorded, and now readable on a job (`0108`)
+
+Amber, on the format `0105` and `0106` settled: *"ok the council area still needs to be
+recorded, but just not in the full address line. it stays as a property field"* — and,
+on how it is stored: *"the council is in the lookup table in supabase and already
+connected and working."*
+
+Two of the three were already true, and are worth stating rather than assuming:
+
+- **Recorded.** `addresses.address_council` is an `sa_council` value on every address,
+  filled in from the suburb off the LGA list. `0106` did not touch it. It is not a
+  `property_defs` row and this did not make it one — the council is an attribute of an
+  address, it moves when the address moves, and a `property_values` copy would be a
+  second place for it to disagree with the column.
+- **Not in the line.** `build_consolidated_address()` has never composed it in — not in
+  `0034`, not in `0105`, not in `0106`.
+
+The third was not. **A job's council could be set and never read.** A project shows
+"Council region" as a field, from `project_display.project_council`. A job showed
+nothing of the kind — and since `0105` a job's address can be *changed* from the drawer,
+through the same `AddressFields` that carries the council picker. Pick a council on a
+job's new address, save, and nowhere in the app said so again.
+
+The cause is `job_display`'s column list: it resolves `job_suburb` off the job's own
+address and stopped there, with `address_council` one column away on the same joined
+row. `0055`'s lesson — *a view's column list is frozen at creation* — for the third
+time. `0108` appends `cur.address_council as job_council`, off `cur` and not `pcur`,
+because a job moved off its project's site can sit in a different LGA.
+
+Two things the probes had to do properly:
+
+- **`security_invoker` is named in the `create or replace`,** because that statement
+  drops reloptions silently — the `0069` hole — and the first assertion reads
+  `pg_class.reloptions` back. Watched: with the `with` clause removed it raises
+  `reloptions (none)`.
+- **The cur/pcur probe manufactures its own disagreement.** All 79 jobs today carry
+  their project's council, so comparing the two proves nothing; the probe moves one
+  job's address to another council inside a sub-transaction, reads the view, and rolls
+  back. Watched failing with `pcur` in place of `cur`:
+  *"job_council read 'City of Onkaparinga' when the job's own address said 'City of
+  Adelaide'"*.
+
+### `0109` — the importer still thought a lot number was text
+
+`0106` made `address_lot_number` an integer. `import_spine()` inserts the lot straight
+out of the staged spine — `sp ->> 'lot_number'`, which is text — and Postgres does not
+coerce text to integer in an INSERT, so from `0106` onwards the loader could not have
+inserted a single row.
+
+Found by `verify/check.sh`, not by reading: step 44 of `behaviour.sql` loads the whole
+staged workbook and that is what failed. The migration set replayed cleanly on its own,
+which is exactly the difference between a schema that applies and a schema that works.
+
+**Nothing was pending and no data is affected.** Amber closed the import on 7 September
+and said the machinery stays applied and inert — *"everything that is in supabase now is
+correct. If I need to import other areas I will let you know as properties may change"*.
+This is worth a migration anyway on two counts: a function that contradicts its own
+table is a trap set for whoever calls it next, and *"I will let you know"* is exactly
+that call; and the verify suite runs it every time, so leaving it broken leaves
+`check.sh` red.
+
+The change is one expression — `nullif(trim(sp ->> 'lot_number'), '')::integer`. Blank
+becomes null, because an empty spreadsheet cell is not a lot number and `''::integer`
+raises about the wrong thing. Anything else non-numeric still fails the load loudly: all
+181 staged lot numbers are digits today, so a workbook that disagrees with *"a lot number
+is only a number"* is news rather than something to coalesce away.
+
+`behaviour.sql` step 36 was rewritten in the same pass. It still expected `0034`'s
+format — `", AU"`, a space-separated tail, and a typed `"Lot 4"` the column can no
+longer hold — and now asserts `0105`'s format including a `Res` line, plus the refusal
+of `"Lot 4"` as a negative. Without that negative the step would pass just as happily
+with the lot number still text, which is how *"2B is a lot number"* survived from August.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in
