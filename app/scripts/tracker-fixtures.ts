@@ -45,6 +45,14 @@ import type {
 const ISO = (y: number, m: number, d: number) =>
   new Date(Date.UTC(y, m - 1, d)).toISOString();
 
+/** A date-only column, n days from today in LOCAL time — see FIXTURE_PROJECT. */
+const DAYS_FROM_TODAY = (n: number): string => {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  const p = (x: number) => String(x).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+
 const PHASES: RoadmapPhase[] = [
   {
     id: "fixture-phase-1",
@@ -177,6 +185,17 @@ const FIXTURE_PROJECT: Project = {
   id: 9001,
   name: "FIXTURE Corner Street",
   type: null,
+  // Dated, so the projects gantt draws a bar and the projects calendar places its
+  // chips. Without these both views render their "nothing has dates yet" branch and the
+  // sweep measures a sentence — the same trap the tasks fixtures were added to close.
+  //
+  // RELATIVE TO TODAY, unlike the fixed dates above, and deliberately. The calendar
+  // opens on the current month: fixed dates put both chips in a month nobody is looking
+  // at within weeks, and the sweep would go back to measuring an empty grid without one
+  // line of this file changing. A week either side keeps both inside the same month.
+  startDate: DAYS_FROM_TODAY(-7),
+  targetCompletion: DAYS_FROM_TODAY(7),
+  endDate: null,
   stage: FIXTURE_STAGE,
   status: "active",
   owningTeam: "design",

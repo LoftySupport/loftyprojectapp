@@ -711,7 +711,7 @@ means for each of them.
 | screen | views | drop writes |
 | --- | --- | --- |
 | Jobs | Board, Table, Gantt, Calendar | stage move (confirmed), process move (confirmed) |
-| Projects | Board, Table, Gantt, Calendar | — a project's stage follows its jobs (0041) |
+| **Projects** | Board, Table, Gantt, **Calendar** | — a project's stage follows its jobs (0041) |
 | **Tasks** | **Board, Table, Gantt, Calendar** | **status, team, assignee** |
 | Maintenance, Contacts, Settings → Properties | table only | — |
 
@@ -719,6 +719,22 @@ Maintenance is the strongest candidate for the four: a maintenance item has a re
 date, a next visit and an owner, so a board, a timeline and a month all have something
 true to draw. Contacts and the Settings tables are configuration and lookups, which is
 the "unless specified otherwise" case — a Gantt of a lookup table is a chart of nothing.
+
+**The projects calendar is new, and the way it was missing is worth writing down.** Amber:
+*"calendar view has also disappeared"*. The projects board offered three views — and
+`/projects?view=Calendar` was still a URL that resolved, because `useBoardParams`
+validated `?view=` against the app-wide `VIEWS` list rather than against what the page
+could draw. So that link rendered the toolbar with an **empty View control and nothing at
+all underneath it**: a blank board, reached by a link that looked legitimate. Both halves
+are fixed — `ProjectsCalendar` places the three real dates a project carries (start,
+target completion, end, each labelled), and a board may now tell `useBoardParams` which
+views it actually has, so an unknown one falls back to the default instead of drawing
+nothing. `?view=Nonsense` lands on Board.
+
+Neither the projects Gantt (26 August) nor the new calendar had ever been in the
+responsive sweep. Both are now, and `FIXTURE_PROJECT` carries dates relative to today so
+the month grid is populated when it is measured rather than showing its empty state —
+fixed dates would have gone stale into the same false pass within weeks.
 
 ### Selection and bulk edit — DONE on Jobs and Tasks
 

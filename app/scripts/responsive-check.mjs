@@ -42,6 +42,10 @@ const ROUTES = ["/", "/dashboard",
                 // and an empty page lays nothing out.
                 "/tasks?scope=all&view=Board", "/tasks?scope=all&view=Gantt",
                 "/tasks?scope=all&view=Calendar",
+                // And the projects board's other two, for the same reason. Its calendar
+                // is new (it had three views and `?view=Calendar` drew a blank page);
+                // its gantt has existed since 26 August and had never been measured.
+                "/projects?view=Gantt", "/projects?view=Calendar",
                 "/reports", "/setup/properties", "/setup/processes", "/contacts", "/setup/contacts", "/setup/notifications", "/maintenance", "/setup/maintenance",
                 "/admin", "/settings", "/setup", "/setup/dictionary", "/setup/wiring",
                 // Tools. Three lanes, three layouts, and each is its own URL now — a

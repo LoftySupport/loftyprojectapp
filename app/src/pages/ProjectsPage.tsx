@@ -35,13 +35,14 @@ import { MoveStageControl, PROJECT_MOVE_NOTE } from "../components/MoveStageDial
 import { daysSince } from "../data/boardModel";
 import { Token, token } from "../components/Token";
 import { SidePanel } from "../components/SidePanel";
-import { Toolbar } from "../components/Toolbar";
+import { Toolbar, type View } from "../components/Toolbar";
 import { accentStyle, columnAccent } from "../theme/accents";
 import { Select, toOptions } from "../components/Select";
 import { PersonSelect } from "../components/PersonSelect";
 import { NewProjectDialog, SplitProjectDialog } from "../components/CreateDialogs";
 import { InlineNewProjectRow } from "../components/InlineNewProjectRow";
 import { ProjectsGantt } from "../components/ProjectsGantt";
+import { ProjectsCalendar } from "../components/ProjectsCalendar";
 import { ActivityFeed } from "../components/ActivityFeed";
 import { CommentsPanel } from "../components/CommentsPanel";
 import { TasksPanel } from "../components/TasksPanel";
@@ -102,6 +103,16 @@ function projectInView(
     : p.jobs.some(j => viewStages.includes(j.stage));
 }
 
+/**
+ * All four, and the same list feeds the toolbar and the URL parser.
+ *
+ * The board offered three and `?view=Calendar` was still accepted, because
+ * `useBoardParams` validated against the app-wide `VIEWS` rather than against what
+ * this page can draw — so that link rendered an empty View control with nothing under
+ * it. One list, read by both, is what makes the two agree.
+ */
+const BOARD_VIEWS: readonly View[] = ["Board", "Table", "Gantt", "Calendar"];
+
 export function ProjectsPage() {
   const { stageNames } = useStages();
   const { teams, teamNames } = useTeams();
@@ -132,7 +143,7 @@ export function ProjectsPage() {
   // flat grid of cards — which answered "what sites are there" and not "where is the
   // portfolio up to", the question the jobs board has always been able to answer.
   const { view, setView, grouping, setGrouping, filters, setFilters, saved, setSaved, search } =
-    useBoardParams({ view: "Board", grouping: "Stage", views: PROJECT_VIEWS });
+    useBoardParams({ view: "Board", grouping: "Stage", views: PROJECT_VIEWS, boardViews: BOARD_VIEWS });
   // The teams this person is in — sharing a view offers their own team, and offers
   // nothing at all to somebody in none (0051).
   const { profile: me } = useAuth();
@@ -522,7 +533,7 @@ export function ProjectsPage() {
       />
 
       <Toolbar
-        views={["Board", "Table", "Gantt"]}
+        views={BOARD_VIEWS}
         view={view}
         onViewChange={setView}
         groupings={["None", "Stage", "Job stage", "Job process", "Type", "Status"]}
@@ -646,6 +657,8 @@ export function ProjectsPage() {
         </Board>
       ) : view === "Gantt" ? (
         <ProjectsGantt rows={rows} onOpen={openOne} />
+      ) : view === "Calendar" ? (
+        <ProjectsCalendar rows={rows} onOpen={openOne} />
       ) : (
         <div className="panel data-table-wrap">
           <table className="data-table">

@@ -93,7 +93,14 @@ export interface BoardParams {
 }
 
 export function useBoardParams(
-  defaults: { view: View; grouping: Grouping; views: SavedView[]; fieldKeys?: FieldKeys }
+  defaults: {
+    view: View;
+    grouping: Grouping;
+    views: SavedView[];
+    /** The views this board actually renders — pass the same list the `Toolbar` gets. */
+    boardViews?: readonly View[];
+    fieldKeys?: FieldKeys;
+  }
 ): BoardParams {
   const [params, setParams] = useSearchParams();
   const location = useLocation();
@@ -149,8 +156,19 @@ export function useBoardParams(
     }
   }, [boardKey, params]);
 
-  /** An unknown value falls back to the default — a mistyped link should land somewhere. */
-  const view = (VIEWS as readonly string[]).includes(params.get("view") ?? "")
+  /**
+   * An unknown value falls back to the default — a mistyped link should land somewhere.
+   *
+   * Validated against THIS BOARD's views when it says which it has, not against the
+   * app-wide list. `/projects?view=Calendar` passed the app-wide check and the projects
+   * page had no branch for Calendar, so it rendered the toolbar with an empty View
+   * control and nothing at all underneath — a blank board reached by a link that looked
+   * legitimate, which is how "the calendar view has disappeared" gets reported. The
+   * projects board has a calendar now; this is the half that stops the next board
+   * without one going blank the same way.
+   */
+  const offered = defaults.boardViews ?? VIEWS;
+  const view = (offered as readonly string[]).includes(params.get("view") ?? "")
     ? (params.get("view") as View)
     : defaults.view;
 
