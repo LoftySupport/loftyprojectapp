@@ -21,6 +21,7 @@ import { ProjectsPage } from "./pages/ProjectsPage";
 import { JobsPage } from "./pages/JobsPage";
 import { TasksPage } from "./pages/TasksPage";
 import { ReportsPage } from "./pages/ReportsPage";
+import { SearchPage } from "./pages/SearchPage";
 import { ToolsPage } from "./pages/ToolsPage";
 import { ContactsPage } from "./pages/ContactsPage";
 import { MaintenancePage } from "./pages/MaintenancePage";
@@ -390,6 +391,10 @@ export default function App() {
               {/* Tasks (0102): every task across every job and project, one board — the
                   "my work" query the schema plan indexed for, given a screen. */}
               <Route path="tasks" element={<TasksPage />} />
+              {/* Every kind of record at once. Reached by pressing Enter in the header
+                  box or by "See all results" under the dropdown — and shareable, because
+                  the query lives in `?q=` rather than in the header's state. */}
+              <Route path="search" element={<SearchPage />} />
               <Route path="reports" element={<ReportsPage />} />
               <Route path="contacts" element={<ContactsPage />} />
               {/* Tools: things you use to make something, as opposed to the records you

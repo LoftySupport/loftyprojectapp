@@ -13,8 +13,14 @@ import { maintenanceMethods } from "./supabaseMaintenanceRepository";
 import { MAX_SPLIT, OPENING_TEAM, teamSlug } from "./types";
 import { projectDisplayName } from "./types";
 import { EMPTY_REPORT_TEMPLATE_LAYOUT } from "./types";
+import { matchedAddress } from "./SearchProvider";
 import type {
   ActivityEntry,
+  DocumentCategory,
+  NewDocumentUrl,
+  RecordDocument,
+  RecentDocument,
+  SearchHit,
   NewReportDocument,
   NewReportDocumentShare,
   NewReportTemplate,
@@ -3478,6 +3484,413 @@ export function createSupabaseRepository(): Repository {
       return toReportDocument(data[0] as unknown as ReportDocumentRow);
     },
 
+    // ---- what is filed on a record, and where it lives (0032 / 0103) ------
+
+    /**
+     * The documents attached to one record.
+     *
+     * An embed rather than two round trips: `document_links` has exactly one foreign key
+     * to `documents`, so `documents(...)` is unambiguous here — this is not the PGRST201
+     * shape that the address embeds are (0036), because that one has TWO keys to the same
+     * table and this has one.
+     */
+    async listRecordDocuments(opts): Promise<RecordDocument[]> {
+      let q = client.from("document_links").select(RECORD_DOCUMENT_COLUMNS);
+      if (opts.jobId) q = q.eq("job_id", opts.jobId);
+      else if (opts.projectId != null) q = q.eq("project_id", opts.projectId);
+      // Neither: the caller asked for the documents belonging to no record, and 0032's
+      // `document_links_one_parent` makes that row impossible. Answering with EVERY
+      // attachment in the company would be the unfiltered-query bug that
+      // listReportDocuments' `mine` branch already guards against.
+      else return [];
+      const { data, error } = await q.order("document_link_created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? [])
+        .map(r => toRecordDocument(r as unknown as RecordDocumentRow))
+        // A link whose document the caller's RLS did not return. Filtered rather than
+        // rendered as a blank row: 0032's policies on the two tables are the same today,
+        // so this cannot happen — and a row with no name would be the first sign that
+        // somebody had narrowed one of them without the other.
+        .filter((d): d is RecordDocument => d !== null);
+    },
+
+    /**
+     * File a document that lives in SharePoint.
+     *
+     * TWO WRITES, AND THE FIRST ONE MAY FIND RATHER THAN CREATE. `documents_one_row_per_url`
+     * says one SharePoint address is one document, so filing the project's contract
+     * against a job as well must attach the existing row rather than make a second. The
+     * lookup is done first and explicitly rather than by catching the unique violation,
+     * because an insert that fails still consumes a sequence and, more to the point, the
+     * "already there" case is ordinary rather than exceptional.
+     *
+     * NOT A TRANSACTION, and that is a real limitation rather than an oversight. PostgREST
+     * has no client-side transaction, so a document row can be created and its link then
+     * refused — leaving a pointer with no attachments. 0103's reaper does not help there:
+     * it fires on DELETE of a link, and no link was ever made. The honest fallback is to
+     * report the failure with the document named, which is what the catch below does; the
+     * row is then reachable by URL, so refiling it attaches rather than duplicating.
+     */
+    async addDocumentUrl(input: NewDocumentUrl): Promise<RecordDocument> {
+      const url = input.url.trim();
+      const name = input.name.trim();
+      // Checked here as well as by the constraint, because a constraint's message goes on
+      // screen verbatim and "violates check constraint documents_url_is_https" does not
+      // tell somebody who pasted a network path what to do instead.
+      if (!name) throw new Error("Give the document a name — that is what the list shows.");
+      if (!/^https:\/\/\S+$/.test(url)) {
+        throw new Error(
+          "That does not look like a link. Open the document in SharePoint, copy the address from the browser bar, and paste it here — it starts with https://."
+        );
+      }
+      if (!input.jobId && input.projectId == null) {
+        throw new Error("A document has to be filed against a job or a project.");
+      }
+
+      const existing = await client
+        .from("documents")
+        .select("document_id")
+        .eq("document_url", url)
+        .maybeSingle();
+      if (existing.error) throw existing.error;
+
+      let documentId = (existing.data as { document_id: string } | null)?.document_id ?? null;
+
+      if (!documentId) {
+        const made = await client
+          .from("documents")
+          .insert({
+            document_name: name,
+            document_description: emptyToNull(input.description),
+            document_url: url,
+            document_category: input.category ?? "other"
+          })
+          .select("document_id")
+          .single();
+        if (made.error) throw documentError(made.error);
+        documentId = (made.data as { document_id: string }).document_id;
+      }
+
+      const link = await client
+        .from("document_links")
+        .insert({
+          document_id: documentId,
+          job_id: input.jobId ?? null,
+          project_id: input.jobId ? null : input.projectId ?? null
+        })
+        .select(RECORD_DOCUMENT_COLUMNS)
+        .single();
+      if (link.error) throw documentError(link.error);
+
+      const filed = toRecordDocument(link.data as unknown as RecordDocumentRow);
+      if (!filed) throw new Error("The document was filed but could not be read back.");
+      return filed;
+    },
+
+    /**
+     * Take a document off this record.
+     *
+     * The link only. 0032: *"detaching is not deleting: the link goes, the file stays"* —
+     * and where nothing else points at the document and Lofty holds no bytes for it,
+     * 0103's trigger removes the row too, inside this same delete. Nothing in SharePoint
+     * is touched either way, which is what the screen says before it asks.
+     */
+    async removeRecordDocument(linkId: string): Promise<void> {
+      const { data, error } = await client
+        .from("document_links")
+        .delete()
+        .eq("document_link_id", linkId)
+        .select("document_link_id");
+      if (error) throw error;
+      if (!data?.length) {
+        throw new Error("That document was not removed from this record — it is no longer attached, or you do not have permission.");
+      }
+    },
+
+    /**
+     * Both kinds of document, newest first.
+     *
+     * Two reads rather than a view over both: `report_documents` and `documents` have
+     * different shapes, different delete rules and different reasons to exist, and a UNION
+     * view would have to be recreated every time either one changed.
+     *
+     * A FILED document is joined back to the record it is on, because the panel is the
+     * only place it is otherwise reachable and "Site survey" with nothing beside it does
+     * not tell you whose site. A document on several records appears once per record,
+     * which is right: what changed is the filing, and each one is its own event.
+     *
+     * `limit` is applied to each read AND to the merge, so a week of filing cannot push
+     * every built document off the list.
+     *
+     * Names are resolved from `listProfiles()` rather than embedded. Both tables carry two
+     * foreign keys to profiles (the audit quartet), which is precisely the PGRST201
+     * ambiguity `verify/embeds.sh` exists to catch — 0094 records the same decision.
+     */
+    async listRecentDocuments(opts = {}): Promise<RecentDocument[]> {
+      const limit = opts.limit ?? 8;
+
+      const [built, filed, people] = await Promise.all([
+        client
+          .from("report_documents")
+          .select("report_document_id, report_document_title, job_id, project_id, report_document_created_at, report_document_updated_at, report_document_updated_by, report_document_created_by")
+          .order("report_document_updated_at", { ascending: false })
+          .limit(limit),
+        client
+          .from("document_links")
+          .select(RECORD_DOCUMENT_COLUMNS)
+          .order("document_link_created_at", { ascending: false })
+          .limit(limit),
+        repo.listProfiles()
+      ]);
+      if (built.error) throw built.error;
+      if (filed.error) throw filed.error;
+
+      const nameOf = (id: string | null | undefined) =>
+        (id && people.find(p => p.id === id)?.fullName) || null;
+
+      // "Added" only while nothing has touched it since. The two timestamps are set
+      // together on insert and the touch trigger moves one of them, so a gap of more than
+      // a second means it has genuinely been edited — a tolerance rather than an equality
+      // test, because the column default and the trigger do not fire in the same statement
+      // and can land a millisecond apart.
+      const change = (createdAt: string, updatedAt: string): RecentDocument["change"] =>
+        Math.abs(Date.parse(updatedAt) - Date.parse(createdAt)) > 1000 ? "changed" : "added";
+
+      const rows: RecentDocument[] = [
+        ...(built.data ?? []).map(r => {
+          const d = r as unknown as {
+            report_document_id: string; report_document_title: string;
+            job_id: string | null; project_id: number | null;
+            report_document_created_at: string; report_document_updated_at: string;
+            report_document_updated_by: string | null; report_document_created_by: string | null;
+          };
+          return {
+            id: d.report_document_id,
+            kind: "built" as const,
+            title: d.report_document_title,
+            url: null,
+            jobId: d.job_id,
+            projectId: d.project_id,
+            at: d.report_document_updated_at,
+            change: change(d.report_document_created_at, d.report_document_updated_at),
+            byName: nameOf(d.report_document_updated_by ?? d.report_document_created_by)
+          };
+        }),
+        ...(filed.data ?? [])
+          .map(r => toRecordDocument(r as unknown as RecordDocumentRow))
+          .filter((d): d is RecordDocument => d !== null)
+          .map(d => ({
+            // The LINK, not the document: the same contract filed on a project and on a
+            // job is two events on this list, and two rows sharing a React key would have
+            // one of them silently disappear.
+            id: d.linkId,
+            kind: "filed" as const,
+            title: d.name,
+            url: d.url,
+            jobId: d.jobId,
+            projectId: d.projectId,
+            // When it was filed HERE. A document uploaded in July and attached to this job
+            // today is news today, and its own updated_at would sort it out of sight.
+            at: d.attachedAt,
+            change: "added" as const,
+            byName: nameOf(d.createdBy)
+          }))
+      ];
+
+      return rows.sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, limit);
+    },
+
+    /**
+     * The header's search, across six kinds at once.
+     *
+     * SIX QUERIES IN PARALLEL, NOT ONE. A single `search_everything` view over six tables
+     * would need a UNION whose column list is the widest of them, recreated every time
+     * any one changes, and — because each table's RLS differs — a `security_invoker`
+     * chain nobody could reason about. Six narrow reads under the caller's own session
+     * keep each table's own policy doing its own job, which is the same argument 0103
+     * makes for not merging document links into report_documents.
+     *
+     * EVERY TERM MUST APPEAR, WHICH IS WHY THE FILTERS ARE CHAINED. Each `.or()` is one
+     * term across that table's searchable columns; PostgREST ANDs the top-level filters
+     * together, so "brodie court" is (brodie somewhere) AND (court somewhere). An OR
+     * across terms would widen the result the moment somebody typed a second word, which
+     * is the opposite of what they were doing — the same rule `matchesTerms` follows for
+     * the in-page search, deliberately, so the two never disagree about what matches.
+     *
+     * Three terms at most. Beyond that the filter string grows past what a URL should
+     * carry, and nobody narrows a search four words at a time.
+     */
+    async search(query: string, opts = {}): Promise<SearchHit[]> {
+      const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean).slice(0, 3);
+      // One character matches most of the database. The caller debounces; this is the
+      // floor that makes a stray keystroke free rather than a six-query round trip.
+      if (!terms.length || query.trim().length < 2) return [];
+      const limit = opts.limit ?? 6;
+      const raw = query.trim();
+
+      /** One term, across several columns — the OR half of the AND-of-ORs above. */
+      const anyOf = (columns: string[], term: string) =>
+        columns.map(c => `${c}.ilike.${ilike(term)}`).join(",");
+
+      let jobQ = client
+        .from("job_display")
+        .select("job_id, project_id, job_number_old, job_stage, job_owning_team, job_current_address, job_original_address")
+        .limit(limit);
+      for (const t of terms) {
+        jobQ = jobQ.or(anyOf(["job_id", "job_number_old", "job_current_address", "job_original_address"], t));
+      }
+
+      let projectQ = client
+        .from("project_display")
+        .select("project_id, project_name, project_status, project_current_address, project_original_address")
+        .limit(limit);
+      for (const t of terms) {
+        const parts = [anyOf(["project_name", "project_current_address", "project_original_address"], t)];
+        // `project_id` is an integer and PostgREST will not ilike one, so a numeric term
+        // is matched exactly instead. Without this, typing a project number found the
+        // project only if its address happened to contain the digits.
+        if (/^\d+$/.test(t)) parts.push(`project_id.eq.${Number(t)}`);
+        projectQ = projectQ.or(parts.join(","));
+      }
+
+      let builtQ = client
+        .from("report_documents")
+        .select("report_document_id, report_document_title, job_id, project_id")
+        .limit(limit);
+      for (const t of terms) builtQ = builtQ.or(anyOf(["report_document_title"], t));
+
+      // The FILED documents (0032). Searched on the document rather than on its links, so
+      // a contract on a project and on three of its jobs is one hit rather than four of
+      // the same name — the panel on the record is where you pick which copy you meant.
+      let filedQ = client
+        .from("documents")
+        .select("document_id, document_name, document_description, document_url, document_category, document_storage_path")
+        .limit(limit);
+      for (const t of terms) filedQ = filedQ.or(anyOf(["document_name", "document_description"], t));
+
+      // Contacts, companies and maintenance go through their own list methods rather
+      // than a query written again here: each already has a search that knows which of
+      // its columns are worth matching, and two copies of that would drift.
+      const [jobs, projects, built, filed, contacts, companies, requests] = await Promise.all([
+        jobQ,
+        projectQ,
+        builtQ,
+        filedQ,
+        repo.listContacts({ search: raw }),
+        repo.listCompanies({ search: raw }),
+        repo.listMaintenanceRequests({ search: raw, queue: "all", limit })
+      ]);
+      if (jobs.error) throw jobs.error;
+      if (projects.error) throw projects.error;
+      if (built.error) throw built.error;
+      if (filed.error) throw filed.error;
+
+      const hits: SearchHit[] = [];
+
+      for (const r of (jobs.data ?? []) as unknown as {
+        job_id: string; project_id: number; job_number_old: string | null;
+        job_stage: string | null; job_owning_team: string | null;
+        job_current_address: string | null; job_original_address: string | null;
+      }[]) {
+        hits.push({
+          kind: "job",
+          id: r.job_id,
+          title: r.job_current_address ?? r.job_id,
+          detail: [r.job_id, r.job_stage].filter(Boolean).join(" · ") || null,
+          href: `/jobs/${encodeURIComponent(r.job_id)}`,
+          onPreviousAddress:
+            matchedAddress(r.job_current_address, r.job_original_address, terms) === "original"
+        });
+      }
+
+      for (const r of (projects.data ?? []) as unknown as {
+        project_id: number; project_name: string | null; project_status: string | null;
+        project_current_address: string | null; project_original_address: string | null;
+      }[]) {
+        hits.push({
+          kind: "project",
+          id: String(r.project_id),
+          title: r.project_current_address ?? r.project_name ?? `Project ${r.project_id}`,
+          detail: `Project ${r.project_id}`,
+          href: `/projects/${r.project_id}`,
+          onPreviousAddress:
+            matchedAddress(r.project_current_address, r.project_original_address, terms) === "original"
+        });
+      }
+
+      for (const c of contacts.slice(0, limit)) {
+        hits.push({
+          kind: "contact",
+          id: c.id,
+          title: c.fullName,
+          detail: c.companyName ?? c.primaryEmail ?? null,
+          href: `/contacts?person=${encodeURIComponent(c.id)}`
+        });
+      }
+
+      for (const c of companies.slice(0, limit)) {
+        hits.push({
+          kind: "company",
+          id: c.id,
+          title: c.name,
+          detail: c.tradingName ?? null,
+          href: `/contacts?tab=companies&company=${encodeURIComponent(c.id)}`
+        });
+      }
+
+      for (const m of requests.slice(0, limit)) {
+        hits.push({
+          kind: "maintenance",
+          id: m.id,
+          title: m.summary,
+          detail: [m.number, m.jobAddress].filter(Boolean).join(" · ") || null,
+          // `queue=all` so a closed request found by search actually renders. Without it
+          // the page opens on the open queue and the row the link names is filtered out,
+          // which reads as a broken link rather than as a filter.
+          href: `/maintenance?queue=all&request=${encodeURIComponent(m.id)}`
+        });
+      }
+
+      for (const r of (built.data ?? []) as unknown as {
+        report_document_id: string; report_document_title: string;
+        job_id: string | null; project_id: number | null;
+      }[]) {
+        hits.push({
+          kind: "document",
+          id: r.report_document_id,
+          title: r.report_document_title,
+          detail: r.job_id ?? (r.project_id != null ? `Project ${r.project_id}` : null),
+          href: `/tools/document-builder?open=${encodeURIComponent(r.report_document_id)}`
+        });
+      }
+
+      for (const r of (filed.data ?? []) as unknown as {
+        document_id: string; document_name: string; document_description: string | null;
+        document_url: string | null; document_category: string;
+        document_storage_path: string | null;
+      }[]) {
+        // A document with a URL opens where it lives — there is no screen in this app that
+        // renders one, and routing somebody to a record and making them find the row again
+        // is a worse answer than opening the thing they searched for.
+        //
+        // One WITHOUT a URL is 0032's other two states: an upload, or a document Lofty is
+        // still waiting on. Neither has anywhere to go yet — the upload viewer is not
+        // built and a document that has not arrived has no destination at all — so those
+        // are left out rather than offered as a row that does nothing when clicked.
+        if (!r.document_url) continue;
+        hits.push({
+          kind: "document",
+          id: r.document_id,
+          title: r.document_name,
+          detail: r.document_category === "other" ? r.document_description : r.document_category,
+          href: r.document_url,
+          external: true
+        });
+      }
+
+      return hits;
+    },
+
     async deletePropertyDef(key: string): Promise<void> {
       const { data, error } = await client
         .from("property_defs")
@@ -3704,6 +4117,105 @@ type ReportTemplateRow = {
   report_template_updated_at: string;
   report_template_updated_by: string | null;
 };
+
+/**
+ * A LIKE pattern from something a person typed.
+ *
+ * `%`, `,`, `(` and `)` are stripped rather than escaped: the first two are LIKE
+ * wildcards that would turn a typo into "match everything", and the last three are what
+ * PostgREST uses to delimit an `or=(…)` filter — a comma in a search term silently
+ * becomes a second condition. The same shape, and the same reasoning, as the helper in
+ * supabasePartyRepository.ts; it is duplicated rather than exported because a two-line
+ * string function shared across modules is a dependency for no benefit.
+ */
+const ilike = (s: string) => `%${s.replace(/[%_,()]/g, " ").trim()}%`;
+
+/**
+ * An attachment with its document embedded — one link row and the file or URL it points at.
+ *
+ * THE FOREIGN KEY IS NAMED, and the first version of this did not name it on the reasoning
+ * that `document_links` has exactly one key to `documents` so there is nothing to
+ * disambiguate. `verify/embeds.sh` refused it, and it was right to: `documents` itself
+ * carries three foreign keys (two to profiles, one to itself for the supersedes chain), so
+ * PostgREST has more than one relationship to weigh and answers PGRST201. That is the same
+ * shape that took sign-in down on 21 August, found here by a check rather than by a user.
+ */
+const RECORD_DOCUMENT_COLUMNS =
+  "document_link_id, document_id, job_id, project_id, document_link_created_at, document_link_created_by, documents!document_links_document_id_fkey(document_id, document_name, document_description, document_storage_path, document_url, document_mime_type, document_size_bytes, document_category, document_supersedes_id, document_created_at, document_created_by, document_updated_at, document_updated_by)";
+
+type RecordDocumentRow = {
+  document_link_id: string;
+  document_id: string;
+  job_id: string | null;
+  project_id: number | null;
+  document_link_created_at: string;
+  document_link_created_by: string | null;
+  documents: {
+    document_id: string;
+    document_name: string;
+    document_description: string | null;
+    document_storage_path: string | null;
+    document_url: string | null;
+    document_mime_type: string | null;
+    document_size_bytes: number | null;
+    document_category: DocumentCategory;
+    document_supersedes_id: string | null;
+    document_created_at: string;
+    document_created_by: string | null;
+    document_updated_at: string;
+    document_updated_by: string | null;
+  } | null;
+};
+
+/**
+ * Null when the embed came back empty — a link whose document the caller's RLS did not
+ * return. 0032's policies on the two tables are identical today, so this cannot happen;
+ * it returns null rather than a half-built row so that the day somebody narrows one policy
+ * without the other, the panel shows one fewer row instead of a nameless one.
+ */
+function toRecordDocument(r: RecordDocumentRow): RecordDocument | null {
+  const d = r.documents;
+  if (!d) return null;
+  return {
+    id: d.document_id,
+    linkId: r.document_link_id,
+    jobId: r.job_id,
+    projectId: r.project_id,
+    attachedAt: r.document_link_created_at,
+    name: d.document_name,
+    description: d.document_description,
+    storagePath: d.document_storage_path,
+    url: d.document_url,
+    mimeType: d.document_mime_type,
+    sizeBytes: d.document_size_bytes,
+    category: d.document_category,
+    supersedesId: d.document_supersedes_id,
+    createdAt: d.document_created_at,
+    createdBy: r.document_link_created_by ?? d.document_created_by,
+    updatedAt: d.document_updated_at,
+    updatedBy: d.document_updated_by
+  };
+}
+
+/**
+ * The constraints on `documents` and `document_links` somebody can hit by typing, turned
+ * into sentences. Everything else surfaces as it comes: an unexpected error dressed up as
+ * a friendly one is how a real fault gets ignored for a week.
+ */
+function documentError(error: { code?: string; message: string }): Error {
+  if (error.code === "23505" && /once_per_/.test(error.message)) {
+    return new Error("That document is already filed against this record.");
+  }
+  if (error.code === "23505") {
+    return new Error("That link is already filed under another name. Find it on the record it is on rather than filing it twice.");
+  }
+  if (error.code === "23514" && /url_is_https/.test(error.message)) {
+    return new Error(
+      "That does not look like a link. Open the document in SharePoint, copy the address from the browser bar, and paste it here — it starts with https://."
+    );
+  }
+  return error instanceof Error ? error : new Error(error.message);
+}
 
 type ReportDocumentRow = {
   report_document_id: string;

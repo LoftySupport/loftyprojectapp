@@ -1,7 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
 import { Button } from "@vibe/core";
-import { Bug, Idea } from "@vibe/icons";
 import { SidePanel } from "./SidePanel";
 import { EMPTY_DRAFT, ReportForm, type ReportDraft } from "./ReportForm";
 import type { FeedbackKind } from "../data/types";
@@ -34,26 +32,25 @@ export function useFeedback(): FeedbackApi {
 }
 
 /**
- * The two footer controls. Rendered by the shell, so the shell decides where they go.
+ * The footer's reporting control. Rendered by the shell, so the shell decides where it goes.
  *
- * The second link is not decoration: "it is already planned" is the thing this whole
- * feature exists to say, and the person most likely to file a duplicate is the one about
- * to open this form.
+ * ONE CONTROL, NOT TWO. There was a "What's planned" beside it, going to `/updates` — on
+ * the argument that the person most likely to file a duplicate is the one about to open
+ * this form. Amber, 10 September: *"remove the 'whats planned' link from footer as there
+ * is already updates"*. She is right that it was a second door to one room: the footer's
+ * own **Updates** link is that page, three positions along the same row.
+ *
+ * NO ICON. It read `<Bug/> Report a bug or request a feature`, which is the only glyph in
+ * a row of six plain links — Amber, same message: *"don't use emojis or icons in links"*.
+ * The word "bug" is doing the work the picture was doing, and a lone icon in a text row
+ * reads as a mistake rather than as emphasis.
  */
 export function FeedbackButtons() {
   const { report } = useFeedback();
-  const navigate = useNavigate();
   return (
-    <>
-      <button type="button" className="foot-action" onClick={() => report()}>
-        <Bug size={16} aria-hidden />
-        Report a bug or request a feature
-      </button>
-      <button type="button" className="foot-action" onClick={() => navigate("/updates")}>
-        <Idea size={16} aria-hidden />
-        What's planned
-      </button>
-    </>
+    <button type="button" className="foot-action" onClick={() => report()}>
+      Report a bug or request a feature
+    </button>
   );
 }
 

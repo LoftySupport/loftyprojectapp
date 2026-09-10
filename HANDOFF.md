@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 186 changes since then —
+Unreleased: 190 changes since then —
+- Changed: the footer drops "What's planned" — Updates in the same row is the same page — and the bug report link loses its icon
+- Added: a document can now be saved as a SharePoint link on a job or a project — add one from the record's Documents panel and take it off again
+- Added: the dashboard shows recent documents and recent changes across the company
+- Changed: the search box in the top bar now finds jobs, projects, people, companies, requests and documents from any page — matches appear as you type, and Enter opens a full results page. It still narrows the board or table you are on as well
 - Added: A Tasks board, in the main navigation, with every task across every job and project — filtered by team, status and process, and sliced into my tasks, my team's tasks, all tasks, overdue, due today and due this week
-- Changed: filled buttons are Crisp Orange again, and drop their fill on hover for a Crisp Orange text and line — the brand colour, chosen over the darker step that cleared the contrast floor
-- Changed: a filled button now drops its fill on hover and focus — the pressed orange becomes the text and a thin line — instead of darkening
-- Changed: exported Word and PDF documents are set in Montserrat, the brand's document face, in place of Helvetica — the PDF now carries the font, so it looks the same on every machine
-- Added: `npm run build:montserrat` regenerates the embedded font subset and its width tables from Google Fonts
-- …and 181 more.
+- …and 185 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -31,6 +31,37 @@ still there, inert. Amber: *"if I need to import other areas I will let you know
 properties may change between now and then"* — so the machinery has a plausible future job
 even though jobs and projects are not it. It never ran: the load rolled back whole on its
 first write, so no project, job or address in the app came from it.
+
+## 10 September — documents can be links, and search leaves the page it is on
+
+Three things Amber asked for on 10 September, all shipped together because they are the
+same complaint from three directions: a record's paperwork was hard to reach.
+
+- **A document can be a URL** (`0103`). One column on `documents`, not a new table — `0032`
+  had already built `documents` + `document_links` for exactly this, and the first draft of
+  the migration rebuilt it under the same name before anybody noticed. The Documents panel
+  on a job or project now files a SharePoint link and takes one off again. The SharePoint
+  *integration* is not built and none of its columns are guessed at; see open question 16.
+- **The dashboard has Recent documents and Recent changes.** Both read across the whole
+  company rather than your own jobs — the panels above already cover "yours", and a document
+  filed on somebody else's job is the thing you would not otherwise hear about.
+- **The header search does two things now.** It still filters the view you are looking at,
+  exactly as before; it *also* offers matches from everywhere else in a dropdown, and Enter
+  opens `/search?q=` with the lot. That is the fix for "brodie" on the Projects page
+  narrowing 117 projects to none and saying so, when Brodie Court is a job.
+
+**What has not been seen against real data.** `0093` put 113 real projects in the database
+and there are still no jobs, so every check here ran against the replay harness and the
+fixtures in `verify/behaviour.sql`. Four things worth clicking on `hub.lofty.au`: file a
+SharePoint link on a project; file the same link on a second project and confirm it is one
+document on two records rather than two; remove one of them and confirm the other survives;
+and search "reynella" from any page — three projects carry it (1050, 1103, 1108).
+
+**Amber's own search example does not match anything yet, and that is not the search's
+fault.** "brodie" is 24 and 14 Brodie Road, Reynella — projects 1116 and 1120, six jobs
+between them — and all of it is in `import_staging_jobs`, the table Phase B never loaded.
+Nothing in `projects` or `jobs` carries the word. The search reads the live tables and will
+find those the day somebody creates them in the app.
 
 ## Where it stands, and what is next — 7 September, evening
 

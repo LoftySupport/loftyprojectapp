@@ -1473,6 +1473,14 @@ export interface Doc {
   description: string | null;
   /** Nullable: a row can exist for a document Lofty expects but has not received. */
   storagePath: string | null;
+  /**
+   * Where it is when Lofty does not hold the bytes — a SharePoint link (0103).
+   *
+   * Independent of `storagePath`, not an alternative to it: an upload has a path, a link
+   * has a URL, a document that is expected but has not arrived has neither, and one the
+   * coming integration has synced may have both.
+   */
+  url: string | null;
   mimeType: string | null;
   sizeBytes: number | null;
   category: DocumentCategory;
@@ -3074,4 +3082,131 @@ export interface NewReportDocumentShare {
   expiresAt: IsoDateTime;
   snapshot: ReportShareSnapshot;
   passwordHash?: string | null;
+}
+
+/**
+ * A document as it appears on a record: the file or link, plus the attachment that put it
+ * there.
+ *
+ * Two rows, flattened for the panel that shows them. `id` is the document — the thing that
+ * is held once, however many records point at it — and `linkId` is this record's
+ * attachment, which is what "Remove" removes. Keeping both is what lets the same
+ * SharePoint contract sit on project 1042 and on job 1042-01 and be one document.
+ */
+export interface RecordDocument extends Doc {
+  linkId: Uuid;
+  /** Which record this attachment is for. Exactly one, by 0032's constraint. */
+  jobId: string | null;
+  projectId: number | null;
+  attachedAt: IsoDateTime;
+}
+
+/**
+ * Filing a document that lives in SharePoint.
+ *
+ * Amber, 10 September: *"when adding a document I need to be able to save it as a url in
+ * sharepoint (integration coming) but for now I need to be able to add and delete them"*.
+ *
+ * Exactly one of `jobId` and `projectId`; 0032's `document_links_one_parent` refuses the
+ * rest. `category` is 0032's existing vocabulary and defaults to `other` — it is offered
+ * because the column is already there with its values decided, not invented for this.
+ */
+export interface NewDocumentUrl {
+  name: string;
+  url: string;
+  description?: string | null;
+  category?: DocumentCategory;
+  jobId?: string | null;
+  projectId?: number | null;
+}
+
+/**
+ * One row of "what has been written lately" — the dashboard's Recent documents panel.
+ *
+ * Both kinds in one list, because "has anything been filed on my jobs this week" is one
+ * question and answering it from two panels means reading two lists and merging them by
+ * eye. `kind` is what decides where the row goes when you click it: a built document opens
+ * in the Document Builder, a link opens in SharePoint, in a new tab.
+ *
+ * `at` is the later of created and updated, so a document edited today sorts above one
+ * filed last week — "recent documents or changes" was the ask, and a list ordered by
+ * creation alone answers only the first half of it.
+ */
+export interface RecentDocument {
+  id: Uuid;
+  kind: "built" | "filed";
+  title: string;
+  /** Where a filed document lives. Null for a built one, which has no URL of its own. */
+  url: string | null;
+  jobId: string | null;
+  projectId: number | null;
+  at: IsoDateTime;
+  /** Whether `at` is when it was filed or when it was last touched. */
+  change: "added" | "changed";
+  /** Who last touched it, resolved to a name where the profile is readable. */
+  byName: string | null;
+}
+
+// ------------------------------------------------------------------ global search
+
+/**
+ * What a hit in the header's search is about.
+ *
+ * The kinds are the things somebody types a name into the box hoping to reach. They are
+ * NOT every table in the app: nobody searches for a property definition or a saved view
+ * by name from the header, and offering them would push the hit they wanted below the
+ * fold.
+ */
+export type SearchHitKind = "job" | "project" | "contact" | "company" | "document" | "maintenance";
+
+export const SEARCH_HIT_LABELS: Record<SearchHitKind, string> = {
+  job: "Job",
+  project: "Project",
+  contact: "Contact",
+  company: "Company",
+  document: "Document",
+  maintenance: "Request"
+};
+
+/**
+ * Written out rather than made by appending an "s". One of the six is "Companies", and a
+ * heading reading "Companys" is the sort of thing that gets noticed by everybody and fixed
+ * by nobody.
+ */
+export const SEARCH_HIT_PLURALS: Record<SearchHitKind, string> = {
+  job: "Jobs",
+  project: "Projects",
+  contact: "Contacts",
+  company: "Companies",
+  document: "Documents",
+  maintenance: "Requests"
+};
+
+/**
+ * One row in the dropdown, and one row on the results page — the same shape for both, so
+ * the two can never rank or word the same hit differently.
+ *
+ * `href` is resolved by the repository rather than by the component. Where a record lives
+ * is a fact about the app's routes, and having six components each build a URL from a
+ * kind and an id is six places to get `/jobs/1042-01` wrong.
+ */
+export interface SearchHit {
+  kind: SearchHitKind;
+  /** Stable within a kind. Two kinds may share one — the key is `kind` plus this. */
+  id: string;
+  /** The line you read: "1042-01", "Brodie Court", "Deanna Rowe". */
+  title: string;
+  /** The second line: the address, the stage, the company. Null when there is nothing to add. */
+  detail: string | null;
+  href: string;
+  /**
+   * True when the only thing that matched was an address the record no longer uses.
+   *
+   * Worth surfacing rather than swallowing, exactly as the in-page matchers do: a hit on
+   * an *original* address means whoever searched is working from something out of date —
+   * an old email, a contract, a note in a file.
+   */
+  onPreviousAddress?: boolean;
+  /** Opened in a new tab rather than routed to. Only a document link is. */
+  external?: boolean;
 }

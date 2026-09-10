@@ -2165,6 +2165,95 @@ Two things are worth keeping straight about it:
 `pg_graphql_authenticated_table_exposed` (94) is unchanged and correct — signed-in staff are
 meant to see the schema they query.
 
+### 10 September — a document can be a URL (`0103`)
+
+*A readable version with diagrams is published at
+<https://claude.ai/code/artifact/fe4d0004-6c9d-4fe7-96ee-41b9f773c066> — show that one to
+people; edit this file.*
+
+Amber: *"when adding a document I need to be able to save it as a url in sharepoint
+(integration coming) but for now I need to be able to add and delete them"*.
+
+**This is one column, and the first draft of it was a whole table.** That draft —
+`document_links`, with a title, a URL and a job or project to hang it off — got as far as
+being written before somebody read `0032`, which had already built exactly that table under
+exactly that name, three months earlier, and for a better reason. The near-miss is recorded
+rather than tidied away, because the mistake was cheap to make and would have been expensive
+to keep: two tables called `document_links`, one of them a subset of the other.
+
+`0032`'s pair is the right shape:
+
+| | |
+| --- | --- |
+| `documents` | **The file, held once.** Named once, categorised once, versioned once. |
+| `document_links` | **Where it is attached.** One row per record it hangs off. |
+
+The exclusive arc is on the LINK rather than on the document, because the same soil report
+genuinely belongs to a project *and* to every job on it. That property is stronger for a
+SharePoint link than for an upload: the contract for project 1042 is one document in one
+place, and it is relevant to the project and to the one job it governs. A per-record table
+would have made those two rows two documents.
+
+So `0103` adds `documents.document_url`, and everything `0032` already built — the links,
+the nine categories, the supersedes chain, the RLS, the audit triggers — works on it
+unchanged.
+
+**`documents` now means one of three things, and the third was already there.**
+
+| `storage_path` | `url` | What it is |
+| --- | --- | --- |
+| set | null | An upload. Lofty holds the bytes. (`0032`) |
+| null | set | A pointer. The bytes are in SharePoint. (`0103`) |
+| null | null | Expected, not arrived — *"the signed contract"* as an outstanding item. (`0032`) |
+
+Both set is allowed and deliberately not constrained against: the coming integration is the
+case for it, and a check refusing it would have to be dropped the week that lands.
+
+**The URL is unique, and the check on it is loose.** `^https://\S+$` and nothing tighter,
+the same shape as `0040`'s folder check — SharePoint URLs come in at least three forms
+(tenant paths, personal sites, shortened `:b:/s/` share links) and a pattern strict enough
+to be useful about one of them refuses the other two. What it catches is what people
+actually paste by accident: a Windows path off the file server. The uniqueness is the half
+that carries a rule rather than a validation — **one SharePoint address is one document** —
+which is what makes filing the same contract against a project and against its job a second
+*attachment* rather than a second copy, and it is the premise the whole "held once" design
+rests on.
+
+**A pointer with no links is reaped, and an upload is not.** `0032` made detaching ordinary
+work and deleting a document admin-only, which is right for a file: the link goes, the file
+stays. A pointer is different — it has no bytes, it is only ever reachable through its
+links, and once the last one goes it is a row nobody below admin can see or remove. So an
+`after delete` trigger on `document_links` deletes the document when nothing points at it
+*and* `document_storage_path is null`.
+
+Three things about that are worth having written down:
+
+- **The guard is the storage path, not the URL.** Both would cover the SharePoint case; the
+  storage test also covers the third state above, which is exactly as unreachable once
+  detached. And it is the safe half of the pair — it is the presence of a stored object,
+  not the absence of a URL, that makes deleting the row lose something.
+- **It is a trigger because the app cannot do it.** `admins delete documents` means an
+  ordinary user's cleanup is refused *silently* — RLS returns "no rows" rather than an
+  error — so the app would report a success it had not achieved. Widening that policy was
+  the alternative and it is worse: it would let a user delete an uploaded file's row and
+  orphan the object in the bucket.
+- **It is `after delete`, and it was watched failing as `before`.** As a BEFORE trigger the
+  link being deleted is still visible to the `not exists`, so it deletes nothing, ever —
+  a trigger that fires, succeeds and does nothing.
+
+**Nothing about who may open the file changed, and the app does not pretend otherwise.**
+This schema stores an address; SharePoint governs the bytes, under Microsoft's own
+permissions. Somebody who opens a link they should not have gets SharePoint's refusal, not
+the document. RLS here protects the knowledge that the document exists and where it is —
+which is worth protecting, and is not the same thing. Filing a link is not a way of sharing
+a file, and the panel says so above the field.
+
+**What the integration will need, and why none of it is here.** A sync will want a drive id,
+an item id, an eTag, a synced-at, probably a webhook subscription. None of that has been
+scoped, and guessing at it now gives either a row of nulls nothing writes or a shape the
+integration has to work around. Adding those columns later is `alter table add column`.
+Removing invented ones after something reads them is not.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

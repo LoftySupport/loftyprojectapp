@@ -255,6 +255,37 @@ BEGIN
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a document link has exactly one parent';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on document link parents (%)', SQLERRM; END;
 
+  -- 0103. What people actually paste when they have the document open rather than the
+  -- link: a path off the file server.
+  BEGIN
+    INSERT INTO documents (document_name, document_url)
+    VALUES ('Contract', '\\lofty-fs01\projects\9106\contract.pdf');
+    RAISE WARNING 'FAIL: a Windows path was accepted as a document URL';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  documents_url_is_https rejected a network path';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on document URL shape (%)', SQLERRM; END;
+
+  -- Its own probe rather than trusting the regex to be read correctly: `^https://` also
+  -- refuses `http://`, but only because of the anchor, and an unanchored version would
+  -- accept it inside a longer string.
+  BEGIN
+    INSERT INTO documents (document_name, document_url)
+    VALUES ('Contract', 'http://lofty.sharepoint.com/x');
+    RAISE WARNING 'FAIL: an http document URL was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  documents_url_is_https rejected http';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on http document URL (%)', SQLERRM; END;
+
+  -- One SharePoint address is one document. A partial unique index over a nullable column
+  -- is exactly the shape that silently enforces nothing when its WHERE clause is wrong, so
+  -- it is watched rather than assumed.
+  BEGIN
+    INSERT INTO documents (document_name, document_url)
+    VALUES ('__probe__ first', 'https://lofty.sharepoint.com/probe/one.pdf');
+    INSERT INTO documents (document_name, document_url)
+    VALUES ('__probe__ second', 'https://lofty.sharepoint.com/probe/one.pdf');
+    RAISE WARNING 'FAIL: the same document URL was accepted twice';
+  EXCEPTION WHEN unique_violation THEN RAISE NOTICE 'ok  documents_one_row_per_url rejected a duplicate address';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on duplicate document URL (%)', SQLERRM; END;
+
   BEGIN
     INSERT INTO comments (comment_body) VALUES ('Attached to nothing');
     RAISE WARNING 'FAIL: a comment on no record was accepted';

@@ -168,6 +168,37 @@ clients, and web-serving the face? If yes, the PDF's two faces become Fieldwork 
 brand repository — and the Word file stays Montserrat, since Word cannot embed without the
 reader's cooperation.
 
+### 16. When the SharePoint integration lands, does Lofty Hub ever hold the file?
+
+`0103` lets a document be a URL, so a job's contract can be filed against it today by
+pasting the link. The row that holds it (`documents`, from `0032`) has **both** a storage
+path and a URL, and nothing stops both being set — deliberately, because the integration
+might legitimately be the case for it.
+
+What has not been decided is which of two things the integration is:
+
+- **A link recorder.** It reads SharePoint and writes the URL, and the bytes never leave
+  Microsoft. `document_storage_path` then stays empty for everything filed this way, and
+  Lofty Hub never has a copy of a client's contract.
+- **A two-way sync.** Uploading here puts the file in SharePoint, and a file in SharePoint
+  is fetched here. Both columns get set, and Lofty Hub does hold copies.
+
+It changes what has to be built and where the risk sits, so it is worth answering before
+the integration is scoped rather than during. Nothing is blocked meanwhile: filing a link
+by hand works either way.
+
+### 17. Should removing a document from a record be a manager's job?
+
+The Documents panel's **Remove** takes a document off *this* job or project and leaves it
+on any other record it is filed against, and leaves the file itself untouched in SharePoint.
+That is `0032`'s existing rule — *"detaching is not deleting: the link goes, the file
+stays"* — inherited rather than chosen for this, and any user can do it.
+
+It has not been asked, and the argument for asking is that "remove" on a contract reads
+heavier than it is. The screen already says what it does not do before it asks, so this is
+recording a choice rather than reporting a problem — but if the answer is *manager*, it is
+one policy line.
+
 ---
 
 ## Answered

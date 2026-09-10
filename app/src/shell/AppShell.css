@@ -300,14 +300,17 @@ html, body, #root { height: 100%; }
   outline-offset: 2px;
   border-radius: 2px;
 }
-/* The two reporting controls (0052). They are buttons, not links — they open a panel
-   rather than going anywhere — but they sit among the footer's links and must not look
-   like a different species, so they take the same underline, the same inherited colour
-   and the same 24px minimum target the links were given for WCAG 2.5.8. */
+/* The reporting control (0052). It is a button, not a link — it opens a panel rather than
+   going anywhere — but it sits among the footer's links and must not look like a different
+   species, so it takes the same underline, the same inherited colour and the same 24px
+   minimum target the links were given for WCAG 2.5.8.
+
+   `gap` went with the icon (Amber, 10 Sep: "don't use emojis or icons in links"). The
+   flex box stays: it is what centres a 24px target around a line of text that is shorter
+   than the box, and without it the underline sits a pixel off the links beside it. */
 .foot-action {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-4);
   border: none;
   background: none;
   padding: var(--space-4);
@@ -376,6 +379,77 @@ html, body, #root { height: 100%; }
    gets the room while you use it. */
 .app-search { min-width: 200px; max-width: 320px; flex: 1 1 200px; transition: max-width 150ms ease; }
 .app-search:focus-within { max-width: 420px; }
+
+/* ---- the matches under the box -------------------------------------------
+   Anchored to the box rather than to the header, so it stays put while the box grows
+   on focus. `position: relative` on the wrapper is what makes that work — without it
+   the popup hangs off the header and lands under the rail on a narrow window. */
+.app-search { position: relative; }
+.app-search-pop {
+  position: absolute;
+  top: calc(100% + var(--space-4));
+  left: 0;
+  right: 0;
+  /* Wider than the box it hangs from: a job's address is longer than 320px and the
+     alternative is six rows of ellipsis, which is a list you cannot read. Capped so it
+     never runs past a narrow window's edge. */
+  min-width: 320px;
+  max-width: min(460px, calc(100vw - var(--space-32)));
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+  /* Above the page and the sticky table headers, below the side panel and its scrim —
+     a dropdown that painted over an open drawer would be unreachable. */
+  z-index: 20;
+  background: var(--primary-background-color);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-medium);
+  box-shadow: var(--box-shadow-medium);
+  padding: var(--space-4);
+}
+.app-search-msg { padding: var(--space-8); }
+.app-search-group + .app-search-group { border-top: 1px solid var(--layout-border-color); margin-top: var(--space-4); padding-top: var(--space-4); }
+.app-search-group-head {
+  padding: var(--space-4) var(--space-8);
+  font: var(--font-text3-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--secondary-text-color);
+}
+.app-search-row,
+.app-search-all {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: var(--border-radius-small);
+  padding: var(--space-8);
+  font: inherit;
+  color: var(--primary-text-color);
+  cursor: pointer;
+}
+/* Hover and keyboard share one appearance deliberately: two different highlights in one
+   list is the fastest way to lose track of what Enter will do. */
+.app-search-row:hover,
+.app-search-row.is-active,
+.app-search-all:hover,
+.app-search-all:focus-visible { background: var(--primary-background-hover-color); }
+.app-search-row:focus-visible,
+.app-search-all:focus-visible { outline: 2px solid var(--primary-color); outline-offset: -2px; }
+.app-search-row-main { display: block; font: var(--font-text2-normal); }
+.app-search-row-sub {
+  display: block;
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+  margin-top: 2px;
+}
+.app-search-ext { color: var(--secondary-text-color); }
+.app-search-all {
+  border-top: 1px solid var(--layout-border-color);
+  border-radius: 0 0 var(--border-radius-small) var(--border-radius-small);
+  margin-top: var(--space-4);
+  color: var(--primary-color);
+}
 
 /* ---- narrow screens ------------------------------------------------------
    Below 900px the rail cannot share a line with the page and still leave the board

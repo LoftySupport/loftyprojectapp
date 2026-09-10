@@ -3,12 +3,14 @@ import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "../data/DataProvider";
 import { initialsOf, useAuth } from "../data/AuthProvider";
 import { greetingName, teamName } from "../data/types";
-import type { MentionEntry } from "../data/types";
+import type { ActivityEntry, MentionEntry, RecentDocument } from "../data/types";
+import { changeSentence } from "../data/auditNarrative";
 import { useTeamLabels, useTeams, useTemplatePhases } from "../data/useLookups";
 import { daysSince } from "../data/boardModel";
 import { Token, token } from "../components/Token";
 import { ExportMenu } from "../components/ExportMenu";
 import { tableFromFields, type ExportDocument } from "../data/export";
+import { LoadProblem } from "../components/SearchNotices";
 import { PageShell } from "./Placeholder";
 import "./DashboardPage.css";
 
@@ -38,6 +40,22 @@ export function DashboardPage() {
   const { data: jobs, loading } = useQuery(r => r.listJobs(), []);
   /** The same read the bell makes — one source, so the two can never disagree. */
   const { data: mentions } = useQuery<MentionEntry[]>(r => r.listMyMentions(), []);
+  /**
+   * Amber, 10 September: *"i also need to be able to see recent documents or changes on my
+   * dashboard page"*. Two panels rather than one merged feed, because they answer
+   * different questions and mixing them buries the rarer one: a week of field edits would
+   * push every document off a combined list.
+   *
+   * Both are read UNFILTERED — everything recent, not everything recent on your own jobs.
+   * A document filed on a job you are not assigned to is exactly the thing you would not
+   * otherwise hear about, and the panels above already cover "yours".
+   */
+  const { data: recentDocs, error: recentDocsError } = useQuery<RecentDocument[]>(
+    r => r.listRecentDocuments({ limit: 6 }), []
+  );
+  const { data: recentChanges, error: recentChangesError } = useQuery<ActivityEntry[]>(
+    r => r.listActivity({ limit: 6 }), []
+  );
   const { profile } = useAuth();
   const { labels, error: teamsError } = useTeamLabels();
   const { teams } = useTeams();
@@ -297,6 +315,122 @@ export function DashboardPage() {
                         Project {m.projectId}
                       </Link>
                     )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section className="pd-panel">
+            <div className="pd-panel-head">
+              <span className="pd-panel-mark document" aria-hidden="true" />
+              <h3>Recent documents</h3>
+            </div>
+            {recentDocsError && <LoadProblem error={recentDocsError} />}
+            {recentDocs.length === 0 ? (
+              <Empty>
+                Nothing filed yet. Documents are made in the Document Builder or linked from
+                SharePoint on a job or a project, and the newest six show here.
+              </Empty>
+            ) : (
+              <ul className="pd-feed">
+                {recentDocs.map(d => (
+                  <li key={`${d.kind}-${d.id}`}>
+                    <div className="pd-feed-line">
+                      {/* Where it goes depends on what it is. A built document opens in the
+                          builder; a filed one opens where it actually lives, in a new tab,
+                          because there is no screen in this app that renders a SharePoint
+                          file and routing to the record would make somebody find the row
+                          again. */}
+                      {d.kind === "filed" && d.url ? (
+                        <a href={d.url} target="_blank" rel="noreferrer noopener">{d.title}</a>
+                      ) : d.kind === "built" ? (
+                        <Link to={`/tools/document-builder?open=${encodeURIComponent(d.id)}`}>
+                          {d.title}
+                        </Link>
+                      ) : (
+                        /* Filed, with no URL: an upload, or a document Lofty is still
+                           waiting on (0032's third state). Neither has anywhere to go
+                           yet, so it is named rather than linked — a link that does
+                           nothing when clicked is worse than plain text. */
+                        <span>{d.title}</span>
+                      )}
+                      <Text type="text3" color="secondary" element="span">
+                        {d.change === "added" ? "added" : "changed"}
+                      </Text>
+                    </div>
+                    <div className="pd-feed-sub">
+                      {/* The record it is about, linked. "Site survey" on its own does not
+                          say whose site, which is the first thing anybody asks. */}
+                      {d.jobId && (
+                        <Link to={`/jobs/${encodeURIComponent(d.jobId)}`} className="activity-subject">
+                          {d.jobId}
+                        </Link>
+                      )}
+                      {d.projectId != null && (
+                        <Link to={`/projects/${d.projectId}`} className="activity-subject">
+                          Project {d.projectId}
+                        </Link>
+                      )}
+                      <Text type="text3" color="secondary" element="span">
+                        {/* Nothing invented when the profile is not readable: the date on
+                            its own, rather than "by someone". */}
+                        {d.byName ? `${d.byName} · ` : ""}
+                        {new Date(d.at).toLocaleDateString()}
+                      </Text>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section className="pd-panel">
+            <div className="pd-panel-head">
+              <span className="pd-panel-mark change" aria-hidden="true" />
+              <h3>Recent changes</h3>
+            </div>
+            {recentChangesError && <LoadProblem error={recentChangesError} />}
+            {recentChanges.length === 0 ? (
+              <Empty>
+                Nothing recorded yet. Every edit anybody makes appears here, newest first.
+              </Empty>
+            ) : (
+              <ul className="pd-feed">
+                {recentChanges.map(e => (
+                  <li key={e.id}>
+                    <div className="pd-feed-line">
+                      {/* The same sentence the activity dialog builds, and deliberately the
+                          same one: "Updated <link>" rather than "Updated profiles", which
+                          names the table and not the record. */}
+                      {e.subject && e.verb ? (
+                        <span>
+                          {e.verb}{" "}
+                          {e.href
+                            ? <Link to={e.href} className="activity-subject">{e.subject}</Link>
+                            : <strong>{e.subject}</strong>}
+                        </span>
+                      ) : (
+                        <span>{e.summary}</span>
+                      )}
+                    </div>
+                    <div className="pd-feed-sub">
+                      <Text type="text3" color="secondary" element="span">
+                        {e.actorName ? `${e.actorName} · ` : ""}
+                        {new Date(e.at).toLocaleString()}
+                      </Text>
+                    </div>
+                    {/* One line of what actually moved, capped. The full list belongs in
+                        the record's own Activity panel; on a dashboard, six changes each
+                        listing nine fields is a wall. */}
+                    {(e.changes ?? []).slice(0, 1).map(c => (
+                      <div className="pd-feed-sub" key={c.column}>
+                        <Text type="text3" color="secondary" element="span" ellipsis={false}>
+                          {changeSentence(c)}
+                          {(e.changes ?? []).length > 1 && ` (+${(e.changes ?? []).length - 1} more)`}
+                        </Text>
+                      </div>
+                    ))}
                   </li>
                 ))}
               </ul>

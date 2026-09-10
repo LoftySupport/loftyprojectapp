@@ -298,6 +298,55 @@ select d.document_name,
 from documents d join document_links l using (document_id)
 where d.document_name like 'Soil report%' group by d.document_name;
 
+\echo '--- 30b. a document can be a URL, and one URL is one document (0103)'
+-- The other shape of document row: no bytes in Storage, an https address instead.
+insert into documents (document_name, document_category, document_url)
+values ('Contract — 9106','contract','https://lofty.sharepoint.com/sites/projects/9106/contract.pdf');
+insert into document_links (document_id, project_id)
+select document_id, 9106 from documents where document_name = 'Contract — 9106';
+
+-- Filing the SAME address against the job as well is a second ATTACHMENT rather than a
+-- second document. That is the whole premise of "held once" and it is what the unique
+-- index on the URL enforces — without it, filing the project's contract on its job would
+-- make two rows that then disagree about the name the day somebody corrects one.
+insert into document_links (document_id, job_id)
+select document_id, '9106-002' from documents where document_name = 'Contract — 9106';
+select case when count(*) = 1 then 'ok  one SharePoint address is one document, on two records'
+  else 'FAIL: ' || count(*) || ' document rows for one URL' end
+from documents where document_url like '%9106/contract.pdf';
+
+\echo '--- 30c. the reaper: a pointer goes with its last link, an upload does not'
+-- Off the job. It is still on the project, so nothing should be reaped — the probe that
+-- stops the reaper passing its own test by deleting on every detach.
+delete from document_links l using documents d
+ where l.document_id = d.document_id and d.document_name = 'Contract — 9106' and l.job_id = '9106-002';
+select case when count(*) = 1 then 'ok  a pointer survives a detach while a link is left'
+  else 'FAIL: a pointer was reaped while another link still pointed at it' end
+from documents where document_name = 'Contract — 9106';
+
+-- Off the project too. That was the last one, and a pointer nothing points at is
+-- reachable from nowhere — nobody below admin could list it, open it or remove it.
+delete from document_links l using documents d
+ where l.document_id = d.document_id and d.document_name = 'Contract — 9106';
+select case when count(*) = 0 then 'ok  a pointer is reaped when its last link goes'
+  else 'FAIL: an unreachable pointer survived losing every link' end
+from documents where document_name = 'Contract — 9106';
+
+-- And the soil report, which HAS a storage path, does not go: 0032's rule that detaching
+-- is not deleting. This is the half that makes the reaper's guard mean something —
+-- without it the reaper would pass the probe above by deleting everything.
+--
+-- INSIDE a transaction that rolls back, for the reason the report_documents block at the
+-- foot of this file records at length: a check that destroys the fixture the next check
+-- needs turns one assertion into a page of false alarms.
+begin;
+delete from document_links l using documents d
+ where l.document_id = d.document_id and d.document_name like 'Soil report%';
+select case when count(*) = 1 then 'ok  an uploaded document survives losing every link'
+  else 'FAIL: an upload was reaped when it was merely detached' end
+from documents where document_name like 'Soil report%';
+rollback;
+
 \echo '--- 31. superseding a drawing: the chain says which is current'
 insert into documents (document_name, document_category) values ('Working drawing rev A','drawing');
 insert into documents (document_name, document_category, document_supersedes_id)

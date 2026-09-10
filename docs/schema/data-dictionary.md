@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-722 properties across 99 tables.
+723 properties across 99 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 673 | In the migration and the types |
+| Created | 674 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -296,7 +296,8 @@ A file, held once however many records point at it. Versions chain through super
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `documents.document_id` | Document | A file, held once however many records point at it. | `uuid` | — | Primary key. | Referenced by document_links, and by documents.document_supersedes_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `documents.document_name` | Name | What the file is called in the app, which need not match the filename. | `text` | — | Not null, not blank. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `documents.document_storage_path` | Storage path | Where the bytes live in Supabase Storage. Nullable, so a row can exist for a document Lofty expects but has not received — "the signed contract" as an outstanding item is a real state. | `text` | — | Nullable. Unique. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `documents.document_storage_path` | Storage path | Where the bytes live in Supabase Storage. Nullable, so a row can exist for a document Lofty expects but has not received — "the signed contract" as an outstanding item is a real state. | `text` | — | Nullable. Unique. | One of three states with document_url: a path and no URL is an upload, a URL and no path is a pointer, neither is a document that has not arrived. It is the presence of a PATH that stops 0103's reaper deleting a row when its last link goes. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `documents.document_url` | Where it lives | The document's address when Lofty does not hold the bytes — a SharePoint link, pasted by hand until the integration lands. Amber, 10 Sep: "when adding a document I need to be able to save it as a url in sharepoint (integration coming) but for now I need to be able to add and delete them". | `text` | — | Nullable. CHECK documents_url_is_https — https and no whitespace, deliberately loose. UNIQUE where not null (documents_one_row_per_url). | The app never fetches it: the link opens under the reader's own Microsoft session, so filing one is not a way of sharing a file — somebody without access sees SharePoint's refusal. Loose on purpose, because tenant paths, personal sites and shortened share links all look different and a pattern tight enough for one refuses the other two. Unique because one SharePoint address is one document, which is what makes filing the same contract on a project and on its job a second ATTACHMENT rather than a second copy. Independent of document_storage_path, and not exclusive with it — a synced document will have both. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `documents.document_category` | Type | contract · drawing · permit · certificate · photo · invoice · report · correspondence · other. For filtering a drawer that will hold dozens. | `text` | — | Not null, default 'other'. CHECK on the nine values — text rather than an enum, because this list will grow and every list that has grown so far was an enum first. | Indexed. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `documents.document_supersedes_id` | Replaces | The document this one supersedes. Versions as a chain rather than a version number: an integer cannot say WHICH document a revision revises when two people upload at once, and "show me the current drawing and what it replaced" is the question people actually ask. | `uuid` | — | Nullable. CHECK documents_not_its_own_predecessor. | FK → documents(document_id) ON DELETE SET NULL. The documents_current view is everything nothing points at. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `documents.document_size_bytes` | Size | File size. | `integer` | — | bigint. Nullable. CHECK >= 0. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
