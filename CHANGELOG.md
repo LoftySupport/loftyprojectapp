@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- a letter can open with the name of anybody on the record — a token for every party role, with two purchasers joined as "A and B"
 - a table's cells and headers take property placeholders, with the same Insert a field menu the text blocks have
 - a document can be published by saving a copy to the job, not only by pasting a SharePoint link
 - a document Lofty holds the file for opens from the record, through a signed link
