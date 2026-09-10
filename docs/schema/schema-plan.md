@@ -2254,6 +2254,67 @@ scoped, and guessing at it now gives either a row of nulls nothing writes or a s
 integration has to work around. Adding those columns later is `alter table add column`.
 Removing invented ones after something reads them is not.
 
+### 10 September — a document is a draft until it is published (`0104`)
+
+Amber: *"they need to be able to edit it in the app and pull in information, but it should
+be linked in sharepoint.. until it is published… have a DRAFT watermark across it while
+editable and saved to the job. and as soon as it is ready to share or publish it, you
+choose the sharepoint location to save it to (which should default to job file) … if
+editing it in the app it reverts to draft"*.
+
+Three columns on `report_documents` — `published_at`, `published_by`, `published_url` —
+and a trigger.
+
+**There is no `status` column, and that is the decision.** `check (status in ('draft',
+'published'))` was the obvious shape and it records the conclusion rather than the fact.
+"Published" would then be a word somebody sets, and the first write that forgot to set it
+back would leave a draft wearing a published label — which is precisely what the watermark
+exists to prevent, and it would be invisible. `published_at is not null` cannot drift,
+because the trigger that sets it is the trigger that clears it.
+
+**Editing reverts it, and the database does that rather than the screen.** Four places
+write a layout today — the builder's autosave, the record panel, the importer, the share
+compile — and an unknown number tomorrow. `0052`'s undo already taught this repo what a
+per-caller opt-in is worth: *"a per-screen opt-in is a promise every future screen has to
+remember to keep, and the first one did not"*. So `guard_report_document_publication()`
+watches `report_document_layout` and `report_document_title`, and clears the publication in
+the same statement, with no cooperation from the caller.
+
+What deliberately does **not** count as an edit: sharing, moving the document to another
+record, and the audit quartet. Nothing a reader would see has changed, and reverting on a
+share would take the publication back at the moment it is most needed.
+
+**The URL survives the revert.** Amber: *"to download it again you need to add the link
+again"* — so `published_at` goes and re-publishing is an act somebody performs. The address
+stays, because a document re-published after an edit almost always goes back to the same
+place, and sending somebody into SharePoint to find that address again is how a document
+ends up filed somewhere new. That gives a third readable state, which the app shows as its
+own chip: **a URL with no `published_at` means what is in SharePoint is out of date.**
+
+Written as an implication rather than an equivalence for exactly that reason — published
+requires a URL, a URL does not require a publication.
+
+**`0095`'s column grant bit, on schedule.** That migration took the table-level SELECT off
+`report_documents` so the share snapshot and password hash could not be read back, and said
+what it would cost: *"a column added later is NOT readable until somebody adds it here.
+That is the failure mode worth having — a visible one, on the day the column is added."*
+This was that day. `verify/rls.sql` stopped with `permission denied for table
+report_documents` the first time it read the new columns as `authenticated`; without the
+three-line grant in `0104` the app's own document query fails for every user on the first
+page load. The prediction was accurate and the check was where it said it would be.
+
+**The watermark is not schema, but it is the reason for the schema.** It reaches four
+renderers — screen, Print/Save PDF, the `.html` download and the `.docx` — because a
+document watermarked in three of them is worse than one watermarked in none, since somebody
+will send the fourth. `npm run check:watermark` asserts all four, and asserts the negative:
+a published document comes out clean.
+
+Two limits are worth writing down rather than discovering. The screen and print mark is a
+fixed tiled layer, which Chromium repeats on every printed page and **Firefox paints on the
+first page only**. And Word gets a spaced stamp in the page header rather than the diagonal
+ghost behind the text, because the `docx` package exposes no VML shape and hand-writing XML
+into somebody else's document part breaks on their next release.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

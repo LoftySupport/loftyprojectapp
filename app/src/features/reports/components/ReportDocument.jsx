@@ -13,6 +13,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { reportToMarkdown } from '../core/markdown.js';
+import { watermarkBackground, watermarkLayerCss } from '../core/watermark.js';
 import { reportToHtml } from '../core/html.js';
 import QRCode from 'react-qr-code';
 import { QR_LEVEL, QR_QUIET_ZONE, qrMatrix } from '../core/qr.js';
@@ -821,8 +822,8 @@ function downloadMarkdown(report, branding) {
   URL.revokeObjectURL(url);
 }
 
-function downloadHtml(report, branding, theme) {
-  const html = reportToHtml(report, { branding, theme });
+function downloadHtml(report, branding, theme, watermark) {
+  const html = reportToHtml(report, { branding, theme, watermark });
   const blob = new Blob([html], { type: 'text/html;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -875,6 +876,10 @@ export default function ReportOverlay({
   // defaults to the built-ins; a host app passes its own set (usually the
   // built-ins plus one built from its brand file).
   themes = BUILT_IN_THEMES, initialTheme = null, onThemeChange = null,
+  // The word a document wears until it is published — 'DRAFT', or nothing (0104).
+  // Threaded rather than derived: this module has no idea what a job or a publication
+  // is, and the host that does passes the answer in.
+  watermark = '',
 }) {
   const [copied, setCopied] = React.useState(null); // null | 'copied' | 'failed'
   const [docxState, setDocxState] = React.useState('idle'); // 'idle' | 'loading' | 'failed'
@@ -932,6 +937,13 @@ export default function ReportOverlay({
     () => ({ ...report, sections: report.sections.filter(s => !excluded.has(s.id)) }),
     [report, excluded]
   );
+
+  // Null when there is no watermark, so a published document renders no layer at all
+  // rather than an invisible one waiting to be made visible by a later change.
+  const watermarkLayer = useMemo(() => {
+    const bg = watermarkBackground(watermark);
+    return bg ? watermarkLayerCss(bg) : null;
+  }, [watermark]);
 
   const toggleSection = (id) => {
     setExcluded(prev => {
@@ -1080,13 +1092,13 @@ export default function ReportOverlay({
             Download .md
           </button>
           <button
-            onClick={() => downloadHtml(filteredReport, branding, activeTheme)}
+            onClick={() => downloadHtml(filteredReport, branding, activeTheme, watermark)}
             className="text-xs px-2.5 py-1.5 rounded-lg bg-white/15 border border-white/20 hover:bg-white/25 transition-colors font-semibold"
           >
             Download .html
           </button>
           <button
-            onClick={() => downloadDocx(filteredReport, setDocxState, { pageSize, orientation, theme: activeTheme, branding })}
+            onClick={() => downloadDocx(filteredReport, setDocxState, { pageSize, orientation, theme: activeTheme, branding, watermark })}
             disabled={docxState === 'loading'}
             className="text-xs px-2.5 py-1.5 rounded-lg bg-white/15 border border-white/20 hover:bg-white/25 transition-colors font-semibold disabled:opacity-50"
           >
@@ -1103,11 +1115,24 @@ export default function ReportOverlay({
           </button>
         </div>
       </div>
+      {watermark && (
+        // The mark says WHAT it is; this says what to do about it. Hidden in print,
+        // because the printed copy carries the watermark itself and a banner explaining
+        // the app would be nonsense on paper.
+        <p className="text-xs font-semibold text-[#f47e63] bg-[#00393f] px-4 py-1.5 print:hidden">
+          This is a draft. Every copy you download or print carries the {String(watermark).toUpperCase()} mark
+          until it is published to SharePoint.
+        </p>
+      )}
       {editing && (
         <p className="text-xs font-semibold text-[#f47e63] bg-[#00393f] px-4 py-1.5 print:hidden">
           Editing the document text — click anywhere in the report to change wording. Edits are kept for Print / Save PDF; the Markdown download stays the generated version. Section and style controls unlock again via Reset edits.
         </p>
       )}
+      {/* Over the document, not behind it: the report paints an opaque surface, so a
+          background on any ancestor is covered. Fixed, so Chromium repeats it on every
+          printed page — see core/watermark.js for what Firefox does instead. */}
+      {watermarkLayer && <div style={watermarkLayer} aria-hidden="true" />}
       {hasEdits ? (
         <div
           ref={docRef}

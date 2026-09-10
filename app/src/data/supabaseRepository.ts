@@ -3891,6 +3891,45 @@ export function createSupabaseRepository(): Repository {
       return hits;
     },
 
+    /**
+     * Record that a document has been saved into SharePoint, and stop it being a draft.
+     *
+     * `published_at` is sent as a value the trigger then OVERWRITES with `now()` — it has
+     * to be non-null for the guard to recognise a publication, and the guard refuses to
+     * take the caller's word for when. `published_by` is not sent at all: it is read from
+     * the session, the same rule as every other "who did this" column in this schema.
+     *
+     * A re-publish after an edit is the same call. There is deliberately no separate
+     * method for it: from here the two are indistinguishable, and the only thing that
+     * differs — whether a URL was already there — is something the DIALOG uses to
+     * pre-fill, not something the write needs to know.
+     */
+    async publishReportDocument(id: string, input: { url: string }): Promise<ReportDocument> {
+      const url = input.url.trim();
+      // Checked here as well as by the constraint, because a constraint's message reaches
+      // the screen verbatim and "violates check constraint
+      // report_documents_published_url_is_https" tells somebody who pasted a network path
+      // nothing they can act on.
+      if (!/^https:\/\/\S+$/.test(url)) {
+        throw new Error(
+          "That does not look like a SharePoint address. Save the document into SharePoint, copy the address from the browser bar, and paste it here — it starts with https://."
+        );
+      }
+      const { data, error } = await client
+        .from("report_documents")
+        .update({
+          report_document_published_url: url,
+          report_document_published_at: new Date().toISOString()
+        })
+        .eq("report_document_id", id)
+        .select(REPORT_DOCUMENT_COLUMNS);
+      if (error) throw error;
+      if (!data?.length) {
+        throw new Error("That document was not published — it no longer exists, or you do not have permission to change it.");
+      }
+      return toReportDocument(data[0] as unknown as ReportDocumentRow);
+    },
+
     async deletePropertyDef(key: string): Promise<void> {
       const { data, error } = await client
         .from("property_defs")
@@ -4099,7 +4138,7 @@ const REPORT_TEMPLATE_COLUMNS =
 // adds a column later — `hasSharePassword` below is computed from a boolean the database
 // sends instead. A hash in a browser response is a hash somebody can attack offline.
 const REPORT_DOCUMENT_COLUMNS =
-  "report_document_id, report_document_title, report_document_layout, report_template_id, job_id, project_id, report_document_share_token, report_document_share_expires_at, report_document_has_share_password, report_document_has_share_snapshot, report_document_created_at, report_document_created_by, report_document_updated_at, report_document_updated_by";
+  "report_document_id, report_document_title, report_document_layout, report_template_id, job_id, project_id, report_document_share_token, report_document_share_expires_at, report_document_has_share_password, report_document_has_share_snapshot, report_document_published_at, report_document_published_by, report_document_published_url, report_document_created_at, report_document_created_by, report_document_updated_at, report_document_updated_by";
 
 type ReportTemplateRow = {
   report_template_id: string;
@@ -4231,6 +4270,9 @@ type ReportDocumentRow = {
   // every row of a list nobody is rendering.
   report_document_has_share_password: boolean;
   report_document_has_share_snapshot: boolean;
+  report_document_published_at: string | null;
+  report_document_published_by: string | null;
+  report_document_published_url: string | null;
   report_document_created_at: string;
   report_document_created_by: string | null;
   report_document_updated_at: string;
@@ -4271,6 +4313,9 @@ function toReportDocument(r: ReportDocumentRow): ReportDocument {
     shareExpiresAt: r.report_document_share_expires_at,
     hasSharePassword: r.report_document_has_share_password,
     hasShareSnapshot: r.report_document_has_share_snapshot,
+    publishedAt: r.report_document_published_at,
+    publishedBy: r.report_document_published_by,
+    publishedUrl: r.report_document_published_url,
     createdAt: r.report_document_created_at,
     createdBy: r.report_document_created_by,
     updatedAt: r.report_document_updated_at,

@@ -14,6 +14,8 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- a document built in the app is a DRAFT until you publish it — every copy you preview, print or download carries a DRAFT watermark, and publishing means pasting the SharePoint address it was saved to
+- editing a published document automatically takes it back to draft, and the watermark comes back with it
 - a document can now be saved as a SharePoint link on a job or a project — add one from the record's Documents panel and take it off again
 - the dashboard shows recent documents and recent changes across the company
 - A Tasks board, in the main navigation, with every task across every job and project — filtered by team, status and process, and sliced into my tasks, my team's tasks, all tasks, overdue, due today and due this week
@@ -112,6 +114,8 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- the app builds again — a dependency update took Tailwind to a major version the build is not set up for, and it is pinned back until that migration is done on its own
+- a document built in the app can now be deleted — there was no way to remove one from anywhere
 - The bug-and-idea form at /report opens again for people held at the demo gate — it had been blank since it was added
 - A link you were sent takes you there after signing in, instead of dropping you on the dashboard
 - A document can be put on a project as easily as on a job — the choice is now asked before the list, instead of every project sorting below every job in one long picker

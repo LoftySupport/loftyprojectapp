@@ -398,6 +398,10 @@ export default function ReportBuilder({
   report, engine, store, ctx, onClose, onSaved,
   branding = '', shareUrlBase = '', canSaveTemplate = true,
   themes = BUILT_IN_THEMES,
+  // Forwarded straight to the overlay. The builder is where a document is edited, so it
+  // is where the DRAFT mark matters most: every Preview & export from here is a copy
+  // somebody could send (0104).
+  watermark = '',
 }) {
   const [title, setTitle] = useState(report.title || 'Untitled report');
   const [widgets, setWidgets] = useState(() => (report.layout?.widgets || []));
@@ -808,6 +812,7 @@ export default function ReportBuilder({
           themes={themes}
           initialTheme={themeKey}
           onThemeChange={setThemeKey}
+          watermark={watermark}
         />
       )}
     </div>,

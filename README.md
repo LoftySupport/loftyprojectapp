@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 190 changes since then —
+Unreleased: 194 changes since then —
+- Fixed: the app builds again — a dependency update took Tailwind to a major version the build is not set up for, and it is pinned back until that migration is done on its own
+- Added: a document built in the app is a DRAFT until you publish it — every copy you preview, print or download carries a DRAFT watermark, and publishing means pasting the SharePoint address it was saved to
+- Added: editing a published document automatically takes it back to draft, and the watermark comes back with it
+- Fixed: a document built in the app can now be deleted — there was no way to remove one from anywhere
 - Changed: the footer drops "What's planned" — Updates in the same row is the same page — and the bug report link loses its icon
-- Added: a document can now be saved as a SharePoint link on a job or a project — add one from the record's Documents panel and take it off again
-- Added: the dashboard shows recent documents and recent changes across the company
-- Changed: the search box in the top bar now finds jobs, projects, people, companies, requests and documents from any page — matches appear as you type, and Enter opens a full results page. It still narrows the board or table you are on as well
-- Added: A Tasks board, in the main navigation, with every task across every job and project — filtered by team, status and process, and sliced into my tasks, my team's tasks, all tasks, overdue, due today and due this week
-- …and 185 more.
+- …and 189 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

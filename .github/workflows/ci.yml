@@ -145,6 +145,14 @@ jobs:
         run: npm run check:import
         working-directory: app
 
+      # Four renderers carry the DRAFT mark — screen, print, .html and .docx — so there
+      # are four places for a refactor to drop it, and nothing else here would notice.
+      # Runs in this job only because it sits beside the other two report checks; it
+      # needs no browser.
+      - name: a draft is watermarked and a published document is not
+        run: npm run check:watermark
+        working-directory: app
+
   deploy:
     name: the deploy assembles
     runs-on: ubuntu-latest

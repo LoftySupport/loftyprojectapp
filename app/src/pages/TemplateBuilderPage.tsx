@@ -1496,6 +1496,16 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
           ctx={ctx}
           themes={themes}
           branding="Lofty"
+          // A document is a draft until it is published to SharePoint (0104), and every
+          // Preview & export from in here is a copy somebody could send. Read from the
+          // row rather than from the documents list: the builder's own autosave is what
+          // takes a publication back, and `onSaved` replaces this row with the answer the
+          // database gave, so the mark appears the moment an edit lands.
+          //
+          // Library entries never carry one. A template is not sent to anybody — it is
+          // the thing documents are made FROM — so watermarking it would be marking the
+          // mould rather than the casting.
+          watermark={open.lane === "document" && !open.row.publishedAt ? "DRAFT" : ""}
           // Only from a document, and it means "propose this layout as a template".
           // From a library entry it would be a template saved as a template.
           canSaveTemplate={open.lane === "document"}

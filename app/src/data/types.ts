@@ -3027,11 +3027,59 @@ export interface ReportDocument {
    * screen in the app renders. The shared page fetches it from the endpoint by token.
    */
   hasShareSnapshot: boolean;
+  /**
+   * DRAFT UNTIL PUBLISHED (0104).
+   *
+   * Amber, 10 September: *"have a DRAFT watermark across it while editable and saved to
+   * the job. and as soon as it is ready to share or publish it, you choose the sharepoint
+   * location to save it to"*.
+   *
+   * `publishedAt` null is the ordinary state and is what the watermark reads — on screen,
+   * in print, in the .html and in the .docx. It is never typed: the database stamps it,
+   * and the same trigger clears it the moment the layout or title changes, because
+   * *"if editing it in the app it reverts to draft"*.
+   */
+  publishedAt: IsoDateTime | null;
+  publishedBy: Uuid | null;
+  /**
+   * Where it was sent. Survives an edit on purpose, so re-publishing can pre-fill the
+   * place it went last time.
+   *
+   * A URL with `publishedAt` null is therefore a real and readable state: this went to
+   * SharePoint, somebody has edited it since, and what is up there is out of date.
+   */
+  publishedUrl: string | null;
   createdAt: IsoDateTime;
   createdBy: Uuid | null;
   updatedAt: IsoDateTime;
   updatedBy: Uuid | null;
 }
+
+/**
+ * What a built document is, in one word, for a chip on a row.
+ *
+ * Derived from `publishedAt` rather than stored — 0104 records at length why the database
+ * has no `status` column, and the same argument applies here: two places holding "is this
+ * published" is one place for them to disagree.
+ */
+export type ReportDocumentState = "draft" | "published" | "edited-since-published";
+
+export function reportDocumentState(d: {
+  publishedAt: string | null;
+  publishedUrl: string | null;
+}): ReportDocumentState {
+  if (d.publishedAt) return "published";
+  // The third state is worth naming rather than folding into "draft": both carry the
+  // watermark and neither is safe to send, but only this one means there is a stale copy
+  // sitting in SharePoint that somebody may still be reading.
+  return d.publishedUrl ? "edited-since-published" : "draft";
+}
+
+export const REPORT_DOCUMENT_STATE_LABELS: Record<ReportDocumentState, string> = {
+  draft: "Draft",
+  published: "Published",
+  "edited-since-published": "Draft — edited since publishing"
+};
 
 export interface NewReportDocument {
   title: string;

@@ -1221,7 +1221,7 @@ function ProjectDetail({
 
         {/* Same list as the job drawer, for a document about the whole site rather than
             one lot — a feasibility, a whole-project summary. */}
-        <RecordDocuments projectId={project.projectId} />
+        <RecordDocuments projectId={project.projectId} folderUrl={project.sharepointUrl} />
 
       </div>
     </>
