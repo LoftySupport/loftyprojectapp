@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 206 changes since then —
+Unreleased: 209 changes since then —
+- Added: a job's address can carry a Res number, and it leads the address once set — "Res 1, Lot 3, 13 Tester Street, Testville, SA, 5000"
+- Added: a job's address can be changed from the job, the way a project's already could — the original stays put and every previous address stays searchable
+- Changed: addresses now read "Testville, SA, 5000" rather than "Testville SA 5000, AU" — the country is no longer printed on the end of every one
 - Fixed: a job created by splitting a project now keeps the street number — every one of them read "Lot 3, Corner Street" with no number in it, because the split threw the project's street number away
 - Added: each lot on the split-a-project dialog can be given its own street number — leave it blank and it takes the project's
-- Changed: the number you can enter when creating a job or splitting a project is now called the old job number rather than the SiteBook number — SiteBook does not issue one until construction, and the field has always held the old system's number
-- Added: the Projects board has a calendar view — it places each project's start date, target completion and end date, so a month shows what is starting and what is due
-- Fixed: a link naming a view a board does not have showed a blank page with an empty View control; it now opens the board's default view instead
-- …and 201 more.
+- …and 204 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

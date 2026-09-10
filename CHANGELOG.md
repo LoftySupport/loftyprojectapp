@@ -14,6 +14,8 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- a job's address can carry a Res number, and it leads the address once set — "Res 1, Lot 3, 13 Tester Street, Testville, SA, 5000"
+- a job's address can be changed from the job, the way a project's already could — the original stays put and every previous address stays searchable
 - each lot on the split-a-project dialog can be given its own street number — leave it blank and it takes the project's
 - the Projects board has a calendar view — it places each project's start date, target completion and end date, so a month shows what is starting and what is due
 - the Tasks board has four views — board, table, gantt and calendar — over the same set of tasks, so the grouping, filters, sort and search survive switching between them
@@ -169,6 +171,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- addresses now read "Testville, SA, 5000" rather than "Testville SA 5000, AU" — the country is no longer printed on the end of every one
 - the number you can enter when creating a job or splitting a project is now called the old job number rather than the SiteBook number — SiteBook does not issue one until construction, and the field has always held the old system's number
 - the footer drops "What's planned" — Updates in the same row is the same page — and the bug report link loses its icon
 - the search box in the top bar now finds jobs, projects, people, companies, requests and documents from any page — matches appear as you type, and Enter opens a full results page. It still narrows the board or table you are on as well
