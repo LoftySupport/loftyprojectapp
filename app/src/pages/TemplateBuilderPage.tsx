@@ -424,6 +424,28 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
   /** What the open document is about, so "the record this document is about" has an answer. */
   const subject = open?.lane === "document" ? open.subject : null;
 
+  // ── Who is on the record ─────────────────────────────────────────────────
+  //
+  // The roles are a short lookup and load with the page. The PARTIES are read per subject
+  // rather than for every record at once, which is the opposite of how the property values
+  // above are loaded and deliberately so: `listPropertyValues()` is one table the boards
+  // already need, while parties are only ever asked about one record — the one the open
+  // document is about — and fetching every party on every job to answer that would be a
+  // table scan per page load for a letter's first line.
+  //
+  // Empty until a document is open, and empty for a library entry: a template is not about
+  // anybody, so `{{purchaser_name}}` inside one stays a placeholder until it is used.
+  const { data: partyRoles } = useQuery(r => r.listPartyRoles(), []);
+  const { data: parties } = useQuery(
+    r => (subject?.jobId
+      ? r.listRecordParties({ jobId: subject.jobId })
+      : subject?.projectId != null
+        ? r.listRecordParties({ projectId: subject.projectId })
+        : Promise.resolve([])),
+    [],
+    [subject?.jobId, subject?.projectId, reloadKey]
+  );
+
   // Memoised, and it is not an optimisation: a fresh `ctx` identity re-resolves every
   // block on every render, which makes typing in a text block feel broken.
   const ctx = useMemo(
@@ -431,6 +453,7 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
       const base = {
         projects, jobs, teams, stageNames, people, processes,
         propertyDefs, propertyValues, propertyOptions,
+        partyRoles, parties,
         sections, expandSection,
         subject
       };
@@ -492,7 +515,8 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
       };
     },
     [projects, jobs, teams, stageNames, people, processes,
-     propertyDefs, propertyValues, propertyOptions, sections, expandSection, subject,
+     propertyDefs, propertyValues, propertyOptions, partyRoles, parties,
+     sections, expandSection, subject,
      textSnippets, askToSaveSnippet]
   );
   ctxRef.current = ctx;

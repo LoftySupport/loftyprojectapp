@@ -178,9 +178,28 @@ const expandSection = (section, h) => {
   }
 };
 
+// Who is on the record (10 September). Two purchasers on the one house, because a letter
+// addressed to one of the two people who own it is the failure the joining rule exists to
+// prevent; a company party with no contact, because the council is a party too; and one
+// who has ENDED, because a purchaser who pulled out in March is not who September writes
+// to. Nothing here is a placeholder — these are the shapes record_parties actually holds.
+const partyRoles = [
+  { id: "purchaser", name: "Purchaser" },
+  { id: "council", name: "Council" },
+  { id: "surveyor", name: "Surveyor" },
+  { id: "real_estate_agent", name: "Real estate agent" }
+];
+const parties = [
+  { roleId: "purchaser", contactName: "Mary Ashby", companyName: null, isPrimary: false, endedOn: null },
+  { roleId: "purchaser", contactName: "John Ashby", companyName: null, isPrimary: true, endedOn: null },
+  { roleId: "purchaser", contactName: "Priya Raman", companyName: null, isPrimary: false, endedOn: "2026-03-14" },
+  { roleId: "council", contactName: null, companyName: "Tea Tree Gully Council", isPrimary: true, endedOn: null }
+];
+
 const full = {
   projects, jobs, teams, stageNames, people, processes,
   propertyDefs, propertyValues, propertyOptions,
+  partyRoles, parties,
   sections, expandSection,
   subject: { jobId: "1042-001", projectId: null },
   // The document's own widget list, which compileReport and the builder both supply.
@@ -205,6 +224,7 @@ const full = {
 const empty = {
   projects: [], jobs: [], teams, stageNames, people: [], processes: [],
   propertyDefs: [], propertyValues: [], propertyOptions: [],
+  partyRoles: [], parties: [],
   sections: [], expandSection, subject: null
 };
 /** What `expandSection` resolves against; the screen keeps this in a ref for the same reason. */
@@ -932,6 +952,58 @@ console.log("--- the Lofty theme is the house document format, role for role");
     menu.some(t => t.value === "job_number") && menu.some(t => t.value === "address")
     && menu.some(t => t.value === "slab_cost"),
     `${menu.length} fields`);
+
+  // ── who is on the record (10 September) ──────────────────────────────────
+  //
+  // Amber wrote the letter as *"dear [Owner Name] your property [property address] has
+  // just received planning approval on [planning approval date]"*. There is no `owner`
+  // role, so there is a token per role instead and nobody has to guess which one a letter
+  // opens to. Broken by dropping partyTokensFor from the menu: the field simply is not
+  // offered and the letter goes out with a name typed by hand that nobody updates.
+  ok("the insert menu offers a field for every party role",
+    ["purchaser_name", "council_name", "surveyor_name", "real_estate_agent_name"]
+      .every(k => menu.some(t => t.value === k)),
+    menu.filter(t => t.group === "Who is on the record").map(t => t.value).join(", "));
+
+  // TWO PURCHASERS, JOINED — the whole reason this is not "the primary one". Broken by
+  // returning only the row marked primary: the letter about somebody's house is addressed
+  // to one of the two people who own it, which reads as correct and is not.
+  ok("two purchasers are both named, primary first",
+    strip(fill("<p>Dear {{purchaser_name}},</p>", { forExport: true })) === "Dear John Ashby and Mary Ashby,",
+    strip(fill("<p>{{purchaser_name}}</p>", { forExport: true })));
+
+  // AND THE ONE WHO PULLED OUT IS NOT AMONG THEM. Broken by dropping the endedOn filter —
+  // Priya Raman comes back into a letter written six months after she left.
+  ok("a party who has ended is not in the letter",
+    !/Priya/.test(fill("<p>{{purchaser_name}}</p>", { forExport: true })),
+    strip(fill("<p>{{purchaser_name}}</p>", { forExport: true })));
+
+  // A COMPANY PARTY, where there is no contact at all.
+  ok("a company party resolves to the company's name",
+    strip(fill("<p>{{council_name}}</p>", { forExport: true })) === "Tea Tree Gully Council",
+    strip(fill("<p>{{council_name}}</p>", { forExport: true })));
+
+  // A REAL ROLE WITH NOBODY IN IT IS A BLANK, not a standing token — the same as a
+  // property nobody has filled in. The two facts are different and the letter says so:
+  // "nobody is filed as the surveyor" is not "you typed a field that does not exist".
+  ok("a role with nobody in it is an em dash, not a standing token",
+    strip(fill("<p>[{{surveyor_name}}]</p>", { forExport: true })) === "[—]",
+    strip(fill("<p>[{{surveyor_name}}]</p>", { forExport: true })));
+
+  // And a role that does not exist still reads as a typo.
+  ok("a role token naming no role is left visible",
+    strip(fill("<p>{{owner_name}}</p>", { forExport: true })) === "{{owner_name}}",
+    strip(fill("<p>{{owner_name}}</p>", { forExport: true })));
+
+  // NO TWO TOKENS MAY SHARE A KEY. A property definition ending `_name` would collide with
+  // a role token and one would silently shadow the other — the letter then says a
+  // surveyor's name where somebody meant a property, or the reverse, with nothing on
+  // screen to show it happened. Asserted rather than assumed, so the day somebody adds
+  // such a property is the day this reports.
+  const keys = menu.map(t => t.value);
+  ok("no two insertable fields share a key",
+    new Set(keys).size === keys.length,
+    keys.filter((k, i) => keys.indexOf(k) !== i).join(", ") || `${keys.length} unique`);
 
   // ── the same placeholders in a TABLE (10 September) ──────────────────────
   //
