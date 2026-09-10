@@ -58,7 +58,13 @@ function partyTokensFor(ctx) {
     .map(r => ({
       value: partyTokenKey(r.id),
       label: `${r.name || r.id} — name`,
-      group: 'Who is on the record'
+      // "Contacts", because that is what the app calls these people — Amber, 10 September,
+      // asked one word and it was the right one. The nav has a Contacts page, the type
+      // dictionary calls them Contacts, and the panel on the job is People & companies.
+      // "Parties" is the TABLE's name (record_parties, 0082) and appears nowhere a person
+      // reading a menu would have seen it, so a menu group called Parties would have been
+      // the schema leaking onto the screen.
+      group: 'Contacts'
     }));
 }
 

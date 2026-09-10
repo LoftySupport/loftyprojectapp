@@ -960,10 +960,16 @@ console.log("--- the Lofty theme is the house document format, role for role");
   // role, so there is a token per role instead and nobody has to guess which one a letter
   // opens to. Broken by dropping partyTokensFor from the menu: the field simply is not
   // offered and the letter goes out with a name typed by hand that nobody updates.
-  ok("the insert menu offers a field for every party role",
+  ok("the insert menu offers a field for every contact role",
     ["purchaser_name", "council_name", "surveyor_name", "real_estate_agent_name"]
       .every(k => menu.some(t => t.value === k)),
-    menu.filter(t => t.group === "Who is on the record").map(t => t.value).join(", "));
+    menu.filter(t => t.group === "Contacts").map(t => t.value).join(", "));
+
+  // The group carries the app's own word. "Parties" is the table's name and appears on no
+  // screen; a menu that used it would be the schema leaking into the editor.
+  ok("and files them under the word the app uses for these people",
+    menu.filter(t => t.group === "Contacts").length === partyRoles.length,
+    [...new Set(menu.map(t => t.group))].join(" · "));
 
   // TWO PURCHASERS, JOINED — the whole reason this is not "the primary one". Broken by
   // returning only the row marked primary: the letter about somebody's house is addressed
