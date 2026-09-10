@@ -50,15 +50,15 @@
     "@types/node": "^26.4.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.6",
-    "@vitejs/plugin-react": "^6.0.4",
+    "@vitejs/plugin-react": "^6.1.1",
     "fontkit": "^2.0.4",
     "jsqr": "^1.4.0",
-    "oxlint": "^1.75.0",
+    "oxlint": "^1.81.0",
     "playwright": "^1.57.0",
     "subset-font": "^2.7.0",
-    "tailwindcss": "^3.4.19",
-    "typescript": "~6.0.2",
-    "vite": "^8.2.0"
+    "tailwindcss": "^4.3.3",
+    "typescript": "~7.0.2",
+    "vite": "^8.2.2"
   },
   "overrides": {
     "@vibe/style": {
