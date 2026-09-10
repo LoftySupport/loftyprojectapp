@@ -45,7 +45,7 @@ import { undoHistory, type UndoStep } from "./undoHistory";
 
 /** Field names as a person would read them in a toast. Anything else is de-camelled. */
 const WORDS: Record<string, string> = {
-  owningTeam: "team", assigneeId: "assignee", jobNumberOld: "SiteBook number",
+  owningTeam: "team", assigneeId: "assignee", jobNumberOld: "old job number",
   titleType: "title type", targetCompletion: "target completion", sharepointUrl: "folder link",
   startDate: "start date", endDate: "end date", dueDate: "due date", dueOn: "due date",
   ownerProfileId: "owner", categoryId: "trade", reportedByContactId: "reporter",

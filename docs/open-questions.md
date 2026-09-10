@@ -223,6 +223,50 @@ question 16.
 
 Nothing is blocked meanwhile: drafts are editable in the builder and publishing works.
 
+### 20. What is a Res #, and where does it live?
+
+**Blocked:** *"please add Lot #, Res # Street # at project creation type and default to
+showing Res # until Lot number assigned"* (Amber, 10 September) cannot be built without
+this, and it is a schema change rather than a form change.
+
+**Two of the three already exist.** `addresses` carries `address_lot_number` and
+`address_street_number`, and the constraint on them already states the rule Amber is
+extending — `addresses_has_a_number`: *"A site is identified by a lot number, a street
+number, or both — never neither. Before titles are issued there is only 'Lot 3';
+afterwards there is '28'."* Project creation collects the lot number per row today and
+does not collect the street number; adding that column to the split rows is a form
+change and nothing more.
+
+**Res # is new.** Nothing in the schema holds one, and it is not a rename of either
+existing column, because Amber's ordering puts three numbers in a sequence:
+
+    Res #  →  Lot #  →  Street #
+
+with the display defaulting to the Res # until a lot number is assigned. Three things
+have to be decided before a migration can be written, and each is a business fact rather
+than a preference:
+
+1. **What is it?** The reading that fits the ordering is the builder's own number for the
+   dwelling, carried before the land division registers the lots. If that is right, say
+   so; if it is something else — a council or a display-home number — it changes where it
+   belongs.
+2. **Does it belong to the address or to the job?** A lot number and a street number are
+   facts about a *place*, which is why they are on `addresses`. If a Res # is also a fact
+   about the place it joins them; if it is Lofty's number for the *dwelling being built*
+   it belongs on `jobs`, and the two are not interchangeable — the address is versioned
+   over time (`address_history`) and the job is not.
+3. **Does it replace the "lot or street number" rule?** Today an address with neither is
+   refused. If a new project has only a Res #, that CHECK has to become "res, lot or
+   street", which also means `address_consolidated` — a column a trigger generates for
+   every address in the system — has to render a Res # when it is the only number there
+   is. That is a migration touching every address row, so it is worth being sure.
+
+**What is not blocked and is already done:** the field at project creation that said
+*"SiteBook number"* now says **"Old job number"**, because *"sitebook number isn't
+created until after construction"* — it always wrote `job_number_old`, the old system's
+number, and asking for a SiteBook number on a create form asked for one that cannot
+exist yet.
+
 ### 19. Do the four views and bulk edit go back onto the older screens?
 
 The 10 September rules say *"all **new** pages that are tables"* get board, table, gantt

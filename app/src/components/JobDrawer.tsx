@@ -302,8 +302,8 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
             </div>
             <div className="field-row">
               <div className="field-label">
-                <Text type="text2">SiteBook number</Text>
-                <div className="field-hint">the old Lofty number — SiteBook and Trello use it</div>
+                <Text type="text2">Old job number</Text>
+                <div className="field-hint">the old Lofty number — SiteBook and Trello reference it</div>
               </div>
               {can("user") ? (
                 <div className="field-inline">

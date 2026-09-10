@@ -1441,7 +1441,7 @@ export function createSupabaseRepository(): Repository {
           // naming itself rather than a type error.
           job_stage: input.stage ?? "Acquisition & Development",
           job_status: input.status ?? "on_track",
-          // The SiteBook number, when the job already exists there (Amber, 7 Sep: "you
+          // The old job number, when the job already exists elsewhere (Amber, 7 Sep: "you
           // should be able to add a sitebook number as well at the time"). Trimmed and
           // blank-to-null for the reason updateJob gives: the column is unique over
           // non-nulls. Omitted from the row entirely when not given, so the column's own
@@ -1453,7 +1453,7 @@ export function createSupabaseRepository(): Repository {
       if (error) {
         if (error.code === "23505" && input.jobNumberOld?.trim()) {
           throw new Error(
-            `SiteBook number ${input.jobNumberOld.trim()} is already on another job — search it to see which.`
+            `Old job number ${input.jobNumberOld.trim()} is already on another job — search it to see which.`
           );
         }
         throw error;

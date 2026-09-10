@@ -39,7 +39,7 @@ function jobMatchesOne(j: BoardJob, f: ToolbarFilter): boolean {
     case "Type": return j.projectType === f.value;
     // A number typed in (Amber, 7 Sep: "you also need to be able to enter a job number").
     // Prefix, not equality: "1042" finds every job on the project, "1042-00" the first
-    // nine, "1042-003" the one. The old SiteBook number counts too, for the same reason
+    // nine, "1042-003" the one. The old job number counts too, for the same reason
     // the search matches it — it is what everything outside the app links by.
     case "Number": return matchesNumber(f.value, [j.jobNumber, j.jobNumberOld, j.projectNumber]);
     case "Project": return j.projectNumber === f.value;
