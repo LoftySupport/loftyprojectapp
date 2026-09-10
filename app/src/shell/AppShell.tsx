@@ -5,7 +5,7 @@ import {
 } from "@vibe/core";
 import {
   Home, Menu, NavigationChevronLeft, NavigationChevronRight,
-  Settings, SettingsKnobs, Group, Broom, Apps } from "@vibe/icons";
+  Settings, SettingsKnobs, Group, Broom, Apps, CheckList } from "@vibe/icons";
 import { HouseChart, HousePin, Houses } from "../theme/houseIcons";
 import { initialsOf, useAuth } from "../data/AuthProvider";
 import { usePermission } from "../data/PermissionProvider";
@@ -45,6 +45,12 @@ const PAGES: {
   { to: "/dashboard", label: "Dashboard", icon: Home, end: true },
   { to: "/projects", label: "Projects", icon: Houses },
   { to: "/jobs", label: "Jobs", icon: HousePin },
+  // Tasks (0102): every task across every job and project, one board. Amber's own
+  // description of what belongs here is what put it beside Jobs rather than under
+  // Setup with Processes — a process's workflow assigns one when a stage changes, a
+  // person assigns one to themselves or their team, and both kinds are work, not
+  // configuration. CheckList rather than Check: a list of lines, not one tick.
+  { to: "/tasks", label: "Tasks", icon: CheckList },
   // Its own tab, not a report filter (Amber, 1 Sep: "a separate tab for maintenance as this
   // will have a lot of automation and needs a quick access").
   { to: "/maintenance", label: "Maintenance", icon: Broom },

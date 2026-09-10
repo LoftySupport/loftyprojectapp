@@ -1497,6 +1497,19 @@ only overdue. `task_display` derives health the way `process_run_display` does;
 `stage_completion` counts milestones per record and stage once, for the board, the drawer
 and the report.
 
+**0102 gives tasks a board of their own** — every task, across every job and project,
+filtered and sorted the way the Jobs board is, opening on "my tasks" with a manager's team
+on top and three slices of the due-date question (overdue, due today, due this week). Two
+things `task_display` did not carry: `task_scheduled_date`, a plain nullable date beside
+`task_due_date` for when the task is *planned* to be worked rather than when it is due —
+it does not feed `task_health`, which stays anchored to the due date; and the record and
+process a task sits on, resolved rather than left as bare keys — `job_display`'s own
+address and stage for a job task, `projects`' name and stage for a project task, and
+`process_runs` → `processes`' name for a task instantiated from a run, null for one somebody
+typed in. The last of those is also how the board reads Amber's distinction between the two
+kinds of task without a separate column: a resolved process name is a system-generated task,
+and its absence is a person's own.
+
 ### Notifications: five tables, one outbox
 
 `notification_types` (defaults per type) · `notification_rules` (audience: assignee, owning

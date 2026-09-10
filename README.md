@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 185 changes since then —
+Unreleased: 186 changes since then —
+- Added: A Tasks board, in the main navigation, with every task across every job and project — filtered by team, status and process, and sliced into my tasks, my team's tasks, all tasks, overdue, due today and due this week
 - Changed: filled buttons are Crisp Orange again, and drop their fill on hover for a Crisp Orange text and line — the brand colour, chosen over the darker step that cleared the contrast floor
 - Changed: a filled button now drops its fill on hover and focus — the pressed orange becomes the text and a thin line — instead of darkening
 - Changed: exported Word and PDF documents are set in Montserrat, the brand's document face, in place of Helvetica — the PDF now carries the font, so it looks the same on every machine
 - Added: `npm run build:montserrat` regenerates the embedded font subset and its width tables from Google Fonts
-- Changed: the design-system mirror is back in step with the brand repository — a sequential orange data scale for continuous values, and Arial is now the last font fallback on every screen (Helvetica before)
-- …and 180 more.
+- …and 181 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

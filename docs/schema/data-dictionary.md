@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-721 properties across 99 tables.
+722 properties across 99 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 672 | In the migration and the types |
+| Created | 673 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -1349,6 +1349,7 @@ One thing to be done. A checklist item instantiated from a template and a task s
 | `tasks.task_assignee_id` | Assignee | The person doing it. Nullable for the same reason as the team. | `uuid` | — | Nullable. | FK → profiles(profile_id). Partially indexed with the due date — this is the "my work" query. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `tasks.task_status` | Status | open · in_progress · blocked · done · cancelled. | `text` | — | Not null, default 'open'. CHECK on the five values, and CHECK tasks_done_has_a_time ties it to the completion time in both directions. | The open three drive every partial index on this table, because a done task is in nobody's queue and those rows will outnumber the open ones many times over. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `tasks.task_due_date` | Due | When it should be finished. | `date` | — | Nullable. | Indexed with the open statuses, for the overdue report. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `tasks.task_scheduled_date` | Scheduled | When it is planned to be worked, as distinct from task_due_date (0102) — the Tasks board's own column, for a task typed in with a plan but no deadline yet. | `date` | — | Nullable. | Does not feed task_health — health stays anchored to task_due_date. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `tasks.task_completed_at` | Completed on | When it was finished, and the single source of truth for whether it was. There is deliberately no boolean beside this: two columns for one fact can disagree, and then one of them is wrong without anything noticing. | `timestamptz` | — | Nullable. Stamped by the tasks_stamp_completion trigger when the status becomes done, and CLEARED when it stops being done — a completion time on a reopened task is a lie, and it is exactly the lie a variation produces. | Paired with task_status by CHECK tasks_done_has_a_time. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `tasks.task_completed_by` | Completed by | Who finished it. Stamped by the database, never sent by the client — a client that can write this can write somebody else's name into it. | `uuid` | — | Nullable. | FK → profiles(profile_id). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `tasks.task_is_external` | Waiting on someone outside Lofty | Council, the EER consultant, SA Water. The process map marks these in orange: nothing downstream moves until they are done, and they are not the owning team's fault when they run late. Without the flag, Design looks permanently overdue for council's statutory 28 days. | `boolean` | — | Not null, default false. | Excluded from team SLA reporting. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
