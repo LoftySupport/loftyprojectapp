@@ -1,10 +1,11 @@
 import { Text } from "@vibe/core";
 import {
-  PROJECT_TYPE_LABELS, RECORD_STATUS_LABELS,
-  type LatestUpdate, type ProjectType, type RecordStatus
+  PROJECT_TYPE_LABELS, RECORD_STATUS_LABELS, TASK_HEALTH_LABELS, isTaskLive,
+  type LatestUpdate, type ProjectType, type RecordStatus, type TaskEntry
 } from "../data/types";
 import { Token } from "./Token";
 import "./ui.css";
+import "./processes.css";
 
 /**
  * The record cards, one per level.
@@ -181,6 +182,96 @@ export function withoutSite(jobAddress: string, site: string | null): string {
   // No match, or nothing left because the job IS at the site: show the whole thing.
   if (head === jobAddress.trim() || head === "") return jobAddress;
   return head.replace(/[,\u2013\u2014-]\s*$/, "").trim() || jobAddress;
+}
+
+/**
+ * A task on the board (0102) — the kanban's card.
+ *
+ * The same geometry as `JobCard`, because a column of task cards beside a column of job
+ * cards has to read as one board. What it carries is what somebody scanning a column
+ * needs to act: what has to be done, whether it is late, which job it is on, when it is
+ * due and who has it. Not the description — that is the reason for the task rather than
+ * the task, and it belongs in the table's own column and in the record.
+ *
+ * `card`, not `card--unbound`: every value here is a real column on `task_display`, and
+ * a dashed border says "this shape is a preview" — which would be a lie about a task.
+ */
+export function TaskCard({ task, onOpen }: { task: TaskEntry; onOpen?: () => void }) {
+  const ref = task.jobId ?? (task.projectId != null ? `Project ${task.projectId}` : null);
+  const due = task.dueEffective
+    ? new Date(`${task.dueEffective}T00:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short" })
+    : null;
+  return (
+    <article
+      className="card"
+      role={onOpen ? "button" : undefined}
+      tabIndex={onOpen ? 0 : undefined}
+      onClick={onOpen}
+      onKeyDown={e => {
+        if (onOpen && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      aria-label={`Task ${task.name}`}
+    >
+      <header className="card-top">
+        <Text type="text2" weight="medium" ellipsis={false}>{task.name}</Text>
+        {/* Health, not status: the column the card is IN is usually the status, and
+            repeating it on the card would spend the one chip on a fact already said.
+            Suppressed for a task with no due date — "No due date" as a red-ish chip on
+            every hand-typed task is noise, and the empty Due line below says it. */}
+        {isTaskLive(task.status) && task.health !== "no_due_date" && (
+          <span className={`health is-${task.health}`}>{TASK_HEALTH_LABELS[task.health]}</span>
+        )}
+      </header>
+
+      {ref && (
+        <Text type="text3" color="secondary" element="div" ellipsis={false}>
+          {ref}{task.recordName ? ` · ${task.recordName}` : ""}
+        </Text>
+      )}
+
+      {/* Only when there are boxes to tick. A "0 of 0" on a task nobody wrote a
+          checklist for is a count of nothing. */}
+      {task.checklistTotal > 0 && (
+        <div className="card-progress">
+          <div className="card-progress-track">
+            <div
+              className="card-progress-fill"
+              style={{ width: `${(task.checklistDone / task.checklistTotal) * 100}%` }}
+            />
+          </div>
+          <Text type="text3" color="secondary">
+            {task.checklistDone} of {task.checklistTotal} ticked
+          </Text>
+        </div>
+      )}
+
+      <div className="card-divider" />
+
+      {/* Due sits in the meta list rather than beside the assignee in the footer. It
+          was in the footer and the two crushed each other on a narrow column — a
+          process name is long, a date must not wrap, and neither would give way. */}
+      <dl className="card-meta">
+        <dt><Text type="text3" color="secondary">Due</Text></dt>
+        <dd><Text type="text3">{due ?? "No due date"}</Text></dd>
+        {/* "Manual" is the honest word for a task nobody's workflow raised, and it is a
+            real answer rather than a blank. */}
+        <dt><Text type="text3" color="secondary">Raised by</Text></dt>
+        <dd><Text type="text3" ellipsis={false}>{task.processName ?? "Manual"}</Text></dd>
+      </dl>
+
+      <footer className="card-foot">
+        <div className="card-who">
+          <div>
+            <Text type="text3" color="secondary">Assigned to</Text>
+            <Text type="text3" weight="medium">{task.assigneeName ?? "Nobody"}</Text>
+          </div>
+        </div>
+      </footer>
+    </article>
+  );
 }
 
 export function ProjectCard({

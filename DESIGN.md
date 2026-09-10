@@ -318,21 +318,44 @@ fixed array; the job template showed 36 checkpoints nobody at Lofty wrote.
 Milestones are a **boolean and never a percentage** for the same reason: "68% complete"
 implies a weighting that does not exist.
 
-## The two interface must-haves
+## The interface must-haves
 
-Given by Amber on 3 September as must-haves rather than preferences, and written up in full
-in **Interface Must-Haves** in [`PRODUCT.md`](PRODUCT.md), which owns them.
+Given by Amber as must-haves rather than preferences — the first three on 3 September, the
+rest on 10 September — and written up in full in **Interface Must-Haves** in
+[`PRODUCT.md`](PRODUCT.md), which owns them. That section also carries **the checklist for
+a new screen**, which is where to start before drawing one.
+
+Before all of them: **a screen is built from the design system**, which is the
+`loftybrand` repository inheriting from Vibe, with the colour and contrast contract below
+over the top. Use the component that exists; never invent a Lofty control.
 
 1. **Every table sorts and filters.** Every column carrying a comparable value sorts
-   (`app/src/components/SortableTable.tsx`; blanks sort last in both directions). Every
-   table about jobs, projects or processes carries at minimum team, team member, build
-   lifecycle stage, search by job # / project #, and a date-range picker.
-2. **Every record opens in the slideout.** One shell — `app/src/components/SidePanel.tsx` —
+   (`app/src/components/SortableTable.tsx`; blanks sort last in both directions), and Sort
+   by and Group by reach any property, not only the columns switched on. Every table about
+   jobs, projects or processes carries at minimum team, team member, build lifecycle stage,
+   search by job # / project #, and a date-range picker. Every date filter is
+   `DateRangeFilter` (`app/src/components/DateRange.tsx`) — Amber, 1 September: *"this is
+   the default way for every date picker in the app"*.
+2. **The filter bar is persistent, inline and compact.** `app/src/components/Toolbar.tsx`,
+   at the top of the screen, one wrapping row of controls with a single **Advanced** row
+   under it. Never a filter panel, a drawer or a sidebar; a filter must not take the
+   screen the results are supposed to be on.
+3. **Every record opens in the slideout.** One shell — `app/src/components/SidePanel.tsx` —
    down the right, over a list that stays readable. It expands to full width, is
    width-adjustable and remembers the width, closes on Escape, and the selection rides the
    URL. **A detail column beside the list is not this**: it halves the list, cannot expand
    and cannot be dragged. That shape (`.contacts-grid`) was deleted rather than left
    available to copy.
+4. **A screen of records is four views** — Board, Table, Gantt, Calendar — over one
+   dataset and one toolbar, **and a kanban column that is a settable value takes a drop**.
+   Where a drop has no write behind it the cards do not drag and the board says so.
+5. **Selection and bulk edit on every list.** A tick box on every row and every card, a
+   select-all, and one bulk bar that reassigns and edits — the bar belongs to the
+   selection, not to the view it was made in.
+6. **A screen ships with its stand-in.** The empty state says what the screen is for and
+   what to do next and offers the control to do it; "nothing here yet" and "nothing
+   matches" are different sentences; an unbound value is a token naming its column and
+   never a plausible-looking guess.
 
 Where a screen does not meet these yet, it is listed in [`HANDOFF.md`](HANDOFF.md) rather
 than left to be discovered.
