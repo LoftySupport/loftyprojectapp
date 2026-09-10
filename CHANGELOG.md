@@ -114,6 +114,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- the app builds again — a dependency update took Tailwind to a major version the build is not set up for, and it is pinned back until that migration is done on its own
 - a document built in the app can now be deleted — there was no way to remove one from anywhere
 - The bug-and-idea form at /report opens again for people held at the demo gate — it had been blank since it was added
 - A link you were sent takes you there after signing in, instead of dropping you on the dashboard
