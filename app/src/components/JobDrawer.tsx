@@ -414,9 +414,10 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
                   previous address stays on the record and stays searchable.
                 </Text>
                 <div className="create-form">
-                  {/* `needs="street"` because a job may not sit at a locality, and the
-                      res number because this is a job — a project's address has none. */}
-                  <AddressFields value={newAddress} onChange={setNewAddress} needs="street" showResNumber />
+                  {/* `needs="street"` because a job may not sit at a locality. The res
+                      number is on every address form now, a project's included — see
+                      `AddressFields`. */}
+                  <AddressFields value={newAddress} onChange={setNewAddress} needs="street" />
                 </div>
                 <div className="field-inline" style={{ marginTop: "var(--space-8)" }}>
                   <Button
@@ -441,6 +442,27 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
                 <Text type="text2" weight="medium">{job.originalAddress}</Text>
               ) : (
                 <Text type="text3" color="secondary">never renamed — always this address</Text>
+              )}
+            </div>
+            {/* Beside the address, never inside it. Amber, 10 September: *"the council
+                area still needs to be recorded, but just not in the full address line.
+                it stays as a property field."* `build_consolidated_address()` has never
+                composed it in; what was missing was anywhere to READ it back on a job —
+                the change-address form above carries the picker, and until 0108
+                `job_display` did not select the column, so a council set here vanished.
+
+                The job's own, not the project's: a job moved off its project's site can
+                sit in a different LGA. An em dash rather than a token when it is null,
+                because optional-since-0073 is a real answer — four SA suburbs span two
+                councils and the form refuses to guess for them. */}
+            <div className="field-row">
+              <div className="field-label">
+                <Text type="text2">Council region</Text>
+              </div>
+              {job.council ? (
+                <Text type="text2" weight="medium">{job.council}</Text>
+              ) : (
+                <Text type="text3" color="secondary">—</Text>
               )}
             </div>
           </CollapsiblePanel>

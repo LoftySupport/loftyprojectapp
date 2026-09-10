@@ -32,7 +32,64 @@ properties may change between now and then"* — so the machinery has a plausibl
 even though jobs and projects are not it. It never ran: the load rolled back whole on its
 first write, so no project, job or address in the app came from it.
 
-## 10 September, later still — a job's address carries a Res number (`0105`)
+## 10 September, later still — the three numbers in an address, and 64 wrong ones
+
+Amber: *"a lot number or res number is only a number not a number and digitl. however a
+street number can be something like 100-105 (as text) or 12B"* — correcting `0105`, and
+behind it `0034` and the split dialog's own on-screen text, which had all claimed since
+August that it was the LOT number carrying the letters.
+
+The live data settled it: 13 of 13 lot numbers are digits; 12 of 178 street numbers are
+not, and they are exactly her examples (`2-4`, `337-339`, `3&5`, `4-11/9`, `83a`). So
+`0106` makes `address_lot_number` and `address_res_number` integers and leaves
+`address_street_number` text, with the measurement on file so nobody reinstates the old
+claim. Typing "Lot 3" still works — that tolerance moved from the trigger to the app,
+because an integer column rejects the cast before any trigger could run.
+
+**`0107` is the one worth knowing about.** *"check against Brodie ave project"* — project
+1002 is **14 Brodie Road** and its three jobs read `1 Brodie Road`, `2 Brodie Road`,
+`3 Brodie Road`. Those are other people's houses. It was **64 of 79 jobs**: the lot
+number was in the street-number column and the project's street number had never been
+carried down. Every affected project's jobs run 1..n from 1 — thirty consecutive
+"houses" on Awoonga Road for a project at 83a — which is what makes it a plan of
+division rather than a street. `1002-001` now reads `Lot 1, 14 Brodie Road, Reynella,
+SA, 5161`.
+
+That fix does **not** claim all 64 are subdivisions: a genuine infill of three houses at
+1, 2 and 3 grouped under a project at 14 would have been caught too. Nothing in the data
+tells them apart, and reversing it is the same statement with the columns swapped.
+
+Also settled, both previously flagged as guesses: addresses as their own table displayed
+on a job or project is *"correct"*; `street_2` *"is important"* and stays; and the res
+number is **not** job-only — *"on a project you might update the res number there as
+well"* — so every address form offers it.
+
+### The council, and two things the verify suite caught (`0108`, `0109`)
+
+Amber: *"the council area still needs to be recorded, but just not in the full address
+line. it stays as a property field"*, and *"the council is in the lookup table in
+supabase and already connected and working."* Both halves of that were already true —
+`addresses.address_council` is the `sa_council` value filled from the LGA list, and
+`build_consolidated_address()` has never composed it into the line. Nothing was rebuilt
+and no property definition was added.
+
+What was **not** true: a job's council could be set and never read. The drawer's
+change-address form carries the picker, and `job_display` never selected the column, so
+the value went in and vanished. `0108` appends `job_council` to the view — off the job's
+**own** address, since a job moved off its project's site can sit in a different LGA —
+and the job drawer shows "Council region" beside the address, never inside it.
+
+**`0109` is the one to know about.** `verify/check.sh` — not review — found that `0106`
+had left `import_spine()` unable to insert a row: it passes `sp ->> 'lot_number'`, which
+is text, into a column that became an integer. The import is closed and inert by Amber's
+7 September decision, so nothing was pending and no data is affected; the fix is one
+cast, and it matters because *"if I need to import other areas I will let you know"* is
+a call on a function that currently contradicts its own table. Two lessons already
+written down and worth repeating: a migration set that *replays* is not a schema that
+*works*, and `check.sh` needs running whenever a column changes type, not only when a
+table is added.
+
+## 10 September — a job's address carries a Res number (`0105`)
 
 Amber gave the shape of an address at each level, with a worked example that settled more
 than it looked like it would:

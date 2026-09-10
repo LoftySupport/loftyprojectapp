@@ -105,6 +105,13 @@ export interface BoardJob {
   /** The site the job belongs to. Read through from the project, never copied. */
   projectAddress?: string | null;
   /**
+   * The council of the job's own current address (0108). Deliberately NOT inside
+   * `currentAddress` — Amber, 10 September: *"the council area still needs to be
+   * recorded, but just not in the full address line. it stays as a property field."*
+   * Null when nobody has said, which is a real state since 0073.
+   */
+  council?: string | null;
+  /**
    * The latest attempt of every process run on this job (0078) — what the Process and
    * Process health chips filter on, and what the card can summarise.
    */
@@ -262,6 +269,7 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
       currentAddress: j.currentAddress,
       originalAddress: j.originalAddress,
       projectAddress: j.projectCurrentAddress,
+      council: j.council,
       processRuns: [...(runsByJob.get(j.id)?.values() ?? [])].map(({ processKey, status, health }) => ({ processKey, status, health })),
       recordedKeys: [...new Set([...(keysByJob.get(j.id) ?? []), ...(keysByProject.get(j.projectId) ?? [])])],
       // The project's values underneath, the job's own on top — the same read-through
