@@ -67,12 +67,24 @@ import "./ui.css";
 export function AddressFields({
   value,
   onChange,
-  needs = "locality"
+  needs = "locality",
+  showResNumber = false
 }: {
   value: NewAddress;
   onChange: (next: NewAddress) => void;
   /** `street` for a job — a street and a number, both marked required. */
   needs?: "locality" | "street";
+  /**
+   * Offer the res number. **A job's address, never a project's** — Amber, 10 September:
+   * a project records seven address details and a job records *"all of that information
+   * PLUS Res #"*.
+   *
+   * Its own flag rather than reading `needs === "street"`, even though the two coincide
+   * today: "this address needs a street" and "this address belongs to a job" are
+   * different statements, and the first one being true of something that is not a job
+   * would silently put a res number on it.
+   */
+  showResNumber?: boolean;
 }) {
   const set = <K extends keyof NewAddress>(key: K, v: NewAddress[K]) =>
     onChange({ ...value, [key]: v });
@@ -139,6 +151,19 @@ export function AddressFields({
 
   return (
     <>
+      {/* First, because it leads the address once it is set: "Res 1, Lot 3, 13 Tester
+          Street, Testville, SA, 5000". Empty until the res number is allocated, which
+          is the normal state of a job for months. */}
+      {showResNumber && (
+        <Field label="Res number" hint="the residence number on the plan — leads the address once it is set">
+          <TextField
+            value={value.resNumber ?? ""}
+            onChange={v => set("resNumber", v || null)}
+            id="addr-res-number"
+            inputAriaLabel="Res number"
+          />
+        </Field>
+      )}
       <Field label="Lot number" hint="as it appears on the plan of division">
         <TextField
           value={value.lotNumber ?? ""}
@@ -821,7 +846,7 @@ export function NewJobDialog({
               </Button>
             </Field>
 
-            {ownAddress && <AddressFields value={address} onChange={setAddress} needs="street" />}
+            {ownAddress && <AddressFields value={address} onChange={setAddress} needs="street" showResNumber />}
           </div>
         )}
         {error && <Problem>{error}</Problem>}

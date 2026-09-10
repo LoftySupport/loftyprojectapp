@@ -286,6 +286,22 @@ export interface Repository {
    */
   setProjectCurrentAddress(id: number, address: NewAddress): Promise<Project>;
 
+  /**
+   * The same for a job — Amber, 10 September: *"A project address needs to be
+   * updatable. A Job address needs to be updatable."*
+   *
+   * Only the project half existed. A job's address could be set at creation and never
+   * changed after it, which is the wrong way round: a job's address is the one that
+   * moves, from "Lot 3" to "13 Tester Street" when titles issue, and it is where a res
+   * number is added months into a build.
+   *
+   * Same rules as the project's, and they come from the database rather than from
+   * here: `guard_original_address` leaves the original alone, the `0042` trigger files
+   * the outgoing current address in `address_history`, and
+   * `guard_job_address_is_a_street` refuses to leave a job at a locality.
+   */
+  setJobCurrentAddress(jobNumber: string, address: NewAddress): Promise<Job>;
+
   /** Every address a record has had and when it stopped applying. Newest first. */
   listAddressHistory(ref: { projectId?: number; jobId?: string }): Promise<AddressHistoryEntry[]>;
 
@@ -950,6 +966,7 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "moveProjectStage",
   "updateProject",
   "setProjectCurrentAddress",
+  "setJobCurrentAddress",
   "listAddressHistory",
   "listStages",
   "listTeams",
@@ -1154,6 +1171,7 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   moveProjectStage: "projects",
   updateProject: "projects",
   setProjectCurrentAddress: "projects + addresses",
+  setJobCurrentAddress: "jobs + addresses",
   listAddressHistory: "address_history",
   // Both became tables — `teams` in 0026, `pipeline_stages` in 0029. The labels
   // said "enum" long after that stopped being true, on the one screen whose entire

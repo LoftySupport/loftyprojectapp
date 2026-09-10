@@ -124,7 +124,7 @@ const WIRED: RepositoryMethod[] = [
   "currentProfile", "listProfiles",
   "createProfile", "updateProfile", "setProfileActive", "listActivity",
   "listComments", "addComment", "updateProject", "moveProjectStage",
-  "setProjectCurrentAddress", "listAddressHistory",
+  "setProjectCurrentAddress", "setJobCurrentAddress", "listAddressHistory",
   "listStages", "listTeams", "updateTeam", "createTeam", "listTemplatePhases", "updateStageSla",
   "listSavedViews", "saveView", "deleteSavedView", "shareSavedView",
   "submitFeedback", "listFeedback", "setFeedbackStage", "setFeedbackPhase", "setFeedbackKind",
@@ -431,7 +431,7 @@ function toComment(r: CommentRow): CommentEntry {
 }
 
 const ADDRESS_COLUMNS =
-  "address_id, address_lot_number, address_street_number, address_street_1, address_street_2, address_suburb, address_state, address_postcode, address_council";
+  "address_id, address_res_number, address_lot_number, address_street_number, address_street_1, address_street_2, address_suburb, address_state, address_postcode, address_council";
 
 /** One `activity_audit` row, as this file reads it (the pre-0080 shape `auditNarrative` diffs). */
 type AuditRow = {
@@ -797,6 +797,9 @@ export function createSupabaseRepository(): Repository {
     const { data, error } = await db
       .from("addresses")
       .insert({
+        // Null on a project's address — the form does not offer it there. `0105`
+        // explains why the database does not forbid it rather than checking it.
+        address_res_number: emptyToNull(a.resNumber),
         address_lot_number: emptyToNull(a.lotNumber),
         address_street_number: emptyToNull(a.streetNumber),
         address_street_1: emptyToNull(a.street1),
@@ -1403,6 +1406,7 @@ export function createSupabaseRepository(): Repository {
         const { data: address, error: addressError } = await client
           .from("addresses")
           .insert({
+            address_res_number: input.address.resNumber ?? null,
             address_lot_number: input.address.lotNumber ?? null,
             address_street_number: input.address.streetNumber ?? null,
             address_street_1: input.address.street1,
@@ -1768,6 +1772,40 @@ export function createSupabaseRepository(): Repository {
       return await readProject(id);
     },
 
+    /**
+     * Give a job a new current address (0105).
+     *
+     * The project half of this has existed since the record page grew an "add another
+     * address"; the job half never did, so a job's address was set once at the split
+     * and frozen. That is the wrong way round — the job's address is the one that
+     * moves, from "Lot 3" to "13 Tester Street" when titles issue, and it is where the
+     * res number arrives months into a build.
+     *
+     * Deliberately the same three lines as `setProjectCurrentAddress`: insert the new
+     * address, repoint, read back. Every rule that makes it safe is a trigger rather
+     * than a check written here — `guard_original_address` protects the original,
+     * `0042` files the outgoing address in `address_history`, and
+     * `guard_job_address_is_a_street` refuses a job left at a locality, which is the
+     * one a job has and a project does not. Re-implementing any of them here would be
+     * a second opinion that can disagree with the database.
+     */
+    async setJobCurrentAddress(jobNumber: string, address: NewAddress): Promise<Job> {
+      const addressId = await insertAddress(address);
+      const { data: updated, error } = await client
+        .from("jobs")
+        .update({ job_current_address_id: addressId })
+        .eq("job_id", jobNumber)
+        .select("job_id");
+      if (error) throw error;
+      if (!updated?.length) {
+        throw new Error(`Job ${jobNumber} was not updated — it no longer exists, or you do not have permission.`);
+      }
+      const { data, error: readError } = await client
+        .from("job_display").select(JOB_COLUMNS).eq("job_id", jobNumber).single();
+      if (readError) throw readError;
+      return toJob(data as unknown as JobRow);
+    },
+
     async listAddressHistory(ref: { projectId?: number; jobId?: string }): Promise<AddressHistoryEntry[]> {
       let q = client
         .from("address_history")
@@ -2032,6 +2070,7 @@ export function createSupabaseRepository(): Repository {
         const { data: made, error: writeError } = await client
           .from("addresses")
           .insert({
+            address_res_number: from.address_res_number,
             address_lot_number: from.address_lot_number,
             address_street_number: from.address_street_number,
             address_street_1: from.address_street_1,

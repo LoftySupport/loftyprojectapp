@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-726 properties across 99 tables.
+727 properties across 99 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 677 | In the migration and the types |
+| Created | 678 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -84,6 +84,7 @@ An address as a record, stored once and pointed at — addresses get corrected a
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `addresses.address_id` | Address ID | The address as a record. Addresses get corrected and changed — a lot renumbered by council, a street renamed, a typo found at handover — so everything points at this id rather than carrying a copy of the text. | `uuid` | — | Primary key, default gen_random_uuid(). | Referenced by projects.original_address_id / current_address_id and jobs.original_address_id / current_address_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `addresses.address_lot_number` | Lot number | The lot as it appears on the plan of division. | `text` | — | Nullable, and freely so since 0073: no constraint ties it to the street any more. On a plan of division the lot number is often the whole address — the lots are numbered before the roads are named — and requiring a street beside it refused the one shape the form most needed to accept. Before titles are issued a subdivided site has only "Lot 3"; afterwards it has "28". Text, not a number — "12A", "5-7" and "Lot 3" are as common as 12, and an integer column has to be migrated the first time one arrives. | Feeds consolidated_address since 0025 — "Lot 3 Corner Street" is what the job is called for months, and what people keep typing into search long after. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `addresses.address_res_number` | Res number | The residence number on the plan — the number Lofty gives the dwelling. | `text` | — | Nullable, and 0105's own note says why it is not forbidden on a project's address even though the app only offers it on a job's: an address row is not owned by one record, so there is nothing on it to hang "this belongs to a job" from. Text for the same reason the lot number is text, and Amber wrote "(number)" against both — "2B" is a real lot number and a res number is the same kind of label off the same plan. Not unique: res numbers repeat across sites by definition, and whether they may repeat within one has not been stated. | Leads consolidated_address when set — "Res 1, Lot 3, 13 Tester Street, Testville, SA, 5000" (Amber's own example, 10 Sep, and one of 0105's five probes). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `addresses.address_street_number` | Street number | The number on the street. Text for the same reason as the lot number. | `text` | — | Nullable. Was half of "a street needs one of the two numbers"; that check went in 0073 and the rule now applies only to jobs, through guard_job_address_is_a_street. | Feeds consolidated_address. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `addresses.address_street_1` | Street | Street name and type — "Ironbark Road". | `text` | — | Nullable since 0037, which is what makes a locality address possible. Whether it is set is what address_precision reads; since 0073 it may stand with no number beside it, because "the Mt Gambier division, Penola Road" is a real thing to know before any lot has a frontage. | Feeds consolidated_address. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `addresses.address_street_2` | Unit / level | Anything above the street line — unit, level, building name. | `text` | — | Nullable. | Feeds consolidated_address. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |

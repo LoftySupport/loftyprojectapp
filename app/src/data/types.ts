@@ -49,6 +49,15 @@ export type AuState = (typeof AU_STATES)[number];
  */
 export interface Address {
   id: Uuid;
+  /**
+   * The residence number on the plan — a job's address carries one, a project's does
+   * not (Amber, 10 Sep: a job records the project's address details *"PLUS Res #"*).
+   *
+   * Leads the consolidated address when set: "Res 1, Lot 3, 13 Tester Street,
+   * Testville, SA, 5000". Text rather than a number for the same reason `lotNumber`
+   * is — see `0105`.
+   */
+  resNumber: string | null;
   lotNumber: string | null;
   streetNumber: string | null;
   street1: string;
@@ -2081,6 +2090,8 @@ export interface ProcessRunPatch {
  * would be the app leaking its own schema into a form.
  */
 export interface NewAddress {
+  /** A job's residence number. Absent on a project's address — see `Address.resNumber`. */
+  resNumber?: string | null;
   lotNumber?: string | null;
   streetNumber?: string | null;
   /**

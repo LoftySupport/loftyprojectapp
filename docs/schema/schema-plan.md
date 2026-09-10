@@ -2315,6 +2315,92 @@ first page only**. And Word gets a spaced stamp in the page header rather than t
 ghost behind the text, because the `docx` package exposes no VML shape and hand-writing XML
 into somebody else's document part breaks on their next release.
 
+### 10 September — a job's address carries a Res number (`0105`)
+
+Amber, giving the shape of an address at each level:
+
+> *"A project needs to record the following address details at a project level: Lot # /
+> Street Number / Street Name / Suburb / Postcode / State / Council. A Job needs to
+> record all of that information PLUS Res #.*
+>
+> *when formatting the address, it should show Lot #, Street Number, Street Name, Suburb,
+> State, Postcode. Only after a Res # is added to the job, does the It go Res #, Lot #,
+> Street Number, Suburb, State, Postcode*
+>
+> *e.g Res 1, Lot 3, 13 Tester Street, Testville, SA, 5000"*
+
+**`addresses.address_res_number`, not `jobs.job_res_number`.** She describes it as one of
+the address details a job records, and the seven it joins are all on `addresses`. Putting
+it on `jobs` would split one address across two tables and take the rendering away from
+`build_consolidated_address()` — the app would have to compose `"Res 1, "` in front of a
+string the database built, everywhere an address is shown, exported or searched. The
+generated column exists so there is one answer to "what is this address".
+
+**The database does not forbid a res number on a project's address**, and that is a
+decision rather than an omission. An address row is not owned by one record —
+`address_history` exists precisely because addresses move between records and through
+time — so there is nothing on the row to hang "this one belongs to a job" from. The app
+is where the distinction lives: `AddressFields` takes a `showResNumber` flag, and only a
+job's address passes it.
+
+**Text, though she wrote "(number)".** She wrote "(number)" against Lot # too, and
+`address_lot_number` is text on purpose: Lofty's own example of a lot number is "2B"
+(`0034`). A res number is the same kind of thing — a label off a plan, usually a numeral,
+never arithmetic — so it takes the type of the two numbers either side of it. "1" stored
+as text is still "1"; if it must be strictly numeric that is a CHECK to add, not a type
+to change back. Not unique either: res numbers repeat across sites by definition, and
+whether they may repeat *within* one has not been stated.
+
+**Three changes to the format, all read off her worked example.** `Res N, ` leads when
+set; suburb, state and postcode became comma-separated (they were space-separated); and
+the trailing `, AU` is gone. The country **column** stays — this changed what is
+rendered, not what is recorded.
+
+| | reads |
+| --- | --- |
+| lot only | `Lot 3, Tester Street, Testville, SA, 5000` |
+| street only | `13 Tester Street, Testville, SA, 5000` |
+| lot + street | `Lot 3, 13 Tester Street, Testville, SA, 5000` |
+| res + lot + street | `Res 1, Lot 3, 13 Tester Street, Testville, SA, 5000` |
+| with a unit | `Unit 2, Res 1, Lot 3, 13 Tester Street, Testville, SA, 5000` |
+
+`address_street_2` — the unit line — is not in her list and is **not** dropped: it holds
+real data, and hiding a populated column is a worse answer than placing it by the rule
+already in force, which put it outermost.
+
+**This is not a display change**, which `0034` made the point of saying: `address_consolidated`
+is the column `pg_trgm` indexes and every address search reads. Dropping `, AU` removes a
+token nobody searches for; the commas sit between tokens rather than inside them, so
+trigram matching on a suburb or a street is unaffected; and `Res 1` becomes newly
+findable, which is the point.
+
+**Watched failing before trusted.** The composition was evaluated against the live
+database with each guarded thing broken in turn:
+
+| broke | bare res | typed label | unit line |
+| --- | --- | --- | --- |
+| no res normalisation | passes | **FAILS** | passes |
+| Res placed after Lot | **FAILS** | **FAILS** | **FAILS** |
+| old space-separated tail | **FAILS** | **FAILS** | **FAILS** |
+
+The first row is why the typed-label probe exists and is not decoration: with the res
+normalisation removed, the other two pass happily — their res number is already a bare
+"1" — and only the probe that types `Res 1` catches `Res Res 1`. A probe set without it
+would have reported green on a real bug.
+
+**Applied to the live database**, and the 197 existing addresses rebuilt through the
+trigger: none still carries `, AU`, none carries a res number yet, and the five probes
+rolled back leaving nothing behind.
+
+**`setJobCurrentAddress` came with it.** Amber: *"A project address needs to be
+updatable. A Job address needs to be updatable."* Only the project half existed, which
+is the wrong way round — a job's address is the one that moves, from "Lot 3" to "13
+Tester Street" when titles issue, and it is where the res number arrives months into a
+build. Three lines, deliberately identical to `setProjectCurrentAddress`: insert,
+repoint, read back. Every rule that makes it safe is a trigger rather than a check
+written in the app — `guard_original_address`, `0042`'s history trigger, and
+`guard_job_address_is_a_street`, which is the one a job has and a project does not.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

@@ -32,7 +32,53 @@ properties may change between now and then"* — so the machinery has a plausibl
 even though jobs and projects are not it. It never ran: the load rolled back whole on its
 first write, so no project, job or address in the app came from it.
 
-## 10 September, later still — a job's address gets its street number back
+## 10 September, later still — a job's address carries a Res number (`0105`)
+
+Amber gave the shape of an address at each level, with a worked example that settled more
+than it looked like it would:
+
+> *"A project needs to record the following address details at a project level: Lot # /
+> Street Number / Street Name / Suburb / Postcode / State / Council. A Job needs to record
+> all of that information PLUS Res # … e.g Res 1, Lot 3, 13 Tester Street, Testville, SA,
+> 5000"*
+
+**The column is on `addresses`, not on `jobs`** — she describes it as one of the address
+details a job records, and the seven it joins are all there. Putting it on `jobs` would
+take the rendering away from `build_consolidated_address()` and make the app compose
+`"Res 1, "` in front of a database-built string everywhere an address is shown, exported
+or searched.
+
+**The database does not forbid one on a project's address**, and that is a decision: an
+address row is not owned by one record — `address_history` exists because addresses move
+between records — so there is nothing on the row to hang "this belongs to a job" from.
+The app draws the line, with `AddressFields`' `showResNumber` flag.
+
+**Text, though she wrote "(number)"** — she wrote it against Lot # too, and
+`address_lot_number` is text because "2B" is a real lot number (`0034`).
+
+**Her example settled two things nobody had asked about:** suburb, state and postcode are
+comma-separated now (they were space-separated), and the trailing `, AU` is gone. The
+country column stays; only the rendering changed. `address_street_2` — the unit line — is
+not in her list and was *not* dropped: it holds real data, and hiding a populated column
+is worse than placing it by the rule already in force.
+
+**Applied to the live database.** All 197 addresses rebuilt through the trigger: none
+still carries `, AU`, none carries a res number yet, and the five probes rolled back
+leaving nothing behind. **The migration is applied and the app code is not deployed yet**
+— that order is deliberate and forward-compatible: the column exists and nothing reads it
+until this merges. The reverse order would have broken every address read, because
+`ADDRESS_COLUMNS` now names the column.
+
+**Watched failing, and one probe earned its place.** With the res normalisation removed,
+the bare-`1` probes pass happily and only the probe that types `Res 1` catches
+`Res Res 1`. A probe set without it would have reported green on a real bug.
+
+**`setJobCurrentAddress` came with it** — *"A project address needs to be updatable. A Job
+address needs to be updatable."* Only the project half existed, which is the wrong way
+round: a job's address is the one that moves. The job drawer now has the same Change
+control, the same words and the same warning as the project panel.
+
+## 10 September — a job's address gets its street number back
 
 Amber: *"jobs are not showing the street number on the address. they are only showing
 lot number."* One line in `splitProject` did it, and it was deliberate:
