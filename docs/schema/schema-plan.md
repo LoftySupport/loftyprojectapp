@@ -2154,6 +2154,10 @@ meant to see the schema they query.
 
 ### 10 September — a document can be a URL (`0102`)
 
+*A readable version with diagrams is published at
+<https://claude.ai/code/artifact/fe4d0004-6c9d-4fe7-96ee-41b9f773c066> — show that one to
+people; edit this file.*
+
 Amber: *"when adding a document I need to be able to save it as a url in sharepoint
 (integration coming) but for now I need to be able to add and delete them"*.
 

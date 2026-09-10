@@ -50,12 +50,18 @@ same complaint from three directions: a record's paperwork was hard to reach.
   opens `/search?q=` with the lot. That is the fix for "brodie" on the Projects page
   narrowing 117 projects to none and saying so, when Brodie Court is a job.
 
-**What has not been seen against real data.** There are no jobs or projects in the database
-yet, so every check here ran against the replay harness and the fixtures in
-`verify/behaviour.sql`. The four things worth clicking on `hub.lofty.au` once there are
-records: file a SharePoint link on a job; file the same link on its project and confirm it
-is one document on two records rather than two; remove one of them and confirm the other
-survives; and search a site name from the Projects page and land on the job.
+**What has not been seen against real data.** `0093` put 113 real projects in the database
+and there are still no jobs, so every check here ran against the replay harness and the
+fixtures in `verify/behaviour.sql`. Four things worth clicking on `hub.lofty.au`: file a
+SharePoint link on a project; file the same link on a second project and confirm it is one
+document on two records rather than two; remove one of them and confirm the other survives;
+and search "reynella" from any page — three projects carry it (1050, 1103, 1108).
+
+**Amber's own search example does not match anything yet, and that is not the search's
+fault.** "brodie" is 24 and 14 Brodie Road, Reynella — projects 1116 and 1120, six jobs
+between them — and all of it is in `import_staging_jobs`, the table Phase B never loaded.
+Nothing in `projects` or `jobs` carries the word. The search reads the live tables and will
+find those the day somebody creates them in the app.
 
 ## Where it stands, and what is next — 7 September, evening
 
