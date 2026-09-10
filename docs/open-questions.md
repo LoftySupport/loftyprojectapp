@@ -21,7 +21,33 @@ invent a value, and `CLAUDE.md` is explicit that an invented default is worse th
 
 ## Open — next question first
 
-### 1. Each publish saves another copy on the job. Is that a version history or clutter?
+### 1. "Dear [Owner Name]" — which party on the record is that?
+
+Amber, 10 September, writing a letter: *"dear [Owner Name] your property [property address]
+has just received planning approval on [planning approval date]"*.
+
+Two of those three resolve today. `{{address}}` is a record fact, and
+`{{planning_approval_received}}` is a real property definition. **The name has nowhere to
+come from**, and this is the sentence it blocks.
+
+What exists: `record_parties` attaches a contact or a company to a job or a project under a
+role, with one marked primary — the Parties panel on every record. The roles are
+**certifier, consultant, contractor, council, engineer, purchaser, real estate agent,
+supplier, surveyor, other**. There is no *owner* and no *client*.
+
+So the question is really two:
+
+- **Is the person a letter is addressed to the `purchaser`**, or is "owner" a role Lofty
+  needs that the list does not have? (A land owner who is not the purchaser is an ordinary
+  thing in this business, which is why this is not obvious from the list.)
+- **When there are several** — two purchasers on one house — does the letter take the one
+  marked primary, or every one of them joined with "and"?
+
+Nothing is guessed until this is answered. What it unblocks: a token per role, filled from
+the record's own parties, so `Dear {{purchaser_name}}` (or `{{owner_name}}`) works the same
+way `{{address}}` does.
+
+### 2. Each publish saves another copy on the job. Is that a version history or clutter?
 
 `0106` lets a document be published by saving the file against the job. Publish it, edit it,
 publish it again, and the record now holds **two** files — both called by the document's
@@ -41,21 +67,21 @@ Three ways to go, and the difference matters more the longer a job runs:
 Built as **leave it** for now, because it is the only one that discards nothing — but that is
 a default, not a decision, and the chain is cheap to add before there are real jobs on here.
 
-### 2. Does undo need a home on a phone?
+### 3. Does undo need a home on a phone?
 
 The header bar is hidden below 600px because two more 32px targets left the search box 70px
 wide, and Ctrl+Z does not exist on a phone — so a phone has no undo at all. Is that
 acceptable for now, or does it need one (a long-press on the "saved" toast is the obvious
 place)?
 
-### 3. Should the person picker offer deactivated people?
+### 4. Should the person picker offer deactivated people?
 
 `PersonSelect` lists active people only, and every assignee, owner and "who is doing this"
 control uses it. A job already assigned to somebody who has since been deactivated still
 shows their name read-only. Nobody asked for the other behaviour; this records that it was a
 choice.
 
-### 4. What is "undo" allowed to reach?
+### 5. What is "undo" allowed to reach?
 
 Today it reaches every field write that saves as you make it — team, assignee, dates, tasks,
 process runs, property values, a request's stage. It deliberately does NOT reach lifecycle
@@ -63,7 +89,7 @@ moves (forwards-only by your rule), creating, deleting, votes, follows or commen
 the right line, or should a lifecycle move be undoable within, say, a minute of making it?
 (The database refuses the way back today; allowing it is a migration, not a UI change.)
 
-### 5. Where does "clone a job" live now?
+### 6. Where does "clone a job" live now?
 
 **Blocked:** nothing is broken, but the app currently has no way to clone a job at all.
 
@@ -83,14 +109,14 @@ What is not decided is what it should look like there:
 Either way `cloneJob(id, copy)` is unchanged and manager+ still gates it. Do not delete
 `CloneDialog.tsx` as dead code before this is answered.
 
-### 6. Is the placeholder at 3.47:1 accepted, or does it get fixed?
+### 7. Is the placeholder at 3.47:1 accepted, or does it get fixed?
 
 The design system now labels it *"example text only, never a label"*, which narrows the
 exposure but does not clear it — placeholder text is still text under WCAG 1.4.3. `#757478`
 would clear it at 4.64:1 as a new `--lofty-black-70` step, leaving `--ui-border-color` at
 the 3.47:1 it was deliberately chosen for.
 
-### 7. What should five missing roadmap items say?
+### 8. What should five missing roadmap items say?
 
 Five commits carry a `Roadmap:` trailer whose text matches no checkbox in `ROADMAP.md`, so
 work that was finished has no line to tick:
@@ -105,7 +131,7 @@ They are real and shipped. What is missing is which phase each belongs to and wh
 wording above is the wording you want, and inventing roadmap text is exactly the thing
 `CLAUDE.md` forbids.
 
-### 8. How is health status worked out?
+### 9. How is health status worked out?
 
 Long-standing, from the schema plan's own risk list. *"Status is what someone sets. Health
 is what the system works out"* — from inputs nobody has defined. Kanban-by-status and
@@ -113,13 +139,13 @@ kanban-by-team work today; **kanban-by-health cannot be built until this is answ
 job at risk because it is past `expected_days`, because a required field is empty, because a
 dependency is blocked, or some combination?
 
-### 9. Does Acquisition & Development want a `project_stage` vocabulary?
+### 10. Does Acquisition & Development want a `project_stage` vocabulary?
 
 `project_stage` is nullable and costs nothing empty. Do not seed a vocabulary until they
 confirm they want one — a half-filled stage column that some projects use and others ignore
 is worse for reporting than no column.
 
-### 10. Do exported documents take Flint for their greys?
+### 11. Do exported documents take Flint for their greys?
 
 The design system retired the two cool greys on 7 September: `#f6f7f7` and `#e7e8e9` are
 gone from the mirror, and in the app Flint 100 `#f4f3ee` is the page and Flint 300 `#c6c5ba`
@@ -130,7 +156,7 @@ where the design system says Mid Grey still belongs. So: do exported documents f
 app onto Flint, or is the house format its own record? Not changed on the sync, because the
 export palette is written down as a decision (0026) and this file is where decisions change.
 
-### 11. A Xero invoice with no purchase order — job or project?
+### 12. A Xero invoice with no purchase order — job or project?
 
 Purchase orders belong to a job and a contractor (answered 8 September, question 16). A
 contractor's bill reconciles against its purchase order, so it inherits the job. What is not
@@ -139,7 +165,7 @@ consultant on the whole site. Recommended: the `invoices` table carries a job **
 (one of the two, checked), and the review queue holds anything Xero sends that matches neither.
 The alternative — everything on a job — leaves project-level money with nowhere to go.
 
-### 12. "Only managers can connect it to approved sources … this is done by superadmin"
+### 13. "Only managers can connect it to approved sources … this is done by superadmin"
 
 Question 18's answer (8 September) says both. Read as: a **superadmin registers** each approved
 source once, organisation-wide (the Copilot Studio agent, the Xero and SiteBook connections),
@@ -148,7 +174,7 @@ managers should be able to register a new source themselves, the Admin → Integ
 opens to managers for that one act and the plan's §3 changes one word. Not blocking: Phase 1
 has one source to register and a superadmin registers it either way.
 
-### 13. Fieldwork in a printed PDF — is the licence settled?
+### 14. Fieldwork in a printed PDF — is the licence settled?
 
 Amber's rule for documents (9 September, answered below): Montserrat, *"unless it has fonts
 embedded in it for print then it will be brand font"*. The PDF writer now embeds Montserrat,
@@ -163,7 +189,7 @@ clients, and web-serving the face? If yes, the PDF's two faces become Fieldwork 
 brand repository — and the Word file stays Montserrat, since Word cannot embed without the
 reader's cooperation.
 
-### 14. When the SharePoint integration lands, does Lofty Hub ever hold the file?
+### 15. When the SharePoint integration lands, does Lofty Hub ever hold the file?
 
 `0103` lets a document be a URL, so a job's contract can be filed against it today by
 pasting the link. The row that holds it (`documents`, from `0032`) has **both** a storage
@@ -182,7 +208,7 @@ It changes what has to be built and where the risk sits, so it is worth answerin
 the integration is scoped rather than during. Nothing is blocked meanwhile: filing a link
 by hand works either way.
 
-### 15. Should removing a document from a record be a manager's job?
+### 16. Should removing a document from a record be a manager's job?
 
 The Documents panel's **Remove** takes a document off *this* job or project and leaves it
 on any other record it is filed against, and leaves the file itself untouched in SharePoint.
@@ -194,7 +220,7 @@ heavier than it is. The screen already says what it does not do before it asks, 
 recording a choice rather than reporting a problem — but if the answer is *manager*, it is
 one policy line.
 
-### 16. Should a draft be openable in Word, and edit back into the app?
+### 17. Should a draft be openable in Word, and edit back into the app?
 
 Amber, 10 September: *"you can choose to open it in the app document builder or in the
 document native file (eg word, pdf. viewer etc, but it still edits and saves it)"*.
@@ -218,7 +244,7 @@ question 16.
 
 Nothing is blocked meanwhile: drafts are editable in the builder and publishing works.
 
-### 17. What is a Res #, and where does it live?
+### 18. What is a Res #, and where does it live?
 
 **Blocked:** *"please add Lot #, Res # Street # at project creation type and default to
 showing Res # until Lot number assigned"* (Amber, 10 September) cannot be built without
@@ -262,7 +288,7 @@ created until after construction"* — it always wrote `job_number_old`, the old
 number, and asking for a SiteBook number on a create form asked for one that cannot
 exist yet.
 
-### 18. Do the four views and bulk edit go back onto the older screens?
+### 19. Do the four views and bulk edit go back onto the older screens?
 
 The 10 September rules say *"all **new** pages that are tables"* get board, table, gantt
 and calendar — and, separately, *"**always** allow selection and editing on a screen for
