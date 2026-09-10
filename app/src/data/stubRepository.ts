@@ -478,6 +478,7 @@ export function createStubRepository(): Repository {
     async deleteReportDocument(): Promise<never> { throw new Error("Removing a document needs Supabase."); },
     async shareReportDocument(): Promise<never> { throw new Error("Creating a share link needs Supabase."); },
     async unshareReportDocument(): Promise<never> { throw new Error("Revoking a share link needs Supabase."); },
+    async publishReportDocument(): Promise<never> { throw new Error("Publishing a document needs Supabase."); },
 
     // ---- what is filed on a record, and where it lives (0032 / 0103) ------
     // Same stance again: nothing to read, and a write that says what it needs. An

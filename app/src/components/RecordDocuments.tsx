@@ -3,7 +3,13 @@ import { Link } from "react-router-dom";
 import { Button, Text, TextField } from "@vibe/core";
 import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
-import { DOCUMENT_CATEGORIES, type DocumentCategory, type RecordDocument } from "../data/types";
+import {
+  DOCUMENT_CATEGORIES,
+  REPORT_DOCUMENT_STATE_LABELS,
+  reportDocumentState,
+  type DocumentCategory,
+  type RecordDocument
+} from "../data/types";
 import { Select } from "./Select";
 import { LoadProblem } from "./SearchNotices";
 import { Problem } from "./Form";
@@ -53,11 +59,21 @@ import { CollapsiblePanel } from "./CollapsiblePanel";
  */
 export function RecordDocuments({
   jobId,
-  projectId
+  projectId,
+  folderUrl
 }: {
   /** Exactly one of these. A document is about a job or about a project, never both. */
   jobId?: string | null;
   projectId?: number | null;
+  /**
+   * The record's own SharePoint folder (0040), used to pre-fill where a document is being
+   * published to. Amber, 10 September: the location *"should default to job file"*.
+   *
+   * Passed in rather than read here: the drawer and the project page both already hold
+   * the record, and a second query for a column they have would be a round trip to learn
+   * something the caller knows.
+   */
+  folderUrl?: string | null;
 }) {
   const { can } = usePermission();
   const repo = useRepository();
@@ -92,6 +108,9 @@ export function RecordDocuments({
   const [problem, setProblem] = useState<string | null>(null);
   /** Which row is asking "are you sure" — id, or null. */
   const [confirming, setConfirming] = useState<string | null>(null);
+  /** Which built document is being published — its id, or null. */
+  const [publishing, setPublishing] = useState<string | null>(null);
+  const [publishUrl, setPublishUrl] = useState("");
 
   const total = documents.length + filed.length;
 
@@ -211,18 +230,142 @@ export function RecordDocuments({
         </Text>
       ) : (
         <ul className="record-documents">
-          {documents.map(d => (
+          {documents.map(d => {
+            const state = reportDocumentState(d);
+            return (
             <li key={d.id}>
+              {/* TWO WAYS IN, and which ones exist depends on the document (Amber, 10 Sep:
+                  "you can choose to open it in the app document builder or in the document
+                  native file"). The builder is always there. The file only exists once it
+                  has been published somewhere — before that there is nothing to open, and
+                  a second link that downloaded a copy would be a dead end rather than a
+                  way in: a downloaded .docx does not save back here. */}
               <Link to={`/tools/document-builder?open=${encodeURIComponent(d.id)}`}>
                 {d.title}
               </Link>
+
+              <span
+                className={`doc-state is-${state}`}
+                title={
+                  state === "published"
+                    ? "Published to SharePoint. Editing it here takes it back to draft."
+                    : state === "edited-since-published"
+                      ? "Edited since it was published — what is in SharePoint is out of date."
+                      : "Not published yet. Every copy carries the DRAFT watermark."
+                }
+              >
+                {REPORT_DOCUMENT_STATE_LABELS[state]}
+              </span>
+
               {/* A shared document is the thing somebody outside Lofty can see, so it is
                   worth saying on the row rather than only inside the builder. */}
               {d.shareToken && (
                 <span className="record-documents-note">shared</span>
               )}
+
+              {d.publishedUrl && (
+                // Opens in SharePoint, which is where Word Online or the desktop app edits
+                // it and saves it back — Microsoft doing the round trip, not this app.
+                <a href={d.publishedUrl} target="_blank" rel="noreferrer noopener">
+                  Open the file
+                </a>
+              )}
+
+              {can("user") && (
+                publishing === d.id ? (
+                  <span className="doc-publish">
+                    <TextField
+                      id={`publish-${d.id}`}
+                      title="Where it was saved in SharePoint"
+                      placeholder="https://lofty.sharepoint.com/…"
+                      value={publishUrl}
+                      onChange={setPublishUrl}
+                      size="small"
+                      inputAriaLabel={`SharePoint address for ${d.title}`}
+                    />
+                    <Button
+                      size="xs"
+                      disabled={busy || !publishUrl.trim()}
+                      onClick={() => run(async () => {
+                        await repo.publishReportDocument(d.id, { url: publishUrl.trim() });
+                        setPublishing(null);
+                        setPublishUrl("");
+                      })}
+                    >
+                      Publish
+                    </Button>
+                    <Button size="xs" kind="tertiary" onClick={() => setPublishing(null)}>
+                      Cancel
+                    </Button>
+                    <Text type="text3" color="secondary" element="p" ellipsis={false} className="doc-publish-hint">
+                      Save the document into SharePoint first, then paste the address it
+                      ends up at. {folderUrl
+                        ? "Pre-filled with this record's folder — replace it with the document's own address."
+                        : "This record has no SharePoint folder linked yet, so there is nothing to pre-fill."}
+                      {" "}Publishing drops the DRAFT watermark; editing it here brings the
+                      watermark back and you will need to publish it again.
+                    </Text>
+                  </span>
+                ) : (
+                  <Button
+                    size="xs"
+                    kind="tertiary"
+                    disabled={busy}
+                    onClick={() => {
+                      setProblem(null);
+                      setPublishing(d.id);
+                      // The place it went last time, else the record's own folder — which
+                      // is Amber's "should default to job file". Neither is the document's
+                      // final address, so both are a starting point rather than an answer.
+                      setPublishUrl(d.publishedUrl ?? folderUrl ?? "");
+                    }}
+                  >
+                    {state === "published" ? "Re-publish" : d.publishedUrl ? "Publish again" : "Publish"}
+                  </Button>
+                )
+              )}
+
+              {/* Deleting a built document had no control anywhere in the app until now:
+                  the seam and the policy existed and nothing called them. Author or admin,
+                  which is what the policy allows — the app only hides the button. */}
+              {can("user") && (
+                confirming === d.id ? (
+                  <span className="record-documents-confirm">
+                    <Text type="text3" color="secondary" element="span">
+                      Delete it? {d.publishedUrl
+                        ? "The copy in SharePoint stays."
+                        : "This is the only copy."}
+                    </Text>
+                    <Button
+                      size="xs"
+                      kind="tertiary"
+                      disabled={busy}
+                      onClick={() => run(async () => {
+                        await repo.deleteReportDocument(d.id);
+                        setConfirming(null);
+                      })}
+                    >
+                      Delete
+                    </Button>
+                    <Button size="xs" kind="tertiary" onClick={() => setConfirming(null)}>
+                      Keep
+                    </Button>
+                  </span>
+                ) : (
+                  <Button
+                    size="xs"
+                    kind="tertiary"
+                    disabled={busy}
+                    aria-label={`Delete ${d.title}`}
+                    onClick={() => { setConfirming(d.id); setProblem(null); }}
+                  >
+                    Delete
+                  </Button>
+                )
+              )}
             </li>
-          ))}
+            );
+          })}
 
           {filed.map(d => (
             <li key={d.linkId}>

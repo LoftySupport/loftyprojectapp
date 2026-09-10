@@ -493,7 +493,11 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
               and maintenance reports made in the Document Builder. Amber, 4 September:
               *"all documents need to be associated to a job or project and they are
               listed on that project"*. This is where they are listed. */}
-          <RecordDocuments jobId={job.jobNumber} />
+          {/* The job's own folder is where a document published from here should go by
+              default (Amber, 10 Sep: "should default to job file"). Its project's folder
+              is deliberately not the fallback: a document about one lot filed at the
+              project would be findable by nobody looking for it. */}
+          <RecordDocuments jobId={job.jobNumber} folderUrl={job.sharepointUrl} />
           </>)}
 
           {(!expanded || tab === 1) && (<>

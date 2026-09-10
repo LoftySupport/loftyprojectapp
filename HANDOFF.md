@@ -32,6 +32,39 @@ properties may change between now and then"* — so the machinery has a plausibl
 even though jobs and projects are not it. It never ran: the load rolled back whole on its
 first write, so no project, job or address in the app came from it.
 
+## 10 September, later — a document is a draft until you publish it
+
+Amber, after #65 merged. Documents built in the app are editable and pull in live record
+data, but the thing that gets sent lives in SharePoint — so until it is published, a
+document is a **draft** and says so on every copy of itself.
+
+- **`0104`** puts `published_at` / `published_by` / `published_url` on `report_documents`,
+  with a trigger that stamps the publisher from the session and **clears the publication
+  whenever the layout or title changes**. Editing reverts it to draft, and the database
+  enforces that rather than each caller remembering to.
+- **The DRAFT watermark** reaches all four renderers — screen, Print/Save PDF, the `.html`
+  download and the `.docx`. `npm run check:watermark` proves all four and proves a
+  published document comes out clean; it runs in CI.
+- **Publish** takes the SharePoint address, pre-filled from the record's own folder
+  (`0040`), and drops the watermark. Re-publishing after an edit pre-fills where it went
+  last time.
+- **Deleting a built document was impossible until now** — `deleteReportDocument()` and its
+  author-or-admin policy both existed and nothing in the app called them. The Documents
+  panel has Delete on every built row.
+
+**Two known limits, stated rather than left to be found.** The screen and print mark is a
+fixed tiled layer: Chromium repeats it on every printed page, **Firefox paints it on the
+first page only**. And Word gets a spaced stamp in the page header rather than a diagonal
+ghost, because the `docx` package exposes no VML shape.
+
+**One thing Amber asked for that is not built, and cannot be yet.** *"you can choose to
+open it in the app document builder or in the document native file (eg word, pdf. viewer
+etc, but it still edits and saves it)"*. Opening the **published** file does exactly that —
+the SharePoint link opens in Word Online or the desktop app and saves back, with Microsoft
+doing the round trip. A **draft** has no file to open: downloading a `.docx` gives a copy
+that does not save back here, so the panel offers the builder and nothing else until the
+document is published. That is open question 18.
+
 ## 10 September — documents can be links, and search leaves the page it is on
 
 Three things Amber asked for on 10 September, all shipped together because they are the
