@@ -33,7 +33,7 @@ const ROUTES = ["/", "/dashboard",
                 // URL — so a green line for this route does not mean the popup is
                 // responsive; its width is capped against the viewport by hand.
                 "/search?q=court",
-                "/projects", "/jobs", "/reports", "/setup/properties", "/setup/processes", "/contacts", "/setup/contacts", "/setup/notifications", "/maintenance", "/setup/maintenance",
+                "/projects", "/jobs", "/tasks", "/reports", "/setup/properties", "/setup/processes", "/contacts", "/setup/contacts", "/setup/notifications", "/maintenance", "/setup/maintenance",
                 "/admin", "/settings", "/setup", "/setup/dictionary", "/setup/wiring",
                 // Tools. Three lanes, three layouts, and each is its own URL now — a
                 // Get Started grid over a table, with different cards and a different

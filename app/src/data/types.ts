@@ -1195,6 +1195,8 @@ export interface Task {
   assigneeId: Uuid | null;
   status: TaskStatus;
   dueDate: IsoDate | null;
+  /** When it is planned to be worked, as distinct from `dueDate` (0102). Does not feed health. */
+  scheduledDate: IsoDate | null;
   /** The single source of truth for "is it done". There is no boolean beside it. */
   completedAt: IsoDateTime | null;
   completedBy: Uuid | null;
@@ -1259,6 +1261,19 @@ export interface TaskEntry extends Task {
   checklistDone: number;
   subtaskTotal: number;
   subtaskDone: number;
+  /** Who typed it in, or who moved the stage that instantiated it (0102). */
+  createdByName: string | null;
+  /**
+   * The process template it was instantiated from, resolved (0102) — null for a
+   * typed-in task. The Tasks board's Process column and its "system-generated vs
+   * typed in" distinction both read this rather than the bare `processRunId`.
+   */
+  processId: Uuid | null;
+  processName: string | null;
+  /** The job's address, or the project's name — whichever the task sits on (0102). */
+  recordName: string | null;
+  /** The job's or the project's current lifecycle stage (0102). */
+  recordStage: StageName | null;
 }
 
 /** What `task_display` derives from today against the two dates. Never stored. */
@@ -1321,6 +1336,7 @@ export interface NewTask {
   owningTeam?: TeamId | null;
   assigneeId?: Uuid | null;
   dueDate?: IsoDate | null;
+  scheduledDate?: IsoDate | null;
   isExternal?: boolean;
   parentTaskId?: Uuid | null;
   expectedDays?: number | null;
@@ -1335,6 +1351,7 @@ export interface TaskPatch {
   owningTeam?: TeamId | null;
   assigneeId?: Uuid | null;
   dueDate?: IsoDate | null;
+  scheduledDate?: IsoDate | null;
   isExternal?: boolean;
   position?: number;
   startedAt?: IsoDateTime | null;
@@ -1457,7 +1474,7 @@ export interface Doc {
   /** Nullable: a row can exist for a document Lofty expects but has not received. */
   storagePath: string | null;
   /**
-   * Where it is when Lofty does not hold the bytes — a SharePoint link (0102).
+   * Where it is when Lofty does not hold the bytes — a SharePoint link (0103).
    *
    * Independent of `storagePath`, not an alternative to it: an upload has a path, a link
    * has a URL, a document that is expected but has not arrived has neither, and one the

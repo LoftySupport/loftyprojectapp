@@ -1,4 +1,4 @@
--- 0102 — a document can be a URL.
+-- 0103 — a document can be a URL.
 --
 -- Amber, 10 September: *"when adding a document I need to be able to save it as a url in
 -- sharepoint (integration coming) but for now I need to be able to add and delete them"*.
@@ -204,7 +204,7 @@ begin
     -- Phase B never ran, so there may be no job to attach to. Say so rather than
     -- reporting a pass: the reaper is the one thing here a constraint cannot express,
     -- and "skipped" and "proved" must not look the same in the log.
-    raise notice '0102: no jobs yet — the reaper was NOT proved on this database. The URL and uniqueness checks were.';
+    raise notice '0103: no jobs yet — the reaper was NOT proved on this database. The URL and uniqueness checks were.';
     delete from documents where document_id = doc_id;
     return;
   end if;

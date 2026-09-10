@@ -301,21 +301,23 @@ type CommentRow = {
  * `tasks`, and re-read the row through the view.
  */
 const TASK_COLUMNS =
-  "task_id, job_id, project_id, task_name, task_description, parent_task_id, task_position, task_owning_team, task_assignee_id, task_status, task_due_date, task_completed_at, task_completed_by, task_is_external, process_run_id, process_task_id, task_started_at, task_expected_days, task_at_risk_lead_days, task_created_at, task_created_by, task_updated_at, task_updated_by, task_assignee_name, task_completed_by_name, task_due_effective, task_at_risk_date, task_health, task_checklist_total, task_checklist_done, task_subtask_total, task_subtask_done";
+  "task_id, job_id, project_id, task_name, task_description, parent_task_id, task_position, task_owning_team, task_assignee_id, task_status, task_due_date, task_scheduled_date, task_completed_at, task_completed_by, task_is_external, process_run_id, process_task_id, task_started_at, task_expected_days, task_at_risk_lead_days, task_created_at, task_created_by, task_updated_at, task_updated_by, task_assignee_name, task_completed_by_name, task_created_by_name, task_process_id, task_process_name, task_record_name, task_record_stage, task_due_effective, task_at_risk_date, task_health, task_checklist_total, task_checklist_done, task_subtask_total, task_subtask_done";
 
 type TaskRow = {
   task_id: string; job_id: string | null; project_id: number | null;
   task_name: string; task_description: string | null;
   parent_task_id: string | null; task_position: number;
   task_owning_team: string | null; task_assignee_id: string | null;
-  task_status: string; task_due_date: string | null;
+  task_status: string; task_due_date: string | null; task_scheduled_date: string | null;
   task_completed_at: string | null; task_completed_by: string | null;
   task_is_external: boolean;
   process_run_id: string | null; process_task_id: string | null;
   task_started_at: string | null; task_expected_days: number | null; task_at_risk_lead_days: number | null;
   task_created_at: string; task_created_by: string | null;
   task_updated_at: string; task_updated_by: string | null;
-  task_assignee_name: string | null; task_completed_by_name: string | null;
+  task_assignee_name: string | null; task_completed_by_name: string | null; task_created_by_name: string | null;
+  task_process_id: string | null; task_process_name: string | null;
+  task_record_name: string | null; task_record_stage: string | null;
   task_due_effective: string | null; task_at_risk_date: string | null;
   task_health: TaskEntry["health"];
   task_checklist_total: number; task_checklist_done: number;
@@ -377,6 +379,7 @@ function toTask(r: TaskRow): TaskEntry {
     assigneeName: r.task_assignee_name,
     status: r.task_status as TaskStatus,
     dueDate: r.task_due_date,
+    scheduledDate: r.task_scheduled_date,
     completedAt: r.task_completed_at,
     completedBy: r.task_completed_by,
     completedByName: r.task_completed_by_name,
@@ -395,6 +398,11 @@ function toTask(r: TaskRow): TaskEntry {
     processTaskId: r.process_task_id,
     createdAt: r.task_created_at,
     createdBy: r.task_created_by,
+    createdByName: r.task_created_by_name,
+    processId: r.task_process_id,
+    processName: r.task_process_name,
+    recordName: r.task_record_name,
+    recordStage: r.task_record_stage as StageName | null,
     updatedAt: r.task_updated_at,
     updatedBy: r.task_updated_by
   };
@@ -2193,18 +2201,25 @@ export function createSupabaseRepository(): Repository {
 
     // ---- tasks -----------------------------------------------------------
 
-    async listTasks(opts: { jobId?: string; projectId?: number }): Promise<TaskEntry[]> {
+    async listTasks(opts: {
+      jobId?: string; projectId?: number; assigneeId?: string; teams?: TeamId[]; all?: boolean;
+    }): Promise<TaskEntry[]> {
       let q = client.from("task_display").select(TASK_COLUMNS);
-      // Exactly one parent, the same rule the CHECK enforces. Asking with neither would
-      // quietly return every task in the company.
+      // Exactly one scope. Asking with none would quietly return every task in the
+      // company — the Tasks board's "All tasks" tab does exactly that, which is why
+      // `all` exists, but only as an explicit ask rather than the fallthrough.
       if (opts.jobId != null) q = q.eq("job_id", opts.jobId);
       else if (opts.projectId != null) q = q.eq("project_id", opts.projectId);
-      else throw new Error("listTasks needs a jobId or a projectId.");
+      else if (opts.assigneeId != null) q = q.eq("task_assignee_id", opts.assigneeId);
+      else if (opts.teams != null) q = q.in("task_owning_team", opts.teams);
+      else if (opts.all) { /* every task — nothing to filter by */ }
+      else throw new Error("listTasks needs a scope: a job, a project, an assignee, a team, or all.");
 
       const { data, error } = await q
         // Position first because somebody chose it; created_at breaks the tie, so two
         // tasks added at position 0 stay in the order they were typed rather than
-        // swapping places between reads.
+        // swapping places between reads. Meaningless across records (the Tasks board
+        // sorts itself), harmless as a tiebreak.
         .order("task_position", { ascending: true })
         .order("task_created_at", { ascending: true });
       if (error) throw error;
@@ -2227,6 +2242,7 @@ export function createSupabaseRepository(): Repository {
           task_owning_team: task.owningTeam ?? null,
           task_assignee_id: task.assigneeId ?? null,
           task_due_date: task.dueDate ?? null,
+          task_scheduled_date: task.scheduledDate ?? null,
           task_is_external: task.isExternal ?? false,
           parent_task_id: task.parentTaskId ?? null,
           task_expected_days: task.expectedDays ?? null,
@@ -2248,6 +2264,7 @@ export function createSupabaseRepository(): Repository {
       if (patch.owningTeam !== undefined) row.task_owning_team = patch.owningTeam;
       if (patch.assigneeId !== undefined) row.task_assignee_id = patch.assigneeId;
       if (patch.dueDate !== undefined) row.task_due_date = patch.dueDate;
+      if (patch.scheduledDate !== undefined) row.task_scheduled_date = patch.scheduledDate;
       if (patch.isExternal !== undefined) row.task_is_external = patch.isExternal;
       if (patch.position !== undefined) row.task_position = patch.position;
       if (patch.startedAt !== undefined) row.task_started_at = patch.startedAt;
@@ -3467,7 +3484,7 @@ export function createSupabaseRepository(): Repository {
       return toReportDocument(data[0] as unknown as ReportDocumentRow);
     },
 
-    // ---- what is filed on a record, and where it lives (0032 / 0102) ------
+    // ---- what is filed on a record, and where it lives (0032 / 0103) ------
 
     /**
      * The documents attached to one record.
@@ -3509,7 +3526,7 @@ export function createSupabaseRepository(): Repository {
      *
      * NOT A TRANSACTION, and that is a real limitation rather than an oversight. PostgREST
      * has no client-side transaction, so a document row can be created and its link then
-     * refused — leaving a pointer with no attachments. 0102's reaper does not help there:
+     * refused — leaving a pointer with no attachments. 0103's reaper does not help there:
      * it fires on DELETE of a link, and no link was ever made. The honest fallback is to
      * report the failure with the document named, which is what the catch below does; the
      * row is then reachable by URL, so refiling it attaches rather than duplicating.
@@ -3575,7 +3592,7 @@ export function createSupabaseRepository(): Repository {
      *
      * The link only. 0032: *"detaching is not deleting: the link goes, the file stays"* —
      * and where nothing else points at the document and Lofty holds no bytes for it,
-     * 0102's trigger removes the row too, inside this same delete. Nothing in SharePoint
+     * 0103's trigger removes the row too, inside this same delete. Nothing in SharePoint
      * is touched either way, which is what the screen says before it asks.
      */
     async removeRecordDocument(linkId: string): Promise<void> {
@@ -3690,7 +3707,7 @@ export function createSupabaseRepository(): Repository {
      * would need a UNION whose column list is the widest of them, recreated every time
      * any one changes, and — because each table's RLS differs — a `security_invoker`
      * chain nobody could reason about. Six narrow reads under the caller's own session
-     * keep each table's own policy doing its own job, which is the same argument 0102
+     * keep each table's own policy doing its own job, which is the same argument 0103
      * makes for not merging document links into report_documents.
      *
      * EVERY TERM MUST APPEAR, WHICH IS WHY THE FILTERS ARE CHAINED. Each `.or()` is one

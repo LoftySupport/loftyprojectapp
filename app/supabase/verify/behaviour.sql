@@ -298,7 +298,7 @@ select d.document_name,
 from documents d join document_links l using (document_id)
 where d.document_name like 'Soil report%' group by d.document_name;
 
-\echo '--- 30b. a document can be a URL, and one URL is one document (0102)'
+\echo '--- 30b. a document can be a URL, and one URL is one document (0103)'
 -- The other shape of document row: no bytes in Storage, an https address instead.
 insert into documents (document_name, document_category, document_url)
 values ('Contract — 9106','contract','https://lofty.sharepoint.com/sites/projects/9106/contract.pdf');

@@ -170,7 +170,7 @@ reader's cooperation.
 
 ### 16. When the SharePoint integration lands, does Lofty Hub ever hold the file?
 
-`0102` lets a document be a URL, so a job's contract can be filed against it today by
+`0103` lets a document be a URL, so a job's contract can be filed against it today by
 pasting the link. The row that holds it (`documents`, from `0032`) has **both** a storage
 path and a URL, and nothing stops both being set — deliberately, because the integration
 might legitimately be the case for it.

@@ -255,7 +255,7 @@ BEGIN
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a document link has exactly one parent';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on document link parents (%)', SQLERRM; END;
 
-  -- 0102. What people actually paste when they have the document open rather than the
+  -- 0103. What people actually paste when they have the document open rather than the
   -- link: a path off the file server.
   BEGIN
     INSERT INTO documents (document_name, document_url)

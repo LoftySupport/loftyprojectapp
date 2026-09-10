@@ -26,7 +26,7 @@ import { CollapsiblePanel } from "./CollapsiblePanel";
  *   **Filed** — a row in 0032's `documents`, attached here by a `document_links` row.
  *   Amber, 10 September: *"when adding a document I need to be able to save it as a url
  *   in sharepoint (integration coming) but for now I need to be able to add and delete
- *   them"*, which 0102 made possible by giving `documents` a URL. The contract, the
+ *   them"*, which 0103 made possible by giving `documents` a URL. The contract, the
  *   survey, the engineer's certificate — things that already exist and that nobody is
  *   going to rebuild in a block editor to make findable.
  *

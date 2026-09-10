@@ -1497,6 +1497,19 @@ only overdue. `task_display` derives health the way `process_run_display` does;
 `stage_completion` counts milestones per record and stage once, for the board, the drawer
 and the report.
 
+**0102 gives tasks a board of their own** — every task, across every job and project,
+filtered and sorted the way the Jobs board is, opening on "my tasks" with a manager's team
+on top and three slices of the due-date question (overdue, due today, due this week). Two
+things `task_display` did not carry: `task_scheduled_date`, a plain nullable date beside
+`task_due_date` for when the task is *planned* to be worked rather than when it is due —
+it does not feed `task_health`, which stays anchored to the due date; and the record and
+process a task sits on, resolved rather than left as bare keys — `job_display`'s own
+address and stage for a job task, `projects`' name and stage for a project task, and
+`process_runs` → `processes`' name for a task instantiated from a run, null for one somebody
+typed in. The last of those is also how the board reads Amber's distinction between the two
+kinds of task without a separate column: a resolved process name is a system-generated task,
+and its absence is a person's own.
+
 ### Notifications: five tables, one outbox
 
 `notification_types` (defaults per type) · `notification_rules` (audience: assignee, owning
@@ -2152,7 +2165,7 @@ Two things are worth keeping straight about it:
 `pg_graphql_authenticated_table_exposed` (94) is unchanged and correct — signed-in staff are
 meant to see the schema they query.
 
-### 10 September — a document can be a URL (`0102`)
+### 10 September — a document can be a URL (`0103`)
 
 *A readable version with diagrams is published at
 <https://claude.ai/code/artifact/fe4d0004-6c9d-4fe7-96ee-41b9f773c066> — show that one to
@@ -2181,7 +2194,7 @@ SharePoint link than for an upload: the contract for project 1042 is one documen
 place, and it is relevant to the project and to the one job it governs. A per-record table
 would have made those two rows two documents.
 
-So `0102` adds `documents.document_url`, and everything `0032` already built — the links,
+So `0103` adds `documents.document_url`, and everything `0032` already built — the links,
 the nine categories, the supersedes chain, the RLS, the audit triggers — works on it
 unchanged.
 
@@ -2190,7 +2203,7 @@ unchanged.
 | `storage_path` | `url` | What it is |
 | --- | --- | --- |
 | set | null | An upload. Lofty holds the bytes. (`0032`) |
-| null | set | A pointer. The bytes are in SharePoint. (`0102`) |
+| null | set | A pointer. The bytes are in SharePoint. (`0103`) |
 | null | null | Expected, not arrived — *"the signed contract"* as an outstanding item. (`0032`) |
 
 Both set is allowed and deliberately not constrained against: the coming integration is the
