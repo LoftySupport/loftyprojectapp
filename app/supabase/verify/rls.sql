@@ -1946,6 +1946,88 @@ begin
   if n = 1 then raise notice 'ok  a user deletes their own document';
   else raise warning 'FAIL: a user could not delete their own document'; end if;
 end $$;
+
+-- ---- publication, and the edit that takes it back (0104) --------------------
+-- HERE rather than in the migration, and the reason is the whole point of this file:
+-- guard_report_document_publication() returns early when auth.uid() is null, which is
+-- every statement in a migration. A probe there would watch nothing happen and report a
+-- pass. This runs as `authenticated` with a real subject, which is the only place the
+-- trigger's body is reached at all.
+do $$
+declare
+  doc uuid;
+  pub timestamptz;
+  who uuid;
+  url text;
+begin
+  insert into report_documents (report_document_title, report_document_layout)
+  values ('__rls__ publication', '{"widgets": []}'::jsonb)
+  returning report_document_id into doc;
+
+  -- Publishing. The caller sends an arbitrary timestamp and no publisher; the guard is
+  -- supposed to overwrite the first and fill in the second from the session.
+  update report_documents
+     set report_document_published_url = 'https://lofty.sharepoint.com/sites/jobs/1103/report.docx',
+         report_document_published_at = timestamptz '2001-01-01'
+   where report_document_id = doc;
+  select report_document_published_at, report_document_published_by
+    into pub, who from report_documents where report_document_id = doc;
+
+  if pub is null then
+    raise warning 'FAIL: publishing a document did not stamp it';
+  elsif pub = timestamptz '2001-01-01' then
+    raise warning 'FAIL: the guard took the caller''s word for when a document was published';
+  else raise notice 'ok  publishing stamps the time from the database, not the caller'; end if;
+
+  if who = current_profile_id() then raise notice 'ok  the publisher is read from the session';
+  else raise warning 'FAIL: published_by was % rather than the session''s profile', who; end if;
+
+  -- THE RULE OF 0104. Amber, 10 Sep: "if editing it in the app it reverts to draft".
+  -- The layout changes and nothing else; the publication must go with it.
+  update report_documents
+     set report_document_layout = '{"widgets": [{"id": "a", "kind": "text", "options": {}}]}'::jsonb
+   where report_document_id = doc;
+  select report_document_published_at, report_document_published_url
+    into pub, url from report_documents where report_document_id = doc;
+
+  if pub is null then raise notice 'ok  editing the layout reverts a published document to draft';
+  else raise warning 'FAIL: a published document survived being edited'; end if;
+
+  -- And the address stays, so re-publishing can pre-fill it. This is the half that would
+  -- be lost by writing the revert as "clear everything", which is the obvious way to
+  -- write it.
+  if url is not null then raise notice 'ok  the SharePoint address survives the revert';
+  else raise warning 'FAIL: the revert threw away where the document had been published'; end if;
+
+  -- The title is the other edit that counts.
+  update report_documents
+     set report_document_published_at = now(), report_document_published_url = 'https://lofty.sharepoint.com/x'
+   where report_document_id = doc;
+  update report_documents set report_document_title = '__rls__ publication, renamed'
+   where report_document_id = doc;
+  select report_document_published_at into pub from report_documents where report_document_id = doc;
+  if pub is null then raise notice 'ok  renaming it reverts it too';
+  else raise warning 'FAIL: a published document survived being renamed'; end if;
+
+  -- And what must NOT revert it: sharing. A share link changes who can see the document,
+  -- not what it says, and treating that as an edit would take the publication back every
+  -- time somebody sent one — which is the moment they most need it to stand.
+  update report_documents
+     set report_document_published_at = now(), report_document_published_url = 'https://lofty.sharepoint.com/x'
+   where report_document_id = doc;
+  -- With a snapshot, because 0095 makes a share without one unwritable — which is the
+  -- point of that migration and not an obstacle to work around here.
+  update report_documents
+     set report_document_share_token = '__rls__token',
+         report_document_share_expires_at = now() + interval '7 days',
+         report_document_share_snapshot = '{"report": {"title": "__rls__", "sections": []}}'::jsonb
+   where report_document_id = doc;
+  select report_document_published_at into pub from report_documents where report_document_id = doc;
+  if pub is not null then raise notice 'ok  sharing a published document does not revert it';
+  else raise warning 'FAIL: sharing took the publication back'; end if;
+
+  delete from report_documents where report_document_id = doc;
+end $$;
 reset role;
 reset request.jwt.claim.sub;
 

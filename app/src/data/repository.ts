@@ -838,6 +838,24 @@ export interface Repository {
   shareReportDocument(id: string, input: NewReportDocumentShare): Promise<ReportDocument>;
   /** Revoke the link. The snapshot survives, so "what did we send them" does too. */
   unshareReportDocument(id: string): Promise<ReportDocument>;
+  /**
+   * Send a built document somewhere, and stop it being a draft (0104).
+   *
+   * Amber, 10 September: *"as soon as it is ready to share or publish it, you choose the
+   * sharepoint location to save it to (which should default to job file) … until
+   * integration is in place add in the draft watermark and when ready to publish you have
+   * to add in the sharepoint link which replaces the draft document"*.
+   *
+   * The URL is where it went. Nothing is uploaded — somebody has saved the file into
+   * SharePoint themselves and is recording where — so this method records a fact rather
+   * than performing a transfer, and it will keep that shape when the integration lands.
+   *
+   * THERE IS NO `unpublish`. Editing the document is what takes the publication back, and
+   * the database does it (0104's trigger) rather than the caller: the builder autosaves,
+   * the panel writes and the importer writes, and a rule each of them has to remember is
+   * a rule the next one will forget.
+   */
+  publishReportDocument(id: string, input: { url: string }): Promise<ReportDocument>;
 
   /**
    * The documents attached to one job or one project — 0032's `documents` joined through
@@ -1103,6 +1121,7 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "deleteReportDocument",
   "shareReportDocument",
   "unshareReportDocument",
+  "publishReportDocument",
   "listRecordDocuments",
   "addDocumentUrl",
   "removeRecordDocument",
@@ -1311,6 +1330,7 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   deleteReportDocument: "report_documents",
   shareReportDocument: "report_documents",
   unshareReportDocument: "report_documents",
+  publishReportDocument: "report_documents",
   listRecordDocuments: "documents + document_links",
   addDocumentUrl: "documents + document_links",
   removeRecordDocument: "document_links",

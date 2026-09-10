@@ -2682,6 +2682,10 @@ code { overflow-wrap: anywhere; }
 .record-documents li {
   display: flex;
   align-items: baseline;
+  /* Wraps: a built document's row now carries a title, a state chip, two ways to open
+     it, Publish and Delete, and the drawer is 320px at its narrowest. Squeezing them
+     onto one line truncates the title, which is the one part that identifies the row. */
+  flex-wrap: wrap;
   gap: var(--space-8);
   padding: var(--space-8) 0;
   border-top: 1px solid var(--layout-border-color);
@@ -2719,6 +2723,40 @@ code { overflow-wrap: anywhere; }
 }
 .search-hits li:first-child { border-top: 0; }
 .search-hit-sub { color: var(--secondary-text-color); }
+
+/* ---- draft until published (0104) -----------------------------------------
+   A word, not a colour alone: the three states have to be legible to somebody who
+   cannot tell the chips apart, and "Draft — edited since publishing" is the one
+   that most needs reading rather than glancing at. */
+.doc-state {
+  font-size: 11px;
+  letter-spacing: .04em;
+  padding: 1px var(--space-4);
+  border-radius: var(--border-radius-small, 3px);
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+/* Orange for a draft, because Crisp Orange is what the watermark itself is set in
+   and the chip should read as the same fact. */
+.doc-state.is-draft { color: var(--lofty-orange-strong); background: var(--lofty-orange-tint); }
+/* The stale state is the loud one: a published document that has since been edited
+   is the only case where somebody may be reading something out of date. */
+.doc-state.is-edited-since-published { color: var(--negative-color); background: var(--negative-color-selected); }
+.doc-state.is-published { color: var(--positive-color); background: var(--positive-color-selected); }
+
+.doc-publish {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  flex: 1 1 100%;
+  margin-top: var(--space-8);
+  padding: var(--space-8);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-small, 4px);
+}
+.doc-publish > div:first-of-type { flex: 1 1 240px; min-width: 180px; }
+.doc-publish-hint { flex: 1 0 100%; margin: 0; }
 
 /* ---- filing a document that lives in SharePoint (0103) --------------------
    Two fields and a button. Stacked below 520px rather than squeezed: a URL field

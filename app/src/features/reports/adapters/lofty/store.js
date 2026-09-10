@@ -96,6 +96,11 @@ const documentToRow = (d) => ({
   jobId: d.jobId,
   projectId: d.projectId,
   shareExpiresAt: d.shareExpiresAt,
+  // Publication (0104). Carried on the row so the builder can watermark live: its
+  // autosave is what reverts a published document to a draft, and a page waiting for a
+  // list refresh would show a clean preview of something that had just become a draft.
+  publishedAt: d.publishedAt,
+  publishedUrl: d.publishedUrl,
   createdBy: d.createdBy,
   updatedBy: d.updatedBy
 });

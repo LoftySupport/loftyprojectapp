@@ -199,7 +199,31 @@ heavier than it is. The screen already says what it does not do before it asks, 
 recording a choice rather than reporting a problem — but if the answer is *manager*, it is
 one policy line.
 
-### 18. Do the four views and bulk edit go back onto the older screens?
+### 18. Should a draft be openable in Word, and edit back into the app?
+
+Amber, 10 September: *"you can choose to open it in the app document builder or in the
+document native file (eg word, pdf. viewer etc, but it still edits and saves it)"*.
+
+Half of that is built and works. A **published** document opens at its SharePoint address,
+where Word Online or the desktop app edits it and saves it back — Microsoft doing the round
+trip, not Lofty Hub.
+
+The other half cannot be built yet, and it is worth being plain about why. A **draft** has
+no file anywhere: it is blocks in a database. The app can hand you a `.docx` of it, but
+that download is a dead-end copy — edit it and nothing comes back, because a round trip
+needs the integration (or a Word add-in) that has not been scoped. So the panel offers a
+draft's builder and nothing else, rather than a second button that quietly loses work.
+
+Two ways out, and this is the question: **(a)** leave it — a draft is edited in the builder,
+and Word only enters the picture once it is published; or **(b)** the coming integration
+creates the SharePoint file at *draft* time, watermark and all, so there is always something
+to open. (b) is more of what you asked for and is a bigger integration — it means Lofty Hub
+writing files into SharePoint rather than only recording where they are, which is also open
+question 16.
+
+Nothing is blocked meanwhile: drafts are editable in the builder and publishing works.
+
+### 19. Do the four views and bulk edit go back onto the older screens?
 
 The 10 September rules say *"all **new** pages that are tables"* get board, table, gantt
 and calendar — and, separately, *"**always** allow selection and editing on a screen for

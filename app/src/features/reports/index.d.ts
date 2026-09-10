@@ -169,6 +169,17 @@ export interface ReportStoreRow {
   updatedAt: string;
   createdBy?: string | null;
   updatedBy?: string | null;
+  /**
+   * Publication, on a document row only (0104). Optional because a LIBRARY row — a
+   * template or a section — has none: only a document is published to SharePoint.
+   *
+   * Carried here rather than looked up so the builder can decide the watermark from the
+   * row it just saved. Its own autosave is what reverts a published document to a draft,
+   * and reading a list that has not refreshed yet would show a clean preview of something
+   * that had become a draft a moment earlier.
+   */
+  publishedAt?: string | null;
+  publishedUrl?: string | null;
 }
 
 export interface ReportStore {
@@ -198,6 +209,8 @@ export const ReportBuilder: ComponentType<{
   shareUrlBase?: string;
   canSaveTemplate?: boolean;
   themes?: ReportThemeSet;
+  /** Forwarded to the overlay this builder opens for Preview & export (0104). */
+  watermark?: string;
 }>;
 
 export const ReportOverlay: ComponentType<{
@@ -210,6 +223,15 @@ export const ReportOverlay: ComponentType<{
   themes?: ReportThemeSet;
   initialTheme?: string;
   onThemeChange?: (key: string) => void;
+  /**
+   * The word a document wears until it is published — "DRAFT", or nothing (0104).
+   *
+   * Passed in rather than worked out: this module knows nothing about jobs or
+   * publications. It reaches all four renderers — screen, print, the .html download and
+   * the .docx — because a document watermarked in three of them is worse than one
+   * watermarked in none, since somebody will send the fourth.
+   */
+  watermark?: string;
 }>;
 
 export const ReportSharePanel: ComponentType<Record<string, unknown>>;
