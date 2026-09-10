@@ -871,6 +871,13 @@ export interface Repository {
    * the panel writes and the importer writes, and a rule each of them has to remember is
    * a rule the next one will forget.
    *
+   * ONE COPY, NOT A HISTORY (0107). Amber, 10 September: *"only onver version of the
+   * document. if they want another copy they can download it"* — so a `file` given here
+   * REPLACES the copy the previous publish saved on the record, rather than adding one
+   * beside it. The database does the replacing, not this method: a trigger, for the same
+   * reason the revert is one. The exception is a copy somebody has since filed on another
+   * record, which is left where they put it and only unpointed.
+   *
    * Nor is there an unpublish hiding in the file's deletion. Deleting the saved copy takes
    * the publication back only when it was the ONLY answer to "where did it go" (0106's
    * trigger) — a document that also went to SharePoint stays published, because the copy

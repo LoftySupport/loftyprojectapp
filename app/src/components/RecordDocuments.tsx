@@ -436,6 +436,9 @@ export function RecordDocuments({
                       builder, then pick the file here to keep a copy on the record — it
                       appears in this list. For SharePoint, save it there first and paste
                       the address it ends up at.
+                      {d.publishedDocumentId
+                        ? " There is already a copy saved here, and publishing again replaces it — download it first if you need to keep it."
+                        : ""}
                       {" "}{folderUrl
                         ? "The address is pre-filled with this record's folder — replace it with the document's own address."
                         : "This record has no SharePoint folder linked yet, so there is nothing to pre-fill."}

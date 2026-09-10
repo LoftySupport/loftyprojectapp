@@ -1960,6 +1960,7 @@ declare
   who uuid;
   url text;
   file_doc uuid;
+  second_file uuid;
   still_named uuid;
 begin
   insert into report_documents (report_document_title, report_document_layout)
@@ -2064,6 +2065,28 @@ begin
   -- should not make somebody find the place again.
   if still_named is not null then raise notice 'ok  the saved file survives the revert, as the address does';
   else raise warning 'FAIL: the revert threw away the file the document was published as'; end if;
+
+  -- 0107. Amber, 10 Sep: *"only onver version of the document. if they want another copy
+  -- they can download it"*. Publishing again replaces the copy on the record rather than
+  -- adding one beside it — and as an ORDINARY USER, which is the half that cannot be
+  -- proved in the migration: deleting a documents row is admin-only by 0032, so without
+  -- SECURITY DEFINER on the trigger this silently deletes nothing for everybody except an
+  -- admin and the job quietly accumulates copies.
+  insert into documents (document_name, document_storage_path)
+  values ('__rls__ published file 2', 'jobs/1103/__rls__2.docx')
+  returning document_id into second_file;
+
+  update report_documents
+     set report_document_published_at = now(),
+         report_document_published_document_id = second_file
+   where report_document_id = doc;
+
+  if exists (select 1 from documents where document_id = file_doc) then
+    raise warning 'FAIL: a user publishing again left the previous copy on the record';
+  else raise notice 'ok  publishing again replaces the copy a user saved last time'; end if;
+  if exists (select 1 from documents where document_id = second_file) then
+    raise notice 'ok  and keeps the one it has just saved';
+  else raise warning 'FAIL: publishing again removed the copy it had just saved'; end if;
 
   delete from report_documents where report_document_id = doc;
 end $$;

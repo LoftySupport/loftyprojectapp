@@ -2390,6 +2390,100 @@ and `0100` record for their own buckets. The policy and the app agree on the obj
 (`jobs/<job key>/…` or `projects/<number>/…`) because both were written from this
 paragraph; a policy the app does not match is a refusal nobody can read.
 
+### 10 September — one published copy per document (`0107`)
+
+Amber, asked whether the copies a document leaves on a job are a version history or
+clutter: *"only onver version of the document. if they want another copy they can download
+it"*.
+
+`0106` let a document be published by saving the file against the record. Publish, edit,
+publish again, and the job held **two** files — both under the document's title, one out of
+date, nothing on either row saying which was current.
+
+**The version chain is deliberately not used.** `documents.supersedes_id` exists for exactly
+this shape, and `0032` argues for it well: *"a version integer cannot say WHICH document a
+revision revises"*. It is the right tool for a drawing at revision C whose revision B
+somebody still needs, and the wrong one here — Amber's answer is not "show the old one
+behind the new one", it is that the old one is not wanted. The second half of her sentence
+says what to do instead.
+
+**One carve-out, and it is not a hedge.** A copy somebody has since filed on ANOTHER record
+is unpointed, not deleted: `documents` holds a file once and `document_links` says where it
+is attached, so deleting it would take a document off a job nobody was publishing to.
+
+**`SECURITY DEFINER` is load-bearing here rather than habitual.** `0032` makes deleting a
+`documents` row admin-only, while re-publishing is ordinary `user` work. Without the definer
+the delete matches no rows, silently, for everybody except an admin — the worst of the three
+possible failures, because it looks like it worked. `verify/rls.sql` proves it as a real
+signed-in user for that reason.
+
+**The bytes outlive the row, and the LIVE database is what said so.** The trigger first
+deleted the storage object beside the row. It replayed perfectly — the harness rebuilds into
+a plain Postgres with no storage schema, so the whole branch was guarded away — and
+production refused it on the first apply:
+
+```
+42501: Direct deletion from storage tables is not allowed. Use the Storage API instead.
+CONTEXT: PL/pgSQL function storage.protect_delete()
+```
+
+So a superseded copy stays in the `job-documents` bucket, unreachable from the app because
+nothing points at it, costing storage and nothing else — the same shape `0062` already lives
+with. Sweeping them needs the Storage API and is an admin or scheduled job, not a trigger's.
+Left undone deliberately: the alternative was widening the bucket's admin-only delete policy
+to every member of staff, which buys tidiness with the rule that stops somebody removing a
+published contract. **Worth keeping for its own sake** — a replay proves the DDL applies, and
+this is a rule no replay could catch, because the thing it guards does not exist there.
+
+**Three things were written the obvious way first and all three were wrong.**
+
+*The trigger as `BEFORE`.* It does not merely misbehave, it does not terminate:
+
+```
+ERROR:  stack depth limit exceeded
+```
+
+BEFORE, the row still holds the old pointer, so deleting the superseded file fires `0106`'s
+reap — which finds a document still naming that file and clears the pointer, which fires
+this trigger again, which deletes again, all the way down. AFTER, the new pointer is already
+in the row, `0106`'s reap matches nothing, and the two never see each other.
+
+*No guard on a pointer being CLEARED.* An admin deleting a published file fires `0106`'s
+reap, the reap clears the pointer, and this trigger then tried to delete the row the outer
+command was already deleting:
+
+```
+27000 / tuple to be deleted was already modified by an operation triggered by the current
+command
+```
+
+Found by `verify/rls.sql`, not by the migration — and the reason the migration missed it is
+worth keeping: its first probe left a SharePoint URL set, so `0106`'s reap declined, the
+pointer was cleared by the foreign key *after* the delete finished, and nothing collided.
+Only a **file-only** publication reproduces it. Clearing a pointer is never this trigger's
+business; only replacing one is.
+
+**Watched failing**, six:
+
+| Broken on purpose | What reported |
+| --- | --- |
+| The delete removed from the trigger | *publishing again left the previous copy on the record* |
+| The moved-pointer test written as `is not null` | *writing the pointer back unchanged deleted the copy it names* |
+| The filed-elsewhere carve-out removed | *a copy filed on another record was deleted by a re-publish* |
+| The trigger made `BEFORE` | *stack depth limit exceeded* |
+| The cleared-pointer guard removed | *27000 / tuple to be deleted was already modified…* |
+| `SECURITY DEFINER` dropped | `verify/rls.sql`: *a user publishing again left the previous copy on the record* |
+
+The seventh was not a sabotage and could not have been one: the storage delete, refused by
+the live database on apply.
+
+**And one probe that passed against a broken trigger**, which is worth more than the six.
+The first version of the delete-the-file probe left a SharePoint URL set, so `0106`'s reap
+declined, the pointer was cleared by the foreign key *after* the delete had finished, and
+nothing collided. Only a **file-only** publication reproduces the deadlock. `verify/rls.sql`
+caught it because its admin deletes exactly that; the probe was then rewritten to clear the
+URL first, and only then did it report.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in
