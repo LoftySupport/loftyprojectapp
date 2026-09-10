@@ -14,6 +14,9 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- a document can be published by saving a copy to the job, not only by pasting a SharePoint link
+- a document Lofty holds the file for opens from the record, through a signed link
+- CI checks that every migration this code needs has been applied to the database
 - each lot on the split-a-project dialog can be given its own street number — leave it blank and it takes the project's
 - the Projects board has a calendar view — it places each project's start date, target completion and end date, so a month shows what is starting and what is due
 - the Tasks board has four views — board, table, gantt and calendar — over the same set of tasks, so the grouping, filters, sort and search survive switching between them
@@ -122,6 +125,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- a missing migration now says the app is ahead of the database and names the column, instead of showing the database's own error
 - a job created by splitting a project now keeps the street number — every one of them read "Lot 3, Corner Street" with no number in it, because the split threw the project's street number away
 - a link naming a view a board does not have showed a blank page with an empty View control; it now opens the board's default view instead
 - the app builds again — a dependency update took Tailwind to a major version the build is not set up for, and it is pinned back until that migration is done on its own
