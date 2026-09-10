@@ -32,6 +32,31 @@ properties may change between now and then"* — so the machinery has a plausibl
 even though jobs and projects are not it. It never ran: the load rolled back whole on its
 first write, so no project, job or address in the app came from it.
 
+## 10 September — documents can be links, and search leaves the page it is on
+
+Three things Amber asked for on 10 September, all shipped together because they are the
+same complaint from three directions: a record's paperwork was hard to reach.
+
+- **A document can be a URL** (`0102`). One column on `documents`, not a new table — `0032`
+  had already built `documents` + `document_links` for exactly this, and the first draft of
+  the migration rebuilt it under the same name before anybody noticed. The Documents panel
+  on a job or project now files a SharePoint link and takes one off again. The SharePoint
+  *integration* is not built and none of its columns are guessed at; see open question 16.
+- **The dashboard has Recent documents and Recent changes.** Both read across the whole
+  company rather than your own jobs — the panels above already cover "yours", and a document
+  filed on somebody else's job is the thing you would not otherwise hear about.
+- **The header search does two things now.** It still filters the view you are looking at,
+  exactly as before; it *also* offers matches from everywhere else in a dropdown, and Enter
+  opens `/search?q=` with the lot. That is the fix for "brodie" on the Projects page
+  narrowing 117 projects to none and saying so, when Brodie Court is a job.
+
+**What has not been seen against real data.** There are no jobs or projects in the database
+yet, so every check here ran against the replay harness and the fixtures in
+`verify/behaviour.sql`. The four things worth clicking on `hub.lofty.au` once there are
+records: file a SharePoint link on a job; file the same link on its project and confirm it
+is one document on two records rather than two; remove one of them and confirm the other
+survives; and search a site name from the Projects page and land on the job.
+
 ## Where it stands, and what is next — 7 September, evening
 
 **Live on `hub.lofty.au`, all merged to `main` today with CI green on every merge (the

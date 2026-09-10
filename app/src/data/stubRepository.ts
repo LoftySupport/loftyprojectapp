@@ -477,6 +477,19 @@ export function createStubRepository(): Repository {
     async updateReportDocument(): Promise<never> { throw new Error("Saving a document needs Supabase."); },
     async deleteReportDocument(): Promise<never> { throw new Error("Removing a document needs Supabase."); },
     async shareReportDocument(): Promise<never> { throw new Error("Creating a share link needs Supabase."); },
-    async unshareReportDocument(): Promise<never> { throw new Error("Revoking a share link needs Supabase."); }
+    async unshareReportDocument(): Promise<never> { throw new Error("Revoking a share link needs Supabase."); },
+
+    // ---- what is filed on a record, and where it lives (0032 / 0102) ------
+    // Same stance again: nothing to read, and a write that says what it needs. An
+    // in-memory list would let somebody file the contract, close the tab and lose it.
+    async listRecordDocuments() { return []; },
+    async addDocumentUrl(): Promise<never> { throw new Error("Filing a document needs Supabase."); },
+    async removeRecordDocument(): Promise<never> { throw new Error("Removing a document needs Supabase."); },
+    async listRecentDocuments() { return []; },
+
+    // No records behind a stub run, so nothing matches anything. Empty rather than a
+    // handful of plausible hits — a search that invents results is the fastest way to
+    // make somebody trust a screen that is lying to them.
+    async search() { return []; }
   };
 }

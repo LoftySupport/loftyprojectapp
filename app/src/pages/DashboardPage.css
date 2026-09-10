@@ -182,6 +182,40 @@
 }
 .pd-panel-mark.incoming { background: var(--primary-color); }
 .pd-panel-mark.mention { background: var(--lofty-orange-strong); }
+/* Eco Green for documents, the brand's second colour, so the two new panels do not read
+   as more of the orange ones above them. Flint for changes: a log is the quietest thing
+   on the page and its dot should say so. Both marks are aria-hidden decoration, so the
+   text-contrast floor in DESIGN.md does not apply to them. */
+.pd-panel-mark.document { background: var(--lofty-eco-green); }
+.pd-panel-mark.change { background: var(--lofty-flint-400); }
+
+/* ---- the two "what happened lately" feeds --------------------------------
+   Denser than .pd-list-row, which is built for a job card's worth of content: these
+   are one line and a subline, six times, in a column that already holds three panels.
+   A hairline BETWEEN rows and none above the first or below the last: padding alone
+   stopped separating once a title wrapped to two lines, and a rule on every row draws a
+   box around the panel it is already inside. */
+.pd-feed { list-style: none; margin: 0; padding: 0; }
+.pd-feed > li { padding: var(--space-8) 0; }
+.pd-feed > li + li { border-top: 1px solid var(--layout-border-color); }
+.pd-feed-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-8);
+  font: var(--font-text2-normal);
+}
+/* The name takes the room and truncates; the "added"/"changed" word never does, because
+   a row that ends "chan…" is worse than one whose title is clipped. */
+.pd-feed-line > :first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pd-feed-line > :last-child { flex: 0 0 auto; }
+.pd-feed-sub {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  margin-top: 2px;
+}
 
 .pd-list-row {
   display: flex;

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
-  Avatar, Dialog, DialogContentContainer, Text, TextField
+  Avatar, Dialog, DialogContentContainer, Text
 } from "@vibe/core";
 import {
   Home, Menu, NavigationChevronLeft, NavigationChevronRight,
@@ -9,7 +9,7 @@ import {
 import { HouseChart, HousePin, Houses } from "../theme/houseIcons";
 import { initialsOf, useAuth } from "../data/AuthProvider";
 import { usePermission } from "../data/PermissionProvider";
-import { useSearch } from "../data/SearchProvider";
+import { GlobalSearch } from "../components/GlobalSearch";
 import { Tooltip } from "@vibe/tooltip";
 import { AskButton, AskDockProvider } from "../components/AskDock";
 import { FeedbackButtons, FeedbackProvider } from "../components/Feedback";
@@ -300,7 +300,6 @@ function Rail({
  * top bar is for search and identity.
  */
 export function AppShell() {
-  const { query, setQuery } = useSearch();
   const { error: authError } = useAuth();
   const location = useLocation();
 
@@ -384,23 +383,11 @@ export function AppShell() {
             </button>
           )}
 
-          {/* A filter on the view you are looking at, not a separate results page —
-              type on the board and the board narrows. Same as the prototype. */}
-          <span className="app-search">
-            {/* `inputAriaLabel`, not `aria-label` — Vibe's TextField writes its own
-                aria-label from the placeholder and drops anything passed through, so a
-                plain aria-label here is silently ignored. An explicit id too: without
-                one every TextField on the page renders id="input". */}
-            <TextField
-              id="app-search"
-              type="search"
-              placeholder="Search jobs…"
-              value={query}
-              onChange={setQuery}
-              size="small"
-              inputAriaLabel="Search jobs and projects"
-            />
-          </span>
+          {/* BOTH: a filter on the view you are looking at — type on the board and the
+              board narrows, as the prototype did — and a dropdown of matches from
+              everywhere else, because "brodie" on the Projects page used to narrow 117
+              projects to none and say so, when Brodie Court is a job. See GlobalSearch. */}
+          <GlobalSearch />
 
           <div className="app-header-right">
             {/* Undo and redo first (Amber, 7 Sep: "add the undo and redo bar to the top

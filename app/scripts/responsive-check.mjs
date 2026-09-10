@@ -26,7 +26,14 @@ const BASE = process.env.RESPONSIVE_BASE ?? "http://127.0.0.1:5200";
 // preference names, so on its own it never measures the dashboard for anybody who has
 // chosen a different landing page — which is how the dashboard became unreachable
 // entirely without a single check noticing.
-const ROUTES = ["/", "/dashboard", "/projects", "/jobs", "/reports", "/setup/properties", "/setup/processes", "/contacts", "/setup/contacts", "/setup/notifications", "/maintenance", "/setup/maintenance",
+const ROUTES = ["/", "/dashboard",
+                // With a query, because that is the only state it has: `/search` on its
+                // own is a one-line "type in the box above" and measures nothing. The
+                // DROPDOWN is not here and cannot be — it opens on a keystroke and has no
+                // URL — so a green line for this route does not mean the popup is
+                // responsive; its width is capped against the viewport by hand.
+                "/search?q=court",
+                "/projects", "/jobs", "/reports", "/setup/properties", "/setup/processes", "/contacts", "/setup/contacts", "/setup/notifications", "/maintenance", "/setup/maintenance",
                 "/admin", "/settings", "/setup", "/setup/dictionary", "/setup/wiring",
                 // Tools. Three lanes, three layouts, and each is its own URL now — a
                 // Get Started grid over a table, with different cards and a different

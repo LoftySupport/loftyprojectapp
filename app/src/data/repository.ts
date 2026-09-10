@@ -3,8 +3,12 @@ import type {
   ActivityEntry,
   AddressHistoryEntry,
   CloneOptions,
+  NewDocumentUrl,
+  RecordDocument,
   NewReportDocument,
   NewReportDocumentShare,
+  RecentDocument,
+  SearchHit,
   NewReportTemplate,
   ReportDocument,
   ReportDocumentPatch,
@@ -831,6 +835,70 @@ export interface Repository {
   shareReportDocument(id: string, input: NewReportDocumentShare): Promise<ReportDocument>;
   /** Revoke the link. The snapshot survives, so "what did we send them" does too. */
   unshareReportDocument(id: string): Promise<ReportDocument>;
+
+  /**
+   * The documents attached to one job or one project — 0032's `documents` joined through
+   * `document_links`.
+   *
+   * Not the same list as `listReportDocuments`, and the two are deliberately separate:
+   * one is what somebody BUILT in the Document Builder, this is what somebody FILED. The
+   * Documents panel shows both, because "what is on this job" is one question.
+   */
+  listRecordDocuments(opts: { jobId?: string; projectId?: number }): Promise<RecordDocument[]>;
+  /**
+   * File a document that lives in SharePoint, as a URL (0102).
+   *
+   * Amber, 10 September: *"when adding a document I need to be able to save it as a url
+   * in sharepoint (integration coming) but for now I need to be able to add and delete
+   * them"*.
+   *
+   * Two rows: the document, and the attachment to this record. If the URL is already
+   * filed elsewhere it is the SAME document — a second attachment, not a second copy —
+   * which is what `documents_one_row_per_url` and the whole "held once" design are for.
+   *
+   * The app never fetches the document itself. It stores the address; Microsoft governs
+   * the file, so filing a link is not a way of sharing one.
+   */
+  addDocumentUrl(input: NewDocumentUrl): Promise<RecordDocument>;
+  /**
+   * Take a document off this record. `user` and above — 0032: *"detaching is not
+   * deleting: the link goes, the file stays"*.
+   *
+   * The exception is a document nothing else points at and Lofty holds no bytes for: the
+   * database reaps that row itself (0102's trigger), because a pointer with no links is
+   * reachable from nowhere. Nothing in SharePoint is ever touched either way.
+   */
+  removeRecordDocument(linkId: string): Promise<void>;
+
+  /**
+   * Both kinds of document, newest first — what the dashboard's Recent documents panel
+   * reads.
+   *
+   * One method rather than two lists merged by the screen: "has anything been filed on my
+   * jobs this week" is one question, and two panels answering halves of it means merging
+   * by eye. Ordered by the later of created and updated, so a document edited today sorts
+   * above one filed last week — the ask was "recent documents **or changes**".
+   */
+  listRecentDocuments(opts?: { limit?: number }): Promise<RecentDocument[]>;
+
+  /**
+   * The header's search, across every kind of record somebody types a name into a box
+   * hoping to reach.
+   *
+   * Distinct from the in-page search, which narrows the board or table you are looking at
+   * and is pure client-side matching in `SearchProvider`. Both exist and neither replaces
+   * the other: on the Jobs page "brodie" should narrow the table AND offer the contact
+   * called Brodie, because only one of those is what you meant and the app cannot tell
+   * which.
+   *
+   * Every term must appear somewhere in a record for it to match — the same AND rule the
+   * in-page matchers use, so "brodie court" narrows rather than widening.
+   *
+   * `limit` is PER KIND, not overall. A query matching forty jobs must not push the one
+   * matching contact off the end of the list, which is exactly what a single overall cap
+   * would do.
+   */
+  search(query: string, opts?: { limit?: number }): Promise<SearchHit[]>;
 }
 
 export type RepositoryMethod = Exclude<keyof Repository, "name" | "wired">;
@@ -1031,7 +1099,12 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "updateReportDocument",
   "deleteReportDocument",
   "shareReportDocument",
-  "unshareReportDocument"
+  "unshareReportDocument",
+  "listRecordDocuments",
+  "addDocumentUrl",
+  "removeRecordDocument",
+  "listRecentDocuments",
+  "search"
 ];
 
 /** Human labels for the wiring checklist on the Status page. */
@@ -1234,5 +1307,13 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   updateReportDocument: "report_documents",
   deleteReportDocument: "report_documents",
   shareReportDocument: "report_documents",
-  unshareReportDocument: "report_documents"
+  unshareReportDocument: "report_documents",
+  listRecordDocuments: "documents + document_links",
+  addDocumentUrl: "documents + document_links",
+  removeRecordDocument: "document_links",
+  // Both kinds in one list, so the Wiring page names the pair rather than half of it.
+  listRecentDocuments: "report_documents + documents",
+  // Six reads behind one method. Named as the spine it searches; the rest are listed in
+  // the method's own comment rather than crammed into a cell.
+  search: "job_display + project_display + …"
 };

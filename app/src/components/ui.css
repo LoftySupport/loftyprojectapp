@@ -2659,6 +2659,53 @@ code { overflow-wrap: anywhere; }
   text-transform: uppercase;
   color: var(--secondary-text-color);
 }
+/* The row's actions sit hard right, so Remove lands in the same place on every row
+   rather than trailing a title of unpredictable length. */
+.record-documents li > a:first-child,
+.record-documents li > .record-documents-link { flex: 1 1 auto; min-width: 0; }
+.record-documents-confirm {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+/* ---- the search results page ---------------------------------------------
+   One panel per kind. The rows are the same shape as the dropdown's — title, then a
+   quiet subline — so a hit looks the same wherever you meet it. */
+.search-group + .search-group { margin-top: var(--space-16); }
+.search-hits { list-style: none; margin: var(--space-8) 0 0; padding: 0; }
+.search-hits li {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  padding: var(--space-8) 0;
+  border-top: 1px solid var(--layout-border-color);
+}
+.search-hits li:first-child { border-top: 0; }
+.search-hit-sub { color: var(--secondary-text-color); }
+
+/* ---- filing a document that lives in SharePoint (0102) --------------------
+   Two fields and a button. Stacked below 520px rather than squeezed: a URL field
+   at 120px shows nothing useful about what was pasted, which is the one thing
+   somebody wants to check before saving. */
+.doc-link-add {
+  display: flex;
+  gap: var(--space-8);
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin: var(--space-8) 0;
+  padding: var(--space-8);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-small, 4px);
+}
+.doc-link-add > div:first-of-type { flex: 1 1 160px; min-width: 140px; }
+.doc-link-add > div:nth-of-type(2) { flex: 2 1 240px; min-width: 180px; }
+.doc-link-hint { flex: 1 0 100%; margin: 0; }
+@media (max-width: 520px) {
+  .doc-link-add > div { flex-basis: 100%; }
+}
 
 /* ---- the typeahead --------------------------------------------------------
    `TypeaheadSelect`: the suburb field's list, for any closed set. It borrows the

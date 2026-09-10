@@ -20,6 +20,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { JobsPage } from "./pages/JobsPage";
 import { ReportsPage } from "./pages/ReportsPage";
+import { SearchPage } from "./pages/SearchPage";
 import { ToolsPage } from "./pages/ToolsPage";
 import { ContactsPage } from "./pages/ContactsPage";
 import { MaintenancePage } from "./pages/MaintenancePage";
@@ -386,6 +387,10 @@ export default function App() {
               <Route path="projects/:projectNumber" element={<ProjectsPage />} />
               <Route path="jobs" element={<JobsPage />} />
               <Route path="jobs/:jobNumber" element={<JobsPage />} />
+              {/* Every kind of record at once. Reached by pressing Enter in the header
+                  box or by "See all results" under the dropdown — and shareable, because
+                  the query lives in `?q=` rather than in the header's state. */}
+              <Route path="search" element={<SearchPage />} />
               <Route path="reports" element={<ReportsPage />} />
               <Route path="contacts" element={<ContactsPage />} />
               {/* Tools: things you use to make something, as opposed to the records you
