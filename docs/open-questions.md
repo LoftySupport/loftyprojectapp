@@ -21,46 +21,21 @@ invent a value, and `CLAUDE.md` is explicit that an invented default is worse th
 
 ## Open — next question first
 
-### 1. Turn on leaked-password protection?
-
-One dashboard toggle. Supabase checks new passwords against HaveIBeenPwned and refuses
-known-breached ones. The reason it has not been flipped is that it changes what happens to a
-real person setting a password, and that is a change to make deliberately rather than
-because an advisor asked. Any objection to it going on?
-
-### 2. Two of the three share-link origins point at nothing
-
-`SHARE_ALLOWED_ORIGINS` holds `https://loftyprojectapp.vercel.app`,
-`https://loftyprojectapp.netlify.app` and `https://app.lofty.au`. The app answers at
-`hub.lofty.au`, Netlify was removed entirely on 6 September, and `app.lofty.au` is a
-different application. Tidying it to just the live origin is one secret edit — but it is
-your secret and an allowlist is a security control, so it is not one to trim on a guess.
-
-### 3. Saved projects views carrying `?stage=` — leave them, or rewrite them?
-
-Since #51 the projects board has two stage filters: **Stage** is the project's own phase (as
-the Stage grouping is) and **Job stage** is "has a job in this stage". Before, `?stage=` on
-the projects board meant the second. `saved_views` stores query strings verbatim (0048), so
-any saved *projects* view with `?stage=` now filters by the project's phase instead. There
-are no shared saved views of that shape that Claude can see, but Claude cannot see everyone's.
-Options: leave it (the new meaning matches the grouping, which was the point), or run a
-one-off `UPDATE saved_views SET … 'stage=' → 'jobstage='` for projects views only.
-
-### 4. Does undo need a home on a phone?
+### 1. Does undo need a home on a phone?
 
 The header bar is hidden below 600px because two more 32px targets left the search box 70px
 wide, and Ctrl+Z does not exist on a phone — so a phone has no undo at all. Is that
 acceptable for now, or does it need one (a long-press on the "saved" toast is the obvious
 place)?
 
-### 5. Should the person picker offer deactivated people?
+### 2. Should the person picker offer deactivated people?
 
 `PersonSelect` lists active people only, and every assignee, owner and "who is doing this"
 control uses it. A job already assigned to somebody who has since been deactivated still
 shows their name read-only. Nobody asked for the other behaviour; this records that it was a
 choice.
 
-### 6. What is "undo" allowed to reach?
+### 3. What is "undo" allowed to reach?
 
 Today it reaches every field write that saves as you make it — team, assignee, dates, tasks,
 process runs, property values, a request's stage. It deliberately does NOT reach lifecycle
@@ -68,7 +43,7 @@ moves (forwards-only by your rule), creating, deleting, votes, follows or commen
 the right line, or should a lifecycle move be undoable within, say, a minute of making it?
 (The database refuses the way back today; allowing it is a migration, not a UI change.)
 
-### 7. Where does "clone a job" live now?
+### 4. Where does "clone a job" live now?
 
 **Blocked:** nothing is broken, but the app currently has no way to clone a job at all.
 
@@ -88,14 +63,14 @@ What is not decided is what it should look like there:
 Either way `cloneJob(id, copy)` is unchanged and manager+ still gates it. Do not delete
 `CloneDialog.tsx` as dead code before this is answered.
 
-### 8. Is the placeholder at 3.47:1 accepted, or does it get fixed?
+### 5. Is the placeholder at 3.47:1 accepted, or does it get fixed?
 
 The design system now labels it *"example text only, never a label"*, which narrows the
 exposure but does not clear it — placeholder text is still text under WCAG 1.4.3. `#757478`
 would clear it at 4.64:1 as a new `--lofty-black-70` step, leaving `--ui-border-color` at
 the 3.47:1 it was deliberately chosen for.
 
-### 9. What should five missing roadmap items say?
+### 6. What should five missing roadmap items say?
 
 Five commits carry a `Roadmap:` trailer whose text matches no checkbox in `ROADMAP.md`, so
 work that was finished has no line to tick:
@@ -110,7 +85,7 @@ They are real and shipped. What is missing is which phase each belongs to and wh
 wording above is the wording you want, and inventing roadmap text is exactly the thing
 `CLAUDE.md` forbids.
 
-### 10. How is health status worked out?
+### 7. How is health status worked out?
 
 Long-standing, from the schema plan's own risk list. *"Status is what someone sets. Health
 is what the system works out"* — from inputs nobody has defined. Kanban-by-status and
@@ -118,13 +93,13 @@ kanban-by-team work today; **kanban-by-health cannot be built until this is answ
 job at risk because it is past `expected_days`, because a required field is empty, because a
 dependency is blocked, or some combination?
 
-### 11. Does Acquisition & Development want a `project_stage` vocabulary?
+### 8. Does Acquisition & Development want a `project_stage` vocabulary?
 
 `project_stage` is nullable and costs nothing empty. Do not seed a vocabulary until they
 confirm they want one — a half-filled stage column that some projects use and others ignore
 is worse for reporting than no column.
 
-### 12. Do exported documents take Flint for their greys?
+### 9. Do exported documents take Flint for their greys?
 
 The design system retired the two cool greys on 7 September: `#f6f7f7` and `#e7e8e9` are
 gone from the mirror, and in the app Flint 100 `#f4f3ee` is the page and Flint 300 `#c6c5ba`
@@ -135,7 +110,7 @@ where the design system says Mid Grey still belongs. So: do exported documents f
 app onto Flint, or is the house format its own record? Not changed on the sync, because the
 export palette is written down as a decision (0026) and this file is where decisions change.
 
-### 13. A Xero invoice with no purchase order — job or project?
+### 10. A Xero invoice with no purchase order — job or project?
 
 Purchase orders belong to a job and a contractor (answered 8 September, question 16). A
 contractor's bill reconciles against its purchase order, so it inherits the job. What is not
@@ -144,7 +119,7 @@ consultant on the whole site. Recommended: the `invoices` table carries a job **
 (one of the two, checked), and the review queue holds anything Xero sends that matches neither.
 The alternative — everything on a job — leaves project-level money with nowhere to go.
 
-### 14. "Only managers can connect it to approved sources … this is done by superadmin"
+### 11. "Only managers can connect it to approved sources … this is done by superadmin"
 
 Question 18's answer (8 September) says both. Read as: a **superadmin registers** each approved
 source once, organisation-wide (the Copilot Studio agent, the Xero and SiteBook connections),
@@ -153,7 +128,7 @@ managers should be able to register a new source themselves, the Admin → Integ
 opens to managers for that one act and the plan's §3 changes one word. Not blocking: Phase 1
 has one source to register and a superadmin registers it either way.
 
-### 15. Fieldwork in a printed PDF — is the licence settled?
+### 12. Fieldwork in a printed PDF — is the licence settled?
 
 Amber's rule for documents (9 September, answered below): Montserrat, *"unless it has fonts
 embedded in it for print then it will be brand font"*. The PDF writer now embeds Montserrat,
@@ -168,7 +143,7 @@ clients, and web-serving the face? If yes, the PDF's two faces become Fieldwork 
 brand repository — and the Word file stays Montserrat, since Word cannot embed without the
 reader's cooperation.
 
-### 16. When the SharePoint integration lands, does Lofty Hub ever hold the file?
+### 13. When the SharePoint integration lands, does Lofty Hub ever hold the file?
 
 `0103` lets a document be a URL, so a job's contract can be filed against it today by
 pasting the link. The row that holds it (`documents`, from `0032`) has **both** a storage
@@ -187,7 +162,7 @@ It changes what has to be built and where the risk sits, so it is worth answerin
 the integration is scoped rather than during. Nothing is blocked meanwhile: filing a link
 by hand works either way.
 
-### 17. Should removing a document from a record be a manager's job?
+### 14. Should removing a document from a record be a manager's job?
 
 The Documents panel's **Remove** takes a document off *this* job or project and leaves it
 on any other record it is filed against, and leaves the file itself untouched in SharePoint.
@@ -199,7 +174,7 @@ heavier than it is. The screen already says what it does not do before it asks, 
 recording a choice rather than reporting a problem — but if the answer is *manager*, it is
 one policy line.
 
-### 18. Should a draft be openable in Word, and edit back into the app?
+### 15. Should a draft be openable in Word, and edit back into the app?
 
 Amber, 10 September: *"you can choose to open it in the app document builder or in the
 document native file (eg word, pdf. viewer etc, but it still edits and saves it)"*.
@@ -296,6 +271,9 @@ decides how much retro-fitting to schedule, and in what order.
 
 | Date | Question | Answer |
 | --- | --- | --- |
+| 10 Sep | (asked as 3) Saved projects views carrying `?stage=` — leave them, or rewrite them? | **Leave them.** *"[No preference]"* — so the recommendation stands, and this records that Claude made the call rather than Amber. The new meaning (the project's own phase) matches the Stage grouping, which was the point of #51. Anyone whose saved view shifted sees a different set once and re-saves it: one confusing moment, no lost work. The rewrite was rejected because `saved_views` stores the query string verbatim (0048) and nothing in it distinguishes a view saved BEFORE #51, where `stage=` meant "has a job in this stage", from one saved after, where the person meant the project's phase — so a blanket `UPDATE` would silently break the second kind to fix the first. **Revisit only if somebody reports a saved view behaving oddly**, at which point it is one person's view to correct rather than a migration |
+| 10 Sep | (asked as 2) What belongs in `SHARE_ALLOWED_ORIGINS`? | **Three: `hub.lofty.au`, the Vercel name, and `app.lofty.au`.** *"keep vercel, lofty and app.lofty"*, then *"hub.lofty.au is where the app is at redirected from vercel"* — so "lofty" is `hub.lofty.au`. **Netlify goes**, removed entirely on 6 September. Set to `https://hub.lofty.au,https://loftyprojectapp.vercel.app,https://app.lofty.au` — comma-separated, no spaces, no trailing slashes; the function does an exact string match on the browser's `Origin` header, so a trailing slash or `http://` fails closed and silently. **Claude cannot set it**: it is a Supabase edge-function secret (Project Settings → Edge Functions → Secrets), so this one is Amber's to paste in. Two things worth knowing about the value. Because Vercel REDIRECTS to `hub.lofty.au`, a browser on the live app always sends `https://hub.lofty.au` — the vercel.app entry is belt-and-braces for anyone who lands on the bare Vercel name before the redirect, not the origin production actually uses. And it does **not** cover preview deployments: those answer on a per-branch host like `loftyprojectapp-git-<branch>-loftygroup.vercel.app`, which is a different origin from `loftyprojectapp.vercel.app`, so share links opened from a preview will still be refused. If testing shares on a preview is ever wanted, that is a separate decision — the allowlist is exact-match with no wildcards. The records also disagreed about the starting state: this file said the secret holds three origins, `HANDOFF.md` said it is unset and the endpoint answers `503 "Sharing is not switched on."`. Either way `hub.lofty.au` was not among them, which is why sharing does not work today |
+| 10 Sep | (asked as 1) Turn on leaked-password protection? | **Not yet — leave it off for now.** Supabase's HaveIBeenPwned check stays off, so nothing changes for anyone setting a password. It is one dashboard toggle whenever that changes, and it only ever affects NEW and CHANGED passwords — no existing account is touched and nobody is forced to reset. **Worth putting back in front of Amber before the app opens to the wider team**, which is the point at which the friction is cheapest to absorb and the exposure largest. The security advisor will keep flagging it meanwhile, and that is expected rather than something to silence |
 | 9 Sep | (asked as 15) Exported documents: Helvetica, or the brand's new Arial? | **Neither — Montserrat.** *"exported documents in monteserat unless it has fonts embedded in it for print then it will be brand font"*. The Word file names Montserrat; the PDF embeds a WinAnsi subset of Montserrat Regular and SemiBold (~41 kB each, `scripts/build-montserrat.mjs`) since it cannot name a face that is not one of the fourteen. The "brand font when embedded" half is question 15 above, held on the licence |
 | 9 Sep | Which orange carries text — the mockups' split, or `Button.jsx`? | Amber first chose **`Button.jsx`**: *"The one filled orange action inverts on hover — fill drops out, orange becomes ink and line."* Applied as drawn that is white on `#f47e63` at 2.62:1, so the follow-up put two options in front of her and she took the Button's behaviour on the pressed step (fill `#c2543c`, inverting to `#c2543c` ink and line, 4.5:1 both states) — built, probed in both themes, pushed. Then, seeing it: *"Make sure buttons are crisp orange."* **Final: Crisp Orange, as `Button.jsx` draws it.** White on `#f47e63` at rest, `#f47e63` ink and line on hover, 2.62:1 in both light states (6.1:1 on dark hover); recorded as shortfalls in `check-contrast`, never allowed to get worse. The pressed step is one line away in `theme/tokens.css` if ever wanted. The 7 Sep pressed-orange decision is superseded |
 | 9 Sep | Arial as the fallback, or the style guide's "never Arial"? | **Arial** — *"Fallback order is Montserrat first, then Arial. Do not substitute Helvetica, Calibri or Aptos."* The style guide's bad example in the brand repository is the one that is wrong |
