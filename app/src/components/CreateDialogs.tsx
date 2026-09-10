@@ -791,13 +791,21 @@ export function NewJobDialog({
             />
 
             {/* At creation, not only afterwards in the drawer (Amber, 7 Sep: "you should
-                be able to add a sitebook number as well at the time"). */}
-            <Field label="SiteBook number" hint="the number this job already has in SiteBook or Trello — leave blank for a job that is new here">
+                be able to add a sitebook number as well at the time").
+
+                CALLED THE OLD JOB NUMBER, NOT THE SITEBOOK NUMBER (Amber, 10 Sep:
+                *"sitebook number isn't created until after construction. so creating a
+                new project we need old job number"*). The column is `job_number_old` and
+                always was — the old system's number, which SiteBook and Trello then
+                reference. Labelling it "SiteBook number" on a CREATE form asked for a
+                number that cannot exist yet: SiteBook does not issue one until the job
+                is in construction. */}
+            <Field label="Old job number" hint="the number this job already has in the old system, Trello or on the paperwork — leave blank for a job that is new here">
               <TextField
                 value={siteBookNo}
                 onChange={setSiteBookNo}
                 id="job-sitebook"
-                inputAriaLabel="SiteBook number"
+                inputAriaLabel="Old job number"
               />
             </Field>
 
@@ -933,6 +941,7 @@ export function SplitProjectDialog({
     : countValid && lotValid
       ? Array.from({ length: n }, (_, i) => ({
           lotNumber: String(first + i),
+          streetNumber: "",
           jobNumberOld: "",
           titleType: seedTitle(i)
         }))
@@ -1053,15 +1062,21 @@ export function SplitProjectDialog({
                   </Text>
                   <Text type="text3" color="secondary" ellipsis={false}>
                     A lot number can be anything on the plan — 2B as readily as 2. The
-                    SiteBook number is the one this job already has in SiteBook or Trello;
-                    leave it blank for a job that is new here. Job numbers themselves are
+                    A street number left blank inherits the project's, which is what the
+                    rest of the address already does — a lot before titles is still at the
+                    project's number, and leaving it out is what made jobs read
+                    "Lot 3, Corner Street" with no number in them. Type one to give a lot
+                    its own. The old job number is the one this job already has in the old
+                    system, Trello or on the paperwork; leave it blank for a job that is
+                    new here. It is not the SiteBook number, which is not issued until
+                    construction. Job numbers themselves are
                     issued by the database, continuing from any that already exist. Title
                     type is seeded from the project's mix — check it per lot, since nothing
                     says which lots take which title.
                   </Text>
                 </div>
                 <div className="split-row split-row-head" aria-hidden="true">
-                  <span>Lot</span><span>SiteBook number</span><span>Title</span>
+                  <span>Lot</span><span>Street #</span><span>Old job number</span><span>Title</span>
                 </div>
                 {rows.map((row, i) => (
                   <div className="split-row" key={i}>
@@ -1079,12 +1094,23 @@ export function SplitProjectDialog({
                             : undefined
                       }
                     />
+                    {/* Blank inherits the project's street number. No placeholder: the
+                        design system's forms rule is that a placeholder is an example
+                        and never a label, and the paragraph above says what blank
+                        means — which is the thing that needs saying. */}
+                    <TextField
+                      value={row.streetNumber ?? ""}
+                      onChange={v => editRow(i, { streetNumber: v })}
+                      size="small"
+                      id={`split-street-${i}`}
+                      inputAriaLabel={`Street number for job ${i + 1} — blank uses the project's`}
+                    />
                     <TextField
                       value={row.jobNumberOld ?? ""}
                       onChange={v => editRow(i, { jobNumberOld: v })}
                       size="small"
                       id={`split-old-${i}`}
-                      inputAriaLabel={`SiteBook number for job ${i + 1}`}
+                      inputAriaLabel={`Old job number for job ${i + 1}`}
                     />
                     {/* Clearable: "not decided yet" is a real state, and a job that
                         carries the wrong title type is worse than one that carries

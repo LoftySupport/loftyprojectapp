@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 197 changes since then —
-- Added: the Tasks board has four views — board, table, gantt and calendar — over the same set of tasks, so the grouping, filters, sort and search survive switching between them
-- Added: Tasks filters are inline across the top and all of them are there — status, assignee, team and process on the bar, with health, stage, job or project number, due date, scheduled date, who raised it, who it is waiting on and who created it under Advanced
-- Added: sort and group the Tasks board by any property, from the toolbar as well as by clicking a column heading — including properties whose column is switched off
-- Added: select several tasks at once, on the table or the board, and set their status, assignee, team or due date in one go
-- Added: drag a task card between columns on the Tasks board to set its status, team or assignee
-- …and 192 more.
+Unreleased: 206 changes since then —
+- Fixed: a job created by splitting a project now keeps the street number — every one of them read "Lot 3, Corner Street" with no number in it, because the split threw the project's street number away
+- Added: each lot on the split-a-project dialog can be given its own street number — leave it blank and it takes the project's
+- Changed: the number you can enter when creating a job or splitting a project is now called the old job number rather than the SiteBook number — SiteBook does not issue one until construction, and the field has always held the old system's number
+- Added: the Projects board has a calendar view — it places each project's start date, target completion and end date, so a month shows what is starting and what is due
+- Fixed: a link naming a view a board does not have showed a blank page with an empty View control; it now opens the board's default view instead
+- …and 201 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -32,7 +32,49 @@ properties may change between now and then"* — so the machinery has a plausibl
 even though jobs and projects are not it. It never ran: the load rolled back whole on its
 first write, so no project, job or address in the app came from it.
 
-## 10 September, later still — the Tasks board becomes a board, and the screen rules get written down
+## 10 September, later still — a job's address gets its street number back
+
+Amber: *"jobs are not showing the street number on the address. they are only showing
+lot number."* One line in `splitProject` did it, and it was deliberate:
+
+```
+address_lot_number: lot.lotNumber,
+// A lot has a lot number, not a street number — the street number arrives when
+// the titles do, which is exactly the rename the address history exists for.
+address_street_number: null,
+```
+
+True of a lot on a plan of division, and false of the address anybody uses. It was also
+the one field the split singled out — street, suburb, state, postcode and council are
+all copied from the project's address, and the street number alone was thrown away. So
+every job created by splitting a project read **"Lot 3, Corner Street, Wandi SA 6167"**:
+an address with no number in it.
+
+**The trigger was never at fault.** `build_consolidated_address()` has always rendered
+`coalesce(new.address_street_number || ' ', '')`, and its own expression, run against
+the live database with literals, says so:
+
+| | reads |
+| --- | --- |
+| lot only (what the split produced) | `Lot 3, Corner Street, Wandi SA 6167, AU` |
+| lot + the project's number | `Lot 3, 28 Corner Street, Wandi SA 6167, AU` |
+| a lot given its own number | `Lot 3, 30 Corner Street, Wandi SA 6167, AU` |
+| titles issued, no lot | `28 Corner Street, Wandi SA 6167, AU` |
+
+**Nothing needs backfilling.** Of 197 addresses in the live database, 178 carry a street
+number only, 13 a lot number only, and **none carries both** — which is the fingerprint
+of this bug plus the fact that Phase B never ran. The 13 are project addresses that
+genuinely have only a lot number, which is their real data rather than a symptom. There
+are no jobs yet, so no job address was written wrong and then kept.
+
+**Street # is now a field per lot on the split**, which is the half of Amber's earlier
+*"add Lot #, Res # Street # at project creation"* that needed no schema change: blank
+inherits the project's number, typed wins. **Res # is still open question 20** — it is
+in no table, it is not a rename of either existing column, and adding it changes both
+`addresses_has_a_number` and the trigger above, so it waits on an answer rather than a
+guess.
+
+## 10 September — the Tasks board becomes a board, and the screen rules get written down
 
 Amber, in two messages: *"fix the filters in the app for dropdown on tasks so it is inline
 and all filters are available as well as advanced filters where you can sort and group by
@@ -711,7 +753,7 @@ means for each of them.
 | screen | views | drop writes |
 | --- | --- | --- |
 | Jobs | Board, Table, Gantt, Calendar | stage move (confirmed), process move (confirmed) |
-| Projects | Board, Table, Gantt, Calendar | — a project's stage follows its jobs (0041) |
+| **Projects** | Board, Table, Gantt, **Calendar** | — a project's stage follows its jobs (0041) |
 | **Tasks** | **Board, Table, Gantt, Calendar** | **status, team, assignee** |
 | Maintenance, Contacts, Settings → Properties | table only | — |
 
@@ -719,6 +761,22 @@ Maintenance is the strongest candidate for the four: a maintenance item has a re
 date, a next visit and an owner, so a board, a timeline and a month all have something
 true to draw. Contacts and the Settings tables are configuration and lookups, which is
 the "unless specified otherwise" case — a Gantt of a lookup table is a chart of nothing.
+
+**The projects calendar is new, and the way it was missing is worth writing down.** Amber:
+*"calendar view has also disappeared"*. The projects board offered three views — and
+`/projects?view=Calendar` was still a URL that resolved, because `useBoardParams`
+validated `?view=` against the app-wide `VIEWS` list rather than against what the page
+could draw. So that link rendered the toolbar with an **empty View control and nothing at
+all underneath it**: a blank board, reached by a link that looked legitimate. Both halves
+are fixed — `ProjectsCalendar` places the three real dates a project carries (start,
+target completion, end, each labelled), and a board may now tell `useBoardParams` which
+views it actually has, so an unknown one falls back to the default instead of drawing
+nothing. `?view=Nonsense` lands on Board.
+
+Neither the projects Gantt (26 August) nor the new calendar had ever been in the
+responsive sweep. Both are now, and `FIXTURE_PROJECT` carries dates relative to today so
+the month grid is populated when it is measured rather than showing its empty state —
+fixed dates would have gone stale into the same false pass within weeks.
 
 ### Selection and bulk edit — DONE on Jobs and Tasks
 

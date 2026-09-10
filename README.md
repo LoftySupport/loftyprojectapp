@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 197 changes since then —
-- Added: the Tasks board has four views — board, table, gantt and calendar — over the same set of tasks, so the grouping, filters, sort and search survive switching between them
-- Added: Tasks filters are inline across the top and all of them are there — status, assignee, team and process on the bar, with health, stage, job or project number, due date, scheduled date, who raised it, who it is waiting on and who created it under Advanced
-- Added: sort and group the Tasks board by any property, from the toolbar as well as by clicking a column heading — including properties whose column is switched off
-- Added: select several tasks at once, on the table or the board, and set their status, assignee, team or due date in one go
-- Added: drag a task card between columns on the Tasks board to set its status, team or assignee
-- …and 192 more.
+Unreleased: 206 changes since then —
+- Fixed: a job created by splitting a project now keeps the street number — every one of them read "Lot 3, Corner Street" with no number in it, because the split threw the project's street number away
+- Added: each lot on the split-a-project dialog can be given its own street number — leave it blank and it takes the project's
+- Changed: the number you can enter when creating a job or splitting a project is now called the old job number rather than the SiteBook number — SiteBook does not issue one until construction, and the field has always held the old system's number
+- Added: the Projects board has a calendar view — it places each project's start date, target completion and end date, so a month shows what is starting and what is due
+- Fixed: a link naming a view a board does not have showed a blank page with an empty View control; it now opens the board's default view instead
+- …and 201 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
