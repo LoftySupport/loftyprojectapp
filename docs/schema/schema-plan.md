@@ -2578,10 +2578,16 @@ is what the first two were. It does not catch a number another branch has WRITTE
 yet applied, and it does not stop that branch taking three more numbers while this one is
 open. The live table is a better source than the repository and it is still not a lock.*
 
+*And it has already happened once without being noticed: `0073_job_numbers_are_three_digits`
+and `0073_only_the_locality_is_required` both sit in `app/supabase/migrations/` on `main`
+today. Two files, one number, applied in whatever order the shell sorted them. Nothing broke,
+which is exactly why nobody caught it — a duplicate only bites when the two touch the same
+table.*
+
 *What would actually settle it: a number claimed at the moment a branch is created rather
 than at the moment a migration is written, or names without numbers and an explicit order
 file. Both are changes to how this repository works, so both are Amber's call rather than
-something to do quietly inside a documents PR — recorded here as the third piece of evidence
+something to do quietly inside a documents PR — recorded here as the fourth piece of evidence
 that it needs deciding.*
 
 Amber, once `0104` had shipped: *"until Documents are integrated to Sharepoint, please
