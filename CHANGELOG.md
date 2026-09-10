@@ -14,12 +14,15 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- the Projects board has a calendar view — it places each project's start date, target completion and end date, so a month shows what is starting and what is due
 - the Tasks board has four views — board, table, gantt and calendar — over the same set of tasks, so the grouping, filters, sort and search survive switching between them
 - Tasks filters are inline across the top and all of them are there — status, assignee, team and process on the bar, with health, stage, job or project number, due date, scheduled date, who raised it, who it is waiting on and who created it under Advanced
 - sort and group the Tasks board by any property, from the toolbar as well as by clicking a column heading — including properties whose column is switched off
 - select several tasks at once, on the table or the board, and set their status, assignee, team or due date in one go
 - drag a task card between columns on the Tasks board to set its status, team or assignee
 - the Tasks table's columns can be shown, hidden and reordered, and the layout is remembered
+- a document built in the app is a DRAFT until you publish it — every copy you preview, print or download carries a DRAFT watermark, and publishing means pasting the SharePoint address it was saved to
+- editing a published document automatically takes it back to draft, and the watermark comes back with it
 - a document can now be saved as a SharePoint link on a job or a project — add one from the record's Documents panel and take it off again
 - the dashboard shows recent documents and recent changes across the company
 - A Tasks board, in the main navigation, with every task across every job and project — filtered by team, status and process, and sliced into my tasks, my team's tasks, all tasks, overdue, due today and due this week
@@ -118,7 +121,10 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- a link naming a view a board does not have showed a blank page with an empty View control; it now opens the board's default view instead
+- the app builds again — a dependency update took Tailwind to a major version the build is not set up for, and it is pinned back until that migration is done on its own
 - entries and month arrows on the jobs and tasks calendars were too small to tap reliably, and a month grid pushed narrow screens sideways
+- a document built in the app can now be deleted — there was no way to remove one from anywhere
 - The bug-and-idea form at /report opens again for people held at the demo gate — it had been blank since it was added
 - A link you were sent takes you there after signing in, instead of dropping you on the dashboard
 - A document can be put on a project as easily as on a job — the choice is now asked before the list, instead of every project sorting below every job in one long picker

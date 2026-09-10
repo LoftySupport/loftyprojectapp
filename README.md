@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 197 changes since then —
+Unreleased: 203 changes since then —
+- Added: the Projects board has a calendar view — it places each project's start date, target completion and end date, so a month shows what is starting and what is due
+- Fixed: a link naming a view a board does not have showed a blank page with an empty View control; it now opens the board's default view instead
+- Fixed: the app builds again — a dependency update took Tailwind to a major version the build is not set up for, and it is pinned back until that migration is done on its own
 - Added: the Tasks board has four views — board, table, gantt and calendar — over the same set of tasks, so the grouping, filters, sort and search survive switching between them
 - Added: Tasks filters are inline across the top and all of them are there — status, assignee, team and process on the bar, with health, stage, job or project number, due date, scheduled date, who raised it, who it is waiting on and who created it under Advanced
-- Added: sort and group the Tasks board by any property, from the toolbar as well as by clicking a column heading — including properties whose column is switched off
-- Added: select several tasks at once, on the table or the board, and set their status, assignee, team or due date in one go
-- Added: drag a task card between columns on the Tasks board to set its status, team or assignee
-- …and 192 more.
+- …and 198 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
