@@ -175,6 +175,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- publishing a document again replaces the copy saved on the record instead of adding another — download the old one first if you need it
 - the number you can enter when creating a job or splitting a project is now called the old job number rather than the SiteBook number — SiteBook does not issue one until construction, and the field has always held the old system's number
 - the footer drops "What's planned" — Updates in the same row is the same page — and the bug report link loses its icon
 - the search box in the top bar now finds jobs, projects, people, companies, requests and documents from any page — matches appear as you type, and Enter opens a full results page. It still narrows the board or table you are on as well

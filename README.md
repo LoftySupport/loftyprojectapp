@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 212 changes since then —
+Unreleased: 213 changes since then —
+- Changed: publishing a document again replaces the copy saved on the record instead of adding another — download the old one first if you need it
 - Added: a table's cells and headers take property placeholders, with the same Insert a field menu the text blocks have
 - Fixed: a placeholder on the canvas is marked again — an unfilled field and a mistyped one had been printing as ordinary text
 - Added: a document can be published by saving a copy to the job, not only by pasting a SharePoint link
 - Added: a document Lofty holds the file for opens from the record, through a signed link
-- Fixed: a missing migration now says the app is ahead of the database and names the column, instead of showing the database's own error
-- …and 207 more.
+- …and 208 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
