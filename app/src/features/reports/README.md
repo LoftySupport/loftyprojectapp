@@ -141,8 +141,10 @@ sending a document has always meant — the Share panel and the shared page both
 | The public page | `pages/SharedDocumentPage.tsx`, outside `RequireAuth` and outside `AppShell` |
 | The endpoint | `supabase/functions/report-share/` — read its README before deploying |
 
-**The endpoint still has to be deployed and given `SHARE_ALLOWED_ORIGINS`.** Until then it
-refuses everything, so the Share panel produces a link that will not open.
+**The endpoint is deployed and `SHARE_ALLOWED_ORIGINS` is set**, so the Share panel produces
+links that open. (This said the opposite until 10 September: the secret was set outside a
+session and nothing in the repository could see it. Confirmed by asking the live endpoint —
+`hub.lofty.au` allowed, `example.com` refused with 403.)
 
 **`SharedReportPage.jsx` is still not vendored.** It resolves widgets against a ctx it
 fetches, which is the design this integration deliberately does not use;

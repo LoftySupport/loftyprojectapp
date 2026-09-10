@@ -233,8 +233,9 @@ the new values rather than recording them as shortfalls.
    - The deep-link case: a write on a record the page has not listed (tasks, runs, property
      values, feedback) goes through unrecorded, because the seam has no "before" for it.
      Every screen today lists before it edits, so nothing hits this; the fallback is honest.
-4. **Still queued from earlier sessions**, unchanged: `SHARE_ALLOWED_ORIGINS` (below), the
-   sortable-header table further down this file, and the notification worker.
+4. **Still queued from earlier sessions**: the sortable-header table further down this file,
+   and the notification worker. `SHARE_ALLOWED_ORIGINS` has come OFF this list — it was set
+   in Supabase several PRs ago and this file did not know (see below).
 5. **Planned, not built — an API, an MCP server and an in-app Ask box.** Amber asked for the
    plan on 8 September; it is `docs/integrations/api-and-mcp-plan.md`; the readable version is
    <https://claude.ai/code/artifact/0a1cfce5-b719-426c-819f-4dd12352453d>. Its six decisions were **asked and answered the same day** (open-questions.md → Answered,
@@ -253,13 +254,33 @@ table of contents and the record pickers live in `app/src/features/reports/` and
 upstream. Do not raise PRs against that repo, and do not treat the two copies as needing to
 agree.
 
-**`report-share` is deployed and inert until one secret is set.** Deployed 4 September to
-`gmekuqdjemrfuurxhuib`, `verify_jwt` off, and answering — a POST returns
-`503 "Sharing is not switched on."` because `SHARE_ALLOWED_ORIGINS` has no value yet. That is
-the designed default, not a fault: the secret is a comma-separated origin allowlist with no
-fallback, so a deploy made before somebody decides the domains answers nothing. Set it in
-Project Settings → Edge Functions → Secrets and the Share button starts producing links that
-open. Until then it produces links that do not, so it is worth doing before anybody is shown
+**`report-share` is deployed AND switched on.** Deployed 4 September to
+`gmekuqdjemrfuurxhuib`, `verify_jwt` off, and `SHARE_ALLOWED_ORIGINS` set — Amber, 10
+September: *"Supabase has the share allowed origins set in edge functions secrets several
+prs ago"*. **This paragraph said the opposite until then**, and so did three other documents,
+because the secret was set outside a session and nothing here was told.
+
+Checked rather than believed, on 10 September, by asking the live endpoint:
+
+```
+Origin: https://hub.lofty.au  → 404 {"error":"This link is not valid."}
+                                 access-control-allow-origin: https://hub.lofty.au
+Origin: https://example.com   → 403 {"error":"This link cannot be opened from here."}
+                                 access-control-allow-origin: null
+```
+
+A 404 on a token that does not exist is the endpoint working; the 503 this file used to
+describe would mean the secret was still empty. So the allowlist is live and enforcing, and
+the Share button produces links that open.
+
+**A secret set outside the repository is invisible to it**, which is the thing worth taking
+from this rather than the correction itself: nothing in CI, in the migrations or in these
+documents can see an edge-function secret, so a claim about one goes stale silently. The
+probe above is the only way to know, and it takes one curl.
+
+Historic, kept because the reasoning still applies to the next secret: the allowlist is a
+comma-separated list with no fallback, so a deploy made before somebody decides the domains
+answers nothing — which is the designed default rather than a fault. It was worth doing
 the feature.
 
 Last updated: 2026-09-07.

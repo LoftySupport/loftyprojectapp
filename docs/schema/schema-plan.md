@@ -1910,8 +1910,11 @@ Three things fell out of it that were not the point but are worth keeping:
   endpoint verifies from the plaintext the viewer sends. `npm run check:share-password`
   imports both real implementations and asserts they agree.
 
-What is left is not a decision: the endpoint has to be **deployed** and given
-`SHARE_ALLOWED_ORIGINS`. Until it is, the Share panel makes a link that will not open.
+What was left was not a decision: the endpoint had to be **deployed** and given
+`SHARE_ALLOWED_ORIGINS`. **Both are done** — deployed 4 September, and the secret set some
+PRs later. Confirmed against the live endpoint on 10 September: `hub.lofty.au` is allowed and
+`example.com` is refused with 403. This paragraph said the work was outstanding for longer
+than it was, because a secret set outside the repository is invisible to it.
 
 ## 4 September — Settings is the managers', Admin is the administrators'
 
