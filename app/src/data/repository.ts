@@ -846,16 +846,58 @@ export interface Repository {
    * integration is in place add in the draft watermark and when ready to publish you have
    * to add in the sharepoint link which replaces the draft document"*.
    *
-   * The URL is where it went. Nothing is uploaded — somebody has saved the file into
-   * SharePoint themselves and is recording where — so this method records a fact rather
-   * than performing a transfer, and it will keep that shape when the integration lands.
+   * TWO WAYS, AND AT LEAST ONE OF THEM (0106). Amber, 10 September, once 0104 had shipped:
+   * *"until Documents are integrated to Sharepoint, please allow the option of saving to
+   * Job in the system and/or downloading it and adding a link to that document file"*.
+   *
+   *   `url`  — where it went, outside Lofty. Records a fact rather than performing a
+   *            transfer: somebody has saved the file into SharePoint themselves and is
+   *            writing down where. This is the shape the integration will keep.
+   *   `file` — the file itself, saved against the record. Uploaded to the `job-documents`
+   *            bucket, filed in `documents` and attached to the job or project this
+   *            document is about, so it lands in that record's Documents list beside
+   *            everything else rather than in a place of its own.
+   *
+   * Both is an ordinary state, not a contradiction: the copy saved on the job IS what was
+   * sent, and the SharePoint address is where the version people edit lives. Neither is
+   * refused — by this method and, underneath it, by constraint.
+   *
+   * `file` needs the document to be about a job or a project. A portfolio report is about
+   * the whole book of work and there is no record to file a copy against, so the control
+   * says so rather than offering a button that fails.
    *
    * THERE IS NO `unpublish`. Editing the document is what takes the publication back, and
    * the database does it (0104's trigger) rather than the caller: the builder autosaves,
    * the panel writes and the importer writes, and a rule each of them has to remember is
    * a rule the next one will forget.
+   *
+   * Nor is there an unpublish hiding in the file's deletion. Deleting the saved copy takes
+   * the publication back only when it was the ONLY answer to "where did it go" (0106's
+   * trigger) — a document that also went to SharePoint stays published, because the copy
+   * people were sent is still where it was sent.
    */
-  publishReportDocument(id: string, input: { url: string }): Promise<ReportDocument>;
+  publishReportDocument(
+    id: string,
+    input: { url?: string | null; file?: File | null }
+  ): Promise<ReportDocument>;
+
+  /**
+   * A link to open a file Lofty itself holds for a record (0106).
+   *
+   * Every `documents` row with a `storagePath` rather than a URL — which today means the
+   * copies saved when a document is published to the job, and will mean whatever the
+   * import brings.
+   *
+   * Signed and short-lived: `job-documents` is private, so there is no permanent URL to
+   * hold and every read is asked for at the moment somebody clicks. Null when storage
+   * refuses — the row then says the copy is gone rather than offering a link that opens
+   * on an error page.
+   *
+   * The same shape as `attachmentUrl`, and deliberately NOT `uploadReportImage`'s
+   * permanent public URL. Which of those two a bucket gets is a decision per bucket, and
+   * this one holds contracts.
+   */
+  jobDocumentUrl(path: string): Promise<string | null>;
 
   /**
    * The documents attached to one job or one project — 0032's `documents` joined through
@@ -1122,6 +1164,7 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "shareReportDocument",
   "unshareReportDocument",
   "publishReportDocument",
+  "jobDocumentUrl",
   "listRecordDocuments",
   "addDocumentUrl",
   "removeRecordDocument",
@@ -1330,7 +1373,8 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   deleteReportDocument: "report_documents",
   shareReportDocument: "report_documents",
   unshareReportDocument: "report_documents",
-  publishReportDocument: "report_documents",
+  publishReportDocument: "report_documents + documents + document_links + storage: job-documents",
+  jobDocumentUrl: "storage: job-documents",
   listRecordDocuments: "documents + document_links",
   addDocumentUrl: "documents + document_links",
   removeRecordDocument: "document_links",

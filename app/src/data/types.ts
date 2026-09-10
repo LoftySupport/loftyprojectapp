@@ -3066,6 +3066,27 @@ export interface ReportDocument {
    * SharePoint, somebody has edited it since, and what is up there is out of date.
    */
   publishedUrl: string | null;
+  /**
+   * PUBLISHED TO THE JOB, rather than to a link (0106).
+   *
+   * Amber, 10 September: *"until Documents are integrated to Sharepoint, please allow the
+   * option of saving to Job in the system and/or downloading it and adding a link to that
+   * document file"*. Until the integration lands, a link means somebody has to have a
+   * SharePoint folder set up and to have put the file there themselves — so this is the
+   * other half: the file saved against the record, in Lofty's own storage.
+   *
+   * The id of a row in `documents`, so the published file appears in this record's
+   * Documents list beside everything else filed on it rather than in a place of its own.
+   *
+   * "AND/OR" IS LITERAL. Either satisfies published, both together is an ordinary state,
+   * and neither with `publishedAt` set is refused by constraint.
+   *
+   * Survives an edit, exactly as `publishedUrl` does and for the same reason. Goes null if
+   * the file itself is deleted — and if that was the only answer to "where did it go", the
+   * publication goes with it, because a document cannot stay published as a file that no
+   * longer exists.
+   */
+  publishedDocumentId: Uuid | null;
   createdAt: IsoDateTime;
   createdBy: Uuid | null;
   updatedAt: IsoDateTime;
@@ -3084,12 +3105,18 @@ export type ReportDocumentState = "draft" | "published" | "edited-since-publishe
 export function reportDocumentState(d: {
   publishedAt: string | null;
   publishedUrl: string | null;
+  publishedDocumentId?: string | null;
 }): ReportDocumentState {
   if (d.publishedAt) return "published";
   // The third state is worth naming rather than folding into "draft": both carry the
   // watermark and neither is safe to send, but only this one means there is a stale copy
-  // sitting in SharePoint that somebody may still be reading.
-  return d.publishedUrl ? "edited-since-published" : "draft";
+  // somebody may still be reading — sitting in SharePoint, or saved on the job here.
+  //
+  // Both are asked about (0106). A document published by saving the file to the job and
+  // then edited is in exactly the same position as one published to a link and then
+  // edited, and reading only the URL would have called it a plain draft — quietly the
+  // wrong answer for the half of the documents that never go near SharePoint.
+  return d.publishedUrl || d.publishedDocumentId ? "edited-since-published" : "draft";
 }
 
 export const REPORT_DOCUMENT_STATE_LABELS: Record<ReportDocumentState, string> = {

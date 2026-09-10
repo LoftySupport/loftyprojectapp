@@ -225,6 +225,16 @@ const SCREENSHOT_BUCKET = "feedback-screenshots";
 const REPORT_IMAGE_BUCKET = "report-images";
 
 /**
+ * The PRIVATE bucket a document published to the job goes into (0106).
+ *
+ * The opposite call to REPORT_IMAGE_BUCKET above, and the two sit together so nobody
+ * copies the wrong one: a picture inside a report is decoration a client is being sent
+ * anyway, and a published document is the work product — a contract, a report, a letter,
+ * with real addresses, names and figures in it. Read by signed URL, like the screenshots.
+ */
+const JOB_DOCUMENT_BUCKET = "job-documents";
+
+/**
  * What the tracker reads off `feedback_display` (0061, widened by 0068).
  *
  * One string literal, like every other column list here: postgrest-js parses these at
@@ -3922,23 +3932,122 @@ export function createSupabaseRepository(): Repository {
      * differs — whether a URL was already there — is something the DIALOG uses to
      * pre-fill, not something the write needs to know.
      */
-    async publishReportDocument(id: string, input: { url: string }): Promise<ReportDocument> {
-      const url = input.url.trim();
+    async publishReportDocument(
+      id: string,
+      input: { url?: string | null; file?: File | null }
+    ): Promise<ReportDocument> {
+      const url = (input.url ?? "").trim();
+      const file = input.file ?? null;
+
+      if (!url && !file) {
+        throw new Error(
+          "Say where this went before publishing it: save a copy to the job, paste the SharePoint address, or both."
+        );
+      }
       // Checked here as well as by the constraint, because a constraint's message reaches
       // the screen verbatim and "violates check constraint
       // report_documents_published_url_is_https" tells somebody who pasted a network path
       // nothing they can act on.
-      if (!/^https:\/\/\S+$/.test(url)) {
+      if (url && !/^https:\/\/\S+$/.test(url)) {
         throw new Error(
           "That does not look like a SharePoint address. Save the document into SharePoint, copy the address from the browser bar, and paste it here — it starts with https://."
         );
       }
+
+      // ---- the file half (0106) -----------------------------------------
+      // Uploaded and FILED before the publication is written, in that order and not the
+      // other way round. If any of it fails the document is still a draft, which is true;
+      // publishing first and then failing to save the copy would leave a document flying
+      // a published flag over a file that was never stored.
+      let publishedDocumentId: string | null = null;
+      if (file) {
+        // WHICH RECORD this document is about. Read from the row rather than taken as an
+        // argument: the caller would be reading the same row, and two places holding
+        // "which job is this for" is one place for them to disagree.
+        const about = await client
+          .from("report_documents")
+          .select("report_document_title, job_id, project_id")
+          .eq("report_document_id", id)
+          .maybeSingle();
+        if (about.error) throw about.error;
+        const row = about.data as { report_document_title: string; job_id: string | null; project_id: number | null } | null;
+        if (!row) {
+          throw new Error("That document was not published — it no longer exists, or you do not have permission to change it.");
+        }
+        if (!row.job_id && row.project_id == null) {
+          throw new Error(
+            "This document is not about a job or a project, so there is nowhere on a record to save the copy. Paste a SharePoint address instead."
+          );
+        }
+
+        // The path shape 0106's storage policy enforces: `jobs/<job key>/…` or
+        // `projects/<number>/…`. Kept the same on both sides deliberately — a policy the
+        // app does not match is a refusal nobody can read, and a path the policy does not
+        // check is a bucket that becomes a flat pile.
+        //
+        // The same sanitising as uploadReportImage, and for the same reason: a filename
+        // arrives from somebody's machine and `../` in an object path is the oldest trick
+        // there is. The uuid keeps two copies of "Site Report.docx" apart.
+        const safe = file.name.replace(/[^a-zA-Z0-9.-]/g, "-").slice(-80) || "document";
+        const folder = row.job_id ? `jobs/${row.job_id}` : `projects/${row.project_id}`;
+        const path = `${folder}/${crypto.randomUUID()}-${safe}`;
+
+        const up = await db.storage
+          .from(JOB_DOCUMENT_BUCKET)
+          .upload(path, file, { contentType: file.type || undefined, upsert: false });
+        // Thrown rather than swallowed: the two failures worth telling apart — too big,
+        // and a type the bucket does not take — both arrive here with their own message.
+        if (up.error) throw up.error;
+
+        const made = await client
+          .from("documents")
+          .insert({
+            // The document's own title, not the filename. The list reads as the documents
+            // people made rather than as whatever their browser called the download.
+            document_name: row.report_document_title,
+            document_storage_path: path,
+            document_mime_type: file.type || null,
+            document_size_bytes: file.size,
+            // 0032's existing vocabulary. `report` because that is what this is — a built
+            // document, published. Not a value invented for this.
+            document_category: "report"
+          })
+          .select("document_id")
+          .single();
+        if (made.error) throw documentError(made.error);
+        publishedDocumentId = (made.data as { document_id: string }).document_id;
+
+        // And attached to the record, which is the whole of "saving to Job in the system":
+        // without this the file is held but appears nowhere anybody would look for it.
+        const link = await client
+          .from("document_links")
+          .insert({
+            document_id: publishedDocumentId,
+            job_id: row.job_id,
+            project_id: row.job_id ? null : row.project_id
+          })
+          .select("document_link_id")
+          .single();
+        if (link.error) throw documentError(link.error);
+      }
+
+      // `published_at` is sent as a value the trigger then OVERWRITES with `now()` — it
+      // has to be non-null for the guard to recognise a publication, and the guard refuses
+      // to take the caller's word for when. `published_by` is not sent at all: it is read
+      // from the session, the same rule as every other "who did this" column here.
+      //
+      // Only what was given is written. A publish that pastes an address must not blank
+      // the copy saved on the job last time, and one that saves a copy must not blank the
+      // address — "and/or" reads both ways.
+      const patch: Record<string, unknown> = {
+        report_document_published_at: new Date().toISOString()
+      };
+      if (url) patch.report_document_published_url = url;
+      if (publishedDocumentId) patch.report_document_published_document_id = publishedDocumentId;
+
       const { data, error } = await client
         .from("report_documents")
-        .update({
-          report_document_published_url: url,
-          report_document_published_at: new Date().toISOString()
-        })
+        .update(patch)
         .eq("report_document_id", id)
         .select(REPORT_DOCUMENT_COLUMNS);
       if (error) throw error;
@@ -3946,6 +4055,24 @@ export function createSupabaseRepository(): Repository {
         throw new Error("That document was not published — it no longer exists, or you do not have permission to change it.");
       }
       return toReportDocument(data[0] as unknown as ReportDocumentRow);
+    },
+
+    /**
+     * A link to open a file Lofty holds for a record (0106).
+     *
+     * Signed and short-lived, because `job-documents` is private — the same shape as
+     * `attachmentUrl` above and deliberately NOT `uploadReportImage`'s permanent public
+     * URL. Null when storage refuses, which the row renders as the copy being gone rather
+     * than as a link that opens on an error page.
+     */
+    async jobDocumentUrl(path: string): Promise<string | null> {
+      const { data, error } = await client.storage
+        .from(JOB_DOCUMENT_BUCKET)
+        // Long enough to open the file and read it, short enough that a copied URL is not
+        // a permanent public link to a contract.
+        .createSignedUrl(path, 300);
+      if (error) return null;
+      return data?.signedUrl ?? null;
     },
 
     async deletePropertyDef(key: string): Promise<void> {
@@ -4156,7 +4283,7 @@ const REPORT_TEMPLATE_COLUMNS =
 // adds a column later — `hasSharePassword` below is computed from a boolean the database
 // sends instead. A hash in a browser response is a hash somebody can attack offline.
 const REPORT_DOCUMENT_COLUMNS =
-  "report_document_id, report_document_title, report_document_layout, report_template_id, job_id, project_id, report_document_share_token, report_document_share_expires_at, report_document_has_share_password, report_document_has_share_snapshot, report_document_published_at, report_document_published_by, report_document_published_url, report_document_created_at, report_document_created_by, report_document_updated_at, report_document_updated_by";
+  "report_document_id, report_document_title, report_document_layout, report_template_id, job_id, project_id, report_document_share_token, report_document_share_expires_at, report_document_has_share_password, report_document_has_share_snapshot, report_document_published_at, report_document_published_by, report_document_published_url, report_document_published_document_id, report_document_created_at, report_document_created_by, report_document_updated_at, report_document_updated_by";
 
 type ReportTemplateRow = {
   report_template_id: string;
@@ -4291,6 +4418,7 @@ type ReportDocumentRow = {
   report_document_published_at: string | null;
   report_document_published_by: string | null;
   report_document_published_url: string | null;
+  report_document_published_document_id: string | null;
   report_document_created_at: string;
   report_document_created_by: string | null;
   report_document_updated_at: string;
@@ -4334,6 +4462,7 @@ function toReportDocument(r: ReportDocumentRow): ReportDocument {
     publishedAt: r.report_document_published_at,
     publishedBy: r.report_document_published_by,
     publishedUrl: r.report_document_published_url,
+    publishedDocumentId: r.report_document_published_document_id,
     createdAt: r.report_document_created_at,
     createdBy: r.report_document_created_by,
     updatedAt: r.report_document_updated_at,

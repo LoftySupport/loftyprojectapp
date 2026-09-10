@@ -2315,6 +2315,81 @@ first page only**. And Word gets a spaced stamp in the page header rather than t
 ghost behind the text, because the `docx` package exposes no VML shape and hand-writing XML
 into somebody else's document part breaks on their next release.
 
+### 10 September — a document can be published to the job (`0106`)
+
+*Numbered `0105` first, and renumbered — PR #69 had already claimed that number and applied
+it to the live database. **The second number collision in two days**, both caught by
+looking at `supabase_migrations.schema_migrations` rather than at the repository: a branch
+cannot see a number another open branch has taken, and the live table is the only place
+both are visible. Worth checking there before naming a migration, not after writing one.*
+
+Amber, once `0104` had shipped: *"until Documents are integrated to Sharepoint, please
+allow the option of saving to Job in the system and/or downloading it and adding a link to
+that document file"*.
+
+`0104` made publishing require a SharePoint address, which was right for the case it was
+built for and wrong as the only case. SharePoint is not integrated, so "publish" meant *go
+and save this somewhere else first, then come back and paste where you put it* — and for
+any job whose folder has not been set up yet, that is a door with no handle.
+
+So there are now **two ways to be published, and "and/or" is literal**:
+
+| `published_url` | `published_document_id` | What it means |
+| --- | --- | --- |
+| set | null | It went to SharePoint. Somebody put it there and wrote down where. |
+| null | set | It is saved on the job, in Lofty's own storage. |
+| set | set | Both, and neither makes the other a lie: the copy on the job is what was sent, the address is where the version people edit lives. |
+| null | null | Refused whenever `published_at` is set. That is the half of `0104`'s rule that had to keep biting. |
+
+The constraint `report_documents_published_names_where` is **dropped and recreated** rather
+than added beside, because as `0104` wrote it, it refuses the new case outright and two
+checks would be unsatisfiable together.
+
+**The file goes in `documents`, which is where files already go.** A pointer from
+`report_documents` into `0032`'s table, not a second place to keep files — and that choice
+is what puts the published copy in the record's own Documents list beside the contract and
+the survey, rather than somewhere only this table knows about. The bytes go in a new
+private `job-documents` bucket, read by signed URL. The opposite call to `0100`'s public
+`report-images`, and deliberately: a picture inside a report is decoration a client is
+being sent anyway, and a published document is the work product.
+
+**`on delete set null` was written first, and it does not work.** This is worth keeping
+rather than tidying away, because it looked right and reviewed clean. The FK reads as *the
+pointer goes, the publication survives*; what actually happens is that the nulling is an
+UPDATE, the UPDATE leaves a published row naming neither a file nor a link, and the check
+refuses it — so the DELETE fails. Watched on the replay database:
+
+```
+DELETE REFUSED: 23514 / new row for relation "report_documents"
+violates check constraint "report_documents_published_names_where"
+```
+
+An admin reaping a file got a message about a constraint they have never heard of and no
+way to act on it. The fix is not to weaken the check but to answer the question the FK was
+ducking: **what is a published document whose published file has been deleted?** It is a
+draft. That is `0104`'s own rule applied honestly — the state is derived from a fact
+precisely so it cannot say "published" about something that is not.
+`reap_publication_of_deleted_document()` clears the publication when the file it names goes
+and no URL is left, and leaves it alone when a URL is, because then the document really did
+go somewhere and still is there.
+
+**What was watched failing**, all six, before any of it was trusted:
+
+| Broken on purpose | What reported |
+| --- | --- |
+| The widened check replaced with `check (true)` | the migration's own probe: *a published document was allowed to name neither a file nor a link* |
+| `0104`'s narrow check left in place | the new case refused — `published_names_where` on the file-only publish |
+| The reap trigger's `published_url is null` carve-out removed | *deleting the stored copy un-published a document that also went to SharePoint* |
+| The reap trigger not created at all | the original bug, reproduced through the app's real path: `verify/rls.sql` reporting *an admin could not delete a published file — 23514* |
+| `0104`'s guard made to clear the file pointer on a revert | *the revert threw away the file the document was published as* |
+
+**What is not proved here.** The bucket and its three object policies do not exist on the
+replay database — Supabase Storage is not part of it — so the path shape, the 25MB limit
+and the six allowed types are checked by hand against the live project, exactly as `0062`
+and `0100` record for their own buckets. The policy and the app agree on the object path
+(`jobs/<job key>/…` or `projects/<number>/…`) because both were written from this
+paragraph; a policy the app does not match is a refusal nobody can read.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in
