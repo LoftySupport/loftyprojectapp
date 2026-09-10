@@ -2268,10 +2268,27 @@ export interface SplitLot {
   /** As it appears on the plan of division — "1", "2B", "14A". */
   lotNumber: string;
   /**
-   * The number this job has in SiteBook or Trello, when it is a job that already exists
-   * there. Unique across `jobs`, and nullable — jobs created here have none.
+   * The number this job has in the old system, when it is a job that already exists
+   * there. Unique across `jobs`, and nullable — jobs created here have none. NOT the
+   * SiteBook number: SiteBook does not issue one until construction (Amber, 10 Sep).
    */
   jobNumberOld?: string | null;
+  /**
+   * The street number this lot has, when it has one.
+   *
+   * Amber, 10 September: *"jobs are not showing the street number on the address. they
+   * are only showing lot number."* The split used to hard-code this to null on every
+   * job it created, on the reasoning that *"a lot has a lot number, not a street
+   * number — the street number arrives when the titles do"*. That is true of a lot on a
+   * plan of division and false of the address people use: before titles issue, Lot 3 is
+   * still AT 28 Corner Street, and dropping the number left every job reading
+   * "Lot 3, Corner Street" with no number in it at all.
+   *
+   * Blank inherits the project's street number, which is what the rest of the address
+   * already does. Typed, it wins — which is what a lot that has been given its own
+   * number needs, and it is the field Amber asked for at project creation.
+   */
+  streetNumber?: string | null;
   /**
    * Community or Torrens (0054). Seeded from the project's intended mix — the first
    * N rows community, the rest Torrens — and editable per row, because which lots take

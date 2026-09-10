@@ -32,7 +32,49 @@ properties may change between now and then"* — so the machinery has a plausibl
 even though jobs and projects are not it. It never ran: the load rolled back whole on its
 first write, so no project, job or address in the app came from it.
 
-## 10 September, later still — the Tasks board becomes a board, and the screen rules get written down
+## 10 September, later still — a job's address gets its street number back
+
+Amber: *"jobs are not showing the street number on the address. they are only showing
+lot number."* One line in `splitProject` did it, and it was deliberate:
+
+```
+address_lot_number: lot.lotNumber,
+// A lot has a lot number, not a street number — the street number arrives when
+// the titles do, which is exactly the rename the address history exists for.
+address_street_number: null,
+```
+
+True of a lot on a plan of division, and false of the address anybody uses. It was also
+the one field the split singled out — street, suburb, state, postcode and council are
+all copied from the project's address, and the street number alone was thrown away. So
+every job created by splitting a project read **"Lot 3, Corner Street, Wandi SA 6167"**:
+an address with no number in it.
+
+**The trigger was never at fault.** `build_consolidated_address()` has always rendered
+`coalesce(new.address_street_number || ' ', '')`, and its own expression, run against
+the live database with literals, says so:
+
+| | reads |
+| --- | --- |
+| lot only (what the split produced) | `Lot 3, Corner Street, Wandi SA 6167, AU` |
+| lot + the project's number | `Lot 3, 28 Corner Street, Wandi SA 6167, AU` |
+| a lot given its own number | `Lot 3, 30 Corner Street, Wandi SA 6167, AU` |
+| titles issued, no lot | `28 Corner Street, Wandi SA 6167, AU` |
+
+**Nothing needs backfilling.** Of 197 addresses in the live database, 178 carry a street
+number only, 13 a lot number only, and **none carries both** — which is the fingerprint
+of this bug plus the fact that Phase B never ran. The 13 are project addresses that
+genuinely have only a lot number, which is their real data rather than a symptom. There
+are no jobs yet, so no job address was written wrong and then kept.
+
+**Street # is now a field per lot on the split**, which is the half of Amber's earlier
+*"add Lot #, Res # Street # at project creation"* that needed no schema change: blank
+inherits the project's number, typed wins. **Res # is still open question 20** — it is
+in no table, it is not a rename of either existing column, and adding it changes both
+`addresses_has_a_number` and the trigger above, so it waits on an answer rather than a
+guess.
+
+## 10 September — the Tasks board becomes a board, and the screen rules get written down
 
 Amber, in two messages: *"fix the filters in the app for dropdown on tasks so it is inline
 and all filters are available as well as advanced filters where you can sort and group by

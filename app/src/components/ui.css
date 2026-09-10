@@ -1712,9 +1712,10 @@ code { overflow-wrap: anywhere; }
 .split-rows-head { margin-bottom: var(--space-8); }
 .split-row {
   display: grid;
-  /* Lot, old number, title type. The title column is widest of the three because
-     "Community title" is the longest thing any of them holds. */
-  grid-template-columns: 0.8fr 1.1fr 1.3fr;
+  /* Lot, street number, old job number, title type. The title column is the widest
+     because "Community title" is the longest thing any of them holds; the two numbers
+     are narrow because "2B" and "28" are the shape of what goes in them. */
+  grid-template-columns: 0.7fr 0.7fr 1.1fr 1.3fr;
   gap: var(--space-8);
   align-items: start;
   padding: var(--space-4) 0;

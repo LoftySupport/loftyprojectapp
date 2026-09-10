@@ -1524,7 +1524,7 @@ export function createSupabaseRepository(): Repository {
        * text and why the mapping back from inserted addresses no longer sorts them
        * numerically.
        */
-      const lots: { lotNumber: string; jobNumberOld?: string | null; titleType?: TitleType | null }[] =
+      const lots: { lotNumber: string; jobNumberOld?: string | null; streetNumber?: string | null; titleType?: TitleType | null }[] =
         input.lots?.length
           ? input.lots
           : Array.from({ length: input.count }, (_, i) => ({ lotNumber: String(firstLot + i) }));
@@ -1541,9 +1541,27 @@ export function createSupabaseRepository(): Repository {
       // a value sent from here would be overwritten anyway — or worse, not be.
       const rows = lots.map(lot => ({
         address_lot_number: lot.lotNumber,
-        // A lot has a lot number, not a street number — the street number arrives when
-        // the titles do, which is exactly the rename the address history exists for.
-        address_street_number: null,
+        /**
+         * The lot's own street number, or the project's.
+         *
+         * THIS WAS HARD-CODED TO NULL, and the comment defending it read: *"A lot has a
+         * lot number, not a street number — the street number arrives when the titles
+         * do, which is exactly the rename the address history exists for."* True of a
+         * lot on a plan of division, and false of the address anybody uses. Amber, 10
+         * September: *"jobs are not showing the street number on the address. they are
+         * only showing lot number."*
+         *
+         * It was also the one field the split singled out: street, suburb, state,
+         * postcode and council are all copied from the project's address, and the
+         * street number alone was thrown away — so a job at 28 Corner Street read
+         * "Lot 3, Corner Street, Adelaide SA 5000", an address with no number in it.
+         *
+         * Inherited rather than invented: the value comes from the project's own
+         * address row. A lot that has been given its own number carries it instead,
+         * which is the per-lot field on the split dialog. The address history still
+         * records the rename when titles issue — that mechanism is untouched.
+         */
+        address_street_number: emptyToNull(lot.streetNumber ?? null) ?? source.address_street_number,
         address_street_1: source.address_street_1,
         address_street_2: source.address_street_2,
         address_suburb: source.address_suburb,
