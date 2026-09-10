@@ -1,19 +1,24 @@
 import { useMemo, useState } from "react";
 import { Button, Text } from "@vibe/core";
-import type { BoardJob } from "../data/boardModel";
+import { isTaskLive, type TaskEntry } from "../data/types";
 import "./ui.css";
 
 /**
- * The month calendar (G14), placing only dates that exist.
+ * The tasks month calendar — two real dates per task, each labelled as what it is.
  *
- * Two kinds of entry per job, both derived from real columns and labelled as what they
- * are: the day it ENTERED its current stage (`job_stage_entered_at`), and — where the
- * stage has an SLA — the day it is DUE out (entered + expected days). The prototype
- * derived a fabricated due date from invented durations; the grid ports, the
- * derivation does not. Dated step-properties join these when they land.
+ * `MonthCalendar` does this for jobs and places the two dates a job carries: the day it
+ * entered its stage, and the day the stage's SLA runs out. A task carries a different
+ * pair and the difference is the point of the screen:
  *
- * The empty month keeps the prototype's best idea: "Jump to {nearest month with
- * entries}" instead of a shrug.
+ *   **due**        `due_effective` — when it has to be finished.
+ *   **scheduled**  `scheduled_date` — when somebody plans to do it (0102).
+ *
+ * They are frequently not the same day, and a calendar that merged them would answer
+ * neither "what is landing this week" nor "what am I doing on Thursday". Both are drawn,
+ * the due one in the orange the jobs calendar already uses for a deadline.
+ *
+ * The grid, the cells and every `cal-*` class are shared with the jobs calendar, so the
+ * two months read as one control with different content in it.
  */
 
 const DAY = 86_400_000;
@@ -24,16 +29,22 @@ const startOfDay = (d: Date | string | number) => {
   return x.getTime();
 };
 
+/** A date-only column at LOCAL midnight — see the same note in `taskFiltering.ts`. */
+const dayOf = (iso: string | null): number | null => {
+  if (!iso) return null;
+  const t = startOfDay(iso.length === 10 ? `${iso}T00:00:00` : iso);
+  return Number.isNaN(t) ? null : t;
+};
+
 interface CalEntry {
-  job: BoardJob;
-  kind: "entered" | "due";
+  task: TaskEntry;
+  kind: "due" | "scheduled";
   when: number;
 }
 
-export function MonthCalendar({ rows, expectedDaysByStage, onOpen }: {
-  rows: BoardJob[];
-  expectedDaysByStage: Record<string, number>;
-  onOpen: (j: BoardJob) => void;
+export function TasksCalendar({ rows, onOpen }: {
+  rows: TaskEntry[];
+  onOpen?: (t: TaskEntry) => void;
 }) {
   const today = startOfDay(Date.now());
   const [anchor, setAnchor] = useState(() => {
@@ -44,14 +55,16 @@ export function MonthCalendar({ rows, expectedDaysByStage, onOpen }: {
 
   const entries = useMemo(() => {
     const out: CalEntry[] = [];
-    for (const j of rows) {
-      const entered = startOfDay(j.stageEnteredAt);
-      out.push({ job: j, kind: "entered", when: entered });
-      const expected = expectedDaysByStage[j.stage];
-      if (expected != null) out.push({ job: j, kind: "due", when: entered + expected * DAY });
+    for (const t of rows) {
+      const due = dayOf(t.dueEffective);
+      if (due != null) out.push({ task: t, kind: "due", when: due });
+      const sched = dayOf(t.scheduledDate);
+      // Only when it says something the due entry does not. A task scheduled for the
+      // day it is due would otherwise sit in the cell twice.
+      if (sched != null && sched !== due) out.push({ task: t, kind: "scheduled", when: sched });
     }
     return out;
-  }, [rows, expectedDaysByStage]);
+  }, [rows]);
 
   const byDay = useMemo(() => {
     const m = new Map<number, CalEntry[]>();
@@ -66,15 +79,14 @@ export function MonthCalendar({ rows, expectedDaysByStage, onOpen }: {
   const a = new Date(anchor);
   const monthLabel = a.toLocaleDateString(undefined, { month: "long", year: "numeric" });
   const first = new Date(a.getFullYear(), a.getMonth(), 1);
-  // Monday-start: how many cells before the 1st.
-  const lead = (first.getDay() + 6) % 7;
+  const lead = (first.getDay() + 6) % 7;              // Monday-start
   const gridStart = startOfDay(first) - lead * DAY;
   const cells = Array.from({ length: 42 }, (_, i) => gridStart + i * DAY);
 
   const inMonth = (t: number) => new Date(t).getMonth() === a.getMonth();
   const monthHasEntries = cells.some(t => inMonth(t) && (byDay.get(t)?.length ?? 0) > 0);
 
-  // The nearest month that has anything, for the empty state's jump.
+  /** The nearest month that has anything, for the empty state's jump. */
   const nearest = useMemo(() => {
     if (entries.length === 0) return null;
     let best: number | null = null;
@@ -94,14 +106,14 @@ export function MonthCalendar({ rows, expectedDaysByStage, onOpen }: {
     setAnchor(d.getTime());
   };
 
+  const undated = rows.filter(t => t.dueEffective == null && t.scheduledDate == null).length;
+
   return (
     <div className="panel">
       <div className="panel-head">
         <Text type="text2" weight="bold">{monthLabel}</Text>
         <div className="field-inline cal-head">
-          <Text type="text3" color="secondary">
-            grey = entered its stage · orange = due out (SLA)
-          </Text>
+          <Text type="text3" color="secondary">orange = due · grey = scheduled to be worked</Text>
           <Button size="small" kind="tertiary" className="cal-nav" onClick={() => move(-1)} aria-label="Previous month">‹</Button>
           <Button
             size="small"
@@ -138,13 +150,18 @@ export function MonthCalendar({ rows, expectedDaysByStage, onOpen }: {
               </div>
               {dayEntries.slice(0, 3).map((e, i) => (
                 <button
-                  key={`${e.job.jobNumber}-${e.kind}-${i}`}
+                  key={`${e.task.id}-${e.kind}-${i}`}
                   type="button"
                   className={"cal-entry" + (e.kind === "due" ? " is-due" : "")}
-                  onClick={() => onOpen(e.job)}
-                  title={`${e.job.jobNumber} — ${e.kind === "due" ? `due out of ${e.job.stage}` : `entered ${e.job.stage}`}`}
+                  onClick={() => onOpen?.(e.task)}
+                  title={
+                    `${e.task.name} — ${e.kind === "due" ? "due" : "scheduled"}` +
+                    `${e.task.jobId ? ` on ${e.task.jobId}` : ""}` +
+                    ` · ${e.task.assigneeName ?? "nobody"}` +
+                    (isTaskLive(e.task.status) ? "" : " · closed")
+                  }
                 >
-                  {e.job.jobNumber} {e.kind === "due" ? "due" : "entered"}
+                  {e.task.name}
                 </button>
               ))}
               {dayEntries.length > 3 && (
@@ -166,6 +183,13 @@ export function MonthCalendar({ rows, expectedDaysByStage, onOpen }: {
             </Button>
           )}
         </div>
+      )}
+
+      {undated > 0 && (
+        <Text type="text3" color="secondary" ellipsis={false} className="gantt-note">
+          {undated} of these have neither a due date nor a scheduled one, so they are on
+          no day of any month. The table and the board still show them.
+        </Text>
       )}
     </div>
   );

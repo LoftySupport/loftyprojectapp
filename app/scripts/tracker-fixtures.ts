@@ -1,6 +1,8 @@
 import { createStubRepository as createEmptyRepository } from "../src/data/stubRepository";
 import type { Repository } from "../src/data/repository";
-import type { FeedbackItem, Job, Process, ProcessRun, Project, RoadmapPhase } from "../src/data/types";
+import type {
+  FeedbackItem, Job, Process, ProcessRun, Profile, Project, RoadmapPhase, TaskEntry, TaskStatus
+} from "../src/data/types";
 
 /**
  * The tracker, with something in it — for the responsive sweep only.
@@ -243,10 +245,105 @@ const FIXTURE_RUNS: ProcessRun[] = [
   } as unknown as ProcessRun;
 });
 
+/**
+ * Two people, so the tasks board has assignees to group into columns and the person
+ * pickers have something to draw. Synthetic on purpose — see the note at the top.
+ */
+const FIXTURE_PEOPLE: Profile[] = [
+  ["fixture-person-1", "Fixture", "Person"],
+  ["fixture-person-2", "Fixture", "Colleague-With-A-Long-Surname"]
+].map(([id, firstName, lastName]) => ({
+  id,
+  authUserId: null,
+  firstName,
+  lastName,
+  fullName: `${firstName} ${lastName}`,
+  email: `${id}@example.invalid`,
+  loginEmail: null,
+  jobTitle: null,
+  teams: ["design"],
+  isActive: true
+} as unknown as Profile));
+
+/**
+ * Tasks, for the four views the tasks board grew on 10 September.
+ *
+ * Same reason as everything above it: `/tasks` rendered "Nothing is assigned to you" and
+ * the sweep measured a heading. The board, the Gantt and the month grid are the layouts
+ * most able to push a page sideways and none of them had ever been drawn.
+ *
+ * Shaped to stress each view rather than to look realistic — one task per status so the
+ * kanban draws every column, a name longer than any column can hold, two on one day so
+ * the calendar overflows, one started weeks ago and overdue so the Gantt draws a long
+ * red bar, and one with no dates at all so both timeline empty-branches run.
+ */
+const TASK_SHAPES: [TaskStatus, string, string | null, string | null, number][] = [
+  // status, name, dueDate, startedAtDay, expectedDays
+  ["open", "FIXTURE A task whose name is long enough to set the column's intrinsic width and find out whether the page scrolls sideways", "2026-09-18", null, 5],
+  ["open", "FIXTURE Nothing dated", null, null, 0],
+  ["in_progress", "FIXTURE Under way", "2026-09-18", "2026-09-02", 12],
+  ["in_progress", "FIXTURE Overdue and running", "2026-08-28", "2026-08-10", 14],
+  ["blocked", "FIXTURE Waiting on council", "2026-10-06", "2026-09-01", 30],
+  ["done", "FIXTURE Finished last week", "2026-09-04", "2026-08-30", 5],
+  ["cancelled", "FIXTURE Called off", "2026-09-30", null, 0]
+];
+
+const FIXTURE_TASKS: TaskEntry[] = TASK_SHAPES.map(([status, name, dueDate, startedOn, expectedDays], i) => {
+  const health =
+    status === "done" ? "done"
+    : status === "cancelled" ? "cancelled"
+    : dueDate == null ? "no_due_date"
+    : dueDate < "2026-09-10" ? "overdue"
+    : dueDate < "2026-09-20" ? "at_risk"
+    : "on_track";
+  return {
+    id: `fixture-task-${i + 1}`,
+    jobId: FIXTURE_JOBS[i % FIXTURE_JOBS.length].id,
+    projectId: null,
+    name,
+    description: i % 2 === 0 ? "Measured, not read." : null,
+    parentTaskId: null,
+    position: i + 1,
+    owningTeam: "design",
+    assigneeId: i % 3 === 2 ? null : FIXTURE_PEOPLE[i % 2].id,
+    status,
+    dueDate,
+    scheduledDate: i % 3 === 0 ? "2026-09-15" : null,
+    completedAt: status === "done" ? ISO(2026, 9, 4) : null,
+    completedBy: null,
+    isExternal: status === "blocked",
+    processRunId: i % 2 === 0 ? FIXTURE_RUNS[0].id : null,
+    processTaskId: null,
+    startedAt: startedOn ? `${startedOn}T08:00:00.000Z` : null,
+    expectedDays: expectedDays || null,
+    atRiskLeadDays: null,
+    createdAt: ISO(2026, 8, 20),
+    createdBy: FIXTURE_PEOPLE[0].id,
+    updatedAt: ISO(2026, 9, 1),
+    updatedBy: null,
+    assigneeName: i % 3 === 2 ? null : FIXTURE_PEOPLE[i % 2].fullName,
+    completedByName: null,
+    dueEffective: dueDate,
+    atRiskDate: null,
+    health,
+    checklistTotal: i % 3 === 0 ? 4 : 0,
+    checklistDone: i % 3 === 0 ? 2 : 0,
+    subtaskTotal: 0,
+    subtaskDone: 0,
+    createdByName: FIXTURE_PEOPLE[0].fullName,
+    processId: i % 2 === 0 ? PROCESSES[0].id : null,
+    processName: i % 2 === 0 ? PROCESSES[0].name : null,
+    recordName: `${28 + (i % 3)} FIXTURE Corner Street, Adelaide SA 5000`,
+    recordStage: JOB_STAGES[i % JOB_STAGES.length]
+  } as unknown as TaskEntry;
+});
+
 export function createStubRepository(): Repository {
   const empty = createEmptyRepository();
   return {
     ...empty,
+    async listProfiles() { return FIXTURE_PEOPLE; },
+    async listTasks() { return FIXTURE_TASKS; },
     async listProcesses() { return PROCESSES; },
     async listProjects() { return [FIXTURE_PROJECT]; },
     async listJobs() { return FIXTURE_JOBS; },

@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 194 changes since then —
-- Fixed: the app builds again — a dependency update took Tailwind to a major version the build is not set up for, and it is pinned back until that migration is done on its own
-- Added: a document built in the app is a DRAFT until you publish it — every copy you preview, print or download carries a DRAFT watermark, and publishing means pasting the SharePoint address it was saved to
-- Added: editing a published document automatically takes it back to draft, and the watermark comes back with it
-- Fixed: a document built in the app can now be deleted — there was no way to remove one from anywhere
-- Changed: the footer drops "What's planned" — Updates in the same row is the same page — and the bug report link loses its icon
-- …and 189 more.
+Unreleased: 197 changes since then —
+- Added: the Tasks board has four views — board, table, gantt and calendar — over the same set of tasks, so the grouping, filters, sort and search survive switching between them
+- Added: Tasks filters are inline across the top and all of them are there — status, assignee, team and process on the bar, with health, stage, job or project number, due date, scheduled date, who raised it, who it is waiting on and who created it under Advanced
+- Added: sort and group the Tasks board by any property, from the toolbar as well as by clicking a column heading — including properties whose column is switched off
+- Added: select several tasks at once, on the table or the board, and set their status, assignee, team or due date in one go
+- Added: drag a task card between columns on the Tasks board to set its status, team or assignee
+- …and 192 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -31,6 +31,54 @@ still there, inert. Amber: *"if I need to import other areas I will let you know
 properties may change between now and then"* — so the machinery has a plausible future job
 even though jobs and projects are not it. It never ran: the load rolled back whole on its
 first write, so no project, job or address in the app came from it.
+
+## 10 September, later still — the Tasks board becomes a board, and the screen rules get written down
+
+Amber, in two messages: *"fix the filters in the app for dropdown on tasks so it is inline
+and all filters are available as well as advanced filters where you can sort and group by
+any properties"*, and *"always allow selection and editing on a screen for the ability to
+select multiple jobs or properties at once and reassign or edit and ensure kanban boards
+are always able to drag and drop"* — preceded by the rule the whole thing hangs off:
+new screens follow the brand guide and the design system, list screens get all four views,
+filters stay persistent and inline and never take the screen, columns sort and filter,
+dates get date pickers, and a screen ships with a stand-in showing what to do *"like on
+the document template"*.
+
+**The rules are written down first**, because a rule that lives in a pull request gets
+re-litigated on the next screen. *Interface Must-Haves* in [PRODUCT.md](PRODUCT.md) now
+carries six rather than three, and ends with **the checklist for a new screen**;
+[DESIGN.md](DESIGN.md) and [CLAUDE.md](CLAUDE.md) point at it. In the design system
+repository the same rules are `guidelines/pattern-screen.html` — drawn in place rather
+than described — and a **Screens** section in its `SKILL.md`, which was the one thing that
+system described component by component and never as a whole.
+
+**Tasks was the screen that met almost none of them**, being the newest: a table with four
+dropdowns over it, one order unless you clicked a header, no board, no Gantt, no calendar,
+and no way to change five tasks at once. It now uses the same `Toolbar`, `Board`, column
+picker, bulk bar and URL rules the Jobs board does.
+
+- **Four views** — Board, Table, Gantt, Calendar — over one read. `TasksGantt` draws each
+  task's start-to-due window; `TasksCalendar` places the two dates a task carries (due,
+  and scheduled-to-be-worked) and labels which is which.
+- **Filters inline and complete.** Status, Assignee, Team and Process on the bar; Health,
+  Stage, job/project number, Due, Scheduled, Raised by, Waiting on and Created by in the
+  Advanced row. Both date filters are the app's standard range picker.
+- **Sort by any property, from the toolbar**, including a property whose column is
+  switched off — because three of the four views have no header to click. The header
+  click and the control are one state in the URL, so they cannot disagree.
+- **Group by any property**, and the board's columns are that grouping.
+- **Selection and bulk edit on the rows and on the cards**, with one bar: set status,
+  assign, set team, set a due date, unassign.
+- **Drag and drop** where the column is a value somebody can set — status, team, assignee.
+  Grouped by anything derived, the cards do not drag and the board says which grouping to
+  switch to.
+
+**Two things the fixtures caught that had been green by not being tested.** The responsive
+sweep measured `/tasks` and the calendar with nothing in them, so it had never laid either
+out: with task fixtures in `scripts/tracker-fixtures.ts` it found calendar entries at 20px
+and month arrows at 21px — both under the 24px WCAG 2.2 AA floor, both on the *jobs*
+calendar too — and a month grid that pushed a 320px page sideways by 73px. All three are
+fixed in `ui.css`, and the sweep now covers 165 combinations rather than 150.
 
 ## 10 September, later — a document is a draft until you publish it
 
@@ -575,9 +623,10 @@ is a PR of its own by the one-table rule.
 
 ## The interface must-haves, and where they are not met yet
 
-Amber, 3 September, gave three rules as **must-haves**. All three are written up in full
-in [PRODUCT.md](PRODUCT.md) under *Interface Must-Haves*; this is the state of play
-against them, so a gap is a listed item rather than something the next person discovers.
+Amber gave three rules as **must-haves** on 3 September and three more on 10 September.
+All six are written up in full in [PRODUCT.md](PRODUCT.md) under *Interface Must-Haves*,
+which also ends with the checklist a new screen is built against; this is the state of
+play, so a gap is a listed item rather than something the next person discovers.
 
 ### What has an order is dragged into it — DONE on Processes, and only there
 
@@ -644,10 +693,45 @@ Admin → Users, Updates.
 | Updates → Requests, table view | title, kind, stage, phase, votes, from, moved — sorts already | stage, kind, reporter |
 | Reports | whatever each report's table holds | the report's own controls |
 
-The date-range picker is the one piece with no shared component yet: Jobs and Projects
-have a range control in their filter bar, and the tables above would each need it wired
-to their own date column. That is the next thing to build for this must-have, not a
-per-page reinvention.
+The date-range picker is **not** the missing piece it was described as here on 3
+September: `app/src/components/DateRange.tsx` has been the shared control since 1
+September and Jobs, Projects and Tasks all use it. What the tables above need is that
+component wired to their own date column, which is a line of props each — not a
+per-page reinvention, and not a component to build.
+
+### The filter bar is persistent, inline and compact — DONE on the three boards
+
+`app/src/components/Toolbar.tsx` is the one implementation: Jobs, Projects and Tasks all
+use it, so the language and the geometry cannot drift. The screens in the table above
+have hand-rolled filter rows; adopting `Toolbar` is what "carries the filters it should"
+means for each of them.
+
+### A screen of records is four views, and the kanban drags — DONE on Jobs and Tasks
+
+| screen | views | drop writes |
+| --- | --- | --- |
+| Jobs | Board, Table, Gantt, Calendar | stage move (confirmed), process move (confirmed) |
+| Projects | Board, Table, Gantt, Calendar | — a project's stage follows its jobs (0041) |
+| **Tasks** | **Board, Table, Gantt, Calendar** | **status, team, assignee** |
+| Maintenance, Contacts, Settings → Properties | table only | — |
+
+Maintenance is the strongest candidate for the four: a maintenance item has a reported
+date, a next visit and an owner, so a board, a timeline and a month all have something
+true to draw. Contacts and the Settings tables are configuration and lookups, which is
+the "unless specified otherwise" case — a Gantt of a lookup table is a chart of nothing.
+
+### Selection and bulk edit — DONE on Jobs and Tasks
+
+Rows and cards both, one bulk bar per screen, writes one at a time so a refusal names its
+record. Not yet on Contacts, Maintenance or Settings → Properties — Amber's *"select
+multiple jobs or properties at once"* names properties explicitly, so Settings →
+Properties is the next one.
+
+### A screen ships with its stand-in — PART DONE
+
+`NothingYet`, `NoResults` and `LoadProblem` in `app/src/components/SearchNotices.tsx` are
+the three sentences, and Jobs, Projects and Tasks each say the right one. The screens in
+the sorting table above mostly render a bare "nothing here" line with no way out of it.
 
 ---
 

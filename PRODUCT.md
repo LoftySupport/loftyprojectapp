@@ -85,11 +85,21 @@ claim that every number on it traces to a row somebody can open.
 
 ## Interface Must-Haves
 
-Amber, 3 September, gave these as **must-haves** rather than preferences. They are here
-because a rule that lives only in a pull request gets re-litigated on the next screen;
-`DESIGN.md` is Amber's visual record and does not repeat them.
+Amber gave these as **must-haves** rather than preferences — the first three on 3
+September, the rest on 10 September. They are here because a rule that lives only in a
+pull request gets re-litigated on the next screen; `DESIGN.md` is Amber's visual record
+and does not repeat them.
 
-Both are checkable by looking at a screen. Neither is satisfied by "most pages do this".
+Every one is checkable by looking at a screen. None is satisfied by "most pages do this".
+
+**Before any of them: a new screen is built on the brand guide and the design system, not
+designed from scratch.** The design system is the `loftybrand` repository — tokens,
+components, icons, the states and motion rules — and it inherits from
+[Vibe](https://vibe.monday.com): *"everything defaults to Vibe unless a Lofty override is
+specified"*. `DESIGN.md` carries the colour, contrast and accessibility contract that sits
+over the top. Use the component that exists before styling a `div`; take the accents,
+spacing and radii from tokens; never invent a Lofty control. A screen that looks like
+nothing else in the app is a screen somebody has to learn separately.
 
 ### 1. Every table sorts and filters
 
@@ -101,10 +111,13 @@ A table of more than a handful of rows is a list somebody is looking for one thi
 Forty-seven rows with no way to order or narrow them is a screen that answers "what
 exists" and never "where is mine".
 
-**Every column that carries a comparable value sorts.** `SortHeader` and `useTableSort`
-in `app/src/components/SortableTable.tsx` are the implementation; blanks sort last in
-both directions, because reversing a sort should not fill the top of the screen with the
-rows carrying no answer.
+**Every column that carries a comparable value sorts, and every column a person would
+narrow by filters.** `SortHeader` and `useTableSort` in
+`app/src/components/SortableTable.tsx` are the implementation; blanks sort last in both
+directions, because reversing a sort should not fill the top of the screen with the rows
+carrying no answer. Sorting is not only the header click: `Toolbar`'s **Sort** control
+takes any property, including one whose column is switched off in the picker, and works
+on the board, the Gantt and the calendar where there is no header to click.
 
 **The filters are the ones that match what the table holds.** For anything about jobs,
 projects or processes that is at minimum:
@@ -119,7 +132,33 @@ projects or processes that is at minimum:
 
 Elsewhere the same rule with the columns that screen actually has: Contacts filters by
 company, role and team; Maintenance by category, status and the job it sits on;
-Properties by stage, scope and team. "Similar options" means the equivalents, not fewer.
+Properties by stage, scope and team. Tasks by status, assignee, team, process, health,
+stage, number, due and scheduled. "Similar options" means the equivalents, not fewer.
+
+**Every date filter is a date picker.** `app/src/components/DateRange.tsx` is the one
+control — Amber, 1 September: *"this is the default way for every date picker in the
+app"*. Today, yesterday, last 7, last 30, next 30 and a custom range. Not a dropdown of
+three fixed spans, and never two boxes to type into.
+
+**The filter bar is persistent, inline, and small.**
+
+> *"the filters persistent at the top with standard filters used eg check job board … keep
+> things compact and clean … never let filters take up the entire screen, they should be
+> inline and intuitive"* — Amber, 10 September
+
+`app/src/components/Toolbar.tsx` is the one implementation and the Jobs board is the
+reference. What that means in practice:
+
+- **On the bar from the start, not added one at a time.** The fields you group by are the
+  fields you filter by, each reading "Any" until chosen. Amber, 7 September: *"not
+  clicking a million times to get new filters up."*
+- **One row of controls, wrapping — never a panel, a drawer or a sidebar.** Everything
+  else is a single **Advanced** row that opens whole, with a count on the button so a
+  filter narrowing the screen from behind a folded row still announces itself.
+- **Everything set is in the URL, and nothing else is.** A default is absent, so a link
+  carries the difference and a shared board is what the sender was looking at.
+- **The count says what is being hidden** — "Showing 11 of 200" — and it is announced to a
+  screen reader, not only drawn.
 
 **A filter that hides rows must say so**, and a sort that reorders a grouped or nested
 list must say what it did to the grouping — Settings → Processes turns dragging off and
@@ -184,6 +223,101 @@ Acquisition & Development through Cancelled. Its order is a CHECK constraint on
 `jobs.job_stage`, a `LINEAR_STAGES` constant and a forwards-only rule that Cancelled sits
 outside of. Reordering it is a schema change with a business decision inside it, and it is
 an open question with Amber rather than a handle nobody added.
+
+### 4. A screen of records is four views, and the kanban always drags
+
+> *"all new pages that are tables should have the kanban, table, gantt and calendar view
+> unless specified otherwise"* … *"ensure kanban boards are always able to drag and
+> drop"* — Amber, 10 September
+
+**Board, Table, Gantt, Calendar.** One dataset, four arrangements, the same toolbar over
+all of them — switching a view re-reads nothing, and the grouping, filters, sort and
+search survive the switch because they belong to the screen rather than to the view.
+`Toolbar`'s View control, `app/src/components/Board.tsx`, and a Gantt and a calendar
+shaped to the records on that screen. Jobs and Tasks both have all four.
+
+*"Unless specified otherwise"* is a real exception and it is spent on screens where a
+view would have nothing to draw: Settings and Setup are configuration rather than
+records, and a Gantt of a lookup table is a chart of nothing. Where a view is left out,
+**say which and why on the screen or in the code** — a missing tab that nobody explained
+reads as unfinished.
+
+**Where a kanban column is a value somebody can set, a card is dragged into it.** On the
+Jobs board a drop moves the job along the lifecycle or along its stage's processes,
+through the same confirmation the drawer's picker uses. On Tasks a drop sets the status,
+the team or the assignee — three ordinary edits, no confirmation, because none of them is
+one-way the way a stage move is.
+
+Two things travel with it and neither is optional:
+
+- **A refusal explains itself where the card landed.** A column that will not take a card
+  refuses the drop during the drag, so the cursor stays honest — and because a refused
+  drop fires no `drop` event at all, the reason is printed on `dragenter`, while there is
+  still time to put the card somewhere else.
+- **A grouping a drop cannot write says so.** Grouped by something derived — a task's
+  health, a job's status label — the cards do not drag, and the board says which grouping
+  to switch to instead of sitting there inert.
+
+### 5. Selection and bulk edit on every list
+
+> *"always allow selection and editing on a screen for the ability to select multiple jobs
+> or properties at once and reassign or edit"* — Amber, 10 September, restating 26 August:
+> *"a select button in table view so you can select multiple jobs at once and edit — e.g.
+> assign to team or person or stage"*
+
+A tick box on every row **and on every card**, a select-all in the header, and one bulk
+bar carrying the edits that screen supports — reassign, set the team, set the status, set
+a date. The bar belongs to the selection and not to one view of it: a selection made on
+the board has to be actionable without switching to the table, and the same set survives
+the switch.
+
+Three rules the Jobs and Tasks bars both follow:
+
+- **Selection is page state, never the URL.** A half-made selection is a draft, and a
+  link that arrives with eleven jobs pre-selected is a trap.
+- **Writes go one at a time** so a single refusal — RLS, a CHECK — names its record
+  instead of failing the batch with "something went wrong".
+- **A mixed selection is normal, not an error.** What was skipped is counted and said
+  before, not discovered after.
+
+### 6. A screen ships with its stand-in
+
+> *"have a standin showing what to do like on the document template"* — Amber, 10 September
+
+The Lofty document template is a **worked example**: every element is in it, filled in,
+so the person starting a report can see what goes where rather than reading a
+specification. A screen owes the same thing at the moment it has nothing in it.
+
+- **The empty state says what the screen is for and what to do next**, and offers the
+  control to do it — `NothingYet` in `app/src/components/SearchNotices.tsx` takes an
+  `action` precisely because the create control usually lives in a row that is not being
+  drawn.
+- **"Nothing here yet" and "nothing matches" are different sentences.** `NoResults` blames
+  the search or the filters, whichever actually narrowed, and offers to clear that one.
+  Saying the wrong one sends somebody looking for a bug.
+- **An unbound value is a token that names its column, never a plausible stand-in** — see
+  *Never fill a gap with a plausible value* in `CLAUDE.md`. `{{job_display.project_type}}`
+  invites somebody to bind it; "Single storey" gets quoted back as though it were agreed.
+
+### The checklist for a new screen
+
+Every line is one of the rules above, in the order they get built.
+
+| | |
+| --- | --- |
+| ☐ | Built from the design system — `loftybrand` tokens and components, Vibe underneath, `DESIGN.md` for colour and contrast. No invented control |
+| ☐ | Four views if it lists records: Board, Table, Gantt, Calendar — or the omission is named and reasoned |
+| ☐ | `Toolbar` at the top: persistent inline filters, one wrapping row, an Advanced row for the rest, never a panel |
+| ☐ | The standard filters for what it holds — team, team member, stage, number, date — plus its own |
+| ☐ | Every comparable column sorts; Group by and Sort by reach any property |
+| ☐ | Every date filter is `DateRangeFilter`; every date field is a date picker |
+| ☐ | Row and card tick boxes, select-all, and a bulk bar that reassigns and edits |
+| ☐ | Kanban columns that are a settable value accept a drop; the rest say why not |
+| ☐ | Column picker: show, hide, reorder, remembered per person |
+| ☐ | Empty, no-match and error states each say the right thing and what to do |
+| ☐ | Records open in the slideout, and the open one rides the URL |
+| ☐ | Everything on screen is in the query string, and defaults are absent from it |
+| ☐ | `cd app && npm run responsive` passes at 320px — and the screen is added to that sweep's routes, with a fixture if the stub has nothing to draw |
 
 ## Brand Commitments
 

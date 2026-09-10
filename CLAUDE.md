@@ -85,6 +85,16 @@ rather than references.
 - **Every change carries a `Changelog:` trailer.** `Added:`, `Changed:`, `Fixed:`,
   `Removed:` — or `Changelog: skip` for something nobody outside the repo would notice.
   Add `Roadmap: <the item's text>` when it finishes a roadmap item.
+- **A new screen starts from the checklist, not from a blank file.** *The checklist for a
+  new screen* at the end of **Interface Must-Haves** in [`PRODUCT.md`](PRODUCT.md) is the
+  list, and it is not advisory: build on the `loftybrand` design system (Vibe underneath,
+  `DESIGN.md` over the top) rather than inventing a control; a screen that lists records
+  gets Board, Table, Gantt and Calendar unless the omission is named and reasoned; the
+  filters are `Toolbar`'s — persistent, inline, one wrapping row plus an Advanced row,
+  never a panel that takes the screen; every comparable column sorts and every date filter
+  is `DateRangeFilter`; rows and cards have tick boxes and a bulk bar; a kanban column
+  that is a settable value takes a drop; and the empty state says what to do. Copy the
+  Jobs or Tasks board — they are the two that meet all of it.
 - **No component imports the Supabase client or seed data.** Everything reads through the
   repository seam in `app/src/data/repository.ts`. If a screen needs something new, add a
   method — do not reach around it.

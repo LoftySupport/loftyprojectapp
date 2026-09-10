@@ -223,6 +223,29 @@ question 16.
 
 Nothing is blocked meanwhile: drafts are editable in the builder and publishing works.
 
+### 19. Do the four views and bulk edit go back onto the older screens?
+
+The 10 September rules say *"all **new** pages that are tables"* get board, table, gantt
+and calendar — and, separately, *"**always** allow selection and editing on a screen for
+the ability to select multiple jobs **or properties** at once"*. The two sentences point
+different ways for the screens that already exist: Maintenance, Contacts and Settings →
+Properties are tables with none of it.
+
+What is unambiguous is already built: Jobs and Tasks have all four views, drag-and-drop
+and bulk edit. What is not is how far back to go, and it is not a small amount of work,
+so it is a question rather than a guess:
+
+- **Maintenance** is the one where all four views have something true to draw — a reported
+  date, a next visit and an owner. Board, gantt and calendar, or leave it a table?
+- **Settings → Properties** is named in the sentence ("or properties"), so **selection and
+  bulk edit** there looks intended even if the four views are not. Confirm?
+- **Contacts** and the other Settings tables are configuration and lookups. Claude's
+  reading is that these are the "unless specified otherwise" case and stay tables with
+  sorting, filters and bulk edit only. Agree?
+
+Nothing is blocked on this — the rules are written down and the two boards meet them. It
+decides how much retro-fitting to schedule, and in what order.
+
 ---
 
 ## Answered

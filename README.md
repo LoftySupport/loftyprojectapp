@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 194 changes since then —
-- Fixed: the app builds again — a dependency update took Tailwind to a major version the build is not set up for, and it is pinned back until that migration is done on its own
-- Added: a document built in the app is a DRAFT until you publish it — every copy you preview, print or download carries a DRAFT watermark, and publishing means pasting the SharePoint address it was saved to
-- Added: editing a published document automatically takes it back to draft, and the watermark comes back with it
-- Fixed: a document built in the app can now be deleted — there was no way to remove one from anywhere
-- Changed: the footer drops "What's planned" — Updates in the same row is the same page — and the bug report link loses its icon
-- …and 189 more.
+Unreleased: 197 changes since then —
+- Added: the Tasks board has four views — board, table, gantt and calendar — over the same set of tasks, so the grouping, filters, sort and search survive switching between them
+- Added: Tasks filters are inline across the top and all of them are there — status, assignee, team and process on the bar, with health, stage, job or project number, due date, scheduled date, who raised it, who it is waiting on and who created it under Advanced
+- Added: sort and group the Tasks board by any property, from the toolbar as well as by clicking a column heading — including properties whose column is switched off
+- Added: select several tasks at once, on the table or the board, and set their status, assignee, team or due date in one go
+- Added: drag a task card between columns on the Tasks board to set its status, team or assignee
+- …and 192 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

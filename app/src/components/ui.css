@@ -579,6 +579,9 @@
 /* An identifier is one token: "1042-01" breaking into "1042-" / "01" is unreadable as
    the thing it names, and the thing it names is what the column is for. */
 .data-table .nowrap { white-space: nowrap; }
+/* A link in a table cell is a tap target and inline text is 16px tall — under the 24px
+   WCAG 2.2 AA floor (2.5.8) the sweep enforces everywhere else. */
+.data-table a { display: inline-block; min-height: 24px; line-height: 24px; }
 
 /* ---- configurable columns ------------------------------------------------
    Headings drag to reorder (Amber, 28 August). `grab` on the heading rather than a
@@ -976,6 +979,10 @@
      the stopPropagation cell around it. */
 }
 .bulk-col { text-align: center; vertical-align: middle; }
+/* A picked row, so the selection is visible in the table as it is on the board. The
+   checkbox alone is 16px of state in a row 1200px wide, and on a long list the count
+   in the bulk bar was the only way to tell what was in it. */
+.data-table tr.is-picked > td { background: var(--primary-selected-color); }
 
 /* ---- drawer --------------------------------------------------------------
    The drawer and its overlay cover the MAIN AREA, not the app. Nav and header stay
@@ -2069,16 +2076,43 @@ code { overflow-wrap: anywhere; }
   border-left: 3px solid var(--ui-border-color);
   background: var(--allgrey-background-color);
   border-radius: 0 var(--border-radius-small) var(--border-radius-small) 0;
-  padding: 1px var(--space-4);
+  padding: 4px var(--space-4);
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* 24px is the WCAG 2.2 AA floor (2.5.8) and these were 20. The sweep never caught it
+     because no calendar route had anything in it to draw until the tasks fixtures
+     landed — the entry was 20px tall on the jobs calendar too.
+     Reached with padding rather than `display:flex`: a flex container's automatic
+     minimum width is its content's, and the content here is deliberately `nowrap`, so
+     flex made every entry as wide as the task's name and pushed the page sideways. */
+  display: block;
+  min-height: 24px;
+  min-width: 0;
 }
 .cal-entry:hover { background: var(--primary-selected-color); }
 .cal-entry.is-due { border-left-color: var(--lofty-orange-strong, #b8482a); background: var(--lofty-orange-tint, #fdeee9); }
 .cal-more { font: var(--font-text3-normal); color: var(--secondary-text-color); }
 .cal-empty { display: flex; align-items: center; gap: var(--space-12); margin-top: var(--space-12); }
+/* ‹ and › are one glyph wide, so Vibe's small tertiary button came out 21px across. */
+.cal-nav { min-width: 24px; }
+/* The legend and the three month buttons are one nowrap row inside a `panel-head` that
+   does wrap — so at 320px the row itself was 371px wide and took the page sideways
+   with it. It wraps now, and the legend gives way first. */
+.cal-head { flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
+.cal-head > :first-child { min-width: 0; }
+
+/* A month grid has seven columns whatever the screen is, so the only thing that can
+   give at 320px is what is inside a cell. The chip goes first — the cell already has
+   an orange ring saying it is today — then the padding. Without this the page itself
+   scrolled sideways by 73px, which is the one thing the sweep never allows. */
+@media (max-width: 640px) {
+  .cal-cell { padding: var(--space-4) 2px; min-height: 72px; }
+  .cal-today-chip { display: none; }
+  .cal-entry { padding: 1px 2px; }
+  .cal-dow { font-size: 10px; }
+}
 
 @media (max-width: 900px) {
   .gantt { --gantt-left: 160px; }

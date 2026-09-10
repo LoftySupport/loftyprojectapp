@@ -33,7 +33,16 @@ const ROUTES = ["/", "/dashboard",
                 // URL — so a green line for this route does not mean the popup is
                 // responsive; its width is capped against the viewport by hand.
                 "/search?q=court",
-                "/projects", "/jobs", "/tasks", "/reports", "/setup/properties", "/setup/processes", "/contacts", "/setup/contacts", "/setup/notifications", "/maintenance", "/setup/maintenance",
+                "/projects", "/jobs", "/tasks",
+                // The tasks board's other three views, for the reason the tracker's
+                // table view is here: they are three different layouts on one route —
+                // a kanban, a timeline and a month grid — and sweeping only the table
+                // measured the other three by assumption. `scope=all` because the
+                // signed-in stub is assigned nothing, so "my tasks" is an empty page
+                // and an empty page lays nothing out.
+                "/tasks?scope=all&view=Board", "/tasks?scope=all&view=Gantt",
+                "/tasks?scope=all&view=Calendar",
+                "/reports", "/setup/properties", "/setup/processes", "/contacts", "/setup/contacts", "/setup/notifications", "/maintenance", "/setup/maintenance",
                 "/admin", "/settings", "/setup", "/setup/dictionary", "/setup/wiring",
                 // Tools. Three lanes, three layouts, and each is its own URL now — a
                 // Get Started grid over a table, with different cards and a different
