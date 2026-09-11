@@ -2842,6 +2842,74 @@ under *what the security advisor still says* above — visible in the schema, no
 because `0101` revoked `anon` and RLS decides the rest.
 
 
+### 11 September — a job has its own completion dates (`0113`)
+
+The sixth key property on the job record, and **the only schema change the design handoff
+needs**. Amber, over two turns:
+
+> *"each job has its own completion date. and completion date is at a job level… there is
+> also a project completion level which is when all jobs in the project are completed"*
+
+then, asked which of the two dates a job's is:
+
+> *"project date and job dates are separate and [it] depends [on] each other. [Both] are
+> needed and relevant"*
+
+So `jobs` gains the pair `projects` has carried since `0028`, and the two pairs are
+separate columns on separate tables that **relate** rather than one deriving the other.
+
+| Column | What it is |
+| --- | --- |
+| `job_target_completion` | The date being worked towards. Set in advance — the handoff draws an empty `dd/mm/yyyy` box on a job still in Pre-construction — and the thing an overdue calculation needs to compare against. Without it a job cannot be late, only finished or not |
+| `job_end_date` | When the job actually finished. What 6b reads under *Complete*: *"Job completed (or Target completion)"* — the actual once there is one, the target until then |
+
+Collapsing them into one column loses the distinction the moment a job finishes on a
+different day from the one planned, which is most jobs. `projects` learned this in `0028`
+and the comment there still says it: *"actual, as opposed to target"*.
+
+**The seeding variant was offered and not taken.** The alternative put to Amber was
+pre-filling a new job's target from `project_target_completion`. She took the plain
+version, so a job with no target says so rather than inheriting a date nobody set for it —
+the house rule about plausible values, applied to a date.
+
+**This is not a rename.** "Handover date" was a label in a mockup for a field that existed
+on neither table: there is nothing to migrate and no column anywhere called handover.
+`job_stage_entered_at` stays exactly what it is.
+
+**A project's completion is still derived** — *"when all jobs in the project are
+completed"* — and `0113` deliberately adds no trigger to write it. Deriving it on read
+cannot go stale; a trigger that writes it can, and the day it disagrees with the jobs is
+the day nobody can tell which is right.
+
+#### What was watched failing, and the probe that was not evidence
+
+| Broken | Reported |
+| --- | --- |
+| `j.job_target_completion` dropped from the view's select | `job_display does not carry job_target_completion` |
+| `with (security_invoker = true)` removed | `job_display lost security_invoker — see 0069` |
+| the end-date CHECK → `check (true)` | `A CONSTRAINT DID NOT BITE` |
+
+The third row is the one worth reading. The end-date probe started inside the migration's
+own proof block, guarded with `if a_job is null` because **a replay from empty has no
+jobs** — so with the constraint deliberately removed, the replay reported
+`ALL MIGRATIONS APPLIED CLEANLY`. A probe that quietly tests nothing is the exact failure
+this directory exists to prevent, and it took breaking the constraint to notice.
+
+The probe moved to `app/supabase/verify/constraints.sql`, which runs after
+`behaviour.sql` has made job `9106-002`, and only then did it report. The guarded block
+stays in the migration because it *does* bite on production, where there are 79 jobs — but
+it is not what the rule is proved by, and the migration now says so.
+
+#### And one self-inflicted near-miss in the dictionary
+
+The two `dictionary.ts` entries were first inserted by a regex that matched the opening
+line of the multi-line `e("jobs.job_title_type", …)` call and landed **inside its
+arguments**. `npm run dictionary` reported no error; the generated table said
+`jobs.job_title_type | Title type | [object Object]` and the property count went *down* by
+one. Caught by reading the generated diff rather than trusting the script that wrote it,
+which is the only reason it is a footnote and not a shipped defect.
+
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

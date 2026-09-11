@@ -258,34 +258,13 @@ so it is a question rather than a guess:
 Nothing is blocked on this — the rules are written down and the two boards meet them. It
 decides how much retro-fitting to schedule, and in what order.
 
-### 20. Is a job's completion date the one being aimed at, or the one it finished on?
-
-**Mostly answered, 11 September.** *"each job has its own completion date. and completion
-date is at a job level… there is also a project completion level which is when all jobs in
-the project are completed"*, and *"you can change handover date to completion date"* — so the
-sixth key property is **Completion date**, it lives on the **job**, and a project's completion
-is **derived** from its jobs rather than typed.
-
-What is left is which date it is, because `projects` already keeps the two apart:
-`project_target_completion` is *"the date being worked towards"* and drives the Gantt and the
-overdue calculation; `project_end_date` is *"when the project actually finished, as opposed to
-the target."*
-
-The handoff shows a job's completion date being **set in advance** — 6a has an empty
-`dd/mm/yyyy` box on a job still in Pre-construction, and 6b reads *Target completion 14/11/26*
-under Construction and *"Job completed (or Target completion)"* under Complete. That reads as
-a planned date that the actual replaces once the job finishes, which would mean a job mirrors
-a project and carries both.
-
-Blocks the migration, and nothing else.
-
-
 ---
 
 ## Answered
 
 | Date | Question | Answer |
 | --- | --- | --- |
+| 11 Sep | (asked as 20) Is a job's completion date the one being aimed at, or the one it finished on? | **Both, and the job's pair is separate from the project's** — *"project date and job dates are separate and [it] depends [on] each other. [Both] are needed and relevant"*, confirmed against the exact columns before anything was written. So `jobs` gains `job_target_completion` (the date being worked towards) and `job_end_date` (when it actually finished), mirroring the pair `projects` has carried since 0001. The drawer's **Completion date** shows the target while the job runs and the actual once it is done, which is exactly what 6b draws — *Target completion 14/11/26* under Construction, *"Job completed (or Target completion)"* under Complete. The project's own dates do not move and a project's completion goes on being **derived** from its jobs rather than typed (decision 7). The seeding variant was offered and not taken: a new job's target is not pre-filled from its project's, so a job with no target says so rather than inheriting a date nobody set for it |
 | 11 Sep | How does the rail get its counts? | **Destination counts only — the flyout carries none.** Three options were put up: one `rail_counts` view, live per-flyout fetches, or the rail's six numbers alone. Amber took the third. So `railCounts()` is one aggregate returning Projects, Jobs and Maintenance, read once per navigation, and the flyout lists its saved views and its stage groupings with **no number beside them**. This is a deliberate departure from the handoff, which draws right-aligned counts on every flyout row in 7b and 7c — it is the one place the build does not match the drawing, and the reason is cost: nine more queries per page visit, or a `rail_counts` view that has to be re-cut every time somebody saves a view. The flyout's job is to jump to a view from anywhere; the number was never what it was for |
 | 11 Sep | What does the job drawer show, and in what order? | **Superseded by a design.** The question was asked with three options; the answer was a package — `docs/design/handoff/job-record/`. Title as the address with the project number linked, health pill, blocked-by banner, then Job Stage, Key properties and Process as the only three collapsible sections, with Tasks / Comments / Activity **docked in a footer** rather than scrolled to. The footer dock is the part no option had: a drawer is header / scrolling body / docked footer, three flex siblings, or the tabs scroll away and the pattern is pointless |
 | 11 Sep | Inbox and Tasks in the new rail — what are they? | *"My Work has Inbox (This was previously the homepage dashboard) and task (was task pages)"*. **No new tables.** `/dashboard` becomes Inbox inside *My work*; `/tasks` survives unchanged and is reached from there. The rail's eight destinations become six plus My work |

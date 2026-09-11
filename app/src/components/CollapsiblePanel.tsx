@@ -62,6 +62,19 @@ interface CollapsiblePanelProps {
   summary?: ReactNode;
   /** Whether it starts open the first time this person sees it. */
   defaultOpen?: boolean;
+  /**
+   * Drop the heading and the toggle, and just render the body.
+   *
+   * For a panel that is already inside something which names it and controls whether it
+   * shows — the job record's docked tab strip, where "Comments" is the tab. Without this
+   * the footer drew a collapsed panel with an empty heading: a lone chevron over nothing,
+   * which is what the first screenshot of it showed.
+   *
+   * Not a second component, because everything else about these panels — the thread, the
+   * composer, the @mentions, the task list — is identical either way, and a bare copy of
+   * each would be three more files to keep in step.
+   */
+  bare?: boolean;
   children: ReactNode;
 }
 
@@ -76,7 +89,7 @@ function remembered(id: string, fallback: boolean): boolean {
   }
 }
 
-export function CollapsiblePanel({ id, title, summary, defaultOpen = true, children }: CollapsiblePanelProps) {
+export function CollapsiblePanel({ id, title, summary, defaultOpen = true, bare = false, children }: CollapsiblePanelProps) {
   // Lazy initialiser: reading localStorage on every render is wasted work, and reading it
   // during the first render rather than in an effect avoids a frame of the wrong state.
   const [open, setOpen] = useState(() => remembered(id, defaultOpen));
@@ -102,6 +115,9 @@ export function CollapsiblePanel({ id, title, summary, defaultOpen = true, child
       return next;
     });
   }, [id]);
+
+  // Hooks all ran above, so this early return cannot change their order.
+  if (bare) return <div className="panel-bare">{children}</div>;
 
   return (
     <section className="panel panel-collapsible">

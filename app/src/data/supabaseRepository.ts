@@ -199,7 +199,7 @@ const PROJECT_COLUMNS =
 //
 // Writes still go to `jobs` — a view is not the place to insert through.
 const JOB_COLUMNS =
-  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_sharepoint_url, job_created_at, job_created_by, job_updated_at, job_updated_by, job_current_address, job_original_address, project_current_address, project_sharepoint_url, project_type, job_title_type, job_council";
+  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_sharepoint_url, job_created_at, job_created_by, job_updated_at, job_updated_by, job_current_address, job_original_address, project_current_address, project_sharepoint_url, project_type, job_title_type, job_council, job_target_completion, job_end_date";
 
 /**
  * `""` and `"   "` are how a browser reports a field somebody did not fill in, and they
@@ -1824,6 +1824,10 @@ export function createSupabaseRepository(): Repository {
       if ("jobNumberOld" in patch) row.job_number_old = patch.jobNumberOld?.trim() || null;
       // Null clears it back to "nobody has said", which is a real answer here.
       if ("titleType" in patch) row.job_title_type = patch.titleType ?? null;
+      // 0113. Null clears either — an unset completion date is a real state, and the
+      // record draws it as an empty date box rather than as a guess.
+      if ("targetCompletion" in patch) row.job_target_completion = patch.targetCompletion ?? null;
+      if ("endDate" in patch) row.job_end_date = patch.endDate ?? null;
       if (Object.keys(row).length === 0) {
         const { data, error } = await client
           .from("job_display").select(JOB_COLUMNS).eq("job_id", id).single();
@@ -4408,6 +4412,8 @@ type JobRow = {
   project_sharepoint_url: string | null;
   project_type: Job["projectType"];
   job_council: Job["council"];
+  job_target_completion: Job["targetCompletion"];
+  job_end_date: Job["endDate"];
 };
 
 function toJob(r: JobRow): Job {
@@ -4438,6 +4444,8 @@ function toJob(r: JobRow): Job {
     // it. Amber, 10 Sep: "the council area still needs to be recorded, but just not in
     // the full address line." It never was in the line; it was simply never read back.
     council: r.job_council,
+    targetCompletion: r.job_target_completion,
+    endDate: r.job_end_date,
     projectSharepointUrl: r.project_sharepoint_url,
     // Inherited from the project through the view, never stored on the job. `job_display`
     // has exposed it since 0028; this read simply never asked for it, so every card and

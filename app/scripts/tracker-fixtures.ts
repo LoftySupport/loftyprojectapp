@@ -214,7 +214,17 @@ const FIXTURE_JOBS: Job[] = ["9001-01", "9001-02", "9001-03"].map((id, i) => ({
   projectId: 9001,
   stage: JOB_STAGES[i],
   owningTeam: "design",
-  status: "active",
+  /**
+   * A REAL status, one of each health, and this was wrong.
+   *
+   * It read `status: "active"`, which is not a `RecordStatus` at all — the valid set is
+   * on_track / at_risk / behind_schedule / on_hold / completed / cancelled / archived.
+   * The cast to `Job` at the bottom of this object is what let it through, and the fault
+   * only became visible when the job record drew its health pill as a coloured dot with
+   * no label in it. Three different ones now, so a screenshot exercises all three colours
+   * rather than proving one.
+   */
+  status: (["on_track", "at_risk", "behind_schedule"] as const)[i],
   currentAddress: `${28 + i} FIXTURE Corner Street, Adelaide SA 5000`,
   originalAddress: null,
   projectCurrentAddress: "FIXTURE Corner Street, Adelaide SA 5000",
@@ -222,6 +232,10 @@ const FIXTURE_JOBS: Job[] = ["9001-01", "9001-02", "9001-03"].map((id, i) => ({
   // is a fixture somebody quotes back. Null is what the drawer shows as "—".
   council: null,
   stageEnteredAt: ISO(2026, 8, 20 + i),
+  // One with a target and none finished: the two states the Completion date row has to
+  // draw, which an all-null fixture would never exercise.
+  targetCompletion: i === 0 ? "2026-11-14" : null,
+  endDate: null,
   createdAt: ISO(2026, 8, 1),
   createdBy: null,
   updatedAt: ISO(2026, 9, 1),
@@ -384,6 +398,21 @@ export function createStubRepository(): Repository {
      * filtered board, a report and a settings screen are the five branches, and a
      * screenshot with five bookmarks all pointing at boards would prove one of them.
      */
+    /**
+     * A stage history, so 6b's readouts draw at all.
+     *
+     * Without it `listJobStageHistory` answers empty, every readout is omitted as a fact
+     * the record does not hold, and a screenshot of the page track proves only that the
+     * omission works. Two stays and a current one is the smallest history that exercises
+     * "Job started", "Days in stage", "Started on" and "Total days" together.
+     */
+    async listJobStageHistory(jobId: string) {
+      if (!FIXTURE_JOBS.some(j => j.id === jobId)) return [];
+      return [
+        { stage: "Acquisition & Development", from: ISO(2026, 6, 2), to: ISO(2026, 8, 20), days: 79 },
+        { stage: "Pre-construction", from: ISO(2026, 8, 20), to: null, days: 22 }
+      ];
+    },
     async listMyPins() {
       return [
         { id: "pin-1", label: "FIXTURE job 9001-01", url: "/jobs/9001-01", position: 1 },

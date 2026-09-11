@@ -52,6 +52,15 @@ const ALL_ROUTES = ["/", "/dashboard",
                 // responsive; its width is capped against the viewport by hand.
                 "/search?q=court",
                 "/projects", "/jobs", "/tasks",
+                // THE JOB RECORD, which the sweep had never once drawn. `/jobs` measures
+                // the board; the drawer is a route of its own (`/jobs/:jobNumber`) and
+                // every layout in it — the stage strip, the 110px property grid, the
+                // docked footer — was unmeasured until 11 September. The supplied 6a
+                // screenshot overflows at 460px, so this is precisely the screen most
+                // able to push a page sideways.
+                //
+                // It needs a job to exist, which is what `tracker-fixtures.ts` is for.
+                "/jobs/9001-02",
                 // The tasks board's other three views, for the reason the tracker's
                 // table view is here: they are three different layouts on one route —
                 // a kanban, a timeline and a month grid — and sweeping only the table

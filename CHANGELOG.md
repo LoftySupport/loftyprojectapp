@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- A job carries its own completion dates — the one being worked towards, and the day it actually finished
 - Pinned in the navigation rail — bookmark any page under a name, up to five, private to you
 - Screenshots and a 1440px desktop width in the responsive harness, so a layout fault can be seen rather than inferred
 - A rail count of projects, jobs and open maintenance requests, read in one round trip
@@ -135,6 +136,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- The job drawer no longer scrolls sideways at 460px, and the responsive sweep now opens it at every width
 - 64 job addresses had their lot number in the street-number column, so a job at lot 1 of 14 Brodie Road read as 1 Brodie Road — somebody else's house
 - the staged-workbook importer could not insert a row after the lot number became a number
 - a placeholder on the canvas is marked again — an unfilled field and a mistyped one had been printing as ordinary text
@@ -186,6 +188,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- The job record is rebuilt from the approved design — the same record as a 460px drawer and a full page, with Tasks, Comments and the activity log docked at the foot instead of scrolled to
 - The navigation rail is rebuilt from the approved design — 224px expanded, 64px collapsed, a flyout of each destination's saved views, and Search, Settings, Admin and your own menu moved out of the header into it
 - publishing a document again replaces the copy saved on the record instead of adding another — download the old one first if you need it
 - a lot number and a res number are whole numbers; a street number stays text, so 12B and 100-105 are kept as typed

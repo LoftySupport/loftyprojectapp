@@ -1067,9 +1067,58 @@
    the drawer's corner — scrolled to the end, the last row's value sat under it. */
 .drawer-body {
   flex: 1;
+  /* A flex child's default minimum is its content, so without this the body grows to fit
+     and pushes the docked footer off the bottom instead of scrolling. It is the same line
+     the RecordDrawer contract warns about, and the footer is why it is needed here now. */
+  min-height: 0;
   overflow-y: auto;
   padding: var(--space-16);
   padding-bottom: calc(48px + 2 * var(--space-24));
+}
+
+/* ---- 6b: the full page is the same record with the conversation beside it -----
+   `PanelGroup` renders a context provider and no DOM, so `.drawer-body` is a direct child
+   of `.drawer` and the two columns are a grid on the parent — no second JSX tree for the
+   expanded state, which is what stops 6a and 6b drifting into two designs.
+
+   The handoff's own words: 6a and 6b are *"the same record at two widths, not two
+   designs"*. They show the same properties in the same order; the page has room to keep
+   the conversation docked BESIDE the record instead of under it. */
+.drawer.is-expanded {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    "head head"
+    "body conv";
+}
+.drawer.is-expanded > .record-head { grid-area: head; }
+.drawer.is-expanded > .drawer-body { grid-area: body; padding: var(--space-24) var(--space-32); }
+.drawer.is-expanded > .record-foot {
+  grid-area: conv;
+  /* Beside, not below: no top margin, no cap, and a left border instead of a top one. */
+  margin-top: 0;
+  max-height: none;
+  min-height: 0;
+  border-top: 0;
+  border-inline-start: 1px solid var(--layout-border-color);
+  background: var(--primary-background-color);
+}
+/* Below the width where 400px of conversation and a readable record both fit, the page
+   goes back to the drawer's shape — one column, conversation docked at the foot. Arrived
+   at from the other direction, and the reason there is one component rather than two. */
+@media (max-width: 1100px) {
+  .drawer.is-expanded {
+    display: flex;
+    flex-direction: column;
+  }
+  .drawer.is-expanded > .record-foot {
+    margin-top: var(--space-12);
+    max-height: 52%;
+    border-top: 1px solid var(--layout-border-color);
+    border-inline-start: 0;
+    background: var(--lofty-flint-100);
+  }
 }
 
 /* ---- template phases ----------------------------------------------------- */
@@ -2894,3 +2943,8 @@ code { overflow-wrap: anywhere; }
 .toolbar-text { width: 160px; }
 .toolbar-text input { font-variant-numeric: tabular-nums; }
 .toolbar-advanced-btn.is-on { background: var(--primary-selected-color); }
+
+/* A CollapsiblePanel rendered bare — inside the job record's docked tab strip, where the
+   tab already names it and controls whether it shows. No section chrome at all: the
+   heading and the toggle would be a second name for the tab above it. */
+.panel-bare { min-width: 0; }

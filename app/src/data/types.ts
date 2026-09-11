@@ -335,6 +335,19 @@ export interface JobPatch {
    * shows — the drawer.
    */
   titleType?: TitleType | null;
+  /**
+   * The date this job is being worked towards, and the day it actually finished (0113).
+   *
+   * Two, not one, because Amber asked for both: *"project date and job dates are
+   * separate and [it] depends [on] each other. [Both] are needed and relevant"*. The
+   * record's **Completion date** shows the target while the job runs and the actual once
+   * it is done, which is what the design draws. Null clears either.
+   *
+   * A PROJECT'S completion is not here and never will be: it is derived from all of its
+   * jobs being completed, and a column for it would be a second answer that can go stale.
+   */
+  targetCompletion?: IsoDate | null;
+  endDate?: IsoDate | null;
 }
 
 /** The joined shape the cards read — `project_display`. */
@@ -454,6 +467,17 @@ export interface Job {
    * of them and a guess on a lodged application is worse than a blank.
    */
   council: SaCouncil | null;
+  /**
+   * The job's own completion dates (0113): the date being worked towards, and the day it
+   * actually finished. Both null until somebody sets them.
+   *
+   * Two columns rather than one because Amber asked for both — *"[both] are needed and
+   * relevant"* — and because collapsing them loses the distinction the moment a job
+   * finishes on a different day from the one planned, which is most jobs. `projects`
+   * learned this in 0028 and its comment still says it: *"actual, as opposed to target"*.
+   */
+  targetCompletion: IsoDate | null;
+  endDate: IsoDate | null;
 
   // + fields
   createdAt: IsoDateTime;

@@ -26,11 +26,14 @@ import { CappedList } from "./CappedList";
 export function ActivityFeed({
   projectId,
   jobId,
-  title = "Activity"
+  title = "Activity",
+  bare = false
 }: {
   projectId?: number;
   jobId?: string;
   title?: string;
+  /** Inside the record's docked tab strip, where the tab already names it. */
+  bare?: boolean;
 }) {
   const { data: entries, loading, error } = useQuery(
     r => r.listRecordActivity({ projectId, jobId }),
@@ -39,8 +42,10 @@ export function ActivityFeed({
   );
 
   return (
-    <section className="panel">
-      <div className="panel-head">
+    <section className={bare ? "panel-bare" : "panel"}>
+      {/* The heading goes inside the record's docked tab strip, where the tab is already
+          called Activity Log and naming it twice in 36 pixels is the fault this avoids. */}
+      <div className="panel-head" hidden={bare}>
         <Text type="text2" weight="bold">{title}</Text>
         {entries.length > 0 && (
           <Text type="text3" color="secondary">
