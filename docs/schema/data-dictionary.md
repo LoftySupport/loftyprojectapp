@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-729 properties across 99 tables.
+734 properties across 100 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 680 | In the migration and the types |
+| Created | 685 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -779,6 +779,18 @@ The permission model as data — which rung of the ladder reaches how far: none,
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `permission_grants.permission` | Permission | Which rung of the ladder this grant applies to. | `enum` | — | permission_level. Part of the composite primary key. | Keyed off the permission_level enum rather than a roles table. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
 | `permission_grants.scope` | Scope | How wide the grant reaches — none, own, team, team_hierarchy, all. There is no 'division' scope: divisions were a prototype invention, not a Lofty concept. | `text` | — | Not null, CHECK against the scope list. | Each value maps to an RLS predicate. 'team' and 'team_hierarchy' both read profiles.teams, which is an array — the predicate is an overlap test, not a join, since 0022. | To do | 2026-08-01 · Proposed — from concept spec | 2026-08-01 · Proposed — from concept spec |
+
+## `pinned_pages`
+
+Up to five pages a person has bookmarked into the navigation rail (0112) — a label and an in-app path, nothing else, private to the owner by RLS. Deliberately NOT projects with a health dot, which is how the mockup drew it: a URL has no health, so the rail draws an icon for the kind of page instead, derived from the path. The five-pin cap is a CHECK of 1..5 plus a UNIQUE per person rather than a counting trigger, so two browser tabs cannot both squeeze in a sixth.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `pinned_pages.pinned_page_id` | Pinned page | One page somebody has bookmarked into the navigation rail — Amber, 11 September: "pinned is new and allows people to save/bookmark a page". Any page: a filtered board, a settings screen, a job, a report. | `uuid` | — | Primary key, default gen_random_uuid(). | Private by RLS: the owner-only policy compares profile_id to current_profile_id(), so nobody sees anybody else's bookmarks. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `pinned_pages.profile_id` | Whose pin | The person the bookmark belongs to. Cascades on delete: a person's bookmarks are theirs and go with them. | `uuid` | — | Not null. FK → profiles(profile_id) ON DELETE CASCADE. | Also the column the RLS policy filters on, and the leading column of both unique constraints that serve it. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `pinned_pages.pinned_page_label` | Name | What the person calls it in the rail — "Wandi lots", "My overdue jobs". | `text` | — | Not null. CHECK: not blank after trimming, and 60 characters or fewer. | Capped because the rail ellipsises but a pasted 4 kB label is an accident rather than a name. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `pinned_pages.pinned_page_url` | Page | Where the bookmark goes — an in-app path with its query string, e.g. /jobs/1209-002 or /projects?saved=current. The kind of thing it points at is read off this path rather than stored, so the icon and the link can never disagree. | `text` | — | Not null. CHECK: starts with a single slash, 2000 characters or fewer. UNIQUE (profile_id, url). | The leading-slash rule is a security constraint, not tidiness: this value is written by a person and rendered into an anchor's href in the one component on every screen, so an absolute or protocol-relative URL would navigate off Lofty from inside the navigation rail. Watched biting in the migration's own proof, both forms. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `pinned_pages.pinned_page_position` | Slot | Which of the five slots the pin occupies, and the order it draws in. | `integer` | — | Not null. CHECK: between 1 and 5. UNIQUE (profile_id, position). | This pair is how "max five" is enforced — the sixth pin has nowhere to go because there is no sixth slot. A counting trigger was the alternative and is racy: two tabs pinning at once would both count four and both insert. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `pipeline_stages`
 

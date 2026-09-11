@@ -35,6 +35,7 @@ import type {
   NewProject,
   NewAddress,
   NewPropertyDef,
+  PinnedPage,
   Profile,
   Project,
   ProjectPatch,
@@ -156,6 +157,32 @@ export interface Repository {
    * may see, which is the only number worth showing them.
    */
   railCounts(): Promise<RailCounts>;
+
+  // ---- the rail's Pinned section (0112) ----------------------------------
+  /**
+   * The five pages this person has bookmarked, in slot order.
+   *
+   * Amber, 11 September: *"pinned is new and allows people to save/bookmark a page"* —
+   * any page, a URL with a name. Private by RLS, so this returns the caller's own and
+   * there is no parameter for whose.
+   */
+  listMyPins(): Promise<PinnedPage[]>;
+
+  /**
+   * Bookmark a page into the first free slot, and hand back the whole list.
+   *
+   * The list rather than the row, for the reason `saveView` returns one: the database is
+   * the authority on what exists, and a list assembled in the component would be a second
+   * answer that can disagree with it after a refusal.
+   *
+   * **Five is the database's rule, not this method's.** `pinned_page_position` is CHECKed
+   * to 1..5 and UNIQUE per person, so a sixth pin has nowhere to go — a count here would
+   * be a courtesy that two browser tabs could both pass.
+   */
+  pinPage(label: string, url: string): Promise<PinnedPage[]>;
+
+  /** Take a bookmark off the rail. Returns the list that is left. */
+  unpinPage(id: string): Promise<PinnedPage[]>;
 
   listProfiles(): Promise<Profile[]>;
   currentProfile(): Promise<Profile | null>;
@@ -1014,6 +1041,9 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "listJobs",
   "getJob",
   "railCounts",
+  "listMyPins",
+  "pinPage",
+  "unpinPage",
   "listProfiles",
   "currentProfile",
   "getProfile",
@@ -1223,6 +1253,9 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   listJobs: "jobs",
   getJob: "jobs",
   railCounts: "projects + job_display + maintenance_request_display",
+  listMyPins: "pinned_pages",
+  pinPage: "pinned_pages",
+  unpinPage: "pinned_pages",
   listProfiles: "profiles",
   currentProfile: "profiles",
   getProfile: "profiles",

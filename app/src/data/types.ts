@@ -3352,6 +3352,49 @@ export interface SearchHit {
 }
 
 /**
+ * A page somebody has bookmarked into the rail (0112).
+ *
+ * Amber, 11 September, asked what Pinned pins: *"pinned is new and allows people to
+ * save/bookmark a page"* — **any page**, a URL with a name. A filtered board, a settings
+ * screen, a job, a report.
+ *
+ * **No status.** The mockup draws pinned rows as projects with an 8px health dot; a URL
+ * has no health, and a second weaker list of projects beside the Projects destination is
+ * not what was asked for. The rail draws an icon for the KIND of page instead, and the
+ * kind is derived from the path rather than stored — see `pinKind` below.
+ */
+export interface PinnedPage {
+  id: Uuid;
+  label: string;
+  /** An in-app path with its query string. The database refuses anything else. */
+  url: string;
+  /** 1..5. The slot is the cap and the order, in one constraint. */
+  position: number;
+}
+
+/** What a pinned page points at, worked out from its path. Drives the row's icon. */
+export type PinKind = "job" | "project" | "board" | "report" | "settings" | "page";
+
+/**
+ * The kind of thing a pinned URL names.
+ *
+ * Derived, never stored: the path already says which, and a `pinned_page_kind` column
+ * would be a second source for the same fact that could disagree with the first the
+ * moment somebody edited one. A record route is recognised by having a segment after the
+ * board — `/jobs/1209-002` is a job, `/jobs?saved=live` is a board of them.
+ */
+export function pinKind(url: string): PinKind {
+  const path = url.split("?")[0].replace(/\/+$/, "");
+  const [, head, tail] = path.split("/");
+  if (head === "jobs") return tail ? "job" : "board";
+  if (head === "projects") return tail ? "project" : "board";
+  if (head === "maintenance" || head === "tasks" || head === "contacts") return "board";
+  if (head === "reports" || head === "report") return "report";
+  if (head === "setup" || head === "settings" || head === "admin") return "settings";
+  return "page";
+}
+
+/**
  * The three numbers the navigation rail carries — Amber, 11 September.
  *
  * Three, and only three. The handoff draws a count on every flyout row as well ("All

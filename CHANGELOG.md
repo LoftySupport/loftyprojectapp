@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Pinned in the navigation rail — bookmark any page under a name, up to five, private to you
 - Screenshots and a 1440px desktop width in the responsive harness, so a layout fault can be seen rather than inferred
 - A rail count of projects, jobs and open maintenance requests, read in one round trip
 - the design handoff's SVG icons and the eight component contracts the app is to build against, so the app and the design system converge rather than being reconciled later

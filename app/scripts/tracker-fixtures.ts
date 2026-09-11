@@ -377,6 +377,22 @@ export function createStubRepository(): Repository {
      * exactly the class of defect the screenshots exist to catch. The real
      * implementation counts rows under RLS; this counts the rows it has.
      */
+    /**
+     * Five pinned pages, one of each kind the rail draws an icon for.
+     *
+     * Chosen to exercise `pinKind()` rather than to look plausible: a job, a project, a
+     * filtered board, a report and a settings screen are the five branches, and a
+     * screenshot with five bookmarks all pointing at boards would prove one of them.
+     */
+    async listMyPins() {
+      return [
+        { id: "pin-1", label: "FIXTURE job 9001-01", url: "/jobs/9001-01", position: 1 },
+        { id: "pin-2", label: "FIXTURE project 9001", url: "/projects/9001", position: 2 },
+        { id: "pin-3", label: "FIXTURE live jobs board", url: "/jobs?saved=live", position: 3 },
+        { id: "pin-4", label: "FIXTURE reports", url: "/reports", position: 4 },
+        { id: "pin-5", label: "FIXTURE processes setup", url: "/setup/processes", position: 5 }
+      ];
+    },
     async railCounts() {
       return {
         projects: 1,

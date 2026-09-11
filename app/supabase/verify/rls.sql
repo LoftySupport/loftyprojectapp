@@ -160,6 +160,34 @@ begin
   exception when others then raise warning 'FAIL: unexpected on your own saved view (%)', sqlerrm;
   end;
 
+  -- 0112: a pinned page is private, and the two halves matter for the same reason
+  -- saved_views' do. A person's bookmarks are a map of what they work on — which jobs
+  -- they are watching, which settings screen they keep going back to — so the USING
+  -- half is not a formality.
+  begin
+    insert into pinned_pages (profile_id, pinned_page_label, pinned_page_url, pinned_page_position)
+    values ((select profile_id from profiles
+              where profile_email <> 'behaviour-test@lofty.com.au' limit 1),
+            '__rls_probe__', '/jobs', 1);
+    raise warning 'FAIL: a pinned page was written onto somebody else';
+  exception
+    when insufficient_privilege then raise notice 'ok  pinned_pages refused a pin written onto another person';
+    when others then raise warning 'FAIL: unexpected writing another person''s pin (%)', sqlerrm;
+  end;
+
+  begin
+    insert into pinned_pages (profile_id, pinned_page_label, pinned_page_url, pinned_page_position)
+    values ((select profile_id from profiles where profile_email = 'behaviour-test@lofty.com.au'),
+            '__rls_probe__', '/jobs', 1);
+    if (select count(*) from pinned_pages where pinned_page_label = '__rls_probe__') = 1 then
+      raise notice 'ok  pinned_pages: your own pin is yours to read';
+    else
+      raise warning 'FAIL: a person could not read the pin they just made';
+    end if;
+    delete from pinned_pages where pinned_page_label = '__rls_probe__';
+  exception when others then raise warning 'FAIL: unexpected on your own pin (%)', sqlerrm;
+  end;
+
   -- 0049's demo gate is probed AFTER this block — see the note below. It cannot live in
   -- here, and finding out why fixed a check that had been reporting a failure it did not
   -- have.

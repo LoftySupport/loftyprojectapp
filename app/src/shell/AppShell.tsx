@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Dialog, DialogContentContainer, Text } from "@vibe/core";
-import { Menu, Note, Search, Settings, CheckList } from "@vibe/icons";
+import { Bookmark, Menu, Note, Search, Settings, CheckList } from "@vibe/icons";
 import { initialsOf, useAuth } from "../data/AuthProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { GlobalSearch } from "../components/GlobalSearch";
@@ -15,6 +15,7 @@ import { greetingName } from "../data/types";
 import { AdminConsole, Dashboard } from "../theme/railIcons";
 import { NavRail, NavRailGroup } from "./NavRail";
 import { useNavDestinations } from "./navDestinations";
+import { PinnedSection } from "./PinnedSection";
 import "./AppShell.css";
 
 const RAIL_KEY = "lofty-nav-collapsed";
@@ -341,10 +342,23 @@ export function AppShell() {
                 )}
               </NavRailGroup>
 
-              {/* PINNED IS NOT HERE YET. It is its own step in the build brief — a
-                  per-person table of {label, url} with an RLS policy and a five-row cap —
-                  and a Pinned group with nothing behind it would be a control that does
-                  nothing. It arrives with the table, the policy and the cap together. */}
+              <div className="nav-rule" />
+
+              {/* Pinned (0112). Bookmark, the design system's own — `ICONS.md` lists it
+                  among the glyphs the Lofty set should not redraw. 24px collapsed, where
+                  a Lofty glyph would take 28: this one fills its box. */}
+              <NavRailGroup
+                id="pinned"
+                label="Pinned"
+                icon={Bookmark}
+                iconSize={24}
+                open={openGroups.has("pinned")}
+                onToggle={() => toggleGroup("pinned")}
+                collapsed={railCollapsed}
+                onExpandRail={() => setCollapsed(false)}
+              >
+                <PinnedSection collapsed={railCollapsed} link={link} />
+              </NavRailGroup>
             </>
           }
           footer={

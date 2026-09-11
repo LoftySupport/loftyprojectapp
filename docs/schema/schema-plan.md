@@ -2752,6 +2752,80 @@ caught it because its admin deletes exactly that; the probe was then rewritten t
 URL first, and only then did it report.
 
 
+### 11 September — five pages you keep (`0112`)
+
+The rail's **Pinned** section, from the design handoff. Amber, asked what Pinned pins:
+*"pinned is new and allows people to save/bookmark a page"* — **any page**, a URL with a
+name. A filtered board, a settings screen, a job, a report.
+
+**The mockup draws this as projects, and the difference is the whole table.** 7a renders
+pinned rows as projects, each with an 8px health dot in orange, teal or grey. That would
+be a second, weaker list of projects sitting directly above the Projects destination — and
+a bookmark has no health. So `pinned_pages` has no status column, and the rail draws an
+icon for the *kind* of page instead. It is correction 3 in
+[`docs/design/handoff/README.md`](../design/handoff/README.md).
+
+**The kind is not a column.** `/jobs/1209-002` is a job, `/projects?saved=current` is a
+board, `/setup/processes` is a settings screen: the URL already says which, so `pinKind()`
+in `types.ts` reads it off the path. A `pinned_page_kind` column would be a second source
+for a fact the first column already carries, and the two would disagree the first time
+somebody edited one.
+
+#### Five, and how five is enforced
+
+*"max five"* — and **not with a counting trigger**, which is the obvious build and is racy:
+two browser tabs pinning at once both count four and both insert.
+
+```sql
+pinned_page_position integer not null check (pinned_page_position between 1 and 5),
+constraint pinned_pages_five_slots_per_person unique (profile_id, pinned_page_position)
+```
+
+A CHECK of 1..5 plus a UNIQUE per person caps it declaratively and race-safely: the sixth
+pin has nowhere to go, because there is no sixth slot. The loser of a race gets a 23505
+and is told the pin was not saved, rather than silently overwriting the winner. The slot
+doubles as the order the rail draws in, which a `created_at` sort would only approximate
+the moment somebody wanted to move a row up.
+
+#### Why the URL is constrained, and why in the database
+
+```sql
+check (pinned_page_url like '/%' and pinned_page_url not like '//%')
+```
+
+This value is **written by a person and rendered by the app into an anchor's `href`**, in
+the one component that is on every screen and that people use without reading. Left free,
+`https://…` and the protocol-relative `//evil.example` would both be stored happily and
+both navigate off Lofty from inside the navigation rail. A leading single slash is the
+whole of the rule.
+
+It is in the database rather than only in the repository for the reason `CLAUDE.md` gives
+about every `can()`: the app's checks are politeness and the policy is the boundary. The
+app checks it too, so the commonest mistake gets a sentence instead of a constraint
+violation — but the app's check is the message, not the rule.
+
+#### What was watched failing
+
+Every assertion in the migration's proof block was watched reporting before it was
+trusted, by breaking the thing it guards and replaying:
+
+| Broken | Reported |
+| --- | --- |
+| the URL CHECK → `check (true)` | `an off-site pin URL was accepted` |
+| the blank-label CHECK → `check (true)` | `a blank pin label was accepted` |
+| the 1..5 CHECK widened to 1..99 | `a sixth pin slot was accepted` |
+| the slot UNIQUE widened with `pinned_page_id` | `a sixth pin was accepted into an occupied slot` |
+| the per-URL UNIQUE widened with `pinned_page_id` | `the same page was pinned twice` |
+| the RLS policy → `using (true) with check (true)` | `FAIL: a pinned page was written onto somebody else` |
+
+**And one thing the harness caught that nobody had written a probe for.** The first
+replay reported `FAIL: tables without the audit trigger: pinned_pages` — `0080` removed
+the allowlist from `log_activity_audit()` and made `verify/behaviour.sql` assert that
+every non-log table in `public` carries `trg_activity_audit_row`, *"so the table created
+next month fails here the day it is created without one"*. That is exactly what happened,
+a fortnight later, to this table.
+
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

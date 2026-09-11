@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 227 changes since then —
+Unreleased: 228 changes since then —
+- Added: Pinned in the navigation rail — bookmark any page under a name, up to five, private to you
 - Changed: The navigation rail is rebuilt from the approved design — 224px expanded, 64px collapsed, a flyout of each destination's saved views, and Search, Settings, Admin and your own menu moved out of the header into it
 - Added: Screenshots and a 1440px desktop width in the responsive harness, so a layout fault can be seen rather than inferred
 - Added: A rail count of projects, jobs and open maintenance requests, read in one round trip
 - Added: the design handoff's SVG icons and the eight component contracts the app is to build against, so the app and the design system converge rather than being reconciled later
-- Added: the approved design for the sidebar rail and the job record, with the ten decisions that answer the gaps in it and the four corrections found reviewing it against the running app
-- …and 222 more.
+- …and 223 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

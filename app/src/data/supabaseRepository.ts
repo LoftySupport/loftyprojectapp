@@ -53,6 +53,7 @@ import type {
   NewPropertyDef,
   NewJob,
   NewProject,
+  PinnedPage,
   Profile,
   Project,
   ProjectPatch,
@@ -119,6 +120,7 @@ const WIRED: RepositoryMethod[] = [
   "listProcessTaskDependencies", "setProcessTaskDependencies",
   "listProcessRuns", "startProcessRun", "updateProcessRun", "deleteProcessRun", "instantiateProcessTasks",
   "listProjects", "getProject", "listJobs", "getJob", "railCounts",
+  "listMyPins", "pinPage", "unpinPage",
   "createProject", "createJob", "createJobsFromSplit", "deleteJob", "deleteProject",
   "moveJobStage",
   "updateJob",
@@ -943,6 +945,78 @@ export function createSupabaseRepository(): Repository {
         jobs: jobs.count ?? 0,
         maintenance: maintenance.count ?? 0
       };
+    },
+
+    // ---- the rail's Pinned section (0112) --------------------------------
+
+    /** In slot order, which is the order the rail draws them. RLS returns only yours. */
+    async listMyPins(): Promise<PinnedPage[]> {
+      const { data, error } = await client
+        .from("pinned_pages")
+        .select("pinned_page_id, pinned_page_label, pinned_page_url, pinned_page_position")
+        .order("pinned_page_position", { ascending: true });
+      if (error) throw error;
+      return (data ?? []).map(r => ({
+        id: r.pinned_page_id,
+        label: r.pinned_page_label,
+        url: r.pinned_page_url,
+        position: r.pinned_page_position
+      }));
+    },
+
+    /**
+     * Into the lowest free slot of five.
+     *
+     * Read-then-write, and the race is handled by the database rather than by trying to
+     * avoid it: `unique (profile_id, pinned_page_position)` means two tabs that both pick
+     * slot 3 produce one insert and one 23505, and the loser is told the pin was not
+     * saved rather than silently overwriting the winner. A counting trigger would have
+     * let both through.
+     *
+     * The messages name the actual rule. "Refused by the database" is true of every
+     * failure and useless in all of them.
+     */
+    async pinPage(label: string, url: string): Promise<PinnedPage[]> {
+      const name = label.trim();
+      if (!name) throw new Error("A pinned page needs a name.");
+      // Checked here as well as in the database: this one is worth a sentence rather
+      // than a constraint violation, because it is the commonest thing to hit.
+      if (!url.startsWith("/") || url.startsWith("//")) {
+        throw new Error("Only a page inside Lofty Hub can be pinned.");
+      }
+      const me = await repo.currentProfile();
+      if (!me) throw new Error("Pinning a page needs you to be signed in.");
+
+      const taken = new Set((await repo.listMyPins()).map(p => p.position));
+      const free = [1, 2, 3, 4, 5].find(n => !taken.has(n));
+      if (!free) throw new Error("Five pages are pinned already — unpin one to make room.");
+
+      const { error } = await client.from("pinned_pages").insert({
+        profile_id: me.id,
+        pinned_page_label: name,
+        pinned_page_url: url,
+        pinned_page_position: free
+      });
+      if (error) {
+        if (error.code === "23505") {
+          throw new Error("That page is already pinned, or a slot was taken — try again.");
+        }
+        throw error;
+      }
+      return await repo.listMyPins();
+    },
+
+    async unpinPage(id: string): Promise<PinnedPage[]> {
+      const { data, error } = await client
+        .from("pinned_pages")
+        .delete()
+        .eq("pinned_page_id", id)
+        .select("pinned_page_id");
+      if (error) throw error;
+      // RLS makes another person's pin unreachable rather than forbidden, so a delete
+      // that matched nothing is the only signal that it was not yours (or is gone).
+      if (!data?.length) throw new Error("That pin was not removed — it no longer exists.");
+      return await repo.listMyPins();
     },
 
     /** `maybeSingle`, not `single`: a job that is not there is null, not an error. */

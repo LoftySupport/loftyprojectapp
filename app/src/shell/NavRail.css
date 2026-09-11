@@ -183,6 +183,85 @@
   margin: 10px auto;
 }
 
+/* ---- Pinned (0112) ------------------------------------------------------ */
+
+/* A pinned row and its unpin control, side by side. The row takes the width and the ×
+   sits on top of its right end rather than beside it, so the label gets the full 208px
+   when nobody is hovering — five bookmarks in a 224px rail cannot afford a permanent
+   28px gutter for a control used once in their lifetime. */
+.nav-pin { position: relative; display: flex; min-width: 0; }
+.nav-pin .nav-row { padding-inline-end: var(--space-24); }
+.nav-pin-off {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: var(--space-4);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  border: 0;
+  border-radius: var(--border-radius-4);
+  background: transparent;
+  color: var(--rail-muted);
+  cursor: pointer;
+  /* Hidden until the row is hovered or something in it has focus. `opacity`, not
+     `display`, so the button keeps its accessible name and its place in the tab order —
+     a keyboard is how somebody who cannot use hover reaches it at all. */
+  opacity: 0;
+  transition: opacity var(--motion-productive-short) var(--motion-timing-transition);
+}
+.nav-pin:hover .nav-pin-off,
+.nav-pin:focus-within .nav-pin-off { opacity: 1; }
+.nav-pin-off:hover { color: var(--lofty-finisher-white); background: var(--rail-hover); }
+.nav-pin-off:disabled { cursor: default; opacity: 0.4; }
+
+/* "Pin this page", and the two states that say why it is off. Quieter than a
+   destination — it is an action in a list of places, so it takes the muted ink rather
+   than full white. */
+.nav-pin-add { color: var(--rail-muted); }
+.nav-pin-add:disabled { cursor: default; background: transparent; }
+.nav-pin-add:disabled:hover { background: transparent; }
+
+.nav-pin-form { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-4); }
+/* A light field on the dark rail, like the search box above it and for the same reason:
+   it is a field, not a nav row, and styling it like the rows is how a box nobody types
+   into gets built. */
+.nav-pin-input {
+  height: 32px;
+  min-width: 0;
+  padding: 0 var(--space-8);
+  border: 1px solid var(--ui-border-color);
+  border-radius: var(--border-radius-4);
+  background: var(--lofty-finisher-white);
+  color: var(--primary-text-color);
+  font: var(--font-text2-normal);
+}
+.nav-pin-actions { display: flex; gap: var(--space-4); }
+.nav-pin-actions button {
+  flex: 1 1 0;
+  min-height: 24px;
+  padding: var(--space-4);
+  border: 1px solid var(--rail-rule);
+  border-radius: var(--border-radius-4);
+  background: transparent;
+  color: var(--lofty-finisher-white);
+  font: var(--font-text3-medium);
+  cursor: pointer;
+}
+.nav-pin-actions button:hover:not(:disabled) { background: var(--rail-hover); }
+.nav-pin-actions button:disabled { opacity: 0.4; cursor: default; }
+/* A refusal from the database, said in the rail rather than swallowed — "Five pages are
+   pinned already", "That page is already pinned". 12/16 is the floor; there is no step
+   below it. */
+.nav-pin-problem {
+  margin: var(--space-4);
+  font: var(--font-text3-normal);
+  color: var(--lofty-finisher-white);
+  background: var(--negative-color);
+  border-radius: var(--border-radius-4);
+  padding: var(--space-4) var(--space-8);
+}
+
 /* ---- search, expanded and collapsed ------------------------------------- */
 
 .nav-rail-search { flex: none; padding: var(--space-12) var(--space-8) var(--space-4); }
