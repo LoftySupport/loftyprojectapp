@@ -258,16 +258,26 @@ so it is a question rather than a guess:
 Nothing is blocked on this — the rules are written down and the two boards meet them. It
 decides how much retro-fitting to schedule, and in what order.
 
-### 20. Does a job carry its own target completion date?
+### 20. Is a job's completion date the one being aimed at, or the one it finished on?
 
-Projects have `targetCompletion`; jobs have no date column beyond `stage_entered_at`. The
-job-record handoff (6b) shows a target completion **on a job**, under the Construction
-segment, and it is one of the six key properties.
+**Mostly answered, 11 September.** *"each job has its own completion date. and completion
+date is at a job level… there is also a project completion level which is when all jobs in
+the project are completed"*, and *"you can change handover date to completion date"* — so the
+sixth key property is **Completion date**, it lives on the **job**, and a project's completion
+is **derived** from its jobs rather than typed.
 
-The recommendation is a nullable `target_completion` on `jobs`, displaying the project's
-until it is set — twenty lots on one site hand over on twenty different days, so a job
-reading its project's date would be wrong for nineteen of them. **This is the only schema
-change the whole handoff needs.** Confirm before the migration is written.
+What is left is which date it is, because `projects` already keeps the two apart:
+`project_target_completion` is *"the date being worked towards"* and drives the Gantt and the
+overdue calculation; `project_end_date` is *"when the project actually finished, as opposed to
+the target."*
+
+The handoff shows a job's completion date being **set in advance** — 6a has an empty
+`dd/mm/yyyy` box on a job still in Pre-construction, and 6b reads *Target completion 14/11/26*
+under Construction and *"Job completed (or Target completion)"* under Complete. That reads as
+a planned date that the actual replaces once the job finishes, which would mean a job mirrors
+a project and carries both.
+
+Blocks the migration, and nothing else.
 
 ### 21. How does the rail get its counts?
 

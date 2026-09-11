@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="page">
+<link rel="stylesheet" href="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/tokens/colors.css">
+<link rel="stylesheet" href="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/tokens/typography.css">
+<link rel="stylesheet" href="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/tokens/spacing.css">
+<link rel="stylesheet" href="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/tokens/radius.css">
+<link rel="stylesheet" href="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/tokens/shadows.css">
+<link rel="stylesheet" href="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/tokens/dark.css">
+<link rel="stylesheet" href="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/tokens/motion.css">
+<link rel="stylesheet" href="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/tokens/base.css">
+<link rel="stylesheet" href="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/styles.css">
+<link rel="stylesheet" href="ds-update/tokens/dark-surface.css">
+<script src="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/_ds_bundle.js"></script>
+<style>
+  body { margin: 0; background: var(--lofty-flint-50); }
+  a { color: var(--primary-text-color); }
+  a:hover { color: var(--primary-hover-color); }
+</style>
+</helmet>
+
+<div style="font-family: var(--font-family); color: var(--primary-text-color); padding: 48px 32px 96px; max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 48px">
+
+  <header style="display: flex; flex-direction: column; gap: 12px; border-bottom: 1px solid var(--layout-border-color); padding-bottom: 24px">
+    <div style="font: var(--font-text3-bold); letter-spacing: .06em; color: var(--secondary-text-color)">DESIGN SYSTEM UPDATE</div>
+    <h1 style="margin: 0; font-family: var(--title-font-family); font: var(--font-h1-bold); letter-spacing: -0.5px">Patterns from the job record and the sidebar</h1>
+    <p style="margin: 0; max-width: 68ch; font: var(--font-text1-normal); color: var(--secondary-text-color); text-wrap: pretty">Eight patterns settled in the Lofty Hub mockups, proposed as additions to Lofty's App Design System. Each is shown light and dark. The drop-in files sit in <code style="font: var(--font-text2-normal)">ds-update/</code> — components, token additions, the traced icon set and a changelog entry.</p>
+  </header>
+
+  <!-- 1 NAV RAIL -->
+  <section style="display: flex; flex-direction: column; gap: 16px">
+    <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap">
+      <span style="font: var(--font-text3-bold); color: var(--lofty-crisp-orange)">01</span>
+      <h2 style="margin: 0; font-family: var(--title-font-family); font: var(--font-h2-bold); letter-spacing: -0.1px">NavRail</h2>
+      <span style="font: var(--font-text2-normal); color: var(--secondary-text-color)">components/navigation/NavRail</span>
+    </div>
+    <p style="margin: 0; max-width: 68ch; font: var(--font-text2-normal); color: var(--secondary-text-color)">The persistent dark application rail. One component with two widths and four states — 224px expanded, 64px collapsed, each with and without a flyout. Selection is a 20% white wash, hover 12%, rules 16%. A Foundation Black rail is the same material on both themes, so the rail itself does not change; the page around it does.</p>
+
+    <div style="display: flex; gap: 20px; flex-wrap: wrap">
+      <div style="flex: 1; min-width: 340px; background: var(--page-tint-color); border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); padding: 20px">
+        <div style="font: var(--font-text3-bold); letter-spacing: .06em; color: var(--secondary-text-color); margin-bottom: 12px">LIGHT</div>
+        <div style="display: flex; gap: 12px; height: 360px">
+          <nav aria-label="Main" style="width: 224px; flex: none; display: flex; flex-direction: column; background: var(--lofty-foundation-black); border-right: 1px solid rgba(255,255,255,.16); border-radius: var(--border-radius-small); overflow: hidden">
+            <div style="height: 56px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 16px; border-bottom: 1px solid rgba(255,255,255,.16)">
+              <img src="assets/lofty-logo-orange.png" alt="Lofty" style="height: 20px">
+              <span style="color: #fff; font: var(--font-text2-normal); opacity: .8">&#171;</span>
+            </div>
+            <div style="flex: 1; min-height: 0; overflow: hidden; padding: 8px; display: flex; flex-direction: column; gap: 2px">
+              <div style="display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 8px; border-radius: var(--border-radius-small); background: rgba(255,255,255,.20); color: #fff; font: var(--font-text2-bold)">
+                <span style="width: 20px; height: 20px; flex: none; background: currentColor; -webkit-mask: url(ds-update/assets/icons-lofty/Projects.svg) center/contain no-repeat; mask: url(ds-update/assets/icons-lofty/Projects.svg) center/contain no-repeat"></span>
+                <span style="flex: 1">Projects</span><span style="font: var(--font-text3-normal); color: rgba(255,255,255,.72)">9</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 8px; border-radius: var(--border-radius-small); background: rgba(255,255,255,.12); color: #fff; font: var(--font-text2-normal)">
+                <span style="width: 20px; height: 20px; flex: none; background: currentColor; -webkit-mask: url(ds-update/assets/icons-lofty/Job.svg) center/contain no-repeat; mask: url(ds-update/assets/icons-lofty/Job.svg) center/contain no-repeat"></span>
+                <span style="flex: 1">Jobs</span><span style="font: var(--font-text3-normal); color: rgba(255,255,255,.72)">128</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 8px; color: #fff; font: var(--font-text2-normal)">
+                <span style="width: 20px; height: 20px; flex: none; background: currentColor; -webkit-mask: url(ds-update/assets/icons-lofty/Maintenance.svg) center/contain no-repeat; mask: url(ds-update/assets/icons-lofty/Maintenance.svg) center/contain no-repeat"></span>
+                <span style="flex: 1">Maintenance</span><span style="font: var(--font-text3-normal); color: rgba(255,255,255,.72)">23</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 8px; color: #fff; font: var(--font-text2-normal)">
+                <span style="width: 20px; height: 20px; flex: none; background: currentColor; -webkit-mask: url(ds-update/assets/icons-lofty/Reports.svg) center/contain no-repeat; mask: url(ds-update/assets/icons-lofty/Reports.svg) center/contain no-repeat"></span>
+                <span style="flex: 1">Reports</span>
+              </div>
+              <div style="height: 1px; background: rgba(255,255,255,.16); margin: 12px 4px"></div>
+              <div style="display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 8px; color: #fff; font: var(--font-text2-normal)">
+                <span style="width: 20px; height: 20px; flex: none; background: currentColor; -webkit-mask: url(ds-update/assets/icons-lofty/Contacts.svg) center/contain no-repeat; mask: url(ds-update/assets/icons-lofty/Contacts.svg) center/contain no-repeat"></span>
+                <span style="flex: 1">Contacts</span>
+              </div>
+            </div>
+            <div style="flex: none; border-top: 1px solid rgba(255,255,255,.16); padding: 8px; display: flex; align-items: center; gap: 8px">
+              <span style="width: 24px; height: 24px; border-radius: 50%; background: var(--lofty-crisp-orange); color: #fff; display: grid; place-items: center; font: var(--font-text3-bold)">GP</span>
+              <span style="color: #fff; font: var(--font-text2-normal)">Gary Patel</span>
+            </div>
+          </nav>
+          <div style="width: 64px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 0; background: var(--lofty-foundation-black); border-radius: var(--border-radius-small)">
+            <img src="assets/brand/lofty-mark-orange.png" alt="" style="width: 26px; margin-bottom: 6px">
+            <div style="width: 44px; height: 44px; display: grid; place-items: center; border-radius: var(--border-radius-small); background: rgba(255,255,255,.20); color: #fff">
+              <span style="width: 28px; height: 28px; background: currentColor; -webkit-mask: url(ds-update/assets/icons-lofty/Projects.svg) center/contain no-repeat; mask: url(ds-update/assets/icons-lofty/Projects.svg) center/contain no-repeat"></span>
+            </div>
+            <div style="width: 44px; height: 44px; display: grid; place-items: center; color: #fff">
+              <span style="width: 28px; height: 28px; background: currentColor; -webkit-mask: url(ds-update/assets/icons-lofty/Job.svg) center/contain no-repeat; mask: url(ds-update/assets/icons-lofty/Job.svg) center/contain no-repeat"></span>
+            </div>
+            <div style="width: 44px; height: 44px; display: grid; place-items: center; color: #fff">
+              <span style="width: 28px; height: 28px; background: currentColor; -webkit-mask: url(ds-update/assets/icons-lofty/Maintenance.svg) center/contain no-repeat; mask: url(ds-update/assets/icons-lofty/Maintenance.svg) center/contain no-repeat"></span>
+            </div>
+            <div style="width: 44px; height: 44px; display: grid; place-items: center; color: #fff">
+              <span style="width: 28px; height: 28px; background: currentColor; -webkit-mask: url(ds-update/assets/icons-lofty/Reports.svg) center/contain no-repeat; mask: url(ds-update/assets/icons-lofty/Reports.svg) center/contain no-repeat"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div data-theme="dark" style="flex: 1; min-width: 340px; background: var(--page-tint-color); border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); padding: 20px">
+        <div style="font: var(--font-text3-bold); letter-spacing: .06em; color: var(--secondary-text-color); margin-bottom: 12px">DARK</div>
+        <div style="display: flex; gap: 12px; height: 360px">
+          <nav aria-label="Main" style="width: 224px; flex: none; display: flex; flex-direction: column; background: var(--lofty-foundation-black); border-right: 1px solid rgba(255,255,255,.16); border-radius: var(--border-radius-small); overflow: hidden">
+            <div style="height: 56px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 16px; border-bottom: 1px solid rgba(255,255,255,.16)">
+              <img src="assets/lofty-logo-orange.png" alt="Lofty" style="height: 20px">
+              <span style="color: #fff; font: var(--font-text2-normal); opacity: .8">&#171;</span>
+            </div>
+            <div style="flex: 1; min-height: 0; overflow: hidden; padding: 8px; display: flex; flex-direction: column; gap: 2px">
+              <div style="display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 8px; border-radius: var(--border-radius-small); background: rgba(255,255,255,.20); color: #fff; font: var(--font-text2-bold)">
+                <span style="width: 20px; height: 20px; flex: none; background: currentColor; -webkit-mask: url(ds-update/assets/icons-lofty/Projects.svg) center/contain no-repeat; mask: url(ds-update/assets/icons-lofty/Projects.svg) center/contain no-repeat"></span>
+                <span style="flex: 1">Projects</span><span style="font: var(--font-text3-normal); color: rgba(255,255,255,.72)">9</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 8px; border-radius: var(--border-radius-small); background: rgba(255,255,255,.12); color: #fff; font: var(--font-text2-normal)">
+                <span style="width: 20px; height: 20px; flex: none; background: currentColor; -webkit-mask: url(ds-update/assets/icons-lofty/Job.svg) center/contain no-repeat; mask: url(ds-update/assets/icons-lofty/Job.svg) center/contain no-repeat"></span>
+                <span style="flex: 1">Jobs</span><span style="font: var(--font-text3-normal); color: rgba(255,255,255,.72)">128</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 8px; color: #fff; font: var(--font-text2-normal)">
+                <span style="width: 20px; height: 20px; flex: none; background: currentColor; -webkit-mask: url(ds-update/assets/icons-lofty/Maintenance.svg) center/contain no-repeat; mask: url(ds-update/assets/icons-lofty/Maintenance.svg) center/contain no-repeat"></span>
+                <span style="flex: 1">Maintenance</span><span style="font: var(--font-text3-normal); color: rgba(255,255,255,.72)">23</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 8px; color: #fff; font: var(--font-text2-normal)">
+                <span style="width: 20px; height: 20px; flex: none; background: currentColor; -webkit-mask: url(ds-update/assets/icons-lofty/Reports.svg) center/contain no-repeat; mask: url(ds-update/assets/icons-lofty/Reports.svg) center/contain no-repeat"></span>
+                <span style="flex: 1">Reports</span>
+              </div>
+              <div style="height: 1px; background: rgba(255,255,255,.16); margin: 12px 4px"></div>
+              <div style="display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 8px; color: #fff; font: var(--font-text2-normal)">
+                <span style="width: 20px; height: 20px; flex: none; background: currentColor; -webkit-mask: url(ds-update/assets/icons-lofty/Contacts.svg) center/contain no-repeat; mask: url(ds-update/assets/icons-lofty/Contacts.svg) center/contain no-repeat"></span>
+                <span style="flex: 1">Contacts</span>
+              </div>
+            </div>
+            <div style="flex: none; border-top: 1px solid rgba(255,255,255,.16); padding: 8px; display: flex; align-items: center; gap: 8px">
+              <span style="width: 24px; height: 24px; border-radius: 50%; background: var(--lofty-crisp-orange); color: #fff; display: grid; place-items: center; font: var(--font-text3-bold)">GP</span>
+              <span style="color: #fff; font: var(--font-text2-normal)">Gary Patel</span>
+            </div>
+          </nav>
+          <div style="flex: 1; min-width: 0; background: var(--primary-background-color); border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-small); padding: 16px">
+            <div style="font: var(--font-text2-bold)">Content sits on Flint 800</div>
+            <p style="margin: 8px 0 0; font: var(--font-text3-normal); color: var(--secondary-text-color); text-wrap: pretty">The rail keeps its hex. Only the page beside it steps to the dark grounds, so the rail reads as a shell on both themes rather than a panel that inverts.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 NAV FLYOUT -->
+  <section style="display: flex; flex-direction: column; gap: 16px">
+    <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap">
+      <span style="font: var(--font-text3-bold); color: var(--lofty-crisp-orange)">02</span>
+      <h2 style="margin: 0; font-family: var(--title-font-family); font: var(--font-h2-bold); letter-spacing: -0.1px">NavFlyout</h2>
+      <span style="font: var(--font-text2-normal); color: var(--secondary-text-color)">components/navigation/NavFlyout</span>
+    </div>
+    <p style="margin: 0; max-width: 68ch; font: var(--font-text2-normal); color: var(--secondary-text-color)">A destination's saved views, opened on hover or keyboard focus beside the rail. 240px, one component at both rail widths. The hovered row lifts to a 28% wash while its panel is open.</p>
+
+    <div style="display: flex; gap: 20px; flex-wrap: wrap">
+      <div style="flex: 1; min-width: 320px; background: var(--page-tint-color); border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); padding: 20px">
+        <div style="font: var(--font-text3-bold); letter-spacing: .06em; color: var(--secondary-text-color); margin-bottom: 12px">LIGHT</div>
+        <div style="width: 240px; background: var(--primary-background-color); border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); padding: 8px; box-shadow: 0 6px 20px rgba(65,64,66,.16)">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 4px">
+            <span style="font-family: var(--title-font-family); font: var(--font-h3-bold); letter-spacing: -0.1px">Projects</span>
+            <span style="font: var(--font-text2-normal); color: var(--secondary-text-color)">+ New</span>
+          </div>
+          <div style="height: 1px; background: var(--lofty-flint-200); margin: 8px 4px"></div>
+          <div style="font: var(--font-text3-bold); letter-spacing: .06em; color: var(--secondary-text-color); padding: 8px 8px 4px">VIEWS</div>
+          <div style="display: flex; align-items: center; height: 32px; padding: 0 8px; border-radius: var(--border-radius-small); background: var(--primary-background-hover-color); font: var(--font-text2-normal)"><span style="flex: 1">All projects</span><span style="font: var(--font-text3-normal); color: var(--secondary-text-color)">9</span></div>
+          <div style="display: flex; align-items: center; height: 32px; padding: 0 8px; font: var(--font-text2-normal)"><span style="flex: 1">My projects</span><span style="font: var(--font-text3-normal); color: var(--secondary-text-color)">3</span></div>
+          <div style="height: 1px; background: var(--lofty-flint-200); margin: 8px 4px"></div>
+          <div style="font: var(--font-text3-bold); letter-spacing: .06em; color: var(--secondary-text-color); padding: 8px 8px 4px">VIEW BY STAGE</div>
+          <div style="display: flex; align-items: center; height: 32px; padding: 0 8px; font: var(--font-text2-normal)"><span style="flex: 1">Pre-construction</span><span style="font: var(--font-text3-normal); color: var(--secondary-text-color)">3</span></div>
+          <div style="display: flex; align-items: center; height: 32px; padding: 0 8px; font: var(--font-text2-normal)"><span style="flex: 1">Construction</span><span style="font: var(--font-text3-normal); color: var(--secondary-text-color)">4</span></div>
+        </div>
+      </div>
+
+      <div data-theme="dark" style="flex: 1; min-width: 320px; background: var(--page-tint-color); border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); padding: 20px">
+        <div style="font: var(--font-text3-bold); letter-spacing: .06em; color: var(--secondary-text-color); margin-bottom: 12px">DARK</div>
+        <div style="width: 240px; background: var(--secondary-background-color); border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); padding: 8px; box-shadow: var(--box-shadow-medium); color: var(--primary-text-color)">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 4px">
+            <span style="font-family: var(--title-font-family); font: var(--font-h3-bold); letter-spacing: -0.1px">Projects</span>
+            <span style="font: var(--font-text2-normal); color: var(--secondary-text-color)">+ New</span>
+          </div>
+          <div style="height: 1px; background: var(--layout-border-color); margin: 8px 4px"></div>
+          <div style="font: var(--font-text3-bold); letter-spacing: .06em; color: var(--secondary-text-color); padding: 8px 8px 4px">VIEWS</div>
+          <div style="display: flex; align-items: center; height: 32px; padding: 0 8px; border-radius: var(--border-radius-small); background: var(--primary-background-hover-color); font: var(--font-text2-normal)"><span style="flex: 1">All projects</span><span style="font: var(--font-text3-normal); color: var(--secondary-text-color)">9</span></div>
+          <div style="display: flex; align-items: center; height: 32px; padding: 0 8px; font: var(--font-text2-normal)"><span style="flex: 1">My projects</span><span style="font: var(--font-text3-normal); color: var(--secondary-text-color)">3</span></div>
+          <div style="height: 1px; background: var(--layout-border-color); margin: 8px 4px"></div>
+          <div style="font: var(--font-text3-bold); letter-spacing: .06em; color: var(--secondary-text-color); padding: 8px 8px 4px">VIEW BY STAGE</div>
+          <div style="display: flex; align-items: center; height: 32px; padding: 0 8px; font: var(--font-text2-normal)"><span style="flex: 1">Pre-construction</span><span style="font: var(--font-text3-normal); color: var(--secondary-text-color)">3</span></div>
+          <div style="display: flex; align-items: center; height: 32px; padding: 0 8px; font: var(--font-text2-normal)"><span style="flex: 1">Construction</span><span style="font: var(--font-text3-normal); color: var(--secondary-text-color)">4</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 RECORD DRAWER -->
+  <section style="display: flex; flex-direction: column; gap: 16px">
+    <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap">
+      <span style="font: var(--font-text3-bold); color: var(--lofty-crisp-orange)">03</span>
+      <h2 style="margin: 0; font-family: var(--title-font-family); font: var(--font-h2-bold); letter-spacing: -0.1px">RecordDrawer</h2>
+      <span style="font: var(--font-text2-normal); color: var(--secondary-text-color)">components/records/RecordDrawer</span>
+    </div>
+    <p style="margin: 0; max-width: 68ch; font: var(--font-text2-normal); color: var(--secondary-text-color)">Header, scrolling body, docked footer — three flex siblings. If the footer ends up inside the scroll region the tabs scroll away, which defeats the pattern. Sections inside are collapsible, open by default, separated by a Flint 300 rule with 16px of air.</p>
+
+    <div style="display: flex; gap: 20px; flex-wrap: wrap">
+      <div style="flex: 1; min-width: 320px; background: var(--page-tint-color); border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); padding: 20px">
+        <div style="font: var(--font-text3-bold); letter-spacing: .06em; color: var(--secondary-text-color); margin-bottom: 12px">LIGHT</div>
+        <div style="width: 100%; max-width: 400px; height: 300px; display: flex; flex-direction: column; background: var(--primary-background-color); border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); overflow: hidden">
+          <div style="flex: none; height: 48px; display: flex; align-items: center; gap: 4px; padding: 0 16px; border-bottom: 1px solid var(--layout-border-color); font: var(--font-text3-normal); color: var(--secondary-text-color)">
+            Jobs <span style="color: var(--lofty-flint-300)">&#8250;</span> 1209 <span style="color: var(--lofty-flint-300)">&#8250;</span> <span style="font: var(--font-text3-bold); color: var(--primary-text-color)">1209-002</span>
+          </div>
+          <div style="flex: 1; min-height: 0; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
+              <span style="font-family: var(--title-font-family); font: var(--font-text1-bold); letter-spacing: -0.1px"><span style="border-bottom: 1px solid var(--lofty-flint-300)">1209</span>-002 - EVANSTON PARK</span>
+              <span style="display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border-radius: var(--border-radius-pill); background: var(--warning-color-selected); color: var(--primary-text-color); font: var(--font-text3-bold); flex: none">At risk</span>
+            </div>
+            <div style="border-top: 1px solid var(--layout-border-color); padding-top: 16px; display: flex; align-items: center; gap: 8px; font: var(--font-text2-bold)">
+              <span style="color: var(--secondary-text-color)">&#8250;</span><span style="flex: 1">Key properties</span>
+            </div>
+            <div style="border-top: 1px solid var(--layout-border-color); padding-top: 16px; display: flex; align-items: center; gap: 8px; font: var(--font-text2-bold)">
+              <span style="color: var(--secondary-text-color)">&#8250;</span><span style="flex: 1">Process</span><span style="font: var(--font-text3-normal); color: var(--secondary-text-color)">4 of 9 steps</span>
+            </div>
+          </div>
+          <div style="flex: none; border-top: 1px solid var(--layout-border-color); background: var(--lofty-flint-100); display: flex">
+            <div style="height: 36px; padding: 0 16px; display: flex; align-items: center; gap: 8px; background: var(--primary-background-color); border-bottom: 2px solid var(--lofty-crisp-orange); border-radius: var(--border-radius-small) var(--border-radius-small) 0 0; font: var(--font-text2-bold)">Tasks</div>
+            <div style="height: 36px; padding: 0 16px; display: flex; align-items: center; border-left: 1px solid var(--lofty-flint-200); font: var(--font-text2-normal)">Comments</div>
+            <div style="height: 36px; padding: 0 16px; display: flex; align-items: center; border-left: 1px solid var(--lofty-flint-200); font: var(--font-text2-normal)">Activity log</div>
+          </div>
+        </div>
+      </div>
+
+      <div data-theme="dark" style="flex: 1; min-width: 320px; background: var(--page-tint-color); border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); padding: 20px">
+        <div style="font: var(--font-text3-bold); letter-spacing: .06em; color: var(--secondary-text-color); margin-bottom: 12px">DARK</div>
+        <div style="width: 100%; max-width: 400px; height: 300px; display: flex; flex-direction: column; background: var(--primary-background-color); border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); overflow: hidden; color: var(--primary-text-color)">
+          <div style="flex: none; height: 48px; display: flex; align-items: center; gap: 4px; padding: 0 16px; border-bottom: 1px solid var(--layout-border-color); font: var(--font-text3-normal); color: var(--secondary-text-color)">
+            Jobs <span style="color: var(--layout-border-color)">&#8250;</span> 1209 <span style="color: var(--layout-border-color)">&#8250;</span> <span style="font: var(--font-text3-bold); color: var(--primary-text-color)">1209-002</span>
+          </div>
+          <div style="flex: 1; min-height: 0; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
+              <span style="font-family: var(--title-font-family); font: var(--font-text1-bold); letter-spacing: -0.1px"><span style="border-bottom: 1px solid var(--layout-border-color)">1209</span>-002 - EVANSTON PARK</span>
+              <span style="display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border-radius: var(--border-radius-pill); background: var(--warning-color-selected); color: var(--primary-text-color); font: var(--font-text3-bold); flex: none">At risk</span>
+            </div>
+            <div style="border-top: 1px solid var(--layout-border-color); padding-top: 16px; display: flex; align-items: center; gap: 8px; font: var(--font-text2-bold)">
+              <span style="color: var(--secondary-text-color)">&#8250;</span><span style="flex: 1">Key properties</span>
+            </div>
+            <div style="border-top: 1px solid var(--layout-border-color); padding-top: 16px; display: flex; align-items: center; gap: 8px; font: var(--font-text2-bold)">
+              <span style="color: var(--secondary-text-color)">&#8250;</span><span style="flex: 1">Process</span><span style="font: var(--font-text3-normal); color: var(--secondary-text-color)">4 of 9 steps</span>
+            </div>
+          </div>
+          <div style="flex: none; border-top: 1px solid var(--layout-border-color); background: var(--page-tint-color); display: flex">
+            <div style="height: 36px; padding: 0 16px; display: flex; align-items: center; gap: 8px; background: var(--secondary-background-color); border-bottom: 2px solid var(--lofty-crisp-orange); border-radius: var(--border-radius-small) var(--border-radius-small) 0 0; font: var(--font-text2-bold)">Tasks</div>
+            <div style="height: 36px; padding: 0 16px; display: flex; align-items: center; border-left: 1px solid var(--layout-border-color); font: var(--font-text2-normal)">Comments</div>
+            <div style="height: 36px; padding: 0 16px; display: flex; align-items: center; border-left: 1px solid var(--layout-border-color); font: var(--font-text2-normal)">Activity log</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 FIELD ROW -->
+  <section style="display: flex; flex-direction: column; gap: 16px">
+    <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap">
+      <span style="font: var(--font-text3-bold); color: var(--lofty-crisp-orange)">04</span>
+      <h2 style="margin: 0; font-family: var(--title-font-family); font: var(--font-h2-bold); letter-spacing: -0.1px">FieldRow</h2>
+      <span style="font: var(--font-text2-normal); color: var(--secondary-text-color)">components/records/FieldRow</span>
+    </div>
+    <p style="margin: 0; max-width: 68ch; font: var(--font-text2-normal); color: var(--secondary-text-color)">One row system for every record: label column 120px in the drawer and 136px on the page, value inline, 32px row. A field with a type shows its control, not the word "Empty" — an empty date is a date box reading dd/mm/yyyy. In a column of controls every control is the same width and height.</p>
+
+    <div style="display: flex; gap: 20px; flex-wrap: wrap">
+      <div style="flex: 1; min-width: 320px; background: var(--page-tint-color); border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); padding: 20px">
+        <div style="font: var(--font-text3-bold); letter-spacing: .06em; color: var(--secondary-text-color); margin-bottom: 12px">LIGHT</div>
+        <div style="background: var(--primary-background-color); border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); padding: 16px; display: flex; flex-direction: column">
+          <div style="display: grid; grid-template-columns: 136px 1fr; align-items: center; gap: 8px; min-height: 32px">
+            <span style="font: var(--font-text2-normal); color: var(--secondary-text-color)">Council</span>
+            <div style="height: 28px; max-width: 300px; box-sizing: border-box; border: 1px solid var(--ui-border-color); border-radius: var(--border-radius-small); padding: 0 8px; display: flex; align-items: center; justify-content: space-between; font: var(--font-text2-normal)">City of Playford <span style="color: var(--icon-color)">&#9662;</span></div>
+          </div>
+          <div style="display: grid; grid-template-columns: 136px 1fr; align-items: center; gap: 8px; min-height: 32px">
+            <span style="font: var(--font-text2-normal); color: var(--secondary-text-color)">Handover date</span>
+            <div style="height: 28px; max-width: 300px; box-sizing: border-box; border: 1px solid var(--ui-border-color); border-radius: var(--border-radius-small); padding: 0 8px; display: flex; align-items: center; justify-content: space-between; font: var(--font-text2-normal); color: var(--placeholder-color)">dd/mm/yyyy <span style="color: var(--icon-color)">&#9634;</span></div>
+          </div>
+          <div style="display: grid; grid-template-columns: 136px 1fr; align-items: center; gap: 8px; min-height: 32px">
+            <span style="font: var(--font-text2-normal); color: var(--secondary-text-color)">Currently with</span>
+            <div style="height: 28px; max-width: 300px; box-sizing: border-box; border: 1px solid var(--ui-border-color); border-radius: var(--border-radius-small); padding: 0 8px; display: flex; align-items: center; justify-content: space-between; font: var(--font-text2-normal); color: var(--placeholder-color)">Select <span style="color: var(--icon-color)">&#9662;</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div data-theme="dark" style="flex: 1; min-width: 320px; background: var(--page-tint-color); border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); padding: 20px">
+        <div style="font: var(--font-text3-bold); letter-spacing: .06em; color: var(--secondary-text-color); margin-bottom: 12px">DARK</div>
+        <div style="background: var(--primary-background-color); border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); padding: 16px; display: flex; flex-direction: column; color: var(--primary-text-color)">
+          <div style="display: grid; grid-template-columns: 136px 1fr; align-items: center; gap: 8px; min-height: 32px">
+            <span style="font: var(--font-text2-normal); color: var(--secondary-text-color)">Council</span>
+            <div style="height: 28px; max-width: 300px; box-sizing: border-box; border: 1px solid var(--ui-border-color); border-radius: var(--border-radius-small); padding: 0 8px; display: flex; align-items: center; justify-content: space-between; font: var(--font-text2-normal); background: var(--secondary-background-color)">City of Playford <span style="color: var(--icon-color)">&#9662;</span></div>
+          </div>
+          <div style="display: grid; grid-template-columns: 136px 1fr; align-items: center; gap: 8px; min-height: 32px">
+            <span style="font: var(--font-text2-normal); color: var(--secondary-text-color)">Handover date</span>
+            <div style="height: 28px; max-width: 300px; box-sizing: border-box; border: 1px solid var(--ui-border-color); border-radius: var(--border-radius-small); padding: 0 8px; display: flex; align-items: center; justify-content: space-between; font: var(--font-text2-normal); color: var(--placeholder-color); background: var(--secondary-background-color)">dd/mm/yyyy <span style="color: var(--icon-color)">&#9634;</span></div>
+          </div>
+          <div style="display: grid; grid-template-columns: 136px 1fr; align-items: center; gap: 8px; min-height: 32px">
+            <span style="font: var(--font-text2-normal); color: var(--secondary-text-color)">Currently with</span>
+            <div style="height: 28px; max-width: 300px; box-sizing: border-box; border: 1px solid var(--ui-border-color); border-radius: var(--border-radius-small); padding: 0 8px; display: flex; align-items: center; justify-content: space-between; font: var(--font-text2-normal); color: var(--placeholder-color); background: var(--secondary-background-color)">Select <span style="color: var(--icon-color)">&#9662;</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 PROCESS STEPS -->
+  <section style="display: flex; flex-direction: column; gap: 16px">
+    <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap">
+      <span style="font: var(--font-text3-bold); color: var(--lofty-crisp-orange)">05</span>
+      <h2 style="margin: 0; font-family: var(--title-font-family); font: var(--font-h2-bold); letter-spacing: -0.1px">ProcessSteps</h2>
+      <span style="font: var(--font-text2-normal); color: var(--secondary-text-color)">components/records/ProcessSteps</span>
+    </div>
+    <p style="margin: 0; max-width: 68ch; font: var(--font-text2-normal); color: var(--secondary-text-color)">A step is a checkbox row with a disclosure chevron. Ticking stamps today's date and opens the next step; the date stays editable. Progress and the "N of 9" summary derive from the ticks — never stored twice.</p>
+
+    <div style="display: flex; gap: 20px; flex-wrap: wrap">
+      <div style="flex: 1; min-width: 320px; background: var(--page-tint-color); border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); padding: 20px">
+        <div style="font: var(--font-text3-bold); letter-spacing: .06em; color: var(--secondary-text-color); margin-bottom: 12px">LIGHT</div>
+        <div style="background: var(--lofty-flint-50); border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); overflow: hidden">
+          <div style="height: 4px; background: var(--lofty-flint-200)"><div style="height: 100%; width: 44%; background: var(--lofty-crisp-orange)"></div></div>
+          <div style="display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px">
+            <span style="color: var(--secondary-text-color)">&#8250;</span><input type="checkbox" checked>
+            <span style="flex: 1; font: var(--font-text2-normal); color: var(--secondary-text-color); text-decoration: line-through">Site inspection</span>
+            <span style="font: var(--font-text3-normal); color: var(--secondary-text-color)">18/07/2026</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-top: 1px solid var(--lofty-flint-200)">
+            <span style="color: var(--secondary-text-color); display: inline-block; transform: rotate(90deg)">&#8250;</span><input type="checkbox">
+            <span style="flex: 1; font: var(--font-text2-normal)">Council approval</span>
+            <span style="font: var(--font-text3-normal); color: var(--placeholder-color)">dd/mm/yyyy</span>
+          </div>
+          <div style="padding: 0 12px 12px 40px; display: flex; flex-direction: column; gap: 4px; background: var(--primary-background-color)">
+            <div style="display: grid; grid-template-columns: 120px 1fr; align-items: center; gap: 8px; min-height: 32px">
+              <span style="font: var(--font-text2-normal); color: var(--secondary-text-color)">Approval</span>
+              <div style="height: 28px; box-sizing: border-box; border: 1px solid var(--ui-border-color); border-radius: var(--border-radius-small); padding: 0 8px; display: flex; align-items: center; justify-content: space-between; font: var(--font-text2-normal); color: var(--placeholder-color)">Select <span style="color: var(--icon-color)">&#9662;</span></div>
+            </div>
+          </div>
+          <div style="padding: 8px 12px; font: var(--font-text3-normal); color: var(--secondary-text-color); border-top: 1px solid var(--lofty-flint-200)">4 of 9 steps</div>
+        </div>
+      </div>
+
+      <div data-theme="dark" style="flex: 1; min-width: 320px; background: var(--page-tint-color); border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); padding: 20px">
+        <div style="font: var(--font-text3-bold); letter-spacing: .06em; color: var(--secondary-text-color); margin-bottom: 12px">DARK</div>
+        <div style="background: var(--primary-background-color); border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); overflow: hidden; color: var(--primary-text-color)">
+          <div style="height: 4px; background: var(--surface-recessed-color)"><div style="height: 100%; width: 44%; background: var(--lofty-crisp-orange)"></div></div>
+          <div style="display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px">
+            <span style="color: var(--secondary-text-color)">&#8250;</span><input type="checkbox" checked>
+            <span style="flex: 1; font: var(--font-text2-normal); color: var(--secondary-text-color); text-decoration: line-through">Site inspection</span>
+            <span style="font: var(--font-text3-normal); color: var(--secondary-text-color)">18/07/2026</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-top: 1px solid var(--layout-border-color)">
+            <span style="color: var(--secondary-text-color); display: inline-block; transform: rotate(90deg)">&#8250;</span><input type="checkbox">
+            <span style="flex: 1; font: var(--font-text2-normal)">Council approval</span>
+            <span style="font: var(--font-text3-normal); color: var(--placeholder-color)">dd/mm/yyyy</span>
+          </div>
+          <div style="padding: 0 12px 12px 40px; display: flex; flex-direction: column; gap: 4px; background: var(--secondary-background-color)">
+            <div style="display: grid; grid-template-columns: 120px 1fr; align-items: center; gap: 8px; min-height: 32px">
+              <span style="font: var(--font-text2-normal); color: var(--secondary-text-color)">Approval</span>
+              <div style="height: 28px; box-sizing: border-box; border: 1px solid var(--ui-border-color); border-radius: var(--border-radius-small); padding: 0 8px; display: flex; align-items: center; justify-content: space-between; font: var(--font-text2-normal); color: var(--placeholder-color)">Select <span style="color: var(--icon-color)">&#9662;</span></div>
+            </div>
+          </div>
+          <div style="padding: 8px 12px; font: var(--font-text3-normal); color: var(--secondary-text-color); border-top: 1px solid var(--layout-border-color)">4 of 9 steps</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 STAGE TRACK -->
+  <section style="display: flex; flex-direction: column; gap: 16px">
+    <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap">
+      <span style="font: var(--font-text3-bold); color: var(--lofty-crisp-orange)">06</span>
+      <h2 style="margin: 0; font-family: var(--title-font-family); font: var(--font-h2-bold); letter-spacing: -0.1px">StageTrack &amp; HealthChip</h2>
+      <span style="font: var(--font-text2-normal); color: var(--secondary-text-color)">components/records/StageTrack</span>
+    </div>
+    <p style="margin: 0; max-width: 68ch; font: var(--font-text2-normal); color: var(--secondary-text-color)">Status carries the health colour: the current stage takes the same fill as the health chip, so stage and health read as one signal. Completed stages are Foundation Black; not started are Flint 200. On the readouts the label is dark semibold and the value light — inverted from the usual field pairing, because the label is what you scan for.</p>
+
+    <div style="display: flex; gap: 20px; flex-wrap: wrap">
+      <div style="flex: 1; min-width: 320px; background: var(--page-tint-color); border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); padding: 20px">
+        <div style="font: var(--font-text3-bold); letter-spacing: .06em; color: var(--secondary-text-color); margin-bottom: 12px">LIGHT</div>
+        <div style="background: var(--primary-background-color); border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); padding: 16px; display: flex; flex-direction: column; gap: 16px">
+          <div style="display: flex; gap: 8px; flex-wrap: wrap">
+            <span style="display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border-radius: var(--border-radius-pill); background: var(--positive-color); color: var(--text-color-on-status); font: var(--font-text3-bold)">On track</span>
+            <span style="display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border-radius: var(--border-radius-pill); background: var(--warning-color-selected); color: var(--primary-text-color); font: var(--font-text3-bold)">At risk</span>
+            <span style="display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border-radius: var(--border-radius-pill); background: var(--negative-color); color: var(--lofty-finisher-white); font: var(--font-text3-bold)">Overdue</span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr)">
+            <div>
+              <div style="height: 32px; display: grid; place-items: center; background: var(--lofty-foundation-black); color: var(--lofty-finisher-white); font: var(--font-text3-bold); border-radius: var(--border-radius-small) 0 0 var(--border-radius-small); padding: 0 8px">Acquisition</div>
+              <div style="padding-top: 4px"><div style="font: var(--font-text3-bold)">Job started</div><div style="font: var(--font-text3-normal); color: var(--secondary-text-color)">04/02/2026</div></div>
+            </div>
+            <div>
+              <div style="height: 32px; display: grid; place-items: center; background: var(--warning-color-selected); color: var(--primary-text-color); font: var(--font-text3-bold); border-left: 1px solid var(--lofty-finisher-white); padding: 0 8px">Pre-construction</div>
+              <div style="padding-top: 4px"><div style="font: var(--font-text3-bold)">Started on</div><div style="font: var(--font-text3-normal); color: var(--secondary-text-color)">18/07/2026</div></div>
+            </div>
+            <div>
+              <div style="height: 32px; display: grid; place-items: center; background: var(--lofty-flint-200); color: var(--primary-text-color); font: var(--font-text3-bold); border-left: 1px solid var(--lofty-finisher-white); border-radius: 0 var(--border-radius-small) var(--border-radius-small) 0; padding: 0 8px">Construction</div>
+              <div style="padding-top: 4px"><div style="font: var(--font-text3-bold)">Target completion</div><div style="font: var(--font-text3-normal); color: var(--secondary-text-color)">&#8212;</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div data-theme="dark" style="flex: 1; min-width: 320px; background: var(--page-tint-color); border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); padding: 20px">
+        <div style="font: var(--font-text3-bold); letter-spacing: .06em; color: var(--secondary-text-color); margin-bottom: 12px">DARK</div>
+        <div style="background: var(--primary-background-color); border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); padding: 16px; display: flex; flex-direction: column; gap: 16px; color: var(--primary-text-color)">
+          <div style="display: flex; gap: 8px; flex-wrap: wrap">
+            <span style="display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border-radius: var(--border-radius-pill); background: var(--positive-color); color: var(--text-color-on-status); font: var(--font-text3-bold)">On track</span>
+            <span style="display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border-radius: var(--border-radius-pill); background: var(--warning-color-selected); color: var(--primary-text-color); font: var(--font-text3-bold)">At risk</span>
+            <span style="display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border-radius: var(--border-radius-pill); background: var(--negative-color); color: var(--text-color-on-status); font: var(--font-text3-bold)">Overdue</span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr)">
+            <div>
+              <div style="height: 32px; display: grid; place-items: center; background: var(--inverted-color-background); color: var(--text-color-on-inverted); font: var(--font-text3-bold); border-radius: var(--border-radius-small) 0 0 var(--border-radius-small); padding: 0 8px">Acquisition</div>
+              <div style="padding-top: 4px"><div style="font: var(--font-text3-bold)">Job started</div><div style="font: var(--font-text3-normal); color: var(--secondary-text-color)">04/02/2026</div></div>
+            </div>
+            <div>
+              <div style="height: 32px; display: grid; place-items: center; background: var(--warning-color-selected); color: var(--primary-text-color); font: var(--font-text3-bold); border-left: 1px solid var(--primary-background-color); padding: 0 8px">Pre-construction</div>
+              <div style="padding-top: 4px"><div style="font: var(--font-text3-bold)">Started on</div><div style="font: var(--font-text3-normal); color: var(--secondary-text-color)">18/07/2026</div></div>
+            </div>
+            <div>
+              <div style="height: 32px; display: grid; place-items: center; background: var(--surface-recessed-color); color: var(--primary-text-color); font: var(--font-text3-bold); border-left: 1px solid var(--primary-background-color); border-radius: 0 var(--border-radius-small) var(--border-radius-small) 0; padding: 0 8px">Construction</div>
+              <div style="padding-top: 4px"><div style="font: var(--font-text3-bold)">Target completion</div><div style="font: var(--font-text3-normal); color: var(--secondary-text-color)">&#8212;</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 RECORD TABS + BREADCRUMB -->
+  <section style="display: flex; flex-direction: column; gap: 16px">
+    <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap">
+      <span style="font: var(--font-text3-bold); color: var(--lofty-crisp-orange)">07</span>
+      <h2 style="margin: 0; font-family: var(--title-font-family); font: var(--font-h2-bold); letter-spacing: -0.1px">RecordTabs, RecordBreadcrumb</h2>
+      <span style="font: var(--font-text2-normal); color: var(--secondary-text-color)">components/navigation</span>
+    </div>
+    <p style="margin: 0; max-width: 68ch; font: var(--font-text2-normal); color: var(--secondary-text-color)">Tabs need delineation when they sit on a record's docked panel: 36px, 16px padding, dividers between, the active one lifted as a white card with a Crisp Orange underline on a Flint 100 strip. The breadcrumb is three levels, and the job title carries its project number as a quiet link — marked with a light Flint underline, not colour.</p>
+
+    <div style="display: flex; gap: 20px; flex-wrap: wrap">
+      <div style="flex: 1; min-width: 320px; background: var(--page-tint-color); border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); padding: 20px; display: flex; flex-direction: column; gap: 16px">
+        <div style="font: var(--font-text3-bold); letter-spacing: .06em; color: var(--secondary-text-color)">LIGHT</div>
+        <div style="display: flex; background: var(--lofty-flint-100); border-bottom: 1px solid var(--layout-border-color)">
+          <div style="height: 36px; padding: 0 16px; display: flex; align-items: center; gap: 8px; background: var(--primary-background-color); border-bottom: 2px solid var(--lofty-crisp-orange); border-radius: var(--border-radius-small) var(--border-radius-small) 0 0; font: var(--font-text2-bold)">Tasks <span style="font: var(--font-text3-normal); background: var(--lofty-flint-200); border-radius: var(--border-radius-pill); padding: 0 8px">4</span></div>
+          <div style="height: 36px; padding: 0 16px; display: flex; align-items: center; border-left: 1px solid var(--lofty-flint-200); font: var(--font-text2-normal)">Comments</div>
+          <div style="height: 36px; padding: 0 16px; display: flex; align-items: center; border-left: 1px solid var(--lofty-flint-200); font: var(--font-text2-normal)">Activity log</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <div style="display: flex; align-items: center; gap: 4px; font: var(--font-text3-normal); color: var(--secondary-text-color)">Jobs <span style="color: var(--lofty-flint-300)">&#8250;</span> 1209 <span style="color: var(--lofty-flint-300)">&#8250;</span> <span style="font: var(--font-text3-bold); color: var(--primary-text-color)">1209-002</span></div>
+          <div style="font-family: var(--title-font-family); font: var(--font-h3-bold); letter-spacing: -0.1px"><span style="border-bottom: 1px solid var(--lofty-flint-300)">1209</span>-002 - EVANSTON PARK, 14/24 Wandoo Road</div>
+        </div>
+      </div>
+
+      <div data-theme="dark" style="flex: 1; min-width: 320px; background: var(--page-tint-color); border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); padding: 20px; display: flex; flex-direction: column; gap: 16px; color: var(--primary-text-color)">
+        <div style="font: var(--font-text3-bold); letter-spacing: .06em; color: var(--secondary-text-color)">DARK</div>
+        <div style="display: flex; background: var(--primary-background-color); border-bottom: 1px solid var(--layout-border-color)">
+          <div style="height: 36px; padding: 0 16px; display: flex; align-items: center; gap: 8px; background: var(--secondary-background-color); border-bottom: 2px solid var(--lofty-crisp-orange); border-radius: var(--border-radius-small) var(--border-radius-small) 0 0; font: var(--font-text2-bold)">Tasks <span style="font: var(--font-text3-normal); background: var(--surface-recessed-color); border-radius: var(--border-radius-pill); padding: 0 8px">4</span></div>
+          <div style="height: 36px; padding: 0 16px; display: flex; align-items: center; border-left: 1px solid var(--layout-border-color); font: var(--font-text2-normal)">Comments</div>
+          <div style="height: 36px; padding: 0 16px; display: flex; align-items: center; border-left: 1px solid var(--layout-border-color); font: var(--font-text2-normal)">Activity log</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <div style="display: flex; align-items: center; gap: 4px; font: var(--font-text3-normal); color: var(--secondary-text-color)">Jobs <span style="color: var(--layout-border-color)">&#8250;</span> 1209 <span style="color: var(--layout-border-color)">&#8250;</span> <span style="font: var(--font-text3-bold); color: var(--primary-text-color)">1209-002</span></div>
+          <div style="font-family: var(--title-font-family); font: var(--font-h3-bold); letter-spacing: -0.1px"><span style="border-bottom: 1px solid var(--layout-border-color)">1209</span>-002 - EVANSTON PARK, 14/24 Wandoo Road</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 DARK SURFACE TOKENS -->
+  <section style="display: flex; flex-direction: column; gap: 16px">
+    <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap">
+      <span style="font: var(--font-text3-bold); color: var(--lofty-crisp-orange)">08</span>
+      <h2 style="margin: 0; font-family: var(--title-font-family); font: var(--font-h2-bold); letter-spacing: -0.1px">Dark-surface tokens</h2>
+      <span style="font: var(--font-text2-normal); color: var(--secondary-text-color)">tokens/dark-surface.css</span>
+    </div>
+    <p style="margin: 0; max-width: 68ch; font: var(--font-text2-normal); color: var(--secondary-text-color)">Selection on a dark ground is a white wash, not the peach light-surface tint and never an orange fill. These were the last hardcoded values in the mockups; naming them closes that gap.</p>
+
+    <div style="background: var(--lofty-foundation-black); border-radius: var(--border-radius-medium); padding: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px">
+      <div style="display: flex; flex-direction: column; gap: 6px"><div style="height: 44px; border-radius: var(--border-radius-small); background: rgba(255,255,255,.12)"></div><div style="color: #fff; font: var(--font-text3-bold)">--on-dark-hover-color</div><div style="color: rgba(255,255,255,.72); font: var(--font-text3-normal)">rgba(255,255,255,.12)</div></div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><div style="height: 44px; border-radius: var(--border-radius-small); background: rgba(255,255,255,.20)"></div><div style="color: #fff; font: var(--font-text3-bold)">--on-dark-selected-color</div><div style="color: rgba(255,255,255,.72); font: var(--font-text3-normal)">rgba(255,255,255,.20)</div></div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><div style="height: 44px; border-radius: var(--border-radius-small); background: rgba(255,255,255,.28)"></div><div style="color: #fff; font: var(--font-text3-bold)">--on-dark-selected-hover-color</div><div style="color: rgba(255,255,255,.72); font: var(--font-text3-normal)">rgba(255,255,255,.28)</div></div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><div style="height: 44px; border-radius: var(--border-radius-small); border: 1px solid rgba(255,255,255,.16)"></div><div style="color: #fff; font: var(--font-text3-bold)">--on-dark-border-color</div><div style="color: rgba(255,255,255,.72); font: var(--font-text3-normal)">rgba(255,255,255,.16)</div></div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><div style="height: 44px; border-radius: var(--border-radius-small); display: grid; place-items: center; color: #fff; font: var(--font-text2-normal)">Aa 10.1:1</div><div style="color: #fff; font: var(--font-text3-bold)">--on-dark-text-color</div><div style="color: rgba(255,255,255,.72); font: var(--font-text3-normal)">#ffffff</div></div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><div style="height: 44px; border-radius: var(--border-radius-small); display: grid; place-items: center; color: rgba(255,255,255,.72); font: var(--font-text2-normal)">Aa 5.9:1</div><div style="color: #fff; font: var(--font-text3-bold)">--on-dark-secondary-text-color</div><div style="color: rgba(255,255,255,.72); font: var(--font-text3-normal)">rgba(255,255,255,.72)</div></div>
+    </div>
+  </section>
+
+  <!-- ICONS -->
+  <section style="display: flex; flex-direction: column; gap: 16px">
+    <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap">
+      <span style="font: var(--font-text3-bold); color: var(--lofty-crisp-orange)">09</span>
+      <h2 style="margin: 0; font-family: var(--title-font-family); font: var(--font-h2-bold); letter-spacing: -0.1px">Lofty construction glyphs, as SVG</h2>
+      <span style="font: var(--font-text2-normal); color: var(--secondary-text-color)">assets/icons-lofty</span>
+    </div>
+    <p style="margin: 0; max-width: 68ch; font: var(--font-text2-normal); color: var(--secondary-text-color)">Fourteen glyphs traced from the client's PNGs onto the 24×24 grid at one stroke weight, inheriting ink through currentColor. Approximations, not masters — replace them if vector originals arrive. <code style="font: var(--font-text2-normal)">Admin.png</code> and <code style="font: var(--font-text2-normal)">AdminConsole.png</code> were the same mark at two weights and are now one file. Full audit in <a href="ds-update/ICONS.md">ICONS.md</a>; PNG-versus-SVG comparison in <a href="ds-update/icon-proof.html">icon-proof.html</a>.</p>
+
+    <div style="display: flex; gap: 20px; flex-wrap: wrap">
+      <div style="flex: 1; min-width: 320px; background: var(--primary-background-color); border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); padding: 20px">
+        <div style="font: var(--font-text3-bold); letter-spacing: .06em; color: var(--secondary-text-color); margin-bottom: 16px">LIGHT</div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(88px, 1fr)); gap: 16px">
+          <sc-for list="{{ icons }}" as="ic" hint-placeholder-count="14">
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--primary-text-color)">
+              <span style="width: 28px; height: 28px; background: currentColor; -webkit-mask: {{ ic.mask }} center/contain no-repeat; mask: {{ ic.mask }} center/contain no-repeat"></span>
+              <span style="font: var(--font-text3-normal); color: var(--secondary-text-color); text-align: center">{{ ic.name }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div data-theme="dark" style="flex: 1; min-width: 320px; background: var(--primary-background-color); border: 1px solid var(--layout-border-color); border-radius: var(--border-radius-medium); padding: 20px">
+        <div style="font: var(--font-text3-bold); letter-spacing: .06em; color: var(--secondary-text-color); margin-bottom: 16px">DARK</div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(88px, 1fr)); gap: 16px">
+          <sc-for list="{{ icons }}" as="ic" hint-placeholder-count="14">
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--primary-text-color)">
+              <span style="width: 28px; height: 28px; background: currentColor; -webkit-mask: {{ ic.mask }} center/contain no-repeat; mask: {{ ic.mask }} center/contain no-repeat"></span>
+              <span style="font: var(--font-text3-normal); color: var(--secondary-text-color); text-align: center">{{ ic.name }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer style="border-top: 1px solid var(--layout-border-color); padding-top: 24px; font: var(--font-text2-normal); color: var(--secondary-text-color); display: flex; flex-direction: column; gap: 8px">
+    <div>Drop-in files: <a href="ds-update/README.md">ds-update/README.md</a> · <a href="ds-update/CHANGELOG-addendum.md">CHANGELOG-addendum.md</a> · <a href="ds-update/ICONS.md">ICONS.md</a></div>
+    <div>Still open: the rail has not been fitted to the projects, reports and settings screens, and no top bar has been promoted to a component.</div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const names = ["AdminConsole","Contacts","Dashboard","Design","Documents","Job","JobMeasure","Maintenance","Projects","Reports","SettingsGear","SettingsGearOutline","SettingsUser","Team"];
+    return {
+      icons: names.map(n => ({ name: n, mask: "url(ds-update/assets/icons-lofty/" + n + ".svg)" }))
+    };
+  }
+}
+</script>
+</body>
+</html>

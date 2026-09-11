@@ -11,6 +11,10 @@ including the decisions below and the corrections found in review.
 | --- | --- |
 | [`sidebar-navigation/`](sidebar-navigation/) | The left rail — one sidebar in four states: expanded 224px, collapsed 64px, and a 240px flyout at either width |
 | [`job-record/`](job-record/) | The job record — the 460px drawer (6a), the 1180px full page (6b), and the column picker (6c) |
+| [`component-contracts/`](component-contracts/) | The eight `.d.ts` files naming the props these patterns are being built as in the design system. **Build against these names**, so the app and the library converge rather than having to be reconciled |
+| [`HANDOFF-INSTRUCTIONS.md`](HANDOFF-INSTRUCTIONS.md) | The author's own hand-over page: what goes to whom, the order, and the two prompts |
+| [`background-how-we-got-here.md`](background-how-we-got-here.md) | How the design was arrived at |
+| `Lofty DS Update - 6 & 7.dc.html` | The eight patterns as specimens, light and dark |
 
 Each holds its own `README.md` (the specification), a `.dc.html` design reference, and the
 screenshots. The design project these came from is
@@ -41,7 +45,7 @@ is the authority.
 | 4 | **The stage strip is five segments, always.** Closed and Cancelled are not segments — the strip freezes as it last was, so the record still shows what was done |
 | 5 | **The stage bar carries health, not position.** At risk is yellow; overdue `--negative-color`, on track `--positive-color`, never Crisp Orange behind small text |
 | 6 | **Key properties are the same fixed six on jobs and projects** — no `is_key` flag, no manager configuration |
-| 7 | **"Handover date" is renamed "Target completion date"**, which is what 6b's own stage readouts already say |
+| 7 | **"Handover date" is renamed "Completion date"** — *"you can change handover date to completion date"*. It lives on the **job**: *"each job has its own completion date… there is also a project completion level which is when all jobs in the project are completed"*, so a project's completion is derived from its jobs, not typed |
 | 8 | **"Currently with" is the assigned user and their team** — `assigneeId` + `owningTeam`, internal staff, not an external party |
 | 9 | **Both the rail flyout and the screen's saved-view tab strip stay**, doing different jobs |
 | 10 | **A slim top bar survives** for undo/redo, Ask and the bell. Search, user, Settings and Admin move into the rail and come *out* of the header |
@@ -61,6 +65,30 @@ or a misreading.
 4. **The sidebar README claims all rail text clears 4.5:1.** Muted white on a selected row
    is 3.86:1 — inside the readable bar, so no action, but do not repeat the claim.
 
+**Since resolved, 11 September:** the Lofty glyphs now exist as **14 traced SVGs** in
+[`sidebar-navigation/assets/icons-lofty-svg/`](sidebar-navigation/assets/icons-lofty-svg/),
+so the 24-versus-28px compensation for the PNGs' internal padding goes away. They are traced
+from the PNGs to unblock the build and should be **replaced, not edited**, when the client's
+vector originals arrive. [`sidebar-navigation/ICONS.md`](sidebar-navigation/ICONS.md) carries
+the audit — including that `Admin.png` and `AdminConsole.png` were the same mark at two
+weights and are now one file.
+
+## Eight components, and the order they land in
+
+The same patterns are being added to Lofty's App Design System as named components:
+`NavRail`, `NavFlyout`, `RecordTabs` and `RecordBreadcrumb` under `components/navigation/`,
+and a new `components/records/` family holding `RecordDrawer`, `FieldRow`, `ProcessSteps` and
+`StageTrack` — the last of which also exports `HealthChip`.
+
+**The names are the contract.** The author's instruction is to merge the design system first,
+*"otherwise development builds eight components into the app that later have to be reconciled
+with the library versions"* — and if the merge cannot come first, to build against these names
+anyway so the two converge. The props are in
+[`component-contracts/`](component-contracts/).
+
+That package (`ds-update/`) is library maintenance and belongs in the `loftybrand`
+repository, not this one. Nothing is built from it here.
+
 ## The contrast bar
 
 Amber, 11 September: *"I don't care about the contrast failures with accessibility so much.
@@ -72,10 +100,11 @@ Readable is the bar, not WCAG AA. The measured boundary: Crisp Orange works on F
 
 ## What is still open
 
-- **Does a job carry its own target completion date?** Projects have `targetCompletion`;
-  jobs have no date column beyond `stageEnteredAt`, and 6b shows one on a job. The
-  recommendation is a nullable `target_completion` on the job, displaying the project's
-  until set. **The only schema change in the package.**
+- **Is the job's completion date the one being aimed at, or the one it finished on?** That
+  it lives on the job is settled; which date it is decides the column, because `projects`
+  already separates `project_target_completion` (the date worked towards, driving the Gantt
+  and the overdue calculation) from `project_end_date` (when it actually finished). **The
+  only schema change in the package.** Question 20.
 - **How the rail gets its counts.** The repository has no aggregate method and the rail is
   on every screen. One `rail_counts` view returning every number in one row is the default.
 

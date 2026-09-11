@@ -51,6 +51,14 @@ across. Read those files for structure and values only.
 without a bundler. This app uses the real `@vibe/core`, which is the more complete
 implementation of the same contract.
 
+**But do build against the design system's names for these eight patterns.** `NavRail`,
+`NavFlyout`, `RecordTabs`, `RecordBreadcrumb`, `RecordDrawer`, `FieldRow`, `ProcessSteps`,
+`StageTrack` (which also exports `HealthChip`) are being added to the library from this same
+work. Their props are in [`component-contracts/`](component-contracts/). Matching the names
+is what stops the app and the library having to be reconciled later — it is the author's own
+instruction, and it is the first real test of whether a fix can land in one place instead of
+thirteen.
+
 ---
 
 ## Already decided — do not re-open
@@ -64,8 +72,8 @@ These answer gaps in the handoff READMEs. They are not in those files; they are 
 | 3 | **Pinned bookmarks any page** — a URL with a name: a filtered board, a settings screen, a job, a report. One per-user table of `{label, url}` with RLS, max five. **No status dot** — a URL has no health. Use a small icon for the kind of thing instead. |
 | 4 | **The stage strip is five segments, always.** Closed and Cancelled are not segments. When a job is closed or cancelled the pipeline is no longer open and the strip freezes as it last was — a job closed thirteen months after completion keeps its completion dates; a cancelled job keeps everything as at the cancellation date, so the record still shows what was done. |
 | 5 | **The stage bar carries health, not position.** At risk is yellow. Per the job-record README: overdue takes `--negative-color` with white ink, on track `--positive-color` with white ink, never Crisp Orange behind small text. |
-| 6 | **Key properties are the same fixed six on jobs and projects.** No `is_key` flag, no manager configuration. Current address, Council, Currently with, Next milestone, Target completion date, SharePoint folder. |
-| 7 | **"Handover date" is renamed "Target completion date."** This also makes 6b self-consistent — its own stage readouts already say *Target completion*. |
+| 6 | **Key properties are the same fixed six on jobs and projects.** No `is_key` flag, no manager configuration. Current address, Council, Currently with, Next milestone, Completion date, SharePoint folder. |
+| 7 | **"Handover date" is renamed "Completion date"**, and it lives on the **job** — each job has its own. A project's completion is *derived*: when all its jobs are completed. |
 | 8 | **"Currently with" is the assigned user and their team.** Internal staff only: `assigneeId` + `owningTeam`, both of which already exist on jobs and projects. It is not an external party. |
 | 9 | **Both the rail flyout and the screen's saved-view tab strip stay**, doing different jobs — the flyout jumps to a view from anywhere without loading the screen; the tab strip switches once you are there and shows which one you are in. |
 | 10 | **A slim top bar survives**, holding only undo/redo, Ask Lofty and the notifications bell. Search, the user menu, Settings and Admin move into the rail and must be **removed** from the header, not left to duplicate it. |
@@ -92,6 +100,12 @@ but **not on Flint 200 (1.99:1)**.
 4. **The sidebar README claims all rail text clears 4.5:1.** Muted white on a selected row
    is 3.86:1. Inside the readable bar, so no action — do not "fix" it and do not repeat the
    claim.
+
+**Icons are solved.** Use the 14 SVGs in
+`sidebar-navigation/assets/icons-lofty-svg/`, not the PNG masks — which means the
+24-versus-28px rule compensating for the PNGs' internal padding no longer applies. They are
+traced pending the client's vector originals, and should be replaced wholesale rather than
+edited when those arrive. `sidebar-navigation/ICONS.md` is the audit.
 
 ---
 
@@ -148,11 +162,13 @@ Chromium is at `/opt/pw-browsers/chromium`. Do not run `playwright install`.
 
 ## Two things still open
 
-- **Does a job carry its own target completion date?** Projects have `targetCompletion`;
-  jobs have no date column beyond `stageEnteredAt`, and 6b shows one on a job. The
-  recommendation is a nullable `target_completion` on the job, displaying the project's
-  until set — twenty lots on one site hand over on twenty different days. **This is the only
-  schema change in the package.** Confirm before writing the migration.
+- **Is the job's completion date the one being aimed at, or the one it finished on?** That
+  it lives on the job is settled — each job has its own, and a project's completion is
+  derived from when all its jobs are completed. Which date it is decides the column:
+  `projects` already separates `project_target_completion` (worked towards, drives the Gantt
+  and the overdue calculation) from `project_end_date` (actually finished), and the handoff
+  shows a job's date being set in advance and replaced by the actual. **The only schema
+  change in the package.** Confirm before writing the migration.
 - **How the rail gets its counts.** Projects 9, Jobs 128, Maintenance 23, plus a count on
   every flyout row. The repository has no aggregate method and the rail is on every screen.
   Default to one `rail_counts` view returning every number in one row; ask if unsure.
