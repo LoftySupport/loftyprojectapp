@@ -16,6 +16,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 - Inbox and Tasks in the navigation rail carry a badge — unread items on Inbox, your open tasks on Tasks, with a dot on My work when the rail is collapsed
 - A job carries its own completion dates — the one being worked towards, and the day it actually finished
+- An element sweep in CI that counts how many different ways the app draws each thing — headers, tables, cards, containers, empty states, filter rows, hint lines — and fails when a number rises, or when a fix lowers one and the baseline is left behind
 - Pinned in the navigation rail — bookmark any page under a name, up to five, private to you
 - Screenshots and a 1440px desktop width in the responsive harness, so a layout fault can be seen rather than inferred
 - A rail count of projects, jobs and open maintenance requests, read in one round trip

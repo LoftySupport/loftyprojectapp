@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 235 changes since then —
+Unreleased: 236 changes since then —
 - Added: Inbox and Tasks in the navigation rail carry a badge — unread items on Inbox, your open tasks on Tasks, with a dot on My work when the rail is collapsed
 - Fixed: The unread count beside Inbox and the one on the bell are the same number read once, so marking everything read clears both together
 - Changed: Job and project properties are grouped under their own headings in the column picker, instead of falling in with everything ungrouped
 - Changed: The column picker is a panel beside the table instead of a dialog over it, with a search box and grouped columns
 - Changed: The job record is rebuilt from the approved design — the same record as a 460px drawer and a full page, with Tasks, Comments and the activity log docked at the foot instead of scrolled to
-- …and 230 more.
+- …and 231 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

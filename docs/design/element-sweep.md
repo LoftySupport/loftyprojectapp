@@ -47,9 +47,37 @@ family measured when it was last agreed. The check fails in **both** directions:
 The diff of the baseline file is therefore the record of which idioms were retired, and by which
 change.
 
+### The one case where a rise is re-baselined rather than fixed
+
+**A surface that did not exist when the baseline was taken has nothing to fix at the source.**
+The sweep landed on `main` at `3a132fa` while #72 — the navigation rail, the job record as a
+drawer and a full page, and the column picker — was already in flight. Merging `main` into it
+raised five families, and not one of the rises was a screen doing its own version of something
+that already existed: they are the box recipes, head rows and tabs of two surfaces the census had
+never seen. The baseline was re-taken at that merge, and the diff names every entry.
+
+That is the exception, and it is narrow. A rise is re-baselined only when the new entries belong
+to a surface added in the same change; a rise in a file the baseline already knew about is the
+ordinary case and gets fixed at the source. Both are visible in the same place — the baseline
+diff — so the exception cannot be taken quietly.
+
+**Two matchers count things that are not what the family is about**, found by that merge and
+worth tightening in the script rather than worked around in the screens:
+
+- **E16 counts the string `type="date"`**, so `<FieldRow type="date">` — a prop naming a field's
+  format, which renders no input of its own — is counted as a raw date input. One of the two the
+  merge added is a prop, not an input.
+- **E12 matches any `.is-empty`**, including `.stage-bar-date.is-empty`, which is a stage on the
+  pipeline strip with no date yet rather than a screen with nothing on it.
+
+Neither is worth renaming a class to dodge. A census that can be gamed by renaming is not
+measuring anything, so the fix belongs in `measure()`.
+
 ## The twelve families
 
-The numbers are those measured on `main` at `3a132fa`, 11 September 2026.
+The numbers are those measured on `main` at `3a132fa`, 11 September 2026, and re-taken when #72
+merged `main` in: **E02 37 → 41, E08 8 → 9, E11 110 → 124, E12 6 → 7, E16 16 → 18**, with E05
+45 → 44 and E14 25 → 24 coming down in the same write.
 
 | | Family | Now | Target | The rule |
 | --- | --- | --- | --- | --- |
