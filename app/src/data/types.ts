@@ -3350,3 +3350,30 @@ export interface SearchHit {
   /** Opened in a new tab rather than routed to. Only a document link is. */
   external?: boolean;
 }
+
+/**
+ * The three numbers the navigation rail carries — Amber, 11 September.
+ *
+ * Three, and only three. The handoff draws a count on every flyout row as well ("All
+ * projects 9", "Pre-construction 3"), and she chose not to have them: three options were
+ * put up — one `rail_counts` view, live per-flyout fetches, or the rail's own six rows
+ * alone — and the third was taken. So the flyout lists its views and stage groupings with
+ * no number beside them, and this is the whole of what the rail counts.
+ *
+ * **Each number is what you land on**, not a row count of the table behind it. Click Jobs
+ * and the board opens on its "All jobs" view, which excludes Closed — so `jobs` excludes
+ * Closed too. Maintenance opens on the open queue, so `maintenance` counts the open
+ * queue. A badge that disagrees with the screen it takes you to is worse than no badge:
+ * the first thing anybody does is click it and count.
+ *
+ * Reports, Contacts and Tools carry no number, in the design and here. They are not
+ * queues — nothing is waiting in them — so a count would be decoration.
+ */
+export interface RailCounts {
+  /** Projects at every lifecycle phase, matching the board's "All Projects" view. */
+  projects: number;
+  /** Jobs at every phase except Closed, matching the board's "All jobs" view. */
+  jobs: number;
+  /** Maintenance requests that are neither closed nor rejected — the default queue. */
+  maintenance: number;
+}

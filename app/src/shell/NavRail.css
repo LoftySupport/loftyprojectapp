@@ -1,0 +1,399 @@
+/* The navigation rail — 11 September handoff, `docs/design/handoff/sidebar-navigation/`.
+   Every measurement here is from that package, which is marked high fidelity: 224 and 64
+   for the two widths, 56 for the header, 40 for a nav row, 32 for a pinned or flyout row,
+   44 for a collapsed button, 4px radius on rows and 8px on the flyout card.
+
+   The alpha washes are white over Foundation Black and are alphas rather than hexes for
+   the reason `NavRail.tsx` gives at `wash`: the ground moves with the theme and a hex
+   would stop tracking it. They are declared once here and once there, and the pair is
+   the one duplication in this component — JS needs them for nothing today, but the
+   design-system contract publishes them and a rail whose CSS and contract disagreed
+   about "selected" would be the exact failure this build exists to stop. */
+
+.nav-rail {
+  --rail-w: 224px;
+  --rail-w-collapsed: 64px;
+  --rail-rule: rgba(255, 255, 255, 0.16);
+  --rail-hover: rgba(255, 255, 255, 0.12);
+  --rail-selected: rgba(255, 255, 255, 0.2);
+  --rail-flyout: rgba(255, 255, 255, 0.28);
+  --rail-muted: rgba(255, 255, 255, 0.72);
+
+  position: sticky;
+  top: 0;
+  /* `position: sticky` makes this a stacking context, so everything inside it — the
+     flyout above all — stacks relative to THIS, and the rail's own place in the page
+     decides where the panel lands. Without a z-index the rail stacks at `auto` and
+     paints in tree order, which puts it before every positioned thing after it: the
+     flyout drew at the right coordinates and completely behind the board. Measured, not
+     guessed — the first screenshot of an open panel showed job cards over the top of it.
+
+     30, the same as the header: above the board (5) and below the drawers and dialogs
+     (40/41), which is the right way round. A nav panel should cover the board it is
+     offering to filter, and should not cover a modal somebody has opened. */
+  z-index: 30;
+  align-self: flex-start;
+  height: 100vh;
+  height: 100dvh;
+  width: var(--rail-w);
+  flex: 0 0 var(--rail-w);
+  display: flex;
+  flex-direction: column;
+  /* No padding on the rail itself: the header, the search, the nav and the foot each
+     carry their own, and they are different (0 12px 0 16px / 12px 8px 4px / 4px 8px 8px
+     / 8px). One padding on the parent would make every one of those wrong. */
+  background: var(--lofty-foundation-black);
+  color: var(--lofty-finisher-white);
+  /* A 1px rule, not the old 4px orange edge. Crisp Orange is a fill in this system and
+     a 4px band of it down the whole screen is the loudest thing on any page. */
+  border-right: 1px solid var(--rail-rule);
+  overflow: visible;
+  transition: width var(--motion-productive-medium) var(--motion-timing-transition),
+              flex-basis var(--motion-productive-medium) var(--motion-timing-transition);
+}
+.nav-rail.is-collapsed {
+  width: var(--rail-w-collapsed);
+  flex-basis: var(--rail-w-collapsed);
+}
+
+/* ---- header: the wordmark and the collapse control ----------------------- */
+
+.nav-rail-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  height: 56px;
+  padding: 0 var(--space-12) 0 var(--space-16);
+  border-bottom: 1px solid var(--rail-rule);
+  min-width: 0;
+}
+.nav-rail.is-collapsed .nav-rail-head {
+  justify-content: center;
+  padding: 0;
+  /* The mark carries 6px beneath it in the handoff, and the header's own border would
+     sit on top of that — so collapsed the rule goes and the space does the separating. */
+  border-bottom: 0;
+  height: auto;
+  padding-top: var(--space-12);
+  margin-bottom: 6px;
+}
+/* 24px tall, left. Two files rather than one image scaled: a wordmark at 26px is
+   unreadable rather than small, so the collapsed state gets the twin-triangle mark. */
+.nav-logo-link { display: inline-flex; align-items: center; min-width: 0; border-radius: var(--border-radius-4); }
+.nav-logo { height: 24px; width: auto; display: block; min-width: 0; }
+.nav-logo-mark { height: 26px; }
+
+/* The « control. 32px, transparent, white ink, hovering on the same .12 wash as
+   everything else in the rail — a `<button>` left unstyled paints itself light grey on a
+   dark ground and reads as a field somebody can type in. */
+.nav-collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: var(--border-radius-4);
+  background: transparent;
+  color: var(--lofty-finisher-white);
+  cursor: pointer;
+  transition: background-color var(--motion-productive-short) var(--motion-timing-transition);
+}
+.nav-collapse:hover { background: var(--rail-hover); }
+.nav-collapse:active { transform: scale(0.95); transition: transform 70ms var(--motion-timing-transition); }
+
+/* ---- the shared row shapes ---------------------------------------------- */
+
+/* One row, three users: a group header (a button), a destination (a link) and a child.
+   40px, icon then 12px then label, count right. Radius 4. */
+.nav-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  width: 100%;
+  height: 40px;
+  flex: none;
+  padding: 0 var(--space-12);
+  border: 0;
+  border-radius: var(--border-radius-4);
+  background: transparent;
+  color: var(--lofty-finisher-white);
+  font: var(--font-text2-normal);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  min-width: 0;
+  transition: background-color var(--motion-productive-short) var(--motion-timing-transition);
+}
+/* Never a colour change, only a wash — the handoff is explicit, and a rail that tints
+   on hover is a rail with two selection languages. */
+.nav-row:hover { background: var(--rail-hover); }
+.nav-row:active { transform: scale(0.95); transition: transform 70ms var(--motion-timing-transition); }
+
+/* Selection is a white wash and a semibold label. The peach tint is a light-surface
+   token and turns muddy on Foundation Black; the old white pill with teal ink was a
+   different idea again. */
+.nav-row.is-active { background: var(--rail-selected); font: var(--font-text2-medium); }
+/* One step brighter while its panel is open, so the row and the panel read as one thing. */
+.nav-row.is-flyout { background: var(--rail-flyout); }
+
+.nav-row-icon { display: inline-flex; flex: none; }
+.nav-row-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.nav-row-chev { display: inline-flex; flex: none; margin-inline-start: auto; }
+/* 12/16 at .72 white — 6.8:1 on the plain ground, 3.86:1 on a selected row. The second
+   number is below AA and inside the bar Amber set on 11 September; it is written down
+   rather than quietly claimed to pass. */
+.nav-row-count {
+  margin-inline-start: auto;
+  flex: none;
+  font: var(--font-text3-normal);
+  color: var(--rail-muted);
+}
+/* The Inbox badge: white on the negative red, pill radius. The one coloured thing in the
+   rail, because it is the one thing that means "somebody is waiting on you". */
+.nav-row-badge {
+  margin-inline-start: auto;
+  flex: none;
+  font: var(--font-text3-medium);
+  color: var(--lofty-finisher-white);
+  background: var(--negative-color);
+  border-radius: var(--border-radius-pill);
+  padding: var(--space-2) 7px;
+}
+
+/* A group's children. 40px for Inbox and Tasks, 32px for a pinned row. */
+.nav-group-body { display: flex; flex-direction: column; min-width: 0; }
+.nav-row-small { height: 32px; }
+
+.nav-rule {
+  flex: none;
+  height: 1px;
+  background: var(--rail-rule);
+  margin: var(--space-12) var(--space-4);
+}
+/* Collapsed the rule is 32px wide and centred — a full-width line in a 64px column
+   reads as the edge of something rather than a separator. */
+.nav-rail.is-collapsed .nav-rule,
+.nav-rule-short {
+  width: 32px;
+  margin: 10px auto;
+}
+
+/* ---- search, expanded and collapsed ------------------------------------- */
+
+.nav-rail-search { flex: none; padding: var(--space-12) var(--space-8) var(--space-4); }
+/* A light input on the dark rail, deliberately: it is a field, not a nav row, and the
+   thing people do wrong is style it like the rows around it and then wonder why nobody
+   types in it. The app's own GlobalSearch renders inside. */
+.nav-rail-search .app-search { min-width: 0; max-width: none; flex: 1 1 auto; width: 100%; }
+.nav-rail-search input {
+  background: var(--lofty-finisher-white);
+  color: var(--primary-text-color);
+}
+
+/* ---- the scrolling middle ----------------------------------------------- */
+
+.nav-rail-nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-4) var(--space-8) var(--space-8);
+  /* Firefox. The WebKit pieces are below. */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.32) var(--lofty-foundation-black);
+}
+.nav-rail.is-collapsed .nav-rail-nav { align-items: center; padding-inline: 0; }
+
+/* The default scrollbar is drawn for a light page and appears as a pale slab down the
+   middle of a dark rail. 8px, track the rail's own ground, thumb a white alpha with a
+   2px track-coloured border so it reads as a rounded bar rather than a block. */
+.nav-rail-nav::-webkit-scrollbar { width: 8px; }
+.nav-rail-nav::-webkit-scrollbar-track { background: var(--lofty-foundation-black); }
+.nav-rail-nav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.32);
+  border: 2px solid var(--lofty-foundation-black);
+  border-radius: var(--border-radius-pill);
+}
+.nav-rail-nav::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.48); }
+
+/* ---- collapsed: one square button per destination ----------------------- */
+
+.nav-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border: 0;
+  border-radius: var(--border-radius-4);
+  background: transparent;
+  color: var(--lofty-finisher-white);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color var(--motion-productive-short) var(--motion-timing-transition);
+}
+.nav-icon-btn:hover { background: var(--rail-hover); }
+.nav-icon-btn:active { transform: scale(0.95); transition: transform 70ms var(--motion-timing-transition); }
+.nav-icon-btn.is-active { background: var(--rail-selected); }
+.nav-icon-btn.is-flyout { background: var(--rail-flyout); }
+/* Utility controls are 44×40 rather than square — the expand control, Settings, Admin.
+   Half a step shorter than a destination, which is the point: navigation reads heavier
+   than tooling, and that is a rank, not an accident. */
+.nav-expand, .nav-rail-foot .nav-icon-btn { height: 40px; }
+
+/* ---- foot: Settings, Admin, you ----------------------------------------- */
+
+.nav-rail-foot {
+  flex: none;
+  border-top: 1px solid var(--rail-rule);
+  padding: var(--space-8);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.nav-rail.is-collapsed .nav-rail-foot { align-items: center; }
+
+/* The avatar is Crisp Orange with white initials — 2.6:1, inside the bar, and the
+   pairing Amber named as acceptable on 11 September. */
+.nav-user-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: var(--border-radius-circle);
+  background: var(--lofty-crisp-orange);
+  color: var(--lofty-finisher-white);
+  font: var(--font-text3-medium);
+}
+.nav-rail.is-collapsed .nav-user-avatar { width: 32px; height: 32px; font: var(--font-text2-medium); }
+/* The collapsed user control is 44×40 like the two above it, with a 32px avatar inside —
+   so the circle can be 32 without the target dropping under 24. */
+.nav-user-btn { padding: 0; }
+
+/* ---- the flyout --------------------------------------------------------- */
+
+.nav-flyout {
+  position: fixed;
+  z-index: var(--z-dropdown);
+  width: 240px;
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+  background: var(--lofty-finisher-white);
+  border: 1px solid var(--lofty-flint-300);
+  border-radius: var(--border-radius-8);
+  box-shadow: 0 6px 20px rgba(65, 64, 66, 0.16);
+  padding: var(--space-8);
+  color: var(--primary-text-color);
+}
+.nav-flyout-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: var(--space-4) var(--space-8);
+  min-width: 0;
+}
+.nav-flyout-title {
+  font: var(--font-h3-medium);
+  letter-spacing: -0.1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Filled Crisp Orange with white ink. Small, and semibold, which is the condition the
+   design system puts on an orange fill carrying text. */
+.nav-flyout-new {
+  flex: none;
+  border: 0;
+  border-radius: var(--border-radius-4);
+  background: var(--lofty-crisp-orange);
+  color: var(--lofty-finisher-white);
+  font: var(--font-text3-medium);
+  padding: var(--space-4) var(--space-8);
+  min-height: 24px;
+  cursor: pointer;
+  /* It is an anchor — see `newTo` in NavRail.tsx — and the app underlines anchors. A
+     filled button that is also underlined reads as a link inside a button. */
+  text-decoration: none;
+  white-space: nowrap;
+}
+.nav-flyout-new:hover { background: var(--lofty-orange-hover); }
+.nav-flyout-new:active { transform: scale(0.95); transition: transform 70ms var(--motion-timing-transition); }
+
+.nav-flyout-rule {
+  height: 1px;
+  background: var(--lofty-flint-200);
+  margin: var(--space-8) var(--space-4);
+}
+/* Written in sentence case in the markup and uppercased here, so a screen reader is not
+   read "V I E W S" letter by letter. 12/16 is the floor — there is no step below it. */
+.nav-flyout-eyebrow {
+  padding: var(--space-4) var(--space-8);
+  font: var(--font-text3-medium);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--secondary-text-color);
+}
+.nav-flyout-row {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 var(--space-8);
+  border-radius: var(--border-radius-4);
+  font: var(--font-text2-normal);
+  color: var(--primary-text-color);
+  text-decoration: none;
+  min-width: 0;
+}
+.nav-flyout-row:hover { background: rgba(65, 64, 66, 0.04); }
+
+/* ---- focus -------------------------------------------------------------- */
+
+/* The system's ring: 3px orange at 50%, plus a 1px inset so it reads on the dark ground
+   as well as the light panel. Do not remove it — on a rail this is the only thing that
+   says where the keyboard is. */
+.nav-rail :focus-visible,
+.nav-flyout :focus-visible {
+  outline: 3px solid rgba(244, 126, 99, 0.5);
+  outline-offset: 1px;
+  box-shadow: inset 0 0 0 1px var(--lofty-crisp-orange);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-row:active, .nav-icon-btn:active, .nav-flyout-new:active, .nav-collapse:active { transform: none; }
+}
+
+/* ---- narrow: the rail is a drawer --------------------------------------- */
+
+/* Below 900px a 224px rail plus a readable board does not fit, so the rail slides over
+   the page instead of sitting beside it. Always full width when it does: the icons-only
+   preference is a way of reclaiming a column on a desk, and on a phone the drawer covers
+   the page anyway, so shrinking it to icons costs the labels and saves nothing. */
+@media (max-width: 900px) {
+  .nav-rail {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 50;
+    height: 100dvh;
+    width: var(--rail-w);
+    flex-basis: var(--rail-w);
+    transform: translateX(-100%);
+    transition: transform var(--motion-productive-medium) var(--motion-timing-transition);
+  }
+  .nav-rail.is-open { transform: translateX(0); }
+  /* The drawer is full width whatever the stored preference says, so the collapse
+     control here is a button that visibly does nothing. */
+  .nav-collapse, .nav-expand { display: none; }
+}

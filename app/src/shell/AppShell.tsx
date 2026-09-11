@@ -1,109 +1,58 @@
-import { useCallback, useEffect, useState } from "react";
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import {
-  Avatar, Dialog, DialogContentContainer, Text
-} from "@vibe/core";
-import {
-  Home, Menu, NavigationChevronLeft, NavigationChevronRight,
-  Settings, SettingsKnobs, Group, Broom, Apps, CheckList } from "@vibe/icons";
-import { HouseChart, HousePin, Houses } from "../theme/houseIcons";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Dialog, DialogContentContainer, Text } from "@vibe/core";
+import { Menu, Note, Search, Settings, CheckList } from "@vibe/icons";
 import { initialsOf, useAuth } from "../data/AuthProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { GlobalSearch } from "../components/GlobalSearch";
-import { Tooltip } from "@vibe/tooltip";
 import { AskButton, AskDockProvider } from "../components/AskDock";
 import { FeedbackButtons, FeedbackProvider } from "../components/Feedback";
 import { NotificationsBell } from "../components/NotificationsBell";
 import { ToastsProvider } from "../components/Toasts";
 import { UndoProvider } from "../data/UndoProvider";
 import { UndoRedoBar } from "../components/UndoRedoBar";
-import { greetingName, type PermissionLevel } from "../data/types";
+import { greetingName } from "../data/types";
+import { AdminConsole, Dashboard } from "../theme/railIcons";
+import { NavRail, NavRailGroup } from "./NavRail";
+import { useNavDestinations } from "./navDestinations";
 import "./AppShell.css";
-
-/**
- * Every destination, each with an icon.
- *
- * The icon is not decoration here — collapsed, it is the only thing left, so it has to
- * carry the meaning on its own. The three record destinations wear Lofty's own house
- * icons (Amber, 27 Aug): **a project holds many houses, a job is one site**, so
- * Projects gets the pair and Jobs gets the pin — her call, and the right way round:
- * the pin marks a single place, which is exactly what a job is. Reports is the house
- * doing well. SettingsKnobs — sliders, not a cog — stays for Settings: the app's own
- * dials, as opposed to the cog in the header that opens Admin.
- *
- * `need` is a **rung, not a lock**. A destination below somebody's level is not drawn
- * for them, and that is all this does: the page behind it is gated again in App.tsx and
- * the data behind that is gated by RLS. A nav item is not a security boundary and must
- * never be the only thing standing between a person and a screen.
- */
-const PAGES: {
-  to: string; label: string; icon: typeof Home; end?: boolean; need?: PermissionLevel;
-}[] = [
-  // "/dashboard", not "/": "/" is the front door and forwards to whatever the
-  // landing preference names, so a nav link pointing there could never reach the
-  // dashboard for anybody who had chosen a different landing page.
-  { to: "/dashboard", label: "Dashboard", icon: Home, end: true },
-  { to: "/projects", label: "Projects", icon: Houses },
-  { to: "/jobs", label: "Jobs", icon: HousePin },
-  // Tasks (0102): every task across every job and project, one board. Amber's own
-  // description of what belongs here is what put it beside Jobs rather than under
-  // Setup with Processes — a process's workflow assigns one when a stage changes, a
-  // person assigns one to themselves or their team, and both kinds are work, not
-  // configuration. CheckList rather than Check: a list of lines, not one tick.
-  { to: "/tasks", label: "Tasks", icon: CheckList },
-  // Its own tab, not a report filter (Amber, 1 Sep: "a separate tab for maintenance as this
-  // will have a lot of automation and needs a quick access").
-  { to: "/maintenance", label: "Maintenance", icon: Broom },
-  { to: "/reports", label: "Reports", icon: HouseChart },
-  { to: "/contacts", label: "Contacts", icon: Group },
-  // Tools is the third kind of destination. Projects, Jobs, Maintenance, Reports and
-  // Contacts are the work; Settings is how the app is wired; this is what you use to make
-  // something — the report Template Builder today, more later. Apps rather than a
-  // spanner: it is a set of things you open, which is what the section is.
-  { to: "/tools", label: "Tools", icon: Apps },
-  // Processes is NOT here (Amber, 2 Sep: "processes are not a page on the sidebar, they
-  // are part of setup only"). It was Templates, then Processes, as a destination beside
-  // the work; it is configuration, so it lives at Settings → Processes and /processes
-  // forwards there for the bookmarks that still carry it.
-  // Updates (the tracker, 0060–0063) is NOT here. It was, on the reasoning that it is for
-  // everybody where Settings is configuration — but "for everybody" is not the same as "a
-  // destination beside the work", and Amber, 3 September: "remove 'updates' from sidebar
-  // navigation as this in the footer". It is where the queue, the roadmap and the
-  // changelog live, which is a thing you go to when you want it rather than a place you
-  // work, so it sits with Privacy, Terms and Support at the bottom of every screen.
-  //
-  // ADMIN IS NOT HERE EITHER, AS OF 4 SEPTEMBER. Amber: "move 'Admin' to the top
-  // navigation bar and replace with a cog icon". It was a sidebar destination at the same
-  // rank as Jobs for something two people in the company ever open; it is now the cog in
-  // the header (see `AdminLink`), which is where an app puts the door nobody but an
-  // administrator is meant to walk through.
-  //
-  // Setup became **Settings** in the same breath, and became manager's (Amber: "grant
-  // permissions for managers and above to view this page… allow managers and above update
-  // properties, processes, contact settings, maintenance tabs, SLAs and automations").
-  // The tabs that were never a manager's business — users, teams, permissions, the
-  // dictionary, the wiring, the bug and idea queues — went to Admin with the cog.
-  { to: "/setup", label: "Settings", icon: SettingsKnobs, need: "manager" }
-  // Your OWN settings are deliberately absent — they are personal, not a destination, so
-  // they live in the menu under your own name where "User settings" says whose settings
-  // they are. That label is doing more work now that the nav item beside it says
-  // "Settings": one is the app's dials, the other is yours.
-];
 
 const RAIL_KEY = "lofty-nav-collapsed";
 /** Below this the rail cannot share a line with the page, so it becomes a drawer. */
 const DRAWER_BREAKPOINT = 900;
 
 /**
- * Your name, and the two things that are yours: your settings, and leaving.
+ * Which destination the current URL belongs to.
  *
- * Settings came out of the main nav to get here. It is not a destination alongside
- * Projects and Jobs — it is personal, and putting it under your own name is what makes
- * "whose settings?" answerable without opening it. The label says "User settings" for
- * the same reason: the app has a Setup screen now, and "Settings" beside it was two
- * words for two unrelated things.
+ * Prefix matching on the pathname, longest first, because `/jobs/1209-002` is still Jobs
+ * and `/setup/processes` is still Settings. Exact matching would leave the rail unlit on
+ * every record and every settings tab — which is the state it spent months in on the old
+ * shell, where `NavLink`'s `end` was set on one item and forgotten on the rest.
  */
-function UserMenu() {
+function activeIdFor(pathname: string, ids: { id: string; to: string }[]): string | null {
+  let best: { id: string; length: number } | null = null;
+  for (const d of ids) {
+    const base = d.to.split("?")[0];
+    if (pathname === base || pathname.startsWith(base + "/")) {
+      if (!best || base.length > best.length) best = { id: d.id, length: base.length };
+    }
+  }
+  return best?.id ?? null;
+}
+
+/**
+ * Your name at the foot of the rail, and the two things that are yours behind it.
+ *
+ * It was in the header, and moved on 11 September with Search, Settings and Admin —
+ * decision 10: *"a slim bar survives, holding only undo/redo, Ask Lofty and the
+ * notifications bell — the rail owns navigation and identity, the bar owns 'what I just
+ * did' and 'what happened to me'."* Those four are **removed** from the header rather
+ * than left there to duplicate the rail.
+ *
+ * The label stays "User settings" rather than "Settings": the rail now has a Settings
+ * row two lines above this one, and the app's dials and yours are not the same thing.
+ */
+function UserMenu({ collapsed }: { collapsed: boolean }) {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -128,170 +77,36 @@ function UserMenu() {
     </DialogContentContainer>
   );
 
-  return (
-    <span className="app-user">
-      <Dialog
-        open={open}
-        onClickOutside={close}
-        content={content}
-        position="bottom-end"
-        showTrigger={[]}
-        hideTrigger={[]}
-      >
-        <button
-          type="button"
-          className="user-menu-trigger"
-          aria-haspopup="menu"
-          aria-expanded={open}
-          onClick={() => setOpen(o => !o)}
-          onKeyDown={e => { if (e.key === "Escape") close(); }}
-        >
-          {profile && (
-            <Avatar size="small" type="text" text={initialsOf(profile)} aria-hidden />
-          )}
-          {/* Hidden below 720px in CSS — the avatar carries identity there and the name
-              costs a line of header. The accessible name stays on the button either way. */}
-          <span className="app-user-name">
-            <Text type="text2" element="span">
-              {profile ? greetingName(profile) : "Account"}
-            </Text>
-          </span>
-        </button>
-      </Dialog>
-    </span>
-  );
-}
+  const name = profile ? greetingName(profile) : "Account";
 
-/**
- * The cog: Admin, in the header, for administrators only.
- *
- * Amber, 4 September: *"move 'Admin' to the top navigation bar and replace with a cog
- * icon. This appears when an admin or super admin login."* It was the ninth item in a
- * sidebar of destinations people visit all day, for a screen that manages the people
- * themselves — so it sat at the rank of Jobs and was, for everybody below admin, a link
- * to a page they had no business opening.
- *
- * `Settings` — the cog — rather than `SettingsKnobs`, which the Settings rail item keeps.
- * The two are deliberately different shapes: dials you turn to configure the app, and the
- * cog behind which the app itself is administered.
- *
- * NOT RENDERED AT ALL below admin, rather than rendered disabled. There is nothing useful
- * to tell a user about a door that is not theirs, and `/admin` is refused by its own route
- * guard and by every policy behind it either way — this is the affordance, not the lock.
- *
- * It shares `.notif-bell-trigger` with the bell and the Ask button so the header cluster
- * reads as one row of 32px targets rather than three different buttons.
- */
-function AdminLink() {
-  const { can } = usePermission();
-  if (!can("admin")) return null;
   return (
-    <Tooltip content="Admin" position="bottom">
-      <NavLink
-        to="/admin"
-        className={({ isActive }) =>
-          "notif-bell-trigger app-admin-cog" + (isActive ? " is-active" : "")
-        }
-        aria-label="Admin"
-      >
-        <Settings size={20} aria-hidden />
-      </NavLink>
-    </Tooltip>
-  );
-}
-
-/**
- * The left rail.
- *
- * Nav moved off the top for room: seven destinations across a header wrapped to two and
- * three rows on anything narrower than a laptop, and every one of those rows was board
- * the work did not get. Down the side it costs one column that the reader can shrink to
- * icons — and the board, which scrolls sideways, gets the whole height back.
- *
- * Collapsed still renders every label; CSS hides them visually and leaves them in the
- * accessibility tree, so a screen reader hears "Jobs" whether or not you can see it.
- * `title` covers the sighted case, since an icon on its own is a guess until you hover.
- */
-function Rail({
-  collapsed,
-  onToggleCollapsed,
-  drawerOpen,
-  onCloseDrawer
-}: {
-  collapsed: boolean;
-  onToggleCollapsed: () => void;
-  drawerOpen: boolean;
-  onCloseDrawer: () => void;
-}) {
-  const { can } = usePermission();
-  // Filtered, not disabled: a greyed-out destination is an invitation to ask why, and the
-  // answer ("you are a user, not a manager") is not something a nav rail can say well.
-  const pages = PAGES.filter(p => !p.need || can(p.need));
-  return (
-    <aside
-      className={
-        "app-side" + (collapsed ? " is-collapsed" : "") + (drawerOpen ? " is-open" : "")
-      }
-      // Hidden from everyone, not just from view, when the drawer is shut. Left visible
-      // it would still be in the tab order — a screen reader walking a menu that is not
-      // on screen is the classic off-canvas bug.
-      inert={drawerOpen ? undefined : true}
+    <Dialog
+      open={open}
+      onClickOutside={close}
+      content={content}
+      position={collapsed ? "right-end" : "top-start"}
+      showTrigger={[]}
+      hideTrigger={[]}
     >
-      <div className="app-side-head">
-        {/* Two files, not one image scaled: the mark is a separate asset because the
-            wordmark at 28px is unreadable rather than small. */}
-        <img
-          src={collapsed ? "/faivcon.png" : "/lofty_logo_orange.png"}
-          alt="Lofty Hub"
-          className={"app-logo" + (collapsed ? " app-logo-mark" : "")}
-        />
-        {/* G3 — the styled tooltip, from @vibe/tooltip (pinned to the version core
-            already carries; core's own bundle doesn't export the type). Shows on focus
-            as well as hover, which the native title never did. */}
-        <Tooltip content={collapsed ? "Expand navigation" : "Collapse navigation"} position="right">
-          <button
-            type="button"
-            className="app-side-toggle"
-            onClick={onToggleCollapsed}
-            aria-expanded={!collapsed}
-            aria-label={collapsed ? "Expand navigation" : "Collapse navigation to icons"}
-          >
-            {collapsed
-              ? <NavigationChevronRight aria-hidden size={16} />
-              : <NavigationChevronLeft aria-hidden size={16} />}
-          </button>
-        </Tooltip>
-      </div>
-
-      <nav className="app-nav" aria-label="Main">
-        {pages.map(p => {
-          const Icon = p.icon;
-          const link = (
-            <NavLink
-              key={p.to}
-              to={p.to}
-              end={p.end}
-              // On a phone the rail is a drawer over the page — leaving it open on top of
-              // the destination you just chose is the thing everyone complains about.
-              onClick={onCloseDrawer}
-              className={({ isActive }) => "app-nav-item" + (isActive ? " is-active" : "")}
-            >
-              <span className="app-nav-icon" aria-hidden><Icon size={20} /></span>
-              <span className="app-nav-label">{p.label}</span>
-            </NavLink>
-          );
-          // Collapsed, the icon is all a sighted person gets — the tooltip names it on
-          // hover AND focus, which the old native title never did for a keyboard.
-          return collapsed ? (
-            <Tooltip key={p.to} content={p.label} position="right">
-              {link}
-            </Tooltip>
-          ) : (
-            link
-          );
-        })}
-      </nav>
-    </aside>
+      <button
+        type="button"
+        className={collapsed ? "nav-icon-btn nav-user-btn" : "nav-row"}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={collapsed ? name : undefined}
+        title={collapsed ? name : undefined}
+        onClick={() => setOpen(o => !o)}
+        onKeyDown={e => { if (e.key === "Escape") close(); }}
+      >
+        {/* Crisp Orange with white initials — the pairing Amber named as acceptable on
+            11 September, at 2.6:1. Not Vibe's Avatar: that paints its own theme colour
+            and sizes itself, and this is 24px on the rail and 32px collapsed. */}
+        <span className="nav-user-avatar" aria-hidden>
+          {profile ? initialsOf(profile) : "?"}
+        </span>
+        {!collapsed && <span className="nav-row-label">{name}</span>}
+      </button>
+    </Dialog>
   );
 }
 
@@ -302,12 +117,16 @@ function Rail({
  * still a flex column so the footer lands at the bottom of a short viewport instead of
  * floating mid-screen, and the scrollbar still belongs to the page.
  *
- * The theme control lives on Settings rather than up here — it is a preference, and the
- * top bar is for search and identity.
+ * Rebuilt on 11 September from `docs/design/handoff/sidebar-navigation/`. What changed,
+ * and it is all of the chrome: the rail is 224/64 rather than 232/68, dark with a white
+ * wash for selection rather than a white pill with teal ink, and it now carries search,
+ * My work, the six destinations, Settings, Admin and you. The header is what is left.
  */
 export function AppShell() {
   const { error: authError } = useAuth();
   const location = useLocation();
+  const { can } = usePermission();
+  const { destinations } = useNavDestinations();
 
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem(RAIL_KEY) === "1"
@@ -318,9 +137,25 @@ export function AppShell() {
   const [narrow, setNarrow] = useState(
     () => window.matchMedia(`(max-width: ${DRAWER_BREAKPOINT}px)`).matches
   );
+  /** Both start closed — the handoff's call, and the rail's job at rest is the six rows. */
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set());
+  const toggleGroup = (id: string) =>
+    setOpenGroups(s => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+
+  const searchBox = useRef<HTMLDivElement>(null);
+  /** Set by the collapsed search button, read once the rail has widened. */
+  const wantSearchFocus = useRef(false);
 
   useEffect(() => {
     localStorage.setItem(RAIL_KEY, collapsed ? "1" : "0");
+    if (!collapsed && wantSearchFocus.current) {
+      wantSearchFocus.current = false;
+      searchBox.current?.querySelector("input")?.focus();
+    }
   }, [collapsed]);
 
   // Watched rather than left to CSS alone: the drawer's open/closed state has to exist in
@@ -349,6 +184,73 @@ export function AppShell() {
   // anybody clicking a link, and the drawer should not survive that either.
   useEffect(() => { setDrawerOpen(false); }, [location.pathname]);
 
+  /** The drawer is always full width, whatever the stored preference says. */
+  const railCollapsed = collapsed && !narrow;
+
+  /**
+   * How a rail row becomes a link.
+   *
+   * Passed into `NavRail` rather than imported by it, so that component never sees the
+   * router — the design-system version of it will not have one, and the two are meant to
+   * converge. `Link`, not `NavLink`: selection is computed once here from the pathname
+   * (`activeIdFor`) rather than per link, because a flyout row carries a query string
+   * that `NavLink` would ignore and light up wrongly.
+   */
+  const link = useCallback(
+    (
+      item: { label: string; to: string },
+      className: string,
+      onClick: () => void,
+      body: ReactNode,
+      extra?: Record<string, unknown>
+    ) => (
+      <Link
+        key={`${className}:${item.to}`}
+        to={item.to}
+        className={className}
+        // On a phone the rail is a drawer over the page — leaving it open on top of the
+        // destination you just chose is the thing everyone complains about.
+        onClick={() => { onClick(); closeDrawer(); }}
+        {...extra}
+      >
+        {body}
+      </Link>
+    ),
+    [closeDrawer]
+  );
+
+  const activeId = useMemo(
+    () => activeIdFor(location.pathname, [
+      ...destinations,
+      // Not destinations, but they light the same way. `/setup` is Settings and
+      // `/settings` is your own — two words for two unrelated things, which is exactly
+      // why the rail's row says Settings and the menu under your name says User settings.
+      { id: "settings", to: "/setup" },
+      { id: "admin", to: "/admin" },
+      { id: "inbox", to: "/dashboard" },
+      { id: "tasks", to: "/tasks" }
+    ]),
+    [location.pathname, destinations]
+  );
+
+  const footRow = (to: string, label: string, icon: ReactNode, id: string) =>
+    link(
+      { label, to },
+      (railCollapsed ? "nav-icon-btn" : "nav-row") + (activeId === id ? " is-active" : ""),
+      () => {},
+      railCollapsed ? icon : (
+        <>
+          <span className="nav-row-icon">{icon}</span>
+          <span className="nav-row-label">{label}</span>
+        </>
+      ),
+      {
+        title: railCollapsed ? label : undefined,
+        "aria-label": railCollapsed ? label : undefined,
+        "aria-current": activeId === id ? "page" : undefined
+      }
+    );
+
   return (
     <ToastsProvider>
     <UndoProvider>
@@ -357,12 +259,110 @@ export function AppShell() {
     <div className={"app-shell" + (narrow ? " is-narrow" : "")}>
       <a className="skip-link" href="#main">Skip to content</a>
 
-      <Rail
-        collapsed={collapsed && !narrow}
-        onToggleCollapsed={() => setCollapsed(c => !c)}
-        drawerOpen={!narrow || drawerOpen}
-        onCloseDrawer={closeDrawer}
-      />
+      <aside
+        className={
+          "nav-rail" + (railCollapsed ? " is-collapsed" : "") + (drawerOpen ? " is-open" : "")
+        }
+        // Hidden from everyone, not just from view, when the drawer is shut. Left visible
+        // it would still be in the tab order — a screen reader walking a menu that is not
+        // on screen is the classic off-canvas bug.
+        inert={narrow && !drawerOpen ? true : undefined}
+      >
+        <NavRail
+          collapsed={railCollapsed}
+          destinations={destinations}
+          activeId={activeId}
+          onToggleCollapse={() => setCollapsed(c => !c)}
+          link={link}
+          header={
+            /* Two files, not one image scaled: the wordmark at 26px is unreadable
+               rather than small, so collapsed gets the twin-triangle mark. */
+            <Link to="/" className="nav-logo-link" aria-label="Lofty Hub — home">
+              <img
+                src={railCollapsed ? "/faivcon.png" : "/lofty_logo_orange.png"}
+                alt="Lofty Hub"
+                className={"nav-logo" + (railCollapsed ? " nav-logo-mark" : "")}
+              />
+            </Link>
+          }
+          search={<div ref={searchBox}><GlobalSearch /></div>}
+          groups={
+            <>
+              {railCollapsed && (
+                <button
+                  type="button"
+                  className="nav-icon-btn"
+                  title="Search"
+                  aria-label="Search"
+                  onClick={() => { wantSearchFocus.current = true; setCollapsed(false); }}
+                >
+                  <Search size={20} />
+                </button>
+              )}
+
+              <NavRailGroup
+                id="myWork"
+                label="My work"
+                icon={Dashboard}
+                iconSize={28}
+                open={openGroups.has("myWork")}
+                onToggle={() => toggleGroup("myWork")}
+                collapsed={railCollapsed}
+                onExpandRail={() => setCollapsed(false)}
+              >
+                {/* Inbox IS the old dashboard (decision 1) — no new table, no new feed,
+                    just the name that says what the page is for. Tasks is `/tasks`
+                    unchanged: four views, saved-view tabs, bulk bar.
+
+                    NO COUNT ON EITHER, and that is deliberate rather than unfinished.
+                    The handoff draws "Inbox 3" as a red badge and "Tasks 12" beside it,
+                    and there is no number in this app those would be. Unread
+                    notifications is the bell's number and already on screen; "my open
+                    tasks" is a third query on every page. A badge invented here would be
+                    the thing `CLAUDE.md` names first — a plausible value that gets quoted
+                    back as though it were agreed. */}
+                {link(
+                  { label: "Inbox", to: "/dashboard" },
+                  "nav-row" + (activeId === "inbox" ? " is-active" : ""),
+                  () => {},
+                  <>
+                    <span className="nav-row-icon"><Note size={20} /></span>
+                    <span className="nav-row-label">Inbox</span>
+                  </>
+                )}
+                {link(
+                  { label: "Tasks", to: "/tasks" },
+                  "nav-row" + (activeId === "tasks" ? " is-active" : ""),
+                  () => {},
+                  <>
+                    <span className="nav-row-icon"><CheckList size={20} /></span>
+                    <span className="nav-row-label">Tasks</span>
+                  </>
+                )}
+              </NavRailGroup>
+
+              {/* PINNED IS NOT HERE YET. It is its own step in the build brief — a
+                  per-person table of {label, url} with an RLS policy and a five-row cap —
+                  and a Pinned group with nothing behind it would be a control that does
+                  nothing. It arrives with the table, the policy and the cap together. */}
+            </>
+          }
+          footer={
+            <>
+              {/* Manager and above, matching `0096_settings_belong_to_the_managers`.
+                  Filtered rather than disabled: a greyed-out destination is an invitation
+                  to ask why, and "you are a user, not a manager" is not something a nav
+                  rail says well. The policy is what actually refuses it. */}
+              {can("manager") && footRow("/setup", "Settings", <Settings size={20} />, "settings")}
+              {/* Admin and above. Not rendered at all below that rung — there is nothing
+                  useful to tell somebody about a door that is not theirs, and `/admin` is
+                  refused by its own route guard and by every policy behind it either way. */}
+              {can("admin") && footRow("/admin", "Admin", <AdminConsole size={20} />, "admin")}
+            </>
+          }
+          user={<UserMenu collapsed={railCollapsed} />}
+        />
+      </aside>
 
       {/* Only rendered when it can do something, so there is never an invisible click
           target sitting over the page on a desktop. */}
@@ -376,6 +376,10 @@ export function AppShell() {
       )}
 
       <div className="app-body">
+        {/* The slim bar (decision 10). Search, the user menu, Settings and Admin have
+            gone to the rail; what is left is what the rail is not for — undo and redo,
+            which are about what you just did to the page, and Ask and the bell, which are
+            about what you want and what happened to you. */}
         <header className="app-header" role="banner">
           {narrow && (
             <button
@@ -389,29 +393,13 @@ export function AppShell() {
             </button>
           )}
 
-          {/* BOTH: a filter on the view you are looking at — type on the board and the
-              board narrows, as the prototype did — and a dropdown of matches from
-              everywhere else, because "brodie" on the Projects page used to narrow 117
-              projects to none and say so, when Brodie Court is a job. See GlobalSearch. */}
-          <GlobalSearch />
-
           <div className="app-header-right">
-            {/* Undo and redo first (Amber, 7 Sep: "add the undo and redo bar to the top
-                navigation"): they are about what you just did on the page, so they sit
-                nearest the page and furthest from the things that are about you. */}
             <UndoRedoBar />
-            {/* Ask sits before the bell: it is a thing you go and do, where the bell is
-                a thing that happens to you, and reading left to right the active one
-                comes first. Both are the same 32px target, so the pair reads as one
-                cluster rather than two decisions. */}
+            {/* Ask sits before the bell: it is a thing you go and do, where the bell is a
+                thing that happens to you, and reading left to right the active one comes
+                first. Both are the same 32px target, so the pair reads as one cluster. */}
             <AskButton />
             <NotificationsBell />
-            {/* The cog sits between the bell and your name, and that order is the
-                argument: Ask is something you go and do, the bell is something that
-                happens to you, and Admin is the app itself — which belongs beside the
-                other thing that is about you rather than about the board. */}
-            <AdminLink />
-            <UserMenu />
           </div>
         </header>
 
@@ -446,12 +434,9 @@ export function AppShell() {
               {/* Privacy and Terms sit OUTSIDE the auth gate deliberately: a policy nobody
                   can read without signing in is not published. Support is Lofty's own
                   portal, hence a full URL and rel="noreferrer". */}
-              {/* Updates came out of the sidebar to here (Amber, 3 Sep): the queue, the
-                  roadmap and the changelog are a thing you go and read, not a place you
-                  work. First in the row because it is the one that changes. */}
-              <NavLink to="/updates">Updates</NavLink>
-              <NavLink to="/privacy">Privacy Policy</NavLink>
-              <NavLink to="/terms">Terms</NavLink>
+              <Link to="/updates">Updates</Link>
+              <Link to="/privacy">Privacy Policy</Link>
+              <Link to="/terms">Terms</Link>
               <a href="https://app.lofty.com.au" target="_blank" rel="noreferrer noopener">
                 Support
               </a>

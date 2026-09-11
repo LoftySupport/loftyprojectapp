@@ -279,16 +279,6 @@ a project and carries both.
 
 Blocks the migration, and nothing else.
 
-### 21. How does the rail get its counts?
-
-The rail shows Projects 9, Jobs 128, Maintenance 23, and every flyout row carries its own
-count. The repository has no aggregate method — every count on screen today comes from a
-list the screen had already loaded — and the rail renders on every page.
-
-Options: one `rail_counts` view returning every number in one row, refreshed on navigation
-(one query, can be a second stale); or live counts fetched per flyout when it opens (exact,
-only pays when hovered). The first is the default unless you prefer the second.
-
 
 ---
 
@@ -296,6 +286,7 @@ only pays when hovered). The first is the default unless you prefer the second.
 
 | Date | Question | Answer |
 | --- | --- | --- |
+| 11 Sep | How does the rail get its counts? | **Destination counts only — the flyout carries none.** Three options were put up: one `rail_counts` view, live per-flyout fetches, or the rail's six numbers alone. Amber took the third. So `railCounts()` is one aggregate returning Projects, Jobs and Maintenance, read once per navigation, and the flyout lists its saved views and its stage groupings with **no number beside them**. This is a deliberate departure from the handoff, which draws right-aligned counts on every flyout row in 7b and 7c — it is the one place the build does not match the drawing, and the reason is cost: nine more queries per page visit, or a `rail_counts` view that has to be re-cut every time somebody saves a view. The flyout's job is to jump to a view from anywhere; the number was never what it was for |
 | 11 Sep | What does the job drawer show, and in what order? | **Superseded by a design.** The question was asked with three options; the answer was a package — `docs/design/handoff/job-record/`. Title as the address with the project number linked, health pill, blocked-by banner, then Job Stage, Key properties and Process as the only three collapsible sections, with Tasks / Comments / Activity **docked in a footer** rather than scrolled to. The footer dock is the part no option had: a drawer is header / scrolling body / docked footer, three flex siblings, or the tabs scroll away and the pattern is pointless |
 | 11 Sep | Inbox and Tasks in the new rail — what are they? | *"My Work has Inbox (This was previously the homepage dashboard) and task (was task pages)"*. **No new tables.** `/dashboard` becomes Inbox inside *My work*; `/tasks` survives unchanged and is reached from there. The rail's eight destinations become six plus My work |
 | 11 Sep | What does Pinned pin? | *"pinned is new and allows people to save/bookmark a page"* — **any page**, a URL with a name: a filtered board, a settings screen, a job, a report. One per-user table of `{label, url}` with RLS, max five. **No status dot**, because a URL has no health; the mockup draws pinned rows as projects with a health dot and that is the thing which changes |

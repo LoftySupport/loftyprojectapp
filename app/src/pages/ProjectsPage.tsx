@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Button, Heading, Text, TextField } from "@vibe/core";
 import { useProcesses, usePropertyAccess, usePropertyDefs, usePropertyOptions, useStages, useTeams } from "../data/useLookups";
 import { propertyColumnDefs } from "../data/propertyColumns";
@@ -126,7 +126,30 @@ export function ProjectsPage() {
   // A control that offers to do what RLS will refuse is worse than no control — this is
   // the app's can() hiding it, and the policy is what actually decides.
   const { can } = usePermission();
+  /**
+   * Creating, and `?new=1` is how somewhere else asks for it.
+   *
+   * It was `useState` alone, which made "create a project" the one act on this board
+   * that could not be linked to — and the rail's Projects flyout has a **+ New project**
+   * on it (11 September handoff, 7b), which is a link and has nowhere else to point.
+   * Same shape and the same key as the Maintenance page's own `?new=1`, so the two
+   * boards answer the same URL the same way rather than inventing a second dialect.
+   *
+   * Cleared by removing the param, not by a second piece of state: with both, closing
+   * the dialog would leave `?new=1` in the address bar and the next Back would open it
+   * again.
+   */
+  const [searchParams, setSearchParams] = useSearchParams();
   const [creating, setCreating] = useState(false);
+  const askedToCreate = searchParams.get("new") === "1";
+  const closeCreate = () => {
+    setCreating(false);
+    if (askedToCreate) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("new");
+      setSearchParams(next, { replace: true });
+    }
+  };
   // Bumped after a create so the board re-reads. There is no cache to invalidate.
   const [reload, setReload] = useState(0);
   const refresh = () => setReload(n => n + 1);
@@ -571,8 +594,8 @@ export function ProjectsPage() {
       />
 
       <NewProjectDialog
-        show={creating}
-        onClose={() => setCreating(false)}
+        show={(creating || askedToCreate) && can("user")}
+        onClose={closeCreate}
         onCreated={refresh}
         onSplit={(id, count, community, torrens) =>
           setSplitting({ id, count, community, torrens, nextLot: 1 })}

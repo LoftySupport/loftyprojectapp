@@ -38,6 +38,7 @@ import type {
   Profile,
   Project,
   ProjectPatch,
+  RailCounts,
   RecordActivity,
   LatestUpdate,
   StagePeriod,
@@ -137,6 +138,24 @@ export interface Repository {
 
   listJobs(opts?: { projectId?: string }): Promise<Job[]>;
   getJob(id: string): Promise<Job | null>;
+
+  /**
+   * The three numbers on the navigation rail, in one read.
+   *
+   * It exists because the rail is on every screen and nothing else on the page can
+   * supply them. Every other count in this app comes out of a list the screen had
+   * already loaded — the board counts its own rows — and the rail has no list: it draws
+   * beside the Contacts page as readily as beside Jobs.
+   *
+   * **Three counts, one round trip, and never the rows.** Each is a `head: true` count,
+   * so Postgres answers with a number and sends no data; three of those cost less than
+   * one `listJobs()`, which is the alternative and would pull every job on every
+   * navigation to put one integer in a badge.
+   *
+   * RLS still applies — a count is a SELECT — so the number is what the person asking
+   * may see, which is the only number worth showing them.
+   */
+  railCounts(): Promise<RailCounts>;
 
   listProfiles(): Promise<Profile[]>;
   currentProfile(): Promise<Profile | null>;
@@ -994,6 +1013,7 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "getProject",
   "listJobs",
   "getJob",
+  "railCounts",
   "listProfiles",
   "currentProfile",
   "getProfile",
@@ -1202,6 +1222,7 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   getProject: "projects",
   listJobs: "jobs",
   getJob: "jobs",
+  railCounts: "projects + job_display + maintenance_request_display",
   listProfiles: "profiles",
   currentProfile: "profiles",
   getProfile: "profiles",

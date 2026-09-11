@@ -9,6 +9,7 @@ import type {
   Profile,
   Project,
   PropertyDef,
+  RailCounts,
   Stage,
   Team,
   TemplateMilestone,
@@ -92,6 +93,9 @@ export function createStubRepository(): Repository {
 
     async listJobs(): Promise<Job[]> { return []; },
     async getJob(): Promise<Job | null> { return null; },
+
+    /** Zero, because there is nothing — the honest answer, not a placeholder. */
+    async railCounts(): Promise<RailCounts> { return { projects: 0, jobs: 0, maintenance: 0 }; },
 
 
     async listProfiles(): Promise<Profile[]> { return []; },

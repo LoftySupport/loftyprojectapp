@@ -56,6 +56,7 @@ import type {
   Profile,
   Project,
   ProjectPatch,
+  RailCounts,
   RecordActivity,
   LatestUpdate,
   StagePeriod,
@@ -117,7 +118,7 @@ const WIRED: RepositoryMethod[] = [
   "listProcessTasks", "createProcessTask", "updateProcessTask", "deleteProcessTask",
   "listProcessTaskDependencies", "setProcessTaskDependencies",
   "listProcessRuns", "startProcessRun", "updateProcessRun", "deleteProcessRun", "instantiateProcessTasks",
-  "listProjects", "getProject", "listJobs", "getJob",
+  "listProjects", "getProject", "listJobs", "getJob", "railCounts",
   "createProject", "createJob", "createJobsFromSplit", "deleteJob", "deleteProject",
   "moveJobStage",
   "updateJob",
@@ -906,6 +907,42 @@ export function createSupabaseRepository(): Repository {
       const { data, error } = await query.order("project_id").order("job_sequence");
       if (error) throw error;
       return (data ?? []).map(r => toJob(r as unknown as JobRow));
+    },
+
+    /**
+     * Three counts, three `head: true` requests, in parallel.
+     *
+     * `head: true` is the whole reason this is cheap: PostgREST answers with a
+     * `Content-Range` and no body, so nothing is serialised and nothing crosses the wire
+     * but a number. The obvious alternative — `listJobs().length` — pulls every job on
+     * every navigation to render one badge.
+     *
+     * Each filter matches the screen the row navigates to, because the first thing
+     * anybody does with a number in a nav rail is click it and count. Jobs excludes
+     * Closed and Maintenance excludes closed and rejected, exactly as `JOB_VIEWS.all` and
+     * `listMaintenanceRequests({ queue: "open" })` do. Projects has no filter, because
+     * the Projects board's "All Projects" view has none either.
+     *
+     * `Promise.all`, so the three are one round of latency rather than three. A refusal
+     * from any of them rejects the lot and the rail shows no numbers at all — which is
+     * the right failure: a rail that silently drew 0 next to Jobs would be reporting an
+     * empty company.
+     */
+    async railCounts(): Promise<RailCounts> {
+      const [projects, jobs, maintenance] = await Promise.all([
+        client.from("projects").select("project_id", { count: "exact", head: true }),
+        client.from("job_display").select("job_id", { count: "exact", head: true })
+          .neq("job_stage", "Closed"),
+        client.from("maintenance_request_display")
+          .select("maintenance_request_id", { count: "exact", head: true })
+          .not("maintenance_request_status", "in", "(closed,rejected)")
+      ]);
+      for (const r of [projects, jobs, maintenance]) if (r.error) throw r.error;
+      return {
+        projects: projects.count ?? 0,
+        jobs: jobs.count ?? 0,
+        maintenance: maintenance.count ?? 0
+      };
     },
 
     /** `maybeSingle`, not `single`: a job that is not there is null, not an error. */

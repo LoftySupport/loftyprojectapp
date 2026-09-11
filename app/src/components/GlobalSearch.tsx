@@ -184,7 +184,9 @@ export function GlobalSearch() {
       <TextField
         id="app-search"
         type="search"
-        placeholder="Search…"
+        // "Search or jump to", from the 11 September handoff: the box is in the rail now,
+        // and the dropdown does jump to a record, so the longer placeholder is the true one.
+        placeholder="Search or jump to"
         value={query}
         onChange={v => { setQuery(v); setOpen(true); }}
         onKeyDown={onKeyDown}

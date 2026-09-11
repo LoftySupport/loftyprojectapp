@@ -369,6 +369,21 @@ export function createStubRepository(): Repository {
     async listProcesses() { return PROCESSES; },
     async listProjects() { return [FIXTURE_PROJECT]; },
     async listJobs() { return FIXTURE_JOBS; },
+    /**
+     * The rail's three counts, derived from the fixtures above rather than typed.
+     *
+     * Derived on purpose: a hand-written `{ jobs: 128 }` beside three fixture jobs would
+     * put a number in the picture that disagrees with the board behind it, which is
+     * exactly the class of defect the screenshots exist to catch. The real
+     * implementation counts rows under RLS; this counts the rows it has.
+     */
+    async railCounts() {
+      return {
+        projects: 1,
+        jobs: FIXTURE_JOBS.filter(j => j.stage !== "Closed").length,
+        maintenance: 0
+      };
+    },
     async listProcessRuns() { return FIXTURE_RUNS; },
     async listFeedback(kind?: "bug" | "idea") {
       return kind ? REQUESTS.filter(r => r.kind === kind) : REQUESTS;
