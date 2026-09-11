@@ -14,6 +14,8 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Screenshots and a 1440px desktop width in the responsive harness, so a layout fault can be seen rather than inferred
+- A rail count of projects, jobs and open maintenance requests, read in one round trip
 - the design handoff's SVG icons and the eight component contracts the app is to build against, so the app and the design system converge rather than being reconciled later
 - the approved design for the sidebar rail and the job record, with the ten decisions that answer the gaps in it and the four corrections found reviewing it against the running app
 - a letter can open with the name of anybody on the record — a token for every party role, with two purchasers joined as "A and B"
@@ -183,6 +185,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- The navigation rail is rebuilt from the approved design — 224px expanded, 64px collapsed, a flyout of each destination's saved views, and Search, Settings, Admin and your own menu moved out of the header into it
 - publishing a document again replaces the copy saved on the record instead of adding another — download the old one first if you need it
 - a lot number and a res number are whole numbers; a street number stays text, so 12B and 100-105 are kept as typed
 - the res number is offered on every address form, a project's included
