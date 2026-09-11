@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Inbox and Tasks in the navigation rail carry a badge — unread items on Inbox, your open tasks on Tasks, with a dot on My work when the rail is collapsed
 - A job carries its own completion dates — the one being worked towards, and the day it actually finished
 - Pinned in the navigation rail — bookmark any page under a name, up to five, private to you
 - Screenshots and a 1440px desktop width in the responsive harness, so a layout fault can be seen rather than inferred
@@ -136,6 +137,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- The unread count beside Inbox and the one on the bell are the same number read once, so marking everything read clears both together
 - The job drawer no longer scrolls sideways at 460px, and the responsive sweep now opens it at every width
 - 64 job addresses had their lot number in the street-number column, so a job at lot 1 of 14 Brodie Road read as 1 Brodie Road — somebody else's house
 - the staged-workbook importer could not insert a row after the lot number became a number
