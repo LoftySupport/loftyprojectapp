@@ -102,10 +102,13 @@ but **not on Flint 200 (1.99:1)**.
    claim.
 
 **Icons are solved.** Use the 14 SVGs in
-`sidebar-navigation/assets/icons-lofty-svg/`, not the PNG masks — which means the
-24-versus-28px rule compensating for the PNGs' internal padding no longer applies. They are
-traced pending the client's vector originals, and should be replaced wholesale rather than
-edited when those arrive. `sidebar-navigation/ICONS.md` is the audit.
+`sidebar-navigation/assets/icons-lofty-svg/`, not the PNG masks. They are traced pending the
+client's vector originals, and should be replaced wholesale rather than edited when those
+arrive. `sidebar-navigation/ICONS.md` is the audit.
+
+**Keep the 24-versus-28px rule.** The SVGs deliberately hold the glyphs inside a 3–21 box on a
+24 grid, so their internal padding survives and a Lofty glyph still needs 28px where a
+design-system one needs 24px to read at the same weight. *"Do not re-crop them."*
 
 ---
 

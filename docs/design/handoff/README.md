@@ -66,12 +66,17 @@ or a misreading.
    is 3.86:1 — inside the readable bar, so no action, but do not repeat the claim.
 
 **Since resolved, 11 September:** the Lofty glyphs now exist as **14 traced SVGs** in
-[`sidebar-navigation/assets/icons-lofty-svg/`](sidebar-navigation/assets/icons-lofty-svg/),
-so the 24-versus-28px compensation for the PNGs' internal padding goes away. They are traced
-from the PNGs to unblock the build and should be **replaced, not edited**, when the client's
-vector originals arrive. [`sidebar-navigation/ICONS.md`](sidebar-navigation/ICONS.md) carries
-the audit — including that `Admin.png` and `AdminConsole.png` were the same mark at two
-weights and are now one file.
+[`sidebar-navigation/assets/icons-lofty-svg/`](sidebar-navigation/assets/icons-lofty-svg/) —
+one stroke weight, `currentColor`, no colour baked in. They are traced from the PNGs to
+unblock the build and should be **replaced, not edited**, when the client's vector originals
+arrive. [`sidebar-navigation/ICONS.md`](sidebar-navigation/ICONS.md) carries the audit,
+including that `Admin.png` and `AdminConsole.png` were the same mark at two weights and are
+now one file.
+
+**The 24-versus-28px rule survives the change, and an earlier draft of this page said it did
+not.** The SVGs keep the glyphs inside a 3–21 box on a 24 grid *on purpose*, so the internal
+padding that made a Lofty glyph need 28px where a design-system one needs 24px is still there.
+`ICONS.md` is explicit: *"Do not re-crop them."*
 
 ## Eight components, and the order they land in
 
