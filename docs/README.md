@@ -24,6 +24,19 @@ The authority above all four is `app/supabase/migrations/` and the live database
 `app/supabase/verify/check.sh` replays every migration into a throwaway database and proves
 the schema *behaves*.
 
+## `design/` — the approved design, and what to build from it
+
+| File | What it is |
+| --- | --- |
+| [`design/handoff/README.md`](design/handoff/README.md) | **The rail and the job record, as handed over on 11 September.** Both packages marked high fidelity by their author, plus the ten decisions that answer the gaps in them and the four corrections found in review |
+| [`design/handoff/BUILD-BRIEF.md`](design/handoff/BUILD-BRIEF.md) | Everything a build needs in one file — what to read, what is decided, what to correct, the order, and the two things still open |
+| [`design/handoff/sidebar-navigation/`](design/handoff/sidebar-navigation/) | The left rail: four states, every measurement, screenshots, the Lofty glyphs |
+| [`design/handoff/job-record/`](design/handoff/job-record/) | The drawer, the full page and the column picker |
+
+The `.dc.html` files in there are **design references, not production code** — they carry an
+in-house template runtime that does not come across. The design system itself is
+`app/src/design-system/tokens/`, mirrored from Lofty's App Design System.
+
 ## `integrations/` — connecting the outside
 
 | File | What it is |
