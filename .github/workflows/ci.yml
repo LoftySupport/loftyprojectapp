@@ -68,6 +68,18 @@ jobs:
         run: npm run check:capped-list
         working-directory: app
 
+      # The design rules in PRODUCT.md are written as behaviours — "every comparable column
+      # sorts", "the empty state says what to do" — and a behaviour is satisfied by any
+      # implementation that produces it. Every screen satisfied them its own way and passed,
+      # so compliance rose while consistency fell: 37 header idioms, 13 hand-built filter
+      # rows, 110 container recipes. This counts how many ways the app does each thing and
+      # holds the number down, which is also the guard on the other half of that failure —
+      # a fix that lands on one screen and not the twelve with the same fault does not move
+      # the count, so it does not count as done.
+      - name: no screen invents a new way to draw something
+        run: npm run check:elements
+        working-directory: app
+
   docs:
     name: documentation links resolve
     runs-on: ubuntu-latest

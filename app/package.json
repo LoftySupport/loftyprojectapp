@@ -24,6 +24,7 @@
     "check:capped-list": "node scripts/check-capped-list.mjs",
     "check:contrast": "node scripts/check-contrast.mjs",
     "check:watermark": "node scripts/check-watermark.mjs",
+    "check:elements": "node scripts/check-elements.mjs",
     "check:migrations": "node ../scripts/check-migrations.mjs",
     "check:migrations:self": "node ../scripts/check-migrations.mjs --self-test"
   },
