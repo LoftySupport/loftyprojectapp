@@ -2825,6 +2825,22 @@ every non-log table in `public` carries `trg_activity_audit_row`, *"so the table
 next month fails here the day it is created without one"*. That is exactly what happened,
 a fortnight later, to this table.
 
+#### Applied, 11 September
+
+**Applied to the live project on Amber's say-so** and read back rather than taken on the
+apply's own word: RLS on, one policy, both triggers (`pinned_pages_touch` and
+`trg_activity_audit_row`), all seven CHECK and UNIQUE constraints present, and the table
+empty — the proof block cleans up after itself, so applying it leaves nothing behind.
+
+The proof block running on production is itself the evidence that the constraints bite
+*there*, not only in the replay: every one of those six probes raises and aborts the
+migration if the rule it guards has stopped holding.
+
+The security advisor gained nothing from it. `pinned_pages` appears only in the standing
+`pg_graphql_authenticated_table_exposed` list, which names all 95 tables and is discussed
+under *what the security advisor still says* above — visible in the schema, not readable,
+because `0101` revoked `anon` and RLS decides the rest.
+
 
 ## Verification
 
