@@ -188,6 +188,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- Job and project properties are grouped under their own headings in the column picker, instead of falling in with everything ungrouped
 - The column picker is a panel beside the table instead of a dialog over it, with a search box and grouped columns
 - The job record is rebuilt from the approved design — the same record as a 460px drawer and a full page, with Tasks, Comments and the activity log docked at the foot instead of scrolled to
 - The navigation rail is rebuilt from the approved design — 224px expanded, 64px collapsed, a flyout of each destination's saved views, and Search, Settings, Admin and your own menu moved out of the header into it

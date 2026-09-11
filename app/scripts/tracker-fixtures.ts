@@ -1,7 +1,8 @@
 import { createStubRepository as createEmptyRepository } from "../src/data/stubRepository";
 import type { Repository } from "../src/data/repository";
 import type {
-  FeedbackItem, Job, Process, ProcessRun, Profile, Project, RoadmapPhase, TaskEntry, TaskStatus
+  FeedbackItem, Job, Process, ProcessRun, Profile, Project, PropertyDef, RoadmapPhase,
+  TaskEntry, TaskStatus
 } from "../src/data/types";
 
 /**
@@ -406,6 +407,50 @@ export function createStubRepository(): Repository {
      * omission works. Two stays and a current one is the smallest history that exercises
      * "Job started", "Days in stage", "Started on" and "Total days" together.
      */
+    /**
+     * Property definitions, so the column picker actually draws its property groups.
+     *
+     * `stubRepository` answers empty by design — the eleven it once carried were
+     * "plausible fiction" and were rightly removed. But empty means the picker's
+     * **Job properties** and **Project properties** headings never render, and a
+     * screenshot of it proves only that the eleven real columns group. Amber, 11
+     * September: *"in the columns you should be able to add any property job or project
+     * to the column view"* — this is what lets that be looked at rather than asserted.
+     *
+     * Four, deliberately: two scopes and three formats, which is the smallest set that
+     * exercises both headings, the "(project)" label on an inherited one, and a numeric
+     * column's right alignment. Every one is named FIXTURE so it cannot be mistaken for
+     * a property Lofty defined.
+     */
+    /**
+     * …and read access to them, or the picker offers none of them.
+     *
+     * `myPropertyAccess()` answers empty in the stub and `usePropertyAccess` defaults an
+     * unknown key to `canRead: false`, which is the right fail-closed behaviour and is
+     * why the four definitions above were invisible on the first run. Worth having found
+     * that way round: the picker genuinely filters by what the reader may see, rather
+     * than listing every definition and letting RLS empty the column later.
+     */
+    async myPropertyAccess() {
+      return ["fixture_client", "fixture_pour_date", "fixture_contract_sum", "fixture_developer"]
+        .map(propertyKey => ({
+          propertyKey, canCreate: true, canRead: true, canUpdate: true, canDelete: false
+        }));
+    },
+    async listPropertyDefs() {
+      const base = {
+        stageName: "Pre-construction", teamId: null, teamName: null, required: false,
+        restricted: false, createLevel: "user", readLevel: "viewer",
+        updateLevel: "user", deleteLevel: "manager", slaDays: null, isActive: true,
+        description: null, importRef: null
+      } as const;
+      return [
+        { ...base, key: "fixture_client", label: "FIXTURE Client", scope: "job", format: "text", position: 1 },
+        { ...base, key: "fixture_pour_date", label: "FIXTURE Pour date", scope: "job", format: "date", position: 2 },
+        { ...base, key: "fixture_contract_sum", label: "FIXTURE Contract sum", scope: "job", format: "currency", position: 3 },
+        { ...base, key: "fixture_developer", label: "FIXTURE Developer", scope: "project", format: "text", position: 4 }
+      ] as unknown as PropertyDef[];
+    },
     async listJobStageHistory(jobId: string) {
       if (!FIXTURE_JOBS.some(j => j.id === jobId)) return [];
       return [
