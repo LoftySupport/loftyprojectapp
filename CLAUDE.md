@@ -122,7 +122,16 @@ rather than references.
 cd app && npm run lint && npm run typecheck && npm run build
 node scripts/check-links.mjs        # if any document moved or was added
 cd app && npm run responsive        # if a screen's layout changed
+cd app && npm run check:elements    # always — CI runs it too
 app/supabase/verify/check.sh        # if a migration changed
 ```
 
-CI runs the first two of those plus `./build.sh`, which is what Vercel runs.
+CI runs the first two of those, the element sweep, and `./build.sh`, which is what Vercel runs.
+
+**The element sweep counts how many different ways the app draws each thing**, and fails when a
+number goes up — see [`docs/design/element-sweep.md`](docs/design/element-sweep.md). It exists
+because every rule in *Interface Must-Haves* is written as a behaviour, and a behaviour is
+satisfied by any implementation that produces it: thirty-seven header idioms all passed. When a
+fix brings a number **down**, lower the baseline in the same commit
+(`npm run check:elements -- --update`) — otherwise the ground gained can be given back without
+anything noticing.

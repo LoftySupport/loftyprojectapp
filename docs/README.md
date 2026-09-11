@@ -32,6 +32,7 @@ the schema *behaves*.
 | [`design/handoff/BUILD-BRIEF.md`](design/handoff/BUILD-BRIEF.md) | Everything a build needs in one file — what to read, what is decided, what to correct, the order, and the two things still open |
 | [`design/handoff/sidebar-navigation/`](design/handoff/sidebar-navigation/) | The left rail: four states, every measurement, screenshots, the Lofty glyphs |
 | [`design/handoff/job-record/`](design/handoff/job-record/) | The drawer, the full page and the column picker |
+| [`design/element-sweep.md`](design/element-sweep.md) | **How the design rules are held.** The twelve element families, the ratchet that stops a fixed one drifting back, and why a rule written as a behaviour raised compliance while consistency fell |
 
 The `.dc.html` files in there are **design references, not production code** — they carry an
 in-house template runtime that does not come across. The design system itself is
