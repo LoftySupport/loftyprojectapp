@@ -438,7 +438,7 @@ export function JobsPage() {
   const jobColumnDefs = useMemo<ColumnDef<BoardJob>[]>(() => [
     // The job number cannot be turned off. A table of jobs with no job number in it is
     // a table nobody can act on; everything else is somebody's call.
-    { key: "job", label: "Job", fixed: true, className: "nowrap",
+    { key: "job", group: "Identity", label: "Job", fixed: true, className: "nowrap",
       sort: j => j.jobNumber,
       // "1042-01" breaking into "1042-" / "01" is unreadable as an identifier, and the
       // identifier is what this column is — hence `nowrap`.
@@ -446,12 +446,12 @@ export function JobsPage() {
     // Exported as text, not as the number it sorts on: a project number is an
     // identifier, and 1042 in a spreadsheet column of numbers invites somebody to
     // average it.
-    { key: "project", label: "Project", sort: j => Number(j.projectNumber),
+    { key: "project", group: "Identity", label: "Project", sort: j => Number(j.projectNumber),
       cell: j => j.projectNumber, text: j => j.projectNumber },
-    { key: "address", label: "Address", sort: j => j.currentAddress ?? null,
+    { key: "address", group: "Identity", label: "Address", sort: j => j.currentAddress ?? null,
       cell: j => j.currentAddress ?? <Token>addresses.consolidated_address</Token>,
       text: j => j.currentAddress ?? token("addresses.consolidated_address") },
-    { key: "type", label: "Type",
+    { key: "type", group: "Identity", label: "Type",
       sort: j => (j.projectType ? PROJECT_TYPE_LABELS[j.projectType] : null),
       cell: j => (j.projectType
         ? PROJECT_TYPE_LABELS[j.projectType]
@@ -461,25 +461,25 @@ export function JobsPage() {
         : token("job_display.project_type")) },
     // Pipeline position, not the alphabet — "Construction" before "Pre-construction"
     // alphabetically would be the lifecycle backwards.
-    { key: "stage", label: "Stage",
+    { key: "stage", group: "Programme", label: "Stage",
       sort: j => { const at = viewStages.indexOf(j.stage); return at === -1 ? null : at; },
       cell: j => j.stage, text: j => j.stage },
-    { key: "team", label: "Team", sort: j => j.team, cell: j => j.team, text: j => j.team },
+    { key: "team", group: "People", label: "Team", sort: j => j.team, cell: j => j.team, text: j => j.team },
     // The dash is for the screen only: a blank table cell reads as a rendering fault,
     // where a blank spreadsheet cell reads as "nobody", which is what it means.
-    { key: "assignee", label: "Assigned to", sort: j => j.assigneeName ?? null,
+    { key: "assignee", group: "People", label: "Assigned to", sort: j => j.assigneeName ?? null,
       cell: j => j.assigneeName ?? "—", text: j => j.assigneeName ?? null },
     // Off by default since 28 August, when it came off the cards for the same reason:
     // who typed a job in months ago is not what anybody scans a list for. Still here
     // for the person who does want it, which is what the picker is for.
-    { key: "createdBy", label: "Created by", offByDefault: true, className: "muted",
+    { key: "createdBy", group: "People", label: "Created by", offByDefault: true, className: "muted",
       sort: j => j.createdBy ?? null, cell: j => j.createdBy ?? "—",
       text: j => j.createdBy ?? null },
     // Same rule as the board's Process columns — one helper, so a job cannot be in the
     // "Working Drawings" column and read "Selections" here. Null is said as null: most
     // of these jobs were worked before the app existed, and an empty run list means the
     // app was not there, not that the job has done nothing.
-    { key: "process", label: "Up to",
+    { key: "process", group: "Programme", label: "Up to",
       sort: j => { const n = currentProcessName(j, processes); return n === null ? null : pipelineOrder.indexOf(n); },
       cell: j => {
         const name = currentProcessName(j, processes);
@@ -489,11 +489,11 @@ export function JobsPage() {
       // because the app was not there when the job was worked, which is worth saying in a
       // file rather than leaving as a blank that reads as "not checked".
       text: j => currentProcessName(j, processes) ?? "Nothing recorded" },
-    { key: "days", label: "Days in stage", className: "num",
+    { key: "days", group: "Programme", label: "Days in stage", className: "num",
       sort: j => j.daysInStage, cell: j => j.daysInStage, text: j => j.daysInStage },
     // The pill has no text in it at all — this column is the reason `text` is
     // required rather than derived from the cell.
-    { key: "status", label: "Status", sort: j => RECORD_STATUS_LABELS[j.status],
+    { key: "status", group: "Programme", label: "Status", sort: j => RECORD_STATUS_LABELS[j.status],
       cell: j => <StatusPill status={j.status} />, text: j => RECORD_STATUS_LABELS[j.status] },
     // Every property the reader may see, job's own and the project's it inherits — off
     // until asked for, in the picker (Amber, 7 Sep). See data/propertyColumns.tsx.

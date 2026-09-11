@@ -215,20 +215,20 @@ export function ProjectsPage() {
   const projectColumnDefs = useMemo<ColumnDef<BoardProject>[]>(() => [
     // Sorted as a number, exported as text: a project number is an identifier, and a
     // column of them typed as numbers invites a total at the bottom of it.
-    { key: "project", label: "Project", fixed: true, className: "nowrap",
+    { key: "project", group: "Identity", label: "Project", fixed: true, className: "nowrap",
       sort: p => Number(p.projectNumber), cell: p => p.projectNumber,
       text: p => p.projectNumber },
-    { key: "address", label: "Address", sort: p => p.currentAddress ?? null,
+    { key: "address", group: "Identity", label: "Address", sort: p => p.currentAddress ?? null,
       cell: p => p.currentAddress ?? <Token>project_display.current_address</Token>,
       text: p => p.currentAddress ?? token("project_display.current_address") },
-    { key: "suburb", label: "Suburb", sort: p => p.suburb ?? null,
+    { key: "suburb", group: "Identity", label: "Suburb", sort: p => p.suburb ?? null,
       cell: p => p.suburb ?? <Token>addresses.suburb</Token>,
       text: p => p.suburb ?? token("addresses.suburb") },
     // Pipeline position, not the alphabet — the same call the jobs table makes.
-    { key: "stage", label: "Stage",
+    { key: "stage", group: "Programme", label: "Stage",
       sort: p => { const at = viewStages.indexOf(p.stage); return at === -1 ? null : at; },
       cell: p => p.stage, text: p => p.stage },
-    { key: "type", label: "Type",
+    { key: "type", group: "Identity", label: "Type",
       sort: p => (p.projectType ? PROJECT_TYPE_LABELS[p.projectType] : null),
       cell: p => (p.projectType
         ? PROJECT_TYPE_LABELS[p.projectType]
@@ -236,11 +236,11 @@ export function ProjectsPage() {
       text: p => (p.projectType
         ? PROJECT_TYPE_LABELS[p.projectType]
         : token("projects.project_type")) },
-    { key: "team", label: "Owning team", offByDefault: true,
+    { key: "team", group: "People", label: "Owning team", offByDefault: true,
       sort: p => (p.owningTeam ? teamName(p.owningTeam) : null),
       cell: p => (p.owningTeam ? teamName(p.owningTeam) : "—"),
       text: p => (p.owningTeam ? teamName(p.owningTeam) : null) },
-    { key: "start", label: "Start date", offByDefault: true,
+    { key: "start", group: "Programme", label: "Start date", offByDefault: true,
       sort: p => p.startDate ?? null,
       // The date as the screen writes it, not the ISO string underneath: a download is
       // read by a person, and 2026-11-04 in an Australian office is ambiguous in the one
@@ -251,7 +251,7 @@ export function ProjectsPage() {
     // detail use, so a blank never turns into a column token or an "Invalid Date". In a
     // file that "Not set" is an absent value, so it exports as a blank cell rather than
     // as the words, which would read as something somebody typed.
-    { key: "target", label: "Target completion", sort: p => p.targetCompletion ?? null,
+    { key: "target", group: "Programme", label: "Target completion", sort: p => p.targetCompletion ?? null,
       cell: p => (p.targetCompletion
         ? new Date(p.targetCompletion).toLocaleDateString()
         : <span className="muted pf-unset">Not set</span>),
@@ -259,11 +259,11 @@ export function ProjectsPage() {
     // Intended lots, and the split between the two kinds of title (0053). Null on both
     // means nobody has said, which is not the same statement as zero — hence the dash
     // rather than "0 / 0".
-    { key: "lots", label: "Lots", offByDefault: true, className: "num",
+    { key: "lots", group: "Programme", label: "Lots", offByDefault: true, className: "num",
       sort: p => p.proposedDwellings,
       cell: p => (p.proposedDwellings == null ? "—" : p.proposedDwellings),
       text: p => p.proposedDwellings },
-    { key: "split", label: "Community / Torrens", offByDefault: true, className: "num",
+    { key: "split", group: "Programme", label: "Community / Torrens", offByDefault: true, className: "num",
       sort: p => p.communityTitleLots,
       cell: p => (p.communityTitleLots == null && p.torrensTitleLots == null
         ? "—"

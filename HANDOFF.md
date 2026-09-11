@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 231 changes since then —
+Unreleased: 232 changes since then —
+- Changed: The column picker is a panel beside the table instead of a dialog over it, with a search box and grouped columns
 - Changed: The job record is rebuilt from the approved design — the same record as a 460px drawer and a full page, with Tasks, Comments and the activity log docked at the foot instead of scrolled to
 - Added: A job carries its own completion dates — the one being worked towards, and the day it actually finished
 - Fixed: The job drawer no longer scrolls sideways at 460px, and the responsive sweep now opens it at every width
 - Added: Pinned in the navigation rail — bookmark any page under a name, up to five, private to you
-- Changed: The navigation rail is rebuilt from the approved design — 224px expanded, 64px collapsed, a flyout of each destination's saved views, and Search, Settings, Admin and your own menu moved out of the header into it
-- …and 226 more.
+- …and 227 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
