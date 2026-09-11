@@ -1,8 +1,8 @@
 import { createStubRepository as createEmptyRepository } from "../src/data/stubRepository";
 import type { Repository } from "../src/data/repository";
 import type {
-  FeedbackItem, Job, Process, ProcessRun, Profile, Project, PropertyDef, RoadmapPhase,
-  TaskEntry, TaskStatus
+  FeedbackItem, Job, Notification, Process, ProcessRun, Profile, Project, PropertyDef,
+  RoadmapPhase, TaskEntry, TaskStatus
 } from "../src/data/types";
 
 /**
@@ -375,6 +375,45 @@ const FIXTURE_TASKS: TaskEntry[] = TASK_SHAPES.map(([status, name, dueDate, star
   } as unknown as TaskEntry;
 });
 
+/**
+ * Three unread and one already read — so the sweep photographs the Inbox badge and the
+ * bell carrying the same number, which is the whole point of `InboxProvider`.
+ *
+ * Unread is `readAt: null` and nothing else, exactly as the real rows work. The fourth
+ * row is read on purpose: a list where every line is bold proves nothing about the two
+ * styles the panel actually has.
+ */
+const FIXTURE_NOTIFICATIONS: Notification[] = [
+  {
+    id: 1, typeId: "task_assigned", projectId: 9001, jobId: "9001-01", taskId: null,
+    processRunId: null, commentId: null,
+    title: "FIXTURE task assigned to you",
+    body: "Slab inspection booking — 28 FIXTURE Corner Street",
+    href: "/jobs/9001-01", createdAt: ISO(2026, 9, 10), readAt: null
+  },
+  {
+    id: 2, typeId: "mentioned", projectId: 9001, jobId: "9001-02", taskId: null,
+    processRunId: null, commentId: null,
+    title: "FIXTURE mention",
+    body: "…can you confirm the council lodgement date on this one?",
+    href: "/jobs/9001-02", createdAt: ISO(2026, 9, 9), readAt: null
+  },
+  {
+    id: 3, typeId: "stage_moved", projectId: 9001, jobId: "9001-03", taskId: null,
+    processRunId: null, commentId: null,
+    title: "FIXTURE job moved to Construction",
+    body: null,
+    href: "/jobs/9001-03", createdAt: ISO(2026, 9, 8), readAt: null
+  },
+  {
+    id: 4, typeId: "task_overdue", projectId: 9001, jobId: "9001-01", taskId: null,
+    processRunId: null, commentId: null,
+    title: "FIXTURE task overdue",
+    body: "Working drawings sign-off",
+    href: "/jobs/9001-01", createdAt: ISO(2026, 9, 4), readAt: ISO(2026, 9, 5)
+  }
+];
+
 export function createStubRepository(): Repository {
   const empty = createEmptyRepository();
   return {
@@ -458,6 +497,26 @@ export function createStubRepository(): Repository {
         { stage: "Pre-construction", from: ISO(2026, 8, 20), to: null, days: 22 }
       ];
     },
+    async listMyNotifications() { return FIXTURE_NOTIFICATIONS.map(n => ({ ...n })); },
+    /**
+     * The one fixture that WRITES, and it earns the exception.
+     *
+     * The Inbox badge and the bell are one piece of state (`InboxProvider`) precisely so
+     * that Mark all read clears both. A fixture that ignored the write would make that
+     * impossible to watch happen — the badge would sit at 3 forever and the check would
+     * be "it looks right", which is the kind of evidence this repo does not accept.
+     */
+    async markNotificationsRead(ids?: number[]) {
+      const now = new Date().toISOString();
+      let marked = 0;
+      for (const n of FIXTURE_NOTIFICATIONS) {
+        if (n.readAt !== null) continue;
+        if (ids && !ids.includes(n.id)) continue;
+        n.readAt = now;
+        marked += 1;
+      }
+      return marked;
+    },
     async listMyPins() {
       return [
         { id: "pin-1", label: "FIXTURE job 9001-01", url: "/jobs/9001-01", position: 1 },
@@ -471,7 +530,11 @@ export function createStubRepository(): Repository {
       return {
         projects: 1,
         jobs: FIXTURE_JOBS.filter(j => j.stage !== "Closed").length,
-        maintenance: 0
+        maintenance: 0,
+        // Derived from the fixture tasks the same way, and with the same filter the real
+        // query uses: every status but done and cancelled. The fixtures are all assigned
+        // to the first fixture person, who is also the signed-in stub.
+        myOpenTasks: FIXTURE_TASKS.filter(t => t.status !== "done" && t.status !== "cancelled").length
       };
     },
     async listProcessRuns() { return FIXTURE_RUNS; },

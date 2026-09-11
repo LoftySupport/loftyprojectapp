@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router";
 import { Button, Dialog, DialogContentContainer, Text } from "@vibe/core";
 import { Notifications } from "@vibe/icons";
 import { Tooltip } from "@vibe/tooltip";
-import { useQuery, useRepository } from "../data/DataProvider";
+import { useInbox } from "../data/InboxProvider";
 import { FEEDBACK_STAGE_LABELS, type MovedRequest, type Notification } from "../data/types";
 import "./ui.css";
 
@@ -19,37 +19,31 @@ import "./ui.css";
  * The tracker's "a request you follow moved" (0065) keeps its own list here: it predates
  * the inbox and its rows are the tracker's, not notifications'.
  *
+ * **The state is `InboxProvider`'s, not this component's** — the rail's Inbox row shows
+ * the same number, and two components reading separately would disagree the moment
+ * somebody pressed Mark all read.
+ *
  * Opening a notification's record marks it read — following the link IS having seen it.
  * "Mark all read" is one call to the database, not fifty.
  */
 export function NotificationsBell() {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
-  const repo = useRepository();
-  const [reload, setReload] = useState(0);
-  const { data: items } = useQuery<Notification[]>(r => r.listMyNotifications({ limit: 40 }), [], [reload]);
-  const { data: moved } = useQuery<MovedRequest[]>(r => r.listMyMovedRequests(), [], [reload]);
-  const unread = items.filter(n => n.readAt === null);
-
-  // The bell refreshes itself every two minutes while the page is open, so a scan that
-  // ran at 07:30 shows without a reload. Realtime would be the next step and the sync
-  // batch adds it; polling is honest until then.
-  useEffect(() => {
-    const t = setInterval(() => setReload(k => k + 1), 120_000);
-    return () => clearInterval(t);
-  }, []);
+  // The reads, the two-minute poll and the three mark-as-read calls moved into
+  // `InboxProvider` on 11 September, when the rail's Inbox row started showing the same
+  // number. They are one piece of state now precisely so the two badges cannot disagree
+  // — press Mark all read and both clear together.
+  const { notifications: items, moved, unread, waiting, markRead, markAllRead, markMovedSeen } = useInbox();
 
   const openOne = (n: Notification) => {
     close();
-    if (n.readAt === null) void repo.markNotificationsRead([n.id]).then(() => setReload(k => k + 1)).catch(() => {});
+    if (n.readAt === null) markRead(n.id);
   };
-  const markAll = () => void repo.markNotificationsRead().then(() => setReload(k => k + 1)).catch(() => {});
+  const markAll = () => markAllRead();
   const openMoved = (m: MovedRequest) => {
     close();
-    void repo.markMoveSeen(m.id).then(() => setReload(k => k + 1)).catch(() => {});
+    markMovedSeen(m.id);
   };
-
-  const waiting = unread.length + moved.length;
 
   const content = (
     <DialogContentContainer>

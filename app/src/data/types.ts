@@ -3419,9 +3419,9 @@ export function pinKind(url: string): PinKind {
 }
 
 /**
- * The three numbers the navigation rail carries — Amber, 11 September.
+ * The four numbers the navigation rail carries — Amber, 11 September.
  *
- * Three, and only three. The handoff draws a count on every flyout row as well ("All
+ * Four, and only four. The handoff draws a count on every flyout row as well ("All
  * projects 9", "Pre-construction 3"), and she chose not to have them: three options were
  * put up — one `rail_counts` view, live per-flyout fetches, or the rail's own six rows
  * alone — and the third was taken. So the flyout lists its views and stage groupings with
@@ -3433,6 +3433,18 @@ export function pinKind(url: string): PinKind {
  * queue. A badge that disagrees with the screen it takes you to is worse than no badge:
  * the first thing anybody does is click it and count.
  *
+ * `myOpenTasks` is the one place that rule is bent, and it is written down rather than
+ * quietly done: Tasks opens on **My tasks**, which lists everything assigned to you
+ * including the ones you have ticked off, and a badge counting those would climb forever
+ * and never come down. So it counts the live ones — every status but Done and Cancelled,
+ * which is `isTaskLive` — and the board's own Status filter is one click from the same
+ * slice. Amber, 11 September: *"Inbox and tasks should have a badge"*.
+ *
+ * The Inbox badge is NOT here. It is unread notifications plus the tracker's moved
+ * requests, which the bell already reads on a two-minute poll — see `InboxProvider`.
+ * Counting it a second time here would produce two numbers for one fact, eight pixels
+ * apart, disagreeing for up to two minutes after every Mark all read.
+ *
  * Reports, Contacts and Tools carry no number, in the design and here. They are not
  * queues — nothing is waiting in them — so a count would be decoration.
  */
@@ -3443,4 +3455,11 @@ export interface RailCounts {
   jobs: number;
   /** Maintenance requests that are neither closed nor rejected — the default queue. */
   maintenance: number;
+  /**
+   * Tasks assigned to you that are neither Done nor Cancelled.
+   *
+   * Zero when nobody is signed in, because there is no "you" to count against — and zero
+   * draws no badge, which is the right answer for a rail nobody is looking at yet.
+   */
+  myOpenTasks: number;
 }

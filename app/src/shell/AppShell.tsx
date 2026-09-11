@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Dialog, DialogContentContainer, Text } from "@vibe/core";
 import { Bookmark, Menu, Note, Search, Settings, CheckList } from "@vibe/icons";
 import { initialsOf, useAuth } from "../data/AuthProvider";
+import { InboxProvider, useInbox } from "../data/InboxProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { GlobalSearch } from "../components/GlobalSearch";
 import { AskButton, AskDockProvider } from "../components/AskDock";
@@ -13,7 +14,7 @@ import { UndoProvider } from "../data/UndoProvider";
 import { UndoRedoBar } from "../components/UndoRedoBar";
 import { greetingName } from "../data/types";
 import { AdminConsole, Dashboard } from "../theme/railIcons";
-import { NavRail, NavRailGroup } from "./NavRail";
+import { NavRail, NavRailGroup, type RailLink } from "./NavRail";
 import { useNavDestinations } from "./navDestinations";
 import { PinnedSection } from "./PinnedSection";
 import "./AppShell.css";
@@ -123,11 +124,109 @@ function UserMenu({ collapsed }: { collapsed: boolean }) {
  * wash for selection rather than a white pill with teal ink, and it now carries search,
  * My work, the six destinations, Settings, Admin and you. The header is what is left.
  */
+/**
+ * My work — Inbox and Tasks, with the two badges Amber asked for on 11 September.
+ *
+ * Its own component for one reason: the Inbox number comes from `InboxProvider`, which
+ * `AppShell` mounts, and a component cannot read a context it renders itself. Everything
+ * else it needs is passed in.
+ *
+ * WHAT THE TWO NUMBERS ARE
+ *
+ *   **Inbox** is unread notifications plus the tracker's moved requests — the same value
+ *   the bell in the header shows, from the same state, capped at 9+ the same way. One
+ *   number in two places. They cannot drift: press Mark all read in the bell and this
+ *   clears with it.
+ *
+ *   **Tasks** is `railCounts().myOpenTasks` — assigned to you, not Done or Cancelled.
+ *
+ * WHY ONE IS RED AND THE OTHER IS NOT
+ *
+ *   The handoff draws "Inbox 3" as a red badge and "Tasks 12" as a plain number, and
+ *   that difference is the meaning rather than decoration: red says somebody is waiting
+ *   on you and goes away when you have looked. A dozen open tasks is the ordinary state
+ *   of a working week — red on it would be red on every screen, every day, which is how
+ *   people learn to stop seeing red.
+ *
+ *   Collapsed, or with the group shut, neither row is on screen. So the group's own head
+ *   carries a dot when the Inbox has anything unread: the count is not visible, but the
+ *   fact that something is waiting still is.
+ */
+function MyWorkGroup({
+  open, onToggle, collapsed, onExpandRail, activeId, myOpenTasks, link
+}: {
+  open: boolean;
+  onToggle: () => void;
+  collapsed: boolean;
+  onExpandRail: () => void;
+  activeId: string | null;
+  myOpenTasks: number | undefined;
+  link: RailLink;
+}) {
+  const { waiting } = useInbox();
+
+  return (
+    <NavRailGroup
+      id="myWork"
+      label="My work"
+      icon={Dashboard}
+      iconSize={28}
+      open={open}
+      onToggle={onToggle}
+      collapsed={collapsed}
+      onExpandRail={onExpandRail}
+      alert={waiting > 0}
+    >
+      {/* Inbox IS the old dashboard (decision 1) — no new table, no new feed, just the
+          name that says what the page is for. Tasks is `/tasks` unchanged: four views,
+          saved-view tabs, bulk bar. */}
+      {link(
+        { label: "Inbox", to: "/dashboard" },
+        "nav-row" + (activeId === "inbox" ? " is-active" : ""),
+        () => {},
+        <>
+          <span className="nav-row-icon"><Note size={20} /></span>
+          <span className="nav-row-label">Inbox</span>
+          {/* Nothing unread draws nothing. A 0 in a badge is a claim that somebody
+              checked, and an empty red pill is worse than no pill. */}
+          {waiting > 0 && (
+            <span className="nav-row-badge" aria-hidden>{waiting > 9 ? "9+" : waiting}</span>
+          )}
+        </>,
+        {
+          "aria-current": activeId === "inbox" ? "page" : undefined,
+          // The badge is aria-hidden, so the count is said here instead — "Inbox, 3
+          // unread" rather than "Inbox 9+", which is not a sentence.
+          "aria-label": waiting > 0 ? `Inbox, ${waiting} unread` : undefined
+        }
+      )}
+      {link(
+        { label: "Tasks", to: "/tasks" },
+        "nav-row" + (activeId === "tasks" ? " is-active" : ""),
+        () => {},
+        <>
+          <span className="nav-row-icon"><CheckList size={20} /></span>
+          <span className="nav-row-label">Tasks</span>
+          {/* `undefined` while the count is in flight, so the row never flashes a 0 it
+              then replaces. Zero open tasks also draws nothing — see above. */}
+          {myOpenTasks !== undefined && myOpenTasks > 0 && (
+            <span className="nav-row-count" aria-hidden>{myOpenTasks}</span>
+          )}
+        </>,
+        {
+          "aria-current": activeId === "tasks" ? "page" : undefined,
+          "aria-label": myOpenTasks ? `Tasks, ${myOpenTasks} open` : undefined
+        }
+      )}
+    </NavRailGroup>
+  );
+}
+
 export function AppShell() {
   const { error: authError } = useAuth();
   const location = useLocation();
   const { can } = usePermission();
-  const { destinations } = useNavDestinations();
+  const { destinations, myOpenTasks } = useNavDestinations();
 
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem(RAIL_KEY) === "1"
@@ -257,6 +356,9 @@ export function AppShell() {
     <UndoProvider>
     <AskDockProvider>
     <FeedbackProvider>
+    {/* Above the rail AND the header, because the Inbox badge and the bell are the same
+        number read once — see `InboxProvider`. */}
+    <InboxProvider>
     <div className={"app-shell" + (narrow ? " is-narrow" : "")}>
       <a className="skip-link" href="#main">Skip to content</a>
 
@@ -301,46 +403,15 @@ export function AppShell() {
                 </button>
               )}
 
-              <NavRailGroup
-                id="myWork"
-                label="My work"
-                icon={Dashboard}
-                iconSize={28}
+              <MyWorkGroup
                 open={openGroups.has("myWork")}
                 onToggle={() => toggleGroup("myWork")}
                 collapsed={railCollapsed}
                 onExpandRail={() => setCollapsed(false)}
-              >
-                {/* Inbox IS the old dashboard (decision 1) — no new table, no new feed,
-                    just the name that says what the page is for. Tasks is `/tasks`
-                    unchanged: four views, saved-view tabs, bulk bar.
-
-                    NO COUNT ON EITHER, and that is deliberate rather than unfinished.
-                    The handoff draws "Inbox 3" as a red badge and "Tasks 12" beside it,
-                    and there is no number in this app those would be. Unread
-                    notifications is the bell's number and already on screen; "my open
-                    tasks" is a third query on every page. A badge invented here would be
-                    the thing `CLAUDE.md` names first — a plausible value that gets quoted
-                    back as though it were agreed. */}
-                {link(
-                  { label: "Inbox", to: "/dashboard" },
-                  "nav-row" + (activeId === "inbox" ? " is-active" : ""),
-                  () => {},
-                  <>
-                    <span className="nav-row-icon"><Note size={20} /></span>
-                    <span className="nav-row-label">Inbox</span>
-                  </>
-                )}
-                {link(
-                  { label: "Tasks", to: "/tasks" },
-                  "nav-row" + (activeId === "tasks" ? " is-active" : ""),
-                  () => {},
-                  <>
-                    <span className="nav-row-icon"><CheckList size={20} /></span>
-                    <span className="nav-row-label">Tasks</span>
-                  </>
-                )}
-              </NavRailGroup>
+                activeId={activeId}
+                myOpenTasks={myOpenTasks}
+                link={link}
+              />
 
               <div className="nav-rule" />
 
@@ -459,6 +530,7 @@ export function AppShell() {
         </footer>
       </div>
     </div>
+    </InboxProvider>
     </FeedbackProvider>
     </AskDockProvider>
     </UndoProvider>

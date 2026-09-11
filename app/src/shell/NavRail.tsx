@@ -60,6 +60,21 @@ export const wash = {
   muted: "rgba(255,255,255,.72)"
 } as const;
 
+/**
+ * How a rail row becomes a link.
+ *
+ * Passed in by the shell rather than imported here, so this file never sees the router —
+ * the design-system version of it will not have one, and the two are meant to converge.
+ * Named because four things take it now: the rail, the group, Pinned and My work.
+ */
+export type RailLink = (
+  item: { label: string; to: string },
+  className: string,
+  onClick: () => void,
+  body: ReactNode,
+  extra?: Record<string, unknown>
+) => ReactNode;
+
 export interface NavDestination {
   id: string;
   label: string;
@@ -183,7 +198,7 @@ export function NavFlyout({
  * them would be a third kind of panel to learn.
  */
 export function NavRailGroup({
-  id, label, icon, iconSize, open, onToggle, collapsed, onExpandRail, children
+  id, label, icon, iconSize, open, onToggle, collapsed, onExpandRail, alert = false, children
 }: {
   id: string;
   label: string;
@@ -194,18 +209,31 @@ export function NavRailGroup({
   collapsed: boolean;
   /** Collapsed, opening a group has to widen the rail first — its rows need labels. */
   onExpandRail: () => void;
+  /**
+   * Something inside is waiting on somebody, and the row that says so is not on screen.
+   *
+   * A dot, not a number: the count belongs to the row that owns it, and a total on the
+   * head would be a second figure to keep in step with the first. Drawn only while the
+   * group is shut or the rail is collapsed — with the rows visible it would be saying
+   * again what the badge beside Inbox already says.
+   */
+  alert?: boolean;
   children: ReactNode;
 }) {
   const Icon = icon;
   const panelId = `nav-group-${id}`;
+  const dot = alert && (collapsed || !open);
+  // The dot is decoration on its own; what it means goes into the accessible name, which
+  // is the only thing a screen reader has to go on.
+  const name = dot ? `${label}, something unread` : label;
 
   if (collapsed) {
     return (
       <button
         type="button"
-        className="nav-icon-btn"
-        title={label}
-        aria-label={label}
+        className={"nav-icon-btn" + (dot ? " has-alert" : "")}
+        title={name}
+        aria-label={name}
         onClick={() => { onExpandRail(); if (!open) onToggle(); }}
       >
         <Icon size={iconSize ?? 24} />
@@ -217,13 +245,15 @@ export function NavRailGroup({
     <>
       <button
         type="button"
-        className="nav-row nav-group-head"
+        className={"nav-row nav-group-head" + (dot ? " has-alert" : "")}
         aria-expanded={open}
         aria-controls={panelId}
+        aria-label={dot ? name : undefined}
         onClick={onToggle}
       >
         <span className="nav-row-icon"><Icon size={20} /></span>
         <span className="nav-row-label">{label}</span>
+        {dot && <span className="nav-row-dot" aria-hidden />}
         <span className="nav-row-chev" aria-hidden>
           {open ? <NavigationChevronDown size={14} /> : <NavigationChevronRight size={14} />}
         </span>
@@ -260,17 +290,8 @@ export function NavRail({
   /** Settings and Admin, below it. Gated by the caller, and again by RLS. */
   footer: ReactNode;
   user: ReactNode;
-  /**
-   * How a row becomes a link. Passed in rather than imported so this file never sees
-   * the router — the design-system version of it will not have one.
-   */
-  link: (
-    item: { label: string; to: string },
-    className: string,
-    onClick: () => void,
-    body: ReactNode,
-    extra?: Record<string, unknown>
-  ) => ReactNode;
+  /** How a row becomes a link — see `RailLink`. */
+  link: RailLink;
   /** Collapsed, the search button widens the rail and puts focus in the field. */
   onSearchClick?: () => void;
 }) {

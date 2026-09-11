@@ -912,7 +912,7 @@ export function createSupabaseRepository(): Repository {
     },
 
     /**
-     * Three counts, three `head: true` requests, in parallel.
+     * Four counts, four `head: true` requests, in parallel.
      *
      * `head: true` is the whole reason this is cheap: PostgREST answers with a
      * `Content-Range` and no body, so nothing is serialised and nothing crosses the wire
@@ -925,25 +925,44 @@ export function createSupabaseRepository(): Repository {
      * `listMaintenanceRequests({ queue: "open" })` do. Projects has no filter, because
      * the Projects board's "All Projects" view has none either.
      *
-     * `Promise.all`, so the three are one round of latency rather than three. A refusal
+     * TASKS IS THE ONE THAT DOES NOT MATCH ITS SCREEN, AND SAYS SO
+     *
+     *   The board's My tasks tab lists everything assigned to you, ticked-off ones
+     *   included. A badge counting that would only ever grow. So this counts the live
+     *   ones — `task_status` outside (done, cancelled), which is `isTaskLive` written as
+     *   a filter — and `RailCounts` records the departure rather than leaving somebody to
+     *   discover it by counting rows.
+     *
+     *   Not `listTasks({ assigneeId })`: that pulls every column of every task you own,
+     *   on every navigation, to render one integer.
+     *
+     * `Promise.all`, so the four are one round of latency rather than four. A refusal
      * from any of them rejects the lot and the rail shows no numbers at all — which is
      * the right failure: a rail that silently drew 0 next to Jobs would be reporting an
      * empty company.
      */
-    async railCounts(): Promise<RailCounts> {
-      const [projects, jobs, maintenance] = await Promise.all([
+    async railCounts(myProfileId?: string | null): Promise<RailCounts> {
+      const [projects, jobs, maintenance, myTasks] = await Promise.all([
         client.from("projects").select("project_id", { count: "exact", head: true }),
         client.from("job_display").select("job_id", { count: "exact", head: true })
           .neq("job_stage", "Closed"),
         client.from("maintenance_request_display")
           .select("maintenance_request_id", { count: "exact", head: true })
-          .not("maintenance_request_status", "in", "(closed,rejected)")
+          .not("maintenance_request_status", "in", "(closed,rejected)"),
+        // Nobody signed in yet is not an error and not a zero-row query dressed as one:
+        // there is no "you" to count against, so the request is not made at all.
+        myProfileId
+          ? client.from("task_display").select("task_id", { count: "exact", head: true })
+              .eq("task_assignee_id", myProfileId)
+              .not("task_status", "in", "(done,cancelled)")
+          : Promise.resolve({ count: 0, error: null })
       ]);
-      for (const r of [projects, jobs, maintenance]) if (r.error) throw r.error;
+      for (const r of [projects, jobs, maintenance, myTasks]) if (r.error) throw r.error;
       return {
         projects: projects.count ?? 0,
         jobs: jobs.count ?? 0,
-        maintenance: maintenance.count ?? 0
+        maintenance: maintenance.count ?? 0,
+        myOpenTasks: myTasks.count ?? 0
       };
     },
 

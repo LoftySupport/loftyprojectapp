@@ -96,7 +96,7 @@ export function createStubRepository(): Repository {
     async getJob(): Promise<Job | null> { return null; },
 
     /** Zero, because there is nothing — the honest answer, not a placeholder. */
-    async railCounts(): Promise<RailCounts> { return { projects: 0, jobs: 0, maintenance: 0 }; },
+    async railCounts(): Promise<RailCounts> { return { projects: 0, jobs: 0, maintenance: 0, myOpenTasks: 0 }; },
 
     // Pinned is a real table (0112); with no backend there is nothing in it, and a
     // refusal is the truthful answer to being asked to write to a database that is

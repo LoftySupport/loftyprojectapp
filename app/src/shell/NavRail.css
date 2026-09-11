@@ -165,6 +165,33 @@
   padding: var(--space-2) 7px;
 }
 
+/* The unread dot on a group's head — 8px of the same negative red the Inbox badge uses.
+   It appears only while the row carrying the number is off screen (the group is shut, or
+   the rail is collapsed), so the two never say the same thing twice. */
+.nav-row-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--border-radius-pill);
+  background: var(--negative-color);
+}
+/* Collapsed there is no room beside the glyph, so the dot sits on its top-right corner.
+   The button is `position: relative` for this and nothing else. */
+.nav-icon-btn.has-alert { position: relative; }
+.nav-icon-btn.has-alert::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--border-radius-pill);
+  background: var(--negative-color);
+  /* A ring of the rail's own ground, so the dot reads as sitting on top of the glyph
+     rather than being part of it. */
+  box-shadow: 0 0 0 2px var(--lofty-foundation-black);
+}
+
 /* A group's children. 40px for Inbox and Tasks, 32px for a pinned row. */
 .nav-group-body { display: flex; flex-direction: column; min-width: 0; }
 .nav-row-small { height: 32px; }

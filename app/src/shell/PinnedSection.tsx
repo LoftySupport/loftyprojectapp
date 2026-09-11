@@ -1,11 +1,12 @@
 import {
-  useCallback, useEffect, useState, type ComponentType, type ReactNode
+  useCallback, useEffect, useState, type ComponentType
 } from "react";
 import { useLocation } from "react-router-dom";
 import { Board, CloseSmall, Doc, Location, Settings } from "@vibe/icons";
 import { useRepository } from "../data/DataProvider";
 import { pinKind, type PinKind, type PinnedPage } from "../data/types";
 import { Projects as ProjectsGlyph, Reports as ReportsGlyph } from "../theme/railIcons";
+import type { RailLink } from "./NavRail";
 
 /**
  * The rail's **Pinned** section — five pages you keep (0112).
@@ -65,13 +66,7 @@ export function PinnedSection({
   link
 }: {
   collapsed: boolean;
-  link: (
-    item: { label: string; to: string },
-    className: string,
-    onClick: () => void,
-    body: ReactNode,
-    extra?: Record<string, unknown>
-  ) => ReactNode;
+  link: RailLink;
 }) {
   const repo = useRepository();
   const location = useLocation();
