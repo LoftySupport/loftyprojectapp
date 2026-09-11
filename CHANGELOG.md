@@ -14,6 +14,8 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- the design handoff's SVG icons and the eight component contracts the app is to build against, so the app and the design system converge rather than being reconciled later
+- the approved design for the sidebar rail and the job record, with the ten decisions that answer the gaps in it and the four corrections found reviewing it against the running app
 - a letter can open with the name of anybody on the record — a token for every party role, with two purchasers joined as "A and B"
 - a job's address shows its council region, which could be set from the drawer and never read back
 - a table's cells and headers take property placeholders, with the same Insert a field menu the text blocks have

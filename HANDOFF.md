@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 222 changes since then —
+Unreleased: 224 changes since then —
+- Added: the design handoff's SVG icons and the eight component contracts the app is to build against, so the app and the design system converge rather than being reconciled later
+- Added: the approved design for the sidebar rail and the job record, with the ten decisions that answer the gaps in it and the four corrections found reviewing it against the running app
 - Added: a letter can open with the name of anybody on the record — a token for every party role, with two purchasers joined as "A and B"
 - Changed: publishing a document again replaces the copy saved on the record instead of adding another — download the old one first if you need it
 - Fixed: 64 job addresses had their lot number in the street-number column, so a job at lot 1 of 14 Brodie Road read as 1 Brodie Road — somebody else's house
-- Changed: a lot number and a res number are whole numbers; a street number stays text, so 12B and 100-105 are kept as typed
-- Added: a job's address shows its council region, which could be set from the drawer and never read back
-- …and 217 more.
+- …and 219 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
