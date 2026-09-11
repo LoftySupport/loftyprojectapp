@@ -2900,6 +2900,18 @@ The probe moved to `app/supabase/verify/constraints.sql`, which runs after
 stays in the migration because it *does* bite on production, where there are 79 jobs — but
 it is not what the rule is proved by, and the migration now says so.
 
+#### Applied, 11 September
+
+**Applied to the live project on Amber's say-so**, and read back rather than taken on the
+apply's own word: 79 jobs, **none** carrying a date (the guarded probe puts back what it
+set, so applying writes nothing), `job_display` carrying both new columns, and
+`security_invoker=true` still on the view after the `create or replace` — which is the
+0069 hole checked rather than assumed, on the database it actually matters on.
+
+The guarded probe DOES bite here, because production has 79 jobs where a replay from empty
+has none. That is the whole reason it stays in the migration despite not being what the
+rule is proved by.
+
 #### And one self-inflicted near-miss in the dictionary
 
 The two `dictionary.ts` entries were first inserted by a regex that matched the opening
