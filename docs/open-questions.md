@@ -21,6 +21,30 @@ invent a value, and `CLAUDE.md` is explicit that an invented default is worse th
 
 ## Open — next question first
 
+### 0. Should every property belong to a process?
+
+Amber, 12 September, in passing: *"all properties should belong to a process"*.
+
+**Taken as a statement about how Lofty should be configured, that is already possible** —
+`process_properties` attaches a property to a process, and a process can require it before
+it will complete. What is not settled is whether it is a **rule**, and the record's shape
+turns on the answer.
+
+| If it is a rule | Then |
+| --- | --- |
+| Every property is attached to at least one process | The **Job properties** and **Project properties** panels on the record are redundant. Every property would be reached through the process that collects it, and a second place to edit the same value is a second place for it to be wrong |
+| It is a strong default, not a rule | The panels stay, and something has to show which properties are attached to nothing — otherwise a property nobody hung off a process is invisible until somebody goes looking in Setup |
+| It is only about new properties | Nothing changes on the record, and Setup → Properties needs a prompt when one is created with no process |
+
+**Recommendation: the middle one, for now.** Making it a rule means auditing every property
+def in the database before the panels can go, and a record that loses a panel and turns out
+to have twelve orphaned properties has lost them, not tidied them. A count on the property
+panels — *"3 of 14 are not collected by any process"* — makes the gap visible and closes it
+in Setup, and the rule can be tightened once that number is zero.
+
+**Blocked on:** her answer. Nothing is built from it, and the property panels are unchanged.
+
+
 ### 1. "Dear [Owner Name]" — which party on the record is that? *(parked)*
 
 **Parked by Amber, 10 September: _"that will be later when linking a contact or company to
@@ -293,6 +317,7 @@ decides how much retro-fitting to schedule, and in what order.
 
 | Date | Question | Answer |
 | --- | --- | --- |
+| 12 Sep | Does the record show a process that has not been started? | **All of them, every stage open, each with a tick box.** Amber: *"even if processes not started it should show them all so that way they can be marked off in order."* `ProcessesPanel` already listed every active process whether or not it had a run — what hid them was the stage disclosures, open only for the current stage. That is right for a panel you scan past and wrong for the record's Process section, where the whole ordered list IS the thing: a stage you have not reached holds the processes you are working towards. Open only in `bare` mode, so the standalone panel keeps the behaviour that suits it. And **marking one off is now one action**: a process with no run needed Start and then Complete, two presses for one fact, where the mockup draws a tick box. Ticking an unstarted process inserts its run already complete — which is what `startProcessRun`'s status argument is for. Unticking returns it to *In progress* rather than to *Not started*: the run exists and somebody worked on it, and "not started" would be a claim the record can disprove |
 | 12 Sep | Can a kanban column be got out of the way? | **Every column folds to a 48px strip, and four start folded.** Amber: *"on Kanban boards can you make them collapsible so they have a narrow view like the side navigation with completed closed cancelled and acquisitions and development closed by default."* Collapsed is a strip, not a hidden column: the name runs down it, the count stays on it, and a card still drops in — which is what "put Completed out of the way" means and what hiding it would not do. The four are matched **by name** rather than by a per-board list, so the rule holds on the Jobs board's stages, the Projects board's, and anywhere else those words are a column; a person's own choice is remembered per board and per column and beats the default. It needed one `BoardColumn` component first: Jobs, Projects and Tasks each wrote the same forty lines of column markup, which is how a fix lands on one board and not the other two |
 | 12 Sep | Why can a task not be created from the Tasks board? | **Because nobody had built the button, and that is the whole answer.** Amber: *"on tasks you can't add a new task and assign it to a person or team or job and project. There is no button."* `createTask` has taken `jobId`, `projectId`, `owningTeam` and `assigneeId` since `0102`, and `TasksPanel` calls it from inside a job — so a task typed by hand could only be created from the record it hung off, and the board built to show every task across every job was a report rather than a place to work. **+ New task** now opens a `SidePanel` asking for all four plus a due date and a planned date. Only the name is required: a task with no assignee is a real state the board already draws as "Nobody", and one with no due date reads as `no_due_date` rather than as overdue. A job **or** a project, never both, in one list so nobody has to pick the kind first; and a task attached to neither is allowed, because *"ring the insurer"* is a real task that belongs to a person and no record. **Closed tasks** joins the six scopes that were already there, and the job-or-project-number filter moved onto the bar from behind Advanced |
 | 12 Sep | Why does the job drawer not match the screen design? | **Two reasons, both fixed.** Amber: *"why is the job sideboard not matching the screen type? The process section should have the processes like the mockup then the contacts maintenance that that was in screen design."* First, the **Process** section drew a read-only five-step preview built from the runs, while the list you could start, complete, record against and attach a checklist to was a separate panel eight sections below — two renderings of one set of runs. `ProcessesPanel` has a `bare` mode now and IS that section's body, so there is one list of processes on the record. Second, the tail ran Documents, properties, Watch, Contacts, Maintenance; 6a's own list ends *"Properties and Contacts & Companies — collapsed rows with counts"*, and it now reads Contacts → Maintenance → Project properties → Job properties → Documents → Job details → Departments. **Still open:** the mockup draws Process as a Flint 50 card with a progress bar and one 36px row per step — chevron, tick box, name, date, owner avatar — expanding to that step's own typed fields. `ProcessSteps` is that card and is what the section used to draw; `ProcessesPanel` has the data and the actions but not that shape. Merging the two is its own piece of work and is not done |

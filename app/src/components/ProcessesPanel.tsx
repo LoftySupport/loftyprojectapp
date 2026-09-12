@@ -158,7 +158,16 @@ export function ProcessesPanel({
         const atRisk = runsHere.filter(r => r.health === "at_risk").length;
         const isCurrent = stage === currentStage;
         return (
-          <details className={`proc-stage${isCurrent ? " is-current" : ""}`} key={stage} open={isCurrent}>
+          /* OPEN, ALL OF THEM, IN THE RECORD. Amber, 12 September: *"even if processes
+             not started it should show them all so that way they can be marked off in
+             order"*. Collapsed-except-the-current-stage is right for a panel you scan;
+             it is wrong for the record's Process section, where the whole ordered list
+             IS the thing — a stage you have not reached yet holds the processes you are
+             working towards, and a shut disclosure hides them.
+
+             The panel keeps the old behaviour: there it sits under eight others and the
+             current stage is the one you came for. */
+          <details className={`proc-stage${isCurrent ? " is-current" : ""}`} key={stage} open={bare || isCurrent}>
             <summary>
               <span>
                 {stage}
@@ -184,6 +193,34 @@ export function ProcessesPanel({
                 return (
                   <li className="proc-row" key={p.id}>
                     <div className="proc-row-head">
+                      {/* MARKED OFF IN ONE ACTION, STARTED OR NOT. Amber, 12 September:
+                          *"it should show them all so that way they can be marked off in
+                          order"*. A process with no run needed Start and then Complete —
+                          two presses to record one fact — and the mockup draws a tick box.
+                          Ticking an unstarted process inserts its run already complete,
+                          which is what `startProcessRun`'s status argument is for.
+
+                          Unticking returns it to In progress rather than to Not started:
+                          the run exists and somebody worked on it, and "not started" would
+                          be a claim the record can disprove. Not applicable is not a tick
+                          state at all — it is beside the box, in the status control. */}
+                      {can("user") && (
+                        <input
+                          type="checkbox"
+                          className="proc-tick"
+                          checked={run?.status === "complete"}
+                          disabled={rowBusy}
+                          aria-label={`${p.name} is complete`}
+                          onChange={e => {
+                            const done = e.target.checked;
+                            if (!run) {
+                              if (done) act(p.id, () => repo.startProcessRun(target, p.id, "complete"));
+                              return;
+                            }
+                            act(p.id, () => repo.updateProcessRun(run.id, { status: done ? "complete" : "in_progress" }));
+                          }}
+                        />
+                      )}
                       <div className="proc-name">
                         <span>
                           <Text type="text2" weight="medium" element="span">{p.name}</Text>
@@ -229,7 +266,7 @@ export function ProcessesPanel({
                         )}
                         {can("user") && !run && (
                           <>
-                            <Button size="small" disabled={rowBusy} onClick={() => act(p.id, () => repo.startProcessRun(target, p.id, "in_progress"))}>
+                            <Button size="small" kind="tertiary" disabled={rowBusy} onClick={() => act(p.id, () => repo.startProcessRun(target, p.id, "in_progress"))}>
                               Start
                             </Button>
                             <Button size="small" kind="tertiary" disabled={rowBusy} onClick={() => act(p.id, () => repo.startProcessRun(target, p.id, "not_applicable"))}>
