@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Clone a job from its line on the project, as an icon beside Remove — the control that went missing when cloning moved off the job drawer
 - Inbox and Tasks in the navigation rail carry a badge — unread items on Inbox, your open tasks on Tasks, with a dot on My work when the rail is collapsed
 - A job carries its own completion dates — the one being worked towards, and the day it actually finished
 - An element sweep in CI that counts how many different ways the app draws each thing — headers, tables, cards, containers, empty states, filter rows, hint lines — and fails when a number rises, or when a fix lowers one and the baseline is left behind
@@ -138,6 +139,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- The phone's navigation button is a hamburger in the top right and the Lofty mark is in the top left, instead of an ellipsis on the left and no mark at all
 - The unread count beside Inbox and the one on the bell are the same number read once, so marking everything read clears both together
 - The job drawer no longer scrolls sideways at 460px, and the responsive sweep now opens it at every width
 - 64 job addresses had their lot number in the street-number column, so a job at lot 1 of 14 Brodie Road read as 1 Brodie Road — somebody else's house

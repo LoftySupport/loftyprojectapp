@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 238 changes since then —
+Unreleased: 240 changes since then —
+- Added: Clone a job from its line on the project, as an icon beside Remove — the control that went missing when cloning moved off the job drawer
+- Fixed: The phone's navigation button is a hamburger in the top right and the Lofty mark is in the top left, instead of an ellipsis on the left and no mark at all
 - Changed: The full screen job record sits inside the app frame, so the sidebar, the top bar and the footer are all still there while you read it
 - Removed: The unread and open-task numbers beside Inbox and Tasks, until what each one counts is settled and checked
 - Added: Inbox and Tasks in the navigation rail carry a badge — unread items on Inbox, your open tasks on Tasks, with a dot on My work when the rail is collapsed
-- Fixed: The unread count beside Inbox and the one on the bell are the same number read once, so marking everything read clears both together
-- Changed: Job and project properties are grouped under their own headings in the column picker, instead of falling in with everything ungrouped
-- …and 233 more.
+- …and 235 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
