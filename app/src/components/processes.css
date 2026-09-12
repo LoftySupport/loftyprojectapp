@@ -51,7 +51,12 @@
    the status pills already use, so a chip and a pill saying "trouble" are the same red. */
 .slot-chip.is-pushed  { background: var(--lofty-orange-tint); color: var(--lofty-orange-strong); }
 .slot-chip.is-differs { background: var(--negative-color-selected); color: var(--negative-ink); }
-.slot-chip.is-current { background: var(--primary-selected-color); color: var(--primary-color); }
+/* --primary-color is Crisp Orange, and DESIGN.md's brand rule is that Crisp Orange is a
+   fill, never ink on light. As ink on the selected tint it measured 2.14:1 — the lowest
+   reading in the whole rendered sweep. --lofty-orange-strong is the step the rule names
+   and the one `.is-pushed` directly above already uses: 3.70:1 on the same ground. The
+   fix was sitting two lines up. */
+.slot-chip.is-current { background: var(--primary-selected-color); color: var(--lofty-orange-strong); }
 .slot-meta { font: var(--font-text3-normal); color: var(--secondary-text-color); margin-top: 2px; }
 .slot-history { margin-top: var(--space-12); border-top: 1px dashed var(--layout-border-color); padding-top: var(--space-8); }
 .slot-history-list { list-style: none; margin: var(--space-4) 0 0; padding: 0; }

@@ -139,6 +139,8 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- Dates from the neighbouring month were too faint to read in the job and task calendars, and so were the job entries sitting in those days
+- The "current" chip on a process slot used the brand orange as text on a pale orange background, which the app's own colour rule forbids and which was the hardest thing to read anywhere in the app
 - On a phone the New button stays on the heading's line on Maintenance and Contacts, instead of dropping below the counts
 - The phone's navigation button is a hamburger in the top right and the Lofty mark is in the top left, instead of an ellipsis on the left and no mark at all
 - The labels under the dashboard's workload figures were dimmed against the orange panel, making them fainter than the app's own colour rules allow
