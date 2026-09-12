@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 246 changes since then —
+Unreleased: 248 changes since then —
 - Fixed: On a phone the New button stays on the heading's line on Maintenance and Contacts, instead of dropping below the counts
 - Changed: Every page loses the sentence under its heading, so more of the screen is the thing you came for
 - Changed: On a phone the filters fold into one row behind Advanced, and every control in it starts and finishes in the same place
 - Changed: On a phone the New button sits on the heading's line, top right
 - Changed: The footer is one line on a phone and at a desk, in smaller type
-- …and 241 more.
+- …and 243 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

@@ -141,6 +141,8 @@ says shipped and what the app shows people cannot use different words for it.
 
 - On a phone the New button stays on the heading's line on Maintenance and Contacts, instead of dropping below the counts
 - The phone's navigation button is a hamburger in the top right and the Lofty mark is in the top left, instead of an ellipsis on the left and no mark at all
+- The labels under the dashboard's workload figures were dimmed against the orange panel, making them fainter than the app's own colour rules allow
+- The "no" mark in the permissions grid was too pale to see against the page, so a role that lacks a permission looked the same as a cell that had not loaded
 - The unread count beside Inbox and the one on the bell are the same number read once, so marking everything read clears both together
 - The job drawer no longer scrolls sideways at 460px, and the responsive sweep now opens it at every width
 - 64 job addresses had their lot number in the street-number column, so a job at lot 1 of 14 Brodie Road read as 1 Brodie Road — somebody else's house
