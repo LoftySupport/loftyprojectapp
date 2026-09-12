@@ -333,6 +333,13 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
                 onChange={v => { if (v !== job.assigneeId) saveWho({ assigneeId: v }); }}
               />
             }
+            /* The Process section's own body. Amber, 12 September: *"the process section
+               should have the processes like the mockup"* — it drew a read-only
+               five-step preview while the list you could act on was a panel further
+               down, which is two renderings of one set of runs. */
+            processSlot={
+              <ProcessesPanel target={{ jobId: job.jobNumber }} scope="job" currentStage={job.stage} bare />
+            }
             stageAction={
               <div className="stack">
                 {/* Manager and above; the component hides itself below that, the same line
@@ -451,16 +458,49 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
             </div>
           )}
 
-          {/* THE PROCESSES, DIRECTLY UNDER THE RECORD'S Process SECTION. Amber,
-              12 September: *"the processes should just be in order like the mockup"*.
-              They were eight panels down, below Numbers, Who it's with, Folders and
-              Phase & stage — so the record named the next milestone at the top and the
-              list you would act on was most of a phone screen away.
 
-              Every stage's processes, this one open, with their properties to record and
-              their checklists to create. Milestones are the processes flagged as such;
-              the stage header counts them. */}
-          <ProcessesPanel target={{ jobId: job.jobNumber }} scope="job" currentStage={job.stage} />
+          {/* CONTACTS AND MAINTENANCE COME FIRST IN THE TAIL. Amber, 12 September:
+              *"the process section should have the processes like the mockup then the
+              contacts maintenance that that was in screen design"* — and 6a's own list
+              ends *"Properties and Contacts & Companies — collapsed rows with counts"*.
+              Everything below these two is Lofty's, not the design's. */}
+          {/* Who from outside Lofty is on this job — the purchaser, the trades on its runs
+              (0082). Sits with the work because "ring the plumber" is a task. */}
+          <div className="field-inline" style={{ justifyContent: "flex-end" }}><WatchButton jobId={job.jobNumber} /></div>
+          <PartiesPanel target={{ jobId: job.jobNumber }} />
+
+          {/* After handover the job keeps living here: its warranty and what the homeowner
+              has reported (0084). Each line opens the Maintenance tab. */}
+          <JobMaintenancePanel jobId={job.jobNumber} />
+
+          </>)}
+
+          {(<>
+          {/* The site's own facts, above the job's — fencing, pegging, the developer, the
+              council. One answer for the whole project, shown here rather than copied,
+              so twenty jobs on one site cannot quietly disagree about it.
+
+              Read-only on purpose: `property_def_scope` is exclusive, and a project
+              property cannot be overridden per job. Editing one happens on the project. */}
+          <PropertySlots
+            scope="project"
+            target={{ jobId: job.jobNumber }}
+            title="Project properties"
+            note="True of the whole site — read through from the project, or pushed onto this job as its own copy. Change them on the project, or push them from there."
+          />
+
+          {/* Then the job's own — twenty jobs, twenty answers. */}
+          <PropertySlots scope="job" target={{ jobId: job.jobNumber }} title="Job properties" showHistory={expanded} />
+
+          {/* What has been written ABOUT this job — the progress reports, client letters
+              and maintenance reports made in the Document Builder. Amber, 4 September:
+              *"all documents need to be associated to a job or project and they are
+              listed on that project"*. This is where they are listed. */}
+          {/* The job's own folder is where a document published from here should go by
+              default (Amber, 10 Sep: "should default to job file"). Its project's folder
+              is deliberately not the fallback: a document about one lot filed at the
+              project would be findable by nobody looking for it. */}
+          <RecordDocuments jobId={job.jobNumber} folderUrl={job.sharepointUrl} />
 
           {/* WHAT IS LEFT AFTER THE DUPLICATES WENT. Amber, 12 September: *"there is so
               much on there that isn't on the mockup. The bottom areas attached are all
@@ -591,49 +631,12 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
             </div>
           </CollapsiblePanel>
 
-          {/* What has been written ABOUT this job — the progress reports, client letters
-              and maintenance reports made in the Document Builder. Amber, 4 September:
-              *"all documents need to be associated to a job or project and they are
-              listed on that project"*. This is where they are listed. */}
-          {/* The job's own folder is where a document published from here should go by
-              default (Amber, 10 Sep: "should default to job file"). Its project's folder
-              is deliberately not the fallback: a document about one lot filed at the
-              project would be findable by nobody looking for it. */}
-          <RecordDocuments jobId={job.jobNumber} folderUrl={job.sharepointUrl} />
-          </>)}
-
-          {(<>
-          {/* The site's own facts, above the job's — fencing, pegging, the developer, the
-              council. One answer for the whole project, shown here rather than copied,
-              so twenty jobs on one site cannot quietly disagree about it.
-
-              Read-only on purpose: `property_def_scope` is exclusive, and a project
-              property cannot be overridden per job. Editing one happens on the project. */}
-          <PropertySlots
-            scope="project"
-            target={{ jobId: job.jobNumber }}
-            title="Project properties"
-            note="True of the whole site — read through from the project, or pushed onto this job as its own copy. Change them on the project, or push them from there."
-          />
-
-          {/* Then the job's own — twenty jobs, twenty answers. */}
-          <PropertySlots scope="job" target={{ jobId: job.jobNumber }} title="Job properties" showHistory={expanded} />
-
           </>)}
 
           {(<>
           {/* Tasks, comments and the activity log are DOCKED IN THE FOOTER now — see the
               record-foot below. They were here, in the body, which meant the conversation
               was nine sections of scrolling away from the record it is about. */}
-
-          {/* Who from outside Lofty is on this job — the purchaser, the trades on its runs
-              (0082). Sits with the work because "ring the plumber" is a task. */}
-          <div className="field-inline" style={{ justifyContent: "flex-end" }}><WatchButton jobId={job.jobNumber} /></div>
-          <PartiesPanel target={{ jobId: job.jobNumber }} />
-
-          {/* After handover the job keeps living here: its warranty and what the homeowner
-              has reported (0084). Each line opens the Maintenance tab. */}
-          <JobMaintenancePanel jobId={job.jobNumber} />
 
           {/* The job as a gantt, a calendar or a list (Amber, 28 August). It sits with
               the activity because it is the same history read a different way — every

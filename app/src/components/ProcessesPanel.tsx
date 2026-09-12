@@ -39,6 +39,7 @@ export function ProcessesPanel({
   scope,
   currentStage,
   title = "Processes",
+  bare = false,
   reloadKey = 0,
   onChanged
 }: {
@@ -47,6 +48,16 @@ export function ProcessesPanel({
   /** The record's own lifecycle stage — the one that opens by default. */
   currentStage: string;
   title?: string;
+  /**
+   * Rendered without its own collapsible heading, for a caller that already has one.
+   *
+   * The job record's **Process** section is that caller. Amber, 12 September: *"the
+   * process section should have the processes like the mockup"* — the record drew a
+   * read-only five-step preview and the list you could act on was a separate panel eight
+   * sections down, which is two renderings of one set of runs. Bare, this IS the section's
+   * body, and there is only one list of processes on the record again.
+   */
+  bare?: boolean;
   reloadKey?: number;
   onChanged?: () => void;
 }) {
@@ -122,24 +133,20 @@ export function ProcessesPanel({
     .filter(s => s.processes.length > 0);
 
   if (!loading && stages.length === 0) {
-    return (
+    const none = (
+      <Text type="text2" color="secondary" ellipsis={false}>
+        No {scope} processes are defined yet. Managers define them in Setup → Processes.
+      </Text>
+    );
+    return bare ? none : (
       <CollapsiblePanel id={`processes-${scope}`} title={title} defaultOpen={false} summary="none defined">
-        <Text type="text2" color="secondary" ellipsis={false}>
-          No {scope} processes are defined yet. Managers define them in Setup → Processes.
-        </Text>
+        {none}
       </CollapsiblePanel>
     );
   }
 
-  return (
-    <CollapsiblePanel
-      id={`processes-${scope}`}
-      title={title}
-      defaultOpen={false}
-      summary={loading
-        ? "Loading…"
-        : `${runs.filter(r => r.status === "complete").length} complete · ${runs.filter(r => isRunOpen(r.status) && r.status !== "not_started").length} in progress`}
-    >
+  const body = (
+    <>
       {error && <div className="create-problem" role="alert"><Text type="text2" ellipsis={false}>{error}</Text></div>}
 
       {stages.map(({ stage, processes: ps }) => {
@@ -292,6 +299,20 @@ export function ProcessesPanel({
           </details>
         );
       })}
+    </>
+  );
+
+  if (bare) return body;
+  return (
+    <CollapsiblePanel
+      id={`processes-${scope}`}
+      title={title}
+      defaultOpen={false}
+      summary={loading
+        ? "Loading…"
+        : `${runs.filter(r => r.status === "complete").length} complete · ${runs.filter(r => isRunOpen(r.status) && r.status !== "not_started").length} in progress`}
+    >
+      {body}
     </CollapsiblePanel>
   );
 }

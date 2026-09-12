@@ -28,6 +28,7 @@ import {
 import { ExportMenu } from "../components/ExportMenu";
 import { tableFromFields, type ExportDocument } from "../data/export";
 import { Board } from "../components/Board";
+import { BoardColumn } from "../components/BoardColumn";
 import { JobsGantt } from "../components/JobsGantt";
 import { MonthCalendar } from "../components/MonthCalendar";
 import { useQuery, useRepository } from "../data/DataProvider";
@@ -705,10 +706,32 @@ export function JobsPage() {
       {view === "Board" && !noMatches && !loading && all.length > 0 && (
         <Board>
           {groups.map((g, gi) => (
-            <section
-              className="board-column"
+            <BoardColumn
+              board="jobs"
               key={g.key}
-              style={accentStyle(columnAccent(grouping, g.key, gi))}
+              name={g.key}
+              grouping={grouping}
+              count={g.jobs.length}
+              empty="No jobs"
+              accent={accentStyle(columnAccent(grouping, g.key, gi))}
+              /* The Jobs board is the one column head that does more than read: drilling
+                 into a stage turns the columns into that stage's processes. */
+              head={grouping === "Stage" ? (
+                <button
+                  type="button"
+                  className="board-col-drill"
+                  title={`Open ${g.key} as its processes, each job in the one it is up to`}
+                  onClick={() =>
+                    setMany({
+                      grouping: "Process",
+                      filters: [...filters.filter(f => f.field !== "Stage"), { field: "Stage", value: g.key }]
+                    })
+                  }
+                >
+                  <Text type="text3" color="secondary">{grouping}</Text>
+                  <Text type="text2" weight="medium">{g.key} ›</Text>
+                </button>
+              ) : undefined}
               /**
                * Why the refusal is explained on ENTER rather than on drop.
                *
@@ -741,52 +764,7 @@ export function JobsPage() {
                 else askProcessMove([job], g.key);
               }}
             >
-              <div className="board-column-head">
-                {/* Drill-down (G8), as navigation rather than a page of its own: filter
-                    to the stage, regroup, and put both in the URL like everything else.
-                    
-                    It regrouped by TEAM, which answered "who holds what inside this
-                    phase". Amber asked for the other question — "how do i see the
-                    processes in the jobs view, eg what process a job is up to" — and
-                    showed the prototype's answer: drilling into a stage turned the
-                    columns into that stage's steps, with each job in the one it had
-                    reached. That is what this does now, for every stage rather than the
-                    one the prototype hardcoded. Team is still a click away in Group by. */}
-                {grouping === "Stage" ? (
-                  <button
-                    type="button"
-                    className="board-col-drill"
-                    title={`Open ${g.key} as its processes, each job in the one it is up to`}
-                    onClick={() =>
-                      setMany({
-                        grouping: "Process",
-                        filters: [...filters.filter(f => f.field !== "Stage"), { field: "Stage", value: g.key }]
-                      })
-                    }
-                  >
-                    <Text type="text3" color="secondary">{grouping}</Text>
-                    <Text type="text2" weight="medium">{g.key} ›</Text>
-                  </button>
-                ) : grouping === "None" ? (
-                  // Ungrouped: one column, and naming it "None" would be a heading that
-                  // says nothing. The count still shows, because how many is still news.
-                  <div><Text type="text3" color="secondary">All jobs</Text></div>
-                ) : (
-                  <div>
-                    <Text type="text3" color="secondary">{grouping}</Text>
-                    <Text type="text2" weight="medium">{g.key}</Text>
-                  </div>
-                )}
-                {/* Ink-on-tint, per the accent rule — the one place the column's colour
-                    repeats, so the chip and the strip read as one system. */}
-                <span className="col-count">{g.jobs.length}</span>
-              </div>
-
-              {g.jobs.length === 0 ? (
-                <div className="board-column-empty">
-                  <Text type="text3" color="secondary">No jobs</Text>
-                </div>
-              ) : (
+              {(
                 g.jobs.map(j => (
                   <div
                     key={j.jobNumber}
@@ -829,7 +807,7 @@ export function JobsPage() {
                   </div>
                 ))
               )}
-            </section>
+            </BoardColumn>
           ))}
         </Board>
       )}

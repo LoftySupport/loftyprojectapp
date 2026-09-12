@@ -16,6 +16,64 @@ Unreleased: 250 changes since then —
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
 
+## 12 September, evening — the boards fold, tasks can be created, and the record matches the design
+
+**Where it stands:** on `claude/tender-mayer-q39ffz`, after PR #72 merged. Four corrections
+from Amber, all with a browser check that was watched failing first.
+
+### Kanban columns collapse
+
+*"On Kanban boards can you make them collapsible so they have a narrow view like the side
+navigation with completed closed cancelled and acquisitions and development closed by
+default."*
+
+Collapsed is a **48px strip**, not a hidden column: the name runs down it, the count stays
+on it, and a card dropped on it lands and opens it. The four are matched **by name**, so the
+rule holds on every board those words appear on rather than needing a per-board list, and a
+person's own choice is remembered per board and per column.
+
+It needed **one `BoardColumn` component** first. Jobs, Projects and Tasks each wrote the
+same forty lines — the accented `<section>`, the head with the grouping above the value, the
+count chip, the "No jobs" / "No projects" / "No tasks" line. Three copies is how a fix lands
+on one board and not the other two. The drag handlers stayed on the pages, because what a
+drop MEANS differs per board.
+
+### The Tasks board can create a task
+
+*"On tasks you can't add a new task and assign it to a person or team or job and project.
+There is no button."*
+
+`createTask` has taken all four since `0102`, and `TasksPanel` calls it from inside a job —
+so a task typed by hand could only be created from the record it hung off, and the board
+built to show every task across every job was a report rather than a place to work.
+
+**+ New task** opens a `SidePanel` asking for the task, a detail line, a job **or** a
+project, a team, an assignee, a due date and a planned date. Only the name is required.
+**Closed tasks** joins the six scopes that were already there, and the job-or-project-number
+filter moved onto the bar from behind Advanced.
+
+### The job record matches the screen design
+
+*"Why is the job sideboard not matching the screen type? The process section should have the
+processes like the mockup then the contacts maintenance that that was in screen design."*
+
+The **Process** section drew a read-only five-step preview while the list you could act on
+was a panel eight sections below. `ProcessesPanel` has a `bare` mode now and IS that
+section's body. The tail reads Contacts → Maintenance → Project properties → Job properties
+→ Documents → Job details → Departments, which is 6a's *"Properties and Contacts & Companies
+— collapsed rows with counts"*.
+
+**Not done, and the next thing a session should pick up:** the mockup draws Process as a
+Flint 50 card with a progress bar and one 36px row per step — chevron, tick box, name, date,
+owner avatar — expanding to that step's own typed fields. `ProcessSteps` is that card, and is
+what the section used to draw. `ProcessesPanel` has the data and the actions but not the
+shape. Merging the two means teaching `ProcessSteps` to complete a run through the seam,
+with its rules about attempts, dependencies and who may.
+
+### A date can be taken back, and the footer folds
+
+Earlier the same evening, and in the same branch — see `docs/open-questions.md`, 12 Sep.
+
 ## 12 September — the rail, the job record, and a day of mobile corrections (PR #72)
 
 **Where it stands:** merged, 12 September ([PR #72](https://github.com/LoftySupport/loftyprojectapp/pull/72)). Everything above the record corrections below is in `main`.
