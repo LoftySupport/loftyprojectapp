@@ -18,7 +18,7 @@ Unreleased: 246 changes since then —
 
 ## 12 September — the rail, the job record, and a day of mobile corrections (PR #72)
 
-**Where it stands:** merged. Everything below is in `main`.
+**Where it stands:** merged, 12 September ([PR #72](https://github.com/LoftySupport/loftyprojectapp/pull/72)). Everything above the record corrections below is in `main`.
 
 **Built from the 11 September handoff:** the navigation rail (224 / 64 / flyout), Pinned
 (`0112`), the slim top bar, the job record as a 460px drawer and a full page (`0113`), and
@@ -34,6 +34,37 @@ wordmark top left; every page lost the sentence under its heading; the filters f
 row behind Advanced below 720px with an 84px label column so they line up; the create
 button rides the heading's line; the footer is one line at both sizes; and search is back
 on the top bar.
+
+**Then, the same evening, the record itself.** Three more corrections, all from Amber
+looking at job 1002-001 on a phone:
+
+| Amber said | What it was, and what it is now |
+| --- | --- |
+| *"if I hit the completion date by accident u can't undo it. You should be able to x it out"* | A bare `<input type="date">`, and the browser's own clear is not a promise — Chrome draws a small ✕, Safari draws nothing, a phone gives you a wheel with no way back to empty. `DateField` draws its own. And every property of format `date` had a clear that silently did nothing: `onChange` read `if (e.target.value)`, so emptying the field told nobody |
+| *"the bottom section with task and actions also needs to be able to collapse on mobile so it isn't sticky"* | Below 720px the docked footer starts shut and is a 37px tab strip; a chevron opens it, and tapping a tab opens it on that tab. The panel is unmounted when shut rather than hidden, so a comment thread nobody is looking at stops polling |
+| *"there is so much on there that isn't on the mockup. The bottom areas attached are all duplicates. The processes should just be in order like the mockup"* | Four panels below the record re-stated what the record above them already said. They are gone; see below |
+
+### The four panels that went, and where their unique halves are now
+
+`JobRecord` renders the handoff's record — title and health, Job Stage, Key properties,
+Process — and `JobDrawer` still rendered the tail it had before that existed. So:
+
+| Panel | What duplicated | What was only there |
+| --- | --- | --- |
+| Numbers & addresses | the job number (the title), the current address and the council (Key properties), and a Change button doing what the `+` beside that address does | the old Lofty number, the title type, the address the job was created as |
+| Who it's with | an assignee picker writing the same column as Currently with | the owning team |
+| Folders | the job folder, which Key properties links | the project's folder |
+| Phase & stage | the phase and the days in it, which the stage strip and its meta line both carry | moving the job to a later stage |
+
+The five survivors are one **Job details** panel. The stage move went up beside the strip
+it moves, through a new `stageAction` slot on `JobRecord`. **Processes moved up** to sit
+directly under the record's Process section rather than eight panels below it. The
+add-address form came up under the record too — it used to render inside the panel that
+is now gone, so pressing `+` appeared to do nothing.
+
+**`saveWho`'s "Saving…" and its errors now report under the record.** They were inside
+the *Who it's with* panel, which is shut by default and is now gone, so a refused
+reassign said nothing at all.
 
 ### What a new session most needs to know
 
@@ -53,6 +84,11 @@ on the top bar.
 4. **One number was lost, not moved:** the Projects heading used to read "118 projects · 79
    jobs" and the job total is no longer on that page.
 5. **Expanded side panels still cover the footer** — only the job record was docked.
+6. **`npm run check:date-clear` is new, and CI runs it.** Two date controls mounted alone,
+   asserting on what the caller was *told* rather than on what the input shows — a control
+   that empties on screen and reports nothing looks fixed in a screenshot. It cannot go
+   through the app: `stubRepository.updateJob` throws, so a date typed into a job reverts
+   before a check can see it. See [`app/scripts/README.md`](app/scripts/README.md).
 
 **Phase A is done and applied, and so is the property-and-process half of Phase C (`0076`–`0079`, 1 September).**
 

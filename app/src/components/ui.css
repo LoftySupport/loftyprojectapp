@@ -855,7 +855,34 @@
 /* Fixed, not fluid: a Vibe dropdown fills whatever it is given, and given the rest of
    the row it filled six hundred pixels and turned three tasks into a page. */
 .task-control { width: 150px; flex: 0 0 150px; }
-.task-controls .date-input { width: 140px; }
+.task-controls /* ---- a date you can take back (12 September) ------------------------------
+   The ✕ beside a date field, because the browser's own clear is not a promise: Chrome
+   draws one, Safari draws nothing, and a phone gives you a wheel picker with no way back
+   to empty. See `DateField.tsx`. */
+.date-field { display: inline-flex; align-items: center; gap: var(--space-4); min-width: 0; }
+.date-field-input { flex: 1 1 auto; min-width: 0; }
+.date-field-clear {
+  flex: none;
+  /* 24px is WCAG 2.5.8's floor and this is a control people reach for in a hurry. */
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: none;
+  border-radius: var(--border-radius-small);
+  color: var(--secondary-text-color);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.date-field-clear:hover { background: var(--primary-background-hover-color); color: var(--primary-text-color); }
+/* Hidden, not absent: the row would jump by 28px the first time somebody picked a date,
+   and a layout that moves under the cursor is how you mis-click the thing beside it. */
+.date-field-clear.is-hidden { visibility: hidden; cursor: default; }
+
+.date-input { width: 140px; }
 /* The second row, for the one task being edited. Full width under it. */
 .task-more {
   flex: 1 0 100%;

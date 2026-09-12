@@ -2,14 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { Button, Text, TextField } from "@vibe/core";
+import { NavigationChevronDown, NavigationChevronUp } from "@vibe/icons";
 import { useTemplatePhases, useTeams } from "../data/useLookups";
 import type { BoardJob } from "../data/boardModel";
 import { TITLE_TYPE_LABELS, TITLE_TYPES, type JobPatch, type NewAddress, type TeamId, type TitleType } from "../data/types";
-import { StatusPill } from "./RecordCards";
 import { PropertySlots } from "./PropertySlots";
 import { ProcessesPanel } from "./ProcessesPanel";
 import { RecordDocuments } from "./RecordDocuments";
 import { ExpandButton, usePanelExpand } from "./PanelExpand";
+import { useOneLine } from "./Toolbar";
 import { JobRecord } from "./JobRecord";
 import { RecordBreadcrumb } from "./record/RecordBreadcrumb";
 import { RecordTabs } from "./record/RecordTabs";
@@ -30,7 +31,6 @@ import { PersonSelect } from "./PersonSelect";
 import { Problem } from "./Form";
 import { useAskDock } from "./AskDock";
 import { useToasts } from "./Toasts";
-import { Token } from "./Token";
 import "./ui.css";
 import { CollapsiblePanel, PanelGroup } from "./CollapsiblePanel";
 
@@ -67,6 +67,27 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
   /** Which of the three docked panels is showing. Its own state, not the fullscreen tab:
    *  one is "which part of the record", the other is "which part of the conversation". */
   const [foot, setFoot] = useState("comments");
+
+  /**
+   * THE CONVERSATION COLLAPSES ON A PHONE, AND STARTS COLLAPSED THERE.
+   *
+   * Amber, 12 September: *"the bottom section with task and actions also needs to be able
+   * to collapse on mobile so it isn't sticky"*.
+   *
+   * Docked is right at a desk — it is what put the conversation in reach of a record you
+   * are reading while talking to somebody. On a 390px phone the same dock is a permanent
+   * 52% of the panel sitting over the record you opened, and there was no way to put it
+   * away.
+   *
+   * So below 720px it is a strip you tap open, shut by default; above it, unchanged and
+   * always open. `useOneLine` is the toolbar's breakpoint, reused rather than a second
+   * one — two would drift and the fold would move under one of them.
+   */
+  const oneLine = useOneLine();
+  const [footOpen, setFootOpen] = useState(!oneLine);
+  // Follow the window rather than the first paint: dragging a phone-width window wider
+  // should give the conversation back, not leave it shut with no way to tell why.
+  useEffect(() => { setFootOpen(!oneLine); }, [oneLine]);
 
   // Once, on mount. Keyed on `onClose` this re-ran whenever the parent re-rendered and
   // pulled focus back to the drawer — the same fault that let the create form accept
@@ -302,8 +323,9 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
             onSetCompletion={iso => void saveWho({ targetCompletion: iso })}
             currentlyWithControl={
               /* The job's team first, everybody else under "Other teams", each name with
-                 their team beside it (Amber, 7 Sep). The same control the "Who it's with"
-                 panel below uses, and the same write — one picker, not two. */
+                 their team beside it (Amber, 7 Sep). This is the ONLY assignee picker on
+                 the job now — a second one sat in a "Who it's with" panel below writing the
+                 same column. */
               <PersonSelect
                 aria-label="Currently with"
                 teamId={job.teamId}
@@ -311,7 +333,75 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
                 onChange={v => { if (v !== job.assigneeId) saveWho({ assigneeId: v }); }}
               />
             }
+            stageAction={
+              <div className="stack">
+                {/* Manager and above; the component hides itself below that, the same line
+                    the database draws (0038). Only later phases are offered — see
+                    MoveStageControl for why — and choosing one asks for confirmation,
+                    because a lifecycle move cannot be undone. */}
+                <div className="field-row">
+                  <div className="field-label">
+                    <Text type="text2">Move to a later stage</Text>
+                    {expected != null && (
+                      <div className="field-hint">this stage is expected to take {expected} days</div>
+                    )}
+                  </div>
+                  <MoveStageControl
+                    subject={job.jobNumber}
+                    stage={job.stage}
+                    move={to => repo.moveJobStage(job.jobNumber, to)}
+                    note={JOB_MOVE_NOTE}
+                    onMoved={onMoved}
+                  />
+                </div>
+              </div>
+            }
           />
+
+          {/* The add-address form, opened by the `+` on Key properties' Current address.
+              It used to render inside the Numbers & addresses panel eight sections down,
+              so pressing `+` scrolled nothing and appeared to do nothing. */}
+          {newAddress !== null && (
+            <div className="new-address-block">
+              <div className="panel-head">
+                <Text type="text2" weight="bold">New address</Text>
+              </div>
+              {/* The same sentence the project's panel uses, because it is the same
+                  rule: the original is what the job was created as and never moves,
+                  and every address it has had stays searchable. */}
+              <Text type="text3" color="secondary" element="p" ellipsis={false}>
+                The original address never changes — it is what the job was created as,
+                and what old paperwork says. Saving this makes it the current one; every
+                previous address stays on the record and stays searchable.
+              </Text>
+              <div className="create-form">
+                {/* `needs="street"` because a job may not sit at a locality. The res
+                    number is on every address form now, a project's included — see
+                    `AddressFields`. */}
+                <AddressFields value={newAddress} onChange={setNewAddress} needs="street" />
+              </div>
+              <div className="field-inline" style={{ marginTop: "var(--space-8)" }}>
+                <Button
+                  size="small"
+                  onClick={() => void saveAddress()}
+                  disabled={addressBusy || !newAddress.suburb.trim() || !newAddress.postcode.trim()}
+                >
+                  {addressBusy ? "Saving…" : "Make this the current address"}
+                </Button>
+                <Button size="small" kind="tertiary" onClick={() => setNewAddress(null)}>
+                  Cancel
+                </Button>
+              </div>
+              {addressErr && <Problem>{addressErr}</Problem>}
+            </div>
+          )}
+
+          {/* One place for what a record write says back. `saveWho` is behind the
+              assignee picker, the completion date, the title type and the owning team;
+              its progress and its errors used to report inside the "Who it's with" panel,
+              which is shut by default and now gone — so a failed reassign said nothing. */}
+          {whoBusy && <Text type="text3" color="secondary">Saving…</Text>}
+          {whoErr && <Problem>{whoErr}</Problem>}
 
           {/* The two acts on this record. Below it rather than in the header, for the
               reason above. G25 — the Request changes entry point ships; the flow rides
@@ -361,14 +451,43 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
             </div>
           )}
 
-          {/* First, because it is how a job is looked up (Amber, 27 Aug): the old
-              Lofty number is what SiteBook, Trello and the paperwork link by, and the
-              addresses are what people say on the phone. */}
-          <CollapsiblePanel id="job-numbers" title={<>Numbers &amp; addresses</>} summary="how this job is looked up">
-            <div className="field-row">
-              <div className="field-label"><Text type="text2">Job number</Text></div>
-              <Text type="text2" weight="medium">{job.jobNumber}</Text>
-            </div>
+          {/* THE PROCESSES, DIRECTLY UNDER THE RECORD'S Process SECTION. Amber,
+              12 September: *"the processes should just be in order like the mockup"*.
+              They were eight panels down, below Numbers, Who it's with, Folders and
+              Phase & stage — so the record named the next milestone at the top and the
+              list you would act on was most of a phone screen away.
+
+              Every stage's processes, this one open, with their properties to record and
+              their checklists to create. Milestones are the processes flagged as such;
+              the stage header counts them. */}
+          <ProcessesPanel target={{ jobId: job.jobNumber }} scope="job" currentStage={job.stage} />
+
+          {/* WHAT IS LEFT AFTER THE DUPLICATES WENT. Amber, 12 September: *"there is so
+              much on there that isn't on the mockup. The bottom areas attached are all
+              duplicates."* Four panels below the record re-stated what the record above
+              them already said:
+
+                Numbers & addresses  job number (the title), current address and council
+                                     (Key properties), and a Change button doing what the
+                                     `+` beside that address does
+                Who it's with        an assignee picker writing the same column as
+                                     Currently with
+                Folders              the job folder, which Key properties links
+                Phase & stage        the phase and the days in it, which the stage strip
+                                     and its meta line both carry
+
+              What none of them duplicated is here, in one panel instead of four: the old
+              Lofty number, the title type, the address this job was created as, the
+              owning team, and the project's folder. The stage move went up beside the
+              strip it moves. */}
+          <CollapsiblePanel
+            id="job-details"
+            title="Job details"
+            defaultOpen={false}
+            summary="the old number, title type, team and project folder"
+          >
+            {/* The old Lofty number is what SiteBook, Trello and the paperwork link by
+                (Amber, 27 Aug) — the one lookup the new number cannot answer. */}
             <div className="field-row">
               <div className="field-label">
                 <Text type="text2">Old job number</Text>
@@ -394,6 +513,7 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
               )}
             </div>
             {oldNoErr && <Problem>{oldNoErr}</Problem>}
+
             {/* Community or Torrens (0054, Amber 28 Aug: "the job will need to carry
                 this information through to the job"). Set at the split from the
                 project's mix and corrected here, because which lots take which title is
@@ -424,54 +544,9 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
                 </Text>
               )}
             </div>
-            <div className="field-row">
-              <div className="field-label"><Text type="text2">Current address</Text></div>
-              <div className="field-inline">
-                <Text type="text2" weight="medium">
-                  {job.currentAddress ?? <Token>job_display.job_current_address</Token>}
-                </Text>
-                {can("user") && newAddress === null && (
-                  <Button size="small" kind="tertiary" onClick={() => setNewAddress({ suburb: "", postcode: "" })}>
-                    Change
-                  </Button>
-                )}
-              </div>
-            </div>
 
-            {newAddress !== null && (
-              <div className="new-address-block">
-                <div className="panel-head">
-                  <Text type="text2" weight="bold">New address</Text>
-                </div>
-                {/* The same sentence the project's panel uses, because it is the same
-                    rule: the original is what the job was created as and never moves,
-                    and every address it has had stays searchable. */}
-                <Text type="text3" color="secondary" element="p" ellipsis={false}>
-                  The original address never changes — it is what the job was created as,
-                  and what old paperwork says. Saving this makes it the current one; every
-                  previous address stays on the record and stays searchable.
-                </Text>
-                <div className="create-form">
-                  {/* `needs="street"` because a job may not sit at a locality. The res
-                      number is on every address form now, a project's included — see
-                      `AddressFields`. */}
-                  <AddressFields value={newAddress} onChange={setNewAddress} needs="street" />
-                </div>
-                <div className="field-inline" style={{ marginTop: "var(--space-8)" }}>
-                  <Button
-                    size="small"
-                    onClick={() => void saveAddress()}
-                    disabled={addressBusy || !newAddress.suburb.trim() || !newAddress.postcode.trim()}
-                  >
-                    {addressBusy ? "Saving…" : "Make this the current address"}
-                  </Button>
-                  <Button size="small" kind="tertiary" onClick={() => setNewAddress(null)}>
-                    Cancel
-                  </Button>
-                </div>
-                {addressErr && <Problem>{addressErr}</Problem>}
-              </div>
-            )}
+            {/* The current one is on Key properties; this is the one it was created as,
+                which old paperwork still says and which stays searchable forever. */}
             <div className="field-row">
               <div className="field-label">
                 <Text type="text2">Previous address</Text>
@@ -482,95 +557,28 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
                 <Text type="text3" color="secondary">never renamed — always this address</Text>
               )}
             </div>
-            {/* Beside the address, never inside it. Amber, 10 September: *"the council
-                area still needs to be recorded, but just not in the full address line.
-                it stays as a property field."* `build_consolidated_address()` has never
-                composed it in; what was missing was anywhere to READ it back on a job —
-                the change-address form above carries the picker, and until 0108
-                `job_display` did not select the column, so a council set here vanished.
 
-                The job's own, not the project's: a job moved off its project's site can
-                sit in a different LGA. An em dash rather than a token when it is null,
-                because optional-since-0073 is a real answer — four SA suburbs span two
-                councils and the form refuses to guess for them. */}
+            {/* The team that owns the job. Not the same fact as Currently with, which is
+                the person: a job can move between people inside one team, and the team is
+                what the board columns and the notification routing read. */}
             <div className="field-row">
               <div className="field-label">
-                <Text type="text2">Council region</Text>
+                <Text type="text2">Owning team</Text>
               </div>
-              {job.council ? (
-                <Text type="text2" weight="medium">{job.council}</Text>
+              {can("user") ? (
+                <Select
+                  aria-label="Owning team"
+                  options={teams.filter(t => t.isActive).map(t => ({ value: t.id, label: t.name }))}
+                  value={job.teamId}
+                  onChange={v => { if (v !== job.teamId) saveWho({ owningTeam: v as TeamId }); }}
+                />
               ) : (
-                <Text type="text3" color="secondary">—</Text>
+                <Text type="text2" weight="medium">{job.team}</Text>
               )}
             </div>
-          </CollapsiblePanel>
 
-          {/* The status pill is the summary, so it stays readable with the section shut —
-              "who it's with" closed but "On hold" visible is the useful half. Guarded:
-              StatusPill renders an empty pill for an absent status, and an empty pill in a
-              heading reads as a rendering fault rather than as missing data. */}
-          <CollapsiblePanel
-            id="job-who"
-            title={<>Who it’s with</>}
-            defaultOpen={false}
-            summary={job.status ? <StatusPill status={job.status} /> : undefined}
-          >
-            {/* Same facts as the card, editable from `user` up — the rung the database
-                already enforces on this write. Below that, read-only, and an em dash
-                stays the honest answer when nobody is assigned. */}
-            {can("user") ? (
-              <>
-                <div className="field-row">
-                  <div className="field-label">
-                    <Text type="text2">Team</Text>
-                  </div>
-                  <Select
-                    aria-label="Owning team"
-                    options={teams.filter(t => t.isActive).map(t => ({ value: t.id, label: t.name }))}
-                    value={job.teamId}
-                    onChange={v => { if (v !== job.teamId) saveWho({ owningTeam: v as TeamId }); }}
-                  />
-                </div>
-                <div className="field-row">
-                  <div className="field-label">
-                    <Text type="text2">Assigned to</Text>
-                  </div>
-                  {/* The job's team first, everybody else under "Other teams", each
-                      name with their team beside it (Amber, 7 Sep). */}
-                  <PersonSelect
-                    aria-label="Assignee"
-                    teamId={job.teamId}
-                    value={job.assigneeId}
-                    onChange={v => { if (v !== job.assigneeId) saveWho({ assigneeId: v }); }}
-                  />
-                </div>
-                {whoBusy && <Text type="text3" color="secondary">Saving…</Text>}
-                {whoErr && <Problem>{whoErr}</Problem>}
-              </>
-            ) : (
-              <div className="card-who">
-                <div>
-                  <Text type="text3" weight="medium">{job.team}</Text>
-                  <Text type="text3" color="secondary">{job.assigneeName ?? "—"}</Text>
-                </div>
-              </div>
-            )}
-          </CollapsiblePanel>
-
-          <CollapsiblePanel id="job-folders" title="Folders" defaultOpen={false} summary={<>the job&apos;s subfolder, inside its project&apos;s</>}>
-            {/* Both links, per Lofty's rule — a job's page shows its own folder and its
-                project's, never its siblings'. An unlinked folder is a real state and
-                says so rather than hiding the row. */}
-            <div className="field-row">
-              <div className="field-label"><Text type="text2">Job folder</Text></div>
-              {job.sharepointUrl ? (
-                <a href={job.sharepointUrl} target="_blank" rel="noreferrer" className="link-button">
-                  Open job folder
-                </a>
-              ) : (
-                <Text type="text3" color="secondary">no folder linked yet</Text>
-              )}
-            </div>
+            {/* The job's own folder is on Key properties. This is its project's — a job's
+                page shows its own and its project's, never its siblings'. */}
             <div className="field-row">
               <div className="field-label"><Text type="text2">Project folder</Text></div>
               {job.projectSharepointUrl ? (
@@ -582,44 +590,6 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
               )}
             </div>
           </CollapsiblePanel>
-
-          <CollapsiblePanel id="job-phase" title={<>Phase &amp; stage</>} defaultOpen={false} summary={job.stage}>
-            <div className="field-row">
-              <div className="field-label">
-                <Text type="text2">Phase</Text>
-              </div>
-              <Text type="text2" weight="medium">{job.stage}</Text>
-            </div>
-            {/* Manager and above; the component hides itself below that, the same line
-                the database draws (0038). Only later phases are offered — see
-                MoveStageControl for why — and choosing one asks for confirmation,
-                because a lifecycle move cannot be undone. */}
-            <div className="field-row">
-              <div className="field-label">
-                <Text type="text2">Move</Text>
-              </div>
-              <MoveStageControl
-                subject={job.jobNumber}
-                stage={job.stage}
-                move={to => repo.moveJobStage(job.jobNumber, to)}
-                note={JOB_MOVE_NOTE}
-                onMoved={onMoved}
-              />
-            </div>
-            <div className="field-row">
-              <div className="field-label">
-                <Text type="text2">Days in stage</Text>
-                {expected != null && <div className="field-hint">expected {expected}</div>}
-              </div>
-              <Text type="text2" weight="medium">{job.daysInStage}</Text>
-            </div>
-          </CollapsiblePanel>
-
-          {/* The processes of every stage, this one open — with their properties to
-              record and their checklists to create. Milestones are the processes flagged
-              as such; the stage header counts them. This replaced a Milestones panel of
-              disabled checkboxes that had nothing behind it. */}
-          <ProcessesPanel target={{ jobId: job.jobNumber }} scope="job" currentStage={job.stage} />
 
           {/* What has been written ABOUT this job — the progress reports, client letters
               and maintenance reports made in the Document Builder. Amber, 4 September:
@@ -710,7 +680,7 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
             is that the bottom no longer means "after nine sections of scrolling" — the
             conversation is in reach the whole way down, which is what a record you read
             while talking to somebody needs. */}
-        <div className="record-foot">
+        <div className={"record-foot" + (footOpen ? "" : " is-shut")}>
           <RecordTabs
             tabs={[
               { id: "tasks", label: "Tasks" },
@@ -718,18 +688,42 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
               { id: "activity", label: "Activity Log" }
             ]}
             value={foot}
-            onChange={setFoot}
+            // Tapping a tab while it is shut opens it ON that tab. Two presses to read
+            // the comments — one to open, one to choose — is the sort of thing that
+            // makes people stop using the panel.
+            onChange={id => { setFoot(id); setFootOpen(true); }}
+            trailing={
+              oneLine ? (
+                <button
+                  type="button"
+                  className="record-foot-toggle"
+                  aria-expanded={footOpen}
+                  aria-controls={`record-panel-${foot}`}
+                  aria-label={footOpen ? "Hide the conversation" : "Show the conversation"}
+                  onClick={() => setFootOpen(o => !o)}
+                >
+                  {footOpen
+                    ? <NavigationChevronDown size={16} aria-hidden />
+                    : <NavigationChevronUp size={16} aria-hidden />}
+                </button>
+              ) : undefined
+            }
           />
-          <div
-            className="record-foot-panel"
-            role="tabpanel"
-            id={`record-panel-${foot}`}
-            aria-labelledby={`record-tab-${foot}`}
-          >
-            {foot === "tasks" && <TasksPanel jobId={job.jobNumber} bare />}
-            {foot === "comments" && <CommentsPanel jobId={job.jobNumber} bare />}
-            {foot === "activity" && <ActivityFeed jobId={job.jobNumber} bare />}
-          </div>
+          {/* Unmounted when shut, not hidden: the three panels each read from the
+              database, and a closed drawer that keeps polling a comment thread nobody is
+              looking at is a cost with no reader. */}
+          {footOpen && (
+            <div
+              className="record-foot-panel"
+              role="tabpanel"
+              id={`record-panel-${foot}`}
+              aria-labelledby={`record-tab-${foot}`}
+            >
+              {foot === "tasks" && <TasksPanel jobId={job.jobNumber} bare />}
+              {foot === "comments" && <CommentsPanel jobId={job.jobNumber} bare />}
+              {foot === "activity" && <ActivityFeed jobId={job.jobNumber} bare />}
+            </div>
+          )}
         </div>
       </aside>
   );

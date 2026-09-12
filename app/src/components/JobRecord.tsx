@@ -9,6 +9,7 @@ import { FieldList, FieldRow } from "./record/FieldRow";
 import { RecordSection } from "./record/RecordDrawer";
 import { JobTitle } from "./record/RecordBreadcrumb";
 import { ProcessSteps, type ProcessStep } from "./record/ProcessSteps";
+import { DateField } from "./DateField";
 import { Token } from "./Token";
 import "./record/record.css";
 
@@ -72,7 +73,8 @@ export function JobRecord({
   variant = "drawer",
   onChangeAddress,
   currentlyWithControl,
-  onSetCompletion
+  onSetCompletion,
+  stageAction
 }: {
   job: BoardJob;
   variant?: "drawer" | "page";
@@ -90,6 +92,15 @@ export function JobRecord({
   currentlyWithControl?: ReactNode;
   /** Completion date — writes `job_target_completion` through the seam (0113). */
   onSetCompletion?: (iso: string | null) => void;
+  /**
+   * Moving the job to a later stage, rendered at the foot of Job Stage.
+   *
+   * It used to live in a *Phase & stage* panel further down that also re-stated the
+   * phase and the days in it — both of which the strip and its meta already say. Amber,
+   * 12 September: *"the bottom areas attached are all duplicates"*. So the panel went
+   * and its one unique control came up here, beside the strip it moves.
+   */
+  stageAction?: ReactNode;
 }) {
   const { can } = usePermission();
   const [open, setOpen] = useState({ stage: true, key: true, process: true });
@@ -285,6 +296,7 @@ export function JobRecord({
             strip shows where it got to.
           </p>
         )}
+        {stageAction}
       </RecordSection>
 
       <RecordSection
@@ -332,12 +344,14 @@ export function JobRecord({
             type="date"
           >
             {can("user") && onSetCompletion && !job.endDate ? (
-              <input
-                type="date"
+              // `DateField`, not a bare input: a date set by accident here had no way
+              // out — Amber, 12 September, *"if I hit the completion date by accident
+              // you can't undo it"*. The ✕ clears it back to nothing.
+              <DateField
                 className="field-box is-input"
-                aria-label="Completion date being worked towards"
-                value={job.targetCompletion ?? ""}
-                onChange={e => onSetCompletion(e.target.value || null)}
+                ariaLabel="Completion date being worked towards"
+                value={job.targetCompletion ?? null}
+                onChange={onSetCompletion}
               />
             ) : undefined}
           </FieldRow>

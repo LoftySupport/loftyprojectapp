@@ -139,3 +139,33 @@ case the app has.
 which is the difference between a check that runs the shipping code and a check that runs
 a copy of it kept in step by hand. Node strips the types itself (22.18+); nothing here
 compiles anything.
+
+# `npm run check:date-clear`
+
+Can you take a date back? Amber, 12 September: *"when you are on a date field the reset
+button isn't working — for example on a job if I hit the completion date by accident u
+can't undo it. You should be able to x it out."*
+
+Two faults wore the same coat, and this check guards both:
+
+- **The job's completion date had no clear at all.** It was a bare `<input type="date">`,
+  and the browser's own is not a promise: Chrome draws a small ✕, Safari draws nothing,
+  and a phone gives you a wheel with no way back to empty. `DateField` draws its own.
+- **Every property of format `date` had a clear that silently did nothing.** `onChange`
+  read `if (e.target.value)`, so emptying the field told nobody and the old value stayed
+  exactly where it was.
+
+The second one is why the assertions read **what the caller was told**, not what the
+input is showing — `window.saved` in the stub. A control that empties on screen and
+reports nothing looks fixed in a screenshot and is not fixed at all.
+
+## Why it does not go through the app
+
+`stubRepository.updateJob` throws (*"Editing a job needs Supabase."*), so a date typed
+into a job in the responsive harness reverts before the check can see it — which is
+exactly what the first attempt at this measured. `scripts/date-clear-stub.jsx` mounts
+`DateField` and `PropertyField` with local state instead: both are prop-driven, and the
+question is about the control rather than the database behind it.
+
+Both guards were watched failing before being trusted. Putting `if (e.target.value)`
+back, and cutting the `onChange(null)` out of the ✕, turns four of the eleven red.
