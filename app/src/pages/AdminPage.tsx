@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
+import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import {
   Button, Heading, Modal, ModalBasicLayout, ModalContent, ModalFooter, ModalHeader,
   Search, Tab, TabList, Text, TextField
@@ -113,14 +113,12 @@ export function AdminPage() {
 
   return (
     <>
+      {/* No line under the heading. Amber, 12 September: *"on all pages remove
+          descriptive line text under page header … we need the most above the fold
+          possible"*. The pointer to Updates went with it; Updates is a
+          destination in the rail. */}
       <div className="page-head">
         <Heading type="h2" weight="bold">Admin</Heading>
-        <Text type="text2" color="secondary" ellipsis={false}>
-          Who works here, what they may do, and how the app itself is defined. Bugs, ideas,
-          the roadmap and the changelog are on{" "}
-          <Link to="/updates" className="text-link">Updates</Link> — one page for everybody, with the triage
-          controls inside each request.
-        </Text>
       </div>
 
       <TabList activeTabId={index} onTabChange={i => navigate(`/admin/${SECTIONS[i].slug}`)}>

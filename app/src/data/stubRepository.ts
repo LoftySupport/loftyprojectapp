@@ -7,8 +7,10 @@ import type {
   CommentEntry,
   Job,
   Profile,
+  PinnedPage,
   Project,
   PropertyDef,
+  RailCounts,
   Stage,
   Team,
   TemplateMilestone,
@@ -92,6 +94,20 @@ export function createStubRepository(): Repository {
 
     async listJobs(): Promise<Job[]> { return []; },
     async getJob(): Promise<Job | null> { return null; },
+
+    /** Zero, because there is nothing — the honest answer, not a placeholder. */
+    async railCounts(): Promise<RailCounts> { return { projects: 0, jobs: 0, maintenance: 0 }; },
+
+    // Pinned is a real table (0112); with no backend there is nothing in it, and a
+    // refusal is the truthful answer to being asked to write to a database that is
+    // not there — the same shape every other write in this file takes.
+    async listMyPins(): Promise<PinnedPage[]> { return []; },
+    async pinPage(): Promise<PinnedPage[]> {
+      throw new Error("Pinning a page needs Supabase.");
+    },
+    async unpinPage(): Promise<PinnedPage[]> {
+      throw new Error("Unpinning a page needs Supabase.");
+    },
 
 
     async listProfiles(): Promise<Profile[]> { return []; },

@@ -27,10 +27,10 @@ html, body, #root { height: 100%; }
      visible and usable beside and above them (Amber, 26 August — a full-screen panel
      "should just cover the main part of the app"). These two variables are the whole
      contract: left edge of the main area, and its top. */
-  --shell-rail-w: 232px;
-  --shell-header-h: 64px;
+  --shell-rail-w: 224px;
+  --shell-header-h: 48px;
 }
-.app-shell:has(.app-side.is-collapsed) { --shell-rail-w: 68px; }
+.app-shell:has(.nav-rail.is-collapsed) { --shell-rail-w: 64px; }
 .app-body {
   display: flex;
   flex-direction: column;
@@ -40,144 +40,72 @@ html, body, #root { height: 100%; }
   min-width: 0;
 }
 
-/* ---- the rail -------------------------------------------------------------
-   Nav lives here rather than across the top: seven destinations wrapped to two and
-   three rows on anything narrower than a laptop, and every row was height the board
-   did not get. Sticky rather than fixed, so it scrolls with a long page but stays put
-   while you read one. */
-.app-side {
-  --rail-width: 232px;
-  --rail-width-collapsed: 68px;
-  position: sticky;
-  top: 0;
-  align-self: flex-start;
-  height: 100vh;
-  height: 100dvh;
-  width: var(--rail-width);
-  flex: 0 0 var(--rail-width);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-8);
-  padding: var(--space-12) var(--space-8);
-  background: var(--lofty-header-bg);
-  color: var(--fixed-light-color);
-  border-right: 4px solid var(--lofty-orange);
-  overflow-y: auto;
-  overflow-x: hidden;
-  transition: width var(--motion-productive-medium) var(--motion-timing-transition),
-              flex-basis var(--motion-productive-medium) var(--motion-timing-transition);
-}
-.app-side.is-collapsed {
-  width: var(--rail-width-collapsed);
-  flex-basis: var(--rail-width-collapsed);
-}
-
-.app-side-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-8);
-  padding: var(--space-4) var(--space-8) var(--space-12);
-  min-width: 0;
-}
-.app-side.is-collapsed .app-side-head {
-  flex-direction: column;
-  padding-inline: 0;
-}
-.app-logo { height: 24px; width: auto; display: block; min-width: 0; }
-.app-logo-mark { height: 28px; }
-
-.app-side-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  flex-shrink: 0;
-  background: none;
-  border: 0;
-  border-radius: var(--border-radius-small);
-  color: var(--lofty-header-text-muted);
-  cursor: pointer;
-}
-.app-side-toggle:hover { color: var(--fixed-light-color); background: rgba(255, 255, 255, 0.12); }
-.app-side-toggle:focus-visible { outline: 2px solid var(--fixed-light-color); outline-offset: 2px; }
-
-/* Collapsed, this is the ONLY way back and it has to look like one.
-   Lofty reported the expand button as missing; it was there — a muted grey chevron on
-   dark navy, 32px, tucked under the logo mark in a 68px rail, which is indistinguishable
-   from a decorative divider until you hover it. Expanded, the button sits beside a full
-   wordmark and a labelled nav, so it can afford to be quiet; collapsed, there is nothing
-   else on that row and no label anywhere to tell you the rail can come back. So it gets
-   a border, a fill and full-strength ink — the difference between a control and a mark. */
-.app-side.is-collapsed .app-side-toggle {
-  color: var(--fixed-light-color);
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  margin-top: var(--space-4);
-}
-.app-side.is-collapsed .app-side-toggle:hover { background: rgba(255, 255, 255, 0.22); }
-
-.app-nav { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.app-nav-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-12);
-  height: 40px;
-  padding: 0 var(--space-12);
-  font: var(--font-text2-medium);
-  color: var(--lofty-header-text-muted);
-  text-decoration: none;
-  border-radius: var(--border-radius-small);
-  white-space: nowrap;
-  min-width: 0;
-  transition: background-color var(--motion-productive-medium) var(--motion-timing-transition);
-}
-.app-nav-item:hover { color: var(--fixed-light-color); background: rgba(255, 255, 255, 0.12); }
-/* Dark ink on the light pill — white on white is the obvious failure here. */
-.app-nav-item.is-active { color: #00393f; background: var(--fixed-light-color); }
-.app-nav-icon { display: inline-flex; flex-shrink: 0; }
-.app-nav-label { overflow: hidden; text-overflow: ellipsis; }
-
-/* Collapsed: the label leaves the screen but stays in the accessibility tree, so the
-   link keeps its name for a screen reader. `display: none` would take the name with
-   it and leave seven identically-unnamed icons. */
-.app-side.is-collapsed .app-nav-item { justify-content: center; padding-inline: 0; }
-.app-side.is-collapsed .app-nav-label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
+/* The rail's own styles live in NavRail.css. Nothing about it is here any more, and
+   that is the point of the 11 September rebuild: one implementation, in one file, under
+   the names the design system is adding the same patterns under. The two variables above
+   are the whole of the contract the rest of the app has with it — where the main area
+   starts, and how far down. */
 
 /* ---- the top bar ----------------------------------------------------------
-   What is left once nav moves out: find something, and who you are. */
+   Three controls, and that is the whole bar (decision 10, 11 September). Search, the user
+   menu, Settings and Admin went into the rail and were REMOVED from here rather than left
+   to duplicate it — the rail owns navigation and identity, the bar owns "what I just did"
+   and "what happened to me".
+
+   48px, down from 64. The handoff does not specify this bar — it was deliberately not
+   promoted to a component, and `HANDOFF-INSTRUCTIONS.md` says so: *"no top bar … the job
+   record's 56px bar is the only version and it assumes an app header above it."* So the
+   height is a judgement: 48 is a 32px control with 8px of air, which is the smallest it
+   can be and still hold one. It stays Foundation Black so the chrome reads as one shell
+   turning a corner rather than as two dark things that happen to touch. */
 .app-header {
-  /* Read by .notif-bell-trigger in ui.css — the bell, the Ask button and the cog. The bar
-     is dark in every theme, so its controls hover with a white alpha, never with a
-     light-surface tint. */
+  /* Read by .notif-bell-trigger in ui.css — the bell and the Ask button. The bar is dark
+     in every theme, so its controls hover with a white alpha, never a light-surface
+     tint. */
   --header-control-hover: rgba(255, 255, 255, 0.12);
   display: flex;
   align-items: center;
   gap: var(--space-12);
   background: var(--lofty-header-bg);
   color: var(--fixed-light-color);
-  padding: 0 var(--space-24);
+  padding: 0 var(--space-16) 0 var(--space-24);
   flex-shrink: 0;
   min-width: 0;
   /* Sticky, like the rail beside it: the chrome stays put while the page scrolls, so
      a panel that starts below the header lines up with it at any scroll position —
      without this, the drawer's top edge would only match the header at the top of the
      page. Fixed height for the same reason: the offset the panels use has to be a
-     number, and every row inside is 40px or less. */
+     number, and every control inside is 32px. */
   position: sticky;
   top: 0;
   z-index: 30;
   height: var(--shell-header-h);
+}
+
+/* The wordmark in the phone bar. Height-capped rather than width-capped, because the
+   bar is 48px and the mark has to sit inside it with air — 22px is the rail's 26px taken
+   down by the 16px of extra chrome a 48px bar has over a 64px one. `flex: none` so it
+   never gives up room to the controls on the right; it is the anchor, they can wrap. */
+.app-header-logo {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  min-width: 0;
+  /* The MARK is 22px; the TARGET is 32. WCAG 2.5.8 wants 24 and the sweep measured the
+     first version at 58x22 and failed it — a home link nobody can hit is not a home
+     link. The box grows around the image rather than the image growing into it. */
+  min-height: 32px;
+}
+.app-header-logo img { height: 22px; width: auto; display: block; }
+
+/* Search's slot in the bar (back here on 12 September). The box itself keeps the widths
+   it has always had — `.app-search` in ui.css, 200 to 320, growing to 420 on focus —
+   and this is only what holds it: it takes the room between the logo and the controls,
+   and gives it up before they do. Below 720px it shrinks to whatever is left, which is
+   what makes a phone header of mark + search + three controls fit at all. */
+.app-search-slot { display: flex; align-items: center; flex: 1 1 auto; min-width: 0; }
+@media (max-width: 720px) {
+  .app-search-slot .app-search { min-width: 0; flex: 1 1 auto; }
 }
 
 .app-menu-button {
@@ -207,37 +135,18 @@ html, body, #root { height: 100%; }
   cursor: pointer;
 }
 
-/* `min-width: 0` because the user token is a long unbreakable string: without it the
-   cluster claims its intrinsic width and pushes the whole page sideways. */
+/* Undo/redo, Ask, the bell. `nowrap`, not the old `wrap`: a wrapped cluster puts a
+   control on its own line and doubles the height of a bar whose whole point is being
+   slim. There is nothing left in here wide enough to need to wrap. */
 .app-header-right {
   display: flex;
   align-items: center;
   gap: var(--space-12);
   flex-shrink: 0;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   min-width: 0;
   margin-inline-start: auto;
 }
-/* The Admin cog (admin and above only — see AdminLink). It borrows the bell's 32px
-   trigger so the header cluster is one row of identical targets, and adds the two things
-   an anchor needs that a button did not: the header's fixed ink, because a NavLink would
-   otherwise take the theme's link colour on a bar that is dark teal in every theme, and a
-   visible active state, because unlike the bell this one is a destination and "am I on
-   Admin?" is a question the header should answer. */
-.app-admin-cog { text-decoration: none; }
-.app-header .app-admin-cog, .app-header .app-admin-cog * { color: var(--fixed-light-color); }
-/* Active, not hovered, so it has to be stronger than the .12 hover to read as "you are
-   here" — the same 0.22 the collapsed rail's toggle uses for the same reason. It was the
-   peach selection tint, which is a light-surface token on a dark bar. */
-.app-admin-cog.is-active { background: rgba(255, 255, 255, 0.22); }
-.app-user { display: flex; align-items: center; gap: var(--space-8); min-width: 0; }
-/* Vibe's Text picks its colour from the theme, which is dark ink in light mode — on a
-   bar that is dark teal in every theme. Pin the ink to the bar, as the yellow banner
-   below already does for the same reason. */
-.app-header .user-menu-trigger, .app-header .user-menu-trigger * { color: var(--fixed-light-color); }
-/* min-width: 0 or the name sizes to its own unbreakable minimum and pushes the header
-   sideways — the same fault as every other overflow in this app. */
-.app-user-name { min-width: 0; }
 
 .app-alert {
   padding: var(--space-8) var(--space-24);
@@ -251,21 +160,82 @@ html, body, #root { height: 100%; }
   padding: var(--space-24);
   min-width: 0;
 }
+/* ---- the dock -------------------------------------------------------------
+   Where a panel goes when it is expanded to full screen, so that it sits INSIDE the
+   frame rather than over it — Amber, 12 September: *"the full screen view sits inside
+   the main frame so still has top and side nav and footer"*.
+
+   Empty on every other screen, and `:empty` takes it out of the layout entirely: a flex
+   child with `flex: 1` and nothing in it would eat the space `.app-main` needs.
+
+   When something IS in it, it takes the room between the header and the footer and the
+   main area stands down. `:has()` rather than a class toggled from React, because the
+   condition IS "is there a panel in the dock" — a second boolean in state is a second
+   thing that can disagree with the DOM. */
+.app-dock:empty { display: none; }
+.app-dock {
+  display: flex;
+  min-width: 0;
+  /* EXACTLY the space between the header and the footer, not `flex: 1`.
+     Flex growth gives a child its content's height when the content is taller, so the
+     record grew to 2792px, the page scrolled, and the conversation tabs it docks at its
+     own foot ended up below the fold — the thing the docked-footer pattern exists to
+     prevent. A definite height makes the record fill the window and scroll its own body,
+     and leaves the page itself with nothing to scroll.
+
+     `--shell-foot-h` is measured in `AppShell` because the footer wraps: one line on a
+     desktop, two or three as the window narrows. */
+  height: calc(100dvh - var(--shell-header-h) - var(--shell-foot-h, 0px));
+}
+.app-body:has(.app-dock > *) .app-main { display: none; }
+
+/* ONE LINE, ON A PHONE AND ON A DESKTOP — Amber, 12 September: *"make footer more
+   condensed and smaller text so one line on mobile and desktop"*.
+   It was 24px of padding above and below a 12px line that wrapped to three rows on a
+   phone: 100px of chrome under every screen. 8px of padding, 11px type, and the two
+   groups on one row — and where the words are what makes it wrap, the words get shorter
+   rather than the target getting smaller (`.narrow-only` below). */
 .app-foot {
   flex-shrink: 0;
   margin-top: auto;
-  padding: var(--space-24);
+  padding: var(--space-8) var(--space-16);
   text-align: center;
+  font-size: 11px;
+  line-height: 16px;
+}
+/* The two labels each control carries: the long one above 720px, the short one below.
+   `display: none` rather than a JS swap, so there is one DOM, no resize listener, and a
+   screen reader reads exactly one of them. */
+.narrow-only { display: none; }
+@media (max-width: 720px) {
+  .wide-only { display: none; }
+  .narrow-only { display: inline; }
+  /* 390px, measured: the copyright, the build ref and five links come to ~420px at 11px
+     against 358px of room, so something had to go. The BUILD REF goes — it is for
+     somebody reporting a fault, who is at a desk when they do it — and the type drops a
+     point. The targets stay 24px. */
+  .app-foot { padding-inline: var(--space-8); }
+  .app-foot > div { font-size: 10px; }
+  .app-foot-version { display: none; }
+  .app-foot > div, .app-foot-links { gap: 0 6px; }
+  .app-foot-links > * + *::before { margin-inline-end: 6px; }
 }
 /* Two groups that sit on one line when there is room and stack when there is not.
    The separators are drawn in CSS rather than typed as "|" characters, so a screen
    reader is not read a pipe between every link. */
 .app-foot > div {
+  /* ON THE WRAPPER, not on `.app-foot`. Vibe's `<Text>` renders this div with its own
+     `font`, which beats anything inherited from the footer — the first two attempts at
+     "smaller text" changed nothing on screen for exactly that reason. */
+  font-size: 11px;
+  line-height: 16px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: var(--space-4) var(--space-12);
+  /* 8px between the two groups rather than 12, and no row gap to find — on one line
+     there is no second row. */
+  gap: 0 var(--space-8);
   min-width: 0;
 }
 .app-foot-links {
@@ -273,22 +243,26 @@ html, body, #root { height: 100%; }
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: var(--space-4) var(--space-12);
+  gap: 0 var(--space-8);
   min-width: 0;
 }
 .app-foot-links > * + *::before {
   content: "|";
-  margin-inline-end: var(--space-12);
+  margin-inline-end: var(--space-8);
   opacity: 0.5;
 }
 /* 16px of underlined text is a 16px tap target, which fails WCAG 2.2 2.5.8 (24px
    minimum) and is a genuine miss on a phone — measured at 75x16, 48x16 and 57x16 for
    Privacy Policy, Terms and Support. Padding rather than a height, so the separators
    drawn between them still sit on the text's baseline. */
+/* 24px of target around an 11px line, which is WCAG 2.5.8's floor and the reason the
+   text shrank rather than the control. `padding-block: 4` would make the row 24px on its
+   own; it is written as a minimum so the line-height cannot quietly take it away. */
 .app-foot a {
   color: inherit;
   text-decoration: underline;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   padding-block: var(--space-4);
   min-height: 24px;
 }
@@ -313,7 +287,7 @@ html, body, #root { height: 100%; }
   align-items: center;
   border: none;
   background: none;
-  padding: var(--space-4);
+  padding: var(--space-4) 0;
   min-height: 24px;
   color: inherit;
   font: inherit;
@@ -457,105 +431,38 @@ html, body, #root { height: 100%; }
    hamburger only exists at these widths — on a desktop the rail is always there and a
    button to summon it would be a control for a problem nobody has.
 
-   900px, not 720px: the cut is now "does a 232px rail plus a readable board fit",
-   which bites earlier than the old "does the header cluster fit beside the nav". */
+   900px, not 720px: the cut is "does a 224px rail plus a readable board fit", which
+   bites earlier than the old "does the header cluster fit beside the nav". The off-canvas
+   half of this rule lives in NavRail.css with the rest of the rail; what is here is what
+   the SHELL has to do about it. */
 @media (max-width: 900px) {
   /* The rail is an off-canvas drawer here, so the main area starts at the left edge —
-     panels that key off the rail's width must not leave a 232px dead strip. */
-  .app-shell, .app-shell:has(.app-side.is-collapsed) { --shell-rail-w: 0px; }
-  .app-side {
-    position: fixed;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    z-index: 50;
-    height: 100dvh;
-    /* Always the full width when it slides in. The icons-only preference is a desktop
-       affordance for reclaiming a column; on a phone the drawer covers the page anyway,
-       so shrinking it to icons costs the labels and saves nothing. */
-    width: var(--rail-width);
-    flex-basis: var(--rail-width);
-    transform: translateX(-100%);
-    transition: transform var(--motion-productive-medium) var(--motion-timing-transition);
-  }
-  .app-side.is-open { transform: translateX(0); }
-  /* The drawer is full width whatever the stored preference says, so the collapse
-     control here would be a button that visibly does nothing. */
-  .app-side-toggle { display: none; }
+     panels that key off the rail's width must not leave a 224px dead strip. */
+  .app-shell, .app-shell:has(.nav-rail.is-collapsed) { --shell-rail-w: 0px; }
   /* The rail is out of the flow here, so the body takes the whole width rather than
-     leaving a 232px gap where the drawer will be. */
+     leaving a 224px gap where the drawer will be. */
   .app-shell { display: block; }
   .app-body { min-height: 100dvh; }
 }
 
 @media (max-width: 720px) {
-  .app-header { padding: var(--space-12) var(--space-16); }
+  .app-header { padding: 0 var(--space-16); }
   .app-main { padding: var(--space-16); }
   .app-foot { padding: var(--space-16); }
 
-  /* On a phone this is the control you reach for, so it gets the room.
-
-     `min-width: 0` is the load-bearing third of this rule and it was missing. The base
-     rule sets `min-width: 200px`, and a flex item never shrinks below its min-width
-     however generous its `flex` is — so the header's intrinsic minimum stayed at
-     40 (menu) + 200 (search) + 121 (the right cluster, flex-shrink: 0) + gaps and
-     padding = 401px, whatever the viewport said.
-
-     That is the whole page's horizontal scroll, measured: 401 - 390 = 11px on an
-     iPhone, 401 - 320 = 81px on the narrowest phone still in use. Every screen was
-     clipped on the right by that much — the avatar half off the edge, "Automations"
-     reading "Automa", the yellow banner losing its last word — because one flex item
-     four rows up refused to shrink. */
-  .app-search { flex: 1 1 auto; max-width: none; min-width: 0; }
-  /* And the cluster it sits beside has to be allowed to give too, or the search alone
-     absorbs every pixel the header is short of.
-
-     `nowrap` with it: the cluster wraps by default, and while it still held the
-     "Unbound" chip that put the chip on its own line above the avatar at 320px, doubling
-     the header's height and pushing the avatar out of the bar. The chip has gone with the
-     binding banner, so there is one child left and nothing to wrap — kept because the
-     next thing added here would reintroduce the fault silently. */
-  /* `flex-shrink: 0`, not 1, and the difference is the whole bug.
-     
-     The cluster's children are each `flex-shrink: 0` (below), so shrinking the cluster
-     does not shrink anything inside it — it just gives the box less room than its
-     contents and lets them hang out of the right edge. With two icons that was invisible;
-     the moment Ask Lofty made it three, the cluster was squeezed to 80px around 108px of
-     buttons and the avatar sat 12px past the viewport, which the responsive sweep read as
-     every page scrolling sideways by 18px at 320.
-     
-     So the search is the one that gives, which is what the comment above already said it
-     was. `nowrap` stays: the cluster wraps by default, and a wrapped cluster puts a
-     control on its own line above the avatar and doubles the header's height. */
-  .app-header-right { flex-shrink: 0; min-width: 0; flex-wrap: nowrap; }
-  /* The two icon triggers hold their size when the row squeezes — the bell's arrival
-     was shrinking the avatar button to 16px at 320, failing the 24px tap target. The
-     search field is the flexible one; identity and the bell are not. The tighter gap
-     pays for the rigidity: at 320 the row was otherwise 4px too wide. */
-  .app-header-right > *, .notif-bell-trigger, .app-admin-cog, .user-menu-trigger { flex-shrink: 0; }
-  .app-header-right { gap: var(--space-4); }
-  /* The avatar carries the identity here. The name is an unbound token 200px wide,
-     which is a whole line of a small screen to say what the circle already says. */
-  .app-user .sb-token, .app-user-name { display: none; }
+  /* Three controls and a hamburger, and every one of them holds its size. The long
+     comment that used to live here was about the search field fighting the right-hand
+     cluster for room — at 320px the header's intrinsic minimum was 401px and every page
+     in the app scrolled sideways by the difference. Search moved to the rail on
+     11 September, so the fight is over; the `flex-shrink: 0` stays because the fault it
+     fixed was a control shrinking under 24px, and that is still the floor. */
+  .app-header-right { gap: var(--space-4); flex-wrap: nowrap; min-width: 0; }
+  .app-header-right > *, .notif-bell-trigger { flex-shrink: 0; }
 }
 
 /* ---- the user menu -------------------------------------------------------
    Your name in the header, and the two things that belong to you behind it. */
 
-.user-menu-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-8);
-  background: none;
-  border: 0;
-  padding: var(--space-4);
-  border-radius: var(--border-radius-small);
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-  min-width: 0;
-}
-.user-menu-trigger:hover { background: rgba(255, 255, 255, 0.12); }
 
 .user-menu { display: flex; flex-direction: column; min-width: 200px; }
 .user-menu-head {

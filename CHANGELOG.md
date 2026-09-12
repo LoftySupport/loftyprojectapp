@@ -14,7 +14,13 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Clone a job from its line on the project, as an icon beside Remove — the control that went missing when cloning moved off the job drawer
+- Inbox and Tasks in the navigation rail carry a badge — unread items on Inbox, your open tasks on Tasks, with a dot on My work when the rail is collapsed
+- A job carries its own completion dates — the one being worked towards, and the day it actually finished
 - An element sweep in CI that counts how many different ways the app draws each thing — headers, tables, cards, containers, empty states, filter rows, hint lines — and fails when a number rises, or when a fix lowers one and the baseline is left behind
+- Pinned in the navigation rail — bookmark any page under a name, up to five, private to you
+- Screenshots and a 1440px desktop width in the responsive harness, so a layout fault can be seen rather than inferred
+- A rail count of projects, jobs and open maintenance requests, read in one round trip
 - the design handoff's SVG icons and the eight component contracts the app is to build against, so the app and the design system converge rather than being reconciled later
 - the approved design for the sidebar rail and the job record, with the ten decisions that answer the gaps in it and the four corrections found reviewing it against the running app
 - a letter can open with the name of anybody on the record — a token for every party role, with two purchasers joined as "A and B"
@@ -133,8 +139,10 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
-- The labels under the dashboard's workload figures were dimmed against the orange panel, making them fainter than the app's own colour rules allow
-- The "no" mark in the permissions grid was too pale to see against the page, so a role that lacks a permission looked the same as a cell that had not loaded
+- On a phone the New button stays on the heading's line on Maintenance and Contacts, instead of dropping below the counts
+- The phone's navigation button is a hamburger in the top right and the Lofty mark is in the top left, instead of an ellipsis on the left and no mark at all
+- The unread count beside Inbox and the one on the bell are the same number read once, so marking everything read clears both together
+- The job drawer no longer scrolls sideways at 460px, and the responsive sweep now opens it at every width
 - 64 job addresses had their lot number in the street-number column, so a job at lot 1 of 14 Brodie Road read as 1 Brodie Road — somebody else's house
 - the staged-workbook importer could not insert a row after the lot number became a number
 - a placeholder on the canvas is marked again — an unfilled field and a mistyped one had been printing as ordinary text
@@ -186,6 +194,16 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- Every page loses the sentence under its heading, so more of the screen is the thing you came for
+- On a phone the filters fold into one row behind Advanced, and every control in it starts and finishes in the same place
+- On a phone the New button sits on the heading's line, top right
+- The footer is one line on a phone and at a desk, in smaller type
+- Search is back on the top bar, where it was before the rail rebuild — the search inside a project or job is untouched
+- The full screen job record sits inside the app frame, so the sidebar, the top bar and the footer are all still there while you read it
+- Job and project properties are grouped under their own headings in the column picker, instead of falling in with everything ungrouped
+- The column picker is a panel beside the table instead of a dialog over it, with a search box and grouped columns
+- The job record is rebuilt from the approved design — the same record as a 460px drawer and a full page, with Tasks, Comments and the activity log docked at the foot instead of scrolled to
+- The navigation rail is rebuilt from the approved design — 224px expanded, 64px collapsed, a flyout of each destination's saved views, and Search, Settings, Admin and your own menu moved out of the header into it
 - publishing a document again replaces the copy saved on the record instead of adding another — download the old one first if you need it
 - a lot number and a res number are whole numbers; a street number stays text, so 12B and 100-105 are kept as typed
 - the res number is offered on every address form, a project's included
@@ -246,6 +264,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Removed
 
+- The unread and open-task numbers beside Inbox and Tasks, until what each one counts is settled and checked
 - Clone is no longer on the job panel — cloning belongs to the project
 - Notifications is no longer a Setup tab; your own channels stay in User settings and the audience rules moved under Automations
 - Processes is no longer a destination in the main navigation — it is part of Setup; /processes and /templates forward there

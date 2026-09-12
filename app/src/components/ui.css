@@ -172,9 +172,28 @@
   overflow: visible;
   text-overflow: clip;
 }
+/* THE CREATE BUTTON STAYS ON THE HEADING'S LINE, AND THE READOUT DROPS UNDER IT.
+   Amber, 12 September: *"on mobile view the add new button should be in top right on same
+   line as the header right aligned"*. On Maintenance and Contacts the row also holds a
+   counts readout, and at 390px heading + counts + button is three lines with the button
+   last — the opposite of what she asked for.
+
+   So the button is `order: 0` and pinned right, and the readout is `order: 3` at full
+   width, which is what pushes it to a second line instead of the button. Above 720px
+   nothing moves: all three sit on one line with room to spare. */
+.page-head-action { margin-inline-start: auto; flex: none; }
+@media (max-width: 720px) {
+  .page-head-count { order: 3; flex: 1 1 100%; }
+}
+
 .page-head-row {
+  flex-wrap: wrap;
   display: flex;
-  align-items: flex-start;
+  /* Centred, not top-aligned: with the descriptive line gone (12 September) the row is a
+     heading and a control, and a 32px button hung off the top of a 28px heading reads as
+     a mistake. It was `flex-start` for a two-line left side that no longer exists. */
+  align-items: center;
+  gap: var(--space-12);
   justify-content: space-between;
   gap: var(--space-16);
   flex-wrap: wrap;
@@ -533,6 +552,24 @@
    thing it has always done on a phone. */
 .data-table { width: max-content; min-width: 100%; border-collapse: collapse; }
 .data-table td { max-width: 320px; }
+/* The row's buttons stay on screen while the rest of the row scrolls under them.
+   A 460px drawer holding a five-column table scrolls sideways by design (see above), and
+   an action pinned to the far right of it is an action nobody finds: the clone icon
+   Amber asked for on 12 September was three columns past the panel's edge on the first
+   run. Sticky rather than a narrower table, because which columns a person wants is
+   theirs to choose and the buttons are not one of them. */
+.data-table .row-actions {
+  position: sticky;
+  right: 0;
+  /* The cell needs a ground of its own, or the row scrolls UNDER it and the address
+     prints through the buttons — which is what the first run looked like. `inherit`
+     rather than a token, so the hover wash, the picked row and the editing row all keep
+     working: whatever the row is painted, this cell is painted the same. */
+  background: inherit;
+}
+/* `inherit` needs something to inherit from, and a `tr` is transparent by default. */
+.data-table tbody tr { background: var(--primary-background-color); }
+.data-table thead tr { background: var(--allgrey-background-color); }
 .data-table th {
   height: 40px;
   padding: 0 var(--space-12);
@@ -596,9 +633,79 @@
 
 /* The picker's list: a checkbox and a name on the left, the two move buttons on the
    right, one row each. */
+/* ---- 6c: the column picker, as a 470px panel -----------------------------
+   A panel rather than a centred modal, because the table behind it is the thing you are
+   deciding about and it has to stay readable while you decide. 470 is the handoff's
+   measurement; `min()` is what keeps it on a phone, where it goes full width beside the
+   rail exactly as the job drawer does. */
+.column-panel {
+  position: fixed;
+  top: var(--shell-header-h, 0px);
+  right: 0;
+  bottom: 0;
+  width: min(470px, calc(100vw - var(--shell-rail-w, 0px)));
+  z-index: 41;
+  display: flex;
+  flex-direction: column;
+  background: var(--primary-background-color);
+  border-left: 1px solid var(--layout-border-color);
+  box-shadow: var(--box-shadow-large);
+  min-width: 0;
+}
+.column-panel-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  padding: var(--space-16);
+  border-bottom: 1px solid var(--layout-border-color);
+}
+.column-panel-top { flex: none; padding: var(--space-16) var(--space-16) var(--space-8); }
+.column-panel-find {
+  width: 100%;
+  height: 36px;
+  min-width: 0;
+  padding: 0 var(--space-12);
+  border: 1px solid var(--ui-border-color);
+  border-radius: var(--border-radius-small);
+  font: var(--font-text2-normal);
+  color: var(--primary-text-color);
+  background: var(--primary-background-color);
+  margin-bottom: var(--space-8);
+}
+/* The only part that scrolls — the header, the search and the footer all stay put, which
+   is the same three-sibling shape the record drawer uses and for the same reason. */
+.column-panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 var(--space-16) var(--space-16);
+}
+.column-panel-foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: var(--space-12) var(--space-16);
+  border-top: 1px solid var(--layout-border-color);
+  background: var(--lofty-flint-100);
+}
+/* 6c's Identity / Programme / People. Uppercase in CSS rather than typed, so a screen
+   reader is not read it letter by letter. */
+.column-group {
+  margin: var(--space-16) 0 var(--space-4);
+  font: var(--font-text3-medium);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--secondary-text-color);
+}
+.column-panel-body > section:first-child .column-group { margin-top: var(--space-4); }
+
 .column-list {
   list-style: none;
-  margin: var(--space-12) 0 0;
+  margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -1067,9 +1174,72 @@
    the drawer's corner — scrolled to the end, the last row's value sat under it. */
 .drawer-body {
   flex: 1;
+  /* A flex child's default minimum is its content, so without this the body grows to fit
+     and pushes the docked footer off the bottom instead of scrolling. It is the same line
+     the RecordDrawer contract warns about, and the footer is why it is needed here now. */
+  min-height: 0;
   overflow-y: auto;
   padding: var(--space-16);
   padding-bottom: calc(48px + 2 * var(--space-24));
+}
+
+/* ---- 6b: the full page is the same record with the conversation beside it -----
+   `PanelGroup` renders a context provider and no DOM, so `.drawer-body` is a direct child
+   of `.drawer` and the two columns are a grid on the parent — no second JSX tree for the
+   expanded state, which is what stops 6a and 6b drifting into two designs.
+
+   The handoff's own words: 6a and 6b are *"the same record at two widths, not two
+   designs"*. They show the same properties in the same order; the page has room to keep
+   the conversation docked BESIDE the record instead of under it. */
+.drawer.is-expanded {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    "head head"
+    "body conv";
+}
+/* In the dock it is a row of the frame, not a panel over it: static, as wide as the main
+   area, and as tall as the space between the header and the footer. The border and the
+   shadow were the overlay saying "I am on top of something" — in the frame they draw a
+   seam where the page does not have one. */
+.app-dock > .drawer.is-expanded {
+  position: static;
+  width: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  z-index: auto;
+  border-left: 0;
+  box-shadow: none;
+}
+.drawer.is-expanded > .record-head { grid-area: head; }
+.drawer.is-expanded > .drawer-body { grid-area: body; padding: var(--space-24) var(--space-32); }
+.drawer.is-expanded > .record-foot {
+  grid-area: conv;
+  /* Beside, not below: no top margin, no cap, and a left border instead of a top one. */
+  margin-top: 0;
+  max-height: none;
+  min-height: 0;
+  border-top: 0;
+  border-inline-start: 1px solid var(--layout-border-color);
+  background: var(--primary-background-color);
+}
+/* Below the width where 400px of conversation and a readable record both fit, the page
+   goes back to the drawer's shape — one column, conversation docked at the foot. Arrived
+   at from the other direction, and the reason there is one component rather than two. */
+@media (max-width: 1100px) {
+  .drawer.is-expanded {
+    display: flex;
+    flex-direction: column;
+  }
+  .drawer.is-expanded > .record-foot {
+    margin-top: var(--space-12);
+    max-height: 52%;
+    border-top: 1px solid var(--layout-border-color);
+    border-inline-start: 0;
+    background: var(--lofty-flint-100);
+  }
 }
 
 /* ---- template phases ----------------------------------------------------- */
@@ -1149,6 +1319,20 @@ code { overflow-wrap: anywhere; }
   .toolbar-field, .filter-chips { flex: 1 1 100%; }
   .toolbar-control { flex: 1; min-width: 0; }
   .toolbar-spacer { margin-left: 0; }
+  /* EVERY CONTROL STARTS AND FINISHES IN THE SAME PLACE. Amber, 12 September, drawing an
+     arrow across a screenshot of the Tasks filters: *"ensure the properties are aligned
+     correctly so they start and finish same spot"*.
+
+     They did not, because each row was [label][control] with the label taking its own
+     width — "View" is 34px and "Assignee" is 62, so six controls began at six different
+     x positions and ended at six different ones. A fixed column fixes both ends at once:
+     the label box is the same width on every row, and the control takes what is left.
+
+     84px is "Job stage" and "Assignee", the longest labels any board uses, at 14px with
+     a little air. Longer than that wraps inside its box rather than pushing the control
+     along, because a ragged column is the thing being fixed. */
+  .toolbar-label { flex: none; width: 84px; white-space: normal; }
+  .toolbar-text { width: auto; flex: 1; min-width: 0; }
   .panel { padding: var(--space-12); }
   /* Label above value, not beside it: a right-aligned value in a 358px row leaves
      the two colliding in the middle. */
@@ -2899,3 +3083,8 @@ code { overflow-wrap: anywhere; }
 .toolbar-text { width: 160px; }
 .toolbar-text input { font-variant-numeric: tabular-nums; }
 .toolbar-advanced-btn.is-on { background: var(--primary-selected-color); }
+
+/* A CollapsiblePanel rendered bare — inside the job record's docked tab strip, where the
+   tab already names it and controls whether it shows. No section chrome at all: the
+   heading and the toggle would be a second name for the tab above it. */
+.panel-bare { min-width: 0; }

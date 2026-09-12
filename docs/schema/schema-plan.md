@@ -2752,6 +2752,176 @@ caught it because its admin deletes exactly that; the probe was then rewritten t
 URL first, and only then did it report.
 
 
+### 11 September — five pages you keep (`0112`)
+
+The rail's **Pinned** section, from the design handoff. Amber, asked what Pinned pins:
+*"pinned is new and allows people to save/bookmark a page"* — **any page**, a URL with a
+name. A filtered board, a settings screen, a job, a report.
+
+**The mockup draws this as projects, and the difference is the whole table.** 7a renders
+pinned rows as projects, each with an 8px health dot in orange, teal or grey. That would
+be a second, weaker list of projects sitting directly above the Projects destination — and
+a bookmark has no health. So `pinned_pages` has no status column, and the rail draws an
+icon for the *kind* of page instead. It is correction 3 in
+[`docs/design/handoff/README.md`](../design/handoff/README.md).
+
+**The kind is not a column.** `/jobs/1209-002` is a job, `/projects?saved=current` is a
+board, `/setup/processes` is a settings screen: the URL already says which, so `pinKind()`
+in `types.ts` reads it off the path. A `pinned_page_kind` column would be a second source
+for a fact the first column already carries, and the two would disagree the first time
+somebody edited one.
+
+#### Five, and how five is enforced
+
+*"max five"* — and **not with a counting trigger**, which is the obvious build and is racy:
+two browser tabs pinning at once both count four and both insert.
+
+```sql
+pinned_page_position integer not null check (pinned_page_position between 1 and 5),
+constraint pinned_pages_five_slots_per_person unique (profile_id, pinned_page_position)
+```
+
+A CHECK of 1..5 plus a UNIQUE per person caps it declaratively and race-safely: the sixth
+pin has nowhere to go, because there is no sixth slot. The loser of a race gets a 23505
+and is told the pin was not saved, rather than silently overwriting the winner. The slot
+doubles as the order the rail draws in, which a `created_at` sort would only approximate
+the moment somebody wanted to move a row up.
+
+#### Why the URL is constrained, and why in the database
+
+```sql
+check (pinned_page_url like '/%' and pinned_page_url not like '//%')
+```
+
+This value is **written by a person and rendered by the app into an anchor's `href`**, in
+the one component that is on every screen and that people use without reading. Left free,
+`https://…` and the protocol-relative `//evil.example` would both be stored happily and
+both navigate off Lofty from inside the navigation rail. A leading single slash is the
+whole of the rule.
+
+It is in the database rather than only in the repository for the reason `CLAUDE.md` gives
+about every `can()`: the app's checks are politeness and the policy is the boundary. The
+app checks it too, so the commonest mistake gets a sentence instead of a constraint
+violation — but the app's check is the message, not the rule.
+
+#### What was watched failing
+
+Every assertion in the migration's proof block was watched reporting before it was
+trusted, by breaking the thing it guards and replaying:
+
+| Broken | Reported |
+| --- | --- |
+| the URL CHECK → `check (true)` | `an off-site pin URL was accepted` |
+| the blank-label CHECK → `check (true)` | `a blank pin label was accepted` |
+| the 1..5 CHECK widened to 1..99 | `a sixth pin slot was accepted` |
+| the slot UNIQUE widened with `pinned_page_id` | `a sixth pin was accepted into an occupied slot` |
+| the per-URL UNIQUE widened with `pinned_page_id` | `the same page was pinned twice` |
+| the RLS policy → `using (true) with check (true)` | `FAIL: a pinned page was written onto somebody else` |
+
+**And one thing the harness caught that nobody had written a probe for.** The first
+replay reported `FAIL: tables without the audit trigger: pinned_pages` — `0080` removed
+the allowlist from `log_activity_audit()` and made `verify/behaviour.sql` assert that
+every non-log table in `public` carries `trg_activity_audit_row`, *"so the table created
+next month fails here the day it is created without one"*. That is exactly what happened,
+a fortnight later, to this table.
+
+#### Applied, 11 September
+
+**Applied to the live project on Amber's say-so** and read back rather than taken on the
+apply's own word: RLS on, one policy, both triggers (`pinned_pages_touch` and
+`trg_activity_audit_row`), all seven CHECK and UNIQUE constraints present, and the table
+empty — the proof block cleans up after itself, so applying it leaves nothing behind.
+
+The proof block running on production is itself the evidence that the constraints bite
+*there*, not only in the replay: every one of those six probes raises and aborts the
+migration if the rule it guards has stopped holding.
+
+The security advisor gained nothing from it. `pinned_pages` appears only in the standing
+`pg_graphql_authenticated_table_exposed` list, which names all 95 tables and is discussed
+under *what the security advisor still says* above — visible in the schema, not readable,
+because `0101` revoked `anon` and RLS decides the rest.
+
+
+### 11 September — a job has its own completion dates (`0113`)
+
+The sixth key property on the job record, and **the only schema change the design handoff
+needs**. Amber, over two turns:
+
+> *"each job has its own completion date. and completion date is at a job level… there is
+> also a project completion level which is when all jobs in the project are completed"*
+
+then, asked which of the two dates a job's is:
+
+> *"project date and job dates are separate and [it] depends [on] each other. [Both] are
+> needed and relevant"*
+
+So `jobs` gains the pair `projects` has carried since `0028`, and the two pairs are
+separate columns on separate tables that **relate** rather than one deriving the other.
+
+| Column | What it is |
+| --- | --- |
+| `job_target_completion` | The date being worked towards. Set in advance — the handoff draws an empty `dd/mm/yyyy` box on a job still in Pre-construction — and the thing an overdue calculation needs to compare against. Without it a job cannot be late, only finished or not |
+| `job_end_date` | When the job actually finished. What 6b reads under *Complete*: *"Job completed (or Target completion)"* — the actual once there is one, the target until then |
+
+Collapsing them into one column loses the distinction the moment a job finishes on a
+different day from the one planned, which is most jobs. `projects` learned this in `0028`
+and the comment there still says it: *"actual, as opposed to target"*.
+
+**The seeding variant was offered and not taken.** The alternative put to Amber was
+pre-filling a new job's target from `project_target_completion`. She took the plain
+version, so a job with no target says so rather than inheriting a date nobody set for it —
+the house rule about plausible values, applied to a date.
+
+**This is not a rename.** "Handover date" was a label in a mockup for a field that existed
+on neither table: there is nothing to migrate and no column anywhere called handover.
+`job_stage_entered_at` stays exactly what it is.
+
+**A project's completion is still derived** — *"when all jobs in the project are
+completed"* — and `0113` deliberately adds no trigger to write it. Deriving it on read
+cannot go stale; a trigger that writes it can, and the day it disagrees with the jobs is
+the day nobody can tell which is right.
+
+#### What was watched failing, and the probe that was not evidence
+
+| Broken | Reported |
+| --- | --- |
+| `j.job_target_completion` dropped from the view's select | `job_display does not carry job_target_completion` |
+| `with (security_invoker = true)` removed | `job_display lost security_invoker — see 0069` |
+| the end-date CHECK → `check (true)` | `A CONSTRAINT DID NOT BITE` |
+
+The third row is the one worth reading. The end-date probe started inside the migration's
+own proof block, guarded with `if a_job is null` because **a replay from empty has no
+jobs** — so with the constraint deliberately removed, the replay reported
+`ALL MIGRATIONS APPLIED CLEANLY`. A probe that quietly tests nothing is the exact failure
+this directory exists to prevent, and it took breaking the constraint to notice.
+
+The probe moved to `app/supabase/verify/constraints.sql`, which runs after
+`behaviour.sql` has made job `9106-002`, and only then did it report. The guarded block
+stays in the migration because it *does* bite on production, where there are 79 jobs — but
+it is not what the rule is proved by, and the migration now says so.
+
+#### Applied, 11 September
+
+**Applied to the live project on Amber's say-so**, and read back rather than taken on the
+apply's own word: 79 jobs, **none** carrying a date (the guarded probe puts back what it
+set, so applying writes nothing), `job_display` carrying both new columns, and
+`security_invoker=true` still on the view after the `create or replace` — which is the
+0069 hole checked rather than assumed, on the database it actually matters on.
+
+The guarded probe DOES bite here, because production has 79 jobs where a replay from empty
+has none. That is the whole reason it stays in the migration despite not being what the
+rule is proved by.
+
+#### And one self-inflicted near-miss in the dictionary
+
+The two `dictionary.ts` entries were first inserted by a regex that matched the opening
+line of the multi-line `e("jobs.job_title_type", …)` call and landed **inside its
+arguments**. `npm run dictionary` reported no error; the generated table said
+`jobs.job_title_type | Title type | [object Object]` and the property count went *down* by
+one. Caught by reading the generated diff rather than trusting the script that wrote it,
+which is the only reason it is a footnote and not a shipped defect.
+
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

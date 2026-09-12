@@ -244,12 +244,10 @@ export function DictionaryPage() {
   return (
     <>
       <div className="page-head page-head-row">
+        {/* No line under the heading (12 September). The live count beside it stays —
+            it is a readout, not a description, and it sits ON the heading's line. */}
         <div>
           <Heading type="h2" weight="bold">Data dictionary</Heading>
-          <Text type="text2" color="secondary">
-            Every property in the schema — what it is called, what it means, what shape it is,
-            and how far along it is.
-          </Text>
         </div>
         {/* The live schema, so this agrees with the "of N" beside the filters. Counting
             all 206 next to a table showing 190 makes the page look broken. */}

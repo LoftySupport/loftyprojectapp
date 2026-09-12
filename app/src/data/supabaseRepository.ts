@@ -53,9 +53,11 @@ import type {
   NewPropertyDef,
   NewJob,
   NewProject,
+  PinnedPage,
   Profile,
   Project,
   ProjectPatch,
+  RailCounts,
   RecordActivity,
   LatestUpdate,
   StagePeriod,
@@ -117,7 +119,8 @@ const WIRED: RepositoryMethod[] = [
   "listProcessTasks", "createProcessTask", "updateProcessTask", "deleteProcessTask",
   "listProcessTaskDependencies", "setProcessTaskDependencies",
   "listProcessRuns", "startProcessRun", "updateProcessRun", "deleteProcessRun", "instantiateProcessTasks",
-  "listProjects", "getProject", "listJobs", "getJob",
+  "listProjects", "getProject", "listJobs", "getJob", "railCounts",
+  "listMyPins", "pinPage", "unpinPage",
   "createProject", "createJob", "createJobsFromSplit", "deleteJob", "deleteProject",
   "moveJobStage",
   "updateJob",
@@ -196,7 +199,7 @@ const PROJECT_COLUMNS =
 //
 // Writes still go to `jobs` — a view is not the place to insert through.
 const JOB_COLUMNS =
-  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_sharepoint_url, job_created_at, job_created_by, job_updated_at, job_updated_by, job_current_address, job_original_address, project_current_address, project_sharepoint_url, project_type, job_title_type, job_council";
+  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_sharepoint_url, job_created_at, job_created_by, job_updated_at, job_updated_by, job_current_address, job_original_address, project_current_address, project_sharepoint_url, project_type, job_title_type, job_council, job_target_completion, job_end_date";
 
 /**
  * `""` and `"   "` are how a browser reports a field somebody did not fill in, and they
@@ -906,6 +909,123 @@ export function createSupabaseRepository(): Repository {
       const { data, error } = await query.order("project_id").order("job_sequence");
       if (error) throw error;
       return (data ?? []).map(r => toJob(r as unknown as JobRow));
+    },
+
+    /**
+     * Three counts, three `head: true` requests, in parallel.
+     *
+     * `head: true` is the whole reason this is cheap: PostgREST answers with a
+     * `Content-Range` and no body, so nothing is serialised and nothing crosses the wire
+     * but a number. The obvious alternative — `listJobs().length` — pulls every job on
+     * every navigation to render one badge.
+     *
+     * Each filter matches the screen the row navigates to, because the first thing
+     * anybody does with a number in a nav rail is click it and count. Jobs excludes
+     * Closed and Maintenance excludes closed and rejected, exactly as `JOB_VIEWS.all` and
+     * `listMaintenanceRequests({ queue: "open" })` do. Projects has no filter, because
+     * the Projects board's "All Projects" view has none either.
+     *
+     * A FOURTH COUNT WAS HERE AND IS NOT ANY MORE
+     *
+     *   `myOpenTasks` — tasks assigned to you, neither done nor cancelled — was added on
+     *   11 September for the rail's Tasks badge and removed the same day with it
+     *   (*"until counts are verified and tested remove"*). Kept as a note rather than as
+     *   dead code: the query was one more `head: true` in this same `Promise.all`, so
+     *   putting it back is four lines, and the thing that needs deciding first is what
+     *   the number means rather than how to fetch it.
+     *
+     * `Promise.all`, so the three are one round of latency rather than three. A refusal
+     * from any of them rejects the lot and the rail shows no numbers at all — which is
+     * the right failure: a rail that silently drew 0 next to Jobs would be reporting an
+     * empty company.
+     */
+    async railCounts(): Promise<RailCounts> {
+      const [projects, jobs, maintenance] = await Promise.all([
+        client.from("projects").select("project_id", { count: "exact", head: true }),
+        client.from("job_display").select("job_id", { count: "exact", head: true })
+          .neq("job_stage", "Closed"),
+        client.from("maintenance_request_display")
+          .select("maintenance_request_id", { count: "exact", head: true })
+          .not("maintenance_request_status", "in", "(closed,rejected)")
+      ]);
+      for (const r of [projects, jobs, maintenance]) if (r.error) throw r.error;
+      return {
+        projects: projects.count ?? 0,
+        jobs: jobs.count ?? 0,
+        maintenance: maintenance.count ?? 0
+      };
+    },
+
+    // ---- the rail's Pinned section (0112) --------------------------------
+
+    /** In slot order, which is the order the rail draws them. RLS returns only yours. */
+    async listMyPins(): Promise<PinnedPage[]> {
+      const { data, error } = await client
+        .from("pinned_pages")
+        .select("pinned_page_id, pinned_page_label, pinned_page_url, pinned_page_position")
+        .order("pinned_page_position", { ascending: true });
+      if (error) throw error;
+      return (data ?? []).map(r => ({
+        id: r.pinned_page_id,
+        label: r.pinned_page_label,
+        url: r.pinned_page_url,
+        position: r.pinned_page_position
+      }));
+    },
+
+    /**
+     * Into the lowest free slot of five.
+     *
+     * Read-then-write, and the race is handled by the database rather than by trying to
+     * avoid it: `unique (profile_id, pinned_page_position)` means two tabs that both pick
+     * slot 3 produce one insert and one 23505, and the loser is told the pin was not
+     * saved rather than silently overwriting the winner. A counting trigger would have
+     * let both through.
+     *
+     * The messages name the actual rule. "Refused by the database" is true of every
+     * failure and useless in all of them.
+     */
+    async pinPage(label: string, url: string): Promise<PinnedPage[]> {
+      const name = label.trim();
+      if (!name) throw new Error("A pinned page needs a name.");
+      // Checked here as well as in the database: this one is worth a sentence rather
+      // than a constraint violation, because it is the commonest thing to hit.
+      if (!url.startsWith("/") || url.startsWith("//")) {
+        throw new Error("Only a page inside Lofty Hub can be pinned.");
+      }
+      const me = await repo.currentProfile();
+      if (!me) throw new Error("Pinning a page needs you to be signed in.");
+
+      const taken = new Set((await repo.listMyPins()).map(p => p.position));
+      const free = [1, 2, 3, 4, 5].find(n => !taken.has(n));
+      if (!free) throw new Error("Five pages are pinned already — unpin one to make room.");
+
+      const { error } = await client.from("pinned_pages").insert({
+        profile_id: me.id,
+        pinned_page_label: name,
+        pinned_page_url: url,
+        pinned_page_position: free
+      });
+      if (error) {
+        if (error.code === "23505") {
+          throw new Error("That page is already pinned, or a slot was taken — try again.");
+        }
+        throw error;
+      }
+      return await repo.listMyPins();
+    },
+
+    async unpinPage(id: string): Promise<PinnedPage[]> {
+      const { data, error } = await client
+        .from("pinned_pages")
+        .delete()
+        .eq("pinned_page_id", id)
+        .select("pinned_page_id");
+      if (error) throw error;
+      // RLS makes another person's pin unreachable rather than forbidden, so a delete
+      // that matched nothing is the only signal that it was not yours (or is gone).
+      if (!data?.length) throw new Error("That pin was not removed — it no longer exists.");
+      return await repo.listMyPins();
     },
 
     /** `maybeSingle`, not `single`: a job that is not there is null, not an error. */
@@ -1713,6 +1833,10 @@ export function createSupabaseRepository(): Repository {
       if ("jobNumberOld" in patch) row.job_number_old = patch.jobNumberOld?.trim() || null;
       // Null clears it back to "nobody has said", which is a real answer here.
       if ("titleType" in patch) row.job_title_type = patch.titleType ?? null;
+      // 0113. Null clears either — an unset completion date is a real state, and the
+      // record draws it as an empty date box rather than as a guess.
+      if ("targetCompletion" in patch) row.job_target_completion = patch.targetCompletion ?? null;
+      if ("endDate" in patch) row.job_end_date = patch.endDate ?? null;
       if (Object.keys(row).length === 0) {
         const { data, error } = await client
           .from("job_display").select(JOB_COLUMNS).eq("job_id", id).single();
@@ -4297,6 +4421,8 @@ type JobRow = {
   project_sharepoint_url: string | null;
   project_type: Job["projectType"];
   job_council: Job["council"];
+  job_target_completion: Job["targetCompletion"];
+  job_end_date: Job["endDate"];
 };
 
 function toJob(r: JobRow): Job {
@@ -4327,6 +4453,8 @@ function toJob(r: JobRow): Job {
     // it. Amber, 10 Sep: "the council area still needs to be recorded, but just not in
     // the full address line." It never was in the line; it was simply never read back.
     council: r.job_council,
+    targetCompletion: r.job_target_completion,
+    endDate: r.job_end_date,
     projectSharepointUrl: r.project_sharepoint_url,
     // Inherited from the project through the view, never stored on the job. `job_display`
     // has exposed it since 0028; this read simply never asked for it, so every card and

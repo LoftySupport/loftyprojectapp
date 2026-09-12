@@ -122,13 +122,42 @@ They are real and shipped. What is missing is which phase each belongs to and wh
 wording above is the wording you want, and inventing roadmap text is exactly the thing
 `CLAUDE.md` forbids.
 
-### 8. How is health status worked out?
+### 8. How is health status worked out? *(mostly answered — one half left)*
 
 Long-standing, from the schema plan's own risk list. *"Status is what someone sets. Health
-is what the system works out"* — from inputs nobody has defined. Kanban-by-status and
-kanban-by-team work today; **kanban-by-health cannot be built until this is answered.** Is a
-job at risk because it is past `expected_days`, because a required field is empty, because a
-dependency is blocked, or some combination?
+is what the system works out"* — from inputs nobody had defined.
+
+**Amber, 12 September, answered the input:** *"Job at risk is when the process is overdue
+which is set by the days marked in the process which says it's at risk."*
+
+So health is **read off the process runs**, and none of it needs a new column. A process
+line already carries `expected_days` and `at_risk_lead_days`; a run of it already carries
+the `due_date` and `at_risk_date` those produce, and a `health` the database computes —
+`not_started`, `no_expectation`, `on_track`, `at_risk`, `overdue`. The job's health is a
+roll-up of its runs' health rather than anything new. That settles the question the schema
+plan's risk list actually asked: it is not an empty required field and not a blocked
+dependency, it is the clock on the process.
+
+**What is still open is the other half of the pill.** The record draws three states and
+the answer names one. A job is *at risk* when a process on it is overdue — so what makes a
+job **overdue**?
+
+- **The job's own completion date has passed** (`job_target_completion`, `0113`), which is
+  the reading that makes both words mean something: a process running late puts the job at
+  risk, and the job missing the date it was working towards makes it overdue. **Recommended.**
+- **A process is overdue by some further margin**, which needs a second number nobody has
+  set.
+- **Nothing does** — the job pill is only ever on track or at risk, and overdue is a
+  process-level word. Defensible, but then `StageTrack`'s three colours are two.
+
+Also unanswered, and smaller: does a run sitting at `at_risk` — inside its lead days, not
+yet past its due date — make the JOB at risk, or does the job only turn when a run actually
+goes overdue? The answer above says "overdue", so the build will take that literally unless
+told otherwise: a run at `at_risk` leaves the job on track.
+
+**Blocked meanwhile:** kanban-by-health, the dashboard's on-track tiles, and the record's
+health pill, which still reads `job_status` (a column somebody sets) rather than a derived
+health.
 
 ### 9. Does Acquisition & Development want a `project_stage` vocabulary?
 
@@ -258,44 +287,16 @@ so it is a question rather than a guess:
 Nothing is blocked on this — the rules are written down and the two boards meet them. It
 decides how much retro-fitting to schedule, and in what order.
 
-### 20. Is a job's completion date the one being aimed at, or the one it finished on?
-
-**Mostly answered, 11 September.** *"each job has its own completion date. and completion
-date is at a job level… there is also a project completion level which is when all jobs in
-the project are completed"*, and *"you can change handover date to completion date"* — so the
-sixth key property is **Completion date**, it lives on the **job**, and a project's completion
-is **derived** from its jobs rather than typed.
-
-What is left is which date it is, because `projects` already keeps the two apart:
-`project_target_completion` is *"the date being worked towards"* and drives the Gantt and the
-overdue calculation; `project_end_date` is *"when the project actually finished, as opposed to
-the target."*
-
-The handoff shows a job's completion date being **set in advance** — 6a has an empty
-`dd/mm/yyyy` box on a job still in Pre-construction, and 6b reads *Target completion 14/11/26*
-under Construction and *"Job completed (or Target completion)"* under Complete. That reads as
-a planned date that the actual replaces once the job finishes, which would mean a job mirrors
-a project and carries both.
-
-Blocks the migration, and nothing else.
-
-### 21. How does the rail get its counts?
-
-The rail shows Projects 9, Jobs 128, Maintenance 23, and every flyout row carries its own
-count. The repository has no aggregate method — every count on screen today comes from a
-list the screen had already loaded — and the rail renders on every page.
-
-Options: one `rail_counts` view returning every number in one row, refreshed on navigation
-(one query, can be a second stale); or live counts fetched per flyout when it opens (exact,
-only pays when hovered). The first is the default unless you prefer the second.
-
-
 ---
 
 ## Answered
 
 | Date | Question | Answer |
 | --- | --- | --- |
+| 11 Sep | 6c draws a value control beside every column name — whose value is it? | **Leave it out.** Four readings were put up — a preview plus an empty-column filter, an editor for the open job, a bulk fill across the board, or nothing — and Amber took the last. So the column picker chooses, searches and groups columns and does not edit values. The ambiguity was real rather than a failure to read the package: the drawn values are one job's (*24 Wandoo Road*, *Evanston Park*, *Pre-construction*) while the count line says *"17 of 41 columns have a value on this board"*, and no reading satisfies both. **"Saved to this view only" is left off the footer for a different reason**: it would be false. `useColumnLayout` stores the layout per person per surface and syncs it to the profile, so it follows somebody to another device and is not scoped to a saved view at all |
+| 11 Sep | (asked as 20) Is a job's completion date the one being aimed at, or the one it finished on? | **Both, and the job's pair is separate from the project's** — *"project date and job dates are separate and [it] depends [on] each other. [Both] are needed and relevant"*, confirmed against the exact columns before anything was written. So `jobs` gains `job_target_completion` (the date being worked towards) and `job_end_date` (when it actually finished), mirroring the pair `projects` has carried since 0001. The drawer's **Completion date** shows the target while the job runs and the actual once it is done, which is exactly what 6b draws — *Target completion 14/11/26* under Construction, *"Job completed (or Target completion)"* under Complete. The project's own dates do not move and a project's completion goes on being **derived** from its jobs rather than typed (decision 7). The seeding variant was offered and not taken: a new job's target is not pre-filled from its project's, so a job with no target says so rather than inheriting a date nobody set for it |
+| 12 Sep | Do Inbox and Tasks carry a count? | **Not yet — both badges were built on 11 September and taken out again on the 12th.** Amber first: *"Inbox and tasks should have a badge"*, with Inbox reading unread notifications from the same state as the bell so the two could not disagree. Then, seeing it: *"they ideally will be for new since last check on inbox and open tasks but if not correct then will just be ignored. So until counts are verified and tested remove."* So the rows are bare again, and what the two numbers have to be is now on the record: **Inbox = new since you last looked**, which nothing in the schema records — there is no per-person 'last seen the dashboard' mark, and unread notifications is a different fact that the bell already shows; **Tasks = open tasks**, which `task_display` can answer but which had not been checked against a real board. The plumbing stays where it costs nothing to keep: `InboxProvider` holds the bell's state so the rail can read the same number rather than a second one, and `.nav-row-badge`, `.nav-row-dot` and `NavRailGroup`'s `alert` keep their styles. The `myOpenTasks` count came OUT of `railCounts()` with the badge — a round trip on every navigation for a number nobody renders is a cost with no reader. **Blocked on:** a decision about what 'new since last check' counts, and where that mark is stored |
+| 11 Sep | How does the rail get its counts? | **Destination counts only — the flyout carries none.** Three options were put up: one `rail_counts` view, live per-flyout fetches, or the rail's six numbers alone. Amber took the third. So `railCounts()` is one aggregate returning Projects, Jobs and Maintenance, read once per navigation, and the flyout lists its saved views and its stage groupings with **no number beside them**. This is a deliberate departure from the handoff, which draws right-aligned counts on every flyout row in 7b and 7c — it is the one place the build does not match the drawing, and the reason is cost: nine more queries per page visit, or a `rail_counts` view that has to be re-cut every time somebody saves a view. The flyout's job is to jump to a view from anywhere; the number was never what it was for |
 | 11 Sep | What does the job drawer show, and in what order? | **Superseded by a design.** The question was asked with three options; the answer was a package — `docs/design/handoff/job-record/`. Title as the address with the project number linked, health pill, blocked-by banner, then Job Stage, Key properties and Process as the only three collapsible sections, with Tasks / Comments / Activity **docked in a footer** rather than scrolled to. The footer dock is the part no option had: a drawer is header / scrolling body / docked footer, three flex siblings, or the tabs scroll away and the pattern is pointless |
 | 11 Sep | Inbox and Tasks in the new rail — what are they? | *"My Work has Inbox (This was previously the homepage dashboard) and task (was task pages)"*. **No new tables.** `/dashboard` becomes Inbox inside *My work*; `/tasks` survives unchanged and is reached from there. The rail's eight destinations become six plus My work |
 | 11 Sep | What does Pinned pin? | *"pinned is new and allows people to save/bookmark a page"* — **any page**, a URL with a name: a filtered board, a settings screen, a job, a report. One per-user table of `{label, url}` with RLS, max five. **No status dot**, because a URL has no health; the mockup draws pinned rows as projects with a health dot and that is the thing which changes |

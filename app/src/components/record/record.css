@@ -1,0 +1,582 @@
+/* The record family — 11 September handoff, `docs/design/handoff/job-record/`.
+   Marked high fidelity: 32px property row, 36px process step, 36px tab, 28–32px field
+   controls, 4px radius on controls, 8px on cards, 100px on pills, and nothing below 12px.
+
+   One stylesheet for six components because they are one pattern seen at two widths, and
+   the six were split into files for the design system's sake rather than because their
+   styles are independent. The drawer's variables are set at `.record-shell` and read all
+   the way down. */
+
+/* ---- the shell: three flex siblings, and only the middle one scrolls ---- */
+
+.record-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  background: var(--primary-background-color);
+}
+.record-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  min-height: 48px;
+  padding: 0 var(--space-16);
+  border-bottom: 1px solid var(--layout-border-color);
+  min-width: 0;
+}
+/* `min-height: 0` is the load-bearing line: a flex child's default minimum is its
+   content, so without it the body grows to fit and pushes the footer off the bottom
+   instead of scrolling. This is the failure the RecordDrawer contract warns about. */
+.record-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  min-width: 0;
+}
+.record-foot {
+  flex: none;
+  margin-top: var(--space-12);
+  border-top: 1px solid var(--layout-border-color);
+  background: var(--lofty-flint-100);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  /* Capped so the conversation cannot eat a short window: the record above it is the
+     thing being read, and a footer taller than half the panel is a second page. */
+  max-height: 52%;
+}
+
+/* ---- breadcrumb and title ---------------------------------------------- */
+
+.record-crumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+  min-width: 0;
+}
+.record-crumb { display: inline-flex; align-items: center; min-width: 0; }
+.record-crumb-sep { margin: 0 var(--space-8); color: var(--lofty-flint-400); }
+.record-crumbs .is-current { font: var(--font-text3-medium); color: var(--primary-text-color); }
+.record-crumbs a { color: inherit; }
+
+/* Montserrat, tight. 16/22 in the drawer and 20/26 on the page — the two sizes the
+   handoff measures, and the only two. */
+.job-title {
+  margin: 0;
+  font: var(--font-text1-medium);
+  font-family: var(--title-font-family);
+  letter-spacing: -0.1px;
+  color: var(--primary-text-color);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.job-title.is-page { font-size: 20px; line-height: 26px; }
+/* Marked ONLY by a light Flint underline — not by the link colour. The title is the
+   loudest thing on the record, and a coloured fragment inside it reads as an error
+   before it reads as a link. */
+.job-title-project {
+  text-decoration: underline;
+  text-decoration-color: var(--lofty-flint-300);
+  text-underline-offset: 3px;
+  text-decoration-thickness: 2px;
+}
+.job-title a { color: inherit; text-decoration: none; }
+.job-title a:hover .job-title-project { text-decoration-color: var(--lofty-crisp-orange); }
+
+/* ---- the health pill ---------------------------------------------------- */
+
+.health-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex: none;
+  padding: var(--space-4) var(--space-12);
+  border-radius: var(--border-radius-pill);
+  font: var(--font-text2-medium);
+  white-space: nowrap;
+}
+
+/* ---- sections ----------------------------------------------------------- */
+
+.record-section { min-width: 0; }
+/* A rule above every section but the first. `border-top` on the section rather than a
+   separate element, so a collapsed section still separates from the one above it. */
+.record-section + .record-section,
+.record-section:not(.is-first) { border-top: 1px solid var(--layout-border-color); padding-top: var(--space-16); }
+.record-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  min-width: 0;
+}
+.record-section-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-height: 24px;
+  padding: var(--space-4) 0;
+  border: 0;
+  background: none;
+  font: var(--font-text2-medium);
+  color: var(--primary-text-color);
+  cursor: pointer;
+  min-width: 0;
+}
+.record-section-chev { display: inline-flex; flex: none; }
+/* The readout sits OUTSIDE the button: "Stage 2 of 5 · 22 days" is a fact, not part of
+   the control's name, and inside it a screen reader would read it on every press. */
+.record-section-meta {
+  flex: none;
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+  text-align: right;
+}
+.record-section-body { padding-top: var(--space-12); min-width: 0; }
+
+/* ---- the stage strip, drawer variant: separated 4px lines --------------- */
+
+.stage-bars {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-8);
+  min-width: 0;
+}
+.stage-bar { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.stage-bar-name {
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+  /* Wrapped, not ellipsised: "Acquisition & Development" in a fifth of 428px is two
+     lines, and an ellipsis there would leave five columns reading "Acquis…". */
+  overflow-wrap: anywhere;
+  min-height: 32px;
+}
+.stage-bar-name.is-current { font: var(--font-text3-medium); color: var(--primary-text-color); }
+.stage-bar-line { height: 4px; border-radius: var(--border-radius-2); }
+.stage-bar-date { font: var(--font-text3-normal); color: var(--secondary-text-color); }
+.stage-bar-date.is-empty { color: var(--placeholder-color); }
+
+/* ---- the stage strip, page variant: butted segments --------------------- */
+
+.stage-track { min-width: 0; }
+.stage-track-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  /* White hairlines BETWEEN the segments, which is what butting them means: a 1px gap
+     over the page's own white, rather than five bordered boxes. */
+  gap: 1px;
+  border-radius: var(--border-radius-4);
+  overflow: hidden;
+  min-width: 0;
+}
+.stage-track-seg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 52px;
+  padding: var(--space-8);
+  font: var(--font-text2-normal);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* Radius only on the outer ends — the inner joins are square, so the five read as one
+   track rather than as five pills in a row. */
+.stage-track-seg.is-first { border-radius: var(--border-radius-4) 0 0 var(--border-radius-4); }
+.stage-track-seg.is-last { border-radius: 0 var(--border-radius-4) var(--border-radius-4) 0; }
+.stage-track-readouts {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: var(--space-8);
+  min-width: 0;
+}
+.stage-readout { margin: 0; padding: var(--space-4) var(--space-8); min-width: 0; }
+/* Two lines per segment in 6b — "Job started 02/06/26" over "Days in stage 79". Label
+   left, value hard right, so five columns of numbers line up down the page. */
+.stage-readout-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0 var(--space-8);
+  align-items: baseline;
+  min-width: 0;
+}
+/* Label dark semibold — the thing you scan for. Value light secondary — the number. */
+.stage-readout dt { font: var(--font-text3-medium); color: var(--primary-text-color); min-width: 0; }
+.stage-readout dd { margin: 0; font: var(--font-text3-normal); color: var(--secondary-text-color); text-align: right; }
+
+/* ---- property rows ------------------------------------------------------ */
+
+.field-list {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  /* Both widths, set once. A row cannot opt out, which is what keeps every control in a
+     column the same width and height. */
+  --field-label-w: 110px;
+  --field-control-w: minmax(0, 1fr);
+}
+/* 110px, not the handoff's 120. The arithmetic is correction 1: at 460px, 120 + 16px
+   padding either side left ~308px for a control holding a name, a role and a chevron,
+   and the supplied screenshot overflows because of it. Ten pixels back, plus a control
+   column that can actually shrink, is what stops the scrollbar. */
+.field-list.is-page { --field-label-w: 136px; --field-control-w: 300px; }
+
+.field-row-r {
+  display: grid;
+  grid-template-columns: var(--field-label-w) var(--field-control-w) auto;
+  align-items: center;
+  gap: var(--space-12);
+  min-height: 32px;
+  padding-block: var(--space-4);
+  min-width: 0;
+}
+.field-row-r:hover { background: rgba(65, 64, 66, 0.04); }
+.field-row-label {
+  font: var(--font-text2-normal);
+  color: var(--secondary-text-color);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* `min-width: 0` on the control column AND on everything the app puts inside it. A grid
+   child's default minimum is its content, so a long address in a Select pushes the
+   column wider than its track and the panel scrolls sideways — which is exactly the
+   fault in the supplied 6a screenshot. */
+.field-row-control { min-width: 0; }
+.field-row-control > * { max-width: 100%; min-width: 0; }
+.field-row-action { display: flex; align-items: center; flex: none; }
+
+/* A typed field with nothing in it still draws its control and says what to do. */
+.field-box {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 var(--space-8);
+  border: 1px solid var(--ui-border-color);
+  border-radius: var(--border-radius-4);
+  font: var(--font-text2-normal);
+  color: var(--primary-text-color);
+  background: var(--primary-background-color);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.field-box.is-empty { color: var(--placeholder-color); }
+/* No type means no control: a computed or read-only fact reads as text, not as a box
+   somebody can try to edit. */
+.field-plain {
+  font: var(--font-text2-normal);
+  color: var(--primary-text-color);
+  overflow-wrap: anywhere;
+}
+.field-plain.is-empty { color: var(--placeholder-color); }
+
+/* The address row's Crisp Orange +. 28px, filled, white ink — the one orange control on
+   the record, and it is a fill with an icon rather than small text on orange. */
+.field-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border: 0;
+  border-radius: var(--border-radius-4);
+  background: var(--lofty-crisp-orange);
+  color: var(--lofty-finisher-white);
+  cursor: pointer;
+}
+.field-add:hover { background: var(--lofty-orange-hover); }
+
+/* ---- the process card --------------------------------------------------- */
+
+.process-card {
+  background: var(--lofty-flint-50);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-8);
+  overflow: hidden;
+  min-width: 0;
+}
+.process-progress { height: 4px; background: var(--lofty-flint-200); }
+.process-progress-fill {
+  height: 100%;
+  background: var(--lofty-crisp-orange);
+  transition: width var(--motion-productive-medium) var(--motion-timing-transition);
+}
+.process-list { list-style: none; margin: 0; padding: 0; min-width: 0; }
+.process-step + .process-step { border-top: 1px solid var(--lofty-flint-200); }
+.process-step-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-height: 36px;
+  padding: 0 var(--space-8);
+  min-width: 0;
+}
+.process-step-row:hover { background: rgba(65, 64, 66, 0.04); }
+.process-step-chev {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border: 0;
+  background: none;
+  border-radius: var(--border-radius-4);
+  color: var(--icon-color);
+  cursor: pointer;
+}
+.process-step-box { flex: none; width: 16px; height: 16px; accent-color: var(--lofty-crisp-orange); }
+/* The name is the checkbox's label, so the whole of it is a 36px target. */
+.process-step-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-block: var(--space-8);
+  font: var(--font-text2-normal);
+  color: var(--primary-text-color);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+/* Struck through in secondary ink — done, and no longer the thing to read. */
+.process-step-name.is-done { text-decoration: line-through; color: var(--secondary-text-color); }
+.process-step-date {
+  flex: none;
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+  white-space: nowrap;
+}
+.process-step-owner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: var(--border-radius-circle);
+  background: var(--lofty-foundation-black);
+  color: var(--lofty-finisher-white);
+  font: var(--font-text3-medium);
+}
+.process-step-fields { padding: var(--space-8) var(--space-8) var(--space-12) 48px; min-width: 0; }
+.process-more {
+  display: block;
+  width: 100%;
+  min-height: 36px;
+  border: 0;
+  border-top: 1px solid var(--lofty-flint-200);
+  background: none;
+  font: var(--font-text2-normal);
+  color: var(--primary-text-color);
+  cursor: pointer;
+}
+.process-more:hover { background: rgba(65, 64, 66, 0.04); }
+
+/* ---- the docked tab strip ----------------------------------------------- */
+
+.record-tabs { flex: none; min-width: 0; }
+.record-tabs-strip {
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  padding: 0 var(--space-16);
+  min-width: 0;
+  overflow-x: auto;
+}
+.record-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex: none;
+  height: 36px;
+  padding: 0 var(--space-16);
+  border: 0;
+  background: none;
+  font: var(--font-text2-normal);
+  color: var(--primary-text-color);
+  cursor: pointer;
+  position: relative;
+}
+/* Flint dividers between, drawn rather than typed, and never beside the lifted tab —
+   a rule butting a white card reads as a crack in it. */
+.record-tab + .record-tab::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 1px;
+  background: var(--lofty-flint-300);
+}
+.record-tab.is-active::before, .record-tab.is-active + .record-tab::before { display: none; }
+/* The active tab is LIFTED as a white card with a Crisp Orange underline — not an
+   underline on the strip, which is what Vibe's own Tabs does on a white ground. */
+.record-tab.is-active {
+  background: var(--primary-background-color);
+  border-radius: var(--border-radius-4) var(--border-radius-4) 0 0;
+  box-shadow: inset 0 -3px 0 var(--lofty-crisp-orange);
+  font: var(--font-text2-medium);
+}
+.record-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 var(--space-4);
+  border-radius: var(--border-radius-pill);
+  background: var(--lofty-flint-200);
+  font: var(--font-text3-normal);
+  color: var(--primary-text-color);
+}
+.record-tabs-trailing {
+  margin-inline-start: auto;
+  align-self: center;
+  padding-inline-start: var(--space-12);
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+  flex: none;
+}
+
+/* ---- 6b: the page's two columns ---------------------------------------- */
+
+/* `1fr | 400px`, and the right column is the conversation docked beside the record
+   rather than under it — the one thing the page has room for that the drawer does not. */
+.record-page { display: grid; grid-template-columns: minmax(0, 1fr) 400px; min-height: 0; min-width: 0; }
+.record-page > .record-shell { border-inline-end: 1px solid var(--layout-border-color); }
+.record-page .record-body { padding: var(--space-24) var(--space-32); }
+/* Below the point where 400px of conversation and a readable record both fit, the two
+   columns stack and the conversation goes back to the foot — which is the drawer's
+   shape, arrived at from the other direction. */
+@media (max-width: 1100px) {
+  .record-page { grid-template-columns: minmax(0, 1fr); }
+  .record-page > .record-shell { border-inline-end: 0; }
+}
+
+/* ---- the blocked-by banner ---------------------------------------------- */
+
+.record-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-height: 32px;
+  padding: var(--space-4) var(--space-12);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-4);
+  background: var(--lofty-flint-100);
+  font: var(--font-text2-normal);
+  color: var(--primary-text-color);
+  min-width: 0;
+}
+.record-banner-icon { display: inline-flex; flex: none; color: var(--negative-color); }
+.record-banner-label { flex: none; color: var(--secondary-text-color); }
+.record-banner-reason { min-width: 0; overflow-wrap: anywhere; }
+
+/* ---- focus and press ---------------------------------------------------- */
+
+.record-shell :focus-visible,
+.record-page :focus-visible {
+  outline: 3px solid rgba(244, 126, 99, 0.5);
+  outline-offset: 1px;
+}
+.record-section-toggle:active,
+.process-step-chev:active,
+.field-add:active,
+.record-tab:active { transform: scale(0.95); transition: transform 70ms var(--motion-timing-transition); }
+
+@media (prefers-reduced-motion: reduce) {
+  .record-section-toggle:active, .process-step-chev:active,
+  .field-add:active, .record-tab:active { transform: none; }
+}
+
+/* ---- the record's title row and its notes ------------------------------- */
+
+.record-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-12);
+  min-width: 0;
+}
+.record-title-row .job-title { flex: 1 1 auto; min-width: 0; }
+
+/* A sentence the record says about itself — the frozen pipeline, the empty process.
+   Secondary ink, 12/16, and never in place of a value: these explain a state, they do
+   not stand in for data. */
+.record-note {
+  margin: var(--space-8) 0 0;
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+}
+
+/* A control that opens something rather than holding a value — "Currently with" opens
+   the assignee editor. Same box as a field so the column stays one width, with a
+   pointer to say it does something. */
+.field-box.is-button {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: var(--font-text2-normal);
+}
+.field-box.is-button:hover { border-color: var(--lofty-foundation-black); }
+/* A real date input inside the same box, so an empty one reads dd/mm/yyyy from the
+   browser and a filled one is editable in place. */
+.field-box.is-input { width: 100%; }
+
+.field-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+  font: var(--font-text2-normal);
+  color: var(--primary-text-color);
+  text-decoration: underline;
+  text-decoration-color: var(--lofty-flint-300);
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+.field-link:hover { text-decoration-color: var(--lofty-crisp-orange); }
+
+/* The breadcrumb's clickable crumbs are buttons, not anchors — see the note in
+   JobDrawer: an anchor here is a full page reload of a 1 MB bundle. They have to read as
+   links anyway. */
+.record-crumb-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--lofty-flint-300);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.record-crumb-link:hover { text-decoration-color: var(--lofty-crisp-orange); }
+
+/* The docked panel under the tabs. It scrolls on its own, so a long comment thread does
+   not push the composer out of the footer — the footer's own max-height caps the pair. */
+.record-foot-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-12) var(--space-16) var(--space-16);
+  min-width: 0;
+}
+
+/* The record's two acts, under the title. */
+.record-acts { display: flex; flex-wrap: wrap; gap: var(--space-8); min-width: 0; }
+
+/* 24px minimum on a crumb, which is the WCAG 2.2 floor the responsive sweep asserts —
+   it caught these at 25x16 and 27x16 on a phone the first time they were drawn. */
+.record-crumb-link { display: inline-flex; align-items: center; min-height: 24px; }

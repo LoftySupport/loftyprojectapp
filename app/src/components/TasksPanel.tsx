@@ -39,11 +39,13 @@ import { CappedList } from "./CappedList";
  * at Lofty wrote.
  */
 export function TasksPanel({
-  jobId, projectId, title = "Tasks"
+  jobId, projectId, title = "Tasks", bare = false
 }: {
   jobId?: string;
   projectId?: number;
   title?: string;
+  /** Inside the record's docked tab strip, where the tab already names it. */
+  bare?: boolean;
 }) {
   const repo = useRepository();
   const { can } = usePermission();
@@ -138,6 +140,7 @@ export function TasksPanel({
 
   return (
     <CollapsiblePanel
+      bare={bare}
       id="job-tasks"
       title={title}
       defaultOpen={false}

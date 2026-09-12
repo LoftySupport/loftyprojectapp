@@ -17,6 +17,24 @@
  * scrolls*. A data table and a kanban board are supposed to be wider than the screen —
  * that is what the scroll container is for. Only the page itself must not move.
  *
+ * AND IT TAKES PICTURES NOW. `RESPONSIVE_SHOTS=<dir>` saves one PNG per route per size
+ * and the run is otherwise unchanged. Every defect this project has shipped — full-width
+ * filter rows, a raw `{{token}}` on a card, unreadable text on a dark rail — was invisible
+ * in a diff and obvious in a picture, and this harness was already driving a real browser
+ * across every route and throwing the frame away. The two assertions measure geometry;
+ * a picture is the only thing that measures whether the screen is right.
+ *
+ * Three environment variables, all optional, all off by default so CI runs exactly as
+ * before:
+ *
+ *   RESPONSIVE_SHOTS=<dir>     write `<size>__<route>.png` for every page visited
+ *   RESPONSIVE_ROUTES=a,b,c    sweep these routes instead of all of them
+ *   RESPONSIVE_SIZES=phone,…   sweep these device names instead of all of them
+ *
+ * The last two exist because a picture run is for looking at one thing: shooting 35
+ * routes at 6 widths to see the rail is 210 images nobody opens. Neither narrows what CI
+ * checks — CI sets neither.
+ *
  * Run it with `npm run responsive`, which starts the server this needs and stops it
  * again. See scripts/README.md for why that server is not the ordinary dev server.
  */
@@ -26,7 +44,7 @@ const BASE = process.env.RESPONSIVE_BASE ?? "http://127.0.0.1:5200";
 // preference names, so on its own it never measures the dashboard for anybody who has
 // chosen a different landing page — which is how the dashboard became unreachable
 // entirely without a single check noticing.
-const ROUTES = ["/", "/dashboard",
+const ALL_ROUTES = ["/", "/dashboard",
                 // With a query, because that is the only state it has: `/search` on its
                 // own is a one-line "type in the box above" and measures nothing. The
                 // DROPDOWN is not here and cannot be — it opens on a keystroke and has no
@@ -34,6 +52,15 @@ const ROUTES = ["/", "/dashboard",
                 // responsive; its width is capped against the viewport by hand.
                 "/search?q=court",
                 "/projects", "/jobs", "/tasks",
+                // THE JOB RECORD, which the sweep had never once drawn. `/jobs` measures
+                // the board; the drawer is a route of its own (`/jobs/:jobNumber`) and
+                // every layout in it — the stage strip, the 110px property grid, the
+                // docked footer — was unmeasured until 11 September. The supplied 6a
+                // screenshot overflows at 460px, so this is precisely the screen most
+                // able to push a page sideways.
+                //
+                // It needs a job to exist, which is what `tracker-fixtures.ts` is for.
+                "/jobs/9001-02",
                 // The tasks board's other three views, for the reason the tracker's
                 // table view is here: they are three different layouts on one route —
                 // a kanban, a timeline and a month grid — and sweeping only the table
@@ -86,13 +113,60 @@ const ROUTES = ["/", "/dashboard",
 // Real devices, not round numbers. 320 is the narrowest still in use; 390 is the
 // iPhone most people have; the landscape row is the same phone turned sideways, which
 // is where the dialogs failed and no portrait size caught it.
-const SIZES = [
+//
+// 1440x900 is the sixth, and it is the one the app is actually used at: Amber's MacBook
+// Air, and every desk at Lofty. Its absence is why this sweep has never once caught a
+// fault on the width people work at — a 1024 tablet is where things START to have room,
+// not where they finally do, and the rail at 224px plus a 460px drawer plus a board
+// between them only resolves above it. It is listed LAST so the narrow sizes, which are
+// where the failures are, still print first.
+const ALL_SIZES = [
   ["phone",      390,  844],
   ["phone-s",    320,  568],
   ["phone-land", 844,  390],
   ["tablet",     768, 1024],
   ["tablet-l",  1024,  768],
+  ["desktop",   1440,  900],
 ];
+
+/**
+ * The narrowing knobs. Both take a comma-separated list; both default to everything, so
+ * an unset environment is the full sweep CI has always run.
+ *
+ * An unknown size name is a hard stop rather than an empty run: `RESPONSIVE_SIZES=laptop`
+ * silently measuring nothing and exiting 0 is the "passes by not testing" failure this
+ * file's own comments warn about twice.
+ */
+const list = v => (v ?? "").split(",").map(s => s.trim()).filter(Boolean);
+
+const wantRoutes = list(process.env.RESPONSIVE_ROUTES);
+const ROUTES = wantRoutes.length ? wantRoutes : ALL_ROUTES;
+
+const wantSizes = list(process.env.RESPONSIVE_SIZES);
+const SIZES = wantSizes.length
+  ? wantSizes.map(n => {
+      const hit = ALL_SIZES.find(s => s[0] === n);
+      if (!hit) {
+        console.error(`unknown size "${n}" — have: ${ALL_SIZES.map(s => s[0]).join(", ")}`);
+        process.exit(2);
+      }
+      return hit;
+    })
+  : ALL_SIZES;
+
+/**
+ * Where the pictures go, or nowhere.
+ *
+ * Deliberately a path you pass in rather than a directory in the repo: a screenshot is
+ * evidence for one change, not an asset the project carries, and a default inside `app/`
+ * would have somebody committing 210 PNGs the first time they ran it.
+ */
+const SHOTS = process.env.RESPONSIVE_SHOTS || null;
+if (SHOTS) await (await import("node:fs/promises")).mkdir(SHOTS, { recursive: true });
+
+/** `/tasks?scope=all&view=Board` → `tasks_scope-all_view-Board`. Stable, and a filename. */
+const slug = route =>
+  route.replace(/^\//, "").replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_|_$/g, "") || "root";
 
 const { chromium } = await import("playwright");
 
@@ -143,6 +217,16 @@ for (const [name, width, height] of SIZES) {
       }
       return { overflow: de.scrollWidth - de.clientWidth, small };
     });
+    // The picture, before the verdict: a FAILING page is the one most worth looking at,
+    // so it is taken whatever the assertions say.
+    //
+    // Viewport, not `fullPage`. A full-page shot of a board stretches to the content and
+    // the rail — which is `position: sticky` and 100dvh tall — draws once at the top and
+    // leaves the rest of the image railless, which is the opposite of what these are for.
+    if (SHOTS) {
+      await page.screenshot({ path: `${SHOTS}/${name}__${slug(route)}.png` });
+    }
+
     checks++;
     if (r.overflow > 1 || r.small.length) {
       failed++;

@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
-import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Button, Heading, Text, TextField } from "@vibe/core";
+import { Duplicate } from "@vibe/icons";
+import { Tooltip } from "@vibe/tooltip";
 import { useProcesses, usePropertyAccess, usePropertyDefs, usePropertyOptions, useStages, useTeams } from "../data/useLookups";
 import { propertyColumnDefs } from "../data/propertyColumns";
 import { useAuth } from "../data/AuthProvider";
@@ -21,6 +23,7 @@ import { PropertySlots } from "../components/PropertySlots";
 import { ProcessesPanel } from "../components/ProcessesPanel";
 import { RecordDocuments } from "../components/RecordDocuments";
 import { PushToJobs } from "../components/PushToJobs";
+import { CloneJobDialog } from "../components/CloneDialog";
 import {
   PROJECT_TYPES, PROJECT_TYPE_LABELS, RECORD_STATUSES, RECORD_STATUS_LABELS, teamName,
   type StageName, type TeamId
@@ -35,7 +38,7 @@ import { MoveStageControl, PROJECT_MOVE_NOTE } from "../components/MoveStageDial
 import { daysSince } from "../data/boardModel";
 import { Token, token } from "../components/Token";
 import { SidePanel } from "../components/SidePanel";
-import { Toolbar, type View } from "../components/Toolbar";
+import { Toolbar, useOneLine, type View } from "../components/Toolbar";
 import { accentStyle, columnAccent } from "../theme/accents";
 import { Select, toOptions } from "../components/Select";
 import { PersonSelect } from "../components/PersonSelect";
@@ -126,7 +129,32 @@ export function ProjectsPage() {
   // A control that offers to do what RLS will refuse is worse than no control — this is
   // the app's can() hiding it, and the policy is what actually decides.
   const { can } = usePermission();
+  /** Below 720px the toolbar folds to one line and the create button moves to the head. */
+  const oneLine = useOneLine();
+  /**
+   * Creating, and `?new=1` is how somewhere else asks for it.
+   *
+   * It was `useState` alone, which made "create a project" the one act on this board
+   * that could not be linked to — and the rail's Projects flyout has a **+ New project**
+   * on it (11 September handoff, 7b), which is a link and has nowhere else to point.
+   * Same shape and the same key as the Maintenance page's own `?new=1`, so the two
+   * boards answer the same URL the same way rather than inventing a second dialect.
+   *
+   * Cleared by removing the param, not by a second piece of state: with both, closing
+   * the dialog would leave `?new=1` in the address bar and the next Back would open it
+   * again.
+   */
+  const [searchParams, setSearchParams] = useSearchParams();
   const [creating, setCreating] = useState(false);
+  const askedToCreate = searchParams.get("new") === "1";
+  const closeCreate = () => {
+    setCreating(false);
+    if (askedToCreate) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("new");
+      setSearchParams(next, { replace: true });
+    }
+  };
   // Bumped after a create so the board re-reads. There is no cache to invalidate.
   const [reload, setReload] = useState(0);
   const refresh = () => setReload(n => n + 1);
@@ -192,20 +220,20 @@ export function ProjectsPage() {
   const projectColumnDefs = useMemo<ColumnDef<BoardProject>[]>(() => [
     // Sorted as a number, exported as text: a project number is an identifier, and a
     // column of them typed as numbers invites a total at the bottom of it.
-    { key: "project", label: "Project", fixed: true, className: "nowrap",
+    { key: "project", group: "Identity", label: "Project", fixed: true, className: "nowrap",
       sort: p => Number(p.projectNumber), cell: p => p.projectNumber,
       text: p => p.projectNumber },
-    { key: "address", label: "Address", sort: p => p.currentAddress ?? null,
+    { key: "address", group: "Identity", label: "Address", sort: p => p.currentAddress ?? null,
       cell: p => p.currentAddress ?? <Token>project_display.current_address</Token>,
       text: p => p.currentAddress ?? token("project_display.current_address") },
-    { key: "suburb", label: "Suburb", sort: p => p.suburb ?? null,
+    { key: "suburb", group: "Identity", label: "Suburb", sort: p => p.suburb ?? null,
       cell: p => p.suburb ?? <Token>addresses.suburb</Token>,
       text: p => p.suburb ?? token("addresses.suburb") },
     // Pipeline position, not the alphabet — the same call the jobs table makes.
-    { key: "stage", label: "Stage",
+    { key: "stage", group: "Programme", label: "Stage",
       sort: p => { const at = viewStages.indexOf(p.stage); return at === -1 ? null : at; },
       cell: p => p.stage, text: p => p.stage },
-    { key: "type", label: "Type",
+    { key: "type", group: "Identity", label: "Type",
       sort: p => (p.projectType ? PROJECT_TYPE_LABELS[p.projectType] : null),
       cell: p => (p.projectType
         ? PROJECT_TYPE_LABELS[p.projectType]
@@ -213,11 +241,11 @@ export function ProjectsPage() {
       text: p => (p.projectType
         ? PROJECT_TYPE_LABELS[p.projectType]
         : token("projects.project_type")) },
-    { key: "team", label: "Owning team", offByDefault: true,
+    { key: "team", group: "People", label: "Owning team", offByDefault: true,
       sort: p => (p.owningTeam ? teamName(p.owningTeam) : null),
       cell: p => (p.owningTeam ? teamName(p.owningTeam) : "—"),
       text: p => (p.owningTeam ? teamName(p.owningTeam) : null) },
-    { key: "start", label: "Start date", offByDefault: true,
+    { key: "start", group: "Programme", label: "Start date", offByDefault: true,
       sort: p => p.startDate ?? null,
       // The date as the screen writes it, not the ISO string underneath: a download is
       // read by a person, and 2026-11-04 in an Australian office is ambiguous in the one
@@ -228,7 +256,7 @@ export function ProjectsPage() {
     // detail use, so a blank never turns into a column token or an "Invalid Date". In a
     // file that "Not set" is an absent value, so it exports as a blank cell rather than
     // as the words, which would read as something somebody typed.
-    { key: "target", label: "Target completion", sort: p => p.targetCompletion ?? null,
+    { key: "target", group: "Programme", label: "Target completion", sort: p => p.targetCompletion ?? null,
       cell: p => (p.targetCompletion
         ? new Date(p.targetCompletion).toLocaleDateString()
         : <span className="muted pf-unset">Not set</span>),
@@ -236,11 +264,11 @@ export function ProjectsPage() {
     // Intended lots, and the split between the two kinds of title (0053). Null on both
     // means nobody has said, which is not the same statement as zero — hence the dash
     // rather than "0 / 0".
-    { key: "lots", label: "Lots", offByDefault: true, className: "num",
+    { key: "lots", group: "Programme", label: "Lots", offByDefault: true, className: "num",
       sort: p => p.proposedDwellings,
       cell: p => (p.proposedDwellings == null ? "—" : p.proposedDwellings),
       text: p => p.proposedDwellings },
-    { key: "split", label: "Community / Torrens", offByDefault: true, className: "num",
+    { key: "split", group: "Programme", label: "Community / Torrens", offByDefault: true, className: "num",
       sort: p => p.communityTitleLots,
       cell: p => (p.communityTitleLots == null && p.torrensTitleLots == null
         ? "—"
@@ -397,8 +425,6 @@ export function ProjectsPage() {
   const narrowed = terms.length > 0 || activeFilterCount(filters) > 0;
   const noMatches = narrowed && rows.length === 0;
   const stale = matchedOnPreviousAddress(rows.flatMap(p => [p, ...p.jobs]), terms);
-  const jobCount = all.reduce((n, p) => n + p.jobs.length, 0);
-
   const optionsFor = (field: string) => {
     switch (field) {
       // The project's own phase and its jobs' stages are the same list of names — the
@@ -485,23 +511,23 @@ export function ProjectsPage() {
 
   return (
     <>
-      <div className="page-head">
+      {/* No line under the heading. Amber, 12 September: *"on all pages remove
+          descriptive line text under page header … we need the most above the fold
+          possible"*. The project count is said again by the toolbar and
+          by the tab; **the job total is the one number that only lived here**, and it
+          goes. Say so rather than discover it missing: "118 projects · 79 jobs" is now
+          "Showing 118 of 118 projects". */}
+      <div className="page-head page-head-row">
         <Heading type="h2" weight="bold">Projects</Heading>
-        <Text type="text2" color="secondary">
-          {loading
-            ? "Loading…"
-            // On All Projects the two totals ARE the answer; on any other view the
-            // interesting number is how much of the whole it is. The test used to be
-            // `saved.stages.length === 0` — "the view names no stages" — which no
-            // built-in view has ever satisfied, so the portfolio line never once
-            // rendered on the first screen the app shows.
-            : saved.slug === "all"
-              ? `${all.length} projects · ${jobCount} jobs`
-              // The view's name is not repeated here: the tab carrying it is the next
-              // thing down the page, bold and with its own count, and "projects with
-              // work in All Projects" is what embedding it produced.
-              : `${inView.length} of ${all.length} projects`}
-        </Text>
+        {/* On a phone the create button rides the heading's line, right-aligned — Amber,
+            12 September. At a desk it stays in the toolbar with Export and Columns,
+            which is the cluster it belongs to when there is room for one.
+
+            Rendered once, either here or there, never both: two buttons with the same
+            name is two things a screen reader reads and one of them does nothing. */}
+        {oneLine && can("user") && (
+          <Button size="small" className="page-head-action" onClick={() => setCreating(true)}>+ New project</Button>
+        )}
       </div>
 
       <SavedViewTabs
@@ -565,14 +591,14 @@ export function ProjectsPage() {
                 "the projects I am looking at, as a spreadsheet" is the same ask
                 whichever arrangement is on screen. */}
             <ExportMenu build={buildExport} disabled={loading || rows.length === 0} />
-            <Button size="small" onClick={() => setCreating(true)}>+ New project</Button>
+            {!oneLine && <Button size="small" onClick={() => setCreating(true)}>+ New project</Button>}
           </>
         }
       />
 
       <NewProjectDialog
-        show={creating}
-        onClose={() => setCreating(false)}
+        show={(creating || askedToCreate) && can("user")}
+        onClose={closeCreate}
         onCreated={refresh}
         onSplit={(id, count, community, torrens) =>
           setSplitting({ id, count, community, torrens, nextLot: 1 })}
@@ -779,6 +805,16 @@ function ProjectDetail({
   const { toast } = useToasts();
   const [removing, setRemoving] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
+  /**
+   * Which job the clone panel is open on, or null.
+   *
+   * Amber, 12 September: *"clone job needs to be an icon button on the job line in
+   * projects screen"* — the entry point her 7 September call took off the job drawer
+   * (*"cloning jobs can only be done on projects"*) and left nowhere. `CloneDialog.tsx`
+   * and `repository.cloneJob()` were kept unreferenced against exactly this, so nothing
+   * about cloning is new here except where you press it.
+   */
+  const [cloning, setCloning] = useState<string | null>(null);
   // The push-to-jobs preview (Amber, 1 Sep). Open until pushed or cancelled.
   const [pushing, setPushing] = useState(false);
   const [propsReload, setPropsReload] = useState(0);
@@ -927,6 +963,16 @@ function ProjectDetail({
             />
           )}
 
+          {/* The clone panel, one for the section rather than one per row: 30 rows would
+              otherwise mount 30 copies of it. It keeps the new job's number on screen
+              until dismissed — that number is the thing somebody came for. */}
+          <CloneJobDialog
+            show={cloning !== null}
+            jobNumber={cloning}
+            onClose={() => setCloning(null)}
+            onCloned={onChanged}
+          />
+
           {project.jobs.length === 0 && (
             <Text type="text3" color="secondary" ellipsis={false}>
               No jobs yet. <strong>Create jobs</strong> splits this project into one per lot,
@@ -972,10 +1018,15 @@ function ProjectDetail({
               <thead>
                 <tr>
                   <th>Job</th><th>Address</th><th>Stage</th><th>Team</th><th>Status</th>
-                  {/* `admins delete jobs` is the policy. The column is hidden below that
-                      level so nobody is offered a button the database will refuse — but
-                      the hiding is courtesy, not security: RLS is what actually stops it. */}
-                  {can("admin") && <th aria-label="Remove"></th>}
+                  {/* One actions column, not two. Clone is `users write jobs` and Remove
+                      is `admins delete jobs` — two different policies, so a user sees one
+                      button and an admin sees both, in the same cell rather than in a
+                      column that appears and disappears.
+
+                      The hiding is courtesy, not security: RLS is what actually refuses
+                      the write, and these gates only stop somebody being offered a button
+                      the database will turn down. */}
+                  {can("user") && <th className="row-actions" aria-label="Actions"></th>}
                 </tr>
               </thead>
               <tbody>
@@ -991,16 +1042,36 @@ function ProjectDetail({
                     <td>{j.stage}</td>
                     <td>{j.team}</td>
                     <td><StatusPill status={j.status} /></td>
-                    {can("admin") && (
-                      <td onClick={e => e.stopPropagation()}>
-                        <Button
-                          kind="tertiary"
-                          size="small"
-                          disabled={removing === j.jobNumber}
-                          onClick={() => removeJob(j.jobNumber)}
-                        >
-                          {removing === j.jobNumber ? "Removing…" : "Remove"}
-                        </Button>
+                    {can("user") && (
+                      // `stopPropagation`, because the row itself navigates to the job.
+                      // Without it, cloning would open the panel AND leave the page.
+                      <td className="row-actions" onClick={e => e.stopPropagation()}>
+                        <div className="field-inline">
+                          {/* An icon, and the words in the tooltip and the accessible
+                              name. A row this narrow has no room for "Clone" beside
+                              "Remove", and a job list is somewhere people scan rather
+                              than read. */}
+                          <Tooltip content={`Clone ${j.jobNumber}`} position="top">
+                            <Button
+                              kind="tertiary"
+                              size="small"
+                              aria-label={`Clone job ${j.jobNumber}`}
+                              onClick={() => setCloning(j.jobNumber)}
+                            >
+                              <Duplicate size={16} aria-hidden />
+                            </Button>
+                          </Tooltip>
+                          {can("admin") && (
+                            <Button
+                              kind="tertiary"
+                              size="small"
+                              disabled={removing === j.jobNumber}
+                              onClick={() => removeJob(j.jobNumber)}
+                            >
+                              {removing === j.jobNumber ? "Removing…" : "Remove"}
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     )}
                   </tr>

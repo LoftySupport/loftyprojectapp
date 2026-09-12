@@ -1,6 +1,6 @@
 # `npm run responsive`
 
-Loads every page at five real device sizes and asserts two things that were both
+Loads every page at six real device sizes and asserts two things that were both
 failing before this existed:
 
 - **no page scrolls sideways** — `scrollWidth > clientWidth` means the layout slides
@@ -10,6 +10,41 @@ failing before this existed:
 ```
 npm run responsive
 ```
+
+## It takes pictures
+
+The sixth size is **1440×900** — Amber's MacBook Air, and every desk at Lofty. It was
+missing until 11 September, which is why this sweep had never caught a fault at the width
+the app is actually used at: 1024 is where a layout starts to have room, not where it
+finally does.
+
+The harness was already driving a real browser across every route and throwing the frame
+away. `RESPONSIVE_SHOTS` keeps the frame:
+
+```
+RESPONSIVE_SHOTS=/tmp/shots \
+RESPONSIVE_ROUTES=/jobs,/projects \
+RESPONSIVE_SIZES=phone,desktop \
+npm run responsive
+```
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `RESPONSIVE_SHOTS` | off | Directory for `<size>__<route>.png`, one per page visited |
+| `RESPONSIVE_ROUTES` | all 35 | Comma-separated routes to sweep instead |
+| `RESPONSIVE_SIZES` | all 6 | Comma-separated device names: `phone`, `phone-s`, `phone-land`, `tablet`, `tablet-l`, `desktop` |
+
+All three are off by default, so CI runs exactly the sweep it always did. The last two
+exist because a picture run is for looking at one thing — 35 routes at 6 widths is 210
+images nobody opens — and an unknown size name exits 2 rather than sweeping nothing, so a
+typo cannot pass by not testing.
+
+The directory is one you pass in, never a path inside `app/`: a screenshot is evidence for
+one change, not an asset the repository carries.
+
+Shots are **viewport**, not full-page. The rail is `position: sticky` and `100dvh` tall, so
+a full-page capture of a long board draws it once at the top and leaves the rest of the
+image railless.
 
 It starts its own Vite server, runs the check, and stops the server again. On a machine
 that has never run Playwright, install the browser once first:
