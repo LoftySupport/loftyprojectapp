@@ -14,6 +14,9 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Kanban columns collapse to a narrow strip, with Completed, Closed, Cancelled and Acquisition & Development folded by default
+- + New task on the Tasks board, which assigns a task to a person, a team and a job or project
+- A Closed tasks view on the Tasks board, and the job-or-project filter moved onto the filter bar
 - npm run check:date-clear, which asserts a date control tells its caller when it has been emptied
 - Clone a job from its line on the project, as an icon beside Remove — the control that went missing when cloning moved off the job drawer
 - Inbox and Tasks in the navigation rail carry a badge — unread items on Inbox, your open tasks on Tasks, with a dot on My work when the rail is collapsed
@@ -196,6 +199,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- The job record's Process section now holds the processes themselves, and the sections below it follow the screen design's order
 - On a phone the job record's Tasks / Comments / Activity footer starts collapsed and opens with a chevron
 - Every page loses the sentence under its heading, so more of the screen is the thing you came for
 - On a phone the filters fold into one row behind Advanced, and every control in it starts and finishes in the same place

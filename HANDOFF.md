@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 250 changes since then —
+Unreleased: 254 changes since then —
+- Added: Kanban columns collapse to a narrow strip, with Completed, Closed, Cancelled and Acquisition & Development folded by default
+- Added: + New task on the Tasks board, which assigns a task to a person, a team and a job or project
+- Added: A Closed tasks view on the Tasks board, and the job-or-project filter moved onto the filter bar
+- Changed: The job record's Process section now holds the processes themselves, and the sections below it follow the screen design's order
 - Fixed: A date set by accident can be cleared again -- the job's completion date has an x, and emptying a date property no longer silently keeps the old value
-- Changed: On a phone the job record's Tasks / Comments / Activity footer starts collapsed and opens with a chevron
-- Removed: Four panels below the job record that repeated what the record above them already said -- what was only in them is now one Job details panel
-- Added: npm run check:date-clear, which asserts a date control tells its caller when it has been emptied
-- Fixed: On a phone the New button stays on the heading's line on Maintenance and Contacts, instead of dropping below the counts
-- …and 245 more.
+- …and 249 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
