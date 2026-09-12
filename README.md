@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 240 changes since then —
-- Added: Clone a job from its line on the project, as an icon beside Remove — the control that went missing when cloning moved off the job drawer
-- Fixed: The phone's navigation button is a hamburger in the top right and the Lofty mark is in the top left, instead of an ellipsis on the left and no mark at all
-- Changed: The full screen job record sits inside the app frame, so the sidebar, the top bar and the footer are all still there while you read it
-- Removed: The unread and open-task numbers beside Inbox and Tasks, until what each one counts is settled and checked
-- Added: Inbox and Tasks in the navigation rail carry a badge — unread items on Inbox, your open tasks on Tasks, with a dot on My work when the rail is collapsed
-- …and 235 more.
+Unreleased: 245 changes since then —
+- Changed: Every page loses the sentence under its heading, so more of the screen is the thing you came for
+- Changed: On a phone the filters fold into one row behind Advanced, and every control in it starts and finishes in the same place
+- Changed: On a phone the New button sits on the heading's line, top right
+- Changed: The footer is one line on a phone and at a desk, in smaller type
+- Changed: Search is back on the top bar, where it was before the rail rebuild — the search inside a project or job is untouched
+- …and 240 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

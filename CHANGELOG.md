@@ -193,6 +193,11 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- Every page loses the sentence under its heading, so more of the screen is the thing you came for
+- On a phone the filters fold into one row behind Advanced, and every control in it starts and finishes in the same place
+- On a phone the New button sits on the heading's line, top right
+- The footer is one line on a phone and at a desk, in smaller type
+- Search is back on the top bar, where it was before the rail rebuild — the search inside a project or job is untouched
 - The full screen job record sits inside the app frame, so the sidebar, the top bar and the footer are all still there while you read it
 - Job and project properties are grouped under their own headings in the column picker, instead of falling in with everything ungrouped
 - The column picker is a panel beside the table instead of a dialog over it, with a search box and grouped columns
