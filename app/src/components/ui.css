@@ -1652,7 +1652,12 @@ code { overflow-wrap: anywhere; }
    The screen-reader text beside each says which it is; the dot is decoration. */
 .perm-cell { text-align: center; }
 .perm-yes { color: var(--positive-ink); font-size: 14px; }
-.perm-no { color: var(--layout-border-color); }
+/* The "no" dot was --layout-border-color, which is 1.74:1 on white: a mark you cannot
+   see is indistinguishable from a cell that failed to render, and this grid is
+   seventy-two of them. --placeholder-color is the same family at 3.47:1 — readable,
+   and still far enough behind the yes dot's 8.13:1 that a column still reads as the
+   list of things a role DOES get. */
+.perm-no { color: var(--placeholder-color); }
 /* Visible to a screen reader, not on screen. The dot alone would announce as a
    character, or as nothing at all. */
 .sr-only {
