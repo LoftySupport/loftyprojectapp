@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- npm run check:date-clear, which asserts a date control tells its caller when it has been emptied
 - Clone a job from its line on the project, as an icon beside Remove — the control that went missing when cloning moved off the job drawer
 - Inbox and Tasks in the navigation rail carry a badge — unread items on Inbox, your open tasks on Tasks, with a dot on My work when the rail is collapsed
 - A job carries its own completion dates — the one being worked towards, and the day it actually finished
@@ -139,6 +140,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- A date set by accident can be cleared again -- the job's completion date has an x, and emptying a date property no longer silently keeps the old value
 - On a phone the New button stays on the heading's line on Maintenance and Contacts, instead of dropping below the counts
 - The phone's navigation button is a hamburger in the top right and the Lofty mark is in the top left, instead of an ellipsis on the left and no mark at all
 - The unread count beside Inbox and the one on the bell are the same number read once, so marking everything read clears both together
@@ -194,6 +196,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- On a phone the job record's Tasks / Comments / Activity footer starts collapsed and opens with a chevron
 - Every page loses the sentence under its heading, so more of the screen is the thing you came for
 - On a phone the filters fold into one row behind Advanced, and every control in it starts and finishes in the same place
 - On a phone the New button sits on the heading's line, top right
@@ -264,6 +267,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Removed
 
+- Four panels below the job record that repeated what the record above them already said -- what was only in them is now one Job details panel
 - The unread and open-task numbers beside Inbox and Tasks, until what each one counts is settled and checked
 - Clone is no longer on the job panel — cloning belongs to the project
 - Notifications is no longer a Setup tab; your own channels stay in User settings and the audience rules moved under Automations

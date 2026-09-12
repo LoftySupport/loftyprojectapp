@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 246 changes since then —
+Unreleased: 250 changes since then —
+- Fixed: A date set by accident can be cleared again -- the job's completion date has an x, and emptying a date property no longer silently keeps the old value
+- Changed: On a phone the job record's Tasks / Comments / Activity footer starts collapsed and opens with a chevron
+- Removed: Four panels below the job record that repeated what the record above them already said -- what was only in them is now one Job details panel
+- Added: npm run check:date-clear, which asserts a date control tells its caller when it has been emptied
 - Fixed: On a phone the New button stays on the heading's line on Maintenance and Contacts, instead of dropping below the counts
-- Changed: Every page loses the sentence under its heading, so more of the screen is the thing you came for
-- Changed: On a phone the filters fold into one row behind Advanced, and every control in it starts and finishes in the same place
-- Changed: On a phone the New button sits on the heading's line, top right
-- Changed: The footer is one line on a phone and at a desk, in smaller type
-- …and 241 more.
+- …and 245 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
