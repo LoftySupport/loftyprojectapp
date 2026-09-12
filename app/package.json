@@ -19,6 +19,8 @@
     "check:report-widgets": "node --import ./scripts/register-ts.mjs scripts/report-widgets-check.mjs",
     "check:share-password": "node --import ./scripts/register-ts.mjs scripts/share-password-check.mjs",
     "check:builder-dnd": "node scripts/check-builder-dnd.mjs",
+    "check:date-clear": "node scripts/check-date-clear.mjs",
+    "check:orphan-properties": "node --import ./scripts/register-ts.mjs scripts/check-orphan-properties.mjs",
     "check:import": "node scripts/check-import.mjs",
     "check:design-tokens": "node scripts/check-design-tokens.mjs",
     "check:capped-list": "node scripts/check-capped-list.mjs",

@@ -361,6 +361,58 @@
   margin-bottom: var(--space-12);
 }
 .board-column-empty { padding: var(--space-16) 0; text-align: center; }
+
+/* COLLAPSED, AND STILL A COLUMN. Amber, 12 September: *"on Kanban boards can you make
+   them collapsible so they have a narrow view like the side navigation"*. 48px rather
+   than the rail's 64: the rail keeps icons at that width and a column keeps its name,
+   written down the strip. The head turns into a vertical stack so the chevron, the name
+   and the count read top to bottom, and nothing is hidden — a card still drops in. */
+.board-column.is-shut {
+  width: 48px;
+  padding: var(--space-8) var(--space-4);
+}
+.board-column.is-shut .board-column-head {
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-8);
+  padding-bottom: 0;
+  border-bottom: 0;
+  margin-bottom: 0;
+}
+/* Bottom-to-top, so a column name reads upwards the way a book's spine does rather than
+   with the first letter at the floor. Capped so a long grouping value cannot make one
+   column taller than the board. */
+.board-column-spine {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  white-space: nowrap;
+  overflow: hidden;
+  max-height: 40vh;
+  text-overflow: ellipsis;
+}
+
+/* The chevron that opens and shuts it. 24px square is the WCAG 2.2 floor (2.5.8) the
+   responsive sweep asserts, and this is the smallest control on the board. */
+.board-column-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 24px;
+  min-height: 24px;
+  border: 0;
+  border-radius: var(--border-radius-small);
+  background: none;
+  padding: 0;
+  color: var(--secondary-text-color);
+  cursor: pointer;
+}
+.board-column-toggle:hover { background: var(--primary-background-hover-color); color: var(--primary-text-color); }
+.board-column-chevron { display: inline-flex; transition: transform 120ms var(--motion-timing-transition); }
+/* Open: pointing down, at the column under it. Shut: pointing right, at what opens. */
+.board-column-chevron:not(.is-shut) { transform: rotate(-90deg); }
+.board-column-chevron.is-shut { transform: rotate(180deg); }
+
 /* Cards were direct siblings with no gap, so they touched and read as one striped block
    instead of as separate records — Amber, 7 September. The cards are block-level, so
    adjacent margins COLLAPSE: the column head and .drag-hint already carry a 12px
@@ -369,6 +421,7 @@
    cards as direct children of .board-column — without touching either page's markup or
    double-spacing the head. */
 .board-column > * + * { margin-top: var(--space-12); }
+.board-column.is-shut > * + * { margin-top: 0; }
 
 /* The board's scrollbar, moved to the bottom of the screen.
    ---------------------------------------------------------------------------
@@ -855,7 +908,34 @@
 /* Fixed, not fluid: a Vibe dropdown fills whatever it is given, and given the rest of
    the row it filled six hundred pixels and turned three tasks into a page. */
 .task-control { width: 150px; flex: 0 0 150px; }
-.task-controls .date-input { width: 140px; }
+.task-controls /* ---- a date you can take back (12 September) ------------------------------
+   The ✕ beside a date field, because the browser's own clear is not a promise: Chrome
+   draws one, Safari draws nothing, and a phone gives you a wheel picker with no way back
+   to empty. See `DateField.tsx`. */
+.date-field { display: inline-flex; align-items: center; gap: var(--space-4); min-width: 0; }
+.date-field-input { flex: 1 1 auto; min-width: 0; }
+.date-field-clear {
+  flex: none;
+  /* 24px is WCAG 2.5.8's floor and this is a control people reach for in a hurry. */
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: none;
+  border-radius: var(--border-radius-small);
+  color: var(--secondary-text-color);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.date-field-clear:hover { background: var(--primary-background-hover-color); color: var(--primary-text-color); }
+/* Hidden, not absent: the row would jump by 28px the first time somebody picked a date,
+   and a layout that moves under the cursor is how you mis-click the thing beside it. */
+.date-field-clear.is-hidden { visibility: hidden; cursor: default; }
+
+.date-input { width: 140px; }
 /* The second row, for the one task being edited. Full width under it. */
 .task-more {
   flex: 1 0 100%;

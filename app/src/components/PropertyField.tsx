@@ -73,13 +73,19 @@ export function PropertyField({ def, value, access, options = [], people = [], o
             aria-label={`${def.label} done`}
             onChange={e => onSave?.(e.target.checked ? { date: today() } : null)}
           />
+          {/* An EMPTY value clears, rather than being swallowed. It used to read
+              `if (e.target.value)`, so somebody using Chrome's built-in ✕ watched the
+              field empty itself and the value stay exactly where it was — the same
+              complaint as the job's completion date, in a different coat. The tick box
+              beside it is still the obvious way to clear; this is the one that was
+              silently doing nothing. */}
           <input
             type="date"
             className="date-input"
             aria-label={`${def.label} date`}
             value={d ?? ""}
             disabled={disabled}
-            onChange={e => { if (e.target.value) onSave?.({ date: e.target.value }); }}
+            onChange={e => onSave?.(e.target.value ? { date: e.target.value } : null)}
           />
           {d && <Text type="text3" color="secondary" element="span">{fmtDate(d)}</Text>}
         </span>

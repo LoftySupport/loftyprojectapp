@@ -14,6 +14,11 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Setup - Properties flags every job and project field that no process collects, including the ones that are columns rather than properties, such as the address
+- Kanban columns collapse to a narrow strip, with Completed, Closed, Cancelled and Acquisition & Development folded by default
+- + New task on the Tasks board, which assigns a task to a person, a team and a job or project
+- A Closed tasks view on the Tasks board, and the job-or-project filter moved onto the filter bar
+- npm run check:date-clear, which asserts a date control tells its caller when it has been emptied
 - Clone a job from its line on the project, as an icon beside Remove — the control that went missing when cloning moved off the job drawer
 - Inbox and Tasks in the navigation rail carry a badge — unread items on Inbox, your open tasks on Tasks, with a dot on My work when the rail is collapsed
 - A job carries its own completion dates — the one being worked towards, and the day it actually finished
@@ -139,12 +144,9 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
-- Dates from the neighbouring month were too faint to read in the job and task calendars, and so were the job entries sitting in those days
-- The "current" chip on a process slot used the brand orange as text on a pale orange background, which the app's own colour rule forbids and which was the hardest thing to read anywhere in the app
+- A date set by accident can be cleared again -- the job's completion date has an x, and emptying a date property no longer silently keeps the old value
 - On a phone the New button stays on the heading's line on Maintenance and Contacts, instead of dropping below the counts
 - The phone's navigation button is a hamburger in the top right and the Lofty mark is in the top left, instead of an ellipsis on the left and no mark at all
-- The labels under the dashboard's workload figures were dimmed against the orange panel, making them fainter than the app's own colour rules allow
-- The "no" mark in the permissions grid was too pale to see against the page, so a role that lacks a permission looked the same as a cell that had not loaded
 - The unread count beside Inbox and the one on the bell are the same number read once, so marking everything read clears both together
 - The job drawer no longer scrolls sideways at 460px, and the responsive sweep now opens it at every width
 - 64 job addresses had their lot number in the street-number column, so a job at lot 1 of 14 Brodie Road read as 1 Brodie Road — somebody else's house
@@ -198,6 +200,9 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- The job record's Process section shows every process, including ones nobody has started, with a tick box that marks one off in a single action
+- The job record's Process section now holds the processes themselves, and the sections below it follow the screen design's order
+- On a phone the job record's Tasks / Comments / Activity footer starts collapsed and opens with a chevron
 - Every page loses the sentence under its heading, so more of the screen is the thing you came for
 - On a phone the filters fold into one row behind Advanced, and every control in it starts and finishes in the same place
 - On a phone the New button sits on the heading's line, top right
@@ -268,6 +273,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Removed
 
+- Four panels below the job record that repeated what the record above them already said -- what was only in them is now one Job details panel
 - The unread and open-task numbers beside Inbox and Tasks, until what each one counts is settled and checked
 - Clone is no longer on the job panel — cloning belongs to the project
 - Notifications is no longer a Setup tab; your own channels stay in User settings and the audience rules moved under Automations

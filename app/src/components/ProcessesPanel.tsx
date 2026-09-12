@@ -39,6 +39,7 @@ export function ProcessesPanel({
   scope,
   currentStage,
   title = "Processes",
+  bare = false,
   reloadKey = 0,
   onChanged
 }: {
@@ -47,6 +48,16 @@ export function ProcessesPanel({
   /** The record's own lifecycle stage — the one that opens by default. */
   currentStage: string;
   title?: string;
+  /**
+   * Rendered without its own collapsible heading, for a caller that already has one.
+   *
+   * The job record's **Process** section is that caller. Amber, 12 September: *"the
+   * process section should have the processes like the mockup"* — the record drew a
+   * read-only five-step preview and the list you could act on was a separate panel eight
+   * sections down, which is two renderings of one set of runs. Bare, this IS the section's
+   * body, and there is only one list of processes on the record again.
+   */
+  bare?: boolean;
   reloadKey?: number;
   onChanged?: () => void;
 }) {
@@ -122,24 +133,20 @@ export function ProcessesPanel({
     .filter(s => s.processes.length > 0);
 
   if (!loading && stages.length === 0) {
-    return (
+    const none = (
+      <Text type="text2" color="secondary" ellipsis={false}>
+        No {scope} processes are defined yet. Managers define them in Setup → Processes.
+      </Text>
+    );
+    return bare ? none : (
       <CollapsiblePanel id={`processes-${scope}`} title={title} defaultOpen={false} summary="none defined">
-        <Text type="text2" color="secondary" ellipsis={false}>
-          No {scope} processes are defined yet. Managers define them in Setup → Processes.
-        </Text>
+        {none}
       </CollapsiblePanel>
     );
   }
 
-  return (
-    <CollapsiblePanel
-      id={`processes-${scope}`}
-      title={title}
-      defaultOpen={false}
-      summary={loading
-        ? "Loading…"
-        : `${runs.filter(r => r.status === "complete").length} complete · ${runs.filter(r => isRunOpen(r.status) && r.status !== "not_started").length} in progress`}
-    >
+  const body = (
+    <>
       {error && <div className="create-problem" role="alert"><Text type="text2" ellipsis={false}>{error}</Text></div>}
 
       {stages.map(({ stage, processes: ps }) => {
@@ -151,7 +158,16 @@ export function ProcessesPanel({
         const atRisk = runsHere.filter(r => r.health === "at_risk").length;
         const isCurrent = stage === currentStage;
         return (
-          <details className={`proc-stage${isCurrent ? " is-current" : ""}`} key={stage} open={isCurrent}>
+          /* OPEN, ALL OF THEM, IN THE RECORD. Amber, 12 September: *"even if processes
+             not started it should show them all so that way they can be marked off in
+             order"*. Collapsed-except-the-current-stage is right for a panel you scan;
+             it is wrong for the record's Process section, where the whole ordered list
+             IS the thing — a stage you have not reached yet holds the processes you are
+             working towards, and a shut disclosure hides them.
+
+             The panel keeps the old behaviour: there it sits under eight others and the
+             current stage is the one you came for. */
+          <details className={`proc-stage${isCurrent ? " is-current" : ""}`} key={stage} open={bare || isCurrent}>
             <summary>
               <span>
                 {stage}
@@ -177,6 +193,34 @@ export function ProcessesPanel({
                 return (
                   <li className="proc-row" key={p.id}>
                     <div className="proc-row-head">
+                      {/* MARKED OFF IN ONE ACTION, STARTED OR NOT. Amber, 12 September:
+                          *"it should show them all so that way they can be marked off in
+                          order"*. A process with no run needed Start and then Complete —
+                          two presses to record one fact — and the mockup draws a tick box.
+                          Ticking an unstarted process inserts its run already complete,
+                          which is what `startProcessRun`'s status argument is for.
+
+                          Unticking returns it to In progress rather than to Not started:
+                          the run exists and somebody worked on it, and "not started" would
+                          be a claim the record can disprove. Not applicable is not a tick
+                          state at all — it is beside the box, in the status control. */}
+                      {can("user") && (
+                        <input
+                          type="checkbox"
+                          className="proc-tick"
+                          checked={run?.status === "complete"}
+                          disabled={rowBusy}
+                          aria-label={`${p.name} is complete`}
+                          onChange={e => {
+                            const done = e.target.checked;
+                            if (!run) {
+                              if (done) act(p.id, () => repo.startProcessRun(target, p.id, "complete"));
+                              return;
+                            }
+                            act(p.id, () => repo.updateProcessRun(run.id, { status: done ? "complete" : "in_progress" }));
+                          }}
+                        />
+                      )}
                       <div className="proc-name">
                         <span>
                           <Text type="text2" weight="medium" element="span">{p.name}</Text>
@@ -222,7 +266,7 @@ export function ProcessesPanel({
                         )}
                         {can("user") && !run && (
                           <>
-                            <Button size="small" disabled={rowBusy} onClick={() => act(p.id, () => repo.startProcessRun(target, p.id, "in_progress"))}>
+                            <Button size="small" kind="tertiary" disabled={rowBusy} onClick={() => act(p.id, () => repo.startProcessRun(target, p.id, "in_progress"))}>
                               Start
                             </Button>
                             <Button size="small" kind="tertiary" disabled={rowBusy} onClick={() => act(p.id, () => repo.startProcessRun(target, p.id, "not_applicable"))}>
@@ -292,6 +336,20 @@ export function ProcessesPanel({
           </details>
         );
       })}
+    </>
+  );
+
+  if (bare) return body;
+  return (
+    <CollapsiblePanel
+      id={`processes-${scope}`}
+      title={title}
+      defaultOpen={false}
+      summary={loading
+        ? "Loading…"
+        : `${runs.filter(r => r.status === "complete").length} complete · ${runs.filter(r => isRunOpen(r.status) && r.status !== "not_started").length} in progress`}
+    >
+      {body}
     </CollapsiblePanel>
   );
 }

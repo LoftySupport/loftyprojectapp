@@ -87,6 +87,26 @@
 .proc-list { margin: 0; padding: 0 var(--space-12) var(--space-8); list-style: none; }
 .proc-row { padding: var(--space-8) 0; border-top: 1px dashed var(--layout-border-color); }
 .proc-row-head { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; }
+/* The tick that marks a process off. 18px rather than the browser default 13: it is the
+   control on this row people reach for most, and the 24px tap target the responsive
+   sweep asserts comes from the row's own height around it. `flex: none` so it never
+   shrinks when a long process name wraps beside it. */
+.proc-tick {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--primary-color);
+  cursor: pointer;
+}
+.proc-tick:disabled { cursor: default; opacity: 0.5; }
+/* Done reads as done at a glance, the way the mockup strikes a completed step through. */
+.proc-row:has(.proc-tick:checked) .proc-name > span > span:first-child,
+.proc-row:has(.proc-tick:checked) .proc-name > span:first-child {
+  text-decoration: line-through;
+  text-decoration-color: var(--lofty-flint-400);
+  color: var(--secondary-text-color);
+}
 .proc-name { flex: 1 1 200px; min-width: 0; display: flex; flex-direction: column; }
 .proc-name .proc-sub { font: var(--font-text3-normal); color: var(--secondary-text-color); }
 .proc-controls { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; }

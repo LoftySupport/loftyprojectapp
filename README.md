@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 250 changes since then —
-- Fixed: Dates from the neighbouring month were too faint to read in the job and task calendars, and so were the job entries sitting in those days
-- Fixed: The "current" chip on a process slot used the brand orange as text on a pale orange background, which the app's own colour rule forbids and which was the hardest thing to read anywhere in the app
-- Fixed: On a phone the New button stays on the heading's line on Maintenance and Contacts, instead of dropping below the counts
-- Changed: Every page loses the sentence under its heading, so more of the screen is the thing you came for
-- Changed: On a phone the filters fold into one row behind Advanced, and every control in it starts and finishes in the same place
-- …and 245 more.
+Unreleased: 256 changes since then —
+- Added: Setup - Properties flags every job and project field that no process collects, including the ones that are columns rather than properties, such as the address
+- Changed: The job record's Process section shows every process, including ones nobody has started, with a tick box that marks one off in a single action
+- Added: Kanban columns collapse to a narrow strip, with Completed, Closed, Cancelled and Acquisition & Development folded by default
+- Added: + New task on the Tasks board, which assigns a task to a person, a team and a job or project
+- Added: A Closed tasks view on the Tasks board, and the job-or-project filter moved onto the filter bar
+- …and 251 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

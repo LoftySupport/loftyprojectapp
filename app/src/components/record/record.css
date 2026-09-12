@@ -497,7 +497,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .record-section-toggle:active, .process-step-chev:active,
-  .field-add:active, .record-tab:active { transform: none; }
+  .field-add:active, .record-tab:active, .record-foot-toggle:active { transform: none; }
 }
 
 /* ---- the record's title row and its notes ------------------------------- */
@@ -563,6 +563,31 @@
   cursor: pointer;
 }
 .record-crumb-link:hover { text-decoration-color: var(--lofty-crisp-orange); }
+
+/* SHUT, ON A PHONE. Amber, 12 September: *"the bottom section with task and actions also
+   needs to be able to collapse on mobile so it isn't sticky"*. Shut, the footer is the tab
+   strip and nothing else — the panel is unmounted, so the cap that keeps an open thread to
+   half the panel has nothing to cap and would only reserve space nothing is using. */
+.record-foot.is-shut { max-height: none; }
+
+/* The chevron that opens and shuts it, in the tab strip's trailing slot. 28px square
+   rather than the 24px WCAG floor: it sits at the very bottom of a phone screen, where
+   the thumb is least accurate, and the strip is 44px tall anyway so nothing moves. */
+.record-foot-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 28px;
+  border: 0;
+  border-radius: var(--border-radius-small);
+  background: none;
+  padding: 0;
+  color: var(--secondary-text-color);
+  cursor: pointer;
+}
+.record-foot-toggle:hover { background: var(--primary-background-hover-color); color: var(--primary-text-color); }
+.record-foot-toggle:active { transform: scale(0.95); transition: transform 70ms var(--motion-timing-transition); }
 
 /* The docked panel under the tabs. It scrolls on its own, so a long comment thread does
    not push the composer out of the footer — the footer's own max-height caps the pair. */
