@@ -26,10 +26,12 @@ import { CappedList } from "./CappedList";
  * the database reads both as one stream; a screen that wants that asks for it there.
  */
 export function CommentsPanel({
-  projectId, jobId, feedbackId, title = "Latest update"
+  projectId, jobId, feedbackId, title = "Latest update", bare = false
 }: {
   projectId?: number;
   jobId?: string;
+  /** Inside the record's docked tab strip, where the tab already names it. */
+  bare?: boolean;
   /**
    * A tracker request (0064's fifth parent on `comments`).
    *
@@ -109,6 +111,7 @@ export function CommentsPanel({
 
   return (
     <CollapsiblePanel
+      bare={bare}
       id="job-comments"
       title={title}
       defaultOpen={false}

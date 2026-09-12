@@ -335,6 +335,19 @@ export interface JobPatch {
    * shows — the drawer.
    */
   titleType?: TitleType | null;
+  /**
+   * The date this job is being worked towards, and the day it actually finished (0113).
+   *
+   * Two, not one, because Amber asked for both: *"project date and job dates are
+   * separate and [it] depends [on] each other. [Both] are needed and relevant"*. The
+   * record's **Completion date** shows the target while the job runs and the actual once
+   * it is done, which is what the design draws. Null clears either.
+   *
+   * A PROJECT'S completion is not here and never will be: it is derived from all of its
+   * jobs being completed, and a column for it would be a second answer that can go stale.
+   */
+  targetCompletion?: IsoDate | null;
+  endDate?: IsoDate | null;
 }
 
 /** The joined shape the cards read — `project_display`. */
@@ -454,6 +467,17 @@ export interface Job {
    * of them and a guess on a lodged application is worse than a blank.
    */
   council: SaCouncil | null;
+  /**
+   * The job's own completion dates (0113): the date being worked towards, and the day it
+   * actually finished. Both null until somebody sets them.
+   *
+   * Two columns rather than one because Amber asked for both — *"[both] are needed and
+   * relevant"* — and because collapsing them loses the distinction the moment a job
+   * finishes on a different day from the one planned, which is most jobs. `projects`
+   * learned this in 0028 and its comment still says it: *"actual, as opposed to target"*.
+   */
+  targetCompletion: IsoDate | null;
+  endDate: IsoDate | null;
 
   // + fields
   createdAt: IsoDateTime;
@@ -3349,4 +3373,81 @@ export interface SearchHit {
   onPreviousAddress?: boolean;
   /** Opened in a new tab rather than routed to. Only a document link is. */
   external?: boolean;
+}
+
+/**
+ * A page somebody has bookmarked into the rail (0112).
+ *
+ * Amber, 11 September, asked what Pinned pins: *"pinned is new and allows people to
+ * save/bookmark a page"* — **any page**, a URL with a name. A filtered board, a settings
+ * screen, a job, a report.
+ *
+ * **No status.** The mockup draws pinned rows as projects with an 8px health dot; a URL
+ * has no health, and a second weaker list of projects beside the Projects destination is
+ * not what was asked for. The rail draws an icon for the KIND of page instead, and the
+ * kind is derived from the path rather than stored — see `pinKind` below.
+ */
+export interface PinnedPage {
+  id: Uuid;
+  label: string;
+  /** An in-app path with its query string. The database refuses anything else. */
+  url: string;
+  /** 1..5. The slot is the cap and the order, in one constraint. */
+  position: number;
+}
+
+/** What a pinned page points at, worked out from its path. Drives the row's icon. */
+export type PinKind = "job" | "project" | "board" | "report" | "settings" | "page";
+
+/**
+ * The kind of thing a pinned URL names.
+ *
+ * Derived, never stored: the path already says which, and a `pinned_page_kind` column
+ * would be a second source for the same fact that could disagree with the first the
+ * moment somebody edited one. A record route is recognised by having a segment after the
+ * board — `/jobs/1209-002` is a job, `/jobs?saved=live` is a board of them.
+ */
+export function pinKind(url: string): PinKind {
+  const path = url.split("?")[0].replace(/\/+$/, "");
+  const [, head, tail] = path.split("/");
+  if (head === "jobs") return tail ? "job" : "board";
+  if (head === "projects") return tail ? "project" : "board";
+  if (head === "maintenance" || head === "tasks" || head === "contacts") return "board";
+  if (head === "reports" || head === "report") return "report";
+  if (head === "setup" || head === "settings" || head === "admin") return "settings";
+  return "page";
+}
+
+/**
+ * The three numbers the navigation rail carries — Amber, 11 September.
+ *
+ * Three, and only three. The handoff draws a count on every flyout row as well ("All
+ * projects 9", "Pre-construction 3"), and she chose not to have them: three options were
+ * put up — one `rail_counts` view, live per-flyout fetches, or the rail's own six rows
+ * alone — and the third was taken. So the flyout lists its views and stage groupings with
+ * no number beside them, and this is the whole of what the rail counts.
+ *
+ * **Each number is what you land on**, not a row count of the table behind it. Click Jobs
+ * and the board opens on its "All jobs" view, which excludes Closed — so `jobs` excludes
+ * Closed too. Maintenance opens on the open queue, so `maintenance` counts the open
+ * queue. A badge that disagrees with the screen it takes you to is worse than no badge:
+ * the first thing anybody does is click it and count.
+ *
+ * **Inbox and Tasks carry no number**, and a `myOpenTasks` count was added here on
+ * 11 September and removed the same day. Amber: *"until counts are verified and tested
+ * remove"* — the two she wants are new-since-you-last-looked on Inbox, which nothing in
+ * the schema records yet, and open tasks on Tasks, which had not been checked against a
+ * real board. A query on every navigation for a number nobody renders is a cost with no
+ * reader, so it went with the badge.
+ *
+ * Reports, Contacts and Tools carry no number, in the design and here. They are not
+ * queues — nothing is waiting in them — so a count would be decoration.
+ */
+export interface RailCounts {
+  /** Projects at every lifecycle phase, matching the board's "All Projects" view. */
+  projects: number;
+  /** Jobs at every phase except Closed, matching the board's "All jobs" view. */
+  jobs: number;
+  /** Maintenance requests that are neither closed nor rejected — the default queue. */
+  maintenance: number;
 }

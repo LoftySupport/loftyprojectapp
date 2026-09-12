@@ -43,11 +43,11 @@ export function SettingsPage({
 
   return (
     <>
+      {/* No line under the heading. Amber, 12 September: *"on all pages remove
+          descriptive line text under page header … we need the most above the fold
+          possible"*. */}
       <div className="page-head">
         <Heading type="h2" weight="bold">User settings</Heading>
-        <Text type="text2" color="secondary">
-          Your details and preferences. Admin is about other people; this page is about you.
-        </Text>
       </div>
 
       {/* Two columns (Amber, 7 Sep): your details with "where you land" BENEATH them on

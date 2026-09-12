@@ -1,7 +1,8 @@
 import { createStubRepository as createEmptyRepository } from "../src/data/stubRepository";
 import type { Repository } from "../src/data/repository";
 import type {
-  FeedbackItem, Job, Process, ProcessRun, Profile, Project, RoadmapPhase, TaskEntry, TaskStatus
+  FeedbackItem, Job, Notification, Process, ProcessRun, Profile, Project, PropertyDef,
+  RoadmapPhase, TaskEntry, TaskStatus
 } from "../src/data/types";
 
 /**
@@ -214,7 +215,17 @@ const FIXTURE_JOBS: Job[] = ["9001-01", "9001-02", "9001-03"].map((id, i) => ({
   projectId: 9001,
   stage: JOB_STAGES[i],
   owningTeam: "design",
-  status: "active",
+  /**
+   * A REAL status, one of each health, and this was wrong.
+   *
+   * It read `status: "active"`, which is not a `RecordStatus` at all — the valid set is
+   * on_track / at_risk / behind_schedule / on_hold / completed / cancelled / archived.
+   * The cast to `Job` at the bottom of this object is what let it through, and the fault
+   * only became visible when the job record drew its health pill as a coloured dot with
+   * no label in it. Three different ones now, so a screenshot exercises all three colours
+   * rather than proving one.
+   */
+  status: (["on_track", "at_risk", "behind_schedule"] as const)[i],
   currentAddress: `${28 + i} FIXTURE Corner Street, Adelaide SA 5000`,
   originalAddress: null,
   projectCurrentAddress: "FIXTURE Corner Street, Adelaide SA 5000",
@@ -222,6 +233,10 @@ const FIXTURE_JOBS: Job[] = ["9001-01", "9001-02", "9001-03"].map((id, i) => ({
   // is a fixture somebody quotes back. Null is what the drawer shows as "—".
   council: null,
   stageEnteredAt: ISO(2026, 8, 20 + i),
+  // One with a target and none finished: the two states the Completion date row has to
+  // draw, which an all-null fixture would never exercise.
+  targetCompletion: i === 0 ? "2026-11-14" : null,
+  endDate: null,
   createdAt: ISO(2026, 8, 1),
   createdBy: null,
   updatedAt: ISO(2026, 9, 1),
@@ -360,6 +375,45 @@ const FIXTURE_TASKS: TaskEntry[] = TASK_SHAPES.map(([status, name, dueDate, star
   } as unknown as TaskEntry;
 });
 
+/**
+ * Three unread and one already read — so the sweep photographs the Inbox badge and the
+ * bell carrying the same number, which is the whole point of `InboxProvider`.
+ *
+ * Unread is `readAt: null` and nothing else, exactly as the real rows work. The fourth
+ * row is read on purpose: a list where every line is bold proves nothing about the two
+ * styles the panel actually has.
+ */
+const FIXTURE_NOTIFICATIONS: Notification[] = [
+  {
+    id: 1, typeId: "task_assigned", projectId: 9001, jobId: "9001-01", taskId: null,
+    processRunId: null, commentId: null,
+    title: "FIXTURE task assigned to you",
+    body: "Slab inspection booking — 28 FIXTURE Corner Street",
+    href: "/jobs/9001-01", createdAt: ISO(2026, 9, 10), readAt: null
+  },
+  {
+    id: 2, typeId: "mentioned", projectId: 9001, jobId: "9001-02", taskId: null,
+    processRunId: null, commentId: null,
+    title: "FIXTURE mention",
+    body: "…can you confirm the council lodgement date on this one?",
+    href: "/jobs/9001-02", createdAt: ISO(2026, 9, 9), readAt: null
+  },
+  {
+    id: 3, typeId: "stage_moved", projectId: 9001, jobId: "9001-03", taskId: null,
+    processRunId: null, commentId: null,
+    title: "FIXTURE job moved to Construction",
+    body: null,
+    href: "/jobs/9001-03", createdAt: ISO(2026, 9, 8), readAt: null
+  },
+  {
+    id: 4, typeId: "task_overdue", projectId: 9001, jobId: "9001-01", taskId: null,
+    processRunId: null, commentId: null,
+    title: "FIXTURE task overdue",
+    body: "Working drawings sign-off",
+    href: "/jobs/9001-01", createdAt: ISO(2026, 9, 4), readAt: ISO(2026, 9, 5)
+  }
+];
+
 export function createStubRepository(): Repository {
   const empty = createEmptyRepository();
   return {
@@ -369,6 +423,116 @@ export function createStubRepository(): Repository {
     async listProcesses() { return PROCESSES; },
     async listProjects() { return [FIXTURE_PROJECT]; },
     async listJobs() { return FIXTURE_JOBS; },
+    /**
+     * The rail's three counts, derived from the fixtures above rather than typed.
+     *
+     * Derived on purpose: a hand-written `{ jobs: 128 }` beside three fixture jobs would
+     * put a number in the picture that disagrees with the board behind it, which is
+     * exactly the class of defect the screenshots exist to catch. The real
+     * implementation counts rows under RLS; this counts the rows it has.
+     */
+    /**
+     * Five pinned pages, one of each kind the rail draws an icon for.
+     *
+     * Chosen to exercise `pinKind()` rather than to look plausible: a job, a project, a
+     * filtered board, a report and a settings screen are the five branches, and a
+     * screenshot with five bookmarks all pointing at boards would prove one of them.
+     */
+    /**
+     * A stage history, so 6b's readouts draw at all.
+     *
+     * Without it `listJobStageHistory` answers empty, every readout is omitted as a fact
+     * the record does not hold, and a screenshot of the page track proves only that the
+     * omission works. Two stays and a current one is the smallest history that exercises
+     * "Job started", "Days in stage", "Started on" and "Total days" together.
+     */
+    /**
+     * Property definitions, so the column picker actually draws its property groups.
+     *
+     * `stubRepository` answers empty by design — the eleven it once carried were
+     * "plausible fiction" and were rightly removed. But empty means the picker's
+     * **Job properties** and **Project properties** headings never render, and a
+     * screenshot of it proves only that the eleven real columns group. Amber, 11
+     * September: *"in the columns you should be able to add any property job or project
+     * to the column view"* — this is what lets that be looked at rather than asserted.
+     *
+     * Four, deliberately: two scopes and three formats, which is the smallest set that
+     * exercises both headings, the "(project)" label on an inherited one, and a numeric
+     * column's right alignment. Every one is named FIXTURE so it cannot be mistaken for
+     * a property Lofty defined.
+     */
+    /**
+     * …and read access to them, or the picker offers none of them.
+     *
+     * `myPropertyAccess()` answers empty in the stub and `usePropertyAccess` defaults an
+     * unknown key to `canRead: false`, which is the right fail-closed behaviour and is
+     * why the four definitions above were invisible on the first run. Worth having found
+     * that way round: the picker genuinely filters by what the reader may see, rather
+     * than listing every definition and letting RLS empty the column later.
+     */
+    async myPropertyAccess() {
+      return ["fixture_client", "fixture_pour_date", "fixture_contract_sum", "fixture_developer"]
+        .map(propertyKey => ({
+          propertyKey, canCreate: true, canRead: true, canUpdate: true, canDelete: false
+        }));
+    },
+    async listPropertyDefs() {
+      const base = {
+        stageName: "Pre-construction", teamId: null, teamName: null, required: false,
+        restricted: false, createLevel: "user", readLevel: "viewer",
+        updateLevel: "user", deleteLevel: "manager", slaDays: null, isActive: true,
+        description: null, importRef: null
+      } as const;
+      return [
+        { ...base, key: "fixture_client", label: "FIXTURE Client", scope: "job", format: "text", position: 1 },
+        { ...base, key: "fixture_pour_date", label: "FIXTURE Pour date", scope: "job", format: "date", position: 2 },
+        { ...base, key: "fixture_contract_sum", label: "FIXTURE Contract sum", scope: "job", format: "currency", position: 3 },
+        { ...base, key: "fixture_developer", label: "FIXTURE Developer", scope: "project", format: "text", position: 4 }
+      ] as unknown as PropertyDef[];
+    },
+    async listJobStageHistory(jobId: string) {
+      if (!FIXTURE_JOBS.some(j => j.id === jobId)) return [];
+      return [
+        { stage: "Acquisition & Development", from: ISO(2026, 6, 2), to: ISO(2026, 8, 20), days: 79 },
+        { stage: "Pre-construction", from: ISO(2026, 8, 20), to: null, days: 22 }
+      ];
+    },
+    async listMyNotifications() { return FIXTURE_NOTIFICATIONS.map(n => ({ ...n })); },
+    /**
+     * The one fixture that WRITES, and it earns the exception.
+     *
+     * The Inbox badge and the bell are one piece of state (`InboxProvider`) precisely so
+     * that Mark all read clears both. A fixture that ignored the write would make that
+     * impossible to watch happen — the badge would sit at 3 forever and the check would
+     * be "it looks right", which is the kind of evidence this repo does not accept.
+     */
+    async markNotificationsRead(ids?: number[]) {
+      const now = new Date().toISOString();
+      let marked = 0;
+      for (const n of FIXTURE_NOTIFICATIONS) {
+        if (n.readAt !== null) continue;
+        if (ids && !ids.includes(n.id)) continue;
+        n.readAt = now;
+        marked += 1;
+      }
+      return marked;
+    },
+    async listMyPins() {
+      return [
+        { id: "pin-1", label: "FIXTURE job 9001-01", url: "/jobs/9001-01", position: 1 },
+        { id: "pin-2", label: "FIXTURE project 9001", url: "/projects/9001", position: 2 },
+        { id: "pin-3", label: "FIXTURE live jobs board", url: "/jobs?saved=live", position: 3 },
+        { id: "pin-4", label: "FIXTURE reports", url: "/reports", position: 4 },
+        { id: "pin-5", label: "FIXTURE processes setup", url: "/setup/processes", position: 5 }
+      ];
+    },
+    async railCounts() {
+      return {
+        projects: 1,
+        jobs: FIXTURE_JOBS.filter(j => j.stage !== "Closed").length,
+        maintenance: 0
+      };
+    },
     async listProcessRuns() { return FIXTURE_RUNS; },
     async listFeedback(kind?: "bug" | "idea") {
       return kind ? REQUESTS.filter(r => r.kind === kind) : REQUESTS;

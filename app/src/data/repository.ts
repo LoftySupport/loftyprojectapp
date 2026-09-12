@@ -35,9 +35,11 @@ import type {
   NewProject,
   NewAddress,
   NewPropertyDef,
+  PinnedPage,
   Profile,
   Project,
   ProjectPatch,
+  RailCounts,
   RecordActivity,
   LatestUpdate,
   StagePeriod,
@@ -137,6 +139,50 @@ export interface Repository {
 
   listJobs(opts?: { projectId?: string }): Promise<Job[]>;
   getJob(id: string): Promise<Job | null>;
+
+  /**
+   * The three numbers on the navigation rail, in one read.
+   *
+   * It exists because the rail is on every screen and nothing else on the page can
+   * supply them. Every other count in this app comes out of a list the screen had
+   * already loaded — the board counts its own rows — and the rail has no list: it draws
+   * beside the Contacts page as readily as beside Jobs.
+   *
+   * **Three counts, one round trip, and never the rows.** Each is a `head: true` count,
+   * so Postgres answers with a number and sends no data; three of those cost less than
+   * one `listJobs()`, which is the alternative and would pull every job on every
+   * navigation to put one integer in a badge.
+   *
+   * RLS still applies — a count is a SELECT — so the number is what the person asking
+   * may see, which is the only number worth showing them.
+   */
+  railCounts(): Promise<RailCounts>;
+
+  // ---- the rail's Pinned section (0112) ----------------------------------
+  /**
+   * The five pages this person has bookmarked, in slot order.
+   *
+   * Amber, 11 September: *"pinned is new and allows people to save/bookmark a page"* —
+   * any page, a URL with a name. Private by RLS, so this returns the caller's own and
+   * there is no parameter for whose.
+   */
+  listMyPins(): Promise<PinnedPage[]>;
+
+  /**
+   * Bookmark a page into the first free slot, and hand back the whole list.
+   *
+   * The list rather than the row, for the reason `saveView` returns one: the database is
+   * the authority on what exists, and a list assembled in the component would be a second
+   * answer that can disagree with it after a refusal.
+   *
+   * **Five is the database's rule, not this method's.** `pinned_page_position` is CHECKed
+   * to 1..5 and UNIQUE per person, so a sixth pin has nowhere to go — a count here would
+   * be a courtesy that two browser tabs could both pass.
+   */
+  pinPage(label: string, url: string): Promise<PinnedPage[]>;
+
+  /** Take a bookmark off the rail. Returns the list that is left. */
+  unpinPage(id: string): Promise<PinnedPage[]>;
 
   listProfiles(): Promise<Profile[]>;
   currentProfile(): Promise<Profile | null>;
@@ -994,6 +1040,10 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "getProject",
   "listJobs",
   "getJob",
+  "railCounts",
+  "listMyPins",
+  "pinPage",
+  "unpinPage",
   "listProfiles",
   "currentProfile",
   "getProfile",
@@ -1202,6 +1252,10 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   getProject: "projects",
   listJobs: "jobs",
   getJob: "jobs",
+  railCounts: "projects + job_display + maintenance_request_display",
+  listMyPins: "pinned_pages",
+  pinPage: "pinned_pages",
+  unpinPage: "pinned_pages",
   listProfiles: "profiles",
   currentProfile: "profiles",
   getProfile: "profiles",

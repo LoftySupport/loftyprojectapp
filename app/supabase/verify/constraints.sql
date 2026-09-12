@@ -35,6 +35,20 @@ BEGIN
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  projects_number_floor rejected 999';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  projects_number_floor rejected 999)', SQLERRM; END;
 
+  -- 0113: a job cannot have finished before it existed. Probed HERE rather than in the
+  -- migration's own block, and the reason is worth writing down: the migration's version
+  -- is guarded with `if a_job is null` because a replay from empty has no jobs, so on a
+  -- rebuild it printed "skipped" and the rule was never watched. A probe that quietly
+  -- tests nothing is the failure this whole directory exists to prevent, so the probe
+  -- moved to where behaviour.sql has already made a job.
+  BEGIN
+    UPDATE jobs
+       SET job_end_date = (job_created_at AT TIME ZONE 'UTC')::date - 1
+     WHERE job_id = '9106-002';
+    RAISE WARNING 'FAIL: a job finished before it was created';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  jobs_end_date_is_not_before_the_job rejected a finish before creation';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  jobs_end_date_is_not_before_the_job)', SQLERRM; END;
+
   BEGIN
     UPDATE jobs SET job_engaged_teams = ARRAY['design','not_a_team'] WHERE job_id LIKE '9106-%';
     RAISE WARNING 'FAIL: unknown team accepted into job_engaged_teams';

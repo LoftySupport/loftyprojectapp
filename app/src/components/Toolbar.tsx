@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button, Text, TextField } from "@vibe/core";
 import { Select, toOptions, type SelectOption } from "./Select";
 import { DateRangeFilter, parseRange, serialiseRange } from "./DateRange";
@@ -28,6 +28,40 @@ import "./ui.css";
  * the first. A filter that is "Any" is not in the URL; a filter with a value is, so the
  * links people paste still carry exactly what narrowed the board.
  */
+
+/**
+ * Below this the toolbar folds into one line — Amber, 12 September, over a screenshot of
+ * six stacked dropdowns: *"condense filters for mobile view so they look better. You
+ * might be able to just do advanced on mobile"*, and on the Projects board, *"condense
+ * these in one line on mobile view"*.
+ *
+ * 720px is the width the rest of the app already treats as "a phone" (`ui.css` and
+ * `AppShell.css` both cut there), and a third breakpoint would be a third thing to keep
+ * in step.
+ */
+const ONE_LINE_BELOW = 720;
+
+/**
+ * Matches `@media (max-width: 720px)`, watched rather than read once.
+ *
+ * Exported because the page heads need the same answer: the create button moves up onto
+ * the heading's line at the same width the toolbar folds (Amber, 12 September: *"on
+ * mobile view the add new button should be in top right on same line as the header right
+ * aligned. We need the most above the fold possible"*). One breakpoint, one hook — two
+ * would drift, and the fold would move under one of them.
+ */
+export function useOneLine(): boolean {
+  const [narrow, setNarrow] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(`(max-width: ${ONE_LINE_BELOW}px)`).matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${ONE_LINE_BELOW}px)`);
+    const onChange = (e: MediaQueryListEvent) => setNarrow(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return narrow;
+}
 
 export const VIEWS = ["Board", "Table", "Gantt", "Calendar"] as const;
 export type View = (typeof VIEWS)[number];
@@ -166,10 +200,22 @@ export function Toolbar({
     const rest = filters.filter(f => f.field !== field);
     onFiltersChange(value ? [...rest, { field, value }] : rest);
   };
+  /**
+   * On a phone the bar is one line and everything else is behind Advanced.
+   *
+   * Not a second design: the same controls, in the same order, in the panel that already
+   * existed for the rest of them. What the bar keeps is View — which is what the screen
+   * IS rather than how it is narrowed — and the button that opens the others.
+   */
+  const oneLine = useOneLine();
   const advancedActive = advanced.filter(f => valueOf(f)).length;
   // A sort chosen from here counts as advanced too: it is set in that row, and a board
   // in an order nobody can see the reason for is the same "where did my rows go".
-  const advancedSet = advancedActive + (sort ? 1 : 0);
+  //
+  // On one line the button stands for every filter, not just the advanced ones, so it
+  // counts every filter — a Status set inside the panel with the button reading "(0)"
+  // is the hidden-filter fault the count exists to prevent.
+  const advancedSet = (oneLine ? filters.filter(f => f.value).length : advancedActive) + (sort ? 1 : 0);
   // Open from the start when a link arrived with an advanced filter set — a narrowed
   // board whose narrowing is hidden behind a closed row would read as missing jobs.
   const [advancedOpen, setAdvancedOpen] = useState(advancedSet > 0);
@@ -241,7 +287,7 @@ export function Toolbar({
         </div>
       )}
 
-      {grouping && onGroupingChange && groupings && (
+      {grouping && onGroupingChange && groupings && !oneLine && (
         <div className="toolbar-field">
           <span className="toolbar-label">Group</span>
           <Select
@@ -257,8 +303,9 @@ export function Toolbar({
         </div>
       )}
 
-      {/* The Group-by fields, as filters, always here. */}
-      {primary.map(control)}
+      {/* The Group-by fields, as filters — on the bar at a desk, inside Advanced on a
+          phone (see `oneLine`). */}
+      {!oneLine && primary.map(control)}
 
       <div className="toolbar-field filter-chips">
         <Button
@@ -309,6 +356,23 @@ export function Toolbar({
           time: the whole complaint was the clicking. */}
       {advancedOpen && (
         <div className="toolbar-advanced" id="toolbar-advanced">
+          {/* On a phone, the grouping and the primary filters live here — first, in the
+              order they have on the bar, so the panel reads as the bar folded rather
+              than as a different screen. */}
+          {oneLine && grouping && onGroupingChange && groupings && (
+            <div className="toolbar-field">
+              <span className="toolbar-label">Group</span>
+              <Select
+                className="toolbar-control"
+                ordered
+                aria-label="Group by"
+                options={toOptions(groupings)}
+                value={grouping}
+                onChange={g => onGroupingChange(g as Grouping)}
+              />
+            </div>
+          )}
+          {oneLine && primary.map(control)}
           {advanced.map(control)}
 
           {/**

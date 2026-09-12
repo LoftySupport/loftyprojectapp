@@ -89,12 +89,11 @@ export function SetupPage() {
 
   return (
     <>
+      {/* No line under the heading. Amber, 12 September: *"on all pages remove
+          descriptive line text under page header … we need the most above the fold
+          possible"*. The tabs under it name what is here. */}
       <div className="page-head">
         <Heading type="h2" weight="bold">Settings</Heading>
-        <Text type="text2" color="secondary">
-          Properties, processes, contacts, maintenance and automations — the dials the work
-          runs on. Users, teams, the dictionary and the wiring are under the cog.
-        </Text>
       </div>
 
       <TabList activeTabId={index} onTabChange={i => navigate(`/setup/${SECTIONS[i].slug}`)}>

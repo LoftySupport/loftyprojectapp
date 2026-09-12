@@ -112,6 +112,17 @@ export interface BoardJob {
    */
   council?: string | null;
   /**
+   * The job's own completion dates (0113) — the date being worked towards, and the day
+   * it actually finished. Both null until somebody sets them, which is a real state and
+   * draws as the date field's own `dd/mm/yyyy` rather than as a stand-in.
+   *
+   * On the board's job rather than fetched by the drawer, because `job_display` carries
+   * them and the drawer already holds this object: a second read for two dates the row
+   * in hand already has is a query nobody needs.
+   */
+  targetCompletion?: string | null;
+  endDate?: string | null;
+  /**
    * The latest attempt of every process run on this job (0078) — what the Process and
    * Process health chips filter on, and what the card can summarise.
    */
@@ -270,6 +281,8 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
       originalAddress: j.originalAddress,
       projectAddress: j.projectCurrentAddress,
       council: j.council,
+      targetCompletion: j.targetCompletion,
+      endDate: j.endDate,
       processRuns: [...(runsByJob.get(j.id)?.values() ?? [])].map(({ processKey, status, health }) => ({ processKey, status, health })),
       recordedKeys: [...new Set([...(keysByJob.get(j.id) ?? []), ...(keysByProject.get(j.projectId) ?? [])])],
       // The project's values underneath, the job's own on top — the same read-through

@@ -5,16 +5,54 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 225 changes since then —
-- Added: An element sweep in CI that counts how many different ways the app draws each thing — headers, tables, cards, containers, empty states, filter rows, hint lines — and fails when a number rises, or when a fix lowers one and the baseline is left behind
-- Added: the design handoff's SVG icons and the eight component contracts the app is to build against, so the app and the design system converge rather than being reconciled later
-- Added: the approved design for the sidebar rail and the job record, with the ten decisions that answer the gaps in it and the four corrections found reviewing it against the running app
-- Added: a letter can open with the name of anybody on the record — a token for every party role, with two purchasers joined as "A and B"
-- Changed: publishing a document again replaces the copy saved on the record instead of adding another — download the old one first if you need it
-- …and 220 more.
+Unreleased: 246 changes since then —
+- Fixed: On a phone the New button stays on the heading's line on Maintenance and Contacts, instead of dropping below the counts
+- Changed: Every page loses the sentence under its heading, so more of the screen is the thing you came for
+- Changed: On a phone the filters fold into one row behind Advanced, and every control in it starts and finishes in the same place
+- Changed: On a phone the New button sits on the heading's line, top right
+- Changed: The footer is one line on a phone and at a desk, in smaller type
+- …and 241 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
+
+## 12 September — the rail, the job record, and a day of mobile corrections (PR #72)
+
+**Where it stands:** merged. Everything below is in `main`.
+
+**Built from the 11 September handoff:** the navigation rail (224 / 64 / flyout), Pinned
+(`0112`), the slim top bar, the job record as a 460px drawer and a full page (`0113`), and
+the column picker as a 470px panel. `app/src/components/record/` carries the design
+system's own names — `RecordDrawer`, `RecordSection`, `FieldRow`, `ProcessSteps`,
+`StageTrack` — so the app and the library converge rather than being reconciled later.
+
+**Then a day of corrections from Amber, looking at it on a phone.** The full screen record
+sits INSIDE the frame now (a `#panel-dock` between the main area and the footer, so the
+rail, the bar and the footer all stay); clone is back as an icon on the job line in a
+project; the phone's navigation control is a real hamburger in the top right with the
+wordmark top left; every page lost the sentence under its heading; the filters fold to one
+row behind Advanced below 720px with an 84px label column so they line up; the create
+button rides the heading's line; the footer is one line at both sizes; and search is back
+on the top bar.
+
+### What a new session most needs to know
+
+1. **Health is half-answered, and nothing is built from it.** Amber, 12 September: *"Job at
+   risk is when the process is overdue which is set by the days marked in the process which
+   says it's at risk."* No new column is needed — `expected_days`, `at_risk_lead_days`,
+   `due_date`, `at_risk_date` and a computed per-run `health` all exist. **What makes a job
+   *overdue* rather than at risk is still open**, with three readings and a recommendation
+   in [`docs/open-questions.md`](docs/open-questions.md) §8. The record's pill still reads
+   `job_status`, a column somebody sets.
+2. **Inbox and Tasks carry no badge**, on purpose. They want *new since you last looked* and
+   *open tasks*; the first has nowhere to come from (nothing records when you last saw the
+   dashboard). `InboxProvider` and the badge styles stay, unused, for when it is settled.
+3. **The element sweep's E02 matcher fires on anything containing "head"** — it counted a
+   logo, a button and a readout as page headers in one day, and each cost a re-baseline.
+   Tightening `measure()` is the fix; see [`docs/design/element-sweep.md`](docs/design/element-sweep.md).
+4. **One number was lost, not moved:** the Projects heading used to read "118 projects · 79
+   jobs" and the job total is no longer on that page.
+5. **Expanded side panels still cover the footer** — only the job record was docked.
 
 **Phase A is done and applied, and so is the property-and-process half of Phase C (`0076`–`0079`, 1 September).**
 

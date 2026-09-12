@@ -133,7 +133,7 @@ export function DashboardPage() {
 
   if (loading) {
     return (
-      <PageShell title="Dashboard" subtitle="What is on your plate today.">
+      <PageShell title="Dashboard">
         <Text type="text2" color="secondary">Loading…</Text>
       </PageShell>
     );

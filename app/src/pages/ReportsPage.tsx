@@ -189,9 +189,11 @@ export function ReportsPage() {
 
   return (
     <>
+      {/* No line under the heading. Amber, 12 September: *"on all pages remove
+          descriptive line text under page header … we need the most above the fold
+          possible"*. */}
       <div className="page-head">
         <Heading type="h2" weight="bold">Reports</Heading>
-        <Text type="text2" color="secondary">Portfolio health, from the jobs in view.</Text>
       </div>
 
       {/* NO TOOLBAR ON THE BUILDER TAB.

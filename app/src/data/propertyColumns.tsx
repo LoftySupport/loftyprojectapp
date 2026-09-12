@@ -43,6 +43,21 @@ export function propertyColumnDefs<T extends { properties: Record<string, Proper
         key: `prop:${d.key}`,
         label: labelScope && d.scope === "project" ? `${d.label} (project)` : d.label,
         offByDefault: true,
+        /**
+         * Their own heading in the picker, by scope.
+         *
+         * Not "Other", which is where they landed the moment the picker grew groups —
+         * and with 174 definitions on this database, one ungrouped heading of 174 rows
+         * under eleven tidy ones makes the grouping actively worse for the columns it
+         * matters most for. Amber, 11 September: *"in the columns you should be able to
+         * add any property job or project to the column view"*, which is exactly these.
+         *
+         * Two headings rather than one, because the jobs table mixes both scopes: a
+         * project property shown on a job is READ THROUGH from the project and is the
+         * same answer for every job on that site, which is a different kind of fact from
+         * the job's own and worth separating before somebody turns on twenty of each.
+         */
+        group: d.scope === "project" ? "Project properties" : "Job properties",
         className: numeric ? "num" : undefined,
         // Figures and dates sort as what they are; everything else sorts as it reads.
         sort: (row: T) => {

@@ -1,14 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { BreadcrumbsBar, BreadcrumbItem, Button, Heading, Tab, TabList, Text, TextField } from "@vibe/core";
+import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
+import { Button, Text, TextField } from "@vibe/core";
 import { useTemplatePhases, useTeams } from "../data/useLookups";
 import type { BoardJob } from "../data/boardModel";
-import { TITLE_TYPE_LABELS, TITLE_TYPES, type NewAddress, type TeamId, type TitleType } from "../data/types";
+import { TITLE_TYPE_LABELS, TITLE_TYPES, type JobPatch, type NewAddress, type TeamId, type TitleType } from "../data/types";
 import { StatusPill } from "./RecordCards";
 import { PropertySlots } from "./PropertySlots";
 import { ProcessesPanel } from "./ProcessesPanel";
 import { RecordDocuments } from "./RecordDocuments";
 import { ExpandButton, usePanelExpand } from "./PanelExpand";
+import { JobRecord } from "./JobRecord";
+import { RecordBreadcrumb } from "./record/RecordBreadcrumb";
+import { RecordTabs } from "./record/RecordTabs";
 import { useResizablePanel } from "./useResizablePanel";
 import { JOB_MOVE_NOTE, MoveStageControl } from "./MoveStageDialog";
 import { ActivityFeed } from "./ActivityFeed";
@@ -60,10 +64,9 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
   const { openAsk } = useAskDock();
   const { toast } = useToasts();
 
-  // The fullscreen tab, sticky while the drawer stays open — editing a field must not
-  // bounce the view back to Main info (the prototype's rule). Docked has no tabs: a
-  // 420-wide column reads better as one scroll than as four hidden ones.
-  const [tab, setTab] = useState(0);
+  /** Which of the three docked panels is showing. Its own state, not the fullscreen tab:
+   *  one is "which part of the record", the other is "which part of the conversation". */
+  const [foot, setFoot] = useState("comments");
 
   // Once, on mount. Keyed on `onClose` this re-ran whenever the parent re-rendered and
   // pulled focus back to the drawer — the same fault that let the create form accept
@@ -99,11 +102,10 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
   const { teams } = useTeams();
   const [whoBusy, setWhoBusy] = useState(false);
   const [whoErr, setWhoErr] = useState<string | null>(null);
-  const saveWho = async (patch: {
-    owningTeam?: TeamId;
-    assigneeId?: string | null;
-    titleType?: TitleType | null;
-  }) => {
+  // `JobPatch` rather than a hand-written subset of it. The subset was a second list of
+  // what a job can have edited, and it went stale the moment 0113 added the completion
+  // dates — this now cannot.
+  const saveWho = async (patch: JobPatch) => {
     if (whoBusy) return;
     setWhoBusy(true);
     setWhoErr(null);
@@ -188,13 +190,33 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
   // put a number under "Days in stage" that read as a target somebody had agreed.
   const expected = expectedDaysByStage[job.stage];
 
-  return (
-    <>
-      <div className="drawer-overlay" onClick={onClose} />
+  /**
+   * DOCKED, NOT OVER THE TOP — the difference between 6a and 6b.
+   *
+   * Amber, 12 September: *"the full screen view sits inside the main frame so still has
+   * top and side nav and footer"*. As a panel it is an overlay: fixed, from under the
+   * header to the bottom of the window, modal, with a scrim over the board behind. Full
+   * screen it is a ROW OF THE FRAME — it portals into `#panel-dock` between the main
+   * area and the footer, `.app-main` hides while it is there, and the footer sits under
+   * it like it sits under every other page.
+   *
+   * Three things follow from that and are not cosmetic:
+   *
+   *   * **No scrim.** Nothing is being covered.
+   *   * **`aria-modal` is false**, because it is not modal any more: the rail, the top
+   *     bar and the footer are all reachable with the record open. Claiming otherwise
+   *     tells a screen reader everything else on the page is inert when it is not.
+   *   * **`role` drops to `region`.** A dialog is a thing you answer and dismiss; this
+   *     is the page you are on.
+   *
+   * Escape still shrinks it back to the panel first (G20), which is why the handler is
+   * outside this and not attached to a dialog role.
+   */
+  const record = (
       <aside
         className={`drawer${expanded ? " is-expanded" : ""}`}
-        role="dialog"
-        aria-modal="true"
+        role={expanded ? "region" : "dialog"}
+        aria-modal={expanded ? undefined : true}
         aria-label={`Job ${job.jobNumber}`}
         tabIndex={-1}
         ref={panel}
@@ -204,69 +226,39 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
             not something a hand can catch — this is 8px wide and sits half over the
             edge, which is the shape every split pane has settled on. */}
         {!expanded && <div className="drawer-grip" {...handleProps} />}
-        <header className="drawer-head">
-          <div>
-            {/* Jobs › project › job, not Board › stage › job.
-                The stage is where the job is *this week*; the project is what it belongs
-                to, and that never changes. Drawing the temporary relationship as the
-                hierarchy and leaving the permanent one out had it backwards — and the
-                database is unambiguous about which is which, since `job_id` is literally
-                `project_id || '-' || job_sequence`.
-
-                `onClick` rather than `link`: Vibe's BreadcrumbItem renders a real anchor
-                for `link`, which in this app is a full page reload of a 1 MB bundle and a
-                fresh auth round trip. The project also appears below as a router Link, so
-                copy-link-address and middle-click are not lost. */}
-            <BreadcrumbsBar type="navigation">
-              <BreadcrumbItem
-                text="Jobs"
-                isClickable
-                onClick={() => { onClose(); navigate("/jobs"); }}
-              />
-              <BreadcrumbItem
-                text={`Project ${job.projectNumber}`}
-                isClickable
-                onClick={() => { onClose(); navigate(`/projects/${job.projectNumber}`); }}
-              />
-              <BreadcrumbItem text={job.jobNumber} isCurrent />
-            </BreadcrumbsBar>
-            <Heading type="h3" weight="medium">
-              {job.currentAddress ?? <Token>job_display.job_current_address</Token>}
-            </Heading>
-            <Text type="text3" color="secondary" element="div" ellipsis={false}>
-              {job.jobNumber}
-              {job.jobNumberOld && <> · Lofty #{job.jobNumberOld}</>} ·{" "}
-              <Link to={`/projects/${job.projectNumber}`} onClick={onClose} className="link-button">
-                Project {job.projectNumber}
-              </Link>
-              {" "}· {job.projectAddress ?? <Token>job_display.project_current_address</Token>}
-            </Text>
-          </div>
+        {/* 48px: breadcrumb left, expand and close right. The TITLE moved into the body
+            (see JobRecord) — the handoff puts it on the first line of the record with the
+            health pill beside it, and a title in the header as well would be the same
+            sentence twice in 80 pixels. */}
+        <header className="record-head">
+          {/* Jobs › 1209 › 1209-002. Three levels, no more.
+              `onClick` rather than an anchor: Vibe's BreadcrumbItem rendered a real one,
+              which in this app is a full page reload of a 1 MB bundle and a fresh auth
+              round trip. The project also appears in the title below as a router link, so
+              copy-link-address and middle-click are not lost. */}
+          <RecordBreadcrumb
+            items={[
+              { label: "Jobs", render: l => (
+                <button type="button" className="record-crumb-link"
+                  onClick={() => { onClose(); navigate("/jobs"); }}>{l}</button>
+              ) },
+              { label: job.projectNumber, render: l => (
+                <button type="button" className="record-crumb-link"
+                  onClick={() => { onClose(); navigate(`/projects/${job.projectNumber}`); }}>{l}</button>
+              ) },
+              { label: job.jobNumber }
+            ]}
+          />
           <div className="drawer-actions">
-            {/* Opens the one AI surface, scoped — "opening from a job is itself the
-                question". The dock says coming soon; the entry point is real. */}
-            {/* G25 — the entry point ships; the flow rides the variations model
-                (Amber's Q8: waiting-on is part of the variation request). */}
-            <Button
-              kind="tertiary"
-              size="small"
-              onClick={() => toast("Request changes comes with variations — it will raise one on this job and flag what it's waiting on.", "normal")}
-            >
-              Request changes
-            </Button>
-            <Button kind="secondary" size="small" onClick={() => openAsk(`job ${job.jobNumber}`)}>
-              Ask about this job
-            </Button>
+            {/* Only expand and close, which is what the handoff's 48px header holds.
+                "Request changes" and "Ask about this job" moved into the body under the
+                title: they are acts on the record, and two 32px buttons beside a
+                breadcrumb wrapped it onto two lines and doubled the header. */}
             {/* NO CLONE HERE. Amber, 7 September: "remove clone off the job sidepanel..
-                cloning jobs can only be done on projects". A clone makes a NEW job in a
-                project, so it is an act on the project, not on the job you happen to have
-                open — and offering it here invited "clone this job" to mean "duplicate it
-                where it is", which is not what 0057 does.
-
-                CloneDialog.tsx and repository.cloneJob() are deliberately KEPT and are now
-                referenced by no screen: the capability is unchanged, only its entry point
-                moved, and the project-side control does not exist yet. Do not delete them
-                as dead code — see docs/open-questions.md. */}
+                cloning jobs can only be done on projects". CloneDialog.tsx and
+                repository.cloneJob() are deliberately KEPT and referenced by no screen:
+                the capability is unchanged, only its entry point moved. Do not delete
+                them as dead code — see docs/open-questions.md. */}
             {canExpand && <ExpandButton expanded={expanded} onToggle={toggle} />}
             <Button kind="tertiary" size="small" onClick={onClose} aria-label="Close">
               ×
@@ -277,15 +269,18 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
         {/* Fullscreen gets the prototype's tab bar; docked stays one scrolled column —
             in a 460px panel four hidden columns read worse than one scroll. The same
             sections render either way; the tabs only choose which show. */}
-        {expanded && (
-          <div className="drawer-tabs">
-            <TabList activeTabId={tab} onTabChange={setTab}>
-              <Tab>Main info</Tab>
-              <Tab>All properties</Tab>
-              <Tab>Departments</Tab>
-            </TabList>
-          </div>
-        )}
+        {/* THE FULLSCREEN TAB STRIP IS GONE, and this is the one thing the 11 September
+            rebuild takes away rather than moves.
+
+            It was Main info / All properties / Departments, and 6b has no such strip: the
+            full page is *"the same record at two widths, not two designs"* — the same
+            properties in the same order, with room to show the tail expanded and the
+            conversation docked beside it rather than under it. Three hidden columns was
+            the drawer's answer to not having room; the page has room.
+
+            Nothing is lost. Every section the tabs hid now renders in the one scroll,
+            which is what the docked footer freed the height for. `Tab`/`TabList` stay
+            imported for the Departments placeholder below. */}
 
         <PanelGroup>{bulk => (
         <div className="drawer-body stack">
@@ -294,6 +289,49 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
               reference designs do. Two buttons rather than one toggle: after a "collapse
               all" a single toggle reads "expand all", and with nine sections in mixed
               states there is no honest label for what one button would do next. */}
+          {(<>
+          {/* The record, in the shape the 11 September handoff specifies: title and
+              health, the blocked-by banner, Job Stage, Key properties and Process. The
+              panels below it are the tail — Documents, Maintenance, Parties, the full
+              property list — which the handoff draws as "collapsed rows with counts" and
+              which stay because they are real working screens nobody asked to lose. */}
+          <JobRecord
+            job={job}
+            variant={expanded ? "page" : "drawer"}
+            onChangeAddress={() => setNewAddress({ suburb: "", postcode: "" })}
+            onSetCompletion={iso => void saveWho({ targetCompletion: iso })}
+            currentlyWithControl={
+              /* The job's team first, everybody else under "Other teams", each name with
+                 their team beside it (Amber, 7 Sep). The same control the "Who it's with"
+                 panel below uses, and the same write — one picker, not two. */
+              <PersonSelect
+                aria-label="Currently with"
+                teamId={job.teamId}
+                value={job.assigneeId}
+                onChange={v => { if (v !== job.assigneeId) saveWho({ assigneeId: v }); }}
+              />
+            }
+          />
+
+          {/* The two acts on this record. Below it rather than in the header, for the
+              reason above. G25 — the Request changes entry point ships; the flow rides
+              the variations model (Amber's Q8: waiting-on is part of the request). */}
+          <div className="record-acts">
+            <Button
+              kind="tertiary"
+              size="small"
+              onClick={() => toast("Request changes comes with variations — it will raise one on this job and flag what it's waiting on.", "normal")}
+            >
+              Request changes
+            </Button>
+            <Button kind="secondary" size="small" onClick={() => openAsk(`job ${job.jobNumber}`)}>
+              Ask about this job
+            </Button>
+          </div>
+
+          {/* The drawer's own controls, BELOW the record rather than above it. They were
+              the first two things on the panel, which put a "Collapse all" and a search
+              box between somebody and the job number they opened it for. */}
           <div className="drawer-bulk">
             <button type="button" className="drawer-bulk-btn" onClick={bulk.collapseAll}>Collapse all</button>
             <span aria-hidden>·</span>
@@ -322,7 +360,7 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
               )}
             </div>
           )}
-          {(!expanded || tab === 0) && (<>
+
           {/* First, because it is how a job is looked up (Amber, 27 Aug): the old
               Lofty number is what SiteBook, Trello and the paperwork link by, and the
               addresses are what people say on the phone. */}
@@ -594,7 +632,7 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
           <RecordDocuments jobId={job.jobNumber} folderUrl={job.sharepointUrl} />
           </>)}
 
-          {(!expanded || tab === 1) && (<>
+          {(<>
           {/* The site's own facts, above the job's — fencing, pegging, the developer, the
               council. One answer for the whole project, shown here rather than copied,
               so twenty jobs on one site cannot quietly disagree about it.
@@ -613,10 +651,10 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
 
           </>)}
 
-          {(!expanded || tab === 0) && (<>
-          {/* What has to be done on this job. Above the timeline because a checklist is
-              worked from, and a history is read — the thing you act on goes first. */}
-          <TasksPanel jobId={job.jobNumber} />
+          {(<>
+          {/* Tasks, comments and the activity log are DOCKED IN THE FOOTER now — see the
+              record-foot below. They were here, in the body, which meant the conversation
+              was nine sections of scrolling away from the record it is about. */}
 
           {/* Who from outside Lofty is on this job — the purchaser, the trades on its runs
               (0082). Sits with the work because "ring the plumber" is a task. */}
@@ -633,7 +671,7 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
           {expanded && <JobTimeline jobId={job.jobNumber} />}
           </>)}
 
-          {expanded && tab === 2 && (
+          {(
             <CollapsiblePanel id="job-departments" title="Departments" summary="handoff view — coming soon">
               <Text type="text2" color="secondary" ellipsis={false}>
                 Where every team stands on this job, in the order it passes through them —
@@ -658,12 +696,55 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
               Two panels rather than one merged stream: comments are user-authored and
               editable, activity is append-only (0058), and interleaving them makes a feed
               where half the entries can be rewritten after the fact. */}
-          {expanded && <ActivityFeed jobId={job.jobNumber} title="Activity" />}
-          <CommentsPanel jobId={job.jobNumber} title="Updates & comments" />
         </div>
         )}</PanelGroup>
-      </aside>
 
+        {/* DOCKED, never inside the scroll region — the RecordDrawer contract's own
+            warning, and the part of the design no earlier option had: *"a drawer is
+            header / scrolling body / docked footer, three flex siblings, or the tabs
+            scroll away and the pattern is pointless."*
+
+            Amber, 7 September, said comments and activity belong "at the bottom as not
+            as important in tabs", and this is not a reversal of that: they are still at
+            the bottom and still not a tab you might come to the drawer FOR. What changed
+            is that the bottom no longer means "after nine sections of scrolling" — the
+            conversation is in reach the whole way down, which is what a record you read
+            while talking to somebody needs. */}
+        <div className="record-foot">
+          <RecordTabs
+            tabs={[
+              { id: "tasks", label: "Tasks" },
+              { id: "comments", label: "Comments" },
+              { id: "activity", label: "Activity Log" }
+            ]}
+            value={foot}
+            onChange={setFoot}
+          />
+          <div
+            className="record-foot-panel"
+            role="tabpanel"
+            id={`record-panel-${foot}`}
+            aria-labelledby={`record-tab-${foot}`}
+          >
+            {foot === "tasks" && <TasksPanel jobId={job.jobNumber} bare />}
+            {foot === "comments" && <CommentsPanel jobId={job.jobNumber} bare />}
+            {foot === "activity" && <ActivityFeed jobId={job.jobNumber} bare />}
+          </div>
+        </div>
+      </aside>
+  );
+
+  // The dock is rendered by `AppShell`, so it is there before any page mounts. The
+  // fallback is the overlay this used to be: a panel expanded outside the shell (a test,
+  // a storybook page) still draws rather than disappearing into a portal target that
+  // does not exist.
+  const dock = expanded ? document.getElementById("panel-dock") : null;
+  if (dock) return createPortal(record, dock);
+
+  return (
+    <>
+      <div className="drawer-overlay" onClick={onClose} />
+      {record}
     </>
   );
 }
