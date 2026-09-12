@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 226 changes since then —
+Unreleased: 227 changes since then —
+- Fixed: The labels under the dashboard's workload figures were dimmed against the orange panel, making them fainter than the app's own colour rules allow
 - Fixed: The "no" mark in the permissions grid was too pale to see against the page, so a role that lacks a permission looked the same as a cell that had not loaded
 - Added: An element sweep in CI that counts how many different ways the app draws each thing — headers, tables, cards, containers, empty states, filter rows, hint lines — and fails when a number rises, or when a fix lowers one and the baseline is left behind
 - Added: the design handoff's SVG icons and the eight component contracts the app is to build against, so the app and the design system converge rather than being reconciled later
 - Added: the approved design for the sidebar rail and the job record, with the ten decisions that answer the gaps in it and the four corrections found reviewing it against the running app
-- Added: a letter can open with the name of anybody on the record — a token for every party role, with two purchasers joined as "A and B"
-- …and 221 more.
+- …and 222 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

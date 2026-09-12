@@ -133,6 +133,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- The labels under the dashboard's workload figures were dimmed against the orange panel, making them fainter than the app's own colour rules allow
 - The "no" mark in the permissions grid was too pale to see against the page, so a role that lacks a permission looked the same as a cell that had not loaded
 - 64 job addresses had their lot number in the street-number column, so a job at lot 1 of 14 Brodie Road read as 1 Brodie Road — somebody else's house
 - the staged-workbook importer could not insert a row after the lot number became a number
