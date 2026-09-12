@@ -186,6 +186,12 @@ jobs:
         run: npm run check:watermark
         working-directory: app
 
+      # Needs no browser either. It sits here because it is the third check that reads the
+      # app's own TypeScript through register-ts.mjs rather than a copy of it.
+      - name: every job and project field belongs to a process, or says why not
+        run: npm run check:orphan-properties
+        working-directory: app
+
   deploy:
     name: the deploy assembles
     runs-on: ubuntu-latest

@@ -16,6 +16,51 @@ Unreleased: 255 changes since then —
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
 
+## 12 September, late — every job and project field has to belong to a process
+
+**Where it stands:** on `claude/tender-mayer-q39ffz`, in [PR #75](https://github.com/LoftySupport/loftyprojectapp/pull/75).
+
+Amber: *"all properties should belong to a process if it is job or project and if they don't
+they should be flagged as orphaned in the properties setting unless they are the primary key.
+This should have all properties including properties not on the properties table eg
+address."* And, clarifying: *"a system property such as a primary key, a user property or
+contact property or task or maintenance property don't need to belong to a process but may
+belong to an automation."*
+
+### The last sentence of the first message is the whole difficulty
+
+A sweep of `property_defs` reports a clean board while the address, the council, the owning
+team, the assignee, the SharePoint folder and both completion dates are collected by nothing
+— they are **columns on `jobs` and `projects`**, not property rows. So the second source is
+the **data dictionary**, which already carries one entry per column with its meaning.
+
+**Setup → Properties now carries both**: an orphan count and an *Only orphaned* filter on the
+property table, and below it *Fields that are not properties* — thirty-three columns nothing
+can collect, and sixteen system fields listed with the reason each is exempt rather than
+silently dropped.
+
+### The classifier is a list, and that is deliberate
+
+The first version read the dictionary's prose for *assigned by* / *maintained by* / *bumped
+by*. It split the siblings — `jobs.job_stage_entered_at` says *maintained by the trigger*,
+`projects.project_stage_entered_at` says *moved by a trigger* — and widening it to catch both
+swept in `job_stage` and `project_stage`, which a person sets. The exemptions are written out
+one at a time now, each with its reason, and the screen shows the System group in full so a
+wrong one is visible. `npm run check:orphan-properties` guards both ends of that mistake and
+CI runs it.
+
+### What a new session should pick up
+
+**Thirty-three fields cannot be attached to a process at all.**
+`process_properties.property_key` points at `property_defs`, so a column has nowhere for the
+attachment to hang. Whether the fixed columns get definitions — and if so whether the values
+move — is **question 0** in [`docs/open-questions.md`](docs/open-questions.md), with three
+options and a recommendation. Reading the list of thirty-three is the next step, not writing
+a migration.
+
+**Amber's third clause is not built.** *"May belong to an automation"* — there is no
+automation model to attach one to yet.
+
 ## 12 September, evening — the boards fold, tasks can be created, and the record matches the design
 
 **Where it stands:** on `claude/tender-mayer-q39ffz`, after PR #72 merged. Four corrections
