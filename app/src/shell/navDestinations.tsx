@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import { Location, Person } from "@vibe/icons";
 import { useStages } from "../data/useLookups";
-import { useAuth } from "../data/AuthProvider";
 import { useQuery } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { JOB_VIEWS, PROJECT_VIEWS, DEFAULT_SAVED_VIEW } from "../data/savedViews";
@@ -75,18 +74,11 @@ export function useNavDestinations(): {
   destinations: NavDestination[];
   /** Zero-state aware: null while the first read is in flight, so no badge flashes 0. */
   countsLoading: boolean;
-  /** Tasks assigned to you and not yet done — the rail's Tasks row draws it. */
-  myOpenTasks: number | undefined;
 } {
   const { stages } = useStages();
   const { can } = usePermission();
-  // The signed-in person, for the one count that is about you rather than about the
-  // company. Passed in rather than looked up inside `railCounts`, which would make it
-  // two round trips; re-read when it changes, because signing in is exactly when the
-  // number goes from nothing to something.
-  const { profile: me } = useAuth();
   const { data: counts, loading: countsLoading } =
-    useQuery<RailCounts | null>(r => r.railCounts(me?.id ?? null), null, [me?.id]);
+    useQuery<RailCounts | null>(r => r.railCounts(), null);
 
   return useMemo(() => {
     /** Every phase the database has, as a link that groups the board by it. */
@@ -176,6 +168,6 @@ export function useNavDestinations(): {
       { id: "tools", label: "Tools", to: "/tools", icon: Documents, iconSize: 28, panel: toolsPanel }
     ];
 
-    return { destinations, countsLoading, myOpenTasks: counts?.myOpenTasks };
+    return { destinations, countsLoading };
   }, [stages, counts, countsLoading, can]);
 }

@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Dialog, DialogContentContainer, Text } from "@vibe/core";
 import { Bookmark, Menu, Note, Search, Settings, CheckList } from "@vibe/icons";
 import { initialsOf, useAuth } from "../data/AuthProvider";
-import { InboxProvider, useInbox } from "../data/InboxProvider";
+import { InboxProvider } from "../data/InboxProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { GlobalSearch } from "../components/GlobalSearch";
 import { AskButton, AskDockProvider } from "../components/AskDock";
@@ -125,46 +125,39 @@ function UserMenu({ collapsed }: { collapsed: boolean }) {
  * My work, the six destinations, Settings, Admin and you. The header is what is left.
  */
 /**
- * My work — Inbox and Tasks, with the two badges Amber asked for on 11 September.
+ * My work — Inbox and Tasks.
  *
- * Its own component for one reason: the Inbox number comes from `InboxProvider`, which
- * `AppShell` mounts, and a component cannot read a context it renders itself. Everything
- * else it needs is passed in.
+ * NEITHER ROW CARRIES A NUMBER, AND THAT IS A DECISION RATHER THAN AN OMISSION
  *
- * WHAT THE TWO NUMBERS ARE
+ *   Both badges were built on 11 September — *"Inbox and tasks should have a badge"* —
+ *   and taken out again the same day, by Amber: *"they ideally will be for new since
+ *   last check on inbox and open tasks but if not correct then will just be ignored. So
+ *   until counts are verified and tested remove."*
  *
- *   **Inbox** is unread notifications plus the tracker's moved requests — the same value
- *   the bell in the header shows, from the same state, capped at 9+ the same way. One
- *   number in two places. They cannot drift: press Mark all read in the bell and this
- *   clears with it.
+ *   The two she wants are **new since you last looked** on Inbox and **open tasks** on
+ *   Tasks. The first does not exist yet: nothing records when you last looked at the
+ *   dashboard, so the honest options were unread notifications (the bell's number, a
+ *   different fact) or nothing. The second exists but had not been checked against a
+ *   real board. A badge that is nearly right is worse than none, because it is the kind
+ *   of wrong nobody reports — they just stop believing the number.
  *
- *   **Tasks** is `railCounts().myOpenTasks` — assigned to you, not Done or Cancelled.
- *
- * WHY ONE IS RED AND THE OTHER IS NOT
- *
- *   The handoff draws "Inbox 3" as a red badge and "Tasks 12" as a plain number, and
- *   that difference is the meaning rather than decoration: red says somebody is waiting
- *   on you and goes away when you have looked. A dozen open tasks is the ordinary state
- *   of a working week — red on it would be red on every screen, every day, which is how
- *   people learn to stop seeing red.
- *
- *   Collapsed, or with the group shut, neither row is on screen. So the group's own head
- *   carries a dot when the Inbox has anything unread: the count is not visible, but the
- *   fact that something is waiting still is.
+ *   What the build still carries, because none of it is on screen: `InboxProvider` holds
+ *   the bell's state, so the rail can read the same number rather than a second one when
+ *   the definition is settled; `.nav-row-badge` and `.nav-row-dot` keep their styles in
+ *   `NavRail.css`; and `NavRailGroup` still takes `alert`. The count query and the
+ *   `RailCounts.myOpenTasks` field went, because an unread round trip on every
+ *   navigation for a number nobody sees is a cost with no reader.
  */
 function MyWorkGroup({
-  open, onToggle, collapsed, onExpandRail, activeId, myOpenTasks, link
+  open, onToggle, collapsed, onExpandRail, activeId, link
 }: {
   open: boolean;
   onToggle: () => void;
   collapsed: boolean;
   onExpandRail: () => void;
   activeId: string | null;
-  myOpenTasks: number | undefined;
   link: RailLink;
 }) {
-  const { waiting } = useInbox();
-
   return (
     <NavRailGroup
       id="myWork"
@@ -175,7 +168,6 @@ function MyWorkGroup({
       onToggle={onToggle}
       collapsed={collapsed}
       onExpandRail={onExpandRail}
-      alert={waiting > 0}
     >
       {/* Inbox IS the old dashboard (decision 1) — no new table, no new feed, just the
           name that says what the page is for. Tasks is `/tasks` unchanged: four views,
@@ -187,18 +179,8 @@ function MyWorkGroup({
         <>
           <span className="nav-row-icon"><Note size={20} /></span>
           <span className="nav-row-label">Inbox</span>
-          {/* Nothing unread draws nothing. A 0 in a badge is a claim that somebody
-              checked, and an empty red pill is worse than no pill. */}
-          {waiting > 0 && (
-            <span className="nav-row-badge" aria-hidden>{waiting > 9 ? "9+" : waiting}</span>
-          )}
         </>,
-        {
-          "aria-current": activeId === "inbox" ? "page" : undefined,
-          // The badge is aria-hidden, so the count is said here instead — "Inbox, 3
-          // unread" rather than "Inbox 9+", which is not a sentence.
-          "aria-label": waiting > 0 ? `Inbox, ${waiting} unread` : undefined
-        }
+        { "aria-current": activeId === "inbox" ? "page" : undefined }
       )}
       {link(
         { label: "Tasks", to: "/tasks" },
@@ -207,16 +189,8 @@ function MyWorkGroup({
         <>
           <span className="nav-row-icon"><CheckList size={20} /></span>
           <span className="nav-row-label">Tasks</span>
-          {/* `undefined` while the count is in flight, so the row never flashes a 0 it
-              then replaces. Zero open tasks also draws nothing — see above. */}
-          {myOpenTasks !== undefined && myOpenTasks > 0 && (
-            <span className="nav-row-count" aria-hidden>{myOpenTasks}</span>
-          )}
         </>,
-        {
-          "aria-current": activeId === "tasks" ? "page" : undefined,
-          "aria-label": myOpenTasks ? `Tasks, ${myOpenTasks} open` : undefined
-        }
+        { "aria-current": activeId === "tasks" ? "page" : undefined }
       )}
     </NavRailGroup>
   );
@@ -226,7 +200,7 @@ export function AppShell() {
   const { error: authError } = useAuth();
   const location = useLocation();
   const { can } = usePermission();
-  const { destinations, myOpenTasks } = useNavDestinations();
+  const { destinations } = useNavDestinations();
 
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem(RAIL_KEY) === "1"
@@ -272,6 +246,35 @@ export function AppShell() {
   }, []);
 
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
+
+  /**
+   * The footer's height, published as `--shell-foot-h` beside the rail's width and the
+   * header's height.
+   *
+   * The other two are constants in CSS; this one cannot be, because the footer wraps to
+   * two lines on a narrow window and to three on a phone. It is measured so that a panel
+   * expanded into the dock can be exactly the space between the header and the footer —
+   * which is what makes the record fill the window and scroll its own body, rather than
+   * growing to its content and pushing the conversation tabs below the fold.
+   *
+   * `ResizeObserver`, not a one-off read: the wrap point depends on the window, and a
+   * height measured at first paint is wrong the moment somebody drags the window.
+   */
+  const foot = useRef<HTMLElement>(null);
+  const [footHeight, setFootHeight] = useState(0);
+  useEffect(() => {
+    const el = foot.current;
+    if (!el) return;
+    // The BORDER box, not `contentRect` — which is the content box and excludes the
+    // footer's 24px of padding top and bottom. Measured that way the footer reported 24
+    // where it draws 72, the dock was 48px too tall, and the page grew a scrollbar with
+    // nothing to scroll to.
+    const ro = new ResizeObserver(() => {
+      setFootHeight(Math.round(el.getBoundingClientRect().height));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -359,7 +362,10 @@ export function AppShell() {
     {/* Above the rail AND the header, because the Inbox badge and the bell are the same
         number read once — see `InboxProvider`. */}
     <InboxProvider>
-    <div className={"app-shell" + (narrow ? " is-narrow" : "")}>
+    <div
+      className={"app-shell" + (narrow ? " is-narrow" : "")}
+      style={{ "--shell-foot-h": `${footHeight}px` } as CSSProperties}
+    >
       <a className="skip-link" href="#main">Skip to content</a>
 
       <aside
@@ -409,7 +415,6 @@ export function AppShell() {
                 collapsed={railCollapsed}
                 onExpandRail={() => setCollapsed(false)}
                 activeId={activeId}
-                myOpenTasks={myOpenTasks}
                 link={link}
               />
 
@@ -500,7 +505,27 @@ export function AppShell() {
           <Outlet />
         </main>
 
-        <footer className="app-foot" role="contentinfo">
+        {/* Where a panel goes when it is expanded to full screen.
+            ==========================================================================
+            Amber, 12 September, looking at the expanded job record: *"the full screen
+            view sits inside the main frame so still has top and side nav and footer"*.
+
+            It already kept the rail and the top bar — that was her 26 August call, and
+            `.app-shell` says so — but it was a fixed overlay from the header down to
+            `bottom: 0`, which put it OVER the footer. The footer was still in the
+            document, still 72px tall, and completely invisible.
+
+            Reserving footer-height at the bottom of the viewport would not have fixed
+            it: the footer is at the bottom of the DOCUMENT, so on any page taller than
+            the window that strip shows the board behind rather than the footer.
+
+            So an expanded panel stops being an overlay and becomes a row of the frame:
+            it portals in here, `.app-main` hides while it is here, and the footer
+            follows it down the page like it follows anything else. Empty the rest of
+            the time, and `:empty` keeps it out of the layout. */}
+        <div id="panel-dock" className="app-dock" />
+
+        <footer className="app-foot" role="contentinfo" ref={foot}>
           <Text type="text3" color="secondary" element="div" ellipsis={false}>
             {/* The year is computed, not written down — a hardcoded one is wrong every
                 January and nobody notices until a client does. */}

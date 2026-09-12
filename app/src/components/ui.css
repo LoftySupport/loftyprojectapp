@@ -1162,6 +1162,20 @@
     "head head"
     "body conv";
 }
+/* In the dock it is a row of the frame, not a panel over it: static, as wide as the main
+   area, and as tall as the space between the header and the footer. The border and the
+   shadow were the overlay saying "I am on top of something" — in the frame they draw a
+   seam where the page does not have one. */
+.app-dock > .drawer.is-expanded {
+  position: static;
+  width: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  z-index: auto;
+  border-left: 0;
+  box-shadow: none;
+}
 .drawer.is-expanded > .record-head { grid-area: head; }
 .drawer.is-expanded > .drawer-body { grid-area: body; padding: var(--space-24) var(--space-32); }
 .drawer.is-expanded > .record-foot {

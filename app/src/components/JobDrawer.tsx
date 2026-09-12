@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { Button, Text, TextField } from "@vibe/core";
 import { useTemplatePhases, useTeams } from "../data/useLookups";
@@ -189,13 +190,33 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
   // put a number under "Days in stage" that read as a target somebody had agreed.
   const expected = expectedDaysByStage[job.stage];
 
-  return (
-    <>
-      <div className="drawer-overlay" onClick={onClose} />
+  /**
+   * DOCKED, NOT OVER THE TOP — the difference between 6a and 6b.
+   *
+   * Amber, 12 September: *"the full screen view sits inside the main frame so still has
+   * top and side nav and footer"*. As a panel it is an overlay: fixed, from under the
+   * header to the bottom of the window, modal, with a scrim over the board behind. Full
+   * screen it is a ROW OF THE FRAME — it portals into `#panel-dock` between the main
+   * area and the footer, `.app-main` hides while it is there, and the footer sits under
+   * it like it sits under every other page.
+   *
+   * Three things follow from that and are not cosmetic:
+   *
+   *   * **No scrim.** Nothing is being covered.
+   *   * **`aria-modal` is false**, because it is not modal any more: the rail, the top
+   *     bar and the footer are all reachable with the record open. Claiming otherwise
+   *     tells a screen reader everything else on the page is inert when it is not.
+   *   * **`role` drops to `region`.** A dialog is a thing you answer and dismiss; this
+   *     is the page you are on.
+   *
+   * Escape still shrinks it back to the panel first (G20), which is why the handler is
+   * outside this and not attached to a dialog role.
+   */
+  const record = (
       <aside
         className={`drawer${expanded ? " is-expanded" : ""}`}
-        role="dialog"
-        aria-modal="true"
+        role={expanded ? "region" : "dialog"}
+        aria-modal={expanded ? undefined : true}
         aria-label={`Job ${job.jobNumber}`}
         tabIndex={-1}
         ref={panel}
@@ -711,7 +732,19 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
           </div>
         </div>
       </aside>
+  );
 
+  // The dock is rendered by `AppShell`, so it is there before any page mounts. The
+  // fallback is the overlay this used to be: a panel expanded outside the shell (a test,
+  // a storybook page) still draws rather than disappearing into a portal target that
+  // does not exist.
+  const dock = expanded ? document.getElementById("panel-dock") : null;
+  if (dock) return createPortal(record, dock);
+
+  return (
+    <>
+      <div className="drawer-overlay" onClick={onClose} />
+      {record}
     </>
   );
 }

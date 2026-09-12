@@ -148,20 +148,15 @@ export interface Repository {
    * already loaded — the board counts its own rows — and the rail has no list: it draws
    * beside the Contacts page as readily as beside Jobs.
    *
-   * **Four counts, one round trip, and never the rows.** Each is a `head: true` count,
-   * so Postgres answers with a number and sends no data; four of those cost less than
+   * **Three counts, one round trip, and never the rows.** Each is a `head: true` count,
+   * so Postgres answers with a number and sends no data; three of those cost less than
    * one `listJobs()`, which is the alternative and would pull every job on every
    * navigation to put one integer in a badge.
    *
    * RLS still applies — a count is a SELECT — so the number is what the person asking
    * may see, which is the only number worth showing them.
-   *
-   * `myProfileId` is the signed-in person, passed in the way `listTasks({ assigneeId })`
-   * takes it rather than looked up here: the caller has it from `useAuth` already, and a
-   * lookup inside would make this two round trips instead of one. Null before sign-in
-   * resolves — `myOpenTasks` is 0 then, and 0 draws no badge.
    */
-  railCounts(myProfileId?: string | null): Promise<RailCounts>;
+  railCounts(): Promise<RailCounts>;
 
   // ---- the rail's Pinned section (0112) ----------------------------------
   /**
@@ -1257,7 +1252,7 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   getProject: "projects",
   listJobs: "jobs",
   getJob: "jobs",
-  railCounts: "projects + job_display + maintenance_request_display + task_display",
+  railCounts: "projects + job_display + maintenance_request_display",
   listMyPins: "pinned_pages",
   pinPage: "pinned_pages",
   unpinPage: "pinned_pages",

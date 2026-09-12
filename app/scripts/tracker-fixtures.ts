@@ -530,11 +530,7 @@ export function createStubRepository(): Repository {
       return {
         projects: 1,
         jobs: FIXTURE_JOBS.filter(j => j.stage !== "Closed").length,
-        maintenance: 0,
-        // Derived from the fixture tasks the same way, and with the same filter the real
-        // query uses: every status but done and cancelled. The fixtures are all assigned
-        // to the first fixture person, who is also the signed-in stub.
-        myOpenTasks: FIXTURE_TASKS.filter(t => t.status !== "done" && t.status !== "cancelled").length
+        maintenance: 0
       };
     },
     async listProcessRuns() { return FIXTURE_RUNS; },

@@ -134,6 +134,35 @@ html, body, #root { height: 100%; }
   padding: var(--space-24);
   min-width: 0;
 }
+/* ---- the dock -------------------------------------------------------------
+   Where a panel goes when it is expanded to full screen, so that it sits INSIDE the
+   frame rather than over it — Amber, 12 September: *"the full screen view sits inside
+   the main frame so still has top and side nav and footer"*.
+
+   Empty on every other screen, and `:empty` takes it out of the layout entirely: a flex
+   child with `flex: 1` and nothing in it would eat the space `.app-main` needs.
+
+   When something IS in it, it takes the room between the header and the footer and the
+   main area stands down. `:has()` rather than a class toggled from React, because the
+   condition IS "is there a panel in the dock" — a second boolean in state is a second
+   thing that can disagree with the DOM. */
+.app-dock:empty { display: none; }
+.app-dock {
+  display: flex;
+  min-width: 0;
+  /* EXACTLY the space between the header and the footer, not `flex: 1`.
+     Flex growth gives a child its content's height when the content is taller, so the
+     record grew to 2792px, the page scrolled, and the conversation tabs it docks at its
+     own foot ended up below the fold — the thing the docked-footer pattern exists to
+     prevent. A definite height makes the record fill the window and scroll its own body,
+     and leaves the page itself with nothing to scroll.
+
+     `--shell-foot-h` is measured in `AppShell` because the footer wraps: one line on a
+     desktop, two or three as the window narrows. */
+  height: calc(100dvh - var(--shell-header-h) - var(--shell-foot-h, 0px));
+}
+.app-body:has(.app-dock > *) .app-main { display: none; }
+
 .app-foot {
   flex-shrink: 0;
   margin-top: auto;
