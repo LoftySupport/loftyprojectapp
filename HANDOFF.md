@@ -5,20 +5,123 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 246 changes since then —
-- Fixed: On a phone the New button stays on the heading's line on Maintenance and Contacts, instead of dropping below the counts
-- Changed: Every page loses the sentence under its heading, so more of the screen is the thing you came for
-- Changed: On a phone the filters fold into one row behind Advanced, and every control in it starts and finishes in the same place
-- Changed: On a phone the New button sits on the heading's line, top right
-- Changed: The footer is one line on a phone and at a desk, in smaller type
-- …and 241 more.
+Unreleased: 256 changes since then —
+- Added: Setup - Properties flags every job and project field that no process collects, including the ones that are columns rather than properties, such as the address
+- Changed: The job record's Process section shows every process, including ones nobody has started, with a tick box that marks one off in a single action
+- Added: Kanban columns collapse to a narrow strip, with Completed, Closed, Cancelled and Acquisition & Development folded by default
+- Added: + New task on the Tasks board, which assigns a task to a person, a team and a job or project
+- Added: A Closed tasks view on the Tasks board, and the job-or-project filter moved onto the filter bar
+- …and 251 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
 
+## 12 September, late — every job and project field has to belong to a process
+
+**Where it stands:** on `claude/tender-mayer-q39ffz`, in [PR #75](https://github.com/LoftySupport/loftyprojectapp/pull/75).
+
+Amber: *"all properties should belong to a process if it is job or project and if they don't
+they should be flagged as orphaned in the properties setting unless they are the primary key.
+This should have all properties including properties not on the properties table eg
+address."* And, clarifying: *"a system property such as a primary key, a user property or
+contact property or task or maintenance property don't need to belong to a process but may
+belong to an automation."*
+
+### The last sentence of the first message is the whole difficulty
+
+A sweep of `property_defs` reports a clean board while the address, the council, the owning
+team, the assignee, the SharePoint folder and both completion dates are collected by nothing
+— they are **columns on `jobs` and `projects`**, not property rows. So the second source is
+the **data dictionary**, which already carries one entry per column with its meaning.
+
+**Setup → Properties now carries both**: an orphan count and an *Only orphaned* filter on the
+property table, and below it *Fields that are not properties* — thirty-three columns nothing
+can collect, and sixteen system fields listed with the reason each is exempt rather than
+silently dropped.
+
+### The classifier is a list, and that is deliberate
+
+The first version read the dictionary's prose for *assigned by* / *maintained by* / *bumped
+by*. It split the siblings — `jobs.job_stage_entered_at` says *maintained by the trigger*,
+`projects.project_stage_entered_at` says *moved by a trigger* — and widening it to catch both
+swept in `job_stage` and `project_stage`, which a person sets. The exemptions are written out
+one at a time now, each with its reason, and the screen shows the System group in full so a
+wrong one is visible. `npm run check:orphan-properties` guards both ends of that mistake and
+CI runs it.
+
+### What a new session should pick up
+
+**Thirty-three fields cannot be attached to a process at all.**
+`process_properties.property_key` points at `property_defs`, so a column has nowhere for the
+attachment to hang. Whether the fixed columns get definitions — and if so whether the values
+move — is **question 0** in [`docs/open-questions.md`](docs/open-questions.md), with three
+options and a recommendation. Reading the list of thirty-three is the next step, not writing
+a migration.
+
+**Amber's third clause is not built.** *"May belong to an automation"* — there is no
+automation model to attach one to yet.
+
+## 12 September, evening — the boards fold, tasks can be created, and the record matches the design
+
+**Where it stands:** on `claude/tender-mayer-q39ffz`, after PR #72 merged. Four corrections
+from Amber, all with a browser check that was watched failing first.
+
+### Kanban columns collapse
+
+*"On Kanban boards can you make them collapsible so they have a narrow view like the side
+navigation with completed closed cancelled and acquisitions and development closed by
+default."*
+
+Collapsed is a **48px strip**, not a hidden column: the name runs down it, the count stays
+on it, and a card dropped on it lands and opens it. The four are matched **by name**, so the
+rule holds on every board those words appear on rather than needing a per-board list, and a
+person's own choice is remembered per board and per column.
+
+It needed **one `BoardColumn` component** first. Jobs, Projects and Tasks each wrote the
+same forty lines — the accented `<section>`, the head with the grouping above the value, the
+count chip, the "No jobs" / "No projects" / "No tasks" line. Three copies is how a fix lands
+on one board and not the other two. The drag handlers stayed on the pages, because what a
+drop MEANS differs per board.
+
+### The Tasks board can create a task
+
+*"On tasks you can't add a new task and assign it to a person or team or job and project.
+There is no button."*
+
+`createTask` has taken all four since `0102`, and `TasksPanel` calls it from inside a job —
+so a task typed by hand could only be created from the record it hung off, and the board
+built to show every task across every job was a report rather than a place to work.
+
+**+ New task** opens a `SidePanel` asking for the task, a detail line, a job **or** a
+project, a team, an assignee, a due date and a planned date. Only the name is required.
+**Closed tasks** joins the six scopes that were already there, and the job-or-project-number
+filter moved onto the bar from behind Advanced.
+
+### The job record matches the screen design
+
+*"Why is the job sideboard not matching the screen type? The process section should have the
+processes like the mockup then the contacts maintenance that that was in screen design."*
+
+The **Process** section drew a read-only five-step preview while the list you could act on
+was a panel eight sections below. `ProcessesPanel` has a `bare` mode now and IS that
+section's body. The tail reads Contacts → Maintenance → Project properties → Job properties
+→ Documents → Job details → Departments, which is 6a's *"Properties and Contacts & Companies
+— collapsed rows with counts"*.
+
+**Not done, and the next thing a session should pick up:** the mockup draws Process as a
+Flint 50 card with a progress bar and one 36px row per step — chevron, tick box, name, date,
+owner avatar — expanding to that step's own typed fields. `ProcessSteps` is that card, and is
+what the section used to draw. `ProcessesPanel` has the data and the actions but not the
+shape. Merging the two means teaching `ProcessSteps` to complete a run through the seam,
+with its rules about attempts, dependencies and who may.
+
+### A date can be taken back, and the footer folds
+
+Earlier the same evening, and in the same branch — see `docs/open-questions.md`, 12 Sep.
+
 ## 12 September — the rail, the job record, and a day of mobile corrections (PR #72)
 
-**Where it stands:** merged. Everything below is in `main`.
+**Where it stands:** merged, 12 September ([PR #72](https://github.com/LoftySupport/loftyprojectapp/pull/72)). Everything above the record corrections below is in `main`.
 
 **Built from the 11 September handoff:** the navigation rail (224 / 64 / flyout), Pinned
 (`0112`), the slim top bar, the job record as a 460px drawer and a full page (`0113`), and
@@ -34,6 +137,37 @@ wordmark top left; every page lost the sentence under its heading; the filters f
 row behind Advanced below 720px with an 84px label column so they line up; the create
 button rides the heading's line; the footer is one line at both sizes; and search is back
 on the top bar.
+
+**Then, the same evening, the record itself.** Three more corrections, all from Amber
+looking at job 1002-001 on a phone:
+
+| Amber said | What it was, and what it is now |
+| --- | --- |
+| *"if I hit the completion date by accident u can't undo it. You should be able to x it out"* | A bare `<input type="date">`, and the browser's own clear is not a promise — Chrome draws a small ✕, Safari draws nothing, a phone gives you a wheel with no way back to empty. `DateField` draws its own. And every property of format `date` had a clear that silently did nothing: `onChange` read `if (e.target.value)`, so emptying the field told nobody |
+| *"the bottom section with task and actions also needs to be able to collapse on mobile so it isn't sticky"* | Below 720px the docked footer starts shut and is a 37px tab strip; a chevron opens it, and tapping a tab opens it on that tab. The panel is unmounted when shut rather than hidden, so a comment thread nobody is looking at stops polling |
+| *"there is so much on there that isn't on the mockup. The bottom areas attached are all duplicates. The processes should just be in order like the mockup"* | Four panels below the record re-stated what the record above them already said. They are gone; see below |
+
+### The four panels that went, and where their unique halves are now
+
+`JobRecord` renders the handoff's record — title and health, Job Stage, Key properties,
+Process — and `JobDrawer` still rendered the tail it had before that existed. So:
+
+| Panel | What duplicated | What was only there |
+| --- | --- | --- |
+| Numbers & addresses | the job number (the title), the current address and the council (Key properties), and a Change button doing what the `+` beside that address does | the old Lofty number, the title type, the address the job was created as |
+| Who it's with | an assignee picker writing the same column as Currently with | the owning team |
+| Folders | the job folder, which Key properties links | the project's folder |
+| Phase & stage | the phase and the days in it, which the stage strip and its meta line both carry | moving the job to a later stage |
+
+The five survivors are one **Job details** panel. The stage move went up beside the strip
+it moves, through a new `stageAction` slot on `JobRecord`. **Processes moved up** to sit
+directly under the record's Process section rather than eight panels below it. The
+add-address form came up under the record too — it used to render inside the panel that
+is now gone, so pressing `+` appeared to do nothing.
+
+**`saveWho`'s "Saving…" and its errors now report under the record.** They were inside
+the *Who it's with* panel, which is shut by default and is now gone, so a refused
+reassign said nothing at all.
 
 ### What a new session most needs to know
 
@@ -53,6 +187,11 @@ on the top bar.
 4. **One number was lost, not moved:** the Projects heading used to read "118 projects · 79
    jobs" and the job total is no longer on that page.
 5. **Expanded side panels still cover the footer** — only the job record was docked.
+6. **`npm run check:date-clear` is new, and CI runs it.** Two date controls mounted alone,
+   asserting on what the caller was *told* rather than on what the input shows — a control
+   that empties on screen and reports nothing looks fixed in a screenshot. It cannot go
+   through the app: `stubRepository.updateJob` throws, so a date typed into a job reverts
+   before a check can see it. See [`app/scripts/README.md`](app/scripts/README.md).
 
 **Phase A is done and applied, and so is the property-and-process half of Phase C (`0076`–`0079`, 1 September).**
 

@@ -18,6 +18,7 @@ import { LoadProblem, NoResults, NothingYet, PreviousAddressNote } from "../comp
 import { SavedViewTabs } from "../components/SavedViewTabs";
 import { useSavedViews } from "../data/useSavedViews";
 import { Board } from "../components/Board";
+import { BoardColumn } from "../components/BoardColumn";
 import { ProjectCard, StatusPill } from "../components/RecordCards";
 import { PropertySlots } from "../components/PropertySlots";
 import { ProcessesPanel } from "../components/ProcessesPanel";
@@ -640,28 +641,16 @@ export function ProjectsPage() {
         // column looks and behaves the same whichever record is in it.
         <Board>
           {projectGroups.map((g, gi) => (
-            <section
-              className="board-column"
+            <BoardColumn
+              board="projects"
               key={g.key}
-              style={accentStyle(columnAccent(grouping, g.key, gi))}
+              name={g.key}
+              grouping={grouping}
+              count={g.projects.length}
+              empty="No projects"
+              accent={accentStyle(columnAccent(grouping, g.key, gi))}
             >
-              <div className="board-column-head">
-                {grouping === "None" ? (
-                  <div><Text type="text3" color="secondary">All projects</Text></div>
-                ) : (
-                  <div>
-                    <Text type="text3" color="secondary">{grouping}</Text>
-                    <Text type="text2" weight="medium">{g.key}</Text>
-                  </div>
-                )}
-                <span className="col-count">{g.projects.length}</span>
-              </div>
-
-              {g.projects.length === 0 ? (
-                <div className="board-column-empty">
-                  <Text type="text3" color="secondary">No projects</Text>
-                </div>
-              ) : (
+              {(
                 g.projects.map(p => (
                   <ProjectCard
                     key={p.projectNumber}
@@ -678,7 +667,7 @@ export function ProjectsPage() {
                   />
                 ))
               )}
-            </section>
+            </BoardColumn>
           ))}
         </Board>
       ) : view === "Gantt" ? (

@@ -171,12 +171,25 @@ jobs:
         run: npm run check:import
         working-directory: app
 
+      # A date set by accident used to be a date you were stuck with, and the property
+      # half emptied on screen while telling nobody. Both live in `input type="date"`
+      # behaviour, so there is no pure function to test instead.
+      - name: a date can be taken back
+        run: npm run check:date-clear
+        working-directory: app
+
       # Four renderers carry the DRAFT mark — screen, print, .html and .docx — so there
       # are four places for a refactor to drop it, and nothing else here would notice.
       # Runs in this job only because it sits beside the other two report checks; it
       # needs no browser.
       - name: a draft is watermarked and a published document is not
         run: npm run check:watermark
+        working-directory: app
+
+      # Needs no browser either. It sits here because it is the third check that reads the
+      # app's own TypeScript through register-ts.mjs rather than a copy of it.
+      - name: every job and project field belongs to a process, or says why not
+        run: npm run check:orphan-properties
         working-directory: app
 
   deploy:

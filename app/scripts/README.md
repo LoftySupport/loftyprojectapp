@@ -139,3 +139,73 @@ case the app has.
 which is the difference between a check that runs the shipping code and a check that runs
 a copy of it kept in step by hand. Node strips the types itself (22.18+); nothing here
 compiles anything.
+
+# `npm run check:date-clear`
+
+Can you take a date back? Amber, 12 September: *"when you are on a date field the reset
+button isn't working — for example on a job if I hit the completion date by accident u
+can't undo it. You should be able to x it out."*
+
+Two faults wore the same coat, and this check guards both:
+
+- **The job's completion date had no clear at all.** It was a bare `<input type="date">`,
+  and the browser's own is not a promise: Chrome draws a small ✕, Safari draws nothing,
+  and a phone gives you a wheel with no way back to empty. `DateField` draws its own.
+- **Every property of format `date` had a clear that silently did nothing.** `onChange`
+  read `if (e.target.value)`, so emptying the field told nobody and the old value stayed
+  exactly where it was.
+
+The second one is why the assertions read **what the caller was told**, not what the
+input is showing — `window.saved` in the stub. A control that empties on screen and
+reports nothing looks fixed in a screenshot and is not fixed at all.
+
+## Why it does not go through the app
+
+`stubRepository.updateJob` throws (*"Editing a job needs Supabase."*), so a date typed
+into a job in the responsive harness reverts before the check can see it — which is
+exactly what the first attempt at this measured. `scripts/date-clear-stub.jsx` mounts
+`DateField` and `PropertyField` with local state instead: both are prop-driven, and the
+question is about the control rather than the database behind it.
+
+Both guards were watched failing before being trusted. Putting `if (e.target.value)`
+back, and cutting the `onChange(null)` out of the ✕, turns four of the eleven red.
+
+
+# `npm run check:orphan-properties`
+
+Does every field of a job or a project belong to a process? Amber, 12 September: *"all
+properties should belong to a process if it is job or project and if they don't they should
+be flagged as orphaned in the properties setting unless they are the primary key. This
+should have all properties including properties not on the properties table eg address."*
+
+The last sentence is the hard half. A sweep of `property_defs` alone reports a clean board
+while the address, the council, the owning team, the assignee, the SharePoint folder and both
+completion dates are collected by nothing — they are **columns on `jobs` and `projects`**,
+not property rows. So the second source is the **data dictionary**, which already carries one
+entry per column.
+
+## The mistake this check exists to stop coming back
+
+The first classifier read the dictionary's prose for *assigned by*, *maintained by*, *bumped
+by*. It agreed with itself on most columns and then split the siblings:
+`jobs.job_stage_entered_at` says *maintained by the trigger* and
+`projects.project_stage_entered_at` says *moved by a trigger*, so one came out exempt and one
+did not. Widening the pattern to catch both swept in `job_stage` and `project_stage` — which a
+person sets, from the Move control on the record.
+
+A pattern tuned against English until it matches somebody's intuition is a guess wearing a
+rule's clothes. The exemptions are a written-out list now, and two of the assertions here are
+the two ends of that mistake: **both** stage-entered stamps are exempt, and the stage itself
+is not.
+
+## What it does not decide
+
+Amber exempted two things and this honours exactly those two: the scope (jobs and projects
+only — a contact, a task, a maintenance request and a person are not swept) and system
+properties. Everything else is reported, including the thirty-three columns that cannot be
+attached to a process at all until they have definitions. Whether they get them is
+`docs/open-questions.md` question 0, and nothing here decides it.
+
+Both guards were watched failing before being trusted: putting the prose test back reports
+`FAIL both stage-entered stamps are exempt, not one of them`, and removing the table filter
+reports the ninety-odd other tables by name.

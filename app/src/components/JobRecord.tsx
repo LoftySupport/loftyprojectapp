@@ -9,6 +9,7 @@ import { FieldList, FieldRow } from "./record/FieldRow";
 import { RecordSection } from "./record/RecordDrawer";
 import { JobTitle } from "./record/RecordBreadcrumb";
 import { ProcessSteps, type ProcessStep } from "./record/ProcessSteps";
+import { DateField } from "./DateField";
 import { Token } from "./Token";
 import "./record/record.css";
 
@@ -72,7 +73,9 @@ export function JobRecord({
   variant = "drawer",
   onChangeAddress,
   currentlyWithControl,
-  onSetCompletion
+  onSetCompletion,
+  stageAction,
+  processSlot
 }: {
   job: BoardJob;
   variant?: "drawer" | "page";
@@ -90,6 +93,29 @@ export function JobRecord({
   currentlyWithControl?: ReactNode;
   /** Completion date — writes `job_target_completion` through the seam (0113). */
   onSetCompletion?: (iso: string | null) => void;
+  /**
+   * Moving the job to a later stage, rendered at the foot of Job Stage.
+   *
+   * It used to live in a *Phase & stage* panel further down that also re-stated the
+   * phase and the days in it — both of which the strip and its meta already say. Amber,
+   * 12 September: *"the bottom areas attached are all duplicates"*. So the panel went
+   * and its one unique control came up here, beside the strip it moves.
+   */
+  stageAction?: ReactNode;
+  /**
+   * The Process section's body, when the caller has a real one to put there.
+   *
+   * Amber, 12 September: *"the process section should have the processes like the
+   * mockup"*. This section used to draw a five-step, read-only preview built from the
+   * runs, while the list you could actually start, complete, record against and attach a
+   * checklist to was a separate panel further down — two renderings of one set of runs,
+   * which is the duplication she was looking at. The job drawer now passes
+   * `<ProcessesPanel bare />` here, so the section holds the processes themselves.
+   *
+   * Without it the read-only checklist is still what draws — a caller with no process
+   * machinery behind it (a preview, a test) gets the shape rather than nothing.
+   */
+  processSlot?: ReactNode;
 }) {
   const { can } = usePermission();
   const [open, setOpen] = useState({ stage: true, key: true, process: true });
@@ -285,6 +311,7 @@ export function JobRecord({
             strip shows where it got to.
           </p>
         )}
+        {stageAction}
       </RecordSection>
 
       <RecordSection
@@ -332,12 +359,14 @@ export function JobRecord({
             type="date"
           >
             {can("user") && onSetCompletion && !job.endDate ? (
-              <input
-                type="date"
+              // `DateField`, not a bare input: a date set by accident here had no way
+              // out — Amber, 12 September, *"if I hit the completion date by accident
+              // you can't undo it"*. The ✕ clears it back to nothing.
+              <DateField
                 className="field-box is-input"
-                aria-label="Completion date being worked towards"
-                value={job.targetCompletion ?? ""}
-                onChange={e => onSetCompletion(e.target.value || null)}
+                ariaLabel="Completion date being worked towards"
+                value={job.targetCompletion ?? null}
+                onChange={onSetCompletion}
               />
             ) : undefined}
           </FieldRow>
@@ -364,24 +393,22 @@ export function JobRecord({
         open={open.process}
         onToggle={() => setOpen(o => ({ ...o, process: !o.process }))}
       >
-        {steps.length ? (
+        {processSlot ?? (steps.length ? (
           <ProcessSteps
             steps={steps}
             openStep={openStep}
             onOpenStep={setOpenStep}
-            // Ticking a step here would have to complete a process RUN, which has its own
-            // rules (attempts, dependencies, who may). Until that is wired through the
-            // seam the boxes read rather than write — the panel below this section is
-            // where a run is actually moved, and two ways to complete the same step is
-            // how the two come to disagree.
+            // Read-only, and only on the fallback path: ticking a step has to complete a
+            // process RUN, which carries its own rules (attempts, dependencies, who may).
+            // The caller that has those rules passes `processSlot` instead.
             canEdit={false}
             visible={variant === "drawer" ? 5 : undefined}
           />
         ) : (
           <p className="record-note">
-            No process has been started on this job. Start one below to get a checklist.
+            No process has been started on this job.
           </p>
-        )}
+        ))}
       </RecordSection>
     </>
   );
