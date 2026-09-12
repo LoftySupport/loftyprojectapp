@@ -139,6 +139,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- On a phone the New button stays on the heading's line on Maintenance and Contacts, instead of dropping below the counts
 - The phone's navigation button is a hamburger in the top right and the Lofty mark is in the top left, instead of an ellipsis on the left and no mark at all
 - The unread count beside Inbox and the one on the bell are the same number read once, so marking everything read clears both together
 - The job drawer no longer scrolls sideways at 460px, and the responsive sweep now opens it at every width
