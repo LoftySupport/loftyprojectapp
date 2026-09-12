@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Dialog, DialogContentContainer, Text } from "@vibe/core";
-import { Bookmark, Menu, Note, Search, Settings, CheckList } from "@vibe/icons";
+import { Bookmark, Note, Search, Settings, CheckList } from "@vibe/icons";
 import { initialsOf, useAuth } from "../data/AuthProvider";
 import { InboxProvider } from "../data/InboxProvider";
 import { usePermission } from "../data/PermissionProvider";
@@ -14,7 +14,7 @@ import { UndoProvider } from "../data/UndoProvider";
 import { UndoRedoBar } from "../components/UndoRedoBar";
 import { greetingName } from "../data/types";
 import { AdminConsole, Dashboard } from "../theme/railIcons";
-import { NavRail, NavRailGroup, type RailLink } from "./NavRail";
+import { Hamburger, NavRail, NavRailGroup, type RailLink } from "./NavRail";
 import { useNavDestinations } from "./navDestinations";
 import { PinnedSection } from "./PinnedSection";
 import "./AppShell.css";
@@ -471,16 +471,28 @@ export function AppShell() {
             which are about what you just did to the page, and Ask and the bell, which are
             about what you want and what happened to you. */}
         <header className="app-header" role="banner">
+          {/* PHONE ONLY: the wordmark on the left and the hamburger on the right.
+              ==================================================================
+              Amber, 12 September: *"on mobile view siderail menu hamburger icon should be
+              in top right three lines and logo top left as this is normal ui otherwise
+              confusing"*.
+
+              Both halves of that were faults rather than preferences. The rail holds the
+              logo, and the rail is off-canvas below 900px — so the phone header carried no
+              mark at all and the top-left corner, which is where every app puts the thing
+              you press to get home, was empty. And the control was `@vibe/icons`' `Menu`,
+              which is three DOTS: an ellipsis means "more actions", not "open the
+              navigation", so the one control that opens the whole app looked like an
+              overflow menu. See `Hamburger` in `NavRail.tsx` for why it is drawn rather
+              than imported.
+
+              Only on narrow. At every other width the rail is on screen with the wordmark
+              at the top of it, and a second mark in the bar would be the same thing
+              twice. */}
           {narrow && (
-            <button
-              type="button"
-              className="app-menu-button"
-              onClick={() => setDrawerOpen(o => !o)}
-              aria-expanded={drawerOpen}
-              aria-label="Navigation"
-            >
-              <Menu size={20} aria-hidden />
-            </button>
+            <Link to="/" className="app-header-logo" aria-label="Lofty Hub — home">
+              <img src="/lofty_logo_orange.png" alt="Lofty Hub" />
+            </Link>
           )}
 
           <div className="app-header-right">
@@ -490,6 +502,20 @@ export function AppShell() {
                 first. Both are the same 32px target, so the pair reads as one cluster. */}
             <AskButton />
             <NotificationsBell />
+            {/* LAST, so it lands in the corner. The bell and Ask are things that happen
+                to you and things you go and do; the hamburger is the way out of the page
+                entirely, which is why every phone puts it at the edge. */}
+            {narrow && (
+              <button
+                type="button"
+                className="app-menu-button"
+                onClick={() => setDrawerOpen(o => !o)}
+                aria-expanded={drawerOpen}
+                aria-label="Navigation"
+              >
+                <Hamburger />
+              </button>
+            )}
           </div>
         </header>
 

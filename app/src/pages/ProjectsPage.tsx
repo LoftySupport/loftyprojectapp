@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Button, Heading, Text, TextField } from "@vibe/core";
+import { Duplicate } from "@vibe/icons";
+import { Tooltip } from "@vibe/tooltip";
 import { useProcesses, usePropertyAccess, usePropertyDefs, usePropertyOptions, useStages, useTeams } from "../data/useLookups";
 import { propertyColumnDefs } from "../data/propertyColumns";
 import { useAuth } from "../data/AuthProvider";
@@ -21,6 +23,7 @@ import { PropertySlots } from "../components/PropertySlots";
 import { ProcessesPanel } from "../components/ProcessesPanel";
 import { RecordDocuments } from "../components/RecordDocuments";
 import { PushToJobs } from "../components/PushToJobs";
+import { CloneJobDialog } from "../components/CloneDialog";
 import {
   PROJECT_TYPES, PROJECT_TYPE_LABELS, RECORD_STATUSES, RECORD_STATUS_LABELS, teamName,
   type StageName, type TeamId
@@ -802,6 +805,16 @@ function ProjectDetail({
   const { toast } = useToasts();
   const [removing, setRemoving] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
+  /**
+   * Which job the clone panel is open on, or null.
+   *
+   * Amber, 12 September: *"clone job needs to be an icon button on the job line in
+   * projects screen"* — the entry point her 7 September call took off the job drawer
+   * (*"cloning jobs can only be done on projects"*) and left nowhere. `CloneDialog.tsx`
+   * and `repository.cloneJob()` were kept unreferenced against exactly this, so nothing
+   * about cloning is new here except where you press it.
+   */
+  const [cloning, setCloning] = useState<string | null>(null);
   // The push-to-jobs preview (Amber, 1 Sep). Open until pushed or cancelled.
   const [pushing, setPushing] = useState(false);
   const [propsReload, setPropsReload] = useState(0);
@@ -950,6 +963,16 @@ function ProjectDetail({
             />
           )}
 
+          {/* The clone panel, one for the section rather than one per row: 30 rows would
+              otherwise mount 30 copies of it. It keeps the new job's number on screen
+              until dismissed — that number is the thing somebody came for. */}
+          <CloneJobDialog
+            show={cloning !== null}
+            jobNumber={cloning}
+            onClose={() => setCloning(null)}
+            onCloned={onChanged}
+          />
+
           {project.jobs.length === 0 && (
             <Text type="text3" color="secondary" ellipsis={false}>
               No jobs yet. <strong>Create jobs</strong> splits this project into one per lot,
@@ -995,10 +1018,15 @@ function ProjectDetail({
               <thead>
                 <tr>
                   <th>Job</th><th>Address</th><th>Stage</th><th>Team</th><th>Status</th>
-                  {/* `admins delete jobs` is the policy. The column is hidden below that
-                      level so nobody is offered a button the database will refuse — but
-                      the hiding is courtesy, not security: RLS is what actually stops it. */}
-                  {can("admin") && <th aria-label="Remove"></th>}
+                  {/* One actions column, not two. Clone is `users write jobs` and Remove
+                      is `admins delete jobs` — two different policies, so a user sees one
+                      button and an admin sees both, in the same cell rather than in a
+                      column that appears and disappears.
+
+                      The hiding is courtesy, not security: RLS is what actually refuses
+                      the write, and these gates only stop somebody being offered a button
+                      the database will turn down. */}
+                  {can("user") && <th className="row-actions" aria-label="Actions"></th>}
                 </tr>
               </thead>
               <tbody>
@@ -1014,16 +1042,36 @@ function ProjectDetail({
                     <td>{j.stage}</td>
                     <td>{j.team}</td>
                     <td><StatusPill status={j.status} /></td>
-                    {can("admin") && (
-                      <td onClick={e => e.stopPropagation()}>
-                        <Button
-                          kind="tertiary"
-                          size="small"
-                          disabled={removing === j.jobNumber}
-                          onClick={() => removeJob(j.jobNumber)}
-                        >
-                          {removing === j.jobNumber ? "Removing…" : "Remove"}
-                        </Button>
+                    {can("user") && (
+                      // `stopPropagation`, because the row itself navigates to the job.
+                      // Without it, cloning would open the panel AND leave the page.
+                      <td className="row-actions" onClick={e => e.stopPropagation()}>
+                        <div className="field-inline">
+                          {/* An icon, and the words in the tooltip and the accessible
+                              name. A row this narrow has no room for "Clone" beside
+                              "Remove", and a job list is somewhere people scan rather
+                              than read. */}
+                          <Tooltip content={`Clone ${j.jobNumber}`} position="top">
+                            <Button
+                              kind="tertiary"
+                              size="small"
+                              aria-label={`Clone job ${j.jobNumber}`}
+                              onClick={() => setCloning(j.jobNumber)}
+                            >
+                              <Duplicate size={16} aria-hidden />
+                            </Button>
+                          </Tooltip>
+                          {can("admin") && (
+                            <Button
+                              kind="tertiary"
+                              size="small"
+                              disabled={removing === j.jobNumber}
+                              onClick={() => removeJob(j.jobNumber)}
+                            >
+                              {removing === j.jobNumber ? "Removing…" : "Remove"}
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     )}
                   </tr>

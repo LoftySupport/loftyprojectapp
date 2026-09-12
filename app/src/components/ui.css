@@ -533,6 +533,24 @@
    thing it has always done on a phone. */
 .data-table { width: max-content; min-width: 100%; border-collapse: collapse; }
 .data-table td { max-width: 320px; }
+/* The row's buttons stay on screen while the rest of the row scrolls under them.
+   A 460px drawer holding a five-column table scrolls sideways by design (see above), and
+   an action pinned to the far right of it is an action nobody finds: the clone icon
+   Amber asked for on 12 September was three columns past the panel's edge on the first
+   run. Sticky rather than a narrower table, because which columns a person wants is
+   theirs to choose and the buttons are not one of them. */
+.data-table .row-actions {
+  position: sticky;
+  right: 0;
+  /* The cell needs a ground of its own, or the row scrolls UNDER it and the address
+     prints through the buttons — which is what the first run looked like. `inherit`
+     rather than a token, so the hover wash, the picked row and the editing row all keep
+     working: whatever the row is painted, this cell is painted the same. */
+  background: inherit;
+}
+/* `inherit` needs something to inherit from, and a `tr` is transparent by default. */
+.data-table tbody tr { background: var(--primary-background-color); }
+.data-table thead tr { background: var(--allgrey-background-color); }
 .data-table th {
   height: 40px;
   padding: 0 var(--space-12);

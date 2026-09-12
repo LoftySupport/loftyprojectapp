@@ -466,6 +466,40 @@ export function NavRail({
 }
 
 /**
+ * The hamburger — three lines, and it has to be drawn because neither set has one.
+ *
+ * Amber, 12 September: *"on mobile view siderail menu hamburger icon should be in top
+ * right three lines and logo top left as this is normal ui otherwise confusing"*. Both
+ * halves were right. `@vibe/icons`' `Menu` is three **dots**, and so is the brand kit's
+ * `Menu.svg`, which mirrors it — so the phone header was carrying an ellipsis where every
+ * app on the same phone carries three lines, and an ellipsis means "more actions", not
+ * "open the navigation". That is the confusion, not a preference.
+ *
+ * Drawn on the same 24 grid at the same 1.7 weight as `DoubleChevron` above, for the same
+ * reason: it sits beside design-system glyphs and must not read as a different family.
+ * Exported because it belongs to the shell's chrome rather than to the rail, and
+ * `AppShell` renders it.
+ */
+export function Hamburger() {
+  return (
+    <svg
+      width={20}
+      height={20}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+      aria-hidden
+    >
+      <path d="M4 7h16" />
+      <path d="M4 12h16" />
+      <path d="M4 17h16" />
+    </svg>
+  );
+}
+
+/**
  * `«` and `»` as one glyph.
  *
  * @vibe/icons has no double chevron, and two `NavigationChevronLeft` side by side do not

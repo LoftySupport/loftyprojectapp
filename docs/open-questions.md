@@ -122,13 +122,42 @@ They are real and shipped. What is missing is which phase each belongs to and wh
 wording above is the wording you want, and inventing roadmap text is exactly the thing
 `CLAUDE.md` forbids.
 
-### 8. How is health status worked out?
+### 8. How is health status worked out? *(mostly answered — one half left)*
 
 Long-standing, from the schema plan's own risk list. *"Status is what someone sets. Health
-is what the system works out"* — from inputs nobody has defined. Kanban-by-status and
-kanban-by-team work today; **kanban-by-health cannot be built until this is answered.** Is a
-job at risk because it is past `expected_days`, because a required field is empty, because a
-dependency is blocked, or some combination?
+is what the system works out"* — from inputs nobody had defined.
+
+**Amber, 12 September, answered the input:** *"Job at risk is when the process is overdue
+which is set by the days marked in the process which says it's at risk."*
+
+So health is **read off the process runs**, and none of it needs a new column. A process
+line already carries `expected_days` and `at_risk_lead_days`; a run of it already carries
+the `due_date` and `at_risk_date` those produce, and a `health` the database computes —
+`not_started`, `no_expectation`, `on_track`, `at_risk`, `overdue`. The job's health is a
+roll-up of its runs' health rather than anything new. That settles the question the schema
+plan's risk list actually asked: it is not an empty required field and not a blocked
+dependency, it is the clock on the process.
+
+**What is still open is the other half of the pill.** The record draws three states and
+the answer names one. A job is *at risk* when a process on it is overdue — so what makes a
+job **overdue**?
+
+- **The job's own completion date has passed** (`job_target_completion`, `0113`), which is
+  the reading that makes both words mean something: a process running late puts the job at
+  risk, and the job missing the date it was working towards makes it overdue. **Recommended.**
+- **A process is overdue by some further margin**, which needs a second number nobody has
+  set.
+- **Nothing does** — the job pill is only ever on track or at risk, and overdue is a
+  process-level word. Defensible, but then `StageTrack`'s three colours are two.
+
+Also unanswered, and smaller: does a run sitting at `at_risk` — inside its lead days, not
+yet past its due date — make the JOB at risk, or does the job only turn when a run actually
+goes overdue? The answer above says "overdue", so the build will take that literally unless
+told otherwise: a run at `at_risk` leaves the job on track.
+
+**Blocked meanwhile:** kanban-by-health, the dashboard's on-track tiles, and the record's
+health pill, which still reads `job_status` (a column somebody sets) rather than a derived
+health.
 
 ### 9. Does Acquisition & Development want a `project_stage` vocabulary?
 

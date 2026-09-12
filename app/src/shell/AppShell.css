@@ -82,6 +82,22 @@ html, body, #root { height: 100%; }
   height: var(--shell-header-h);
 }
 
+/* The wordmark in the phone bar. Height-capped rather than width-capped, because the
+   bar is 48px and the mark has to sit inside it with air — 22px is the rail's 26px taken
+   down by the 16px of extra chrome a 48px bar has over a 64px one. `flex: none` so it
+   never gives up room to the controls on the right; it is the anchor, they can wrap. */
+.app-header-logo {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  min-width: 0;
+  /* The MARK is 22px; the TARGET is 32. WCAG 2.5.8 wants 24 and the sweep measured the
+     first version at 58x22 and failed it — a home link nobody can hit is not a home
+     link. The box grows around the image rather than the image growing into it. */
+  min-height: 32px;
+}
+.app-header-logo img { height: 22px; width: auto; display: block; }
+
 .app-menu-button {
   display: inline-flex;
   align-items: center;
