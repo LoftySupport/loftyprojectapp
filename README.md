@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 255 changes since then —
+Unreleased: 256 changes since then —
+- Added: Setup - Properties flags every job and project field that no process collects, including the ones that are columns rather than properties, such as the address
 - Changed: The job record's Process section shows every process, including ones nobody has started, with a tick box that marks one off in a single action
 - Added: Kanban columns collapse to a narrow strip, with Completed, Closed, Cancelled and Acquisition & Development folded by default
 - Added: + New task on the Tasks board, which assigns a task to a person, a team and a job or project
 - Added: A Closed tasks view on the Tasks board, and the job-or-project filter moved onto the filter bar
-- Changed: The job record's Process section now holds the processes themselves, and the sections below it follow the screen design's order
-- …and 250 more.
+- …and 251 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

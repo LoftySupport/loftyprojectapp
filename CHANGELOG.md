@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Setup - Properties flags every job and project field that no process collects, including the ones that are columns rather than properties, such as the address
 - Kanban columns collapse to a narrow strip, with Completed, Closed, Cancelled and Acquisition & Development folded by default
 - + New task on the Tasks board, which assigns a task to a person, a team and a job or project
 - A Closed tasks view on the Tasks board, and the job-or-project filter moved onto the filter bar
