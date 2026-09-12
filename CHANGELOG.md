@@ -191,6 +191,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- The full screen job record sits inside the app frame, so the sidebar, the top bar and the footer are all still there while you read it
 - Job and project properties are grouped under their own headings in the column picker, instead of falling in with everything ungrouped
 - The column picker is a panel beside the table instead of a dialog over it, with a search box and grouped columns
 - The job record is rebuilt from the approved design — the same record as a 460px drawer and a full page, with Tasks, Comments and the activity log docked at the foot instead of scrolled to
@@ -255,6 +256,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Removed
 
+- The unread and open-task numbers beside Inbox and Tasks, until what each one counts is settled and checked
 - Clone is no longer on the job panel — cloning belongs to the project
 - Notifications is no longer a Setup tab; your own channels stay in User settings and the audience rules moved under Automations
 - Processes is no longer a destination in the main navigation — it is part of Setup; /processes and /templates forward there
