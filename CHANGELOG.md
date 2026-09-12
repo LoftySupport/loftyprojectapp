@@ -199,6 +199,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- The job record's Process section shows every process, including ones nobody has started, with a tick box that marks one off in a single action
 - The job record's Process section now holds the processes themselves, and the sections below it follow the screen design's order
 - On a phone the job record's Tasks / Comments / Activity footer starts collapsed and opens with a chevron
 - Every page loses the sentence under its heading, so more of the screen is the thing you came for
