@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Dialog, DialogContentContainer, Text } from "@vibe/core";
-import { Bookmark, Note, Search, Settings, CheckList } from "@vibe/icons";
+import { Bookmark, Note, Settings, CheckList } from "@vibe/icons";
 import { initialsOf, useAuth } from "../data/AuthProvider";
 import { InboxProvider } from "../data/InboxProvider";
 import { usePermission } from "../data/PermissionProvider";
@@ -220,16 +220,11 @@ export function AppShell() {
       return next;
     });
 
+  /** Kept for the keyboard shortcut that focuses the box; the rail no longer owns it. */
   const searchBox = useRef<HTMLDivElement>(null);
-  /** Set by the collapsed search button, read once the rail has widened. */
-  const wantSearchFocus = useRef(false);
 
   useEffect(() => {
     localStorage.setItem(RAIL_KEY, collapsed ? "1" : "0");
-    if (!collapsed && wantSearchFocus.current) {
-      wantSearchFocus.current = false;
-      searchBox.current?.querySelector("input")?.focus();
-    }
   }, [collapsed]);
 
   // Watched rather than left to CSS alone: the drawer's open/closed state has to exist in
@@ -394,21 +389,9 @@ export function AppShell() {
               />
             </Link>
           }
-          search={<div ref={searchBox}><GlobalSearch /></div>}
+
           groups={
             <>
-              {railCollapsed && (
-                <button
-                  type="button"
-                  className="nav-icon-btn"
-                  title="Search"
-                  aria-label="Search"
-                  onClick={() => { wantSearchFocus.current = true; setCollapsed(false); }}
-                >
-                  <Search size={20} />
-                </button>
-              )}
-
               <MyWorkGroup
                 open={openGroups.has("myWork")}
                 onToggle={() => toggleGroup("myWork")}
@@ -495,6 +478,20 @@ export function AppShell() {
             </Link>
           )}
 
+          {/* SEARCH IS BACK ON THE TOP BAR — Amber, 12 September: *"search should be on
+              top nav bar"*. It moved into the rail on the 11th as part of decision 10,
+              which is now reversed: a search box you have to open a sidebar to reach is
+              two actions for the thing people do most, and on a phone the sidebar is a
+              drawer over the page.
+
+              Her second sentence is the boundary: *"not search also appears in job
+              project to search within that project or job only"*. The box on a project's
+              panel narrows THAT project's jobs and stays where it is. Two searches, two
+              scopes, and the difference is which screen you are standing on. */}
+          <div className="app-search-slot" ref={searchBox}>
+            <GlobalSearch />
+          </div>
+
           <div className="app-header-right">
             <UndoRedoBar />
             {/* Ask sits before the bell: it is a thing you go and do, where the bell is a
@@ -556,7 +553,11 @@ export function AppShell() {
             {/* The year is computed, not written down — a hardcoded one is wrong every
                 January and nobody notices until a client does. */}
             <span className="app-foot-name">
-              Lofty © {new Date().getFullYear()} Project Management App
+              Lofty © {new Date().getFullYear()}
+              {/* The product's name is what goes when the footer has to be one line on a
+                  phone: the mark is at the top of the same screen, so "Project Management
+                  App" is the one thing down here nobody is reading. */}
+              <span className="wide-only"> Project Management App</span>
               {" "}
               <span className="app-foot-version" title={`${__BUILD_HOST__} · ${__BUILD_CONTEXT__}`}>
                 v{__BUILD_REF__}
@@ -571,7 +572,10 @@ export function AppShell() {
                   can read without signing in is not published. Support is Lofty's own
                   portal, hence a full URL and rel="noreferrer". */}
               <Link to="/updates">Updates</Link>
-              <Link to="/privacy">Privacy Policy</Link>
+              <Link to="/privacy">
+                <span className="wide-only">Privacy Policy</span>
+                <span className="narrow-only">Privacy</span>
+              </Link>
               <Link to="/terms">Terms</Link>
               <a href="https://app.lofty.com.au" target="_blank" rel="noreferrer noopener">
                 Support

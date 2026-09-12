@@ -6,6 +6,7 @@ import { usePermission } from "../data/PermissionProvider";
 import { useAuth } from "../data/AuthProvider";
 import { supabaseUrl } from "../data/supabaseEnv";
 import { SidePanel } from "../components/SidePanel";
+import { useOneLine } from "../components/Toolbar";
 import { Field, Problem } from "../components/Form";
 import { PersonSelect } from "../components/PersonSelect";
 import { Select } from "../components/Select";
@@ -42,6 +43,8 @@ import "../components/processes.css";
 export function MaintenancePage() {
   const [params, setParams] = useSearchParams();
   const { can } = usePermission();
+  /** Below 720px the create button moves onto the heading's line — see `useOneLine`. */
+  const oneLine = useOneLine();
   const { profile } = useAuth();
   const selected = params.get("request");
   const jobFilter = params.get("job");
@@ -81,16 +84,20 @@ export function MaintenancePage() {
   return (
     <>
       <div className="page-head page-head-row">
+        {/* No line under the heading (12 September). The counts beside it stay — they
+            are a readout, on the heading's own line. */}
         <div>
           <Heading type="h2" weight="bold">Maintenance</Heading>
-          <Text type="text2" color="secondary" ellipsis={false}>
-            What homeowners have reported after handover, who is fixing it, and whether it is inside the time we promised.
-          </Text>
         </div>
         {!loading && dbQueue === "open" && (
           <Text type="text3" color="secondary">
             {counts.open} open · {counts.overdue} over SLA · {counts.atRisk} at risk · {counts.waiting} awaiting a contractor
           </Text>
+        )}
+        {/* The create button rides the heading's line on a phone and stays in the
+            toolbar at a desk — Amber, 12 September. One or the other, never both. */}
+        {oneLine && can("user") && (
+          <Button size="small" onClick={() => setParam({ new: "1", request: null })}>+ New request</Button>
         )}
       </div>
 
@@ -104,7 +111,7 @@ export function MaintenancePage() {
         {jobFilter && (
           <Button size="small" kind="tertiary" onClick={() => setParam({ job: null })}>Job {jobFilter} only — show all</Button>
         )}
-        {can("user") && <Button size="small" onClick={() => setParam({ new: "1", request: null })}>+ New request</Button>}
+        {!oneLine && can("user") && <Button size="small" onClick={() => setParam({ new: "1", request: null })}>+ New request</Button>}
       </div>
 
       {error && <LoadProblem error={error} />}

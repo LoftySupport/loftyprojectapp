@@ -291,15 +291,10 @@
 
 /* ---- search, expanded and collapsed ------------------------------------- */
 
-.nav-rail-search { flex: none; padding: var(--space-12) var(--space-8) var(--space-4); }
-/* A light input on the dark rail, deliberately: it is a field, not a nav row, and the
-   thing people do wrong is style it like the rows around it and then wonder why nobody
-   types in it. The app's own GlobalSearch renders inside. */
-.nav-rail-search .app-search { min-width: 0; max-width: none; flex: 1 1 auto; width: 100%; }
-.nav-rail-search input {
-  background: var(--lofty-finisher-white);
-  color: var(--primary-text-color);
-}
+/* THE RAIL NO LONGER HOLDS SEARCH. It arrived here on 11 September with decision 10 and
+   went back to the top bar on the 12th — Amber: *"search should be on top nav bar"*. The
+   rules are gone rather than left behind: dead CSS is how a class ends up back on an
+   element because somebody saw a style for it. */
 
 /* ---- the scrolling middle ----------------------------------------------- */
 

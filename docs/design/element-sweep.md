@@ -69,6 +69,9 @@ worth tightening in the script rather than worked around in the screens:
   merge added is a prop, not an input.
 - **E12 matches any `.is-empty`**, including `.stage-bar-date.is-empty`, which is a stage on the
   pipeline strip with no date yet rather than a screen with nothing on it.
+- **E02 matches any class containing `head`**, so `.app-header-logo` — the Lofty mark in the
+  phone bar, added 12 September — is counted as a page-header idiom. It is an image inside a
+  header, not a header.
 
 Neither is worth renaming a class to dodge. A census that can be gamed by renaming is not
 measuring anything, so the fix belongs in `measure()`.
@@ -78,6 +81,11 @@ measuring anything, so the fix belongs in `measure()`.
 The numbers are those measured on `main` at `3a132fa`, 11 September 2026, and re-taken when #72
 merged `main` in: **E02 37 → 41, E08 8 → 9, E11 110 → 124, E12 6 → 7, E16 16 → 18**, with E05
 45 → 44 and E14 25 → 24 coming down in the same write.
+
+Re-taken once more on 12 September, for the mobile pass: **E02 41 → 42** (`.app-header-logo`, the
+matcher note above) — and two that came DOWN and are locked in with it, **E05 44 → 39** and
+**E04 13 → 11**. Those two are the descriptive lines removed from every page header and the
+filters folded into one row on a phone: ground gained, so the baseline follows it down.
 
 | | Family | Now | Target | The rule |
 | --- | --- | --- | --- | --- |

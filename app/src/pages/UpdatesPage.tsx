@@ -74,11 +74,11 @@ export function UpdatesPage() {
 
   return (
     <>
+      {/* No line under the heading. Amber, 12 September: *"on all pages remove
+          descriptive line text under page header … we need the most above the fold
+          possible"*. The three tabs under it say the same thing. */}
       <div className="page-head">
         <Heading type="h2" weight="bold">Updates</Heading>
-        <Text type="text2" color="secondary">
-          What has been asked for, what is planned, and what has shipped.
-        </Text>
       </div>
 
       <TabList activeTabId={index} onTabChange={i => navigate(`/updates/${SECTIONS[i].slug}`)}>

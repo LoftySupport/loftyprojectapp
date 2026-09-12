@@ -98,6 +98,16 @@ html, body, #root { height: 100%; }
 }
 .app-header-logo img { height: 22px; width: auto; display: block; }
 
+/* Search's slot in the bar (back here on 12 September). The box itself keeps the widths
+   it has always had — `.app-search` in ui.css, 200 to 320, growing to 420 on focus —
+   and this is only what holds it: it takes the room between the logo and the controls,
+   and gives it up before they do. Below 720px it shrinks to whatever is left, which is
+   what makes a phone header of mark + search + three controls fit at all. */
+.app-search-slot { display: flex; align-items: center; flex: 1 1 auto; min-width: 0; }
+@media (max-width: 720px) {
+  .app-search-slot .app-search { min-width: 0; flex: 1 1 auto; }
+}
+
 .app-menu-button {
   display: inline-flex;
   align-items: center;
@@ -179,21 +189,53 @@ html, body, #root { height: 100%; }
 }
 .app-body:has(.app-dock > *) .app-main { display: none; }
 
+/* ONE LINE, ON A PHONE AND ON A DESKTOP — Amber, 12 September: *"make footer more
+   condensed and smaller text so one line on mobile and desktop"*.
+   It was 24px of padding above and below a 12px line that wrapped to three rows on a
+   phone: 100px of chrome under every screen. 8px of padding, 11px type, and the two
+   groups on one row — and where the words are what makes it wrap, the words get shorter
+   rather than the target getting smaller (`.narrow-only` below). */
 .app-foot {
   flex-shrink: 0;
   margin-top: auto;
-  padding: var(--space-24);
+  padding: var(--space-8) var(--space-16);
   text-align: center;
+  font-size: 11px;
+  line-height: 16px;
+}
+/* The two labels each control carries: the long one above 720px, the short one below.
+   `display: none` rather than a JS swap, so there is one DOM, no resize listener, and a
+   screen reader reads exactly one of them. */
+.narrow-only { display: none; }
+@media (max-width: 720px) {
+  .wide-only { display: none; }
+  .narrow-only { display: inline; }
+  /* 390px, measured: the copyright, the build ref and five links come to ~420px at 11px
+     against 358px of room, so something had to go. The BUILD REF goes — it is for
+     somebody reporting a fault, who is at a desk when they do it — and the type drops a
+     point. The targets stay 24px. */
+  .app-foot { padding-inline: var(--space-8); }
+  .app-foot > div { font-size: 10px; }
+  .app-foot-version { display: none; }
+  .app-foot > div, .app-foot-links { gap: 0 6px; }
+  .app-foot-links > * + *::before { margin-inline-end: 6px; }
 }
 /* Two groups that sit on one line when there is room and stack when there is not.
    The separators are drawn in CSS rather than typed as "|" characters, so a screen
    reader is not read a pipe between every link. */
 .app-foot > div {
+  /* ON THE WRAPPER, not on `.app-foot`. Vibe's `<Text>` renders this div with its own
+     `font`, which beats anything inherited from the footer — the first two attempts at
+     "smaller text" changed nothing on screen for exactly that reason. */
+  font-size: 11px;
+  line-height: 16px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: var(--space-4) var(--space-12);
+  /* 8px between the two groups rather than 12, and no row gap to find — on one line
+     there is no second row. */
+  gap: 0 var(--space-8);
   min-width: 0;
 }
 .app-foot-links {
@@ -201,22 +243,26 @@ html, body, #root { height: 100%; }
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: var(--space-4) var(--space-12);
+  gap: 0 var(--space-8);
   min-width: 0;
 }
 .app-foot-links > * + *::before {
   content: "|";
-  margin-inline-end: var(--space-12);
+  margin-inline-end: var(--space-8);
   opacity: 0.5;
 }
 /* 16px of underlined text is a 16px tap target, which fails WCAG 2.2 2.5.8 (24px
    minimum) and is a genuine miss on a phone — measured at 75x16, 48x16 and 57x16 for
    Privacy Policy, Terms and Support. Padding rather than a height, so the separators
    drawn between them still sit on the text's baseline. */
+/* 24px of target around an 11px line, which is WCAG 2.5.8's floor and the reason the
+   text shrank rather than the control. `padding-block: 4` would make the row 24px on its
+   own; it is written as a minimum so the line-height cannot quietly take it away. */
 .app-foot a {
   color: inherit;
   text-decoration: underline;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   padding-block: var(--space-4);
   min-height: 24px;
 }
@@ -241,7 +287,7 @@ html, body, #root { height: 100%; }
   align-items: center;
   border: none;
   background: none;
-  padding: var(--space-4);
+  padding: var(--space-4) 0;
   min-height: 24px;
   color: inherit;
   font: inherit;

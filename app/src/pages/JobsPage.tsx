@@ -57,7 +57,9 @@ import "../components/ui.css";
  * me what you are looking at" is a link rather than a list of instructions.
  */
 export function JobsPage() {
-  const { stages, stageNames } = useStages();
+  // `stages` (the full list, for the "across N stages" line) went with the subtitle on
+  // 12 September; the names are what the filters and the board still need.
+  const { stageNames } = useStages();
   const { teams, teamNames } = useTeams();
   // For the Process / Property filter chips (0077, 0078).
   const { processes } = useProcesses();
@@ -584,15 +586,12 @@ export function JobsPage() {
 
   return (
     <>
+      {/* No line under the heading. Amber, 12 September: *"on all pages remove
+          descriptive line text under page header … we need the most above the fold
+          possible"*. The count this line carried is said again by the
+          toolbar — "Showing 3 of 3 jobs" — and the view's name by the tab under it. */}
       <div className="page-head">
         <Heading type="h2" weight="bold">Jobs</Heading>
-        <Text type="text2" color="secondary">
-          {loading
-            ? "Loading…"
-            : saved.stages.length === 0
-              ? `${all.length} job${all.length === 1 ? "" : "s"} across ${stages.length} stages`
-              : `${inView.length} of ${all.length} jobs · ${saved.label}, ${viewStages.length} of ${stages.length} stages`}
-        </Text>
       </div>
 
       <SavedViewTabs

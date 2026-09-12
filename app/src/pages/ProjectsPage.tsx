@@ -38,7 +38,7 @@ import { MoveStageControl, PROJECT_MOVE_NOTE } from "../components/MoveStageDial
 import { daysSince } from "../data/boardModel";
 import { Token, token } from "../components/Token";
 import { SidePanel } from "../components/SidePanel";
-import { Toolbar, type View } from "../components/Toolbar";
+import { Toolbar, useOneLine, type View } from "../components/Toolbar";
 import { accentStyle, columnAccent } from "../theme/accents";
 import { Select, toOptions } from "../components/Select";
 import { PersonSelect } from "../components/PersonSelect";
@@ -129,6 +129,8 @@ export function ProjectsPage() {
   // A control that offers to do what RLS will refuse is worse than no control — this is
   // the app's can() hiding it, and the policy is what actually decides.
   const { can } = usePermission();
+  /** Below 720px the toolbar folds to one line and the create button moves to the head. */
+  const oneLine = useOneLine();
   /**
    * Creating, and `?new=1` is how somewhere else asks for it.
    *
@@ -423,8 +425,6 @@ export function ProjectsPage() {
   const narrowed = terms.length > 0 || activeFilterCount(filters) > 0;
   const noMatches = narrowed && rows.length === 0;
   const stale = matchedOnPreviousAddress(rows.flatMap(p => [p, ...p.jobs]), terms);
-  const jobCount = all.reduce((n, p) => n + p.jobs.length, 0);
-
   const optionsFor = (field: string) => {
     switch (field) {
       // The project's own phase and its jobs' stages are the same list of names — the
@@ -511,23 +511,23 @@ export function ProjectsPage() {
 
   return (
     <>
-      <div className="page-head">
+      {/* No line under the heading. Amber, 12 September: *"on all pages remove
+          descriptive line text under page header … we need the most above the fold
+          possible"*. The project count is said again by the toolbar and
+          by the tab; **the job total is the one number that only lived here**, and it
+          goes. Say so rather than discover it missing: "118 projects · 79 jobs" is now
+          "Showing 118 of 118 projects". */}
+      <div className="page-head page-head-row">
         <Heading type="h2" weight="bold">Projects</Heading>
-        <Text type="text2" color="secondary">
-          {loading
-            ? "Loading…"
-            // On All Projects the two totals ARE the answer; on any other view the
-            // interesting number is how much of the whole it is. The test used to be
-            // `saved.stages.length === 0` — "the view names no stages" — which no
-            // built-in view has ever satisfied, so the portfolio line never once
-            // rendered on the first screen the app shows.
-            : saved.slug === "all"
-              ? `${all.length} projects · ${jobCount} jobs`
-              // The view's name is not repeated here: the tab carrying it is the next
-              // thing down the page, bold and with its own count, and "projects with
-              // work in All Projects" is what embedding it produced.
-              : `${inView.length} of ${all.length} projects`}
-        </Text>
+        {/* On a phone the create button rides the heading's line, right-aligned — Amber,
+            12 September. At a desk it stays in the toolbar with Export and Columns,
+            which is the cluster it belongs to when there is room for one.
+
+            Rendered once, either here or there, never both: two buttons with the same
+            name is two things a screen reader reads and one of them does nothing. */}
+        {oneLine && can("user") && (
+          <Button size="small" onClick={() => setCreating(true)}>+ New project</Button>
+        )}
       </div>
 
       <SavedViewTabs
@@ -591,7 +591,7 @@ export function ProjectsPage() {
                 "the projects I am looking at, as a spreadsheet" is the same ask
                 whichever arrangement is on screen. */}
             <ExportMenu build={buildExport} disabled={loading || rows.length === 0} />
-            <Button size="small" onClick={() => setCreating(true)}>+ New project</Button>
+            {!oneLine && <Button size="small" onClick={() => setCreating(true)}>+ New project</Button>}
           </>
         }
       />

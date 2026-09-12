@@ -49,7 +49,13 @@ export function FeedbackButtons() {
   const { report } = useFeedback();
   return (
     <button type="button" className="foot-action" onClick={() => report()}>
-      Report a bug or request a feature
+      {/* "Report a bug or request a feature" is 33 characters, and the footer has to be
+          one line on a 390px phone (Amber, 12 September). The short form is the same
+          control saying the same thing in the room available; the long one is what a
+          desktop has room for. CSS chooses, so there is one button either way and a
+          screen reader is not read both — see `.wide-only` / `.narrow-only`. */}
+      <span className="wide-only">Report a bug or request a feature</span>
+      <span className="narrow-only">Feedback</span>
     </button>
   );
 }

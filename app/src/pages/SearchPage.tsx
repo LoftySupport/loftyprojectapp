@@ -54,14 +54,7 @@ export function SearchPage() {
     .filter(g => g.rows.length > 0);
 
   return (
-    <PageShell
-      title={q ? `Results for “${q}”` : "Search"}
-      subtitle={
-        q
-          ? `${hits.length} ${hits.length === 1 ? "match" : "matches"} across jobs, projects, people, companies, requests and documents.`
-          : "Type in the box at the top of the page to search everything at once."
-      }
-    >
+    <PageShell title={q ? `Results for “${q}”` : "Search"}>
       {error && <LoadProblem error={error} />}
 
       {q.length === 1 && (

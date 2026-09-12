@@ -271,7 +271,6 @@ export function NavRail({
   activeId,
   onToggleCollapse,
   header,
-  search,
   groups,
   footer,
   user,
@@ -283,8 +282,6 @@ export function NavRail({
   onToggleCollapse: () => void;
   /** Wordmark expanded, twin-triangle mark collapsed. */
   header: ReactNode;
-  /** The search field, expanded only — collapsed it is the 44px button below. */
-  search: ReactNode;
   /** My work and Pinned, above the rule. */
   groups: ReactNode;
   /** Settings and Admin, below it. Gated by the caller, and again by RLS. */
@@ -292,8 +289,6 @@ export function NavRail({
   user: ReactNode;
   /** How a row becomes a link — see `RailLink`. */
   link: RailLink;
-  /** Collapsed, the search button widens the rail and puts focus in the field. */
-  onSearchClick?: () => void;
 }) {
   /** Which destination's panel is showing, and where the row that opened it sits. */
   const [flyout, setFlyout] = useState<{ id: string; top: number } | null>(null);
@@ -373,9 +368,7 @@ export function NavRail({
         )}
       </div>
 
-      {!collapsed && <div className="nav-rail-search">{search}</div>}
-
-      <nav
+          <nav
         className="nav-rail-nav"
         aria-label="Main"
         onScroll={onNavScroll}

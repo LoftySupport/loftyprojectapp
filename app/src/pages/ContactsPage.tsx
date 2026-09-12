@@ -6,6 +6,7 @@ import { usePermission } from "../data/PermissionProvider";
 import { Field, Problem } from "../components/Form";
 import { SidePanel } from "../components/SidePanel";
 import { Select } from "../components/Select";
+import { useOneLine } from "../components/Toolbar";
 import {
   CONTACT_METHOD_KINDS, CONTACT_METHOD_LABELS,
   type Company, type Contact, type ContactMethodKind, type RecordParty
@@ -30,6 +31,8 @@ import "../components/processes.css";
 export function ContactsPage() {
   const [params, setParams] = useSearchParams();
   const { can } = usePermission();
+  /** Below 720px the create button moves onto the heading's line — see `useOneLine`. */
+  const oneLine = useOneLine();
   const tab = params.get("company") ? 1 : params.get("tab") === "companies" ? 1 : 0;
   const selectedPerson = params.get("person");
   const selectedCompany = params.get("company");
@@ -60,15 +63,20 @@ export function ContactsPage() {
   return (
     <>
       <div className="page-head page-head-row">
+        {/* No line under the heading (12 September). The counts beside it stay. */}
         <div>
           <Heading type="h2" weight="bold">Contacts</Heading>
-          <Text type="text2" color="secondary" ellipsis={false}>
-            The people and companies outside Lofty — purchasers, trades, suppliers, councils — and what each is to us.
-          </Text>
         </div>
         <Text type="text3" color="secondary">
           {contacts.length} people · {companies.length} companies{pending > 0 && can("manager") ? ` · ${pending} awaiting sign-off` : ""}
         </Text>
+        {/* The create button rides the heading's line on a phone and stays in the
+            toolbar at a desk — Amber, 12 September. One or the other, never both. */}
+        {oneLine && can("user") && (
+          <Button size="small" onClick={() => { setCreating(true); select("person", null); }}>
+            {tab === 1 ? "+ New company" : "+ New person"}
+          </Button>
+        )}
       </div>
 
       <div className="toolbar">
@@ -77,7 +85,7 @@ export function ContactsPage() {
           <Tab>Companies</Tab>
         </TabList>
         <TextField size="small" id="contacts-search" inputAriaLabel="Search contacts" placeholder="Search name, email, phone, company…" value={search} onChange={setSearch} />
-        {can("user") && <Button size="small" onClick={() => { setCreating(true); select("person", null); }}>{tab === 1 ? "+ New company" : "+ New person"}</Button>}
+        {!oneLine && can("user") && <Button size="small" onClick={() => { setCreating(true); select("person", null); }}>{tab === 1 ? "+ New company" : "+ New person"}</Button>}
       </div>
 
       {/*

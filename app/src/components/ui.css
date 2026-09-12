@@ -174,7 +174,11 @@
 }
 .page-head-row {
   display: flex;
-  align-items: flex-start;
+  /* Centred, not top-aligned: with the descriptive line gone (12 September) the row is a
+     heading and a control, and a 32px button hung off the top of a 28px heading reads as
+     a mistake. It was `flex-start` for a two-line left side that no longer exists. */
+  align-items: center;
+  gap: var(--space-12);
   justify-content: space-between;
   gap: var(--space-16);
   flex-wrap: wrap;
@@ -1300,6 +1304,20 @@ code { overflow-wrap: anywhere; }
   .toolbar-field, .filter-chips { flex: 1 1 100%; }
   .toolbar-control { flex: 1; min-width: 0; }
   .toolbar-spacer { margin-left: 0; }
+  /* EVERY CONTROL STARTS AND FINISHES IN THE SAME PLACE. Amber, 12 September, drawing an
+     arrow across a screenshot of the Tasks filters: *"ensure the properties are aligned
+     correctly so they start and finish same spot"*.
+
+     They did not, because each row was [label][control] with the label taking its own
+     width — "View" is 34px and "Assignee" is 62, so six controls began at six different
+     x positions and ended at six different ones. A fixed column fixes both ends at once:
+     the label box is the same width on every row, and the control takes what is left.
+
+     84px is "Job stage" and "Assignee", the longest labels any board uses, at 14px with
+     a little air. Longer than that wraps inside its box rather than pushing the control
+     along, because a ragged column is the thing being fixed. */
+  .toolbar-label { flex: none; width: 84px; white-space: normal; }
+  .toolbar-text { width: auto; flex: 1; min-width: 0; }
   .panel { padding: var(--space-12); }
   /* Label above value, not beside it: a right-aligned value in a 358px row leaves
      the two colliding in the middle. */
