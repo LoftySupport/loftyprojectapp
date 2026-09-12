@@ -69,9 +69,12 @@ worth tightening in the script rather than worked around in the screens:
   merge added is a prop, not an input.
 - **E12 matches any `.is-empty`**, including `.stage-bar-date.is-empty`, which is a stage on the
   pipeline strip with no date yet rather than a screen with nothing on it.
-- **E02 matches any class containing `head`**, so `.app-header-logo` — the Lofty mark in the
-  phone bar, added 12 September — is counted as a page-header idiom. It is an image inside a
-  header, not a header.
+- **E02 matches any class containing `head`**, and fired three times on 12 September for things
+  that are not page headers: `.app-header-logo` (the Lofty mark in the phone bar),
+  `.page-head-action` (the create button that sits on the heading's line) and `.page-head-count`
+  (the readout beside it). An image, a button and a span of text, all inside a header, none of
+  them a header. **This is the matcher that most needs tightening** — every future utility class
+  named after the head it sits in will trip it, and each trip spends a re-baseline.
 
 Neither is worth renaming a class to dodge. A census that can be gamed by renaming is not
 measuring anything, so the fix belongs in `measure()`.

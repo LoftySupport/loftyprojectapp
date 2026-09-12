@@ -172,7 +172,22 @@
   overflow: visible;
   text-overflow: clip;
 }
+/* THE CREATE BUTTON STAYS ON THE HEADING'S LINE, AND THE READOUT DROPS UNDER IT.
+   Amber, 12 September: *"on mobile view the add new button should be in top right on same
+   line as the header right aligned"*. On Maintenance and Contacts the row also holds a
+   counts readout, and at 390px heading + counts + button is three lines with the button
+   last — the opposite of what she asked for.
+
+   So the button is `order: 0` and pinned right, and the readout is `order: 3` at full
+   width, which is what pushes it to a second line instead of the button. Above 720px
+   nothing moves: all three sit on one line with room to spare. */
+.page-head-action { margin-inline-start: auto; flex: none; }
+@media (max-width: 720px) {
+  .page-head-count { order: 3; flex: 1 1 100%; }
+}
+
 .page-head-row {
+  flex-wrap: wrap;
   display: flex;
   /* Centred, not top-aligned: with the descriptive line gone (12 September) the row is a
      heading and a control, and a 32px button hung off the top of a 28px heading reads as

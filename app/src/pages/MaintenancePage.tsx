@@ -90,14 +90,14 @@ export function MaintenancePage() {
           <Heading type="h2" weight="bold">Maintenance</Heading>
         </div>
         {!loading && dbQueue === "open" && (
-          <Text type="text3" color="secondary">
+          <Text type="text3" color="secondary" className="page-head-count">
             {counts.open} open · {counts.overdue} over SLA · {counts.atRisk} at risk · {counts.waiting} awaiting a contractor
           </Text>
         )}
         {/* The create button rides the heading's line on a phone and stays in the
             toolbar at a desk — Amber, 12 September. One or the other, never both. */}
         {oneLine && can("user") && (
-          <Button size="small" onClick={() => setParam({ new: "1", request: null })}>+ New request</Button>
+          <Button size="small" className="page-head-action" onClick={() => setParam({ new: "1", request: null })}>+ New request</Button>
         )}
       </div>
 

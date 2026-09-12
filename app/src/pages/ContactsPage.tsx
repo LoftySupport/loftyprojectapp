@@ -67,13 +67,13 @@ export function ContactsPage() {
         <div>
           <Heading type="h2" weight="bold">Contacts</Heading>
         </div>
-        <Text type="text3" color="secondary">
+        <Text type="text3" color="secondary" className="page-head-count">
           {contacts.length} people · {companies.length} companies{pending > 0 && can("manager") ? ` · ${pending} awaiting sign-off` : ""}
         </Text>
         {/* The create button rides the heading's line on a phone and stays in the
             toolbar at a desk — Amber, 12 September. One or the other, never both. */}
         {oneLine && can("user") && (
-          <Button size="small" onClick={() => { setCreating(true); select("person", null); }}>
+          <Button size="small" className="page-head-action" onClick={() => { setCreating(true); select("person", null); }}>
             {tab === 1 ? "+ New company" : "+ New person"}
           </Button>
         )}

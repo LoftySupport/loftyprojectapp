@@ -3,7 +3,7 @@
   "measured": "2026-09-12",
   "families": {
     "e02-page-header": {
-      "count": 42,
+      "count": 44,
       "variants": [
         ".app-header",
         ".app-header-logo",
@@ -21,6 +21,8 @@
         ".notif-mention-head",
         ".notif-panel-head",
         ".page-head",
+        ".page-head-action",
+        ".page-head-count",
         ".page-head-row",
         ".page-head-tight",
         ".panel-head",

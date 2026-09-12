@@ -526,7 +526,7 @@ export function ProjectsPage() {
             Rendered once, either here or there, never both: two buttons with the same
             name is two things a screen reader reads and one of them does nothing. */}
         {oneLine && can("user") && (
-          <Button size="small" onClick={() => setCreating(true)}>+ New project</Button>
+          <Button size="small" className="page-head-action" onClick={() => setCreating(true)}>+ New project</Button>
         )}
       </div>
 

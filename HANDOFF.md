@@ -16,6 +16,44 @@ Unreleased: 245 changes since then —
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
 
+## 12 September — the rail, the job record, and a day of mobile corrections (PR #72)
+
+**Where it stands:** merged. Everything below is in `main`.
+
+**Built from the 11 September handoff:** the navigation rail (224 / 64 / flyout), Pinned
+(`0112`), the slim top bar, the job record as a 460px drawer and a full page (`0113`), and
+the column picker as a 470px panel. `app/src/components/record/` carries the design
+system's own names — `RecordDrawer`, `RecordSection`, `FieldRow`, `ProcessSteps`,
+`StageTrack` — so the app and the library converge rather than being reconciled later.
+
+**Then a day of corrections from Amber, looking at it on a phone.** The full screen record
+sits INSIDE the frame now (a `#panel-dock` between the main area and the footer, so the
+rail, the bar and the footer all stay); clone is back as an icon on the job line in a
+project; the phone's navigation control is a real hamburger in the top right with the
+wordmark top left; every page lost the sentence under its heading; the filters fold to one
+row behind Advanced below 720px with an 84px label column so they line up; the create
+button rides the heading's line; the footer is one line at both sizes; and search is back
+on the top bar.
+
+### What a new session most needs to know
+
+1. **Health is half-answered, and nothing is built from it.** Amber, 12 September: *"Job at
+   risk is when the process is overdue which is set by the days marked in the process which
+   says it's at risk."* No new column is needed — `expected_days`, `at_risk_lead_days`,
+   `due_date`, `at_risk_date` and a computed per-run `health` all exist. **What makes a job
+   *overdue* rather than at risk is still open**, with three readings and a recommendation
+   in [`docs/open-questions.md`](docs/open-questions.md) §8. The record's pill still reads
+   `job_status`, a column somebody sets.
+2. **Inbox and Tasks carry no badge**, on purpose. They want *new since you last looked* and
+   *open tasks*; the first has nowhere to come from (nothing records when you last saw the
+   dashboard). `InboxProvider` and the badge styles stay, unused, for when it is settled.
+3. **The element sweep's E02 matcher fires on anything containing "head"** — it counted a
+   logo, a button and a readout as page headers in one day, and each cost a re-baseline.
+   Tightening `measure()` is the fix; see [`docs/design/element-sweep.md`](docs/design/element-sweep.md).
+4. **One number was lost, not moved:** the Projects heading used to read "118 projects · 79
+   jobs" and the job total is no longer on that page.
+5. **Expanded side panels still cover the footer** — only the job record was docked.
+
 **Phase A is done and applied, and so is the property-and-process half of Phase C (`0076`–`0079`, 1 September).**
 
 **Phase B — the import — is CLOSED, 7 September, without ever running.** Amber: *"i don't
