@@ -222,8 +222,20 @@ not a preference.
 - **Focus is a 3px orange-at-50% ring plus a 1px inset** (`--focus-ring`). Never removed,
   never replaced by a colour change alone. It is re-stated as an `outline` under
   `forced-colors: active`, where a `box-shadow` ring disappears entirely.
-- **Zero AA contrast failures across all three themes**, checked with a composited-alpha
-  audit rather than by eye — semi-transparent overlays measured against what is behind them.
+- **Readable is the bar, not AA.** Amber, 11 September: *"it needs to be readable but not
+  meet full accessibility guidelines — like Crisp Orange and white, or Flint together, are
+  ok."* This line used to claim zero AA failures across all three themes. That claim is
+  retired on both counts: AA stopped being the target, and `npm run contrast:sweep` —
+  which builds the app, walks twenty-six routes in a browser and measures every text node
+  **as painted**, composited through every ancestor's opacity — found 143 nodes under 3:1.
+  Most are the accepted white-on-Crisp-Orange at 2.62:1. The ones that were not were fixed:
+  `.perm-no` at 1.74, `.cal-cell.is-outside` at 1.91, `.pd-stat-lbl` at 2.29 and
+  `.slot-chip.is-current` at 2.14.
+- **A palette check cannot find those.** Three of the four were the *sanctioned* pairing
+  with something dimming it afterwards — an `opacity` on the rule or on an ancestor — and
+  arithmetic over two token values has no way to see that. `check-contrast.mjs` asserts
+  what this file writes down and runs on every pull request; `contrast:sweep` finds what
+  nobody wrote down, and is run by a person.
 - **Every clickable surface is keyboard-operable.** 126 controls on the board view alone
   were `div` and `tr` elements with click handlers and no `tabindex`, `role` or Enter/Space
   handling. A new clickable that is not a `button` or a link needs all three, or it does

@@ -1916,7 +1916,12 @@ code { overflow-wrap: anywhere; }
    The screen-reader text beside each says which it is; the dot is decoration. */
 .perm-cell { text-align: center; }
 .perm-yes { color: var(--positive-ink); font-size: 14px; }
-.perm-no { color: var(--layout-border-color); }
+/* The "no" dot was --layout-border-color, which is 1.74:1 on white: a mark you cannot
+   see is indistinguishable from a cell that failed to render, and this grid is
+   seventy-two of them. --placeholder-color is the same family at 3.47:1 — readable,
+   and still far enough behind the yes dot's 8.13:1 that a column still reads as the
+   list of things a role DOES get. */
+.perm-no { color: var(--placeholder-color); }
 /* Visible to a screen reader, not on screen. The dot alone would announce as a
    character, or as nothing at all. */
 .sr-only {
@@ -2323,7 +2328,21 @@ code { overflow-wrap: anywhere; }
 }
 .cal-cell:nth-child(7n) { border-right: 0; }
 .cal-cell.is-weekend { background: var(--allgrey-background-color); }
-.cal-cell.is-outside { opacity: 0.45; }
+/* 0.45 put the day number at 1.91:1 — twenty-four of them across the two calendars,
+   the worst readable-bar failure the rendered sweep found. It also dimmed the job
+   entries inside the cell, which are buttons: a control at 45% is harder to read than
+   the text beside it and no less clickable.
+
+   0.75 is the lowest step that clears 3:1 on BOTH grounds a cell can have — 3.34 on
+   white, 3.12 on the weekend tint. 0.70 clears white at 3.02 and fails the weekend
+   cells at 2.85, which is exactly the kind of "fixed on the screen I was looking at"
+   this register exists to stop. Outside days still recede; they are no longer guesswork.
+
+   Note for whoever touches this next: UpdatesPage.css says the same thing a different
+   way — `.cal-cell.is-outside { background: var(--allgrey-background-color) }`, tinting
+   the ground instead of dimming the text. Two idioms for one idea. Neither is wrong,
+   but they should converge, and that is a design call rather than a readability one. */
+.cal-cell.is-outside { opacity: 0.75; }
 .cal-cell.is-today { box-shadow: inset 0 0 0 2px var(--lofty-orange, #f47e63); }
 .cal-date { display: flex; align-items: baseline; justify-content: space-between; font: var(--font-text3-normal); color: var(--secondary-text-color); }
 .cal-today-chip {

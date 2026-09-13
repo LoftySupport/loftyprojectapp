@@ -120,7 +120,11 @@
   color: var(--text-color-on-primary);
   letter-spacing: var(--letter-spacing-h2);
 }
-.pd-stat-lbl { font: var(--font-text3-normal); color: var(--text-color-on-primary); opacity: 0.85; margin-top: 2px; }
+/* No opacity here. White on Crisp Orange is 2.62:1 and that pairing is accepted —
+   Amber, 11 September: "crisp orange and a white together are ok". Dimming it to 85%
+   took the label to 2.29:1, which is below the pairing that was actually sanctioned,
+   for a hierarchy the size and weight already carry against the 32px number above it. */
+.pd-stat-lbl { font: var(--font-text3-normal); color: var(--text-color-on-primary); margin-top: 2px; }
 
 .pd-card {
   display: flex;
