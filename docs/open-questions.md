@@ -45,6 +45,31 @@ not the schema.
 from the answer; the sweep reports and changes nothing.
 
 
+### 0b. Does the maintenance SLA run from the day an issue was identified, or the day it was logged?
+
+**Nothing is blocked on this today, and it will matter the moment a trade is set.**
+
+`0114` gave a request a **Date identified** (the PCI walk, the 3 Month Inspection) alongside
+the **Reported** timestamp it already had (the moment somebody typed it in). The two differ
+whenever a walk on Thursday is logged on Monday.
+
+`maintenance_request_due_on` is still computed from **Reported** plus the trade's SLA days.
+The new drawer sets no trade, so today every request logged this way reads **No SLA** and
+the question is moot. It stops being moot the first time a trade is attached.
+
+| Option | What it means |
+| --- | --- |
+| **Keep Reported as the clock** | The SLA measures Lofty's response from when Lofty knew. A defect found on a Thursday walk and logged the following Monday has its full SLA from Monday |
+| **Identified, falling back to Reported** | The SLA measures from when the defect was found, so a late entry eats its own delay. Needs a rule for a cleared Date identified, which is why the fallback is in the option |
+
+**Recommendation: the second**, because the homeowner's clock started when the defect was
+found and a request logged late should look late. But it makes an SLA breach possible on
+the day a request is created, which is a real change to what the queue shows, so it is
+yours rather than a default.
+
+**Blocked on:** nothing. Both readings are one line in `guard_maintenance_request()`.
+
+
 ### 1. "Dear [Owner Name]" — which party on the record is that? *(parked)*
 
 **Parked by Amber, 10 September: _"that will be later when linking a contact or company to
@@ -317,6 +342,7 @@ decides how much retro-fitting to schedule, and in what order.
 
 | Date | Question | Answer |
 | --- | --- | --- |
+| 14 Sep | An issue needs its own record id — is it a line inside one request, or a request of its own? | **Its own request.** Amber took the second of two options: *"each one of these issues have its own record id but you only enter the job number, reported by, identifies at, date once so you can then have a status, date booked, and followup for each"*. So three defects from one PCI walk are **1042-01-M3, -M4 and -M5**, created together from one drawer, each with its own status, date booked, follow-up and assignee. No new table: `maintenance_requests` grows the header fields it lacked plus a `maintenance_request_batch_id` recording that they were typed in one sitting, which same-job-same-day cannot — it is wrong the first time two people log a PCI on one house on one day, and it is what the report groups a section on (`0114`) |
 | 12 Sep | Should every property belong to a process? | **Yes, for a job or a project, and the ones that do not are flagged.** Amber: *"all properties should belong to a process if it is job or project and if they don't they should be flagged as orphaned in the properties setting unless they are the primary key. This should have all properties including properties not on the properties table eg address"*, and clarifying: *"a system property such as a primary key, a user property or contact property or task or maintenance property don't need to belong to a process but may belong to an automation."* So the rule binds **jobs and projects only** — a contact, a task, a maintenance request and a person all hold fields no process collects, and that is correct. Two exemptions, both hers: the scope, and **system properties**. The last sentence of her first message is the hard half: a sweep of `property_defs` alone reports a clean board while the address, the council, the owning team, the assignee, the SharePoint folder and both completion dates are collected by nothing, because they are **columns on `jobs` and `projects`** rather than property rows. The second source is therefore the data dictionary. **Thirty-three fields are reported** and every one is real. They cannot simply be attached: `process_properties.property_key` points at `property_defs`, so a column has nowhere for the attachment to hang — which is why they read *Not a property* rather than *Orphaned*, and why **whether the fixed columns get property definitions is the open half** (question 1 below). *"May belong to an automation"* is not built: there is no automation model to attach one to, and inventing the attachment before the model is the plausible value this repository keeps warning about |
 | 12 Sep | Does the record show a process that has not been started? | **All of them, every stage open, each with a tick box.** Amber: *"even if processes not started it should show them all so that way they can be marked off in order."* `ProcessesPanel` already listed every active process whether or not it had a run — what hid them was the stage disclosures, open only for the current stage. That is right for a panel you scan past and wrong for the record's Process section, where the whole ordered list IS the thing: a stage you have not reached holds the processes you are working towards. Open only in `bare` mode, so the standalone panel keeps the behaviour that suits it. And **marking one off is now one action**: a process with no run needed Start and then Complete, two presses for one fact, where the mockup draws a tick box. Ticking an unstarted process inserts its run already complete — which is what `startProcessRun`'s status argument is for. Unticking returns it to *In progress* rather than to *Not started*: the run exists and somebody worked on it, and "not started" would be a claim the record can disprove |
 | 12 Sep | Can a kanban column be got out of the way? | **Every column folds to a 48px strip, and four start folded.** Amber: *"on Kanban boards can you make them collapsible so they have a narrow view like the side navigation with completed closed cancelled and acquisitions and development closed by default."* Collapsed is a strip, not a hidden column: the name runs down it, the count stays on it, and a card still drops in — which is what "put Completed out of the way" means and what hiding it would not do. The four are matched **by name** rather than by a per-board list, so the rule holds on the Jobs board's stages, the Projects board's, and anywhere else those words are a column; a person's own choice is remembered per board and per column and beats the default. It needed one `BoardColumn` component first: Jobs, Projects and Tasks each wrote the same forty lines of column markup, which is how a fix lands on one board and not the other two |
