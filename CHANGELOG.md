@@ -150,6 +150,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- A half-filled new maintenance request is kept when the drawer closes, so a stray click no longer loses a pasted list of issues
 - The person and company pickers show a chevron, so a field that only takes a name from the list no longer looks like a box you can type anything into
 - Dates from the neighbouring month were too faint to read in the job and task calendars, and so were the job entries sitting in those days
 - The "current" chip on a process slot used the brand orange as text on a pale orange background, which the app's own colour rule forbids and which was the hardest thing to read anywhere in the app
