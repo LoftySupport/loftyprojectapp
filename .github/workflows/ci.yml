@@ -124,8 +124,16 @@ jobs:
   # had; and after a merge, main carries the last-merged branch's file, which lacks any
   # PR merged in between until the next commit's hook repairs it. That drift is the
   # hook's to fix, not a reason to fail main.
+  #
+  # ADVISORY since 14 September, and that is the point. A PR opened on Monday and merged
+  # on Friday has a CHANGELOG.md built from Monday's history; four PRs merged in between
+  # and the file is stale through nobody's fault. Blocking on it produced the same
+  # conflict four times in one day — every one of them resolved by regenerating, which is
+  # to say by running the generator the `self-heal` job below now runs on main. The step
+  # still runs and still names what drifted; it just does not hold a merge hostage to the
+  # order the merges happened in.
   generated:
-    name: changelog, roadmap, README and handoff are current
+    name: changelog, roadmap, README and handoff are current (advisory)
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -137,7 +145,21 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-      - run: node scripts/changelog.mjs --check
+
+      - id: check
+        continue-on-error: true
+        run: node scripts/changelog.mjs --check
+
+      # A warning rather than a failure, so it shows in the PR's checks without a red
+      # tick. An unreadable trailer — the case worth acting on — also lands here, and the
+      # step's own log says which of the two it was.
+      - if: steps.check.outcome == 'failure'
+        run: |
+          echo "::warning title=Generated docs are behind::CHANGELOG.md, ROADMAP.md, \
+          README.md or HANDOFF.md do not match this branch's trailers. Usually just means \
+          main moved since this branch was opened: the self-heal job repairs it after the \
+          merge. Run 'node scripts/changelog.mjs' locally if an unreadable trailer is named \
+          in the step above."
 
   # Does every page still fit a phone? Two assertions, both objective: the page does not
   # scroll sideways, and nothing tappable is under 24x24. It caught a real regression on
@@ -222,3 +244,74 @@ jobs:
             test -f "dist/$f" || { echo "missing from dist/: $f"; exit 1; }
           done
           echo "dist/ carries all five."
+
+  # The four generated files, repaired on main after every merge.
+  #
+  # Why this exists. CHANGELOG.md, the ticks in ROADMAP.md and the `generated:shipped`
+  # blocks in README.md and HANDOFF.md are built by walking `git log`. That makes them a
+  # function of the history at the moment they were written — so a branch cut on Monday
+  # carries Monday's CHANGELOG.md, and every PR merged after it leaves that file one
+  # merge further behind. Four PRs on 14 September each hit the same conflict in the same
+  # four files, and every one was resolved the same way: throw both sides away and run
+  # the generator against the merged history. This job is that resolution, done once, by
+  # the machine, in the only place the merged history exists.
+  #
+  # `.githooks/post-commit` does the same locally and deliberately stops at rewriting the
+  # working tree. It cannot help here: a merge done with GitHub's merge button runs no
+  # hook on anybody's machine, and that is how every merge in this repository is made.
+  #
+  # No loop. A push authenticated with GITHUB_TOKEN does not start a workflow run, so the
+  # commit this job makes is the end of it. Were that ever to change, the second run
+  # would regenerate, find nothing changed, and stop — the fixpoint is one commit deep.
+  self-heal:
+    name: regenerate the generated docs on main
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The whole history, for the same reason the advisory check needs it: every
+          # trailer ever written is an input to the files being rebuilt.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: regenerate, commit and push if the docs moved
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Somebody may merge again while this runs. On a rejected push, throw this
+          # attempt away, take main as it now is, and regenerate from there — rebasing
+          # instead would fight a conflict in the four files this job exists to settle.
+          for attempt in 1 2 3; do
+            git fetch origin main
+            git reset --hard origin/main
+
+            node scripts/changelog.mjs
+
+            # Only the four files this owns. `git commit -a` would sweep up anything else
+            # the generator happened to touch.
+            if git diff --quiet -- CHANGELOG.md ROADMAP.md README.md HANDOFF.md; then
+              echo "The generated docs already match the trailers. Nothing to push."
+              exit 0
+            fi
+            git add -- CHANGELOG.md ROADMAP.md README.md HANDOFF.md
+            git commit \
+              -m "Regenerate the generated docs against main's history" \
+              -m "Written by the self-heal job in .github/workflows/ci.yml after a merge, from the trailers on main. These four files are generated: the source is the commit messages, and scripts/changelog.mjs is what reads them." \
+              -m "Changelog: skip"
+
+            if git push origin HEAD:main; then
+              echo "Pushed on attempt $attempt."
+              exit 0
+            fi
+            echo "Push rejected — main moved. Starting again from the new main ($attempt of 3)."
+          done
+
+          echo "::error title=Self-heal could not push::main moved three times while this ran. The generated docs are still behind; the next merge will repair them."
+          exit 1

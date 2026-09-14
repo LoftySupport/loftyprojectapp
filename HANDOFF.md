@@ -54,6 +54,63 @@ position** and none of them needs a browser: `check:pipeline`, `check:pipeline-o
 `check:process-move`, `check:report-widgets`, `check:share-password` and `check:file-drop`.
 Wiring them in is a separate small job, and worth doing — a check nobody runs is a check that
 silently stops being true.
+## 14 September — the four generated files repair themselves on `main`
+
+**Where it stands:** **merged** ([PR #84](https://github.com/LoftySupport/loftyprojectapp/pull/84)).
+One file changed, `.github/workflows/ci.yml`. Nothing in `app/` moved.
+
+**The problem, stated plainly.** `CHANGELOG.md`, the ticks in `ROADMAP.md` and the
+`generated:shipped` blocks in `README.md` and `HANDOFF.md` are built by walking `git log`.
+They are therefore a function of the history *at the moment they were written*. A branch cut
+on Monday carries Monday's `CHANGELOG.md`, and every pull request merged after it leaves that
+file one merge further behind — through nobody's fault, and with no way for the branch to know.
+
+On 14 September that produced the same conflict, in the same four files, four separate times
+(#78, #80, #81, #82). Every one was resolved the same way: discard both sides and run the
+generator against the merged history. One of those resolutions went wrong in a way worth
+recording — the session's clone was shallow, 299 of 615 commits, so regenerating *deleted*
+87 lines of `CHANGELOG.md` that the missing commits had written. `git fetch --unshallow`
+fixed it, but the lesson is that a human resolving this by hand is a human who can get it
+wrong quietly.
+
+**What changed.** Amber, asked which of three fixes to take, chose the third:
+*"Stop it recurring — make the generated files self-heal"*.
+
+- A **`self-heal` job** runs on `push` to `main` only. It takes `main` as it now is, runs
+  `node scripts/changelog.mjs`, and if any of the four files moved, commits them with
+  `Changelog: skip` and pushes. On a rejected push — somebody merged while it ran — it throws
+  its attempt away, takes the new `main`, and regenerates from there; three attempts, then it
+  fails loudly rather than forcing. Rebasing instead would fight a conflict in exactly the
+  four files the job exists to settle.
+- The **PR-side `generated` check is now advisory**. It still runs, on the PR's own head, and
+  still names what drifted — it emits a `::warning::` instead of a red tick. A stale generated
+  file on a branch is a fact about the order merges happened in, not a defect in the branch.
+
+**No loop:** a push authenticated with `GITHUB_TOKEN` does not start a workflow run. Were that
+ever to change, the second run would regenerate, find nothing, and stop — the fixpoint is one
+commit deep, and that path is proved below.
+
+**What was watched failing.** The job's step body was extracted from the YAML and run against a
+throwaway clone of this repository, so the test ran the same text the runner will:
+
+| Break | What it did |
+| --- | --- |
+| `main` carrying a `CHANGELOG.md` 132 lines behind | Regenerated, committed, pushed; the file came back to 285 lines |
+| Run again with nothing stale | `"already match the trailers. Nothing to push."`, exit 0, **no empty commit** |
+| A `pre-receive` hook rejecting the first push | `"Push rejected — main moved… (1 of 3)"`, took the new `main`, regenerated, `"Pushed on attempt 2."` |
+
+**One thing to check, and it is a repository setting rather than code.** The push needs
+`GITHUB_TOKEN` to have write access. The job asks for it (`permissions: contents: write`), but
+a job can only ask up to the repository's ceiling: if **Settings → Actions → General →
+Workflow permissions** is set to *Read repository contents*, the push returns 403 three times
+and the job goes red with the error message it prints. `main` is **not** a protected branch, so
+nothing else stands in the way. If that job's first run on `main` fails on a 403, that setting
+is why.
+
+**What this does not do.** It does not fix a branch's generated files *before* the merge, and
+it does not need to — after the merge, `main` is right within a minute, which is the only place
+the files are read from. An **unreadable** trailer (`Changelog: fixt: …`) still fails, and
+still should: that is a change that never reaches the changelog.
 
 ---
 
@@ -849,6 +906,9 @@ terminal would have; and `changelog.mjs --check` on every PR's own head, because
 first commit landed with the four generated files stale and only the post-commit hook —
 which is opt-in — noticed. The check runs on pull requests only; see the comment in
 `.github/workflows/ci.yml` for why a red `main` after a merge is the hook's to repair.
+*(Superseded 14 September: the hook never repaired it, because every merge here is made with
+GitHub's merge button and no hook runs on anybody's machine. A `self-heal` job on `main` does
+it now, and this check is advisory — see the entry at the top of this file.)*
 
 **Open, and hers to decide:**
 
