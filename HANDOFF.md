@@ -12,6 +12,13 @@ Unreleased: 279 changes since then —
 - Changed: A maintenance photo or video now has a permanent link, so a generated maintenance sheet still shows its pictures after it is emailed
 - Added: A maintenance issue takes video as well as photos
 - …and 274 more.
+Unreleased: 277 changes since then —
+- Added: Community title jobs now carry a "c" in the job number itself — 1004-003c. Mark a job community title and its number updates everywhere it is used; correct it back and the c goes away. The project number and the three-digit job code never change, and the numbering still runs straight through both title types.
+- Added: Community title jobs now read with a "c" after the job number — 1004-003c. Torrens jobs and jobs whose title type is not set yet read without one, and the numbering still runs straight through both. The job's underlying number never changes, so nothing already written down goes stale.
+- Added: A calculated completion date on jobs — what the SLAs say the job will finish, beside the target somebody committed to and the day it actually did. Three columns on the Jobs table, off by default. Blank until the processes have estimates on them, with a count of how many are missing.
+- Fixed: A project's new address now carries its live jobs with it. A job still standing at the project's old address follows, keeping its own lot and res numbers, so "Lot 1, 14 Brodie Road" becomes "Lot 1, 28 Corner Street". A job given its own address since its title issued is left alone, as are closed and cancelled jobs.
+- Fixed: The check that every database view runs as its caller now tests the setting's value rather than only that it was written, so a view with the protection turned off can no longer pass it
+- …and 272 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -257,6 +264,91 @@ back transaction: the default holds, both checks bite, `video` is accepted, noth
 - **A photo package when a job closes**, to SharePoint. Amber: *"It would be good to maybe when
   a job closes to have the ability to download all jobs photos in a package and save to
   SharePoint"* — a *maybe*, recorded here rather than acted on.
+## 14 September, evening — where this stops, and what the next thread picks up
+
+**Amber is rethinking how properties, processes and tasks fit together, and is starting a
+new thread for it.** This section is the state she is leaving, written so the next session
+does not have to reconstruct it from the log.
+
+### What is live, and what is only on the branch
+
+| | State |
+| --- | --- |
+| `0118` a project's address moves its jobs | **Applied to the live database**, `20260914145252` |
+| `0119` the calculated completion date | On the branch. **Not applied** |
+| `0120` the community-title `c` in the job number | On the branch. **Not applied** |
+
+Everything else on branch `claude/keen-bohr-oy74gn` is documentation. The pull request is
+**[#88](https://github.com/LoftySupport/loftyprojectapp/pull/88), still a draft** — deliberately,
+because two of its three migrations are unapplied and the model underneath them is what
+Amber is about to reconsider.
+
+Applying `0119` and `0120` is one command each and neither depends on the other. `0120`
+renames nine live jobs; `0119` changes no data at all.
+
+### The sixteen decisions taken on 14 September
+
+They are in [`docs/open-questions.md`](docs/open-questions.md) with her own words. The four
+that matter most to the next thread, because they are the ones the rethink touches:
+
+- **Every fixed column gets a property definition.** Not just the ones a process gates —
+  a definition is what carries `property_def_owning_team` and `property_def_stage`, so a
+  field without one cannot be assigned to a team or a stage at all.
+- **Four fields became derived**: owning team from the active process, assignee from the
+  tasks in it, stage from the processes, status from the dates. One tie-break covers all
+  four — *the earliest unfinished process in the job's stage*.
+- **Which processes a job runs is a function of the job's own facts**, not a fixed list:
+  the title type selects them, and a process can be optional.
+- **Overriding the active team is a handshake, not a reassignment** — request, the current
+  team's manager releases or refuses, the board flags who asked. Amber parked it into
+  Automations.
+
+### What is blocked on a build rather than an answer
+
+In dependency order. None of it is started.
+
+1. **`property_def_scope` must widen** past `project` and `job`. The council belongs to the
+   address; Amber also names task, maintenance and contact properties shown on job cards.
+   Open as question **0e**, with a recommendation and no answer.
+2. **`processes` needs an optional flag.** PWA is not on every job; planning approval and
+   working drawings are. Load-bearing for the owning-team rule, and for `0119`'s forecast,
+   which currently counts every process including ones nobody will run.
+3. **The four derivations.** All read from process runs and tasks.
+4. **The Override Active Team handshake.** No automations backlog exists to park it in.
+5. **A SiteBook ID column and the process that collects it.** Neither exists.
+
+### Two open questions, both with recommendations and neither answered
+
+- **0e** — does `property_def_scope` just widen, or does a property gain a separate
+  *shown on* fact? Recommendation: the second, because it is the only one that can answer
+  *what appears on a job card* from data rather than from a component.
+- **0f** — when a job number changes, should the old one stay findable? `0120` made the
+  number move; `address_history` keeps superseded addresses searchable and job numbers have
+  no equivalent. Recommendation: make search ignore the suffix rather than build a table.
+
+### Things that are wrong and are nobody's current task
+
+- **`app/supabase/verify/constraints.sql` reports 26 `FAIL:` lines on `main`.** Unchanged by
+  any of this work — 26 before, 26 after. They are probe fixtures planting a job at a
+  locality-only address, which `guard_job_address_is_a_street` correctly refuses while the
+  harness's expected-error matcher does not recognise the message. **`check.sh` therefore
+  exits non-zero for everyone**, which is how a harness stops being trusted. Its own branch.
+- **All 38 Pre-construction processes carry no SLA estimate**, as do both Acquisition &
+  Development ones. Only Construction is populated. `0119` is built and deliberately returns
+  nothing until Amber fills them in; `job_calculated_completion_missing` counts what is
+  outstanding.
+- **67 of 83 jobs have no title type set**, so most read without a `c` regardless of what
+  they are.
+- **Project number 1992 will never exist.** `0118`'s proof block creates a project and
+  deletes it, which consumes a number from the identity sequence. `0114` and `0081` did the
+  same. It is the standing price of a proof block that inserts into `projects`.
+
+### One correction Amber made to the repository
+
+There are **seven** lifecycle stages, not five — Closed and Cancelled are still stages.
+Checked against `jobs_stage_is_a_lifecycle_stage`, which admits seven. `supabaseRepository.ts`
+calling Acquisition & Development *"the first of the five lifecycle phases"* is the loose
+part, and is still there.
 
 ---
 

@@ -201,7 +201,7 @@ const PROJECT_COLUMNS =
 //
 // Writes still go to `jobs` — a view is not the place to insert through.
 const JOB_COLUMNS =
-  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_sharepoint_url, job_created_at, job_created_by, job_updated_at, job_updated_by, job_current_address, job_original_address, project_current_address, project_sharepoint_url, project_type, job_title_type, job_council, job_target_completion, job_end_date";
+  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_sharepoint_url, job_created_at, job_created_by, job_updated_at, job_updated_by, job_current_address, job_original_address, project_current_address, project_sharepoint_url, project_type, job_title_type, job_council, job_target_completion, job_end_date, job_calculated_completion, job_calculated_completion_missing";
 
 /**
  * `""` and `"   "` are how a browser reports a field somebody did not fill in, and they
@@ -4605,6 +4605,8 @@ type JobRow = {
   job_council: Job["council"];
   job_target_completion: Job["targetCompletion"];
   job_end_date: Job["endDate"];
+  job_calculated_completion: Job["calculatedCompletion"];
+  job_calculated_completion_missing: Job["calculatedCompletionMissing"];
 };
 
 function toJob(r: JobRow): Job {
@@ -4637,6 +4639,11 @@ function toJob(r: JobRow): Job {
     council: r.job_council,
     targetCompletion: r.job_target_completion,
     endDate: r.job_end_date,
+    // 0119. Computed by the view, never written — the repository could not set these if
+    // it wanted to, which is the point: one implementation of the critical path, in the
+    // database, where the import and a hand-written query read the same answer.
+    calculatedCompletion: r.job_calculated_completion,
+    calculatedCompletionMissing: r.job_calculated_completion_missing,
     projectSharepointUrl: r.project_sharepoint_url,
     // Inherited from the project through the view, never stored on the job. `job_display`
     // has exposed it since 0028; this read simply never asked for it, so every card and

@@ -61,6 +61,12 @@ export function JobTitle({
   renderProjectLink,
   style
 }: {
+  /**
+   * `1004-003`, or `1004-003c` on a community title job (0120).
+   *
+   * The split on the dash is unaffected: `1004-003c` still yields `1004` for the project
+   * link and `-003c` for the rest, because the suffix rides on the tail.
+   */
   jobNumber: string;
   /** "EVANSTON PARK, 14/24 Wandoo Road". Null when the address is unreadable. */
   location?: ReactNode;
