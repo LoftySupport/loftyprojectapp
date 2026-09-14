@@ -2864,8 +2864,16 @@ export interface MaintenanceRequest {
   assigneeName: string | null;
   assignedCompanyId: Uuid | null;
   assignedCompanyName: string | null;
-  /** When the repair is booked in, and when to chase it. Per issue; nothing derives either. */
+  /**
+   * When the repair is booked in, the day it was actually done, and when to chase it.
+   * Per issue, and nothing derives any of them.
+   *
+   * `completedOn` is NOT the status and NOT `closedAt`: a request can carry a completion
+   * date while its status is still In progress, because the tradesperson finishing and
+   * the ticket being closed are two events (0116).
+   */
   bookedOn: IsoDate | null;
+  completedOn: IsoDate | null;
   followUpOn: IsoDate | null;
   closedAt: IsoDateTime | null;
   closedReason: string | null;
@@ -2907,6 +2915,7 @@ export interface NewMaintenanceRequest {
   assigneeProfileId?: Uuid | null;
   assignedCompanyId?: Uuid | null;
   bookedOn?: IsoDate | null;
+  completedOn?: IsoDate | null;
   followUpOn?: IsoDate | null;
 }
 export interface MaintenanceRequestPatch {
@@ -2925,6 +2934,8 @@ export interface MaintenanceRequestPatch {
   assigneeProfileId?: Uuid | null;
   assignedCompanyId?: Uuid | null;
   bookedOn?: IsoDate | null;
+  /** The day the repair was done. Independent of the status, by 0116's decision. */
+  completedOn?: IsoDate | null;
   followUpOn?: IsoDate | null;
   closedReason?: string | null;
   externalRef?: string | null;

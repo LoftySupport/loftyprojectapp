@@ -40,7 +40,7 @@ const REQUEST_COLUMNS = [
   "maintenance_request_reported_by_profile_id", "maintenance_request_reported_by_profile_name",
   "maintenance_request_assignee_kind", "maintenance_request_assignee_profile_id", "maintenance_request_assignee_name",
   "maintenance_request_assigned_company_id", "maintenance_request_assigned_company_name",
-  "maintenance_request_booked_on", "maintenance_request_followup_on"
+  "maintenance_request_booked_on", "maintenance_request_completed_on", "maintenance_request_followup_on"
 ].join(", ");
 
 type RequestRow = {
@@ -59,7 +59,7 @@ type RequestRow = {
   maintenance_request_reported_by_profile_id: string | null; maintenance_request_reported_by_profile_name: string | null;
   maintenance_request_assignee_kind: MaintenanceRequest["assigneeKind"]; maintenance_request_assignee_profile_id: string | null; maintenance_request_assignee_name: string | null;
   maintenance_request_assigned_company_id: string | null; maintenance_request_assigned_company_name: string | null;
-  maintenance_request_booked_on: string | null; maintenance_request_followup_on: string | null;
+  maintenance_request_booked_on: string | null; maintenance_request_completed_on: string | null; maintenance_request_followup_on: string | null;
 };
 
 const fromRequest = (r: RequestRow): MaintenanceRequest => ({
@@ -78,7 +78,7 @@ const fromRequest = (r: RequestRow): MaintenanceRequest => ({
   reportedByProfileId: r.maintenance_request_reported_by_profile_id, reportedByProfileName: r.maintenance_request_reported_by_profile_name,
   assigneeKind: r.maintenance_request_assignee_kind, assigneeProfileId: r.maintenance_request_assignee_profile_id, assigneeName: r.maintenance_request_assignee_name,
   assignedCompanyId: r.maintenance_request_assigned_company_id, assignedCompanyName: r.maintenance_request_assigned_company_name,
-  bookedOn: r.maintenance_request_booked_on, followUpOn: r.maintenance_request_followup_on
+  bookedOn: r.maintenance_request_booked_on, completedOn: r.maintenance_request_completed_on, followUpOn: r.maintenance_request_followup_on
 });
 
 const ITEM_COLUMNS = [
@@ -228,6 +228,7 @@ export function maintenanceMethods(client: SupabaseClient): MaintenanceMethods {
         maintenance_request_assignee_profile_id: input.assigneeProfileId ?? null,
         maintenance_request_assigned_company_id: input.assignedCompanyId ?? null,
         maintenance_request_booked_on: input.bookedOn ?? null,
+        maintenance_request_completed_on: input.completedOn ?? null,
         maintenance_request_followup_on: input.followUpOn ?? null
       }).select("maintenance_request_id").single();
       if (error) throw error;
@@ -252,6 +253,7 @@ export function maintenanceMethods(client: SupabaseClient): MaintenanceMethods {
       if (patch.assigneeProfileId !== undefined) row.maintenance_request_assignee_profile_id = patch.assigneeProfileId;
       if (patch.assignedCompanyId !== undefined) row.maintenance_request_assigned_company_id = patch.assignedCompanyId;
       if (patch.bookedOn !== undefined) row.maintenance_request_booked_on = patch.bookedOn;
+      if (patch.completedOn !== undefined) row.maintenance_request_completed_on = patch.completedOn;
       if (patch.followUpOn !== undefined) row.maintenance_request_followup_on = patch.followUpOn;
       if (patch.closedReason !== undefined) row.maintenance_request_closed_reason = patch.closedReason;
       if (patch.externalRef !== undefined) row.maintenance_request_external_ref = patch.externalRef;
