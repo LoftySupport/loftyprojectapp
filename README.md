@@ -25,6 +25,13 @@ Unreleased: 261 changes since then —
 - Added: Kanban columns collapse to a narrow strip, with Completed, Closed, Cancelled and Acquisition & Development folded by default
 - Added: + New task on the Tasks board, which assigns a task to a person, a team and a job or project
 - …and 256 more.
+Unreleased: 266 changes since then —
+- Added: A maintenance issue carries the day it was booked and the day it was done, on the board and in the drawer, with the follow-up date beside them
+- Changed: The maintenance board shows Identified, Booked and Completed, and who the issue is assigned to, in place of Trade and Owner
+- Fixed: The person and company pickers show a chevron, so a field that only takes a name from the list no longer looks like a box you can type anything into
+- Added: Photos and files attach to a maintenance issue — from the phone's camera or library — and are filed against the job as well, so they appear in that job's Documents
+- Changed: Every slideout's form is condensed: no rules between rows, one column width for every field, and a Details box you can actually write in
+- …and 261 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

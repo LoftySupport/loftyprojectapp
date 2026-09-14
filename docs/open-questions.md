@@ -70,6 +70,26 @@ yours rather than a default.
 **Blocked on:** nothing. Both readings are one line in `guard_maintenance_request()`.
 
 
+### 0d. Is a "trade" the same thing as a contractor?
+
+**Not blocking — the drawer works either way, and the reading it took is visible.**
+
+Amber, on the external assignee: *"any companies in the system that are trades or
+contractors"*. The `classifications` lookup holds **client, contractor, supplier,
+consultant, authority, other**. There is no *Trade*, so the picker offers companies
+classified `contractor`, plus any company already on the job whatever it is classified as —
+being the plumber on 1042-01 is stronger evidence than a classification nobody set.
+
+| Option | What it means |
+| --- | --- |
+| **Contractor is the trade** | Nothing changes. One classification, and a company that fixes things is a contractor |
+| **Add a Trade classification** | Bricklayer, plumber and tiler are *trades*; a project manager and a surveyor are *contractors*. A one-row insert and the picker widens to both |
+
+**Recommendation: leave it as one** until the imported company list shows the distinction
+is real in Lofty's own data. Splitting a classification is easy; merging two back after
+people have used both is not.
+
+
 ### 1. "Dear [Owner Name]" — which party on the record is that? *(parked)*
 
 **Parked by Amber, 10 September: _"that will be later when linking a contact or company to
@@ -342,6 +362,7 @@ decides how much retro-fitting to schedule, and in what order.
 
 | Date | Question | Answer |
 | --- | --- | --- |
+| 14 Sep | Where do a maintenance issue's photos live? | **`job-documents`, private.** Three options were put up — the private job bucket, a new private `maintenance-photos` bucket, or the public `report-images` one — and Amber took the first. So a defect photo is a document about the job: it is filed in `documents`, attached through `document_links.maintenance_request_id` (which `0084` already added for exactly this), and it appears in that job's Documents list beside the contract and the site plan. Every read is a short-lived signed URL, so nothing leaves Lofty without one. **The consequence to carry into the report (PR #79):** an emailed report cannot simply point at these images the way a shared document points at `report-images`, because a signed link expires and a private object has no permanent URL. The report will have to embed the bytes or sign at the moment of building. That is the cost of the choice, and it is the right one — a defect photo of somebody's house is not a thing to make permanently public to anyone who ever sees the URL |
 | 14 Sep | An issue needs its own record id — is it a line inside one request, or a request of its own? | **Its own request.** Amber took the second of two options: *"each one of these issues have its own record id but you only enter the job number, reported by, identifies at, date once so you can then have a status, date booked, and followup for each"*. So three defects from one PCI walk are **1042-01-M3, -M4 and -M5**, created together from one drawer, each with its own status, date booked, follow-up and assignee. No new table: `maintenance_requests` grows the header fields it lacked plus a `maintenance_request_batch_id` recording that they were typed in one sitting, which same-job-same-day cannot — it is wrong the first time two people log a PCI on one house on one day, and it is what the report groups a section on (`0114`) |
 | 12 Sep | Should every property belong to a process? | **Yes, for a job or a project, and the ones that do not are flagged.** Amber: *"all properties should belong to a process if it is job or project and if they don't they should be flagged as orphaned in the properties setting unless they are the primary key. This should have all properties including properties not on the properties table eg address"*, and clarifying: *"a system property such as a primary key, a user property or contact property or task or maintenance property don't need to belong to a process but may belong to an automation."* So the rule binds **jobs and projects only** — a contact, a task, a maintenance request and a person all hold fields no process collects, and that is correct. Two exemptions, both hers: the scope, and **system properties**. The last sentence of her first message is the hard half: a sweep of `property_defs` alone reports a clean board while the address, the council, the owning team, the assignee, the SharePoint folder and both completion dates are collected by nothing, because they are **columns on `jobs` and `projects`** rather than property rows. The second source is therefore the data dictionary. **Thirty-three fields are reported** and every one is real. They cannot simply be attached: `process_properties.property_key` points at `property_defs`, so a column has nowhere for the attachment to hang — which is why they read *Not a property* rather than *Orphaned*, and why **whether the fixed columns get property definitions is the open half** (question 1 below). *"May belong to an automation"* is not built: there is no automation model to attach one to, and inventing the attachment before the model is the plausible value this repository keeps warning about |
 | 12 Sep | Does the record show a process that has not been started? | **All of them, every stage open, each with a tick box.** Amber: *"even if processes not started it should show them all so that way they can be marked off in order."* `ProcessesPanel` already listed every active process whether or not it had a run — what hid them was the stage disclosures, open only for the current stage. That is right for a panel you scan past and wrong for the record's Process section, where the whole ordered list IS the thing: a stage you have not reached holds the processes you are working towards. Open only in `bare` mode, so the standalone panel keeps the behaviour that suits it. And **marking one off is now one action**: a process with no run needed Start and then Complete, two presses for one fact, where the mockup draws a tick box. Ticking an unstarted process inserts its run already complete — which is what `startProcessRun`'s status argument is for. Unticking returns it to *In progress* rather than to *Not started*: the run exists and somebody worked on it, and "not started" would be a claim the record can disprove |

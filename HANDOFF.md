@@ -12,6 +12,13 @@ Unreleased: 261 changes since then —
 - Added: Kanban columns collapse to a narrow strip, with Completed, Closed, Cancelled and Acquisition & Development folded by default
 - Added: + New task on the Tasks board, which assigns a task to a person, a team and a job or project
 - …and 256 more.
+Unreleased: 266 changes since then —
+- Added: A maintenance issue carries the day it was booked and the day it was done, on the board and in the drawer, with the follow-up date beside them
+- Changed: The maintenance board shows Identified, Booked and Completed, and who the issue is assigned to, in place of Trade and Owner
+- Fixed: The person and company pickers show a chevron, so a field that only takes a name from the list no longer looks like a box you can type anything into
+- Added: Photos and files attach to a maintenance issue — from the phone's camera or library — and are filed against the job as well, so they appear in that job's Documents
+- Changed: Every slideout's form is condensed: no rules between rows, one column width for every field, and a Details box you can actually write in
+- …and 261 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -71,6 +78,88 @@ choice Amber made on 14 September. **Ask her before building any of them.**
   block options above are the same set of questions, so the work is a translation from the
   table's filter state into a widget's options rather than a second filter model.
 - **Stage 3** — automation. Nothing exists.
+## 14 September — the maintenance drawer, and the two things left for Amber to decide
+
+**Where it stands:** on `claude/sleepy-mendel-0birzy` (schema, [PR #76](https://github.com/LoftySupport/loftyprojectapp/pull/76)) and
+`claude/sleepy-mendel-0birzy-drawer` (the drawer, PR #77). Amber asked for **small PRs**,
+one bit at a time, because she is low on credits — so the work is four, in this order:
+schema, drawer, attachments, report.
+
+### An issue is a request, and the header is typed once
+
+Amber: *"each one of these issues have its own record id but you only enter the job number,
+reported by, identifies at, date once so you can then have a status, date booked, and
+followup for each"*. Asked which shape, she chose **a request per issue** — so one drawer
+posts N requests, `1042-01-M3`, `-M4`, `-M5`, sharing a `maintenance_request_batch_id`.
+
+The form is now: **Job · Date identified · Identified at · Reported by**, then a repeating
+block of **Issue · Details · Assigned to · Attach files**, then **+ Add**. *How it arrived*,
+*Trade*, *Priority* and *Owner* came off it. The columns stay, because email and form intake
+still set them.
+
+**What that costs, and it is visible:** no trade means no SLA, so everything logged here
+reads **No SLA** in the queue. That is what the health derivation has always said about a
+request with no category, not a new fault.
+
+### Attachments are built, and a defect photo is a document about the job
+
+Asked where the photos should live, Amber chose **`job-documents`, private** (question 0c,
+answered 14 September). So each file is written three times, and all three matter: the
+object into `jobs/<job>/…`, one `documents` row, and **two `document_links`** — one to the
+job, so it appears in that job's Documents list, and one to the request, so the issue knows
+its own pictures. A document is held once and attached as many times as it is about
+something; that is `0032`'s design, not a workaround.
+
+`0115` is the whole schema change: `job-documents` was created by `0110` with an
+`allowed_mime_types` list covering PDF, Word, HTML, Markdown and text, **and no image type
+at all** — so Storage refused a phone photo at the door before any policy was consulted.
+Five image types were added, HEIC among them because an iPhone's camera roll is HEIC.
+
+**The cost of private, written down before it surprises anybody:** a private object has no
+permanent URL. The report below cannot point at these images the way a shared document
+points at `report-images` — it has to embed the bytes or sign at the moment of building,
+and a signed link in an email stops working.
+
+### One reading left open
+
+**"Trades or contractors" is read as the `contractor` classification**, because it is the
+only one in the system that means a trade — `classifications` holds client, contractor,
+supplier, consultant, authority, other. Companies already on the job are offered whatever
+they are classified as, since being the plumber on 1042-01 is stronger evidence. **Question
+0d** asks whether Lofty wants a separate *Trade* classification.
+
+### The slideout's forms were condensed, everywhere
+
+Amber, 14 September: *"fix the spacing on the slideout drawer by removing the separator
+between each row so it is condensed and ensuring all fillable properties are same width and
+aligned and allow the details section to have more space to write with. remove descriptions
+and placeholder text"*.
+
+Scoped to `.side-panel`, **not** to Maintenance: every slideout draws the same `Field` rows,
+and fixing one would leave Contacts, Setup and the job drawer looking like a different app.
+A page's own forms keep the dashed rule, because down a full-width page it is what stops a
+long list of rows reading as one block. The control column is a **fixed 240px** rather than
+a minimum, which is what makes a date, a dropdown and a text box line up; it goes full width
+below 520px. Two smaller things fell out of it: `textarea.pf-input` was inheriting a 32px
+height and silently ignoring its own `rows`, and the date field's ✕ moved to the left of the
+box, because a native date input's right-hand end is the browser's calendar button and the
+✕ after it left that one row 27px short of the column.
+
+### Identified at is a CHECK, not a lookup table
+
+The nine values are Amber's, in her order. Making the list editable means a lookup table,
+a Setup screen and a migration — the swap to make when adding a tenth matters, and not
+before. The drawer sorts nothing: PCI → the inspectors → handover → 1, 2 and 3 month is a
+sequence, so the picker is `ordered`.
+
+### Still to build
+
+- **The maintenance report** — the last piece. Amber: select one or more jobs or projects, or
+  everything assigned to one person, and print or email a report with **each issue on its
+  own page**: job details, date reported, pictures, comments. Nothing of it is built.
+- **Date booked and follow-up have columns and no UI.** `0114` added
+  `maintenance_request_booked_on` and `_followup_on`; the request drawer does not yet show
+  them, so today they can only be set through the repository.
 
 ## 12 September, late — every job and project field has to belong to a process
 
