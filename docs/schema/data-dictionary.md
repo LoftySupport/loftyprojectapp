@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-755 properties across 100 tables.
+756 properties across 100 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 706 | In the migration and the types |
+| Created | 707 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -47,6 +47,7 @@ The change log. Since 0080 a trigger writes one row for every insert, update and
 | `activity_audit.activity_audit_jwt_sub` | Auth user | auth.uid() as text at write time. Kept for rows older than activity_audit_profile_id and for the people-activity report. Renamed from `jwt_sub` in 0080. | `text` | — | Nullable. Default auth.uid()::text. | Indexed with activity_audit_at. | Created | 2026-08-01 · Amber Beaumont — outside the migrations; renamed 0080 | 2026-08-01 · Amber Beaumont — outside the migrations; renamed 0080 |
 | `activity_audit.activity_audit_profile_id` | Who | The person, as a profile, resolved from auth.uid() at write time (0080). Null for a migration, a seed, or a trigger with nobody behind it — never a stand-in. | `uuid` | — | Nullable. No FK: the history outlives the account. | Indexed with activity_audit_at, newest first. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `activity_audit.activity_audit_job_id` | Job | The job the change was on, resolved from the row at write time: directly, or through its task, variation, process run or comment (0080). Null when the change was not about a job. | `text` | — | Nullable. No FK: history outlives the record. | Partial index (job, at desc). A job's Activity tab is this lookup across every table. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `activity_audit.activity_audit_maintenance_request_id` | Maintenance issue | The maintenance issue this audit row is about, resolved the same way the job and the project are. | `uuid` | — | Nullable, and null for the great majority of rows. Indexed partially. | Added by 0121, correcting 0120: that migration gave activity_events a maintenance parent, but nothing in the app reads activity_events — the Activity panel reads this table. Denormalised on purpose, because a record's history has to be an index lookup rather than a jsonb-path scan, which is what 0080 removed. It also catches rows about OTHER tables that belong to the issue: a comment, a task, a photo attached. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `activity_audit.activity_audit_project_id` | Project | The project, the same way — and a job's change carries its project, so a project's history includes its jobs' (0080). | `integer` | — | Nullable. No FK. | Partial index (project, at desc). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `activity_audit.activity_audit_origin` | Origin | Where the write came from: `app`, or the slug a sync worker set in app.sync_origin (0080). The loop guard: a system's own changes are never sent back to it, and the feed names the integration as the actor. | `text` | — | Not null, default 'app'. CHECK: a slug. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 

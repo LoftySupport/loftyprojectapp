@@ -3250,6 +3250,49 @@ the view not rebuilt at all (the column never reaches the board).
 **Not yet applied to the live project.**
 
 
+### 14 September — the audit trail knows which issue it is about (`0121`)
+
+**This corrects `0120`, and the mistake is the reason the entry exists.** `0120` gave
+`activity_events` a `maintenance_request_id` so an issue could have a history. Sound column,
+delivers nothing: **nothing in the app reads `activity_events`** — it is on `0080`'s
+audit-exempt list and appears in the repository only as a dictionary entry. The Activity panel
+reads **`activity_audit`**, through `listRecordActivity`, filtered on
+`activity_audit_job_id` and `activity_audit_project_id`.
+
+So `0120` added a parent to the table that *models* the feed and left the table that *feeds*
+it untouched. Caught while wiring the panel. The `0120` column stays — it is the right shape
+for that table and costs nothing.
+
+**A jsonb filter would have needed no migration and is still the wrong answer**, for two
+reasons. `0080`'s own note says the jsonb-path scans it inherited *"are gone with it"*: the
+denormalised `job_id` and `project_id` exist precisely so a record's history is an index
+lookup. And filtering `activity_audit_table = 'maintenance_requests'` would show only rows
+about the request — a photo attached, a task booked, a comment left all write audit rows on
+*other* tables, and every one belongs in the issue's history.
+
+So `private.audit_record_ids` gains a third OUT parameter and `log_activity_audit` stamps it,
+both the way the job and project already work. The trigger function is **rebuilt from its own
+`pg_get_functiondef` source** with three targeted replacements rather than retyped: `0080`'s
+body carries the exempt-table logic, the origin column and the snapshot handling, and a hand
+copy of all that is a copy that drifts.
+
+**Backfilled**, as `0080` backfilled the job and project when it added them — otherwise an
+issue's history would start the day the migration ran, on a record whose whole purpose is
+saying what happened. On the live project: **43 rows across 17 issues and 4 tables**.
+
+**Three assertions watched failing, and the third one twice.** The trigger not taught to stamp
+(*INSERT has more target columns than expressions*), the resolver never reading the column
+(*stamped &lt;NULL&gt;, expected …*), and the "carry the job up from the issue" branch removed.
+
+**That third break reported nothing the first time**, and the reason is worth keeping: a
+`maintenance_requests` row already holds `job_id` directly, so deleting the branch changed
+nothing about it. The branch exists for rows that name **only** the issue — a comment, a task
+— so the assertion now checks that a comment on the issue carries the job. Then the break
+bit: *a comment on the issue did not carry the job, so it is missing from the job's feed*.
+
+**Applied to the live project and verified there**, inside a rolled-back transaction.
+
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

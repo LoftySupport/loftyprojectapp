@@ -5,16 +5,44 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 277 changes since then —
+Unreleased: 278 changes since then —
+- Added: A maintenance issue keeps a history of who changed what, including the photos, tasks and comments on it
 - Added: A maintenance issue carries its own comments, activity and tasks, so a repair shows on the Tasks board beside everything else
 - Changed: A maintenance photo or video now has a permanent link, so a generated maintenance sheet still shows its pictures after it is emailed
 - Added: A maintenance issue takes video as well as photos
 - Fixed: A project's new address now carries its live jobs with it. A job still standing at the project's old address follows, keeping its own lot and res numbers, so "Lot 1, 14 Brodie Road" becomes "Lot 1, 28 Corner Street". A job given its own address since its title issued is left alone, as are closed and cancelled jobs.
-- Fixed: The check that every database view runs as its caller now tests the setting's value rather than only that it was written, so a view with the protection turned off can no longer pass it
-- …and 272 more.
+- …and 273 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
+
+## 14 September — the audit trail knows which issue it is about (`0121`), correcting `0120`
+
+**Where it stands:** same branch, applied live and verified. **This fixes a mistake I made in
+`0120` and it is worth reading before trusting that migration's Activity half.**
+
+`0120` gave `activity_events` a maintenance parent. Nothing in the app reads
+`activity_events` — the Activity panel reads `activity_audit`. So `0120` widened the table
+that *models* the feed and left the one that *feeds* it alone. `0121` adds
+`activity_audit_maintenance_request_id`, teaches `private.audit_record_ids` to resolve it and
+`log_activity_audit` to stamp it, and **backfills**: 43 rows across 17 issues and 4 tables on
+the live project, so an issue's history does not start today.
+
+A jsonb filter would have needed no migration and was still wrong twice over: `0080` removed
+exactly those scans on purpose, and it would have shown only rows about the request itself —
+not the photo, the task or the comment, which all belong in the issue's history.
+
+**One break reported nothing the first time**, which is the part worth keeping: removing the
+"carry the job up from the issue" branch changed nothing, because a `maintenance_requests` row
+already holds `job_id`. The branch exists for rows that name **only** the issue. The assertion
+now uses a comment, and the break bites.
+
+**What is left of Amber's ask:** the drawer itself. The data layer is done and verified —
+`listComments`, `addComment`, `listRecordActivity` and `listTasks` all take a
+`maintenanceRequestId` now. What remains is UI: `RequestDetail` laid out like `NewRequests`,
+and the four panels pointed at the issue.
+
+---
 
 ## 14 September — a maintenance issue becomes a record you can work on (`0120`)
 

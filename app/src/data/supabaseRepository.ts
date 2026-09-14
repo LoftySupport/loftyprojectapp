@@ -505,7 +505,7 @@ type AuditRow = {
  * `fromAuditRow`, so the rename touched one place in the app rather than four.
  */
 const AUDIT_COLUMNS =
-  "activity_audit_id, activity_audit_table, activity_audit_operation, activity_audit_at, activity_audit_jwt_sub, activity_audit_old_row, activity_audit_new_row, activity_audit_profile_id, activity_audit_job_id, activity_audit_project_id, activity_audit_origin";
+  "activity_audit_id, activity_audit_table, activity_audit_operation, activity_audit_at, activity_audit_jwt_sub, activity_audit_old_row, activity_audit_new_row, activity_audit_profile_id, activity_audit_job_id, activity_audit_project_id, activity_audit_maintenance_request_id, activity_audit_origin";
 
 interface AuditDbRow {
   activity_audit_id: number;
@@ -1342,7 +1342,7 @@ export function createSupabaseRepository(): Repository {
     },
 
     async listComments(
-      ref: { projectId?: number; jobId?: string; feedbackId?: string }, limit = 50
+      ref: { projectId?: number; jobId?: string; feedbackId?: string; maintenanceRequestId?: string }, limit = 50
     ): Promise<CommentEntry[]> {
       let q = client.from("comments").select(COMMENT_COLUMNS);
       // Exactly one ref, the same rule the CHECK enforces — asking with neither would
@@ -1350,7 +1350,8 @@ export function createSupabaseRepository(): Repository {
       if (ref.projectId != null) q = q.eq("project_id", ref.projectId);
       else if (ref.jobId != null) q = q.eq("job_id", ref.jobId);
       else if (ref.feedbackId != null) q = q.eq("feedback_id", ref.feedbackId);
-      else throw new Error("listComments needs a projectId, a jobId or a feedbackId.");
+      else if (ref.maintenanceRequestId != null) q = q.eq("maintenance_request_id", ref.maintenanceRequestId);
+      else throw new Error("listComments needs a projectId, a jobId, a feedbackId or a maintenanceRequestId.");
 
       const { data, error } = await q
         // Pinned first — the official answer sits above the discussion (0064). Then
@@ -1366,13 +1367,13 @@ export function createSupabaseRepository(): Repository {
     },
 
     async addComment(
-      ref: { projectId?: number; jobId?: string; feedbackId?: string },
+      ref: { projectId?: number; jobId?: string; feedbackId?: string; maintenanceRequestId?: string },
       body: string,
       mentions: string[] = [],
       standing: { internal?: boolean; stage?: FeedbackStage } = {}
     ): Promise<CommentEntry> {
-      if (ref.projectId == null && ref.jobId == null && ref.feedbackId == null) {
-        throw new Error("addComment needs a projectId, a jobId or a feedbackId.");
+      if (ref.projectId == null && ref.jobId == null && ref.feedbackId == null && ref.maintenanceRequestId == null) {
+        throw new Error("addComment needs a projectId, a jobId, a feedbackId or a maintenanceRequestId.");
       }
       // The author is NOT sent: comments_stamp_created_by fills it from the session,
       // which is the only version of "who wrote this" a client cannot forge.
@@ -1382,6 +1383,7 @@ export function createSupabaseRepository(): Repository {
           project_id: ref.projectId ?? null,
           job_id: ref.jobId ?? null,
           feedback_id: ref.feedbackId ?? null,
+          maintenance_request_id: ref.maintenanceRequestId ?? null,
           comment_body: body,
           // Both refused below admin by guard_comment_standing_on_insert(), so a
           // non-admin sending them gets 42501 rather than a comment that quietly is
@@ -2339,11 +2341,14 @@ export function createSupabaseRepository(): Repository {
      * its jobs' rows. The two jsonb-path scans 0058 needed are gone with it.
      */
     async listRecordActivity(
-      opts: { projectId?: number; jobId?: string; limit?: number }
+      opts: { projectId?: number; jobId?: string; maintenanceRequestId?: string; limit?: number }
     ): Promise<RecordActivity[]> {
       const limit = opts.limit ?? 50;
       let q = client.from("activity_audit").select(AUDIT_COLUMNS);
-      if (opts.jobId) q = q.eq("activity_audit_job_id", opts.jobId);
+      // The issue first: it is the narrowest scope, and an issue's rows also carry their
+      // job (0121), so asking by job would swamp the drawer with the whole house's history.
+      if (opts.maintenanceRequestId) q = q.eq("activity_audit_maintenance_request_id", opts.maintenanceRequestId);
+      else if (opts.jobId) q = q.eq("activity_audit_job_id", opts.jobId);
       else if (opts.projectId != null) q = q.eq("activity_audit_project_id", opts.projectId);
       else return [];
       const { data, error } = await q.order("activity_audit_at", { ascending: false }).limit(limit);
@@ -2463,12 +2468,17 @@ export function createSupabaseRepository(): Repository {
 
     async listTasks(opts: {
       jobId?: string; projectId?: number; assigneeId?: string; teams?: TeamId[]; all?: boolean;
+      maintenanceRequestId?: string;
     }): Promise<TaskEntry[]> {
       let q = client.from("task_display").select(TASK_COLUMNS);
       // Exactly one scope. Asking with none would quietly return every task in the
       // company — the Tasks board's "All tasks" tab does exactly that, which is why
       // `all` exists, but only as an explicit ask rather than the fallthrough.
-      if (opts.jobId != null) q = q.eq("job_id", opts.jobId);
+      // Narrows WITHIN a job rather than replacing it (0120): a maintenance task keeps its
+      // job_id, which is what puts it on the board, so this is checked first and the job
+      // filter below is the broader question.
+      if (opts.maintenanceRequestId != null) q = q.eq("maintenance_request_id", opts.maintenanceRequestId);
+      else if (opts.jobId != null) q = q.eq("job_id", opts.jobId);
       else if (opts.projectId != null) q = q.eq("project_id", opts.projectId);
       else if (opts.assigneeId != null) q = q.eq("task_assignee_id", opts.assigneeId);
       else if (opts.teams != null) q = q.in("task_owning_team", opts.teams);

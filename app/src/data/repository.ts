@@ -207,7 +207,7 @@ export interface Repository {
    * "latest update". Exactly one of the two refs, matching the CHECK on `comments`.
    */
   listComments(
-    ref: { projectId?: number; jobId?: string; feedbackId?: string },
+    ref: { projectId?: number; jobId?: string; feedbackId?: string; maintenanceRequestId?: string },
     limit?: number
   ): Promise<CommentEntry[]>;
 
@@ -225,7 +225,7 @@ export interface Repository {
    * in `comment_mentions`, which is what the bell reads.
    */
   addComment(
-    ref: { projectId?: number; jobId?: string; feedbackId?: string },
+    ref: { projectId?: number; jobId?: string; feedbackId?: string; maintenanceRequestId?: string },
     body: string,
     mentions?: string[],
     /**
@@ -419,7 +419,7 @@ export interface Repository {
    * admin-only, and this panel would have rendered empty for almost everybody while
    * looking right to whoever built it.
    */
-  listRecordActivity(opts: { projectId?: number; jobId?: string; limit?: number }): Promise<RecordActivity[]>;
+  listRecordActivity(opts: { projectId?: number; jobId?: string; maintenanceRequestId?: string; limit?: number }): Promise<RecordActivity[]>;
 
   /**
    * The newest comment on each of these jobs, keyed by job number (0059).
@@ -458,6 +458,11 @@ export interface Repository {
    */
   listTasks(opts: {
     jobId?: string; projectId?: number; assigneeId?: string; teams?: TeamId[]; all?: boolean;
+    /**
+     * The tasks on one maintenance issue (0120). Narrows within a job rather than replacing
+     * it: a maintenance task keeps its `jobId`, which is what puts it on the board.
+     */
+    maintenanceRequestId?: string;
   }): Promise<TaskEntry[]>;
 
   /**

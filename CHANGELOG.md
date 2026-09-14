@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- A maintenance issue keeps a history of who changed what, including the photos, tasks and comments on it
 - A maintenance issue carries its own comments, activity and tasks, so a repair shows on the Tasks board beside everything else
 - A maintenance issue takes video as well as photos
 - Paste a list into a new maintenance request and each line becomes its own issue, bullets and numbering stripped
