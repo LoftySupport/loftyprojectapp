@@ -3343,6 +3343,13 @@ export interface RecordDocument extends Doc {
   /** Which record this attachment is for. Exactly one, by 0032's constraint. */
   jobId: string | null;
   projectId: number | null;
+  /**
+   * The maintenance issue this attachment is for (0115). A photo of a cracked tile is
+   * filed twice — once against the job, so it appears in the job's Documents list, and
+   * once against the issue, so the issue knows its own pictures. Two links, one document:
+   * 0032's design rather than a workaround.
+   */
+  maintenanceRequestId: Uuid | null;
   attachedAt: IsoDateTime;
 }
 

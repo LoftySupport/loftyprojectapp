@@ -39,20 +39,49 @@ still set them.
 reads **No SLA** in the queue. That is what the health derivation has always said about a
 request with no category, not a new fault.
 
-### Two placeholders, both deliberate, both needing Amber
+### Attachments are built, and a defect photo is a document about the job
 
-**1. Attach files is a labelled row with a note and no control.** Photos, PDFs and taking a
-photo need a storage bucket, a `document_links` row per issue and a signed read — that is a
-change of its own size, not a field. Amber, 14 September: *"if anything is a large chunk
-make a note of it in handoff and just leave a placeholder for it to be added in clearly
-identified but check first with me"*. This is that note. **Question 0c** in
-[`docs/open-questions.md`](docs/open-questions.md) asks which bucket the photos belong in.
+Asked where the photos should live, Amber chose **`job-documents`, private** (question 0c,
+answered 14 September). So each file is written three times, and all three matter: the
+object into `jobs/<job>/…`, one `documents` row, and **two `document_links`** — one to the
+job, so it appears in that job's Documents list, and one to the request, so the issue knows
+its own pictures. A document is held once and attached as many times as it is about
+something; that is `0032`'s design, not a workaround.
 
-**2. "Trades or contractors" is read as the `contractor` classification**, because it is the
+`0115` is the whole schema change: `job-documents` was created by `0110` with an
+`allowed_mime_types` list covering PDF, Word, HTML, Markdown and text, **and no image type
+at all** — so Storage refused a phone photo at the door before any policy was consulted.
+Five image types were added, HEIC among them because an iPhone's camera roll is HEIC.
+
+**The cost of private, written down before it surprises anybody:** a private object has no
+permanent URL. The report below cannot point at these images the way a shared document
+points at `report-images` — it has to embed the bytes or sign at the moment of building,
+and a signed link in an email stops working.
+
+### One reading left open
+
+**"Trades or contractors" is read as the `contractor` classification**, because it is the
 only one in the system that means a trade — `classifications` holds client, contractor,
 supplier, consultant, authority, other. Companies already on the job are offered whatever
 they are classified as, since being the plumber on 1042-01 is stronger evidence. **Question
 0d** asks whether Lofty wants a separate *Trade* classification.
+
+### The slideout's forms were condensed, everywhere
+
+Amber, 14 September: *"fix the spacing on the slideout drawer by removing the separator
+between each row so it is condensed and ensuring all fillable properties are same width and
+aligned and allow the details section to have more space to write with. remove descriptions
+and placeholder text"*.
+
+Scoped to `.side-panel`, **not** to Maintenance: every slideout draws the same `Field` rows,
+and fixing one would leave Contacts, Setup and the job drawer looking like a different app.
+A page's own forms keep the dashed rule, because down a full-width page it is what stops a
+long list of rows reading as one block. The control column is a **fixed 240px** rather than
+a minimum, which is what makes a date, a dropdown and a text box line up; it goes full width
+below 520px. Two smaller things fell out of it: `textarea.pf-input` was inheriting a 32px
+height and silently ignoring its own `rows`, and the date field's ✕ moved to the left of the
+box, because a native date input's right-hand end is the browser's calendar button and the
+✕ after it left that one row 27px short of the column.
 
 ### Identified at is a CHECK, not a lookup table
 
@@ -63,8 +92,7 @@ sequence, so the picker is `ordered`.
 
 ### Still to build
 
-- **Attachments per issue** — PR #78, blocked on question 0c.
-- **The maintenance report** — PR #79. Amber: select one or more jobs or projects, or
+- **The maintenance report** — the last piece. Amber: select one or more jobs or projects, or
   everything assigned to one person, and print or email a report with **each issue on its
   own page**: job details, date reported, pictures, comments. Nothing of it is built.
 - **Date booked and follow-up have columns and no UI.** `0114` added
