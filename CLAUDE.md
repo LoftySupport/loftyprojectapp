@@ -87,7 +87,9 @@ rather than references.
   `app/src/data/dictionary.ts`; `CHANGELOG.md`, the ticks in `ROADMAP.md` and the
   `<!-- generated:shipped -->` blocks in `README.md` and `HANDOFF.md` come from commit
   trailers via `node scripts/changelog.mjs`. An edit made in one of them is lost on the
-  next commit — put it in the source, or in the commit message.
+  next commit — put it in the source, or in the commit message. CI regenerates those four on
+  `main` after every merge (the `self-heal` job in `.github/workflows/ci.yml`), so a branch
+  whose copies are behind `main` is normal and the pull request check saying so is advisory.
 - **Every change carries a `Changelog:` trailer.** `Added:`, `Changed:`, `Fixed:`,
   `Removed:` — or `Changelog: skip` for something nobody outside the repo would notice.
   Add `Roadmap: <the item's text>` when it finishes a roadmap item.
