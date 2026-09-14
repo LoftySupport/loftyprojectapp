@@ -70,6 +70,52 @@ yours rather than a default.
 **Blocked on:** nothing. Both readings are one line in `guard_maintenance_request()`.
 
 
+### 0c. Where do a maintenance issue's photos live?
+
+**Blocking the attachments PR (#78).** The drawer draws *Attach files* as a labelled row
+with a note and no control, on purpose: photos, PDFs and taking a photo need a storage
+bucket, a link row per issue and a signed read, which is a change of its own size.
+
+The app has exactly two storage paths today and they behave oppositely — `job-documents`
+is **private**, read through a short-lived signed URL asked for at the moment somebody
+clicks; `report-images` is **public**, because Amber chose that on 7 September so an image
+in a shared document keeps working after the link is revoked.
+
+| Option | What it means |
+| --- | --- |
+| **`job-documents`, private** | A maintenance photo is filed against the job like any other document and appears in that job's Documents list. Nobody outside Lofty sees it without a signed link |
+| **A new `maintenance-photos` bucket, private** | The photos stay out of the job's document list, which keeps forty PCI snaps from burying the contract. A third bucket to govern |
+| **`report-images`, public** | The photos drop straight into the printed report with no signing. Anyone with the URL has the photo, for good |
+
+**Recommendation: the first.** A defect photo *is* a document about the job, the Documents
+panel already lists what is filed against a job, and `document_links` already carries
+`maintenance_request_id` — the plumbing exists. But the report in part 2 has to show these
+photos, and if that report is emailed outside Lofty the signed-URL question comes straight
+back, which is why this is yours rather than a default.
+
+**Blocked on:** this answer. Nothing of the upload is built.
+
+
+### 0d. Is a "trade" the same thing as a contractor?
+
+**Not blocking — the drawer works either way, and the reading it took is visible.**
+
+Amber, on the external assignee: *"any companies in the system that are trades or
+contractors"*. The `classifications` lookup holds **client, contractor, supplier,
+consultant, authority, other**. There is no *Trade*, so the picker offers companies
+classified `contractor`, plus any company already on the job whatever it is classified as —
+being the plumber on 1042-01 is stronger evidence than a classification nobody set.
+
+| Option | What it means |
+| --- | --- |
+| **Contractor is the trade** | Nothing changes. One classification, and a company that fixes things is a contractor |
+| **Add a Trade classification** | Bricklayer, plumber and tiler are *trades*; a project manager and a surveyor are *contractors*. A one-row insert and the picker widens to both |
+
+**Recommendation: leave it as one** until the imported company list shows the distinction
+is real in Lofty's own data. Splitting a classification is easy; merging two back after
+people have used both is not.
+
+
 ### 1. "Dear [Owner Name]" — which party on the record is that? *(parked)*
 
 **Parked by Amber, 10 September: _"that will be later when linking a contact or company to
