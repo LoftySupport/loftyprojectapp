@@ -150,6 +150,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- A project's new address now carries its live jobs with it. A job still standing at the project's old address follows, keeping its own lot and res numbers, so "Lot 1, 14 Brodie Road" becomes "Lot 1, 28 Corner Street". A job given its own address since its title issued is left alone, as are closed and cancelled jobs.
 - The check that every database view runs as its caller now tests the setting's value rather than only that it was written, so a view with the protection turned off can no longer pass it
 - A half-filled new maintenance request is kept when the drawer closes, so a stray click no longer loses a pasted list of issues
 - The person and company pickers show a chevron, so a field that only takes a name from the list no longer looks like a box you can type anything into
