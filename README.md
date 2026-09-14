@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 265 changes since then —
+Unreleased: 268 changes since then —
 - Added: Paste a list into a new maintenance request and each line becomes its own issue, bullets and numbering stripped
+- Added: A maintenance issue carries the day it was booked and the day it was done, on the board and in the drawer, with the follow-up date beside them
+- Changed: The maintenance board shows Identified, Booked and Completed, and who the issue is assigned to, in place of Trade and Owner
+- Added: A Maintenance section in the report builder — every issue as a table you can filter and group, or one page per issue with its details, saved as a template
 - Fixed: The person and company pickers show a chevron, so a field that only takes a name from the list no longer looks like a box you can type anything into
-- Added: Photos and files attach to a maintenance issue — from the phone's camera or library — and are filed against the job as well, so they appear in that job's Documents
-- Changed: Every slideout's form is condensed: no rules between rows, one column width for every field, and a Details box you can actually write in
-- Changed: New maintenance request takes the job, date, where it was identified and who reported it once, then as many issues as you need — each one its own request with its own number, assigned to a Lofty person or a contractor
-- …and 260 more.
+- …and 263 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
