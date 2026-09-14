@@ -10,11 +10,17 @@ import { useOneLine } from "../components/Toolbar";
 import { Field, Problem } from "../components/Form";
 import { PersonSelect } from "../components/PersonSelect";
 import { Select } from "../components/Select";
+import { DateField } from "../components/DateField";
+import { TypeaheadSelect } from "../components/TypeaheadSelect";
 import { LoadProblem } from "../components/SearchNotices";
 import {
-  MAINTENANCE_ASSIGNMENT_STATUS_LABELS, MAINTENANCE_HEALTH_LABELS, MAINTENANCE_ITEM_STATUS_LABELS, MAINTENANCE_PRIORITIES, MAINTENANCE_PRIORITY_LABELS,
-  MAINTENANCE_SOURCES, MAINTENANCE_SOURCE_LABELS, MAINTENANCE_STATUSES, MAINTENANCE_STATUS_LABELS,
-  type MaintenanceItem, type MaintenanceMessage, type MaintenancePriority, type MaintenanceRequest, type MaintenanceSource, type MaintenanceStatus
+  MAINTENANCE_ASSIGNEE_KINDS, MAINTENANCE_ASSIGNEE_KIND_LABELS,
+  MAINTENANCE_ASSIGNMENT_STATUS_LABELS, MAINTENANCE_HEALTH_LABELS,
+  MAINTENANCE_IDENTIFIED_AT, MAINTENANCE_IDENTIFIED_AT_LABELS,
+  MAINTENANCE_ITEM_STATUS_LABELS, MAINTENANCE_PRIORITIES, MAINTENANCE_PRIORITY_LABELS,
+  MAINTENANCE_SOURCE_LABELS, MAINTENANCE_STATUSES, MAINTENANCE_STATUS_LABELS,
+  type MaintenanceAssigneeKind, type MaintenanceIdentifiedAt, type MaintenanceItem, type MaintenanceMessage,
+  type MaintenancePriority, type MaintenanceRequest, type MaintenanceStatus
 } from "../data/types";
 import "../components/ui.css";
 import "../components/processes.css";
@@ -137,7 +143,14 @@ export function MaintenancePage() {
                     </td>
                     <td>{r.jobAddress}</td>
                     <td>{r.summary}{r.isWarranty && <span className="slot-chip" style={{ marginLeft: 6 }}>warranty</span>}</td>
-                    <td className="muted nowrap">{new Date(r.reportedAt).toLocaleDateString()} · {MAINTENANCE_SOURCE_LABELS[r.source]}</td>
+                    {/* The identified date and place when somebody recorded them, and the
+                        logged date and channel when nobody did. Showing "Logged by staff"
+                        beside a request that says PCI would hide the fact that was typed. */}
+                    <td className="muted nowrap">
+                      {new Date(r.identifiedOn ?? r.reportedAt).toLocaleDateString()}
+                      {" · "}
+                      {r.identifiedAt ? MAINTENANCE_IDENTIFIED_AT_LABELS[r.identifiedAt] : MAINTENANCE_SOURCE_LABELS[r.source]}
+                    </td>
                     <td className="muted">{r.categoryName ?? "—"}</td>
                     <td className="muted">{r.ownerName ?? "—"}</td>
                     <td className="num">{r.itemsTotal ? `${r.itemsDone} / ${r.itemsTotal}` : <span className="muted">—</span>}</td>
@@ -157,7 +170,9 @@ export function MaintenancePage() {
 
       {creating && (
         <SidePanel open title="New maintenance request" onClose={() => setParam({ new: null })}>
-          <NewRequest jobId={jobFilter} onDone={id => { bump(); setParam({ new: null, request: id }); }} />
+          {/* One issue opens on save; several do not, because opening the first of five is
+              a choice nobody made — the queue behind the drawer is already showing them. */}
+          <NewRequests jobId={jobFilter} onDone={ids => { bump(); setParam({ new: null, request: ids.length === 1 ? ids[0] : null }); }} />
         </SidePanel>
       )}
       {/* The number and the summary come from the row that was clicked, so the head says
@@ -173,66 +188,292 @@ export function MaintenancePage() {
 }
 
 // -----------------------------------------------------------------------------------------
-function NewRequest({ jobId, onDone }: { jobId: string | null; onDone: (id: string) => void }) {
+/**
+ * One drawer, one header, as many issues as the walk turned up.
+ *
+ * Amber, 14 September: *"each one of these issues have its own record id but you only
+ * enter the job number, reported by, identifies at, date once so you can then have a
+ * status, date booked, and followup for each"* — and, asked which shape that should take,
+ * she chose **a request per issue**. So this form types the header once and posts N
+ * requests, all carrying the same `batchId`, all numbered by the database.
+ *
+ * WHAT CAME OFF THE FORM, AND WHAT THAT COSTS
+ *
+ *   How it arrived, the trade, the priority and the owner are gone (Amber, item 2). The
+ *   columns are still there and email, form and portal intake still set them. The visible
+ *   consequence: no trade means no SLA, so the queue reads **No SLA** for everything logged
+ *   here. That is the readout the health derivation has always given a request with no
+ *   category, and it is better than a priority nobody chose being quoted back as agreed.
+ *
+ * THE POST IS SEQUENTIAL, NOT PARALLEL
+ *
+ *   `assign_maintenance_request_number()` takes the next number by bumping
+ *   `jobs.job_maintenance_seq_high_water`. Five inserts on one job at once are five
+ *   updates contending for one row; one at a time is both correct and, on five rows, not
+ *   slower in any way a person can see. A failure part-way through is reported as what it
+ *   is — the ones that landed stay landed, and only the rest are left in the form.
+ */
+interface IssueDraft {
+  /** React's key. The record id is the database's, and it does not exist until save. */
+  key: string;
+  summary: string;
+  description: string;
+  assigneeKind: MaintenanceAssigneeKind;
+  assigneeProfileId: string | null;
+  assignedCompanyId: string | null;
+  /** Chosen, not uploaded. The request has no id to attach them to until it is saved. */
+  files: File[];
+}
+
+let issueSeed = 0;
+const blankIssue = (): IssueDraft => ({
+  key: `issue-${++issueSeed}`, summary: "", description: "",
+  assigneeKind: "internal", assigneeProfileId: null, assignedCompanyId: null, files: []
+});
+
+/** `yyyy-mm-dd` for the browser's own day, which at Lofty is the Adelaide day. */
+function todayIso(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/** The two teams Amber named for an internal repairer. Anyone already chosen stays offered. */
+const REPAIR_TEAMS = ["maintenance", "construction"] as const;
+
+function NewRequests({ jobId, onDone }: { jobId: string | null; onDone: (ids: string[]) => void }) {
   const repo = useRepository();
   const { data: jobs } = useQuery(r => r.listJobs(), []);
-  const { data: contacts } = useQuery(r => r.listContacts(), []);
-  const { data: categories } = useQuery(r => r.listMaintenanceCategories(), []);
+  const [companyReload, setCompanyReload] = useState(0);
+  const { data: companies } = useQuery(r => r.listCompanies(), [], [companyReload]);
+
   const [job, setJob] = useState<string | null>(jobId);
-  const [summary, setSummary] = useState("");
-  const [description, setDescription] = useState("");
-  const [source, setSource] = useState<MaintenanceSource>("phone");
-  const [priority, setPriority] = useState<MaintenancePriority>("normal");
-  const [reporter, setReporter] = useState<string | null>(null);
-  const [category, setCategory] = useState<string | null>(null);
-  const [owner, setOwner] = useState<string | null>(null);
+  // Today, and clearable — both halves are Amber's: "default to today's date, but can be
+  // cleared or edited". Which is why the column behind it is nullable.
+  const [identifiedOn, setIdentifiedOn] = useState<string | null>(todayIso());
+  const [identifiedAt, setIdentifiedAt] = useState<MaintenanceIdentifiedAt | null>(null);
+  const [reportedBy, setReportedBy] = useState<string | null>(null);
+  const [issues, setIssues] = useState<IssueDraft[]>(() => [blankIssue()]);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const submit = async () => {
-    if (!job || !summary.trim()) return;
-    setBusy(true); setProblem(null);
+  // The companies on this job come first in the external picker — Amber: "prioritising
+  // those who are linked to the job". Only while a job is chosen; there is nothing to
+  // prioritise by before that.
+  const { data: parties } = useQuery(r => job ? r.listRecordParties({ jobId: job }) : Promise.resolve([]), [], [job]);
+  const onThisJob = useMemo(() => {
+    const m = new Map<string, string>();
+    parties.forEach(p => { if (p.companyId && !p.endedOn) m.set(p.companyId, p.roleName); });
+    return m;
+  }, [parties]);
+
+  /**
+   * Trades and contractors, with the ones already on the job at the top.
+   *
+   * `contractor` is the only classification in the system that means "a trade" — there is
+   * no separate Trade classification, and inventing one here would be a value nobody set.
+   * A company on the job is offered whatever it is classified as, because being the
+   * plumber on 1042-01 is the stronger evidence.
+   */
+  const companyOptions = useMemo(() => {
+    const pool = companies.filter(c => c.isActive && (c.classificationIds.includes("contractor") || onThisJob.has(c.id)));
+    const opt = (c: typeof pool[number]) => ({
+      value: c.id,
+      label: c.name,
+      sub: onThisJob.get(c.id) ?? null,
+      group: onThisJob.has(c.id) ? "On this job" : "Other contractors"
+    });
+    // Group order follows first appearance, so the job's companies are listed first here.
+    return [...pool.filter(c => onThisJob.has(c.id)), ...pool.filter(c => !onThisJob.has(c.id))].map(opt);
+  }, [companies, onThisJob]);
+
+  const patch = (key: string, change: Partial<IssueDraft>) =>
+    setIssues(list => list.map(i => i.key === key ? { ...i, ...change } : i));
+
+  /**
+   * A company typed into the picker that matches nothing. Amber: *"if it isn't there they
+   * can type in and it can says 'Add new company' when no results and by pressing enter it
+   * will add that company in as typed as contractor"*. It is a real `companies` row, with
+   * the contractor classification and nothing else invented — a manager still approves it,
+   * which is what `company_approved_at` has been for since 0082.
+   */
+  const addCompany = async (key: string, name: string) => {
+    setProblem(null);
     try {
-      const r = await repo.createMaintenanceRequest({ jobId: job, summary: summary.trim(), description: description.trim() || null, source, priority, reportedByContactId: reporter, categoryId: category, ownerProfileId: owner });
-      onDone(r.id);
+      const made = await repo.createCompany({ name, classificationIds: ["contractor"] });
+      setCompanyReload(n => n + 1);
+      patch(key, { assignedCompanyId: made.id });
     } catch (e) { setProblem(e instanceof Error ? e.message : String(e)); }
-    finally { setBusy(false); }
+  };
+
+  const ready = issues.filter(i => i.summary.trim() !== "");
+  const canSave = Boolean(job) && ready.length > 0 && !busy;
+
+  const submit = async () => {
+    if (!job || ready.length === 0) return;
+    setBusy(true); setProblem(null);
+    const batchId = crypto.randomUUID();
+    const made: string[] = [];
+    const landed = new Set<string>();
+    const refusedFiles: string[] = [];
+    try {
+      for (const i of ready) {
+        const r = await repo.createMaintenanceRequest({
+          jobId: job,
+          summary: i.summary.trim(),
+          description: i.description.trim() || null,
+          identifiedOn, identifiedAt,
+          reportedByProfileId: reportedBy,
+          batchId,
+          assigneeKind: i.assigneeKind,
+          assigneeProfileId: i.assigneeKind === "internal" ? i.assigneeProfileId : null,
+          assignedCompanyId: i.assigneeKind === "external" ? i.assignedCompanyId : null
+        });
+        made.push(r.id);
+        landed.add(i.key);
+        // After the request, because the attachment needs its id. A file that will not
+        // upload must not undo a request that saved: the issue is logged either way and
+        // the failure is reported with the file named, rather than the whole batch
+        // reading as refused because somebody picked a video.
+        if (i.files.length) {
+          try { await repo.attachMaintenanceFiles({ requestId: r.id, jobId: job, files: i.files }); }
+          catch (e) { refusedFiles.push(e instanceof Error ? e.message : String(e)); }
+        }
+      }
+      if (refusedFiles.length) {
+        // Every issue landed; some files did not. Said here rather than swallowed, and the
+        // drawer stays open so the files can be picked again on the request itself.
+        setProblem(`${made.length} logged. ${refusedFiles.join(" ")}`);
+        return;
+      }
+      onDone(made);
+    } catch (e) {
+      // Half a batch is a real state and the form says so rather than pretending nothing
+      // happened. What landed is taken out of the form, so pressing the button again
+      // finishes the job instead of logging the first ones twice.
+      const said = e instanceof Error ? e.message : String(e);
+      setProblem(made.length
+        ? `${made.length} of ${ready.length} logged. The next one was refused: ${said}`
+        : said);
+      if (made.length) setIssues(list => list.filter(i => !landed.has(i.key)));
+    } finally { setBusy(false); }
   };
 
   return (
     <div className="stack">
-      <Text type="text3" color="secondary" ellipsis={false} element="p">
-        Logged by hand — a call, a walk-in, an email you are copying in. The number is given on save; the due date comes from the trade's SLA.
-      </Text>
       {problem && <Problem>{problem}</Problem>}
+
+      {/* The header is a panel too, so its controls sit at the same inset as the issue
+          cards' and the whole column lines up — Amber, 14 September: "ensuring all
+          fillable properties are same width and aligned". Two cards at different insets
+          is what "aligned" rules out. */}
+      <section className="panel">
       <Field label="Job" required>
-        <Select aria-label="Job" clearable placeholder="Job…" value={job} onChange={setJob}
+        <Select aria-label="Job" clearable value={job} onChange={setJob}
           options={jobs.map(j => ({ value: j.id, label: `${j.id} · ${j.currentAddress}` }))} />
       </Field>
-      <Field label="What is wrong" required>
-        <TextField size="small" id="new-request-summary" inputAriaLabel="Summary" placeholder="One line — leaking ensuite tap" value={summary} onChange={setSummary} />
+      <Field label="Date identified">
+        <DateField value={identifiedOn} onChange={setIdentifiedOn} ariaLabel="Date identified" />
       </Field>
-      <Field label="Details">
-        <textarea className="pf-input" rows={3} aria-label="Details" value={description} onChange={e => setDescription(e.target.value)} placeholder="What the homeowner said, when it started, anything a contractor should know" />
+      {/* `ordered`: Amber's list runs PCI → the inspectors → handover → the 1, 2 and 3
+          month inspections. That sequence is the information, so it is not sorted. */}
+      <Field label="Identified at">
+        <Select aria-label="Identified at" clearable ordered
+          value={identifiedAt} onChange={v => setIdentifiedAt(v as MaintenanceIdentifiedAt | null)}
+          options={MAINTENANCE_IDENTIFIED_AT.map(k => ({ value: k, label: MAINTENANCE_IDENTIFIED_AT_LABELS[k] }))} />
       </Field>
-      <Field label="How it arrived">
-        <Select aria-label="Source" value={source} onChange={v => setSource(v as MaintenanceSource)} options={MAINTENANCE_SOURCES.filter(s => s !== "api").map(s => ({ value: s, label: MAINTENANCE_SOURCE_LABELS[s] }))} />
+      <Field label="Reported by">
+        <PersonSelect aria-label="Reported by" placeholder="" value={reportedBy} onChange={setReportedBy} />
       </Field>
-      <Field label="Reported by" hint="A contact — add them under Contacts first if they are new">
-        <Select aria-label="Reported by" clearable placeholder="Contact…" value={reporter} onChange={setReporter}
-          options={contacts.map(c => ({ value: c.id, label: c.fullName + (c.primaryEmail ? ` · ${c.primaryEmail}` : "") }))} />
-      </Field>
-      <Field label="Trade" hint={categories.length === 0 ? "No categories yet — set them in Setup → Maintenance" : undefined}>
-        <Select aria-label="Trade" clearable placeholder="Trade…" value={category} onChange={setCategory} options={categories.map(c => ({ value: c.id, label: c.name }))} />
-      </Field>
-      <Field label="Priority">
-        <Select aria-label="Priority" value={priority} onChange={v => setPriority(v as MaintenancePriority)} options={MAINTENANCE_PRIORITIES.map(p => ({ value: p, label: MAINTENANCE_PRIORITY_LABELS[p] }))} />
-      </Field>
-      <Field label="Owner">
-        <PersonSelect aria-label="Owner" placeholder="Lofty person…" value={owner} onChange={setOwner} />
-      </Field>
+      </section>
+
+      {issues.map((issue, n) => (
+        <section key={issue.key} className="panel">
+          <div className="field-inline" style={{ justifyContent: "space-between", marginBottom: "var(--space-8)" }}>
+            <Text type="text2" weight="medium" element="h3">Issue {n + 1}</Text>
+            {issues.length > 1 && (
+              <Button size="small" kind="tertiary" onClick={() => setIssues(list => list.filter(i => i.key !== issue.key))}>
+                Remove
+              </Button>
+            )}
+          </div>
+          <Field label="Issue" required>
+            <TextField size="small" id={`${issue.key}-summary`} inputAriaLabel={`Issue ${n + 1}`}
+              value={issue.summary} onChange={v => patch(issue.key, { summary: v })} />
+          </Field>
+          <Field label="Details">
+            {/* Six rows, not three — Amber: "allow the details section to have more space
+                to write with". The width stays the column's so it lines up with the rest. */}
+            <textarea className="pf-input" rows={6} aria-label={`Details for issue ${n + 1}`}
+              value={issue.description} onChange={e => patch(issue.key, { description: e.target.value })} />
+          </Field>
+          <Field label="Assigned to">
+            <div className="stack-tight">
+              <div className="field-inline" role="radiogroup" aria-label={`Assigned to, issue ${n + 1}`}>
+                {MAINTENANCE_ASSIGNEE_KINDS.map(kind => (
+                  <label key={kind} className="issue-draft-radio">
+                    <input type="radio" name={`${issue.key}-kind`} value={kind}
+                      checked={issue.assigneeKind === kind}
+                      // The other half is cleared with the switch: the database refuses a
+                      // row that names a person AND a company, and clearing here means the
+                      // refusal never reaches somebody who cannot act on it.
+                      onChange={() => patch(issue.key, { assigneeKind: kind, assigneeProfileId: null, assignedCompanyId: null })} />
+                    <Text type="text2" element="span">{MAINTENANCE_ASSIGNEE_KIND_LABELS[kind]}</Text>
+                  </label>
+                ))}
+              </div>
+              {issue.assigneeKind === "internal" ? (
+                <PersonSelect aria-label={`Internal assignee, issue ${n + 1}`} placeholder=""
+                  only={REPAIR_TEAMS} emptyText="Nobody on Maintenance or Construction by that name"
+                  value={issue.assigneeProfileId} onChange={v => patch(issue.key, { assigneeProfileId: v })} />
+              ) : (
+                <TypeaheadSelect aria-label={`Contractor, issue ${n + 1}`} clearable placeholder=""
+                  options={companyOptions} value={issue.assignedCompanyId}
+                  onChange={v => patch(issue.key, { assignedCompanyId: v })}
+                  emptyText="No contractor by that name"
+                  createLabel={typed => `Add new company “${typed}”`}
+                  onCreate={name => { void addCompany(issue.key, name); }} />
+              )}
+            </div>
+          </Field>
+          {/* One input, not two. `accept` without `capture` is what gives an iPhone the
+              choice of Photo Library, Take Photo or Browse — adding `capture` would force
+              the camera and take away choosing one already taken, which is the commoner
+              half of what Amber asked for. Uploaded after the request exists to hold it. */}
+          <Field label="Attach files">
+            <div className="issue-files">
+              <input type="file" multiple accept="image/*,application/pdf"
+                aria-label={`Attach files to issue ${n + 1}`}
+                onChange={e => {
+                  const picked = Array.from(e.target.files ?? []);
+                  if (picked.length) patch(issue.key, { files: [...issue.files, ...picked] });
+                  // Cleared so picking the same file twice in a row still fires a change.
+                  e.target.value = "";
+                }} />
+              {issue.files.map((f, at) => (
+                <div className="issue-file" key={`${f.name}-${at}`}>
+                  <Text type="text3" color="secondary" element="span">{f.name}</Text>
+                  <Button size="xs" kind="tertiary"
+                    onClick={() => patch(issue.key, { files: issue.files.filter((_, i) => i !== at) })}>
+                    Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </Field>
+        </section>
+      ))}
+
+      <div className="field-inline">
+        <Button size="small" kind="tertiary" onClick={() => setIssues(list => [...list, blankIssue()])}>
+          + Add
+        </Button>
+      </div>
+
       <div className="field-inline" style={{ justifyContent: "flex-end" }}>
-        <Button size="small" disabled={busy || !job || !summary.trim()} onClick={submit}>Log request</Button>
+        <Button size="small" disabled={!canSave} onClick={submit}>
+          {ready.length > 1 ? `Log ${ready.length} issues` : "Log issue"}
+        </Button>
       </div>
     </div>
   );
@@ -254,6 +495,17 @@ function RequestDetail({ id, onChanged }: { id: string; onChanged: () => void })
   const [newItem, setNewItem] = useState({ description: "", location: "", categoryId: null as string | null });
 
   const bump = () => { setReload(n => n + 1); onChanged(); };
+  const { data: files } = useQuery(r => r.listMaintenanceDocuments(id), [], [id, reload]);
+  /**
+   * `job-documents` is private, so there is no URL to render into an href — one is asked
+   * for when somebody clicks and it expires in five minutes. Null when storage refuses,
+   * which says the copy is gone rather than opening an error page.
+   */
+  const openFile = async (path: string | null) => {
+    if (!path) return;
+    const url = await repo.jobDocumentUrl(path);
+    if (url) window.open(url, "_blank", "noopener");
+  };
   async function run(fn: () => Promise<unknown>) {
     setProblem(null);
     try { await fn(); bump(); }
@@ -330,6 +582,36 @@ function RequestDetail({ id, onChanged }: { id: string; onChanged: () => void })
           ) : <Text type="text3" color="secondary" ellipsis={false} element="p">Nobody recorded — the closing email has nowhere to go until a contact is set.</Text>}
           {r.description && <Text type="text2" ellipsis={false} element="p" style={{ whiteSpace: "pre-wrap" }}>{r.description}</Text>}
         </div>
+      </section>
+
+      {/* The photos and files on this issue (0115). Opened through a signed URL asked for
+          at the moment somebody clicks — `job-documents` is private and has no permanent
+          address, which is the choice Amber made on 14 September. Removing one here takes
+          it off the ISSUE; the copy filed against the job stays, because they are two
+          links to one document. */}
+      <section className="panel">
+        <div className="panel-head">
+          <Text type="text2" weight="bold">Photos and files</Text>
+          <Text type="text3" color="secondary">{files.length === 0 ? "none yet" : `${files.length} attached`}</Text>
+        </div>
+        {files.length === 0 && <Text type="text3" color="secondary" ellipsis={false} element="p">Nothing attached. Add photos when the issue is logged, or here.</Text>}
+        {files.map(f => (
+          <div key={f.linkId} className="issue-file" style={{ padding: "var(--space-4) 0" }}>
+            <button type="button" className="link-button tap-link" onClick={() => void openFile(f.storagePath)}>{f.name}</button>
+            {canWrite && (
+              <Button size="xs" kind="tertiary" onClick={() => run(() => repo.removeRecordDocument(f.linkId))}>Remove</Button>
+            )}
+          </div>
+        ))}
+        {canWrite && !isClosed && (
+          <input type="file" multiple accept="image/*,application/pdf" aria-label="Attach files to this issue"
+            style={{ marginTop: "var(--space-8)" }}
+            onChange={e => {
+              const picked = Array.from(e.target.files ?? []);
+              e.target.value = "";
+              if (picked.length) void run(() => repo.attachMaintenanceFiles({ requestId: r.id, jobId: r.jobId, files: picked }));
+            }} />
+        )}
       </section>
 
       <section className="panel">

@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Photos and files attach to a maintenance issue — from the phone's camera or library — and are filed against the job as well, so they appear in that job's Documents
 - Setup - Properties flags every job and project field that no process collects, including the ones that are columns rather than properties, such as the address
 - Kanban columns collapse to a narrow strip, with Completed, Closed, Cancelled and Acquisition & Development folded by default
 - + New task on the Tasks board, which assigns a task to a person, a team and a job or project
@@ -144,6 +145,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- The person and company pickers show a chevron, so a field that only takes a name from the list no longer looks like a box you can type anything into
 - Dates from the neighbouring month were too faint to read in the job and task calendars, and so were the job entries sitting in those days
 - The "current" chip on a process slot used the brand orange as text on a pale orange background, which the app's own colour rule forbids and which was the hardest thing to read anywhere in the app
 - A date set by accident can be cleared again -- the job's completion date has an x, and emptying a date property no longer silently keeps the old value
@@ -204,6 +206,8 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- Every slideout's form is condensed: no rules between rows, one column width for every field, and a Details box you can actually write in
+- New maintenance request takes the job, date, where it was identified and who reported it once, then as many issues as you need — each one its own request with its own number, assigned to a Lofty person or a contractor
 - The job record's Process section shows every process, including ones nobody has started, with a tick box that marks one off in a single action
 - The job record's Process section now holds the processes themselves, and the sections below it follow the screen design's order
 - On a phone the job record's Tasks / Comments / Activity footer starts collapsed and opens with a chevron

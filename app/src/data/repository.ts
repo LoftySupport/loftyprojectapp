@@ -978,6 +978,29 @@ export interface Repository {
    */
   listRecordDocuments(opts: { jobId?: string; projectId?: number }): Promise<RecordDocument[]>;
   /**
+   * The photos and files on one maintenance issue (0115).
+   *
+   * Read off the request's own links, so taking a photo off the issue leaves the job's
+   * copy filed — which is what attaching one document twice is for.
+   */
+  listMaintenanceDocuments(requestId: Uuid): Promise<RecordDocument[]>;
+  /**
+   * Attach photos and files to a maintenance issue (0115).
+   *
+   * Amber, 14 September: *"add in a section to upload one or multiple a image, photo,
+   * file, pdfs, or take a photo"* — and, asked where they should live, **`job-documents`,
+   * private**: a defect photo is a document about the job, so it is filed against the job
+   * as well as against the issue and appears in that job's Documents list.
+   *
+   * Every read is a short-lived signed URL through `jobDocumentUrl`. There is no permanent
+   * address, deliberately — a photograph of somebody's house is not a thing to make
+   * public to anyone who ever sees a link.
+   *
+   * File by file, so eight photos from a walk do not all fail because the seventh was a
+   * video. What was refused is reported by name with the database's own words.
+   */
+  attachMaintenanceFiles(input: { requestId: Uuid; jobId: string; files: File[] }): Promise<RecordDocument[]>;
+  /**
    * File a document that lives in SharePoint, as a URL (0103).
    *
    * Amber, 10 September: *"when adding a document I need to be able to save it as a url
@@ -1240,6 +1263,8 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "publishReportDocument",
   "jobDocumentUrl",
   "listRecordDocuments",
+  "listMaintenanceDocuments",
+  "attachMaintenanceFiles",
   "addDocumentUrl",
   "removeRecordDocument",
   "listRecentDocuments",
@@ -1454,6 +1479,8 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   unshareReportDocument: "report_documents",
   publishReportDocument: "report_documents + documents + document_links + storage: job-documents",
   jobDocumentUrl: "storage: job-documents",
+  listMaintenanceDocuments: "document_links",
+  attachMaintenanceFiles: "documents + document_links + storage: job-documents",
   listRecordDocuments: "documents + document_links",
   addDocumentUrl: "documents + document_links",
   removeRecordDocument: "document_links",

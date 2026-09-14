@@ -18,6 +18,11 @@
 }
 /* Focus is a ring from the palette, not the browser's default blue. The same ring the
    saved-view controls draw, so a keyboard user sees one signal everywhere. */
+/* A textarea is not a 32px box. `.pf-input` sets a height for the text inputs it was
+   written for, and a textarea inheriting it silently ignores its own `rows` — the
+   maintenance drawer's Details asked for six lines and drew one. Contacts sets its own
+   height inline and is unaffected either way. */
+textarea.pf-input { height: auto; padding: var(--space-4) var(--space-8); line-height: 1.45; resize: vertical; }
 .pf-input:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; border-color: var(--primary-color); }
 .pf-input::placeholder { color: var(--secondary-text-color); }
 .pf-input:disabled { cursor: not-allowed; }
