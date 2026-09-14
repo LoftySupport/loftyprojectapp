@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button, Heading, Text, TextField } from "@vibe/core";
 import { useQuery, useRepository } from "../data/DataProvider";
@@ -11,6 +11,7 @@ import { Field, Problem } from "../components/Form";
 import { PersonSelect } from "../components/PersonSelect";
 import { Select } from "../components/Select";
 import { splitBrainDump } from "../data/brainDump";
+import { clearDraft, draftIsEmpty, readDraft, writeDraft, type DraftIssue } from "../data/maintenanceDraft";
 import { DateField } from "../components/DateField";
 import { FileDrop } from "../components/FileDrop";
 import { TypeaheadSelect } from "../components/TypeaheadSelect";
@@ -232,12 +233,18 @@ interface IssueDraft {
   assignedCompanyId: string | null;
   /** Chosen, not uploaded. The request has no id to attach them to until it is saved. */
   files: File[];
+  /**
+   * Files a restored draft could not keep. A `File` is a handle to bytes the page was
+   * granted; it cannot be stored and cannot be re-granted without the person picking it
+   * again, so the draft keeps the names and the block says which to attach again.
+   */
+  lostFiles: string[];
 }
 
 let issueSeed = 0;
 const blankIssue = (): IssueDraft => ({
   key: `issue-${++issueSeed}`, summary: "", description: "",
-  assigneeKind: "internal", assigneeProfileId: null, assignedCompanyId: null, files: []
+  assigneeKind: "internal", assigneeProfileId: null, assignedCompanyId: null, files: [], lostFiles: []
 });
 
 /** `yyyy-mm-dd` for the browser's own day, which at Lofty is the Adelaide day. */
@@ -256,14 +263,27 @@ function NewRequests({ jobId, onDone }: { jobId: string | null; onDone: (ids: st
   const [companyReload, setCompanyReload] = useState(0);
   const { data: companies } = useQuery(r => r.listCompanies(), [], [companyReload]);
 
-  const [job, setJob] = useState<string | null>(jobId);
+  /**
+   * The draft, read ONCE on mount. Amber: *"ensure the form persists on job drawer when
+   * pulling out"* — one click on the scrim beside the panel unmounts this component, and
+   * before this every field went with it.
+   *
+   * In a `useState` initialiser rather than an effect: an effect would render the blank
+   * form first and then replace it, which flashes and loses a keystroke typed in between.
+   */
+  const [restored] = useState(() => readDraft(jobId));
+
+  const [job, setJob] = useState<string | null>(restored?.job ?? jobId);
   // Today, and clearable — both halves are Amber's: "default to today's date, but can be
   // cleared or edited". Which is why the column behind it is nullable.
-  const [identifiedOn, setIdentifiedOn] = useState<string | null>(todayIso());
-  const [identifiedAt, setIdentifiedAt] = useState<MaintenanceIdentifiedAt | null>(null);
-  const [reportedBy, setReportedBy] = useState<string | null>(null);
-  const [issues, setIssues] = useState<IssueDraft[]>(() => [blankIssue()]);
-  const [dump, setDump] = useState("");
+  const [identifiedOn, setIdentifiedOn] = useState<string | null>(restored ? restored.identifiedOn : todayIso());
+  const [identifiedAt, setIdentifiedAt] = useState<MaintenanceIdentifiedAt | null>((restored?.identifiedAt as MaintenanceIdentifiedAt | null) ?? null);
+  const [reportedBy, setReportedBy] = useState<string | null>(restored?.reportedBy ?? null);
+  const [issues, setIssues] = useState<IssueDraft[]>(() =>
+    restored?.issues.length
+      ? restored.issues.map(i => ({ ...blankIssue(), ...i, files: [], lostFiles: i.fileNames ?? [] }))
+      : [blankIssue()]);
+  const [dump, setDump] = useState(restored?.dump ?? "");
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -318,6 +338,30 @@ function NewRequests({ jobId, onDone }: { jobId: string | null; onDone: (ids: st
     } catch (e) { setProblem(e instanceof Error ? e.message : String(e)); }
   };
 
+  /**
+   * Saved on every change, so a drawer closed by a mis-click loses nothing. An effect
+   * rather than a save on close: the close path is `onClose` on a panel that also closes
+   * from the scrim, from Escape and from a navigation, and a save hung off one of those
+   * three is a save that misses the other two.
+   *
+   * `draftIsEmpty` inside `writeDraft` stops an untouched form from overwriting a real
+   * draft — opening the drawer to look at it and closing again must not wipe what was
+   * typed yesterday.
+   */
+  useEffect(() => {
+    writeDraft(jobId, {
+      job, identifiedOn, identifiedAt, reportedBy, dump,
+      issues: issues.map<DraftIssue>(i => ({
+        summary: i.summary, description: i.description,
+        assigneeKind: i.assigneeKind,
+        assigneeProfileId: i.assigneeProfileId, assignedCompanyId: i.assignedCompanyId,
+        // What is on the form now, plus what a previous draft could not keep — otherwise
+        // reopening twice quietly forgets that anything was ever attached.
+        fileNames: [...i.files.map(f => f.name), ...i.lostFiles]
+      }))
+    });
+  }, [jobId, job, identifiedOn, identifiedAt, reportedBy, dump, issues]);
+
   /** Recomputed as it is typed, so the button can say how many are coming. */
   const dumpItems = useMemo(() => splitBrainDump(dump), [dump]);
 
@@ -355,6 +399,9 @@ function NewRequests({ jobId, onDone }: { jobId: string | null; onDone: (ids: st
           catch (e) { refusedFiles.push(e instanceof Error ? e.message : String(e)); }
         }
       }
+      // Logged, so the draft has done its job. Cleared here rather than in `onDone` so a
+      // partial failure below keeps it — the rows that did not land are still in the form.
+      clearDraft(jobId);
       if (refusedFiles.length) {
         // Every issue landed; some files did not. Said here rather than swallowed, and the
         // drawer stays open so the files can be picked again on the request itself.
@@ -460,6 +507,11 @@ function NewRequests({ jobId, onDone }: { jobId: string | null; onDone: (ids: st
               <FileDrop
                 ariaLabel={`Attach files to issue ${n + 1}`}
                 onFiles={picked => patch(issue.key, { files: [...issue.files, ...picked] })} />
+              {issue.lostFiles.length > 0 && (
+                <Text type="text3" color="secondary" element="span" ellipsis={false}>
+                  Not kept when the drawer closed: {issue.lostFiles.join(", ")}. Attach again.
+                </Text>
+              )}
               {issue.files.map((f, at) => (
                 <div className="issue-file" key={`${f.name}-${at}`}>
                   <Text type="text3" color="secondary" element="span">{f.name}</Text>
@@ -513,7 +565,22 @@ function NewRequests({ jobId, onDone }: { jobId: string | null; onDone: (ids: st
         </Button>
       </div>
 
+      {/* A way out. Persistence without one is its own trap: a draft that reappears every
+          time the drawer opens, with no way to be rid of it, is worse than losing it. */}
       <div className="field-inline" style={{ justifyContent: "flex-end" }}>
+        {!draftIsEmpty({ job, identifiedOn, identifiedAt, reportedBy, dump,
+                         issues: issues.map(i => ({ summary: i.summary, description: i.description,
+                           assigneeKind: i.assigneeKind, assigneeProfileId: i.assigneeProfileId,
+                           assignedCompanyId: i.assignedCompanyId,
+                           fileNames: [...i.files.map(f => f.name), ...i.lostFiles] })) }) && (
+          <Button size="small" kind="tertiary" disabled={busy} onClick={() => {
+            clearDraft(jobId);
+            setJob(jobId); setIdentifiedOn(todayIso()); setIdentifiedAt(null);
+            setReportedBy(null); setDump(""); setIssues([blankIssue()]); setProblem(null);
+          }}>
+            Discard
+          </Button>
+        )}
         <Button size="small" disabled={!canSave} onClick={submit}>
           {ready.length > 1 ? `Log ${ready.length} issues` : "Log issue"}
         </Button>

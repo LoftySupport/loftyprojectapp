@@ -20,6 +20,7 @@ instead of showing a plausible guess.
 
 Unreleased: 271 changes since then —
 - Changed: A pasted maintenance list splits at a colon - what is before it becomes the issue, what is after becomes the details
+- Fixed: A half-filled new maintenance request is kept when the drawer closes, so a stray click no longer loses a pasted list of issues
 - Added: Paste a list into a new maintenance request and each line becomes its own issue, bullets and numbering stripped
 - Added: Attachments can be dragged straight onto a maintenance issue, including from an email, and a drop that carries nothing says why
 - Added: A maintenance issue given to a contractor shows the company, the person you ring with their own email and phone, and the suburb
