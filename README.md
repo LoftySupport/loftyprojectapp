@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 278 changes since then —
+Unreleased: 279 changes since then —
+- Changed: A maintenance issue is edited in the same layout it was logged in, with tasks, comments, activity and documents beneath it
 - Added: A maintenance issue keeps a history of who changed what, including the photos, tasks and comments on it
 - Added: A maintenance issue carries its own comments, activity and tasks, so a repair shows on the Tasks board beside everything else
 - Changed: A maintenance photo or video now has a permanent link, so a generated maintenance sheet still shows its pictures after it is emailed
 - Added: A maintenance issue takes video as well as photos
-- Fixed: A project's new address now carries its live jobs with it. A job still standing at the project's old address follows, keeping its own lot and res numbers, so "Lot 1, 14 Brodie Road" becomes "Lot 1, 28 Corner Street". A job given its own address since its title issued is left alone, as are closed and cancelled jobs.
-- …and 273 more.
+- …and 274 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

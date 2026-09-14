@@ -5,16 +5,102 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 278 changes since then —
+Unreleased: 279 changes since then —
+- Changed: A maintenance issue is edited in the same layout it was logged in, with tasks, comments, activity and documents beneath it
 - Added: A maintenance issue keeps a history of who changed what, including the photos, tasks and comments on it
 - Added: A maintenance issue carries its own comments, activity and tasks, so a repair shows on the Tasks board beside everything else
 - Changed: A maintenance photo or video now has a permanent link, so a generated maintenance sheet still shows its pictures after it is emailed
 - Added: A maintenance issue takes video as well as photos
-- Fixed: A project's new address now carries its live jobs with it. A job still standing at the project's old address follows, keeping its own lot and res numbers, so "Lot 1, 14 Brodie Road" becomes "Lot 1, 28 Corner Street". A job given its own address since its title issued is left alone, as are closed and cancelled jobs.
-- …and 273 more.
+- …and 274 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
+
+## 14 September — START HERE IF YOU ARE A NEW CHAT: the maintenance drawer, and the rethink coming after it
+
+Amber, 14 September, ending the session: *"An issue becomes a task … I am rethinking the
+process/properties/task alignment and how they work together but that is a new car. Get the
+drawer right and do handoff for new chat as I might need to refactor and redefine how these
+work together."*
+
+**Read this section, then `docs/open-questions.md`, then the three migration entries in
+`docs/schema/schema-plan.md` (`0119`, `0120`, `0121`). Everything below is on
+[PR #89](https://github.com/LoftySupport/loftyprojectapp/pull/89) and all three migrations
+are applied to the live project.**
+
+### What is built and live
+
+| Piece | Where | State |
+| --- | --- | --- |
+| Maintenance photos and video on permanent links | `0119`, public `maintenance-media` bucket | Live |
+| An issue as a parent of comments, activity and tasks | `0120` | Live |
+| The audit trail stamping the issue, backfilled | `0121` | Live, 43 rows across 17 issues |
+| The edit drawer: new-request layout, plus Tasks, Comments, Activity and Documents | `MaintenancePage.tsx` → `RequestDetail` | On the branch |
+
+### The decision that sets up the rethink
+
+**"An issue becomes a task."** That is the answer to the question `0120` deliberately left
+open: an issue could carry both `maintenance_items` (the defect by trade, with cost and a
+done-stamp) and `tasks` (scheduled work on the board), and nothing said which was the truth.
+
+The drawer now reads **tasks**. `maintenance_items` is **not deleted and nothing is migrated
+off it** — she said in the same breath that the alignment is being reconsidered, and tearing
+out a table on the strength of a rule about to be revisited is how you do the work twice.
+**`maintenance_items` is the first thing to look at when the rethink lands.**
+
+### What the rethink has to decide, stated as questions rather than guesses
+
+Nobody has answered these and nothing in the code assumes an answer:
+
+1. **Does `maintenance_items` survive at all**, or does an issue's breakdown-by-trade become
+   sub-tasks? Items carry cost and a done-stamp that `tasks` does not.
+2. **What creates the task** — a person pressing *Add task* in the drawer, which is what is
+   built, or an issue generating one automatically when it is logged or booked? Automatic
+   creation was NOT built, because "becomes" could mean either and inventing it would be a
+   plausible value.
+3. **Where do properties sit** on maintenance work — `process_properties` binds properties to
+   processes, and a maintenance issue is not in a process today.
+4. **Does a repair belong to a process run?** `tasks.process_run_id` exists. A maintenance
+   task currently has none, so it is a task outside every process.
+
+### The two shapes to keep in mind before refactoring
+
+- **`tasks.maintenance_request_id` is a QUALIFIER, not a parent.** `tasks_one_parent` still
+  requires exactly one of `job_id` and `project_id`, because the Tasks board reads by job and
+  a task parented only to an issue would vanish from it. A composite foreign key ties the
+  issue to the same job, so a repair cannot land on another house's board.
+- **`comments` and `activity_events` took the issue as a genuine extra parent**, the way
+  `feedback_id` became a fifth in `0064`.
+
+### Two mistakes from this session, both fixed, both worth not repeating
+
+- **`0120` widened `activity_events`, which nothing in the app reads.** The Activity panel
+  reads `activity_audit`. Adding a parent to the table that *models* a feed is not the same as
+  adding it to the table that *feeds* it. `0121` fixed it.
+- **Two proof blocks proved nothing and still reported green.** One skipped every assertion
+  because the replay database had no jobs; one had a break that changed nothing because the
+  row already carried the field by another route. **If a deliberate break does not turn a
+  check red, the check was not testing what you think.**
+
+### Still not started
+
+- **The generated documents.** A maintenance request sheet per issue with its pictures, and an
+  overall document per job with every issue sorted by how it was identified, named
+  `<job number> - maintenance request`, linked from the job card, the project card and the
+  issue drawer. **The report builder is person-driven today** — a document is something
+  somebody *builds* from the library and publishes. Autogenerating one, and re-generating it
+  when an issue changes, is new machinery rather than a new widget. Agree the shape with Amber
+  before writing it; the unanswered part is what happens to a sheet already sent when the
+  issue behind it changes.
+- **A photo package to SharePoint when a job closes.** Recorded from *"It would be good to
+  maybe…"* — a maybe, not a commitment.
+- **The twelve photographs filed before `0119`** are still in the private bucket, so a sheet
+  generated for them carries pictures that expire. Moving them is ~20 lines through the
+  Storage API and a change to live data, so it waits on Amber's yes.
+- **`0118` is still not applied to the live project.** A trigger, no columns, so nothing is
+  broken by the gap — but it is not doing its job either.
+
+---
 
 ## 14 September — the audit trail knows which issue it is about (`0121`), correcting `0120`
 

@@ -2507,6 +2507,9 @@ export function createSupabaseRepository(): Repository {
         .insert({
           job_id: task.jobId ?? null,
           project_id: task.projectId ?? null,
+          // 0120: a qualifier beside the parent, not instead of it. The composite foreign
+          // key refuses a pair that disagree, so a task cannot carry another job's issue.
+          maintenance_request_id: task.maintenanceRequestId ?? null,
           task_name: name,
           task_description: task.description?.trim() || null,
           task_owning_team: task.owningTeam ?? null,

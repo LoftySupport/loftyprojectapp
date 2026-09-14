@@ -26,19 +26,26 @@ import { CappedList } from "./CappedList";
 export function ActivityFeed({
   projectId,
   jobId,
+  maintenanceRequestId,
   title = "Activity",
   bare = false
 }: {
   projectId?: number;
   jobId?: string;
+  /**
+   * One maintenance issue's history (0121). Narrower than the job it belongs to and
+   * deliberately so: an issue's rows also carry their job, so asking by job here would
+   * bury three lines about a cracked tile under the whole house's history.
+   */
+  maintenanceRequestId?: string;
   title?: string;
   /** Inside the record's docked tab strip, where the tab already names it. */
   bare?: boolean;
 }) {
   const { data: entries, loading, error } = useQuery(
-    r => r.listRecordActivity({ projectId, jobId }),
+    r => r.listRecordActivity({ projectId, jobId, maintenanceRequestId }),
     [],
-    [projectId, jobId]
+    [projectId, jobId, maintenanceRequestId]
   );
 
   return (

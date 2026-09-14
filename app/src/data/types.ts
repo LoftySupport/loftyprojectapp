@@ -1425,6 +1425,14 @@ export interface StageCompletion {
 export interface NewTask {
   jobId?: string;
   projectId?: number;
+  /**
+   * The maintenance issue this task is the work for (0120). Amber, 14 September: *"an issue
+   * becomes a task"*.
+   *
+   * Sent WITH `jobId`, never instead of it — the database refuses a pair that disagree, and
+   * the job is what puts the task on the board.
+   */
+  maintenanceRequestId?: Uuid;
   name: string;
   description?: string | null;
   owningTeam?: TeamId | null;
