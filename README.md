@@ -34,7 +34,8 @@ under **Updates**, reached from the footer — the queue, the roadmap and the ch
 readable by everybody signed in. It sits in the footer rather than the sidebar (Amber,
 3 September) because the sidebar is for the work. In this repository the same three live in [ROADMAP.md](ROADMAP.md) and
 [CHANGELOG.md](CHANGELOG.md), both kept current from commit trailers by
-`node scripts/changelog.mjs`.
+`node scripts/changelog.mjs` — which CI reruns on `main` after every merge, so nobody has to
+remember to.
 
 The stakeholder prototype this grew out of lives in a separate repo,
 [`loftyprojectboard`](https://github.com/amberbeaumont/loftyprojectboard), and is
