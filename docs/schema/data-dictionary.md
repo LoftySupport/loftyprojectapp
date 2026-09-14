@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-750 properties across 100 tables.
+751 properties across 100 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 701 | In the migration and the types |
+| Created | 702 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -676,6 +676,7 @@ The ticket (0084): one per thing a homeowner reported on a handed-over job, howe
 | `maintenance_requests.maintenance_request_assignee_profile_id` | Assignee (internal) | The Lofty person fixing it, when the kind is internal. | `uuid` | — | Nullable. FK → profiles. Refused when the kind is external. | Not an offer — maintenance_assignments is the offer, with its accept link. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `maintenance_requests.maintenance_request_assigned_company_id` | Assignee (external) | The trade or contractor fixing it, when the kind is external. | `uuid` | — | Nullable. FK → companies. Refused when the kind is internal. | Typing a name nothing matches creates the company as a contractor; a manager still approves it. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `maintenance_requests.maintenance_request_booked_on` | Date booked | The day the repair is booked in. | `date` | — | Nullable. | Per issue, which is why each issue is its own request. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `maintenance_requests.maintenance_request_completed_on` | Date completed | The day the repair was actually done — a date somebody sets, like the booking beside it. | `date` | — | Nullable. Nothing derives it and no trigger stamps it (0116). | Not the status and not Closed: a request can carry this date while its status is still In progress, because the tradesperson finishing and the ticket being closed are two events. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `maintenance_requests.maintenance_request_followup_on` | Follow-up | The day to chase this issue. | `date` | — | Nullable. Nothing derives it. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `maintenance_requests.maintenance_request_created_at` | Created | — | `timestamptz` | — | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `maintenance_requests.maintenance_request_created_by` | Created by | — | `uuid` | — | Nullable. FK → profiles. Stamped by trigger. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |

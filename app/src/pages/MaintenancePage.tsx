@@ -131,7 +131,10 @@ export function MaintenancePage() {
           <div className="data-table-wrap">
             <table className="data-table">
               <thead>
-                <tr><th>Request</th><th>Address</th><th>What</th><th>Reported</th><th>Trade</th><th>Owner</th><th className="num">Items</th><th>Health</th><th>Next visit</th></tr>
+                {/* Booked and Completed sit beside the identification date, so the three
+                    dates of an issue read left to right: found, booked, done. Amber,
+                    14 September: "add in the date booked, date completed into UI". */}
+                <tr><th>Request</th><th>Address</th><th>What</th><th>Identified</th><th>Booked</th><th>Completed</th><th>Assigned to</th><th className="num">Items</th><th>Health</th><th>Next visit</th></tr>
               </thead>
               <tbody>
                 {rows.map(r => (
@@ -152,8 +155,12 @@ export function MaintenancePage() {
                       {" · "}
                       {r.identifiedAt ? MAINTENANCE_IDENTIFIED_AT_LABELS[r.identifiedAt] : MAINTENANCE_SOURCE_LABELS[r.source]}
                     </td>
-                    <td className="muted">{r.categoryName ?? "—"}</td>
-                    <td className="muted">{r.ownerName ?? "—"}</td>
+                    <td className="muted nowrap">{r.bookedOn ? new Date(r.bookedOn).toLocaleDateString() : "—"}</td>
+                    <td className="muted nowrap">{r.completedOn ? new Date(r.completedOn).toLocaleDateString() : "—"}</td>
+                    {/* Who is fixing it, whichever side of the radio it came from. Replaces
+                        Trade and Owner, which the new drawer stops asking for and which read
+                        as an em dash on every issue logged since. */}
+                    <td className="muted">{(r.assigneeKind === "external" ? r.assignedCompanyName : r.assigneeName) ?? "—"}</td>
                     <td className="num">{r.itemsTotal ? `${r.itemsDone} / ${r.itemsTotal}` : <span className="muted">—</span>}</td>
                     <td><span className={`health is-${r.health}`}>{MAINTENANCE_HEALTH_LABELS[r.health]}</span>{r.offersOpen > 0 && <div className="slot-sub">{r.offersOpen} offer{r.offersOpen === 1 ? "" : "s"} unanswered</div>}</td>
                     <td className="muted nowrap">{r.nextVisit ? new Date(r.nextVisit).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : "—"}</td>
@@ -563,6 +570,33 @@ function RequestDetail({ id, onChanged }: { id: string; onChanged: () => void })
               <Select aria-label="Priority" value={r.priority} onChange={v => run(() => repo.updateMaintenanceRequest(r.id, { priority: v as MaintenancePriority }))}
                 options={MAINTENANCE_PRIORITIES.map(p => ({ value: p, label: MAINTENANCE_PRIORITY_LABELS[p] }))} />
             ) : <Text type="text3" element="span">{MAINTENANCE_PRIORITY_LABELS[r.priority]}</Text>}
+          </label>
+          {/* The three dates of an issue, editable in the drawer — Amber, 14 September:
+              "add in the date booked, date completed into UI and drawer when clicked on."
+              Follow-up joins them because 0114 added it at the same time on her earlier
+              ask and nothing has ever shown it.
+
+              Each writes on change and clears to null: DateField draws its own ✕ because
+              the browser's is not a promise (12 September). None of the three is derived
+              from the status and none derives it — a repair finished on Tuesday that
+              nobody has closed shows a completion date and In progress, which is true. */}
+          <label className="field-inline"><Text type="text3" element="span">Booked</Text>
+            {canWrite ? (
+              <DateField value={r.bookedOn} ariaLabel="Date booked"
+                onChange={v => run(() => repo.updateMaintenanceRequest(r.id, { bookedOn: v }))} />
+            ) : <Text type="text3" element="span">{r.bookedOn ? new Date(r.bookedOn).toLocaleDateString() : "—"}</Text>}
+          </label>
+          <label className="field-inline"><Text type="text3" element="span">Completed</Text>
+            {canWrite ? (
+              <DateField value={r.completedOn} ariaLabel="Date completed"
+                onChange={v => run(() => repo.updateMaintenanceRequest(r.id, { completedOn: v }))} />
+            ) : <Text type="text3" element="span">{r.completedOn ? new Date(r.completedOn).toLocaleDateString() : "—"}</Text>}
+          </label>
+          <label className="field-inline"><Text type="text3" element="span">Follow-up</Text>
+            {canWrite ? (
+              <DateField value={r.followUpOn} ariaLabel="Follow-up date"
+                onChange={v => run(() => repo.updateMaintenanceRequest(r.id, { followUpOn: v }))} />
+            ) : <Text type="text3" element="span">{r.followUpOn ? new Date(r.followUpOn).toLocaleDateString() : "—"}</Text>}
           </label>
           <label className="field-inline"><Text type="text3" element="span">Trade</Text>
             {canWrite ? (
