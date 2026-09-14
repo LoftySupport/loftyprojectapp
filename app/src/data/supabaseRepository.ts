@@ -1910,8 +1910,18 @@ export function createSupabaseRepository(): Repository {
 
     async setProjectCurrentAddress(id: number, address: NewAddress): Promise<Project> {
       const addressId = await insertAddress(address);
-      // The repoint. guard_original_address leaves the original alone, and the 0042
-      // trigger records the outgoing current address's stint in address_history.
+      // The repoint. guard_original_address leaves the original alone, the 0042 trigger
+      // records the outgoing current address's stint in address_history, and the 0118
+      // trigger carries the project's live jobs across where they were still standing at
+      // the address being left — each keeping any lot and res number of its own.
+      //
+      // None of those three is written here, and that is the point: a job is moved by a
+      // rule the import and a hand-written UPDATE obey too. Re-implementing the match in
+      // TypeScript would be a second opinion that can disagree with the database, which
+      // is the same reason setJobCurrentAddress checks nothing itself.
+      //
+      // readProject returns the project alone, so a caller showing the jobs re-reads —
+      // ProjectsPage's `refresh` does, which is how the jobs list shows the new street.
       const { data: updated, error } = await client
         .from("projects")
         .update({ project_current_address_id: addressId })
