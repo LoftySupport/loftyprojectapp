@@ -83,12 +83,6 @@ export interface SearchableJob {
   jobNumber: string;
   /** The old Lofty number — the id everything outside the app still links by. */
   jobNumberOld?: string | null;
-  /**
-   * The job number with its community-title `c` (0120). Matched as well as the key, not
-   * instead of it: somebody who reads `1004-003c` off a card and types it back must find
-   * the job, and so must somebody who types `1004-003` from an older document.
-   */
-  displayNumber?: string | null;
   projectNumber?: string | number | null;
   stage?: string | null;
   team?: string | null;
@@ -110,7 +104,6 @@ export function jobMatchesQuery(job: SearchableJob, terms: string[]): boolean {
   return matchesTerms(
     [
       job.jobNumber,
-      job.displayNumber,
       job.jobNumberOld,
       job.projectNumber,
       job.stage,

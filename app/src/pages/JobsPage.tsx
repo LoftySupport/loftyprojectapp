@@ -461,13 +461,10 @@ export function JobsPage() {
     // The job number cannot be turned off. A table of jobs with no job number in it is
     // a table nobody can act on; everything else is somebody's call.
     { key: "job", group: "Identity", label: "Job", fixed: true, className: "nowrap",
-      // Sorted on the KEY, shown as the DISPLAY number (0120). Sorting on the displayed
-      // one would put 1004-003 after 1004-002c but before 1004-002, which is the same
-      // project's jobs interleaved by title type — the suffix is not part of the order.
       sort: j => j.jobNumber,
       // "1042-01" breaking into "1042-" / "01" is unreadable as an identifier, and the
       // identifier is what this column is — hence `nowrap`.
-      cell: j => j.displayNumber, text: j => j.displayNumber },
+      cell: j => j.jobNumber, text: j => j.jobNumber },
     // Exported as text, not as the number it sorts on: a project number is an
     // identifier, and 1042 in a spreadsheet column of numbers invites somebody to
     // average it.
@@ -844,7 +841,7 @@ export function JobsPage() {
                       </label>
                     )}
                     <JobCard
-                      displayNumber={j.displayNumber}
+                      jobNumber={j.jobNumber}
                       stageName={j.stage}
                       team={j.team}
                       address={j.currentAddress}

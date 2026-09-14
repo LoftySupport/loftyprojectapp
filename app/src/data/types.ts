@@ -513,21 +513,6 @@ export interface Job {
   calculatedCompletion: IsoDate | null;
   /** How many of the job's processes have no estimate. 0 when the forecast is real, null when the job is not live. */
   calculatedCompletionMissing: number | null;
-  /**
-   * The job number as a person reads it (0120): `id`, with a trailing `c` when the job is
-   * community title. `1004-003` becomes `1004-003c`; Torrens and not-yet-decided read
-   * without one.
-   *
-   * **Never use this to route, look a job up, or key a list.** `id` is the key and the only
-   * thing that is stable — Amber chose the suffix on the displayed number precisely so the
-   * key would not move when a title type is corrected during a build. The two differ by one
-   * character and the wrong one silently 404s.
-   *
-   * Generated in the database rather than composed here, for the same reason
-   * `address_consolidated` is: a job number appears in documents and exports that never go
-   * near this file, and two implementations would eventually disagree.
-   */
-  displayNumber: string;
 
   // + fields
   createdAt: IsoDateTime;

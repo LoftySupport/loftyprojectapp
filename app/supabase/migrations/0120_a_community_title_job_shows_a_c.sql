@@ -1,114 +1,169 @@
 -- =============================================================================
--- 0120 — a community title job shows a c, and the key does not move
+-- 0120 — a community title job carries a c, in the number itself
 -- =============================================================================
 -- Amber, 14 September: *"Any job that is listed as community title needs a 'c' suffix
 -- after the job number eg 1004-001c. Torrens title has no suffix. The jobs remain
 -- sequential eg 1004-001c / 1004-002c / 1004-003 / 1004-004 Etc"*.
 --
--- The sequence half needs no code at all: `assign_job_sequence()` already numbers jobs
--- in one run per project regardless of their title type, which is exactly what her
--- example shows. Only the suffix is new.
+-- Then, when the first draft of this migration put the suffix on a DISPLAY column and left
+-- the key alone: *"But the primary key can it be updated that is also linked so it show the
+-- c on the end (like the address when updated) but the project 4 digits and 3 digit job
+-- code always remains with job too"*.
 --
--- WHY THIS IS A DISPLAY COLUMN AND NOT A CHANGE TO THE KEY
+-- **Yes, it can, and this is that.** The first draft is recorded in `schema-plan.md` as a
+-- reversed decision rather than deleted, because the reasoning against it is still true and
+-- somebody should be able to see what was weighed.
 --
---   `job_id` IS the job number here — `jobs_id_matches_its_parts` pins it to
---   `project_id || '-' || job_sequence`, and `jobs_job_sequence_check` allows digits
---   only. Putting a `c` in it means changing the primary key's shape.
+-- WHY THE ANSWER CHANGED
 --
---   Seventeen tables point at `jobs(job_id)`. Sixteen cascade on update; **report_documents
---   does not**, so a renumber would be refused outright by a table nobody would think to
---   look at. That is survivable — one FK to change — and it is not the real problem.
+--   The objection was never that a key cannot be renamed here. It is that renaming one
+--   reaches things the database cannot: contracts, emails, SharePoint folder names. That
+--   cost is real and Amber has now accepted it knowingly, twice.
 --
---   The real problem is that Amber settled this morning that the title type *"might be
---   updated later during the build so it needs to be editable"*, and **67 of the 83 live
---   jobs have no title type set at all**. So under a key-carried suffix, most jobs would be
---   renumbered LONG AFTER creation, by somebody changing a dropdown — and a job number is
---   what goes in contracts, emails, SharePoint folder names and SiteBook. A cascade fixes
---   the database and reaches none of those.
+--   Against it, the machinery for exactly this **already exists and was built on purpose**.
+--   `resync_job_id` has rebuilt `job_id` from its parts on every update since 0028, and 16
+--   of the 17 tables referencing `jobs(job_id)` were already declared ON UPDATE CASCADE.
+--   The schema was designed for a job number that moves. Bolting a parallel display column
+--   beside it would have been a second answer to "what is this job called", which is the
+--   thing this repository keeps refusing to have.
 --
---   Put the choice to her with the numbers, she took **the suffix on the displayed number,
---   with the key left alone**. So:
+--   Her constraint is honoured exactly: **the 4-digit project and the 3-digit sequence never
+--   change.** `job_sequence` stays digits-only under `jobs_job_sequence_check` and
+--   `jobs_sequence_is_padded`; only the suffix is appended or removed. 1004-003 becomes
+--   1004-003c and back, and can never become 1004-004.
 --
---     job_id              1004-003     the key. Never moves. Routes, foreign keys, URLs.
---     job_number_display  1004-003c    what a person reads. Follows the title type.
+-- THE ONE TABLE THAT WOULD HAVE REFUSED
 --
---   The `c` therefore appears the moment a job is marked community title and disappears if
---   that is corrected, with nothing to migrate and nothing to renumber. A job whose title
---   type nobody has set yet reads without a suffix, which is honest: it is not a claim that
---   the job is Torrens, it is the absence of a claim either way.
+--   `report_documents` referenced `jobs(job_id)` with **NO ACTION**, so the very first
+--   rename would have been rejected by a table nobody would think to look at, with 6 rows
+--   already linked. Fixed here to ON UPDATE CASCADE, matching its sixteen siblings.
 --
--- A GENERATED COLUMN, NOT A VIEW COLUMN
+-- WHAT WAS CHECKED BEFORE COMMITTING TO THIS
 --
---   `address_consolidated` set this precedent in 0001 and its comment still says why:
---   *"Assembled once, in the database, so every card, export and search reads the same
---   string."* The same argument holds here and is stronger, because a job number appears in
---   documents and reports that never go near `job_display`.
+--   - Nothing embeds the job number inside its own key. `maintenance_request_id` is a uuid,
+--     not "1042-01-M3" as the naming might suggest, so no child id goes stale.
+--   - No job has a SharePoint folder yet (0 of 83), so no stored URL breaks today.
+--   - 9 jobs are community title and get renamed by the backfill below. 7 are torrens and
+--     67 have no title type, and none of those move.
 --
---   STORED and `generated always`, so it cannot be written to by hand and cannot drift
---   from the two columns it is built from. `address_consolidated` had to be a trigger
---   because casting an enum to text is not immutable; this expression is plain text
---   concatenation and a CASE, so the real generated column is available.
+-- THE COST, STATED PLAINLY
+--
+--   A bookmarked `/jobs/1004-003` stops resolving once that job is marked community title.
+--   Whether the old number should stay findable — the other half of Amber's address analogy,
+--   since `address_history` keeps superseded addresses searchable — is open question 0f and
+--   is deliberately NOT guessed at here.
 -- =============================================================================
 
-alter table jobs
-  add column if not exists job_number_display text
-  generated always as (job_id || case when job_title_type = 'community' then 'c' else '' end) stored;
+-- ------------------------------------------------- the one FK that would refuse
+alter table report_documents
+  drop constraint if exists report_documents_job_id_fkey;
+alter table report_documents
+  add constraint report_documents_job_id_fkey
+  foreign key (job_id) references jobs(job_id) on update cascade on delete set null;
 
-comment on column jobs.job_number_display is
-  'The job number as a person reads it: the job_id, with a trailing "c" when the job is community title. Torrens and not-yet-decided read without one. Generated and STORED, so it follows job_title_type automatically and cannot be written to by hand. The KEY is job_id and does not carry the suffix — Amber, 14 September, chose the suffix on the displayed number over a suffix in the key, because the title type stays editable and a job number that changes under an edit is one that no longer matches the contract, the email or the SharePoint folder. 0120.';
+-- --------------------------------------------------------- one definition
+-- Both triggers below build the number from this, so there is exactly one place that
+-- knows the shape. The CHECK inlines the same expression rather than calling it: a CHECK
+-- built on a function is NOT re-verified when the function changes, so it would go on
+-- passing rows it no longer describes. The proof block asserts the two agree, which is
+-- what stops them drifting without duplicating the rule unwatched.
+create or replace function job_number(the_project integer, the_sequence text, the_title_type text)
+returns text
+language sql immutable
+set search_path = public, pg_temp
+as $$
+  select the_project::text || '-' || the_sequence
+      || case when the_title_type = 'community' then 'c' else '' end;
+$$;
 
--- The view hands it to every screen that already reads job_display. Appended, so
--- CREATE OR REPLACE keeps `task_display` and the twenty-eight columns above it intact.
-create or replace view job_display with (security_invoker = true) as
-  select j.job_id,
-         j.project_id,
-         j.job_sequence,
-         j.job_number_old,
-         j.job_original_address_id,
-         j.job_current_address_id,
-         j.job_created_at,
-         j.job_created_by,
-         j.job_updated_at,
-         j.job_updated_by,
-         p.project_type,
-         j.job_status,
-         is_current(j.job_status) as job_is_current,
-         j.job_stage,
-         j.job_stage_entered_at,
-         j.job_owning_team,
-         j.job_engaged_teams,
-         j.job_assignee_id,
-         j.job_sharepoint_url,
-         cur.address_consolidated  as job_current_address,
-         orig.address_consolidated as job_original_address,
-         cur.address_suburb        as job_suburb,
-         pcur.address_consolidated as project_current_address,
-         p.project_sharepoint_url,
-         j.job_title_type,
-         cur.address_council       as job_council,
-         j.job_target_completion,
-         j.job_end_date,
-         f.forecast as job_calculated_completion,
-         f.missing  as job_calculated_completion_missing,
-         j.job_number_display
-  from jobs j
-  join projects p using (project_id)
-  join addresses cur       on cur.address_id  = j.job_current_address_id
-  left join addresses orig on orig.address_id = j.job_original_address_id
-  join addresses pcur      on pcur.address_id = p.project_current_address_id
-  left join lateral job_completion_forecast(j.job_id) f on true;
+comment on function job_number(integer, text, text) is
+  'The job number: the project number, a dash, the padded sequence, and a trailing "c" when the job is community title. Torrens and not-yet-decided carry no suffix — a missing title type is the absence of a claim, not a claim that it is torrens. The project and sequence parts never change; only the suffix moves. Amber, 14 September. 0120.';
+
+grant execute on function job_number(integer, text, text) to authenticated;
+
+-- ------------------------------------------------------------ the two triggers
+-- At insert. Unchanged except for the suffix on the last line.
+create or replace function assign_job_sequence() returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  next_no integer;
+begin
+  if new.job_sequence is null then
+    update projects
+       set project_job_seq_high_water = project_job_seq_high_water + 1
+     where project_id = new.project_id
+    returning project_job_seq_high_water into next_no;
+
+    if next_no is null then
+      raise exception 'project % does not exist', new.project_id using errcode = '23503';
+    end if;
+
+    -- Pad to three, never truncate. The sequence itself carries no suffix, which is what
+    -- keeps Amber's "3 digit job code always remains with job" true: the counter counts
+    -- dwellings, not community-title dwellings, so 001c and 002 are consecutive.
+    new.job_sequence := case
+      when next_no < 1000 then lpad(next_no::text, 3, '0')
+      else next_no::text
+    end;
+  end if;
+
+  new.job_id := job_number(new.project_id, new.job_sequence, new.job_title_type);
+  return new;
+end $$;
+
+-- On update. `job_title_type` joins the two parts that already rebuilt the number, which
+-- is the whole of Amber's "can it be updated … like the address when updated".
+create or replace function resync_job_id() returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  if new.project_id is distinct from old.project_id
+     or new.job_sequence is distinct from old.job_sequence
+     or new.job_title_type is distinct from old.job_title_type then
+    new.job_id := job_number(new.project_id, new.job_sequence, new.job_title_type);
+  end if;
+  return new;
+end $$;
+
+comment on function resync_job_id() is
+  'Rebuilds job_id when any part of it changes: the project, the sequence, or — since 0120 — the title type, which appends or removes the community-title "c". The 16 ON UPDATE CASCADE foreign keys carry the rename to every child row; report_documents was made the 17th in 0120 because it would otherwise have refused the first one.';
+
+-- --------------------------------------------------------------- the shape
+alter table jobs drop constraint if exists jobs_id_matches_its_parts;
+alter table jobs add constraint jobs_id_matches_its_parts
+  check (job_id = project_id::text || '-' || job_sequence
+                || case when job_title_type = 'community' then 'c' else '' end);
+
+-- ------------------------------------------------------------- the backfill
+-- The 9 community title jobs take their suffix. Every child row follows by cascade; no
+-- child id embeds the job number, which was checked before this was written.
+do $$
+declare
+  moved integer;
+begin
+  update jobs
+     set job_id = job_number(project_id, job_sequence, job_title_type)
+   where job_title_type = 'community'
+     and job_id is distinct from job_number(project_id, job_sequence, job_title_type);
+  get diagnostics moved = row_count;
+  raise notice '0120: % community title jobs took their c.', moved;
+end $$;
 
 -- ---------------------------------------------------------------------- proof
--- Watched fail before it was watched pass: dropping the `= 'community'` test suffixed
--- every job including the Torrens one and assertion 2 reported; changing the literal to
--- 'C' reported on assertion 1; and making the column plain instead of generated let the
--- update in assertion 3 leave it stale, which assertion 3 is there to catch.
+-- Watched fail before it was watched pass, each mutation replayed into a fresh database:
+-- suffixing every job, suffixing torrens instead of community, an upper-case C, no suffix
+-- at all, dropping job_title_type from resync_job_id's test (the c then never appears on
+-- an existing job), and leaving report_documents on NO ACTION (the rename is refused).
 do $$
 declare
   probe_addr uuid; probe_project integer;
   community_job text; torrens_job text; undecided_job text;
-  reads text;
+  now_called text;
   seqs text;
+  probe_template uuid; probe_doc uuid;
 begin
   insert into addresses (address_lot_number, address_street_1, address_suburb, address_postcode)
   values (120, 'Probe Street 0120', 'Golden Grove', '5125') returning address_id into probe_addr;
@@ -122,68 +177,99 @@ begin
   insert into jobs (project_id, job_current_address_id, job_owning_team)
   values (probe_project, probe_addr, 'construction') returning job_id into undecided_job;
 
-  -- 1. Community gets the c, appended to the key rather than replacing anything in it.
-  select job_number_display into reads from jobs where job_id = community_job;
-  if reads is distinct from community_job || 'c' then
-    raise exception '0120 proof: the community job reads "%", expected "%"', reads, community_job || 'c';
+  -- 1. Born with it. The key itself, not a column beside it.
+  if community_job is distinct from probe_project::text || '-001c' then
+    raise exception '0120 proof: the community job was created as "%", expected "%-001c"',
+      community_job, probe_project;
   end if;
 
-  -- 2. Torrens does not, and neither does a job nobody has decided about. The second is
-  --    the one worth stating: a missing title type is not a claim that it is Torrens, and
-  --    both correctly read without a suffix for different reasons.
-  select job_number_display into reads from jobs where job_id = torrens_job;
-  if reads is distinct from torrens_job then
-    raise exception '0120 proof: the torrens job reads "%", expected "%"', reads, torrens_job;
+  -- 2. Torrens does not, and neither does a job nobody has decided about. Both read
+  --    without a suffix for different reasons, and the second is the one worth stating:
+  --    a missing title type is not a claim that the job is torrens.
+  if torrens_job is distinct from probe_project::text || '-002' then
+    raise exception '0120 proof: the torrens job was created as "%", expected "%-002"',
+      torrens_job, probe_project;
   end if;
-  select job_number_display into reads from jobs where job_id = undecided_job;
-  if reads is distinct from undecided_job then
-    raise exception '0120 proof: the undecided job reads "%", expected "%"', reads, undecided_job;
-  end if;
-
-  -- 3. It FOLLOWS the title type, which is the whole reason it is generated rather than
-  --    written once. Amber: the type "might be updated later during the build".
-  update jobs set job_title_type = 'community' where job_id = undecided_job;
-  select job_number_display into reads from jobs where job_id = undecided_job;
-  if reads is distinct from undecided_job || 'c' then
-    raise exception '0120 proof: after being marked community the job reads "%", expected "%"',
-      reads, undecided_job || 'c';
-  end if;
-  -- And back again, so the suffix is not a one-way door.
-  update jobs set job_title_type = 'torrens' where job_id = undecided_job;
-  select job_number_display into reads from jobs where job_id = undecided_job;
-  if reads is distinct from undecided_job then
-    raise exception '0120 proof: after being corrected to torrens the job still reads "%"', reads;
+  if undecided_job is distinct from probe_project::text || '-003' then
+    raise exception '0120 proof: the undecided job was created as "%", expected "%-003"',
+      undecided_job, probe_project;
   end if;
 
-  -- 4. The KEY never moved. This is the point of the whole design.
-  if not exists (select 1 from jobs where job_id = community_job) then
-    raise exception '0120 proof: the community job''s key changed';
-  end if;
-
-  -- 5. The sequence runs across both types without restarting — Amber's own example is
-  --    001c, 002c, 003, 004. Nothing here implements that; the assertion exists so that
-  --    a future change to assign_job_sequence cannot quietly break it.
+  -- 3. Amber's own example: the sequence runs straight through both types. 001c, 002, 003
+  --    — the counter counts dwellings, so the c never costs a number.
   select string_agg(job_sequence, ',' order by job_sequence) into seqs
     from jobs where project_id = probe_project;
   if seqs is distinct from '001,002,003' then
-    raise exception '0120 proof: the sequence reads "%", expected "001,002,003" — it must not restart per title type', seqs;
+    raise exception '0120 proof: the sequence reads "%", expected "001,002,003"', seqs;
   end if;
 
-  -- 6. The view carries it.
-  perform 1 from information_schema.columns
-   where table_schema = 'public' and table_name = 'job_display' and column_name = 'job_number_display';
-  if not found then
-    raise exception '0120 proof: job_display does not carry job_number_display';
+  -- 4. THE ANSWER TO HER QUESTION. Change the title type on a job that already exists and
+  --    the key itself moves, carrying its children with it.
+  insert into tasks (job_id, task_name) values (undecided_job, 'Probe task 0120');
+  update jobs set job_title_type = 'community' where job_id = undecided_job;
+
+  select job_id into now_called from jobs where job_sequence = '003' and project_id = probe_project;
+  if now_called is distinct from undecided_job || 'c' then
+    raise exception '0120 proof: after being marked community the job is called "%", expected "%"',
+      now_called, undecided_job || 'c';
+  end if;
+  -- The child followed. This is the cascade doing the work the design depends on.
+  if not exists (select 1 from tasks where job_id = now_called and task_name = 'Probe task 0120') then
+    raise exception '0120 proof: the job was renamed and its task did not follow';
+  end if;
+  if exists (select 1 from tasks where job_id = undecided_job) then
+    raise exception '0120 proof: a task is still pointing at the old job number';
   end if;
 
-  raise notice 'ok  0120 — community reads with a c, torrens and undecided without, and the key never moves';
+  -- 5. And the 4-digit project and 3-digit sequence are untouched by the move, which is
+  --    the constraint Amber set on the whole idea.
+  if not exists (
+    select 1 from jobs
+     where job_id = now_called and project_id = probe_project and job_sequence = '003') then
+    raise exception '0120 proof: the rename disturbed the project number or the sequence';
+  end if;
 
+  -- 6. Not a one-way door: corrected back to torrens, the c goes away again.
+  update jobs set job_title_type = 'torrens' where job_id = now_called;
+  select job_id into now_called from jobs where job_sequence = '003' and project_id = probe_project;
+  if now_called is distinct from undecided_job then
+    raise exception '0120 proof: corrected back to torrens the job is still called "%"', now_called;
+  end if;
+
+  -- 7. report_documents would have refused the rename before this migration. Prove it
+  --    cascades now, on a real row rather than on the constraint's catalogue entry.
+  insert into report_templates (report_template_kind, report_template_name, report_template_layout)
+  values ('template', 'Probe template 0120', '{"widgets": []}'::jsonb)
+  returning report_template_id into probe_template;
+  insert into report_documents (report_template_id, job_id, report_document_title, report_document_layout)
+  values (probe_template, now_called, 'Probe document 0120', '{"widgets": []}'::jsonb)
+  returning report_document_id into probe_doc;
+
+  update jobs set job_title_type = 'community' where job_id = now_called;
+  if not exists (
+    select 1 from report_documents d join jobs j on j.job_id = d.job_id
+     where d.report_document_id = probe_doc and j.job_sequence = '003') then
+    raise exception '0120 proof: report_documents did not follow the rename';
+  end if;
+
+  -- 8. The CHECK and the function agree. They are written twice on purpose — a CHECK built
+  --    on a function is not re-verified when the function changes — so this is what stops
+  --    the two drifting apart unnoticed.
+  if exists (
+    select 1 from jobs
+     where job_id is distinct from job_number(project_id, job_sequence, job_title_type)) then
+    raise exception '0120 proof: a job exists whose id disagrees with job_number()';
+  end if;
+
+  raise notice 'ok  0120 — the c is in the key, it moves both ways, children follow, and the project and sequence never budge';
+
+  delete from report_documents where report_document_id = probe_doc;
+  delete from report_templates where report_template_id = probe_template;
+  delete from tasks where job_id in (select job_id from jobs where project_id = probe_project);
   delete from jobs where project_id = probe_project;
   delete from projects where project_id = probe_project;
   delete from addresses where address_id = probe_addr;
   delete from activity_audit
    where coalesce(activity_audit_new_row, activity_audit_old_row) ->> 'project_id' = probe_project::text
-      or coalesce(activity_audit_new_row, activity_audit_old_row) ->> 'job_id'
-           in (community_job, torrens_job, undecided_job)
       or coalesce(activity_audit_new_row, activity_audit_old_row) ->> 'address_street_1' = 'Probe Street 0120';
 end $$;

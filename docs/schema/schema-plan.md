@@ -3244,77 +3244,86 @@ Projects get no forecast: Amber asked about a job.
 **Applied to the live project? Not yet.**
 
 
-### 14 September — a community title job shows a `c`, and the key does not move (`0120`)
+### 14 September — a community title job carries a `c`, in the number itself (`0120`)
 
 Amber: *"Any job that is listed as community title needs a 'c' suffix after the job number
 eg 1004-001c. Torrens title has no suffix. The jobs remain sequential eg 1004-001c /
 1004-002c / 1004-003 / 1004-004 Etc"*.
 
-The sequence half needed no code: `assign_job_sequence()` already numbers jobs in one run
-per project regardless of title type, which is exactly what her example shows. An assertion
-now pins that, so a future change to the sequence cannot quietly break it.
+#### The first answer, and why it was reversed — kept, not deleted
 
-#### Why the suffix is on the displayed number and not in the key
+The first build put the suffix on a **generated display column** and left `job_id` alone.
+The case for it was real and is still true:
 
-`job_id` **is** the job number — `jobs_id_matches_its_parts` pins it to `project_id || '-'
-|| job_sequence` and `jobs_job_sequence_check` allows digits only. A `c` in it changes the
-shape of the primary key.
+- `job_id` is the primary key, pinned by `jobs_id_matches_its_parts`.
+- **67 of the 83 live jobs have no title type set**, so most jobs would take their suffix
+  *long after creation*, by somebody changing a dropdown — and the title type was settled
+  the same morning as editable during a build.
+- A job number is what sits in contracts, emails, SharePoint folder names and SiteBook, and
+  **no cascade reaches any of those**.
 
-Seventeen tables point at `jobs(job_id)`. Sixteen cascade on update; **`report_documents`
-does not**, so a renumber would be refused by a table nobody would think to look at. That
-is one FK to fix, and it is not the real problem.
+Amber read that and pushed back: *"But the primary key can it be updated that is also
+linked so it show the c on the end (like the address when updated) but the project 4 digits
+and 3 digit job code always remains with job too"*.
 
-The real problem is what a renumber would mean. Amber settled the same morning that the
-title type *"might be updated later during the build so it needs to be editable"*, and **67
-of the 83 live jobs have no title type set at all**. Under a key-carried suffix most jobs
-would therefore be renumbered *long after creation*, by somebody changing a dropdown — and
-a job number is what goes in contracts, emails, SharePoint folder names and SiteBook. A
-cascade fixes the database and reaches none of those.
+**She is right that it can, and the reversal is hers knowingly.** What tipped it is that the
+machinery already exists and was built on purpose: `resync_job_id` has rebuilt `job_id` from
+its parts since `0028`, and 16 of the 17 referencing tables were already `ON UPDATE
+CASCADE`. The schema was designed for a job number that moves. A display column beside it
+would have been a second answer to *what is this job called*, which is the thing this
+repository keeps refusing to have. The external cost stands, and she has accepted it twice.
 
-Put to her with those numbers, she chose the suffix on the displayed number:
+#### What it does
 
-| | | |
-| --- | --- | --- |
-| `job_id` | `1004-003` | The key. Never moves. Routes, foreign keys, URLs |
-| `job_number_display` | `1004-003c` | What a person reads. Follows the title type |
+| | |
+| --- | --- |
+| `job_number(project, sequence, title_type)` | The one definition. `1004` + `-` + `003` + `c` when community |
+| `assign_job_sequence` | Builds it at insert |
+| `resync_job_id` | Rebuilds it when the project, the sequence **or the title type** changes |
+| `jobs_id_matches_its_parts` | Holds the shape, inlined rather than calling the function |
 
-So the `c` appears the moment a job is marked community title and disappears if that is
-corrected, with nothing to migrate and nothing to renumber.
+Her constraint is honoured exactly: **the 4-digit project and 3-digit sequence never move.**
+`job_sequence` stays digits-only under its two existing checks, so `1004-003` can become
+`1004-003c` and back, and can never become `1004-004`. The counter counts dwellings, not
+community-title dwellings, which is why her own example runs `001c, 002c, 003, 004`.
 
-#### A generated column, not a view column
+The CHECK inlines the expression instead of calling `job_number()` deliberately: **a CHECK
+built on a function is not re-verified when the function changes**, so it would go on
+passing rows it no longer describes. Assertion 8 asserts the two agree, which is what stops
+them drifting without leaving the rule written twice and unwatched.
 
-`address_consolidated` set the precedent in `0001`: *"Assembled once, in the database, so
-every card, export and search reads the same string."* The argument is stronger here,
-because a job number appears in documents and reports that never go near `job_display`.
-`generated always … stored`, so it cannot be written by hand and cannot drift from the two
-columns it is built from. `address_consolidated` had to be a trigger because casting an
-enum to text is not immutable; this expression is concatenation and a `CASE`, so the real
-generated column is available.
+#### The one table that would have refused
 
-#### What the app does with the pair
+`report_documents` referenced `jobs(job_id)` with **NO ACTION**, with 6 rows already linked,
+so the very first rename would have been rejected by a table nobody would think to look at.
+Made the seventeenth cascade here — and the mutation that puts it back to `NO ACTION` fails
+with a foreign key violation, so that fix is proved load-bearing rather than assumed.
 
-`BoardJob` now carries **both**, and which one is used is a rule rather than a preference:
+#### Checked before committing to it
 
-- `jobNumber` routes (`/jobs/:jobNumber`), matches in `find`, and keys React rows.
-- `displayNumber` is printed, and nothing else.
+Nothing embeds the job number inside its own key — `maintenance_request_id` is a uuid, not
+`1042-01-M3` as the naming suggests, so no child id goes stale. No job has a SharePoint
+folder yet (0 of 83), so no stored URL breaks today. Nine community title jobs are renamed
+by the backfill; the 7 torrens and 67 undecided do not move.
 
-`JobCard` was given only the display number, and the key taken away from it — it never used
-the key except to print it, and a component that holds the key is a component that can route
-by the wrong one. `JobTitle` needed no change: `1004-003c` still splits to `1004` for the
-project link and `-003c` for the tail.
+#### Six mutations, each replayed into a fresh database
 
-Search matches **both**, so `1004-003c` off a card and `1004-003` off an older document each
-find the job. The Jobs table **sorts on the key and shows the display**: sorting on the
-suffix would interleave a project's jobs by title type, and the suffix is not part of the
-order.
+Suffix everything, suffix torrens instead, an upper-case `C`, no suffix at all, drop
+`job_title_type` from `resync_job_id`'s test, and put `report_documents` back to `NO
+ACTION`. All six reported. **Five were caught by `jobs_id_matches_its_parts` itself** rather
+than by a named assertion, which is the better outcome: the schema refuses the wrong shape
+before a probe has to notice it.
 
-#### Four mutations, each watched failing
+The probe also proves the suffix is **not a one-way door** — corrected back to torrens, the
+`c` goes away — that a child row follows the rename and nothing is left pointing at the old
+number, and that the project and sequence are untouched throughout.
 
-Suffixing every job, suffixing Torrens instead of community, an upper-case `C`, and no
-suffix at all were each replayed into a fresh database and each reported by a named
-assertion. The probe also asserts the suffix is **not a one-way door** — a job corrected
-back from community to Torrens loses the `c` again — and that the key is unchanged
-throughout, which is the point of the whole design.
+#### The cost, stated plainly
+
+A bookmarked `/jobs/1004-003` stops resolving once that job is marked community title.
+Whether the old number should stay findable — the other half of Amber's address analogy,
+since `address_history` keeps superseded addresses searchable — is **open question 0f** and
+is deliberately not guessed at.
 
 **Applied to the live project? Not yet.**
 

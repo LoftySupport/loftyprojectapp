@@ -133,7 +133,7 @@ export function JobsGantt({ groups, grouping, expectedDaysByStage, onOpen }: {
                   return (
                     <div className="gantt-row" key={j.jobNumber}>
                       <button type="button" className="gantt-left gantt-job" onClick={() => onOpen(j)}>
-                        <span className="gantt-job-no">{j.displayNumber}</span>
+                        <span className="gantt-job-no">{j.jobNumber}</span>
                         <span className="gantt-job-sub">
                           {j.assigneeName ?? "—"} · {j.daysInStage}d in stage
                           {expected != null ? ` of ${expected}` : ""}
@@ -150,7 +150,7 @@ export function JobsGantt({ groups, grouping, expectedDaysByStage, onOpen }: {
                         <div
                           className={"gantt-bar" + (cut ? " is-cut" : "") + (over ? " is-over" : "")}
                           style={{ left: x(from), width: Math.max(COL / 2, x(Math.min(today, max)) - x(from) + COL / 2) }}
-                          title={`${j.displayNumber} — entered ${new Date(entered).toLocaleDateString()}${due != null ? `, due ${new Date(due).toLocaleDateString()}` : ""}`}
+                          title={`${j.jobNumber} — entered ${new Date(entered).toLocaleDateString()}${due != null ? `, due ${new Date(due).toLocaleDateString()}` : ""}`}
                         />
                         <div className="gantt-today-line" style={{ left: x(today) + COL / 2 }} aria-hidden />
                       </div>

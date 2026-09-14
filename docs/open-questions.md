@@ -21,6 +21,34 @@ invent a value, and `CLAUDE.md` is explicit that an invented default is worse th
 
 ## Open — next question first
 
+### 0f. When a job number changes, should the old one stay findable?
+
+`0120` made the job number move: mark a job community title and `1004-003` becomes
+`1004-003c`, carrying every child row with it by cascade. Amber's own words for what she
+wanted were *"like the address when updated"* — and the address half of that analogy has a
+second part this does not yet have.
+
+**An address that is superseded is kept.** `address_history` records the stint, and
+`0042`'s note quotes her from 25 August: *"all addresses should be in the project history"*,
+so searching an old address off an old contract still finds the record. A superseded job
+number is currently kept nowhere. Type `1004-003` after the job became `1004-003c` and you
+get nothing.
+
+| Option | What it means |
+| --- | --- |
+| **A job number history, like the address's** | A row per superseded number, searchable, shown on the record. Matches the analogy she drew. A new table, and the only one of the three that makes an old email or contract findable |
+| **Search falls back by stripping the suffix** | No new table: a search for `1004-003` also matches `1004-003c`. Cheap, and it covers the common case exactly — the suffix is the only part that ever changes. It records nothing, so it cannot tell you the number *did* change or when |
+| **Nothing — the new number is the number** | The rename is the point, and the old one is meant to stop working. Honest, and it makes a bookmarked link and a quoted number simply wrong |
+
+**Recommendation: the second.** The suffix is the only mutable part of the number, so a
+search that ignores it covers every case a history table would, at the cost of one function
+rather than a table and a trigger. If the audit trail turns out to matter — who changed it
+and when — `activity_audit` already records every `jobs` update, so the history is
+recoverable without a second home for it.
+
+**Blocked on:** this answer. Nothing else waits on it; `0120` works either way.
+
+
 ### 0c. Which team and which stage does each remaining fixed column get?
 
 **This is the walk-through Amber asked for**, and it is the live interview rather than a
@@ -437,7 +465,7 @@ decides how much retro-fitting to schedule, and in what order.
 
 | Date | Question | Answer |
 | --- | --- | --- |
-| 14 Sep | Community title jobs need a `c` suffix — does it go in the job number itself? | **No. The suffix is on the displayed number; the key stays as it is.** Amber: *"Any job that is listed as community title needs a 'c' suffix after the job number eg 1004-001c. Torrens title has no suffix. The jobs remain sequential."* Asked whether a later title-type correction should renumber the job, she chose the display-only option over *suffix in the key*, *stamped once at creation then frozen*, and *lock the title type*. The numbers that made the case: **67 of 83 live jobs have no title type set**, so under a key-carried suffix most would be renumbered long after creation by somebody changing a dropdown; 17 tables reference `jobs(job_id)` and one of them, `report_documents`, has no `ON UPDATE CASCADE`; and a job number is what sits in contracts, emails and SharePoint folder names, which no cascade reaches. Built as `0120`, a generated stored column, so the `c` follows the title type both ways with nothing to migrate |
+| 14 Sep | Community title jobs need a `c` suffix — does it go in the job number itself? | **Yes, in the key, and the key moves when the title type is corrected.** Asked first whether a later correction should renumber the job, Amber chose a display-only suffix; shown the build, she reversed it: *"But the primary key can it be updated that is also linked so it show the c on the end (like the address when updated) but the project 4 digits and 3 digit job code always remains with job too"*. It can, and the machinery was already there — `resync_job_id` has rebuilt `job_id` from its parts since `0028` and 16 of 17 referencing tables were already `ON UPDATE CASCADE`. The concern that made the first answer is recorded in `schema-plan.md` rather than deleted, because it is still true: 67 of 83 live jobs have no title type, so most will be renumbered long after creation, and a job number in a contract or an email is beyond any cascade's reach. She has accepted that twice. Built as `0120`; the 4-digit project and 3-digit sequence never move, only the suffix |
 | 14 Sep | What should the calculated completion date show while most processes have no SLA? | **Build it; she will fill the SLAs in.** Chosen over *blank naming what is missing*, *partial and marked as such*, and *fall back to a per-stage figure*. The finding that prompted the question: 3 of 51 processes carry `process_expected_days` while 107 of 107 `process_tasks` carry theirs, and **all 38 Pre-construction processes have neither**. So the mechanism is built and returns null until the estimates land, with `job_calculated_completion_missing` saying how many are outstanding. Built as `0119` |
 | 14 Sep | Are the expected days working days or calendar days? | **Calendar days.** So no weekday skip and no South Australian holiday table, and a 10-day SLA is 10 days on the calendar |
 | 14 Sep | What does the forecast assume about a process already past its SLA? | **It finishes today, and everything after runs to SLA.** Chosen over *re-charge its full SLA from today*, *scale the remaining work by how late it is running*, and *flag the blockage instead of projecting past it*. Honest about the past and deliberately optimistic about the present — which is a choice she made rather than an accident of the arithmetic, and worth remembering when the forecast turns out to run early |
