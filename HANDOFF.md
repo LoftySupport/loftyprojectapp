@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 266 changes since then —
+Unreleased: 269 changes since then —
 - Added: Attachments can be dragged straight onto a maintenance issue, including from an email, and a drop that carries nothing says why
 - Added: A maintenance issue given to a contractor shows the company, the person you ring with their own email and phone, and the suburb
-- Fixed: The person and company pickers show a chevron, so a field that only takes a name from the list no longer looks like a box you can type anything into
-- Added: Photos and files attach to a maintenance issue — from the phone's camera or library — and are filed against the job as well, so they appear in that job's Documents
-- Changed: Every slideout's form is condensed: no rules between rows, one column width for every field, and a Details box you can actually write in
-- …and 261 more.
+- Added: A maintenance issue carries the day it was booked and the day it was done, on the board and in the drawer, with the follow-up date beside them
+- Changed: The maintenance board shows Identified, Booked and Completed, and who the issue is assigned to, in place of Trade and Owner
+- Added: A Maintenance section in the report builder — every issue as a table you can filter and group, or one page per issue with its details, saved as a template
+- …and 264 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
