@@ -21,6 +21,55 @@ invent a value, and `CLAUDE.md` is explicit that an invented default is worse th
 
 ## Open — next question first
 
+### 0c. Which team and which stage does each remaining fixed column get?
+
+**This is the walk-through Amber asked for**, and it is the live interview rather than a
+decision waiting on her. *"Ask me property by property"* (14 September).
+
+Settled so far:
+
+| Field | Answer |
+| --- | --- |
+| The address fields | System. Listed and assignable, no process |
+| Community and Torrens title lot counts | System. Listed and assignable, no process |
+| Council | Not a job or project property. Belongs to `addresses`, shows on the card |
+| Owning team | Not a property. Derived from the active process (see *Answered*) |
+
+Still to ask, one at a time: the assignee, the status, the stage, the SharePoint folder,
+both completion dates, the title type, the old job number, the notes, the project name and
+the project type.
+
+**Blocked on:** nothing. This is Amber's time, not a missing fact.
+
+
+### 0e. What scopes does a property definition need, now that a property can belong elsewhere and still show on a card?
+
+`property_defs.property_def_scope` is NOT NULL with a check that admits **`project` and
+`job` only**. Two of Amber's 14 September answers break that:
+
+- *"Some properties will be task or maintainece or contact properties which aren't job or
+  project properties but are shown on job or project cards"*
+- The council, which she placed on the **address**.
+
+So the scope vocabulary has to grow, and **where a property is shown becomes a second fact
+from what it belongs to**. A `contact` property rendered on a job card is not a job
+property that happens to live elsewhere; it is a contact property the job card displays.
+
+| Option | What it means |
+| --- | --- |
+| **Widen `property_def_scope` only** | Add `address`, `task`, `maintenance`, `contact` to the check. Cheapest. But then nothing records that a contact property appears on a job card, so the card has to hard-code which foreign properties it shows |
+| **Scope, plus a `shown_on` list** | `property_def_scope` says what it belongs to; a second column or table says which record types display it. Two facts, recorded separately, which is what Amber described |
+| **Leave scope alone and treat these as card configuration** | Nothing changes in `property_defs`; which foreign fields a card shows is a screen decision. Keeps the schema still, and makes the card the third place field layout is decided |
+
+**Recommendation: the second**, because it is the only one that can answer *"what shows on
+a job card"* from the data rather than from a component. But it is a schema change on a
+table the properties screen already reads, so it is worth settling before the walk-through
+in 0c finishes and produces thirty-odd rows in the wrong shape.
+
+**Blocked on:** this answer. The walk-through in 0c can continue meanwhile — which team and
+stage a field takes does not change with the scope vocabulary.
+
+
 ### 0. Do the fixed columns on a job and a project get property definitions?
 
 **This is what the orphan sweep turned up, and it is a decision rather than a build.**
@@ -362,6 +411,11 @@ decides how much retro-fitting to schedule, and in what order.
 
 | Date | Question | Answer |
 | --- | --- | --- |
+| 14 Sep | Do the fixed columns on a job and a project get property definitions? | **Yes, all of them, and ask her property by property.** Amber: *"Ask me property by property. Some things like address fields collections are part of creating a new job or project process but are not required to be really documented as a process as they are a system. Same as number of community titles etc but I still need them listed in the properties section so I can assign them to a team or stage. Some properties will be task or maintainece or contact properties which aren't job or project properties but are shown on job or project cards"*. This **reverses the recommendation**, which was definitions only for the handful a process gates. The reason it was wrong: a definition is not only a hook for a process, it is the row that carries `property_def_owning_team` and `property_def_stage`, so a field with no definition cannot be assigned to a team or a stage at all — which is the thing she actually wants from the screen. So a system field still gets a definition; what it does not get is a process. Two consequences: **`property_def_scope` has to widen** beyond `project` and `job` (question 0e below), and the walk-through of the remaining fields is now the work |
+| 14 Sep | Is the council a job/project property? | **No — it belongs to the address, and shows on the job and project card.** Chosen over *system field on the job* and *process-collected*. It is already `addresses.address_council`, filled from the suburb off the LGA list, and `0108` is what made a job able to read its own. So it is the first confirmed case of the pattern in the answer above: a property owned by one record and displayed on another |
+| 14 Sep | Is the owning team a property somebody sets? | **No — it is an assignment derived from the active process.** Amber: *"The owning team is an assignment that updates when a job starts that new process. For example when a job starts working drawings process which is owned by design team that job is now with design."* `processes.process_owning_team` already exists, so the input is there. What does not exist is the derivation: `jobs.job_owning_team` is set to `Acquisition & Development` at creation and changed by hand from the record. Tie-break and override are the answer below |
+| 14 Sep | When two processes from different teams run at once, which owns the job? | **The earliest unfinished process in the job's stage, with a manual override that has to be granted.** Amber: *"It needs to be a drop down so it can assigned to a new team with a button next to it that requests control of job, eg 'Override Active Team' at which point the active team manager gets a notification that can either release the job to the new team or not. This is flagged on the job with a highlighted style update on the board that flags who has request job ownership. Note this process will need to be added as an automation in automations section to be refined. So it defaults to the earliest unfinished process in a jobs stage."* So: a default the database can compute, and a request-and-release handshake on top of it that is **not** a silent reassignment. The override is explicitly parked into Automations to be refined rather than built now |
+| 14 Sep | Can a process be skipped? | **Yes — a process needs an optional flag.** Amber, in the same answer: *"processes will need a new property that is the ability to mark that process as optional as some processes eg PWA is not required on every job so it can be skipped and ignored. However some like planning approval or working drawings are mandatory."* A column on `processes`, not on the run: whether PWA applies is a fact about the process, not about one job's attempt at it. This also gives the owning-team derivation above something it needs — an optional process nobody will run should not hold the job |
 | 14 Sep | When a project's current address changes, which of its jobs should take the new address? | **Only the jobs still standing at the project's address.** Amber asked for it in the first place: *"when a new address is added and updated to current project address this address needs to push to jobs so that the job address shown on the job drawer and project drawer is the current address"* — and, given three options, took the conservative one over *every live job* and over *ask each time with a preview*. So a job follows when its street number, street, street line 2, suburb, state and postcode all match the address the project is **leaving**, and it keeps any lot and res number of its own: "Lot 1, 14 Brodie Road" becomes "Lot 1, 28 Corner Street". A job given its own address since, once its title issued, is left exactly where it is; so are closed and cancelled jobs. Built as `0118`, a trigger rather than repository code, because the import and hand-written SQL write these tables too. Two consequences worth carrying: a job that has diverged **never comes back** on its own, which is correct but means a bulk re-address of a whole street is still a job-at-a-time edit; and a project moving to a locality takes nothing with it, because `guard_job_address_is_a_street` refuses a job with no street |
 | 14 Sep | Where do a maintenance issue's photos live? | **`job-documents`, private.** Three options were put up — the private job bucket, a new private `maintenance-photos` bucket, or the public `report-images` one — and Amber took the first. So a defect photo is a document about the job: it is filed in `documents`, attached through `document_links.maintenance_request_id` (which `0084` already added for exactly this), and it appears in that job's Documents list beside the contract and the site plan. Every read is a short-lived signed URL, so nothing leaves Lofty without one. **The consequence to carry into the report (PR #79):** an emailed report cannot simply point at these images the way a shared document points at `report-images`, because a signed link expires and a private object has no permanent URL. The report will have to embed the bytes or sign at the moment of building. That is the cost of the choice, and it is the right one — a defect photo of somebody's house is not a thing to make permanently public to anyone who ever sees the URL |
 | 14 Sep | An issue needs its own record id — is it a line inside one request, or a request of its own? | **Its own request.** Amber took the second of two options: *"each one of these issues have its own record id but you only enter the job number, reported by, identifies at, date once so you can then have a status, date booked, and followup for each"*. So three defects from one PCI walk are **1042-01-M3, -M4 and -M5**, created together from one drawer, each with its own status, date booked, follow-up and assignee. No new table: `maintenance_requests` grows the header fields it lacked plus a `maintenance_request_batch_id` recording that they were typed in one sitting, which same-job-same-day cannot — it is wrong the first time two people log a PCI on one house on one day, and it is what the report groups a section on (`0114`) |
