@@ -48,6 +48,13 @@ does not do.
 dropping the digit guard (2), dropping the slash guard (1), allowing an empty issue name (2),
 and not trimming either side of the colon (5).
 
+**That check now runs in CI**, in the `app` job. It had been running nowhere but a
+developer's machine, which is the same as not running. **Six others are still in that
+position** and none of them needs a browser: `check:pipeline`, `check:pipeline-order`,
+`check:process-move`, `check:report-widgets`, `check:share-password` and `check:file-drop`.
+Wiring them in is a separate small job, and worth doing — a check nobody runs is a check that
+silently stops being true.
+
 ---
 
 ## 14 September — the maintenance report, stage 1 of three
