@@ -17,7 +17,9 @@ import { matchedAddress } from "./SearchProvider";
 import type {
   ActivityEntry,
   DocumentCategory,
+  StorageBucket,
   NewDocumentUrl,
+  Doc,
   RecordDocument,
   RecentDocument,
   SearchHit,
@@ -236,6 +238,38 @@ const REPORT_IMAGE_BUCKET = "report-images";
  * with real addresses, names and figures in it. Read by signed URL, like the screenshots.
  */
 const JOB_DOCUMENT_BUCKET = "job-documents";
+/**
+ * Where a maintenance photo or video goes (0119), and it behaves OPPOSITELY to the one
+ * above: this bucket is public, so its objects have permanent URLs and nothing is signed.
+ * Amber, 14 September, reversing her own 0c answer — *"No videos or photos are private
+ * accept video and photos with permanent links"* — so a generated sheet can point at a
+ * picture that still works when it reaches a contractor.
+ *
+ * Contracts, permits and published documents keep going to `JOB_DOCUMENT_BUCKET`. Read
+ * `documents.document_storage_bucket` to know which one a row is in; do not infer it.
+ */
+const MAINTENANCE_MEDIA_BUCKET = "maintenance-media";
+
+/**
+ * `photo`, `video`, or null for anything that is neither — a PDF quote, a Word scope.
+ *
+ * The extension fallback is the same one `FileDrop` carries and for the same reason: HEIC
+ * off a phone and a file dragged out of some mail clients arrive with an empty `type`, and
+ * refusing a real photograph because the browser did not label it is the wrong failure.
+ * Both lists are small and deliberately not `image/*` — see 0110 on why an allowlist is the
+ * cheapest guard against a bucket becoming a drive.
+ */
+function mediaKind(file: File): "photo" | "video" | null {
+  const type = file.type || EXTENSION_MEDIA[file.name.split(".").pop()?.toLowerCase() ?? ""] || "";
+  if (type.startsWith("image/")) return "photo";
+  if (type.startsWith("video/")) return "video";
+  return null;
+}
+const EXTENSION_MEDIA: Record<string, string> = {
+  jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp",
+  heic: "image/heic", heif: "image/heif",
+  mp4: "video/mp4", mov: "video/quicktime", webm: "video/webm", mpeg: "video/mpeg", mpg: "video/mpeg"
+};
 
 /**
  * What the tracker reads off `feedback_display` (0061, widened by 0068).
@@ -3786,8 +3820,15 @@ export function createSupabaseRepository(): Repository {
           // The uuid keeps two photos both called IMG_0042.jpg apart.
           const safe = file.name.replace(/[^a-zA-Z0-9.-]/g, "-").slice(-80) || "attachment";
           const path = `jobs/${input.jobId}/${crypto.randomUUID()}-${safe}`;
+          // Media goes to the public bucket, everything else stays private (0119). A photo
+          // and a video are evidence somebody outside Lofty has to be able to open from an
+          // emailed sheet; a PDF quote attached to the same issue is not, and putting it on
+          // a permanent URL because it arrived through the same drop zone would be a
+          // privacy decision nobody made.
+          const kind = mediaKind(file);
+          const bucket: StorageBucket = kind ? MAINTENANCE_MEDIA_BUCKET : JOB_DOCUMENT_BUCKET;
           const up = await db.storage
-            .from(JOB_DOCUMENT_BUCKET)
+            .from(bucket)
             .upload(path, file, { contentType: file.type || undefined, upsert: false });
           if (up.error) throw up.error;
 
@@ -3796,9 +3837,10 @@ export function createSupabaseRepository(): Repository {
             .insert({
               document_name: file.name,
               document_storage_path: path,
+              document_storage_bucket: bucket,
               document_mime_type: file.type || null,
               document_size_bytes: file.size,
-              document_category: file.type.startsWith("image/") ? "photo" : "other"
+              document_category: kind ?? "other"
             })
             .select("document_id")
             .single();
@@ -4356,6 +4398,16 @@ export function createSupabaseRepository(): Repository {
      * URL. Null when storage refuses, which the row renders as the copy being gone rather
      * than as a link that opens on an error page.
      */
+    async documentUrl(doc: Pick<Doc, "storagePath" | "storageBucket">): Promise<string | null> {
+      if (!doc.storagePath) return null;
+      // Public: the URL is permanent and there is nothing to sign, so no round trip.
+      if (doc.storageBucket === MAINTENANCE_MEDIA_BUCKET) {
+        const { data } = db.storage.from(MAINTENANCE_MEDIA_BUCKET).getPublicUrl(doc.storagePath);
+        return data?.publicUrl ?? null;
+      }
+      return this.jobDocumentUrl(doc.storagePath);
+    },
+
     async jobDocumentUrl(path: string): Promise<string | null> {
       const { data, error } = await client.storage
         .from(JOB_DOCUMENT_BUCKET)
@@ -4625,7 +4677,7 @@ const ilike = (s: string) => `%${s.replace(/[%_,()]/g, " ").trim()}%`;
  * shape that took sign-in down on 21 August, found here by a check rather than by a user.
  */
 const RECORD_DOCUMENT_COLUMNS =
-  "document_link_id, document_id, job_id, project_id, maintenance_request_id, document_link_created_at, document_link_created_by, documents!document_links_document_id_fkey(document_id, document_name, document_description, document_storage_path, document_url, document_mime_type, document_size_bytes, document_category, document_supersedes_id, document_created_at, document_created_by, document_updated_at, document_updated_by)";
+  "document_link_id, document_id, job_id, project_id, maintenance_request_id, document_link_created_at, document_link_created_by, documents!document_links_document_id_fkey(document_id, document_name, document_description, document_storage_path, document_storage_bucket, document_url, document_mime_type, document_size_bytes, document_category, document_supersedes_id, document_created_at, document_created_by, document_updated_at, document_updated_by)";
 
 type RecordDocumentRow = {
   document_link_id: string;
@@ -4640,6 +4692,7 @@ type RecordDocumentRow = {
     document_name: string;
     document_description: string | null;
     document_storage_path: string | null;
+    document_storage_bucket: StorageBucket;
     document_url: string | null;
     document_mime_type: string | null;
     document_size_bytes: number | null;
@@ -4671,6 +4724,7 @@ function toRecordDocument(r: RecordDocumentRow): RecordDocument | null {
     name: d.document_name,
     description: d.document_description,
     storagePath: d.document_storage_path,
+    storageBucket: d.document_storage_bucket,
     url: d.document_url,
     mimeType: d.document_mime_type,
     sizeBytes: d.document_size_bytes,

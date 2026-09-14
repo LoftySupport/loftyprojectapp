@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-751 properties across 100 tables.
+752 properties across 100 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 702 | In the migration and the types |
+| Created | 703 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -307,6 +307,7 @@ A file, held once however many records point at it. Versions chain through super
 | `documents.document_category` | Type | contract · drawing · permit · certificate · photo · invoice · report · correspondence · other. For filtering a drawer that will hold dozens. | `text` | — | Not null, default 'other'. CHECK on the nine values — text rather than an enum, because this list will grow and every list that has grown so far was an enum first. | Indexed. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `documents.document_supersedes_id` | Replaces | The document this one supersedes. Versions as a chain rather than a version number: an integer cannot say WHICH document a revision revises when two people upload at once, and "show me the current drawing and what it replaced" is the question people actually ask. | `uuid` | — | Nullable. CHECK documents_not_its_own_predecessor. | FK → documents(document_id) ON DELETE SET NULL. The documents_current view is everything nothing points at. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `documents.document_size_bytes` | Size | File size. | `integer` | — | bigint. Nullable. CHECK >= 0. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `documents.document_storage_bucket` | Storage bucket | Which bucket the storage path is a path in, and therefore how a read works. job-documents is private and every read is a signed URL that expires; maintenance-media is public and its URL is permanent. | `text` | — | Not null. Defaults to job-documents. One of job-documents, maintenance-media. | Added by 0119 when Amber reversed 0c: "No videos or photos are private accept video and photos with permanent links". A defect photo is therefore fetchable by anyone holding the URL, for good, which is what makes a generated maintenance sheet keep working after it is emailed. The twelve photographs filed before 0119 stay in the private bucket, so a reader must read this column rather than assume one. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `documents.document_mime_type` | Content type | What kind of file it is, for choosing a preview. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `feedback`

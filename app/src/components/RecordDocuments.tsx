@@ -4,6 +4,7 @@ import { Button, Text, TextField } from "@vibe/core";
 import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import {
+  type Doc,
   DOCUMENT_CATEGORIES,
   REPORT_DOCUMENT_STATE_LABELS,
   reportDocumentState,
@@ -32,11 +33,16 @@ import { CollapsiblePanel } from "./CollapsiblePanel";
  * comes back.
  */
 function OpenStoredFile({
-  path,
+  doc,
   label,
   ariaLabel
 }: {
-  path: string;
+  /**
+   * The document to open, not just its path: since 0119 there are two buckets and they
+   * behave oppositely, so `repo.documentUrl` asks the row which one it is in rather than
+   * this component assuming. A path alone could not say.
+   */
+  doc: Pick<Doc, "storagePath" | "storageBucket">;
   label: string;
   ariaLabel: string;
 }) {
@@ -63,7 +69,7 @@ function OpenStoredFile({
           tab.opener = null;
           setBusy(true);
           try {
-            const url = await repo.jobDocumentUrl(path);
+            const url = await repo.documentUrl(doc);
             if (url) {
               tab.location.href = url;
             } else {
@@ -366,7 +372,9 @@ export function RecordDocuments({
                   the panel is holding is a round trip to learn what it knows. */}
               {publishedCopyPath(d.publishedDocumentId) && (
                 <OpenStoredFile
-                  path={publishedCopyPath(d.publishedDocumentId) as string}
+                  // A published copy is always in the private bucket: 0119's public one
+                  // takes maintenance media and nothing else.
+                  doc={{ storagePath: publishedCopyPath(d.publishedDocumentId) as string, storageBucket: "job-documents" }}
                   label="Open the copy on the job"
                   ariaLabel={`Open the copy of ${d.title} saved on this record`}
                 />
@@ -544,7 +552,7 @@ export function RecordDocuments({
                   it — Word for a .docx, the PDF viewer for a .pdf. */}
               {!d.url && d.storagePath && (
                 <OpenStoredFile
-                  path={d.storagePath}
+                  doc={d}
                   label="Open"
                   ariaLabel={`Open ${d.name}`}
                 />

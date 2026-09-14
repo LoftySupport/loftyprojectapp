@@ -41,6 +41,11 @@ import "./ui.css";
 /** What `job-documents` takes (0115). Keep in step with the bucket, not with a guess. */
 export const ATTACHABLE_MIME_TYPES = [
   "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif",
+  // Video since 0119. Amber, 14 September: *"there may be videos as well. It is essential
+  // to keep these as a record"*. Four types rather than `video/*`, the same allowlist
+  // reasoning as the images above: quicktime is what an iPhone records, mp4 what Android
+  // does, webm a browser capture, mpeg the older cameras still on site.
+  "video/mp4", "video/quicktime", "video/webm", "video/mpeg",
   "application/pdf",
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -53,11 +58,16 @@ export const ATTACHABLE_ACCEPT = ATTACHABLE_MIME_TYPES.join(",");
 /**
  * HEIC from a phone sometimes arrives with an empty `type`, and so does a file dragged
  * out of some mail clients. Falling back to the extension keeps a real photograph from
- * being refused by a check that was meant for a video.
+ * being refused by a check that never saw its MIME type.
+ *
+ * (Until 0119 this comment ended "…by a check that was meant for a video", because video
+ * was the thing being kept out. It is not any more.)
  */
 const EXTENSION_TYPES: Record<string, string> = {
   jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp",
-  heic: "image/heic", heif: "image/heif", pdf: "application/pdf",
+  heic: "image/heic", heif: "image/heif",
+  mp4: "video/mp4", mov: "video/quicktime", webm: "video/webm", mpeg: "video/mpeg", mpg: "video/mpeg",
+  pdf: "application/pdf",
   doc: "application/msword",
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   txt: "text/plain", md: "text/markdown", html: "text/html", htm: "text/html"

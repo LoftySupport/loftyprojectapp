@@ -1550,6 +1550,21 @@ export interface Doc {
   /** Nullable: a row can exist for a document Lofty expects but has not received. */
   storagePath: string | null;
   /**
+   * Which bucket `storagePath` is a path in (0119), and therefore how to read it.
+   *
+   * `job-documents` is PRIVATE — every read is a signed URL, asked for when somebody
+   * clicks, gone in five minutes. `maintenance-media` is PUBLIC — a permanent URL you can
+   * put straight in an `src` or an email. Amber, 14 September, reversing her own 0c
+   * answer: *"No videos or photos are private accept video and photos with permanent
+   * links"*, so a generated maintenance sheet points at a picture instead of embedding it
+   * or watching it expire.
+   *
+   * **Read it, never assume it.** Twelve photographs filed before 0119 are in the private
+   * bucket and stay there; the same list can hold both, so a reader that hard-codes one
+   * renders half the pictures as broken images.
+   */
+  storageBucket: StorageBucket;
+  /**
    * Where it is when Lofty does not hold the bytes — a SharePoint link (0103).
    *
    * Independent of `storagePath`, not an alternative to it: an upload has a path, a link
@@ -1572,9 +1587,29 @@ export interface Doc {
   updatedBy: Uuid | null;
 }
 
+/**
+ * The two buckets a document's bytes can be in (0119), and they behave oppositely.
+ *
+ * Contracts, permits and published documents go to `job-documents`, which is private.
+ * Maintenance photos and videos go to `maintenance-media`, which is public: anyone holding
+ * the URL can fetch it, with no sign-in, for good. That is the cost Amber accepted for a
+ * sheet whose pictures still work when it reaches a contractor, and it is stated here
+ * because a name alone does not say it.
+ *
+ * `report-images` is a third public bucket and is deliberately NOT in this union — it is
+ * owned by a document or a library entry rather than by a `documents` row, and reached
+ * through `uploadReportImage`.
+ */
+export const STORAGE_BUCKETS = ["job-documents", "maintenance-media"] as const;
+export type StorageBucket = typeof STORAGE_BUCKETS[number];
+
 export const DOCUMENT_CATEGORIES = [
   "contract", "drawing", "permit", "certificate",
-  "photo", "invoice", "report", "correspondence", "other"
+  // `video` joined the vocabulary in 0119, when the bucket first accepted one. It is a
+  // category rather than a MIME-type test because the generated maintenance sheet shows a
+  // photo and links a video, and two places to ask "is this a video" is one place to get a
+  // different answer.
+  "photo", "video", "invoice", "report", "correspondence", "other"
 ] as const;
 export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number];
 

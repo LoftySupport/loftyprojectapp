@@ -502,6 +502,7 @@ export function createStubRepository(): Repository {
     // and a stub that throws would take the whole panel down on a screen that has no
     // published documents in it anyway.
     async jobDocumentUrl(): Promise<string | null> { return null; },
+    async documentUrl(): Promise<string | null> { return null; },
 
     // ---- what is filed on a record, and where it lives (0032 / 0103) ------
     // Same stance again: nothing to read, and a write that says what it needs. An

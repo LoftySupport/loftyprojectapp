@@ -17,6 +17,7 @@ import { FileDrop } from "../components/FileDrop";
 import { TypeaheadSelect } from "../components/TypeaheadSelect";
 import { LoadProblem } from "../components/SearchNotices";
 import {
+  type Doc,
   MAINTENANCE_ASSIGNEE_KINDS, MAINTENANCE_ASSIGNEE_KIND_LABELS,
   MAINTENANCE_ASSIGNMENT_STATUS_LABELS, MAINTENANCE_HEALTH_LABELS,
   MAINTENANCE_IDENTIFIED_AT, MAINTENANCE_IDENTIFIED_AT_LABELS,
@@ -621,13 +622,15 @@ function RequestDetail({ id, onChanged }: { id: string; onChanged: () => void })
     r => assignedCompanyId ? r.getCompany(assignedCompanyId) : Promise.resolve(null), null, [assignedCompanyId]
   );
   /**
-   * `job-documents` is private, so there is no URL to render into an href — one is asked
-   * for when somebody clicks and it expires in five minutes. Null when storage refuses,
-   * which says the copy is gone rather than opening an error page.
+   * Which bucket a file is in decides how it is opened, so the row is asked rather than
+   * assumed (0119): a photo or video taken since then is in the public bucket and its URL
+   * is permanent; a PDF on the same issue, and the twelve photographs filed before 0119,
+   * are private and signed for five minutes. Null when storage refuses, which says the
+   * copy is gone rather than opening an error page.
    */
-  const openFile = async (path: string | null) => {
-    if (!path) return;
-    const url = await repo.jobDocumentUrl(path);
+  const openFile = async (doc: Pick<Doc, "storagePath" | "storageBucket"> | null) => {
+    if (!doc?.storagePath) return;
+    const url = await repo.documentUrl(doc);
     if (url) window.open(url, "_blank", "noopener");
   };
   async function run(fn: () => Promise<unknown>) {
@@ -805,7 +808,7 @@ function RequestDetail({ id, onChanged }: { id: string; onChanged: () => void })
         {files.length === 0 && <Text type="text3" color="secondary" ellipsis={false} element="p">Nothing attached. Add photos when the issue is logged, or here.</Text>}
         {files.map(f => (
           <div key={f.linkId} className="issue-file" style={{ padding: "var(--space-4) 0" }}>
-            <button type="button" className="link-button tap-link" onClick={() => void openFile(f.storagePath)}>{f.name}</button>
+            <button type="button" className="link-button tap-link" onClick={() => void openFile(f)}>{f.name}</button>
             {canWrite && (
               <Button size="xs" kind="tertiary" onClick={() => run(() => repo.removeRecordDocument(f.linkId))}>Remove</Button>
             )}

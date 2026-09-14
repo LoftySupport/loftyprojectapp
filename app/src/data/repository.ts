@@ -4,6 +4,7 @@ import type {
   AddressHistoryEntry,
   CloneOptions,
   NewDocumentUrl,
+  Doc,
   RecordDocument,
   NewReportDocument,
   NewReportDocumentShare,
@@ -969,6 +970,26 @@ export interface Repository {
   jobDocumentUrl(path: string): Promise<string | null>;
 
   /**
+   * How to read ONE document, whichever bucket it turned out to be in (0119).
+   *
+   * There are two now and they behave oppositely: `job-documents` is private and every read
+   * is a signed URL good for five minutes; `maintenance-media` is public and its URL is
+   * permanent. A caller holding a list can hold both — the twelve photographs filed before
+   * 0119 are in the private one and the ones taken since are in the public one — so this
+   * asks the row rather than assuming, and every screen that opens a document goes through
+   * it instead of picking a bucket itself.
+   *
+   * Null when there is nothing to open: a row with no stored bytes (a document Lofty expects
+   * but has not received), or storage refusing. The caller shows "the copy is gone" rather
+   * than a link that opens on an error page.
+   *
+   * Synchronous callers cannot use this — signing is a round trip. That is the reason the
+   * generated maintenance sheet can only carry media from the PUBLIC bucket, and why 0119
+   * exists at all.
+   */
+  documentUrl(doc: Pick<Doc, "storagePath" | "storageBucket">): Promise<string | null>;
+
+  /**
    * The documents attached to one job or one project — 0032's `documents` joined through
    * `document_links`.
    *
@@ -1262,6 +1283,7 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "unshareReportDocument",
   "publishReportDocument",
   "jobDocumentUrl",
+  "documentUrl",
   "listRecordDocuments",
   "listMaintenanceDocuments",
   "attachMaintenanceFiles",
@@ -1479,6 +1501,7 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   unshareReportDocument: "report_documents",
   publishReportDocument: "report_documents + documents + document_links + storage: job-documents",
   jobDocumentUrl: "storage: job-documents",
+  documentUrl: "storage: job-documents + maintenance-media",
   listMaintenanceDocuments: "document_links",
   attachMaintenanceFiles: "documents + document_links + storage: job-documents",
   listRecordDocuments: "documents + document_links",

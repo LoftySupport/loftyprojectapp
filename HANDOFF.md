@@ -5,16 +5,93 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 274 changes since then —
+Unreleased: 276 changes since then —
+- Changed: A maintenance photo or video now has a permanent link, so a generated maintenance sheet still shows its pictures after it is emailed
+- Added: A maintenance issue takes video as well as photos
 - Fixed: A project's new address now carries its live jobs with it. A job still standing at the project's old address follows, keeping its own lot and res numbers, so "Lot 1, 14 Brodie Road" becomes "Lot 1, 28 Corner Street". A job given its own address since its title issued is left alone, as are closed and cancelled jobs.
 - Fixed: The check that every database view runs as its caller now tests the setting's value rather than only that it was written, so a view with the protection turned off can no longer pass it
 - Changed: A pasted maintenance list splits at a colon - what is before it becomes the issue, what is after becomes the details
-- Fixed: A half-filled new maintenance request is kept when the drawer closes, so a stray click no longer loses a pasted list of issues
-- Added: Paste a list into a new maintenance request and each line becomes its own issue, bullets and numbering stripped
-- …and 269 more.
+- …and 271 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
+
+## 14 September — photos and videos get permanent links (`0119`), and what the maintenance rebuild still needs
+
+**Where it stands:** on `claude/sleepy-mendel-0birzy-mdrawer`, off `main`. **`0119` is applied
+to the live project and verified there.** This is the first of three pieces; the other two are
+named at the bottom and neither is started.
+
+### The decision, because it reverses one of yours
+
+Amber, 14 September, asked twice with the cost stated both times: *"Keep them forever and there
+may be videos as well. It is essential to keep these as a record"*, then *"No videos or photos
+are private accept video and photos with permanent links"*.
+
+That reverses **`0c`**, answered earlier the same day, which put a defect photo in the private
+`job-documents` bucket. **A photograph of a defect inside somebody's house is now fetchable by
+anyone who ever sees the URL, with no sign-in, for good** — the terms `report-images` has
+carried since 7 September. It was put to her before she chose it, weighed against a sheet whose
+pictures break minutes after it is emailed. The `0c` row is kept in
+[`docs/open-questions.md`](docs/open-questions.md) rather than rewritten.
+
+### What `0119` does
+
+- A public **`maintenance-media`** bucket: 200 MB rather than 25, and four video types beside
+  `0115`'s five image ones. Still an allowlist — `0110`'s reason, that `image/*` makes a bucket
+  a drive, has not changed.
+- **`documents.document_storage_bucket`**, defaulting to `job-documents`. The path never said
+  which bucket it was in because there was only one; two makes that a guess, and a wrong guess
+  is a broken image rather than an error anybody notices.
+- **`video` joins `0032`'s category vocabulary**, because the sheet shows a photo and links a
+  video, and deriving that from the MIME type would put the same question in two places.
+- `repo.documentUrl(doc)` asks the row which bucket it is in and signs or links accordingly.
+  `OpenStoredFile` and the maintenance drawer both go through it now.
+- `FileDrop` accepts video. Its comment used to end *"a check that was meant for a video"* —
+  that is corrected in place rather than deleted, and so is the check assertion that used a
+  `.mov` as its example of a refused type.
+
+**`job-documents` is untouched**: still private, still 25 MB, still holding the contracts.
+Making it public was never an option — `public` is a flag on the bucket, not the object.
+
+### The twelve already filed, and what you need to decide
+
+Twelve photographs sit in `job-documents` today, on jobs `1002-001` and `1991-001`. **`0119`
+does not move them and cannot** — the bytes are storage objects and no SQL statement copies
+them. They keep `document_storage_bucket = 'job-documents'`, which is true of them, and the app
+signs a private one and links a public one, so both keep working. **But a sheet generated for
+those twelve will carry pictures that expire.** Moving them is a copy through the Storage API,
+about twenty lines, and it is a change to live data — so it is **yours to say yes to**, not
+something a migration does behind you.
+
+### Watched failing
+
+Five through `replay.sh`: the default changed away from the old bucket (the twelve break), the
+check dropped (a typo'd bucket accepted), the column made nullable, the category check left as
+`0032` wrote it (`video` refused), the vocabulary replaced rather than widened (`contract`
+refused). Three through `check:file-drop`: the video MIME types removed, the video extensions
+removed, and the allowlist opened to everything (the `.zip` got through). Live, inside a rolled
+back transaction: the default holds, both checks bite, `video` is accepted, nothing written.
+
+### Still to build, and neither is started
+
+- **The maintenance edit drawer.** Amber: *"when you click on a maintenance job to edit it you
+  have same type of format that is when you add a new job but at the additional fields for
+  status booked in and they tasks activity comments documents that are the same format as on
+  the bottom of a job or project drawer"*. `RequestDetail` in `MaintenancePage.tsx` is the
+  screen; the panels to reuse are the ones at the bottom of the job and project drawers.
+- **The generated documents — a large chunk, flagged as one.** A maintenance request sheet per
+  issue with its pictures, and an overall document per job with every issue sorted by how it
+  was identified (PCI, site inspection, and the rest), named `<job number> - maintenance
+  request`, linked from the job card, the project card and the issue's own drawer. The report
+  builder is person-driven today: a document is something somebody *builds* from the library.
+  **Autogenerating one is new machinery, not a new widget**, and it is the piece to check the
+  shape of with Amber before it is written.
+- **A photo package when a job closes**, to SharePoint. Amber: *"It would be good to maybe when
+  a job closes to have the ability to download all jobs photos in a package and save to
+  SharePoint"* — a *maybe*, recorded here rather than acted on.
+
+---
 
 ## 14 September — seven checks that ran nowhere, and one that asked the wrong question
 

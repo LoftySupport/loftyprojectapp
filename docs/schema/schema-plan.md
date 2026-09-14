@@ -3144,6 +3144,51 @@ field alone.
 **Not yet applied to the live project.**
 
 
+### 14 September — a defect photo is evidence you can link to (`0119`)
+
+**This reverses `0c`, and the reversal is Amber's.** Asked twice, with the cost stated both
+times: *"Keep them forever and there may be videos as well. It is essential to keep these as
+a record"*, then *"No videos or photos are private accept video and photos with permanent
+links"*.
+
+`0c` put a defect photo in `job-documents`: private, every read a signed URL good for five
+minutes. That answer was recorded on 14 September **with its consequence written down at the
+time** — *"an emailed report cannot simply point at these images … a signed link expires and
+a private object has no permanent URL"*. The generated maintenance sheet is now being built,
+so the consequence arrived, and she took the other side of it.
+
+**What it means, stated plainly because it is not a small thing:** a photograph of a defect
+inside somebody's house is fetchable by anyone who ever sees the URL, with no sign-in, for
+good. Those are the terms `report-images` has carried since 7 September. The `0c` row in
+`docs/open-questions.md` is kept rather than rewritten, for the reason this whole document
+exists: a schema choice without its reasoning gets "simplified" back into a bug.
+
+| Decision | Why |
+| --- | --- |
+| A **second bucket**, not a flag on the first | `public` is a property of the bucket, not of the object. Making `job-documents` public would put every contract, permit and published document on a permanent URL — not what was asked and not what anyone would want |
+| **`documents.document_storage_bucket`**, defaulting to `job-documents` | The path has never said which bucket it is in; it did not need to, because there was one. Two makes the repository's constant a guess, and a wrong guess renders a broken image rather than an error anybody notices |
+| 200 MB rather than `job-documents`' 25 MB | A two-minute clip of a leaking shower off a phone is tens of megabytes. Still a cap: the guard against somebody filing a site walkthrough, which belongs in SharePoint |
+| Four video types, not `video/*` | The allowlist reasoning `0110` gives — `image/*` makes a bucket a drive. quicktime is what an iPhone records, mp4 Android, webm a browser capture, mpeg the older cameras still on site |
+| **`video` joins `0032`'s category vocabulary** | The sheet shows a photo and links a video. Deriving that from the MIME type works and is what the first draft did; the category is where this schema keeps that vocabulary, and two places to ask "is this a video" is one place to get a different answer |
+| READ is the bucket's `public` flag; the `select` policy is staff-only | Being able to **fetch** a photo whose URL you hold is a different thing from being able to **enumerate** every photo Lofty holds. The first is what was asked for; the second was never on the table |
+| DELETE stays admin-only | `0062`, `0100` and `0110` all draw that line, and Amber's own reason for the change — *"essential to keep these as a record"* — makes the uploader tidying up later exactly the case to refuse |
+
+**The twelve already filed.** Twelve photographs sit in `job-documents` today, across jobs
+`1002-001` and `1991-001`. This migration does **not** move them and cannot: the bytes are
+objects in storage and no SQL statement copies them. They keep
+`document_storage_bucket = 'job-documents'`, which is true of them, and `repo.documentUrl`
+signs a private one and links a public one — **both paths are real, so both are handled
+rather than one being assumed**. Moving them is a separate deliberate act with her say-so,
+not a side effect of a migration.
+
+**Five assertions, each watched failing** through `replay.sh`: the default changed away from
+the old bucket (the twelve break), the check dropped (a typo'd bucket accepted), the column
+made nullable (the reader has to guess), the category check left as `0032` wrote it (`video`
+refused), and the vocabulary replaced rather than widened (`contract` refused).
+
+**Not yet applied to the live project.**
+
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

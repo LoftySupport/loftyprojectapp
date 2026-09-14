@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- A maintenance issue takes video as well as photos
 - Paste a list into a new maintenance request and each line becomes its own issue, bullets and numbering stripped
 - Attachments can be dragged straight onto a maintenance issue, including from an email, and a drop that carries nothing says why
 - A maintenance issue given to a contractor shows the company, the person you ring with their own email and phone, and the suburb
@@ -214,6 +215,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- A maintenance photo or video now has a permanent link, so a generated maintenance sheet still shows its pictures after it is emailed
 - A pasted maintenance list splits at a colon - what is before it becomes the issue, what is after becomes the details
 - The maintenance board shows Identified, Booked and Completed, and who the issue is assigned to, in place of Trade and Owner
 - Every slideout's form is condensed: no rules between rows, one column width for every field, and a Details box you can actually write in

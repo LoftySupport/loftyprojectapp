@@ -539,6 +539,10 @@ export const DICTIONARY: DictionaryEntry[] = [
     "uuid", "Nullable. CHECK documents_not_its_own_predecessor.",
     "FK → documents(document_id) ON DELETE SET NULL. The documents_current view is everything nothing points at.", "created"),
   e("documents.document_size_bytes", "Size", "File size.", "integer", "bigint. Nullable. CHECK >= 0.", "—", "created"),
+  e("documents.document_storage_bucket", "Storage bucket", "Which bucket the storage path is a path in, and therefore how a read works. job-documents is private and every read is a signed URL that expires; maintenance-media is public and its URL is permanent.",
+    "text", "Not null. Defaults to job-documents. One of job-documents, maintenance-media.",
+    "Added by 0119 when Amber reversed 0c: \"No videos or photos are private accept video and photos with permanent links\". A defect photo is therefore fetchable by anyone holding the URL, for good, which is what makes a generated maintenance sheet keep working after it is emailed. The twelve photographs filed before 0119 stay in the private bucket, so a reader must read this column rather than assume one.",
+    "created"),
   e("documents.document_mime_type", "Content type", "What kind of file it is, for choosing a preview.", "text", "Nullable.", "—", "created"),
 
   // -------------------------------------------------------------- document_links
