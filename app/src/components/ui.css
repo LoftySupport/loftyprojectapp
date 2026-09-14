@@ -3187,6 +3187,45 @@ code { overflow-wrap: anywhere; }
    heading and the toggle would be a second name for the tab above it. */
 .panel-bare { min-width: 0; }
 
+/* -------------------------------------------------------------- forms inside a slideout
+   Amber, 14 September, on the maintenance drawer: *"fix the spacing on the slideout drawer
+   by removing the separator between each row so it is condensed and ensuring all fillable
+   properties are same width and aligned and allow the details section to have more space
+   to write with"*.
+
+   Scoped to `.side-panel`, not to Maintenance. Every slideout in the app draws the same
+   `Field` rows, and fixing the spacing on one of them would leave Contacts, Setup and the
+   job drawer looking like a different app — which is the drift `Form.tsx` was written to
+   end. A page's own forms keep the dashed rule, because down a full-width page it is what
+   stops a long list of rows reading as one block.
+
+   THE ALIGNMENT IS A FIXED COLUMN, NOT A MINIMUM.
+     `.field-control` has a `min-width` everywhere else, so each control is as wide as it
+     wants to be and the left edges of a date, a dropdown and a text box all differ. Here
+     the column is one width and every control fills it, so they line up — which is the
+     whole of what "same width and aligned" asks for. It collapses to full width when the
+     row wraps on a narrow panel, or the controls would run off the edge. */
+.side-panel .field-row { padding: var(--space-4) 0; }
+.side-panel .field-row + .field-row { border-top: none; }
+.side-panel .field-control { flex: 0 0 240px; min-width: 0; max-width: 100%; }
+.side-panel .field-control > * { width: 100%; }
+/* Vibe draws its own wrappers inside the control, and a width on the outside of one of
+   those does not reach the textarea. The date field is deliberately NOT in this list:
+   it is a flex row of an input and a ✕, and forcing the input to 100% pushed the ✕ onto
+   a second line — watched doing exactly that before this note was written. */
+.side-panel .field-control textarea { width: 100%; box-sizing: border-box; }
+/* The clear ✕ moves to the LEFT of the date box here, which looks odd written down and
+   right on the screen: every control in this column is right-aligned to the same edge,
+   and a ✕ after the input pushes the date box 27px short of it — the one row that did not
+   line up. It cannot be overlaid inside the input the way `.typeahead-clear` is, because
+   a native date input's right-hand end is the browser's own calendar button. The space is
+   reserved whether or not there is a date to clear (`is-hidden` is visibility, not
+   display), so the box does not change width when one is set. */
+.side-panel .field-control .date-field { display: flex; flex-direction: row-reverse; }
+@media (max-width: 520px) {
+  .side-panel .field-control { flex: 1 1 100%; }
+}
+
 /* ---------------------------------------------------------------- issues in one drawer
    The new-maintenance-request drawer types the header once and repeats an issue block
    below it (0114). The block is a `panel`, its title row is a `field-inline` and the
@@ -3194,3 +3233,10 @@ code { overflow-wrap: anywhere; }
    which nothing else in the app draws. Anything more would be a second way to draw a card. */
 .issue-draft-radio { display: inline-flex; align-items: center; gap: var(--space-4); cursor: pointer; }
 .issue-draft-radio input { margin: 0; }
+
+/* The staged files on an issue, before the request exists to attach them to (0115). A
+   plain list of names with a way to take one off — not a gallery, because nothing has
+   been uploaded yet and a thumbnail would suggest otherwise. */
+.issue-files { display: flex; flex-direction: column; gap: var(--space-4); width: 100%; }
+.issue-file { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); min-width: 0; }
+.issue-file > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -3724,6 +3724,106 @@ export function createSupabaseRepository(): Repository {
     },
 
     /**
+     * The photos and files on one maintenance issue (0115).
+     *
+     * Read off the request's own links, so a photo taken off the issue disappears from
+     * here while the job's copy stays filed — which is what two links mean.
+     */
+    async listMaintenanceDocuments(requestId: string): Promise<RecordDocument[]> {
+      const { data, error } = await client
+        .from("document_links")
+        .select(RECORD_DOCUMENT_COLUMNS)
+        .eq("maintenance_request_id", requestId)
+        .order("document_link_created_at", { ascending: true });
+      if (error) throw error;
+      return (data ?? [])
+        .map(r => toRecordDocument(r as unknown as RecordDocumentRow))
+        .filter((d): d is RecordDocument => d !== null);
+    },
+
+    /**
+     * Attach photos and files to a maintenance issue (0115).
+     *
+     * Amber, 14 September: *"add in a section to upload one or multiple a image, photo,
+     * file, pdfs, or take a photo"*, and — asked where they should live — **`job-documents`,
+     * private**: a defect photo is a document about the job.
+     *
+     * SO EACH FILE IS WRITTEN THREE TIMES, AND ALL THREE ARE THE POINT
+     *
+     *   1. The object, into `job-documents` under `jobs/<job>/…` — the path shape 0110's
+     *      storage policy enforces. Images reach that bucket at all because 0115 widened
+     *      its mime allowlist; before that Storage refused a photograph at the door.
+     *   2. One `documents` row, category `photo` for an image and `other` otherwise. The
+     *      vocabulary is 0032's, not invented here.
+     *   3. Two `document_links`: one to the job, so it appears in the job's Documents list
+     *      the way Amber asked, and one to the request, so the issue knows its own
+     *      pictures. A document is held once and attached as many times as it is about
+     *      something.
+     *
+     * NOT A TRANSACTION, the same real limitation `addDocumentUrl` records: PostgREST has
+     * no client-side transaction. The order is chosen so a failure leaves the least
+     * confusing state — object, then row, then links — and a file that uploaded but failed
+     * to file is reported by name rather than swallowed. FILE BY FILE, so eight photos
+     * from a walk do not all fail because the seventh was a video.
+     */
+    async attachMaintenanceFiles(input: { requestId: string; jobId: string; files: File[] }): Promise<RecordDocument[]> {
+      const made: RecordDocument[] = [];
+      const refused: string[] = [];
+      for (const file of input.files) {
+        try {
+          // The same sanitising as every other upload here: a filename arrives from
+          // somebody's phone and `../` in an object path is the oldest trick there is.
+          // The uuid keeps two photos both called IMG_0042.jpg apart.
+          const safe = file.name.replace(/[^a-zA-Z0-9.-]/g, "-").slice(-80) || "attachment";
+          const path = `jobs/${input.jobId}/${crypto.randomUUID()}-${safe}`;
+          const up = await db.storage
+            .from(JOB_DOCUMENT_BUCKET)
+            .upload(path, file, { contentType: file.type || undefined, upsert: false });
+          if (up.error) throw up.error;
+
+          const doc = await client
+            .from("documents")
+            .insert({
+              document_name: file.name,
+              document_storage_path: path,
+              document_mime_type: file.type || null,
+              document_size_bytes: file.size,
+              document_category: file.type.startsWith("image/") ? "photo" : "other"
+            })
+            .select("document_id")
+            .single();
+          if (doc.error) throw documentError(doc.error);
+          const documentId = (doc.data as { document_id: string }).document_id;
+
+          const links = await client
+            .from("document_links")
+            .insert([
+              { document_id: documentId, job_id: input.jobId },
+              { document_id: documentId, maintenance_request_id: input.requestId }
+            ])
+            .select(RECORD_DOCUMENT_COLUMNS);
+          if (links.error) throw documentError(links.error);
+          const onRequest = (links.data ?? [])
+            .map(r => toRecordDocument(r as unknown as RecordDocumentRow))
+            .find(d => d?.maintenanceRequestId === input.requestId);
+          if (onRequest) made.push(onRequest);
+        } catch (e) {
+          refused.push(`${file.name} — ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+      // Named, not counted. "3 files failed" sends somebody to look at all eight; the file
+      // and the database's own words say which one and why — too big, or a type the bucket
+      // does not take, which are the two that actually happen.
+      if (refused.length) {
+        throw Object.assign(
+          new Error(`${made.length} attached. These were not: ${refused.join("; ")}`),
+          { attached: made }
+        );
+      }
+      return made;
+    },
+
+    /**
      * File a document that lives in SharePoint.
      *
      * TWO WRITES, AND THE FIRST ONE MAY FIND RATHER THAN CREATE. `documents_one_row_per_url`
@@ -4515,13 +4615,14 @@ const ilike = (s: string) => `%${s.replace(/[%_,()]/g, " ").trim()}%`;
  * shape that took sign-in down on 21 August, found here by a check rather than by a user.
  */
 const RECORD_DOCUMENT_COLUMNS =
-  "document_link_id, document_id, job_id, project_id, document_link_created_at, document_link_created_by, documents!document_links_document_id_fkey(document_id, document_name, document_description, document_storage_path, document_url, document_mime_type, document_size_bytes, document_category, document_supersedes_id, document_created_at, document_created_by, document_updated_at, document_updated_by)";
+  "document_link_id, document_id, job_id, project_id, maintenance_request_id, document_link_created_at, document_link_created_by, documents!document_links_document_id_fkey(document_id, document_name, document_description, document_storage_path, document_url, document_mime_type, document_size_bytes, document_category, document_supersedes_id, document_created_at, document_created_by, document_updated_at, document_updated_by)";
 
 type RecordDocumentRow = {
   document_link_id: string;
   document_id: string;
   job_id: string | null;
   project_id: number | null;
+  maintenance_request_id: string | null;
   document_link_created_at: string;
   document_link_created_by: string | null;
   documents: {
@@ -4555,6 +4656,7 @@ function toRecordDocument(r: RecordDocumentRow): RecordDocument | null {
     linkId: r.document_link_id,
     jobId: r.job_id,
     projectId: r.project_id,
+    maintenanceRequestId: r.maintenance_request_id,
     attachedAt: r.document_link_created_at,
     name: d.document_name,
     description: d.document_description,

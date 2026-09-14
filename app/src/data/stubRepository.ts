@@ -507,6 +507,8 @@ export function createStubRepository(): Repository {
     // Same stance again: nothing to read, and a write that says what it needs. An
     // in-memory list would let somebody file the contract, close the tab and lose it.
     async listRecordDocuments() { return []; },
+    async listMaintenanceDocuments() { return []; },
+    async attachMaintenanceFiles(): Promise<never> { throw new Error("Attaching files needs Supabase."); },
     async addDocumentUrl(): Promise<never> { throw new Error("Filing a document needs Supabase."); },
     async removeRecordDocument(): Promise<never> { throw new Error("Removing a document needs Supabase."); },
     async listRecentDocuments() { return []; },

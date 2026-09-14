@@ -221,12 +221,14 @@ interface IssueDraft {
   assigneeKind: MaintenanceAssigneeKind;
   assigneeProfileId: string | null;
   assignedCompanyId: string | null;
+  /** Chosen, not uploaded. The request has no id to attach them to until it is saved. */
+  files: File[];
 }
 
 let issueSeed = 0;
 const blankIssue = (): IssueDraft => ({
   key: `issue-${++issueSeed}`, summary: "", description: "",
-  assigneeKind: "internal", assigneeProfileId: null, assignedCompanyId: null
+  assigneeKind: "internal", assigneeProfileId: null, assignedCompanyId: null, files: []
 });
 
 /** `yyyy-mm-dd` for the browser's own day, which at Lofty is the Adelaide day. */
@@ -313,6 +315,7 @@ function NewRequests({ jobId, onDone }: { jobId: string | null; onDone: (ids: st
     const batchId = crypto.randomUUID();
     const made: string[] = [];
     const landed = new Set<string>();
+    const refusedFiles: string[] = [];
     try {
       for (const i of ready) {
         const r = await repo.createMaintenanceRequest({
@@ -328,6 +331,20 @@ function NewRequests({ jobId, onDone }: { jobId: string | null; onDone: (ids: st
         });
         made.push(r.id);
         landed.add(i.key);
+        // After the request, because the attachment needs its id. A file that will not
+        // upload must not undo a request that saved: the issue is logged either way and
+        // the failure is reported with the file named, rather than the whole batch
+        // reading as refused because somebody picked a video.
+        if (i.files.length) {
+          try { await repo.attachMaintenanceFiles({ requestId: r.id, jobId: job, files: i.files }); }
+          catch (e) { refusedFiles.push(e instanceof Error ? e.message : String(e)); }
+        }
+      }
+      if (refusedFiles.length) {
+        // Every issue landed; some files did not. Said here rather than swallowed, and the
+        // drawer stays open so the files can be picked again on the request itself.
+        setProblem(`${made.length} logged. ${refusedFiles.join(" ")}`);
+        return;
       }
       onDone(made);
     } catch (e) {
@@ -344,13 +361,15 @@ function NewRequests({ jobId, onDone }: { jobId: string | null; onDone: (ids: st
 
   return (
     <div className="stack">
-      <Text type="text3" color="secondary" ellipsis={false} element="p">
-        Typed once at the top; every issue below becomes its own request.
-      </Text>
       {problem && <Problem>{problem}</Problem>}
 
+      {/* The header is a panel too, so its controls sit at the same inset as the issue
+          cards' and the whole column lines up — Amber, 14 September: "ensuring all
+          fillable properties are same width and aligned". Two cards at different insets
+          is what "aligned" rules out. */}
+      <section className="panel">
       <Field label="Job" required>
-        <Select aria-label="Job" clearable placeholder="Job…" value={job} onChange={setJob}
+        <Select aria-label="Job" clearable value={job} onChange={setJob}
           options={jobs.map(j => ({ value: j.id, label: `${j.id} · ${j.currentAddress}` }))} />
       </Field>
       <Field label="Date identified">
@@ -359,13 +378,14 @@ function NewRequests({ jobId, onDone }: { jobId: string | null; onDone: (ids: st
       {/* `ordered`: Amber's list runs PCI → the inspectors → handover → the 1, 2 and 3
           month inspections. That sequence is the information, so it is not sorted. */}
       <Field label="Identified at">
-        <Select aria-label="Identified at" clearable ordered placeholder="Where it was found…"
+        <Select aria-label="Identified at" clearable ordered
           value={identifiedAt} onChange={v => setIdentifiedAt(v as MaintenanceIdentifiedAt | null)}
           options={MAINTENANCE_IDENTIFIED_AT.map(k => ({ value: k, label: MAINTENANCE_IDENTIFIED_AT_LABELS[k] }))} />
       </Field>
       <Field label="Reported by">
-        <PersonSelect aria-label="Reported by" placeholder="Lofty person…" value={reportedBy} onChange={setReportedBy} />
+        <PersonSelect aria-label="Reported by" placeholder="" value={reportedBy} onChange={setReportedBy} />
       </Field>
+      </section>
 
       {issues.map((issue, n) => (
         <section key={issue.key} className="panel">
@@ -379,13 +399,13 @@ function NewRequests({ jobId, onDone }: { jobId: string | null; onDone: (ids: st
           </div>
           <Field label="Issue" required>
             <TextField size="small" id={`${issue.key}-summary`} inputAriaLabel={`Issue ${n + 1}`}
-              placeholder="One line — leaking ensuite tap" value={issue.summary}
-              onChange={v => patch(issue.key, { summary: v })} />
+              value={issue.summary} onChange={v => patch(issue.key, { summary: v })} />
           </Field>
           <Field label="Details">
-            <textarea className="pf-input" rows={3} aria-label={`Details for issue ${n + 1}`}
-              value={issue.description} onChange={e => patch(issue.key, { description: e.target.value })}
-              placeholder="What was seen, where in the house, anything a contractor should know" />
+            {/* Six rows, not three — Amber: "allow the details section to have more space
+                to write with". The width stays the column's so it lines up with the rest. */}
+            <textarea className="pf-input" rows={6} aria-label={`Details for issue ${n + 1}`}
+              value={issue.description} onChange={e => patch(issue.key, { description: e.target.value })} />
           </Field>
           <Field label="Assigned to">
             <div className="stack-tight">
@@ -403,12 +423,11 @@ function NewRequests({ jobId, onDone }: { jobId: string | null; onDone: (ids: st
                 ))}
               </div>
               {issue.assigneeKind === "internal" ? (
-                <PersonSelect aria-label={`Internal assignee, issue ${n + 1}`} placeholder="Maintenance or Construction…"
+                <PersonSelect aria-label={`Internal assignee, issue ${n + 1}`} placeholder=""
                   only={REPAIR_TEAMS} emptyText="Nobody on Maintenance or Construction by that name"
                   value={issue.assigneeProfileId} onChange={v => patch(issue.key, { assigneeProfileId: v })} />
               ) : (
-                <TypeaheadSelect aria-label={`Contractor, issue ${n + 1}`} clearable
-                  placeholder={job ? "Start typing a trade…" : "Choose the job first…"}
+                <TypeaheadSelect aria-label={`Contractor, issue ${n + 1}`} clearable placeholder=""
                   options={companyOptions} value={issue.assignedCompanyId}
                   onChange={v => patch(issue.key, { assignedCompanyId: v })}
                   emptyText="No contractor by that name"
@@ -417,14 +436,30 @@ function NewRequests({ jobId, onDone }: { jobId: string | null; onDone: (ids: st
               )}
             </div>
           </Field>
-          {/* PLACEHOLDER — attachments are PR #78, and this says so rather than drawing a
-              control that does nothing. Photos, PDFs and camera capture need a storage
-              bucket, a link row per issue and a signed read; that is its own change. */}
+          {/* One input, not two. `accept` without `capture` is what gives an iPhone the
+              choice of Photo Library, Take Photo or Browse — adding `capture` would force
+              the camera and take away choosing one already taken, which is the commoner
+              half of what Amber asked for. Uploaded after the request exists to hold it. */}
           <Field label="Attach files">
-            <Text type="text3" color="secondary" ellipsis={false} element="p">
-              Not built yet. Photos, PDFs and taking a photo are the next change; until then,
-              add them to the request after it is logged.
-            </Text>
+            <div className="issue-files">
+              <input type="file" multiple accept="image/*,application/pdf"
+                aria-label={`Attach files to issue ${n + 1}`}
+                onChange={e => {
+                  const picked = Array.from(e.target.files ?? []);
+                  if (picked.length) patch(issue.key, { files: [...issue.files, ...picked] });
+                  // Cleared so picking the same file twice in a row still fires a change.
+                  e.target.value = "";
+                }} />
+              {issue.files.map((f, at) => (
+                <div className="issue-file" key={`${f.name}-${at}`}>
+                  <Text type="text3" color="secondary" element="span">{f.name}</Text>
+                  <Button size="xs" kind="tertiary"
+                    onClick={() => patch(issue.key, { files: issue.files.filter((_, i) => i !== at) })}>
+                    Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
           </Field>
         </section>
       ))}
@@ -460,6 +495,17 @@ function RequestDetail({ id, onChanged }: { id: string; onChanged: () => void })
   const [newItem, setNewItem] = useState({ description: "", location: "", categoryId: null as string | null });
 
   const bump = () => { setReload(n => n + 1); onChanged(); };
+  const { data: files } = useQuery(r => r.listMaintenanceDocuments(id), [], [id, reload]);
+  /**
+   * `job-documents` is private, so there is no URL to render into an href — one is asked
+   * for when somebody clicks and it expires in five minutes. Null when storage refuses,
+   * which says the copy is gone rather than opening an error page.
+   */
+  const openFile = async (path: string | null) => {
+    if (!path) return;
+    const url = await repo.jobDocumentUrl(path);
+    if (url) window.open(url, "_blank", "noopener");
+  };
   async function run(fn: () => Promise<unknown>) {
     setProblem(null);
     try { await fn(); bump(); }
@@ -536,6 +582,36 @@ function RequestDetail({ id, onChanged }: { id: string; onChanged: () => void })
           ) : <Text type="text3" color="secondary" ellipsis={false} element="p">Nobody recorded — the closing email has nowhere to go until a contact is set.</Text>}
           {r.description && <Text type="text2" ellipsis={false} element="p" style={{ whiteSpace: "pre-wrap" }}>{r.description}</Text>}
         </div>
+      </section>
+
+      {/* The photos and files on this issue (0115). Opened through a signed URL asked for
+          at the moment somebody clicks — `job-documents` is private and has no permanent
+          address, which is the choice Amber made on 14 September. Removing one here takes
+          it off the ISSUE; the copy filed against the job stays, because they are two
+          links to one document. */}
+      <section className="panel">
+        <div className="panel-head">
+          <Text type="text2" weight="bold">Photos and files</Text>
+          <Text type="text3" color="secondary">{files.length === 0 ? "none yet" : `${files.length} attached`}</Text>
+        </div>
+        {files.length === 0 && <Text type="text3" color="secondary" ellipsis={false} element="p">Nothing attached. Add photos when the issue is logged, or here.</Text>}
+        {files.map(f => (
+          <div key={f.linkId} className="issue-file" style={{ padding: "var(--space-4) 0" }}>
+            <button type="button" className="link-button tap-link" onClick={() => void openFile(f.storagePath)}>{f.name}</button>
+            {canWrite && (
+              <Button size="xs" kind="tertiary" onClick={() => run(() => repo.removeRecordDocument(f.linkId))}>Remove</Button>
+            )}
+          </div>
+        ))}
+        {canWrite && !isClosed && (
+          <input type="file" multiple accept="image/*,application/pdf" aria-label="Attach files to this issue"
+            style={{ marginTop: "var(--space-8)" }}
+            onChange={e => {
+              const picked = Array.from(e.target.files ?? []);
+              e.target.value = "";
+              if (picked.length) void run(() => repo.attachMaintenanceFiles({ requestId: r.id, jobId: r.jobId, files: picked }));
+            }} />
+        )}
       </section>
 
       <section className="panel">
