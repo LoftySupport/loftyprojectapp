@@ -40,7 +40,7 @@ export function StatusPill({ status }: { status: RecordStatus }) {
 }
 
 export function JobCard({
-  jobNumber,
+  displayNumber,
   stageName,
   team,
   address,
@@ -50,7 +50,14 @@ export function JobCard({
   latestUpdate = null,
   onOpen
 }: {
-  jobNumber: string;
+  /**
+   * What the card prints: the job number with its community-title `c` (0120).
+   *
+   * The card takes the DISPLAY number and not the key, deliberately. It only ever prints
+   * this — the click that opens a job is the page's, with the key it already holds — so
+   * handing it the key as well would be handing it the chance to route by the wrong one.
+   */
+  displayNumber: string;
   stageName: string;
   team: string;
   /**
@@ -91,12 +98,12 @@ export function JobCard({
           onOpen();
         }
       }}
-      aria-label={`Job ${jobNumber}`}
+      aria-label={`Job ${displayNumber}`}
     >
       <header className="card-top">
         {/* The number leads. It is the thing on the contract, and it carries the project
             in its first half — 1001-001 is job 001 of project 1001. */}
-        <Text type="text2" weight="medium">{jobNumber}</Text>
+        <Text type="text2" weight="medium">{displayNumber}</Text>
         {SHOW_STATUS_ON_CARDS && <StatusPill status={status} />}
       </header>
 
@@ -288,7 +295,7 @@ export function ProjectCard({
 }: {
   projectNumber: string;
   /** The project's jobs, each with its own lot address for the list at the foot. */
-  jobs: { jobNumber: string; address: string | null; stage?: string }[];
+  jobs: { jobNumber: string; displayNumber?: string; address: string | null; stage?: string }[];
   /**
    * How many jobs the project has in total, when this card is showing only SOME of them.
    *
@@ -416,7 +423,7 @@ export function ProjectCard({
             stands out, because it is the only line that does. */}
         {jobs.slice(0, 8).map(j => (
           <div key={j.jobNumber}>
-            <Text type="text3" weight="medium" element="span">{j.jobNumber}</Text>{" "}
+            <Text type="text3" weight="medium" element="span">{j.displayNumber ?? j.jobNumber}</Text>{" "}
             <Text type="text3" color="secondary" element="span">
               {j.address ? withoutSite(j.address, address ?? null)
                          : <Token>addresses.consolidated_address</Token>}

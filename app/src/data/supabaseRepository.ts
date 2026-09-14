@@ -199,7 +199,7 @@ const PROJECT_COLUMNS =
 //
 // Writes still go to `jobs` — a view is not the place to insert through.
 const JOB_COLUMNS =
-  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_sharepoint_url, job_created_at, job_created_by, job_updated_at, job_updated_by, job_current_address, job_original_address, project_current_address, project_sharepoint_url, project_type, job_title_type, job_council, job_target_completion, job_end_date, job_calculated_completion, job_calculated_completion_missing";
+  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_sharepoint_url, job_created_at, job_created_by, job_updated_at, job_updated_by, job_current_address, job_original_address, project_current_address, project_sharepoint_url, project_type, job_title_type, job_council, job_target_completion, job_end_date, job_calculated_completion, job_calculated_completion_missing, job_number_display";
 
 /**
  * `""` and `"   "` are how a browser reports a field somebody did not fill in, and they
@@ -4535,6 +4535,7 @@ type JobRow = {
   job_end_date: Job["endDate"];
   job_calculated_completion: Job["calculatedCompletion"];
   job_calculated_completion_missing: Job["calculatedCompletionMissing"];
+  job_number_display: Job["displayNumber"];
 };
 
 function toJob(r: JobRow): Job {
@@ -4572,6 +4573,9 @@ function toJob(r: JobRow): Job {
     // database, where the import and a hand-written query read the same answer.
     calculatedCompletion: r.job_calculated_completion,
     calculatedCompletionMissing: r.job_calculated_completion_missing,
+    // 0120. Generated and stored on `jobs`, so it follows the title type on its own and
+    // cannot be written here even by mistake. `id` stays the key.
+    displayNumber: r.job_number_display,
     projectSharepointUrl: r.project_sharepoint_url,
     // Inherited from the project through the view, never stored on the job. `job_display`
     // has exposed it since 0028; this read simply never asked for it, so every card and

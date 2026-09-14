@@ -262,7 +262,7 @@ export function JobRecord({
     <>
       <div className="record-title-row">
         <JobTitle
-          jobNumber={job.jobNumber}
+          jobNumber={job.displayNumber}
           location={job.currentAddress ?? <Token>job_display.job_current_address</Token>}
           size={variant}
         />
@@ -370,7 +370,7 @@ export function JobRecord({
               />
             ) : undefined}
           </FieldRow>
-          <FieldRow label="SharePoint folder" value={job.sharepointUrl ? job.jobNumber : null}>
+          <FieldRow label="SharePoint folder" value={job.sharepointUrl ? job.displayNumber : null}>
             {job.sharepointUrl ? (
               <a
                 href={job.sharepointUrl}
@@ -378,7 +378,7 @@ export function JobRecord({
                 rel="noreferrer noopener"
                 className="field-link"
               >
-                {job.jobNumber}
+                {job.displayNumber}
                 {job.currentAddress ? ` — ${job.currentAddress}` : ""}
                 <ExternalPage size={16} aria-hidden />
               </a>

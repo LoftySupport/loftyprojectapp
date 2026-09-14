@@ -33,8 +33,20 @@ import {
  */
 
 export interface BoardJob {
-  /** '1042-01' — the job number and the primary key are the same thing. */
+  /**
+   * '1042-01' — the job number and the primary key are the same thing.
+   *
+   * This is what routes (`/jobs/:jobNumber`), what `find` matches on, and what React keys
+   * a row by. It never carries the community-title `c`; `displayNumber` does.
+   */
   jobNumber: string;
+  /**
+   * The same job as a person reads it (0120): `1042-01c` when it is community title.
+   *
+   * **Display only.** Routing or looking up by this finds nothing the moment a job is
+   * marked community title, which is the failure this pair exists to make impossible.
+   */
+  displayNumber: string;
   /**
    * The old Lofty number — "12345". SiteBook, Trello and everyone's memory link by
    * this, so search matches it and the drawer shows and edits it. Null for jobs born
@@ -268,6 +280,7 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
 
     const boardJobs: BoardJob[] = jobs.map(j => ({
       jobNumber: j.id,
+      displayNumber: j.displayNumber,
       jobNumberOld: j.jobNumberOld,
       titleType: j.titleType,
       projectNumber: String(j.projectId),

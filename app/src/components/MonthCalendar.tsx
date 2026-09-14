@@ -142,9 +142,9 @@ export function MonthCalendar({ rows, expectedDaysByStage, onOpen }: {
                   type="button"
                   className={"cal-entry" + (e.kind === "due" ? " is-due" : "")}
                   onClick={() => onOpen(e.job)}
-                  title={`${e.job.jobNumber} — ${e.kind === "due" ? `due out of ${e.job.stage}` : `entered ${e.job.stage}`}`}
+                  title={`${e.job.displayNumber} — ${e.kind === "due" ? `due out of ${e.job.stage}` : `entered ${e.job.stage}`}`}
                 >
-                  {e.job.jobNumber} {e.kind === "due" ? "due" : "entered"}
+                  {e.job.displayNumber} {e.kind === "due" ? "due" : "entered"}
                 </button>
               ))}
               {dayEntries.length > 3 && (
