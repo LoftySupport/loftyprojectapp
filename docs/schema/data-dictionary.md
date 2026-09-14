@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-751 properties across 100 tables.
+753 properties across 100 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 702 | In the migration and the types |
+| Created | 704 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -403,6 +403,8 @@ The read view behind the boards: jobs joined to their addresses and their projec
 
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `job_display.job_calculated_completion` | Completion date (calculated) | What the SLAs say the job will finish, beside the target somebody committed to and the day it actually did. Amber, 14 September: a system field "based by when the job is likely to end based on slas and [the stage] it is up to so management can look at targeted completion date (when they want it to be done) versus the realistic calculated date based on slas and then the actual date it was completed for process optimisation". | `date` | — | Read-only, computed. NULL is the normal answer today and job_calculated_completion_missing says why — all 38 Pre-construction processes carry no estimate, so the forecast refuses to answer rather than projecting from the third of the pipeline that is populated. NULL for both columns means the job is not live. | The longest path through process_dependencies in CALENDAR days, from job_completion_forecast() (0119). A process costs its own process_expected_days when set and the sum of its tasks' process_task_expected_days otherwise — 3 of 51 processes use the first, 107 of 107 tasks feed the second. Every start is floored at today, so an overrun is sunk rather than pushed forward. Counts optional processes, because process_is_optional does not exist yet. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `job_display.job_calculated_completion_missing` | Estimates missing | How many of the job's processes nobody has put a duration on. It is why the calculated completion date is blank when it is blank. | `integer` | — | Read-only, computed. 0 when the forecast is real. NULL when the job is not live. | From job_completion_forecast() (0119). Exists so an empty cell is a number somebody can act on rather than a mystery — the repository's rule that a blank invites configuring while a guess gets quoted back as agreed. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `job_display.project_type` | Job type (inherited) | The job's type, which is its project's type. Inherited through the view rather than copied onto the job, so there is nowhere for the two to disagree. | `view` | — | Read-only. | jobs ⋈ projects on project_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `job_display.job_is_current` | Is current | Whether the job is still live — not completed, cancelled or archived. Derived from status every time it is read, never stored. | `view` | — | Read-only. is_current(jobs.job_status). | Mirrors the isCurrent() helper in the app. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `job_display.job_id` | Job number | The job number, joined for the board and for search. | `view` | — | Read-only. The job number and the key are the same value. | jobs.job_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |

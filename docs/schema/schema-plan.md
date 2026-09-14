@@ -3156,6 +3156,94 @@ SECURITY DEFINER Function* lint names four functions and this is not one of them
 are the policy helpers `0012` deliberately granted.
 
 
+### 14 September — the date the SLAs say, beside the date somebody wanted (`0119`)
+
+Amber: *"A new calculated/derived property needs to be created called 'calculated
+completion date' which is a system field that shows calculated completions date based by
+when the job is likely to end based on slas and [the stage] it is up to so management can
+look at targeted completion date (when they want it to be done) versus the realistic
+calculated date based on slas and then the actual date it was completed for process
+optimisation."*
+
+Three dates, and the point is the gaps between them:
+
+| | What it is | Since |
+| --- | --- | --- |
+| `job_target_completion` | What somebody committed to | Entered, 14 Sep |
+| `job_calculated_completion` | What the SLAs say will happen | **This migration** |
+| `job_end_date` | What actually happened | Derived, 14 Sep |
+
+#### What the data supports, checked before a line was written
+
+The SLAs are **not on `processes`**. Three of 51 processes carry `process_expected_days`;
+**107 of 107 `process_tasks` carry `process_task_expected_days`**. So a process costs the
+sum of its tasks, and its own column is the override. Reading the process column alone
+would have valued 48 of 51 processes at nothing and produced a confidently wrong date.
+
+Sequencing did not need inventing either: **`process_dependencies` holds 49 edges with
+`process_dependency_lag_days`**. So this is a longest path through that graph. Summing
+Construction's tasks gives 302 days; the critical path through them is shorter, and the
+sum would have been wrong on every job in the pessimistic direction.
+
+And the coverage is thin where it matters: **all 38 Pre-construction processes have no
+tasks and no expected days**, as do both Acquisition & Development ones. Only Construction
+is populated. Amber was shown this and chose *"Build it, and I will fill in the SLAs
+first"* — so the mechanism lands now and stays dark until she does.
+
+#### Four rules, all hers
+
+- **Calendar days**, not working days. No weekday skip, no holiday table.
+- **An overrun is sunk.** A process 15 days past its SLA is assumed to finish today and
+  everything after runs to SLA. Chosen over re-charging its full SLA, over scaling the
+  remainder by how late it is running, and over refusing to project past a blockage.
+- **Blank rather than partial.** If any process still to run has no duration, the answer is
+  null — not a number built from the third of the pipeline that happens to be filled in.
+  That is the *"45% on track computed from a fixed array"* this repository already shipped
+  once and had to take back.
+- The blank is **not silent**: `job_calculated_completion_missing` says how many processes
+  have no estimate, so an empty cell is a number somebody can act on.
+
+#### Where it is shown, and where it deliberately is not
+
+Three columns on the **Jobs table**, off by default. Not a seventh row in the drawer's Key
+properties: Amber settled on 11 September that those *"will always be those key 6"*, and
+comparing three dates **across** jobs is a table's job anyway. Off by default because a
+column that is blank on every row today is worse than one somebody turns on the day the
+estimates are in.
+
+#### `create or replace view`, not drop and create
+
+`task_display` depends on `job_display`, so a drop is refused — which is the better
+outcome, because the `DROP … CASCADE` that would have "fixed" it takes `task_display` with
+it and nothing in the migration would put it back. Replace also enforces what the change
+claims: it permits columns **appended** and rejects any rename, retype or reorder of the
+existing ones.
+
+#### Eight mutations, and the two that exposed the probe rather than the code
+
+Each of the six comparisons, the lag, the completed-run lookup, the liveness check, the
+blank guard, `max` → `min`, and both halves of the duration fallback were broken in turn.
+**Two passed on the first attempt, and both were the fixture's fault:**
+
+- Deleting the **task-sum fallback** read green, because all three probe processes carried
+  their own `process_expected_days`. The branch 48 of Lofty's 51 processes depend on was
+  never executed. The probe's tail process now has no column of its own and two tasks.
+- Deleting the **`greatest(current_date, …)` floor** read green, because the overrunning
+  process was a *root* of the graph, which never reaches the recursive branch — and the
+  later test completed its predecessor at `now()`, so `max()` hid the difference. Test 6
+  now finishes **every** predecessor a hundred days ago, which is the only shape where the
+  floor decides the answer. Without it the forecast comes back in the past.
+
+#### Known overestimate, recorded rather than papered over
+
+**Optional processes are all counted**, because `process_is_optional` does not exist yet —
+it is on the list from the same interview. Until it does, a process nobody will run still
+lengthens the path. **Title type does not filter the set** either, for the same reason.
+Projects get no forecast: Amber asked about a job.
+
+**Applied to the live project? Not yet.**
+
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

@@ -123,6 +123,13 @@ export interface BoardJob {
   targetCompletion?: string | null;
   endDate?: string | null;
   /**
+   * What the SLAs say, beside what was promised and what happened (0119). Computed by
+   * `job_display`, never stored, and null while any process still to run has no estimate
+   * — `calculatedCompletionMissing` is how many, so the blank says why it is blank.
+   */
+  calculatedCompletion?: string | null;
+  calculatedCompletionMissing?: number | null;
+  /**
    * The latest attempt of every process run on this job (0078) — what the Process and
    * Process health chips filter on, and what the card can summarise.
    */
@@ -283,6 +290,8 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
       council: j.council,
       targetCompletion: j.targetCompletion,
       endDate: j.endDate,
+      calculatedCompletion: j.calculatedCompletion,
+      calculatedCompletionMissing: j.calculatedCompletionMissing,
       processRuns: [...(runsByJob.get(j.id)?.values() ?? [])].map(({ processKey, status, health }) => ({ processKey, status, health })),
       recordedKeys: [...new Set([...(keysByJob.get(j.id) ?? []), ...(keysByProject.get(j.projectId) ?? [])])],
       // The project's values underneath, the job's own on top — the same read-through

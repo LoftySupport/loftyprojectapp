@@ -489,6 +489,30 @@ export interface Job {
    */
   targetCompletion: IsoDate | null;
   endDate: IsoDate | null;
+  /**
+   * The third date (0119), and the one nobody types.
+   *
+   * Amber, 14 September, asked for *"the realistic calculated date based on slas"* to sit
+   * beside the target somebody committed to and the day it actually finished, *"for
+   * process optimisation"*. So the trio reads: what we promised, what the SLAs say, what
+   * happened.
+   *
+   * The longest path through `process_dependencies` in **calendar days**, with every start
+   * floored at today — an overrun is sunk rather than pushed forward, which is her rule
+   * and not an accident of the arithmetic.
+   *
+   * **Null is the normal answer today, and `calculatedCompletionMissing` says why.** All
+   * 38 Pre-construction processes carry no estimate, so until those are filled in the
+   * forecast refuses to answer rather than projecting from the third of the pipeline that
+   * is populated. A partial number presented as a whole one is the failure this repository
+   * already shipped once. Null with a count is a to-do; a number built on a gap is a lie.
+   *
+   * Both are null rather than 0 when the job is not live: a completed job has an end date,
+   * and a forecast beside it would be noise.
+   */
+  calculatedCompletion: IsoDate | null;
+  /** How many of the job's processes have no estimate. 0 when the forecast is real, null when the job is not live. */
+  calculatedCompletionMissing: number | null;
 
   // + fields
   createdAt: IsoDateTime;
