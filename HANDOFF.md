@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 270 changes since then —
+Unreleased: 271 changes since then —
+- Fixed: A half-filled new maintenance request is kept when the drawer closes, so a stray click no longer loses a pasted list of issues
 - Added: Paste a list into a new maintenance request and each line becomes its own issue, bullets and numbering stripped
 - Added: Attachments can be dragged straight onto a maintenance issue, including from an email, and a drop that carries nothing says why
 - Added: A maintenance issue given to a contractor shows the company, the person you ring with their own email and phone, and the suburb
 - Added: A maintenance issue carries the day it was booked and the day it was done, on the board and in the drawer, with the follow-up date beside them
-- Changed: The maintenance board shows Identified, Booked and Completed, and who the issue is assigned to, in place of Trade and Owner
-- …and 265 more.
+- …and 266 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -153,6 +153,44 @@ sequence, so the picker is `ordered`.
 - **Date booked and follow-up have columns and no UI.** `0114` added
   `maintenance_request_booked_on` and `_followup_on`; the request drawer does not yet show
   them, so today they can only be set through the repository.
+
+## 14 September — the form is kept when the drawer closes
+
+Amber: *"ensure the form persists on job drawer when pulling out"*. Reproduced before it
+was fixed: one stray click on the scrim beside the panel, or one Escape, unmounts
+`NewRequests` and takes every field with it. With a pasted list of twelve issues that is
+the whole entry, lost to a mis-click. **Expanding the drawer was never the problem** — that
+only toggles a class — which is worth knowing before hunting in `SidePanel`.
+
+`app/src/data/maintenanceDraft.ts` keeps it in `localStorage`, saved on every change and
+cleared when the issues are logged. It survives a scrim click, Escape, a navigation and a
+reload, and there is a **Discard** button so a draft nobody wants is not a trap.
+
+### The key carries the scope, and two wrong designs are why
+
+A draft must never restore into a drawer opened from another job's record — that logs a
+defect against somebody else's house and looks completely normal. Two attempts failed, and
+**both were caught by the checks rather than by reading the code**:
+
+1. One draft with a comparison in `readDraft`. A draft with no job set still passed into a
+   job's drawer.
+2. The comparison tightened. Now the other job's drawer started blank and the save-on-change
+   effect wrote that blank form **over the stored draft** — opening the wrong drawer for a
+   second destroyed work that had not been lost before.
+
+So the storage key carries the drawer's scope: `…:1042-01` for a drawer opened from that
+job, `…:none` for one opened from the Maintenance page. Neither can see or overwrite the
+other, which makes the guard structural rather than a comparison somebody has to remember.
+
+### Attachments are named, not kept
+
+A `File` is a handle to bytes the page was granted; it cannot be serialised and cannot be
+re-granted without the person choosing the file again. The draft keeps the **names** and the
+issue block says which to attach again. Silently losing them would be the worse half of the
+bug wearing a fix's coat.
+
+`npm run check:maintenance-draft` guards the rules that can put a defect on the wrong house.
+Four breaks were watched failing.
 
 ## 12 September, late — every job and project field has to belong to a process
 

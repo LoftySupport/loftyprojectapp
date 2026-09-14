@@ -22,6 +22,7 @@
     "check:date-clear": "node scripts/check-date-clear.mjs",
     "check:file-drop": "node scripts/check-file-drop.mjs",
     "check:brain-dump": "node --import ./scripts/register-ts.mjs scripts/brain-dump-check.mjs",
+    "check:maintenance-draft": "node --import ./scripts/register-ts.mjs scripts/maintenance-draft-check.mjs",
     "check:orphan-properties": "node --import ./scripts/register-ts.mjs scripts/check-orphan-properties.mjs",
     "check:import": "node scripts/check-import.mjs",
     "check:design-tokens": "node scripts/check-design-tokens.mjs",
