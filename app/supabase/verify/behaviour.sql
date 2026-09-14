@@ -633,21 +633,40 @@ rollback;
 --
 -- Written as one assertion over pg_class rather than a probe per view, so a view added
 -- next month is covered without anybody remembering to extend this.
+--
+-- 14 September: this asked the WRONG QUESTION for eleven days. It matched the substring
+-- `security_invoker=` in reloptions, which tests that the option is PRESENT and says
+-- nothing about its value — so a view created `with (security_invoker = false)` carries
+-- `{security_invoker=false}`, contains the substring, and sailed through the one check
+-- written to catch exactly that. Watched: a probe view with the protection deliberately
+-- turned off was reported `ok  every view in public sets security_invoker`.
+--
+-- Postgres also stores the spelling you wrote rather than a normalised value, and this
+-- schema uses both — `{security_invoker=on}` on two views, `{security_invoker=true}` on
+-- nineteen. Any comparison against one literal marks the other as a hole. So the option
+-- is read through pg_options_to_table and CAST TO BOOLEAN, which is how Postgres itself
+-- reads it: `on`, `true`, `yes` and `1` all mean the same thing to the server and must
+-- mean the same thing here.
+--
+-- `is not true` rather than `= false`: a view with no option at all yields NULL from the
+-- subquery, and that is the original 0055 failure — it must fail, not disappear.
 -- ============================================================================
 select case
   when not exists (
     select 1 from pg_class c
     join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'public' and c.relkind = 'v'
-      and coalesce(array_to_string(c.reloptions, ','), '') not like '%security_invoker=%'
+      and coalesce((select option_value::boolean from pg_options_to_table(c.reloptions)
+                    where option_name = 'security_invoker'), false) is not true
   )
-  then 'ok  every view in public sets security_invoker'
+  then 'ok  every view in public runs as its caller, not as its owner'
   else 'FAIL: view(s) executing as owner, past every policy underneath: ' || (
     select string_agg(c.relname, ', ' order by c.relname)
     from pg_class c
     join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'public' and c.relkind = 'v'
-      and coalesce(array_to_string(c.reloptions, ','), '') not like '%security_invoker=%'
+      and coalesce((select option_value::boolean from pg_options_to_table(c.reloptions)
+                    where option_name = 'security_invoker'), false) is not true
   )
 end;
 
