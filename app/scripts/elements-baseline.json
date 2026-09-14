@@ -1,6 +1,6 @@
 {
   "$comment": "Written by scripts/check-elements.mjs --update. Each number is how many different ways the app currently does one thing. It may go down and may not go up; the diff of this file is the record of which idioms were retired.",
-  "measured": "2026-09-12",
+  "measured": "2026-09-14",
   "families": {
     "e02-page-header": {
       "count": 44,
@@ -276,13 +276,12 @@
       }
     },
     "e17-field-hint-line": {
-      "count": 88,
+      "count": 86,
       "files": {
         "src/components/CreateDialogs.tsx": 19,
         "src/components/ReportForm.tsx": 4,
         "src/components/UserDialogs.tsx": 4,
         "src/pages/ContactsPage.tsx": 4,
-        "src/pages/MaintenancePage.tsx": 2,
         "src/pages/MaintenanceSetupPage.tsx": 5,
         "src/pages/ProcessesSetupPage.tsx": 14,
         "src/pages/PropertiesSetupPage.tsx": 13,
