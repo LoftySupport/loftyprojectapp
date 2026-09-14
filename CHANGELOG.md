@@ -14,6 +14,8 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Attachments can be dragged straight onto a maintenance issue, including from an email, and a drop that carries nothing says why
+- A maintenance issue given to a contractor shows the company, the person you ring with their own email and phone, and the suburb
 - Photos and files attach to a maintenance issue — from the phone's camera or library — and are filed against the job as well, so they appear in that job's Documents
 - Setup - Properties flags every job and project field that no process collects, including the ones that are columns rather than properties, such as the address
 - Kanban columns collapse to a narrow strip, with Completed, Closed, Cancelled and Acquisition & Development folded by default
