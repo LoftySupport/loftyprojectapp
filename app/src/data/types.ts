@@ -2735,6 +2735,47 @@ export type MaintenanceSource = (typeof MAINTENANCE_SOURCES)[number];
 export const MAINTENANCE_SOURCE_LABELS: Record<MaintenanceSource, string> = {
   email: "Email", phone: "Phone call", form: "Web form", portal: "Portal", api: "API", staff: "Logged by staff"
 };
+/**
+ * Where the issue was identified (0114). Amber's list, in her order and her wording — the
+ * four one-off inspections, then the four scheduled ones, then Other. A CHECK on the column
+ * rather than a lookup table, because nothing edits the list yet; HANDOFF.md records the
+ * swap to make when it matters.
+ */
+export const MAINTENANCE_IDENTIFIED_AT = [
+  "pci", "building_inspector_client", "building_inspector_house_inspect", "handover_inspection",
+  "site_inspection", "inspection_1_month", "inspection_2_month", "inspection_3_month", "other"
+] as const;
+export type MaintenanceIdentifiedAt = (typeof MAINTENANCE_IDENTIFIED_AT)[number];
+export const MAINTENANCE_IDENTIFIED_AT_LABELS: Record<MaintenanceIdentifiedAt, string> = {
+  pci: "PCI",
+  building_inspector_client: "Building Inspector (Client)",
+  building_inspector_house_inspect: "Building Inspector (House Inspect)",
+  handover_inspection: "Handover Inspection",
+  site_inspection: "Site Inspection",
+  inspection_1_month: "1 Month Inspection",
+  inspection_2_month: "2 Month Inspection",
+  inspection_3_month: "3 Month Inspection",
+  other: "Other"
+};
+/** The grouping Amber drew: a divider before the scheduled inspections and before Other. */
+export const MAINTENANCE_IDENTIFIED_AT_GROUPS: readonly (readonly MaintenanceIdentifiedAt[])[] = [
+  ["pci", "building_inspector_client", "building_inspector_house_inspect", "handover_inspection"],
+  ["site_inspection", "inspection_1_month", "inspection_2_month", "inspection_3_month"],
+  ["other"]
+];
+
+/**
+ * Who is fixing it (0114). Amber: *"Assigned to: Internal / External — (radio select enum
+ * type that defaults to internal)"*. Internal names a Lofty person, external names a trade
+ * or contractor company; the database refuses the other half of the pair.
+ *
+ * This is NOT an offer. `MaintenanceAssignment` is the offer — the accept link, the expiry,
+ * the decline that keeps its row. This is the plain answer to whose job it is.
+ */
+export const MAINTENANCE_ASSIGNEE_KINDS = ["internal", "external"] as const;
+export type MaintenanceAssigneeKind = (typeof MAINTENANCE_ASSIGNEE_KINDS)[number];
+export const MAINTENANCE_ASSIGNEE_KIND_LABELS: Record<MaintenanceAssigneeKind, string> = { internal: "Internal", external: "External" };
+
 export const MAINTENANCE_STATUSES = ["new", "triaged", "in_progress", "waiting_on_contractor", "waiting_on_client", "completed", "closed", "rejected"] as const;
 export type MaintenanceStatus = (typeof MAINTENANCE_STATUSES)[number];
 export const MAINTENANCE_STATUS_LABELS: Record<MaintenanceStatus, string> = {
@@ -2792,6 +2833,15 @@ export interface MaintenanceRequest {
   number: string;
   sequence: number;
   source: MaintenanceSource;
+  /** The day it was identified, as opposed to the moment it was logged (0114). Clearable. */
+  identifiedOn: IsoDate | null;
+  /** Where it was identified — PCI, a building inspector, one of the scheduled inspections. */
+  identifiedAt: MaintenanceIdentifiedAt | null;
+  /** The issues typed into one drawer share this, and the report groups a section on it. */
+  batchId: Uuid | null;
+  /** The Lofty person who reported it (0114) — separate from the homeowner contact below. */
+  reportedByProfileId: Uuid | null;
+  reportedByProfileName: string | null;
   reportedByContactId: Uuid | null;
   reportedByName: string | null;
   reportedByEmail: string | null;
@@ -2808,6 +2858,15 @@ export interface MaintenanceRequest {
   health: MaintenanceHealth;
   ownerProfileId: Uuid | null;
   ownerName: string | null;
+  /** Internal or external (0114); defaults to internal and decides which assignee is set. */
+  assigneeKind: MaintenanceAssigneeKind;
+  assigneeProfileId: Uuid | null;
+  assigneeName: string | null;
+  assignedCompanyId: Uuid | null;
+  assignedCompanyName: string | null;
+  /** When the repair is booked in, and when to chase it. Per issue; nothing derives either. */
+  bookedOn: IsoDate | null;
+  followUpOn: IsoDate | null;
   closedAt: IsoDateTime | null;
   closedReason: string | null;
   externalRef: string | null;
@@ -2828,13 +2887,27 @@ export interface MaintenanceRequest {
 export interface NewMaintenanceRequest {
   jobId: string;
   summary: string;
-  source: MaintenanceSource;
+  /**
+   * Optional since 0114: the drawer stopped asking how it arrived, so a request logged by
+   * hand takes the column's own default of `staff`. Email, form and portal intake still
+   * pass their own.
+   */
+  source?: MaintenanceSource;
   description?: string | null;
   priority?: MaintenancePriority;
   reportedByContactId?: Uuid | null;
+  reportedByProfileId?: Uuid | null;
   reportedAt?: IsoDateTime | null;
+  identifiedOn?: IsoDate | null;
+  identifiedAt?: MaintenanceIdentifiedAt | null;
+  batchId?: Uuid | null;
   categoryId?: string | null;
   ownerProfileId?: Uuid | null;
+  assigneeKind?: MaintenanceAssigneeKind;
+  assigneeProfileId?: Uuid | null;
+  assignedCompanyId?: Uuid | null;
+  bookedOn?: IsoDate | null;
+  followUpOn?: IsoDate | null;
 }
 export interface MaintenanceRequestPatch {
   summary?: string;
@@ -2845,6 +2918,14 @@ export interface MaintenanceRequestPatch {
   dueOn?: IsoDate | null;
   ownerProfileId?: Uuid | null;
   reportedByContactId?: Uuid | null;
+  reportedByProfileId?: Uuid | null;
+  identifiedOn?: IsoDate | null;
+  identifiedAt?: MaintenanceIdentifiedAt | null;
+  assigneeKind?: MaintenanceAssigneeKind;
+  assigneeProfileId?: Uuid | null;
+  assignedCompanyId?: Uuid | null;
+  bookedOn?: IsoDate | null;
+  followUpOn?: IsoDate | null;
   closedReason?: string | null;
   externalRef?: string | null;
 }

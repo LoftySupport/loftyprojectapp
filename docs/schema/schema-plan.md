@@ -2922,6 +2922,70 @@ one. Caught by reading the generated diff rather than trusting the script that w
 which is the only reason it is a footnote and not a shipped defect.
 
 
+### 14 September — an issue is a request, and the header is typed once (`0114`)
+
+Amber rewrote the new-maintenance-request drawer: *"each one of these issues have its own
+record id but you only enter the job number, reported by, identifies at, date once so you
+can then have a status, date booked, and followup for each"*.
+
+Asked whether an issue should be a line inside one request or a request of its own, she
+took the second. So **1042-01-M3, -M4, -M5 are three issues from one PCI walk**, created
+together from one drawer, and no new table exists: `maintenance_requests` grows eleven
+columns and `maintenance_request_display` is rebuilt to carry them.
+
+| Column | What it is |
+| --- | --- |
+| `maintenance_request_identified_on` | The day it was identified. Defaults to today in the drawer, **and can be cleared** |
+| `maintenance_request_identified_at` | PCI · Building Inspector (Client) · Building Inspector (House Inspect) · Handover Inspection · Site Inspection · 1/2/3 Month Inspection · Other |
+| `maintenance_request_reported_by_profile_id` | The Lofty person, not the homeowner contact |
+| `maintenance_request_batch_id` | The issues typed in one sitting |
+| `maintenance_request_assignee_kind` | `internal` or `external`, defaulting to internal |
+| `maintenance_request_assignee_profile_id` / `_assigned_company_id` | The one the kind allows; the other is refused |
+| `maintenance_request_booked_on` / `_followup_on` | Per issue, and nothing derives either |
+
+#### Why identified-on is not a rewrite of `reported_at`
+
+`maintenance_request_reported_at` is not null, starts the SLA clock and is what the warranty
+flag compares against handover. Amber's *Date Identified* defaults to today **and can be
+cleared** — a nullable business date, which is a different fact from the moment the row was
+logged. Collapsing them means either a nullable SLA clock or refusing to clear the field she
+asked to be clearable.
+
+Whether the SLA should run from the identification date is a real question and it is in
+[`docs/open-questions.md`](../open-questions.md) rather than answered here. It changes
+nothing today: this drawer sets no category, and no category has always meant no SLA.
+
+#### What the drawer stops asking, and what that costs
+
+How it arrived, the trade, the priority and the owner come off the form. **The columns
+stay** — email and form intake still set them, and the queue still reads them. Dropping
+them would be a data loss for a path that still runs.
+
+The consequence, stated rather than hidden: **a request logged this way has no trade, so it
+has no SLA and the queue reads "No SLA" for it.** That is the honest readout the health
+derivation has always given a request with no category, not a new defect.
+
+#### Assignment here is not an offer
+
+`maintenance_assignments` is an *offer*: a signed accept link, an expiry, a decline that
+keeps its row. The two new assignee columns are the plain answer to whose job it is, set
+when the issue is logged and before anybody has been asked. Offering still goes through
+`offer_maintenance_item()` and still emails the contractor; nothing in `0114` sends
+anything.
+
+#### What was watched failing
+
+Each CHECK body was removed in turn and the migration's proof raised each time:
+widening `identified_at` to accept `over_the_fence` reported *an unknown identified_at was
+accepted*; removing the assignee pairing reported *an internal request took a company*.
+The probe makes its own job rather than reading one, so it bites on a replay from empty as
+well as on production — `0113`'s guarded probe is the counter-example, and it skipped
+silently on a database with no jobs. The projects identity sequence is captured and put
+back, so the probe does not take the number the next real project would get.
+
+**Not yet applied to the live project.**
+
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

@@ -34,7 +34,13 @@ const REQUEST_COLUMNS = [
   "maintenance_request_owner_profile_id", "maintenance_request_owner_name", "maintenance_request_closed_at", "maintenance_request_closed_reason", "maintenance_request_external_ref",
   "job_current_address", "job_suburb", "job_handover_at", "job_warranty_ends_on", "maintenance_request_is_warranty",
   "maintenance_request_items_total", "maintenance_request_items_done", "maintenance_request_offers_open", "maintenance_request_next_visit",
-  "maintenance_request_messages_total", "maintenance_request_last_message_at", "maintenance_request_created_at", "maintenance_request_updated_at"
+  "maintenance_request_messages_total", "maintenance_request_last_message_at", "maintenance_request_created_at", "maintenance_request_updated_at",
+  // 0114 — the header typed once, and who is fixing this one issue.
+  "maintenance_request_identified_on", "maintenance_request_identified_at", "maintenance_request_batch_id",
+  "maintenance_request_reported_by_profile_id", "maintenance_request_reported_by_profile_name",
+  "maintenance_request_assignee_kind", "maintenance_request_assignee_profile_id", "maintenance_request_assignee_name",
+  "maintenance_request_assigned_company_id", "maintenance_request_assigned_company_name",
+  "maintenance_request_booked_on", "maintenance_request_followup_on"
 ].join(", ");
 
 type RequestRow = {
@@ -49,6 +55,11 @@ type RequestRow = {
   job_handover_at: string | null; job_warranty_ends_on: string | null; maintenance_request_is_warranty: boolean | null;
   maintenance_request_items_total: number; maintenance_request_items_done: number; maintenance_request_offers_open: number; maintenance_request_next_visit: string | null;
   maintenance_request_messages_total: number; maintenance_request_last_message_at: string | null; maintenance_request_created_at: string; maintenance_request_updated_at: string;
+  maintenance_request_identified_on: string | null; maintenance_request_identified_at: MaintenanceRequest["identifiedAt"]; maintenance_request_batch_id: string | null;
+  maintenance_request_reported_by_profile_id: string | null; maintenance_request_reported_by_profile_name: string | null;
+  maintenance_request_assignee_kind: MaintenanceRequest["assigneeKind"]; maintenance_request_assignee_profile_id: string | null; maintenance_request_assignee_name: string | null;
+  maintenance_request_assigned_company_id: string | null; maintenance_request_assigned_company_name: string | null;
+  maintenance_request_booked_on: string | null; maintenance_request_followup_on: string | null;
 };
 
 const fromRequest = (r: RequestRow): MaintenanceRequest => ({
@@ -62,7 +73,12 @@ const fromRequest = (r: RequestRow): MaintenanceRequest => ({
   jobAddress: r.job_current_address, jobSuburb: r.job_suburb, handoverAt: r.job_handover_at, warrantyEndsOn: r.job_warranty_ends_on,
   isWarranty: r.maintenance_request_is_warranty === true, itemsTotal: r.maintenance_request_items_total, itemsDone: r.maintenance_request_items_done,
   offersOpen: r.maintenance_request_offers_open, nextVisit: r.maintenance_request_next_visit, messagesTotal: r.maintenance_request_messages_total,
-  lastMessageAt: r.maintenance_request_last_message_at, createdAt: r.maintenance_request_created_at, updatedAt: r.maintenance_request_updated_at
+  lastMessageAt: r.maintenance_request_last_message_at, createdAt: r.maintenance_request_created_at, updatedAt: r.maintenance_request_updated_at,
+  identifiedOn: r.maintenance_request_identified_on, identifiedAt: r.maintenance_request_identified_at, batchId: r.maintenance_request_batch_id,
+  reportedByProfileId: r.maintenance_request_reported_by_profile_id, reportedByProfileName: r.maintenance_request_reported_by_profile_name,
+  assigneeKind: r.maintenance_request_assignee_kind, assigneeProfileId: r.maintenance_request_assignee_profile_id, assigneeName: r.maintenance_request_assignee_name,
+  assignedCompanyId: r.maintenance_request_assigned_company_id, assignedCompanyName: r.maintenance_request_assigned_company_name,
+  bookedOn: r.maintenance_request_booked_on, followUpOn: r.maintenance_request_followup_on
 });
 
 const ITEM_COLUMNS = [
@@ -195,12 +211,24 @@ export function maintenanceMethods(client: SupabaseClient): MaintenanceMethods {
       return data ? fromRequest(data as unknown as RequestRow) : null;
     },
     async createMaintenanceRequest(input): Promise<MaintenanceRequest> {
+      // `source` is spread rather than defaulted here: leaving the key out lets the column's
+      // own default of `staff` apply, which is one place the value is decided instead of two.
       const { data, error } = await client.from("maintenance_requests").insert({
-        job_id: input.jobId, maintenance_request_summary: input.summary, maintenance_request_source: input.source,
+        job_id: input.jobId, maintenance_request_summary: input.summary,
+        ...(input.source ? { maintenance_request_source: input.source } : {}),
         maintenance_request_description: input.description ?? null, maintenance_request_priority: input.priority ?? "normal",
         maintenance_request_reported_by_contact_id: input.reportedByContactId ?? null,
+        maintenance_request_reported_by_profile_id: input.reportedByProfileId ?? null,
         ...(input.reportedAt ? { maintenance_request_reported_at: input.reportedAt } : {}),
-        maintenance_category_id: input.categoryId ?? null, maintenance_request_owner_profile_id: input.ownerProfileId ?? null
+        maintenance_request_identified_on: input.identifiedOn ?? null,
+        maintenance_request_identified_at: input.identifiedAt ?? null,
+        maintenance_request_batch_id: input.batchId ?? null,
+        maintenance_category_id: input.categoryId ?? null, maintenance_request_owner_profile_id: input.ownerProfileId ?? null,
+        maintenance_request_assignee_kind: input.assigneeKind ?? "internal",
+        maintenance_request_assignee_profile_id: input.assigneeProfileId ?? null,
+        maintenance_request_assigned_company_id: input.assignedCompanyId ?? null,
+        maintenance_request_booked_on: input.bookedOn ?? null,
+        maintenance_request_followup_on: input.followUpOn ?? null
       }).select("maintenance_request_id").single();
       if (error) throw error;
       return readRequest((data as { maintenance_request_id: string }).maintenance_request_id);
@@ -215,6 +243,16 @@ export function maintenanceMethods(client: SupabaseClient): MaintenanceMethods {
       if (patch.dueOn !== undefined) row.maintenance_request_due_on = patch.dueOn;
       if (patch.ownerProfileId !== undefined) row.maintenance_request_owner_profile_id = patch.ownerProfileId;
       if (patch.reportedByContactId !== undefined) row.maintenance_request_reported_by_contact_id = patch.reportedByContactId;
+      if (patch.reportedByProfileId !== undefined) row.maintenance_request_reported_by_profile_id = patch.reportedByProfileId;
+      if (patch.identifiedOn !== undefined) row.maintenance_request_identified_on = patch.identifiedOn;
+      if (patch.identifiedAt !== undefined) row.maintenance_request_identified_at = patch.identifiedAt;
+      // The kind and its assignee move together or the CHECK refuses the pair: switching to
+      // external while a person is still named is exactly what it is there to stop.
+      if (patch.assigneeKind !== undefined) row.maintenance_request_assignee_kind = patch.assigneeKind;
+      if (patch.assigneeProfileId !== undefined) row.maintenance_request_assignee_profile_id = patch.assigneeProfileId;
+      if (patch.assignedCompanyId !== undefined) row.maintenance_request_assigned_company_id = patch.assignedCompanyId;
+      if (patch.bookedOn !== undefined) row.maintenance_request_booked_on = patch.bookedOn;
+      if (patch.followUpOn !== undefined) row.maintenance_request_followup_on = patch.followUpOn;
       if (patch.closedReason !== undefined) row.maintenance_request_closed_reason = patch.closedReason;
       if (patch.externalRef !== undefined) row.maintenance_request_external_ref = patch.externalRef;
       const { data: me } = await client.rpc("current_profile_id");
