@@ -9,6 +9,10 @@ import {
 } from "../data/types";
 import { useProcesses, usePropertyAccess, usePropertyDefs, usePropertyOptions, useStages, useTeams, useTemplatePhases } from "../data/useLookups";
 import { propertyColumnDefs } from "../data/propertyColumns";
+// The app already has one date formatter. A second one here would be a second way
+// to draw a date, which is exactly what the element sweep counts and refuses.
+import { fmtDate } from "../data/propertyFormat";
+
 import { useAuth } from "../data/AuthProvider";
 import { useBoardRecords, type BoardJob } from "../data/boardModel";
 import { jobMatchesQuery, matchedOnPreviousAddress, useSearch } from "../data/SearchProvider";
@@ -45,6 +49,21 @@ import { Problem, Result } from "../components/Form";
 import { PersonSelect } from "../components/PersonSelect";
 import { Select, toOptions } from "../components/Select";
 import "../components/ui.css";
+
+/**
+ * Why the calculated completion date is blank, in the cell where the date would be.
+ *
+ * Never "—". A blank here is not "no value", it is "nobody has estimated part of this
+ * job's pipeline yet", and those read identically in an empty cell while meaning
+ * completely different things. All 38 Pre-construction processes carry no estimate
+ * today, so this is what the column says on most jobs until the SLAs are filled in.
+ */
+function missingEstimates(j: BoardJob): string {
+  const n = j.calculatedCompletionMissing;
+  if (n == null) return "Not live";
+  if (n === 0) return "Not calculated";
+  return `No estimate on ${n} process${n === 1 ? "" : "es"}`;
+}
 
 /**
  * The jobs screen — one dataset, four views, the same toolbar over all of them.
@@ -494,6 +513,34 @@ export function JobsPage() {
       text: j => currentProcessName(j, processes) ?? "Nothing recorded" },
     { key: "days", group: "Programme", label: "Days in stage", className: "num",
       sort: j => j.daysInStage, cell: j => j.daysInStage, text: j => j.daysInStage },
+    /* The three dates, side by side, which is the whole reason the calculated one exists.
+       Amber, 14 September: *"management can look at targeted completion date (when they
+       want it to be done) versus the realistic calculated date based on slas and then the
+       actual date it was completed for process optimisation"*.
+
+       Columns rather than a seventh row in the drawer's Key properties: she settled on
+       11 September that those *"will always be those key 6"*, and comparing three dates
+       ACROSS jobs is a table's job anyway, not a drawer's.
+
+       Off by default. A column nobody asked for that is blank on every row today is worse
+       than one they turn on the day the SLAs are in. */
+    { key: "targetCompletion", group: "Programme", label: "Target completion", offByDefault: true,
+      sort: j => j.targetCompletion ?? null,
+      cell: j => j.targetCompletion ? fmtDate(j.targetCompletion) : <span className="muted">Not set</span>,
+      text: j => j.targetCompletion ? fmtDate(j.targetCompletion) : "Not set" },
+    { key: "calculatedCompletion", group: "Programme", label: "Calculated completion", offByDefault: true,
+      sort: j => j.calculatedCompletion ?? null,
+      /* Never a date it cannot stand behind. When the forecast is null the cell says how
+         many processes have no estimate, so an empty column reads as work to do rather
+         than as a feature that does not work. */
+      cell: j => j.calculatedCompletion
+        ? fmtDate(j.calculatedCompletion)
+        : <span className="muted">{missingEstimates(j)}</span>,
+      text: j => j.calculatedCompletion ? fmtDate(j.calculatedCompletion) : missingEstimates(j) },
+    { key: "endDate", group: "Programme", label: "Actually completed", offByDefault: true,
+      sort: j => j.endDate ?? null,
+      cell: j => j.endDate ? fmtDate(j.endDate) : <span className="muted">Not finished</span>,
+      text: j => j.endDate ? fmtDate(j.endDate) : "Not finished" },
     // The pill has no text in it at all — this column is the reason `text` is
     // required rather than derived from the cell.
     { key: "status", group: "Programme", label: "Status", sort: j => RECORD_STATUS_LABELS[j.status],

@@ -21,6 +21,109 @@ invent a value, and `CLAUDE.md` is explicit that an invented default is worse th
 
 ## Open — next question first
 
+### 0f. When a job number changes, should the old one stay findable?
+
+`0120` made the job number move: mark a job community title and `1004-003` becomes
+`1004-003c`, carrying every child row with it by cascade. Amber's own words for what she
+wanted were *"like the address when updated"* — and the address half of that analogy has a
+second part this does not yet have.
+
+**An address that is superseded is kept.** `address_history` records the stint, and
+`0042`'s note quotes her from 25 August: *"all addresses should be in the project history"*,
+so searching an old address off an old contract still finds the record. A superseded job
+number is currently kept nowhere. Type `1004-003` after the job became `1004-003c` and you
+get nothing.
+
+| Option | What it means |
+| --- | --- |
+| **A job number history, like the address's** | A row per superseded number, searchable, shown on the record. Matches the analogy she drew. A new table, and the only one of the three that makes an old email or contract findable |
+| **Search falls back by stripping the suffix** | No new table: a search for `1004-003` also matches `1004-003c`. Cheap, and it covers the common case exactly — the suffix is the only part that ever changes. It records nothing, so it cannot tell you the number *did* change or when |
+| **Nothing — the new number is the number** | The rename is the point, and the old one is meant to stop working. Honest, and it makes a bookmarked link and a quoted number simply wrong |
+
+**Recommendation: the second.** The suffix is the only mutable part of the number, so a
+search that ignores it covers every case a history table would, at the cost of one function
+rather than a table and a trigger. If the audit trail turns out to matter — who changed it
+and when — `activity_audit` already records every `jobs` update, so the history is
+recoverable without a second home for it.
+
+**Blocked on:** this answer. Nothing else waits on it; `0120` works either way.
+
+
+### 0c. Which team and which stage does each remaining fixed column get?
+
+**This is the walk-through Amber asked for**, and it is the live interview rather than a
+decision waiting on her. *"Ask me property by property"* (14 September).
+
+Settled so far:
+
+| Field | Answer |
+| --- | --- |
+| The address fields | System. Listed and assignable, no process |
+| Community and Torrens title lot counts | System. Listed and assignable, no process |
+| Council | Not a job or project property. Belongs to `addresses`, shows on the card |
+| Owning team | Not a property. Derived from the active process (see *Answered*) |
+| Assignee | Not a job field. It is the task's assignee, read through the active process |
+| Status | Derived from dates and open processes, with a pinnable override for On hold |
+| Stage | Derived from the processes, still manually movable through the confirm modal |
+| Target completion | Entered by a person |
+| End date | Derived — stamped when the work is done |
+| Old Lofty job number | Stays on the job. Entered by hand at job creation. Reference key only |
+| SiteBook ID | **New.** A separate property, collected by a process still to be named |
+| Project name | Composed from the current address, with a manual override |
+| Project type | Create-form field, and a step inside the project creation process |
+| SharePoint folder | Collected by a process |
+| Title type | A **job** property. Collected at job creation, editable later, and it selects which processes the job runs |
+| Notes | Does not exist on either table, and is not to be added. Comments covers it |
+
+**The walk-through is complete.** Every field this file enumerated has an answer. What it
+produced is not the list of thirty-three property definitions the question expected: five
+of the fields turned out not to be job or project properties at all (the council belongs to
+the address, the assignee to the task, the owning team and stage and status are derived,
+the notes field does not exist), and one new property was added that has no column yet
+(SiteBook ID).
+
+**What is now blocked on a build rather than an answer**, in the order the dependencies run:
+
+1. `property_def_scope` has to widen — question 0e above.
+2. `processes` needs an **optional** flag, because the title type selects processes and an
+   optional one nobody runs must not hold the job.
+3. The **owning team, assignee, stage and status derivations**, which all read from process
+   runs and tasks and all need the tie-break Amber gave: earliest unfinished process in the
+   job's stage.
+4. The **Override Active Team** handshake, which she parked into Automations to be refined.
+5. A **SiteBook ID** column and the process that collects it.
+
+**Blocked on:** nothing. This is Amber's time, not a missing fact.
+
+
+### 0e. What scopes does a property definition need, now that a property can belong elsewhere and still show on a card?
+
+`property_defs.property_def_scope` is NOT NULL with a check that admits **`project` and
+`job` only**. Two of Amber's 14 September answers break that:
+
+- *"Some properties will be task or maintainece or contact properties which aren't job or
+  project properties but are shown on job or project cards"*
+- The council, which she placed on the **address**.
+
+So the scope vocabulary has to grow, and **where a property is shown becomes a second fact
+from what it belongs to**. A `contact` property rendered on a job card is not a job
+property that happens to live elsewhere; it is a contact property the job card displays.
+
+| Option | What it means |
+| --- | --- |
+| **Widen `property_def_scope` only** | Add `address`, `task`, `maintenance`, `contact` to the check. Cheapest. But then nothing records that a contact property appears on a job card, so the card has to hard-code which foreign properties it shows |
+| **Scope, plus a `shown_on` list** | `property_def_scope` says what it belongs to; a second column or table says which record types display it. Two facts, recorded separately, which is what Amber described |
+| **Leave scope alone and treat these as card configuration** | Nothing changes in `property_defs`; which foreign fields a card shows is a screen decision. Keeps the schema still, and makes the card the third place field layout is decided |
+
+**Recommendation: the second**, because it is the only one that can answer *"what shows on
+a job card"* from the data rather than from a component. But it is a schema change on a
+table the properties screen already reads, so it is worth settling before the walk-through
+in 0c finishes and produces thirty-odd rows in the wrong shape.
+
+**Blocked on:** this answer. The walk-through in 0c can continue meanwhile — which team and
+stage a field takes does not change with the scope vocabulary.
+
+
 ### 0. Do the fixed columns on a job and a project get property definitions?
 
 **This is what the orphan sweep turned up, and it is a decision rather than a build.**
@@ -362,6 +465,26 @@ decides how much retro-fitting to schedule, and in what order.
 
 | Date | Question | Answer |
 | --- | --- | --- |
+| 14 Sep | Community title jobs need a `c` suffix — does it go in the job number itself? | **Yes, in the key, and the key moves when the title type is corrected.** Asked first whether a later correction should renumber the job, Amber chose a display-only suffix; shown the build, she reversed it: *"But the primary key can it be updated that is also linked so it show the c on the end (like the address when updated) but the project 4 digits and 3 digit job code always remains with job too"*. It can, and the machinery was already there — `resync_job_id` has rebuilt `job_id` from its parts since `0028` and 16 of 17 referencing tables were already `ON UPDATE CASCADE`. The concern that made the first answer is recorded in `schema-plan.md` rather than deleted, because it is still true: 67 of 83 live jobs have no title type, so most will be renumbered long after creation, and a job number in a contract or an email is beyond any cascade's reach. She has accepted that twice. Built as `0120`; the 4-digit project and 3-digit sequence never move, only the suffix |
+| 14 Sep | What should the calculated completion date show while most processes have no SLA? | **Build it; she will fill the SLAs in.** Chosen over *blank naming what is missing*, *partial and marked as such*, and *fall back to a per-stage figure*. The finding that prompted the question: 3 of 51 processes carry `process_expected_days` while 107 of 107 `process_tasks` carry theirs, and **all 38 Pre-construction processes have neither**. So the mechanism is built and returns null until the estimates land, with `job_calculated_completion_missing` saying how many are outstanding. Built as `0119` |
+| 14 Sep | Are the expected days working days or calendar days? | **Calendar days.** So no weekday skip and no South Australian holiday table, and a 10-day SLA is 10 days on the calendar |
+| 14 Sep | What does the forecast assume about a process already past its SLA? | **It finishes today, and everything after runs to SLA.** Chosen over *re-charge its full SLA from today*, *scale the remaining work by how late it is running*, and *flag the blockage instead of projecting past it*. Honest about the past and deliberately optimistic about the present — which is a choice she made rather than an accident of the arithmetic, and worth remembering when the forecast turns out to run early |
+| 14 Sep | Does a job or project keep a notes field? | **No — Comments already does it.** Chosen over *keep it as a system field* and *keep it as a handover note a process collects*. **And the question was built on a wrong premise, which the database corrected before anything was recorded:** there is no notes column on `jobs` or `projects` at all. This file's own enumeration of the thirty-three listed *"the notes"*, and that was loose. So nothing is retired; the answer stands as a **standing rule not to add one** — the record has a comment stream with mentions, an activity feed, and `job_latest_update` already reading the newest comment as the latest update, and a free-text column beside that is the second place nobody reads. The five `%note%` columns that do exist are all on other records — `companies`, `contacts`, `process_runs`, `record_parties`, `maintenance_assignments` — and none is in scope here |
+| 14 Sep | How is the project name set? | **Composed, with a manual override.** The formula stays the default — `projectDisplayName` builds *number - SUBURB, street* from the CURRENT address, so the name follows a move — and somebody can pin a different name when a site is known by something else. Same override shape as the status answer above, which is now the third place this pattern appears (status, owning team, project name): **derive it, let a person pin it** |
+| 14 Sep | Is the project type a create-form field or process-collected? | **A create-form field, and it is part of the project creation process.** Chosen over *gated at Acquisition & Development* and *derived from the job mix*. Both halves matter: the value is picked on the form as it is today, and the act of picking it is a step inside project creation rather than an untracked form field. Jobs keep reading it through `job_display` rather than storing their own |
+| 14 Sep | Is the SharePoint folder system or collected? | **Collected by a process.** Chosen over *system, created with the record* and *system now, automated later*. So somebody making the folder and putting the link back is real work that a stage gates, and it stays that way until the SharePoint integration lands (question 14 below) |
+| 14 Sep | Where does the title type belong? | **To the JOB, collected during job creation at the project stage, and editable afterwards.** Amber: *"Title type is a job property and collected at project stage during job creation but might be updated later during the build so it needs to be editable as assignable. Also this field is importantly as it might change which processes a job goes through. However how the project job creation split works now is correct but important to know that the title type belongs to a job."* Two things to carry: the split's current behaviour is **confirmed correct** and not to be changed, and **the title type selects processes**. That last part joins the optional-process flag answered above — together they mean which processes a job runs is a function of the job's own facts, not a fixed list, and the owning-team derivation sits on top of whatever that resolves to |
+| 14 Sep | Where does the old Lofty job number live, and what about SiteBook? | **They are two different things. The old number stays on the JOB; SiteBook is a new property collected in a process.** Amber first said the old number *"belongs to project"*; the live data was checked before acting on it and disagrees. Sixteen jobs carry an old number across four projects, and **all four projects hold more than one distinct value**: 1109 has 2154, 2155, 2156, 2157, 2158, 2159 on six jobs, and 1009 and 1991 are the same flat shape. Only 1010 looks project-stemmed — `1216 - D1`, `1216 - D2`, `1216 - D3`. Moving the field to the project would have collapsed 16 recorded values to 4. Shown the rows, she chose **stay on the job, entered by hand during job creation**, so nothing is lost and `jobs.job_number_old` is unchanged. Her framing of *how* it is entered still stands: typed once while creating jobs from the project screen, used only as a reference key. **SiteBook ID is separate and does not exist yet** — *"a third party software primary key"* — and she wants it collected as a **process step (process TBA)**, not typed at creation. That is a new column and a new process, both unbuilt |
+| 14 Sep | Is the assignee a job field? | **No — "currently with" is the task's assignee, not the job's.** Chosen over *derived from the active process*, *set by hand within the derived team*, and *a system field*. So `jobs.job_assignee_id` becomes derived or retired, in the same move that made the owning team derived. The pair is consistent: the process says which team, the tasks say which person |
+| 14 Sep | With several open tasks on one job, which person shows? | **Whoever holds tasks in the active process.** Chosen over *earliest unfinished task anywhere on the job*, *everyone with an open task*, and *nobody until assigned*. It mirrors the team rule exactly, and it is the only one of the four that cannot name somebody from a team that is not on the job |
+| 14 Sep | Who sets the status? | **Derived, but a person can override it.** Chosen over *set by hand*, *purely derived*, and *split status from health*. So the dates and open processes compute it, and somebody can pin a different value — which is where **On hold** lives, because no date maths produces it. Note this overlaps question 8 below, which asks how health is worked out; the override half is now answered and the derivation half still is not |
+| 14 Sep | Is the stage derived? | **Yes, from the processes, and still manually movable.** Amber: *"Derived from processes like the tram but can be overridden and manually moved (as importing older jobs) with modal pop like now."* The existing confirm modal stays — importing an older job is the case that needs it. **And a correction from her in the same answer: there are SEVEN stages, not five** — *"closed and cancelled are still stages"*. Checked against the database rather than taken on either side's word: `jobs_stage_is_a_lifecycle_stage` and its projects twin both admit *Acquisition & Development, Pre-construction, Construction, Maintenance, Completed, Closed, Cancelled*. She is right and the repository's own prose is the loose part — `supabaseRepository.ts` calls Acquisition & Development *"the first of the five lifecycle phases"* |
+| 14 Sep | Target completion and end date: derived or entered? | **Target entered, end date derived.** Chosen over *both entered*, *target derived*, and *both derived*. A person commits to the target, so a contracted handover date is not overwritten by process maths; the end date is stamped when the work is actually done rather than relying on somebody remembering to record it |
+| 14 Sep | Do the fixed columns on a job and a project get property definitions? | **Yes, all of them, and ask her property by property.** Amber: *"Ask me property by property. Some things like address fields collections are part of creating a new job or project process but are not required to be really documented as a process as they are a system. Same as number of community titles etc but I still need them listed in the properties section so I can assign them to a team or stage. Some properties will be task or maintainece or contact properties which aren't job or project properties but are shown on job or project cards"*. This **reverses the recommendation**, which was definitions only for the handful a process gates. The reason it was wrong: a definition is not only a hook for a process, it is the row that carries `property_def_owning_team` and `property_def_stage`, so a field with no definition cannot be assigned to a team or a stage at all — which is the thing she actually wants from the screen. So a system field still gets a definition; what it does not get is a process. Two consequences: **`property_def_scope` has to widen** beyond `project` and `job` (question 0e below), and the walk-through of the remaining fields is now the work |
+| 14 Sep | Is the council a job/project property? | **No — it belongs to the address, and shows on the job and project card.** Chosen over *system field on the job* and *process-collected*. It is already `addresses.address_council`, filled from the suburb off the LGA list, and `0108` is what made a job able to read its own. So it is the first confirmed case of the pattern in the answer above: a property owned by one record and displayed on another |
+| 14 Sep | Is the owning team a property somebody sets? | **No — it is an assignment derived from the active process.** Amber: *"The owning team is an assignment that updates when a job starts that new process. For example when a job starts working drawings process which is owned by design team that job is now with design."* `processes.process_owning_team` already exists, so the input is there. What does not exist is the derivation: `jobs.job_owning_team` is set to `Acquisition & Development` at creation and changed by hand from the record. Tie-break and override are the answer below |
+| 14 Sep | When two processes from different teams run at once, which owns the job? | **The earliest unfinished process in the job's stage, with a manual override that has to be granted.** Amber: *"It needs to be a drop down so it can assigned to a new team with a button next to it that requests control of job, eg 'Override Active Team' at which point the active team manager gets a notification that can either release the job to the new team or not. This is flagged on the job with a highlighted style update on the board that flags who has request job ownership. Note this process will need to be added as an automation in automations section to be refined. So it defaults to the earliest unfinished process in a jobs stage."* So: a default the database can compute, and a request-and-release handshake on top of it that is **not** a silent reassignment. The override is explicitly parked into Automations to be refined rather than built now |
+| 14 Sep | Can a process be skipped? | **Yes — a process needs an optional flag.** Amber, in the same answer: *"processes will need a new property that is the ability to mark that process as optional as some processes eg PWA is not required on every job so it can be skipped and ignored. However some like planning approval or working drawings are mandatory."* A column on `processes`, not on the run: whether PWA applies is a fact about the process, not about one job's attempt at it. This also gives the owning-team derivation above something it needs — an optional process nobody will run should not hold the job |
 | 14 Sep | When a project's current address changes, which of its jobs should take the new address? | **Only the jobs still standing at the project's address.** Amber asked for it in the first place: *"when a new address is added and updated to current project address this address needs to push to jobs so that the job address shown on the job drawer and project drawer is the current address"* — and, given three options, took the conservative one over *every live job* and over *ask each time with a preview*. So a job follows when its street number, street, street line 2, suburb, state and postcode all match the address the project is **leaving**, and it keeps any lot and res number of its own: "Lot 1, 14 Brodie Road" becomes "Lot 1, 28 Corner Street". A job given its own address since, once its title issued, is left exactly where it is; so are closed and cancelled jobs. Built as `0118`, a trigger rather than repository code, because the import and hand-written SQL write these tables too. Two consequences worth carrying: a job that has diverged **never comes back** on its own, which is correct but means a bulk re-address of a whole street is still a job-at-a-time edit; and a project moving to a locality takes nothing with it, because `guard_job_address_is_a_street` refuses a job with no street |
 | 14 Sep | Where do a maintenance issue's photos live? | **`job-documents`, private.** Three options were put up — the private job bucket, a new private `maintenance-photos` bucket, or the public `report-images` one — and Amber took the first. So a defect photo is a document about the job: it is filed in `documents`, attached through `document_links.maintenance_request_id` (which `0084` already added for exactly this), and it appears in that job's Documents list beside the contract and the site plan. Every read is a short-lived signed URL, so nothing leaves Lofty without one. **The consequence to carry into the report (PR #79):** an emailed report cannot simply point at these images the way a shared document points at `report-images`, because a signed link expires and a private object has no permanent URL. The report will have to embed the bytes or sign at the moment of building. That is the cost of the choice, and it is the right one — a defect photo of somebody's house is not a thing to make permanently public to anyone who ever sees the URL |
 | 14 Sep | An issue needs its own record id — is it a line inside one request, or a request of its own? | **Its own request.** Amber took the second of two options: *"each one of these issues have its own record id but you only enter the job number, reported by, identifies at, date once so you can then have a status, date booked, and followup for each"*. So three defects from one PCI walk are **1042-01-M3, -M4 and -M5**, created together from one drawer, each with its own status, date booked, follow-up and assignee. No new table: `maintenance_requests` grows the header fields it lacked plus a `maintenance_request_batch_id` recording that they were typed in one sitting, which same-job-same-day cannot — it is wrong the first time two people log a PCI on one house on one day, and it is what the report groups a section on (`0114`) |

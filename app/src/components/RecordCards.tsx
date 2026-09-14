@@ -50,6 +50,7 @@ export function JobCard({
   latestUpdate = null,
   onOpen
 }: {
+  /** '1042-01', or '1042-01c' on a community title job — the key carries the suffix (0120). */
   jobNumber: string;
   stageName: string;
   team: string;

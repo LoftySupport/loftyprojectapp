@@ -2983,7 +2983,7 @@ well as on production — `0113`'s guarded probe is the counter-example, and it 
 silently on a database with no jobs. The projects identity sequence is captured and put
 back, so the probe does not take the number the next real project would get.
 
-**Not yet applied to the live project.**
+**Applied to the live project** as `20260914022630_an_issue_is_a_request_and_the_header_is_typed_once`. Read off `supabase_migrations.schema_migrations` on 14 September while applying `0118`; the line above said otherwise and was simply out of date.
 
 
 ### 14 September — a repair has a day it was booked and a day it was done (`0116`)
@@ -3071,7 +3071,7 @@ ordering no rule guarantees. The fixture now gives the **non-primary** employee 
 earliest start date, so the filter has something to fail on, and the break was watched
 again reporting *the primary contact is Probe Extra 0117*.
 
-**Not yet applied to the live project.**
+**Applied to the live project** as `20260914032258_a_company_carries_the_person_you_ring`. Read off `supabase_migrations.schema_migrations` on 14 September while applying `0118`.
 
 
 ### 14 September — a project's new address moves the jobs that were still standing on it (`0118`)
@@ -3141,7 +3141,191 @@ street number, street, suburb and postcode at once, so any three of the four wer
 keep it standing still. There is now one job per field, differing from the project in that
 field alone.
 
-**Not yet applied to the live project.**
+**Applied to the live project on 14 September**, as
+`20260914145252_a_project_address_moves_its_jobs`. The proof block ran against the live
+database and cleaned up after itself: 119 projects, 83 jobs and 203 addresses before and
+after, and no `0118` probe row left behind. It consumed **project number 1992** from the
+identity sequence, which the probe then deleted, so 1992 will never be a real project;
+that is the cost of a proof block that creates a project, and `0114` and `0081` paid it
+before this one.
+
+Two things were checked on the live function rather than assumed: `prosecdef` is true with
+`search_path` pinned to `public, pg_temp`, and `has_function_privilege('authenticated', …)`
+is **false**, so the revokes held. The security advisor's *Signed-In Users Can Execute
+SECURITY DEFINER Function* lint names four functions and this is not one of them — the four
+are the policy helpers `0012` deliberately granted.
+
+
+### 14 September — the date the SLAs say, beside the date somebody wanted (`0119`)
+
+Amber: *"A new calculated/derived property needs to be created called 'calculated
+completion date' which is a system field that shows calculated completions date based by
+when the job is likely to end based on slas and [the stage] it is up to so management can
+look at targeted completion date (when they want it to be done) versus the realistic
+calculated date based on slas and then the actual date it was completed for process
+optimisation."*
+
+Three dates, and the point is the gaps between them:
+
+| | What it is | Since |
+| --- | --- | --- |
+| `job_target_completion` | What somebody committed to | Entered, 14 Sep |
+| `job_calculated_completion` | What the SLAs say will happen | **This migration** |
+| `job_end_date` | What actually happened | Derived, 14 Sep |
+
+#### What the data supports, checked before a line was written
+
+The SLAs are **not on `processes`**. Three of 51 processes carry `process_expected_days`;
+**107 of 107 `process_tasks` carry `process_task_expected_days`**. So a process costs the
+sum of its tasks, and its own column is the override. Reading the process column alone
+would have valued 48 of 51 processes at nothing and produced a confidently wrong date.
+
+Sequencing did not need inventing either: **`process_dependencies` holds 49 edges with
+`process_dependency_lag_days`**. So this is a longest path through that graph. Summing
+Construction's tasks gives 302 days; the critical path through them is shorter, and the
+sum would have been wrong on every job in the pessimistic direction.
+
+And the coverage is thin where it matters: **all 38 Pre-construction processes have no
+tasks and no expected days**, as do both Acquisition & Development ones. Only Construction
+is populated. Amber was shown this and chose *"Build it, and I will fill in the SLAs
+first"* — so the mechanism lands now and stays dark until she does.
+
+#### Four rules, all hers
+
+- **Calendar days**, not working days. No weekday skip, no holiday table.
+- **An overrun is sunk.** A process 15 days past its SLA is assumed to finish today and
+  everything after runs to SLA. Chosen over re-charging its full SLA, over scaling the
+  remainder by how late it is running, and over refusing to project past a blockage.
+- **Blank rather than partial.** If any process still to run has no duration, the answer is
+  null — not a number built from the third of the pipeline that happens to be filled in.
+  That is the *"45% on track computed from a fixed array"* this repository already shipped
+  once and had to take back.
+- The blank is **not silent**: `job_calculated_completion_missing` says how many processes
+  have no estimate, so an empty cell is a number somebody can act on.
+
+#### Where it is shown, and where it deliberately is not
+
+Three columns on the **Jobs table**, off by default. Not a seventh row in the drawer's Key
+properties: Amber settled on 11 September that those *"will always be those key 6"*, and
+comparing three dates **across** jobs is a table's job anyway. Off by default because a
+column that is blank on every row today is worse than one somebody turns on the day the
+estimates are in.
+
+#### `create or replace view`, not drop and create
+
+`task_display` depends on `job_display`, so a drop is refused — which is the better
+outcome, because the `DROP … CASCADE` that would have "fixed" it takes `task_display` with
+it and nothing in the migration would put it back. Replace also enforces what the change
+claims: it permits columns **appended** and rejects any rename, retype or reorder of the
+existing ones.
+
+#### Eight mutations, and the two that exposed the probe rather than the code
+
+Each of the six comparisons, the lag, the completed-run lookup, the liveness check, the
+blank guard, `max` → `min`, and both halves of the duration fallback were broken in turn.
+**Two passed on the first attempt, and both were the fixture's fault:**
+
+- Deleting the **task-sum fallback** read green, because all three probe processes carried
+  their own `process_expected_days`. The branch 48 of Lofty's 51 processes depend on was
+  never executed. The probe's tail process now has no column of its own and two tasks.
+- Deleting the **`greatest(current_date, …)` floor** read green, because the overrunning
+  process was a *root* of the graph, which never reaches the recursive branch — and the
+  later test completed its predecessor at `now()`, so `max()` hid the difference. Test 6
+  now finishes **every** predecessor a hundred days ago, which is the only shape where the
+  floor decides the answer. Without it the forecast comes back in the past.
+
+#### Known overestimate, recorded rather than papered over
+
+**Optional processes are all counted**, because `process_is_optional` does not exist yet —
+it is on the list from the same interview. Until it does, a process nobody will run still
+lengthens the path. **Title type does not filter the set** either, for the same reason.
+Projects get no forecast: Amber asked about a job.
+
+**Applied to the live project? Not yet.**
+
+
+### 14 September — a community title job carries a `c`, in the number itself (`0120`)
+
+Amber: *"Any job that is listed as community title needs a 'c' suffix after the job number
+eg 1004-001c. Torrens title has no suffix. The jobs remain sequential eg 1004-001c /
+1004-002c / 1004-003 / 1004-004 Etc"*.
+
+#### The first answer, and why it was reversed — kept, not deleted
+
+The first build put the suffix on a **generated display column** and left `job_id` alone.
+The case for it was real and is still true:
+
+- `job_id` is the primary key, pinned by `jobs_id_matches_its_parts`.
+- **67 of the 83 live jobs have no title type set**, so most jobs would take their suffix
+  *long after creation*, by somebody changing a dropdown — and the title type was settled
+  the same morning as editable during a build.
+- A job number is what sits in contracts, emails, SharePoint folder names and SiteBook, and
+  **no cascade reaches any of those**.
+
+Amber read that and pushed back: *"But the primary key can it be updated that is also
+linked so it show the c on the end (like the address when updated) but the project 4 digits
+and 3 digit job code always remains with job too"*.
+
+**She is right that it can, and the reversal is hers knowingly.** What tipped it is that the
+machinery already exists and was built on purpose: `resync_job_id` has rebuilt `job_id` from
+its parts since `0028`, and 16 of the 17 referencing tables were already `ON UPDATE
+CASCADE`. The schema was designed for a job number that moves. A display column beside it
+would have been a second answer to *what is this job called*, which is the thing this
+repository keeps refusing to have. The external cost stands, and she has accepted it twice.
+
+#### What it does
+
+| | |
+| --- | --- |
+| `job_number(project, sequence, title_type)` | The one definition. `1004` + `-` + `003` + `c` when community |
+| `assign_job_sequence` | Builds it at insert |
+| `resync_job_id` | Rebuilds it when the project, the sequence **or the title type** changes |
+| `jobs_id_matches_its_parts` | Holds the shape, inlined rather than calling the function |
+
+Her constraint is honoured exactly: **the 4-digit project and 3-digit sequence never move.**
+`job_sequence` stays digits-only under its two existing checks, so `1004-003` can become
+`1004-003c` and back, and can never become `1004-004`. The counter counts dwellings, not
+community-title dwellings, which is why her own example runs `001c, 002c, 003, 004`.
+
+The CHECK inlines the expression instead of calling `job_number()` deliberately: **a CHECK
+built on a function is not re-verified when the function changes**, so it would go on
+passing rows it no longer describes. Assertion 8 asserts the two agree, which is what stops
+them drifting without leaving the rule written twice and unwatched.
+
+#### The one table that would have refused
+
+`report_documents` referenced `jobs(job_id)` with **NO ACTION**, with 6 rows already linked,
+so the very first rename would have been rejected by a table nobody would think to look at.
+Made the seventeenth cascade here — and the mutation that puts it back to `NO ACTION` fails
+with a foreign key violation, so that fix is proved load-bearing rather than assumed.
+
+#### Checked before committing to it
+
+Nothing embeds the job number inside its own key — `maintenance_request_id` is a uuid, not
+`1042-01-M3` as the naming suggests, so no child id goes stale. No job has a SharePoint
+folder yet (0 of 83), so no stored URL breaks today. Nine community title jobs are renamed
+by the backfill; the 7 torrens and 67 undecided do not move.
+
+#### Six mutations, each replayed into a fresh database
+
+Suffix everything, suffix torrens instead, an upper-case `C`, no suffix at all, drop
+`job_title_type` from `resync_job_id`'s test, and put `report_documents` back to `NO
+ACTION`. All six reported. **Five were caught by `jobs_id_matches_its_parts` itself** rather
+than by a named assertion, which is the better outcome: the schema refuses the wrong shape
+before a probe has to notice it.
+
+The probe also proves the suffix is **not a one-way door** — corrected back to torrens, the
+`c` goes away — that a child row follows the rename and nothing is left pointing at the old
+number, and that the project and sequence are untouched throughout.
+
+#### The cost, stated plainly
+
+A bookmarked `/jobs/1004-003` stops resolving once that job is marked community title.
+Whether the old number should stay findable — the other half of Amber's address analogy,
+since `address_history` keeps superseded addresses searchable — is **open question 0f** and
+is deliberately not guessed at.
+
+**Applied to the live project? Not yet.**
 
 
 ## Verification
