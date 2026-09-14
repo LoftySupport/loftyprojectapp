@@ -5,21 +5,59 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 271 changes since then —
+Unreleased: 272 changes since then —
+- Changed: A pasted maintenance list splits at a colon - what is before it becomes the issue, what is after becomes the details
 - Fixed: A half-filled new maintenance request is kept when the drawer closes, so a stray click no longer loses a pasted list of issues
 - Added: Paste a list into a new maintenance request and each line becomes its own issue, bullets and numbering stripped
 - Added: Attachments can be dragged straight onto a maintenance issue, including from an email, and a drop that carries nothing says why
 - Added: A maintenance issue given to a contractor shows the company, the person you ring with their own email and phone, and the suburb
-- Added: A maintenance issue carries the day it was booked and the day it was done, on the board and in the drawer, with the follow-up date beside them
-- …and 266 more.
+- …and 267 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
 
+## 14 September — a colon in a pasted line splits the issue from its details
+
+**Where it stands:** on `claude/sleepy-mendel-0birzy-braindump2`, off `main`. Two files,
+`app/src/data/brainDump.ts` and the paste panel in `app/src/pages/MaintenancePage.tsx`, plus
+the check.
+
+Amber, 14 September: *"if a new line is added and it has ':' in it e.g. 'bathroom silicone
+fix: fix the silicone in the shower screen' … everything before the ':' is the issue and
+everything after is the description … if no ':' then just add it all to the issue"*.
+
+`splitBrainDump` now returns `{ issue, description }` rather than a string. The shape was
+already in the paste — a name, then what is wrong with it — and the drawer was throwing the
+second half away.
+
+**Three judgements the instruction did not cover, made here and open to being overruled:**
+
+| The line | What it does | Why |
+| --- | --- | --- |
+| `Ensuite: tap leaking: replace the washer` | Splits at the **first** colon; the rest stays in the details | Splitting at the last would make the issue a sentence and the details a fragment |
+| `Site inspection 9:30 tap leaking` | Does **not** split | A colon between two digits is a time. The split would give an issue called "Site inspection 9" |
+| `Tile cracked, see https://lofty.au/…` | Does **not** split | A colon followed by `/` is a URL, and the issue would be called "https" |
+
+Two smaller ones: `Kitchen:` becomes the issue *Kitchen* with no details, because at that
+point the colon is separator punctuation and nothing else; `: tap leaking` does not split at
+all, because there is no issue name to take and inventing one is the thing this repository
+does not do.
+
+**What was watched failing.** Five deliberate breaks, each one reported by
+`npm run check:brain-dump`: splitting on the last colon instead of the first (1 failure),
+dropping the digit guard (2), dropping the slash guard (1), allowing an empty issue name (2),
+and not trimming either side of the colon (5).
+
+**That check now runs in CI**, in the `app` job. It had been running nowhere but a
+developer's machine, which is the same as not running. **Six others are still in that
+position** and none of them needs a browser: `check:pipeline`, `check:pipeline-order`,
+`check:process-move`, `check:report-widgets`, `check:share-password` and `check:file-drop`.
+Wiring them in is a separate small job, and worth doing — a check nobody runs is a check that
+silently stops being true.
 ## 14 September — the four generated files repair themselves on `main`
 
-**Where it stands:** on `claude/sleepy-mendel-0birzy-selfheal`, off `main`. One file changes,
-`.github/workflows/ci.yml`. Nothing in `app/` moves.
+**Where it stands:** **merged** ([PR #84](https://github.com/LoftySupport/loftyprojectapp/pull/84)).
+One file changed, `.github/workflows/ci.yml`. Nothing in `app/` moved.
 
 **The problem, stated plainly.** `CHANGELOG.md`, the ticks in `ROADMAP.md` and the
 `generated:shipped` blocks in `README.md` and `HANDOFF.md` are built by walking `git log`.

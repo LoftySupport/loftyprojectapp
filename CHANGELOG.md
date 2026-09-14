@@ -212,6 +212,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- A pasted maintenance list splits at a colon - what is before it becomes the issue, what is after becomes the details
 - The maintenance board shows Identified, Booked and Completed, and who the issue is assigned to, in place of Trade and Owner
 - Every slideout's form is condensed: no rules between rows, one column width for every field, and a Details box you can actually write in
 - New maintenance request takes the job, date, where it was identified and who reported it once, then as many issues as you need — each one its own request with its own number, assigned to a Lofty person or a contractor

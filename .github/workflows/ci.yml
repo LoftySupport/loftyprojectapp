@@ -80,6 +80,14 @@ jobs:
         run: npm run check:elements
         working-directory: app
 
+      # What counts as one pasted issue, and where the colon divides the issue from its
+      # details. A pure function with no browser and no database behind it, which is why it
+      # is a function rather than logic inside the drawer — and it had been running nowhere
+      # but a developer's machine, which is the same as not running. About a second.
+      - name: a pasted list becomes one issue per line
+        run: npm run check:brain-dump
+        working-directory: app
+
   docs:
     name: documentation links resolve
     runs-on: ubuntu-latest

@@ -363,7 +363,7 @@ function NewRequests({ jobId, onDone }: { jobId: string | null; onDone: (ids: st
   }, [jobId, job, identifiedOn, identifiedAt, reportedBy, dump, issues]);
 
   /** Recomputed as it is typed, so the button can say how many are coming. */
-  const dumpLines = useMemo(() => splitBrainDump(dump), [dump]);
+  const dumpItems = useMemo(() => splitBrainDump(dump), [dump]);
 
   const ready = issues.filter(i => i.summary.trim() !== "");
   const canSave = Boolean(job) && ready.length > 0 && !busy;
@@ -530,29 +530,31 @@ function NewRequests({ jobId, onDone }: { jobId: string | null; onDone: (ids: st
           about to appear is visible BEFORE the button is pressed — a button that says
           "Add" and quietly makes nineteen is one nobody presses twice.
 
-          The lines land in the Issue field of a block each, with details, assignee and
-          files still to fill in per issue. It adds rather than replaces, and an untouched
-          empty block is consumed rather than left stranded above the new ones. */}
+          Each line lands in the Issue field of a block, and where the line carried a colon
+          the text after it lands in Details — Amber, 14 September: "everything before the
+          ':' is the issue and everything after is the description". Assignee and files are
+          still per issue. It adds rather than replaces, and an untouched empty block is
+          consumed rather than left stranded above the new ones. */}
       <section className="panel">
         <div className="panel-head">
           <Text type="text2" weight="bold">Paste a list</Text>
-          {dumpLines.length > 0 && (
-            <Text type="text3" color="secondary">{dumpLines.length} issue{dumpLines.length === 1 ? "" : "s"}</Text>
+          {dumpItems.length > 0 && (
+            <Text type="text3" color="secondary">{dumpItems.length} issue{dumpItems.length === 1 ? "" : "s"}</Text>
           )}
         </div>
         <textarea className="pf-input" rows={4} aria-label="Paste a list of issues"
           style={{ width: "100%" }}
           value={dump} onChange={e => setDump(e.target.value)} />
         <div className="field-inline" style={{ justifyContent: "space-between", marginTop: "var(--space-8)" }}>
-          <Text type="text3" color="secondary" ellipsis={false} element="span">One line, one issue. Bullets and numbering are stripped.</Text>
-          <Button size="small" kind="tertiary" disabled={dumpLines.length === 0} onClick={() => {
+          <Text type="text3" color="secondary" ellipsis={false} element="span">One line, one issue. Anything after a colon becomes the details.</Text>
+          <Button size="small" kind="tertiary" disabled={dumpItems.length === 0} onClick={() => {
             setIssues(list => {
               const kept = list.filter(i => i.summary.trim() !== "" || i.description.trim() !== "" || i.files.length > 0);
-              return [...kept, ...dumpLines.map(line => ({ ...blankIssue(), summary: line }))];
+              return [...kept, ...dumpItems.map(d => ({ ...blankIssue(), summary: d.issue, description: d.description }))];
             });
             setDump("");
           }}>
-            {dumpLines.length > 0 ? `Add ${dumpLines.length} issue${dumpLines.length === 1 ? "" : "s"}` : "Add"}
+            {dumpItems.length > 0 ? `Add ${dumpItems.length} issue${dumpItems.length === 1 ? "" : "s"}` : "Add"}
           </Button>
         </div>
       </section>
