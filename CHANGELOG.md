@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- A maintenance issue carries the day it was booked and the day it was done, on the board and in the drawer, with the follow-up date beside them
 - Photos and files attach to a maintenance issue — from the phone's camera or library — and are filed against the job as well, so they appear in that job's Documents
 - Setup - Properties flags every job and project field that no process collects, including the ones that are columns rather than properties, such as the address
 - Kanban columns collapse to a narrow strip, with Completed, Closed, Cancelled and Acquisition & Development folded by default
@@ -206,6 +207,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- The maintenance board shows Identified, Booked and Completed, and who the issue is assigned to, in place of Trade and Owner
 - Every slideout's form is condensed: no rules between rows, one column width for every field, and a Details box you can actually write in
 - New maintenance request takes the job, date, where it was identified and who reported it once, then as many issues as you need — each one its own request with its own number, assigned to a Lofty person or a contractor
 - The job record's Process section shows every process, including ones nobody has started, with a tick box that marks one off in a single action
