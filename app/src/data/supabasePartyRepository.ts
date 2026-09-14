@@ -57,7 +57,7 @@ const toContact = (r: ContactRow): Contact => ({
 });
 
 const COMPANY_COLUMNS =
-  "company_id, company_name, company_trading_name, company_abn, company_address_id, company_address, company_notes, company_source, company_is_active, company_approved_at, company_approved_by, company_primary_email, company_primary_phone, company_classification_ids, company_people_count, company_open_parties, company_created_at, company_updated_at";
+  "company_id, company_name, company_trading_name, company_abn, company_address_id, company_address, company_notes, company_source, company_is_active, company_approved_at, company_approved_by, company_primary_email, company_primary_phone, company_classification_ids, company_people_count, company_open_parties, company_created_at, company_updated_at, company_primary_contact_id, company_primary_contact_name, company_primary_contact_role, company_primary_contact_email, company_primary_contact_phone, company_suburb";
 
 interface CompanyRow {
   company_id: string; company_name: string; company_trading_name: string | null; company_abn: string | null;
@@ -67,6 +67,10 @@ interface CompanyRow {
   company_primary_email: string | null; company_primary_phone: string | null;
   company_classification_ids: string[]; company_people_count: number; company_open_parties: number;
   company_created_at: string; company_updated_at: string;
+  company_primary_contact_id: string | null; company_primary_contact_name: string | null;
+  company_primary_contact_role: string | null;
+  company_primary_contact_email: string | null; company_primary_contact_phone: string | null;
+  company_suburb: string | null;
 }
 
 const toCompany = (r: CompanyRow): Company => ({
@@ -74,6 +78,11 @@ const toCompany = (r: CompanyRow): Company => ({
   addressId: r.company_address_id, address: r.company_address, notes: r.company_notes, source: r.company_source,
   isActive: r.company_is_active, approvedAt: r.company_approved_at, approvedBy: r.company_approved_by,
   primaryEmail: r.company_primary_email, primaryPhone: r.company_primary_phone,
+  // 0117 — the person you ring, with their OWN email and phone, and the suburb alone.
+  primaryContactId: r.company_primary_contact_id, primaryContactName: r.company_primary_contact_name,
+  primaryContactRole: r.company_primary_contact_role,
+  primaryContactEmail: r.company_primary_contact_email, primaryContactPhone: r.company_primary_contact_phone,
+  suburb: r.company_suburb,
   classificationIds: r.company_classification_ids ?? [], peopleCount: r.company_people_count, openParties: r.company_open_parties,
   createdAt: r.company_created_at, updatedAt: r.company_updated_at
 });

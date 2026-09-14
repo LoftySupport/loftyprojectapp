@@ -2986,6 +2986,49 @@ back, so the probe does not take the number the next real project would get.
 **Not yet applied to the live project.**
 
 
+### 14 September — a company carries the person you ring (`0117`)
+
+Amber, on a maintenance issue given to a contractor: *"with the assigned contact to
+maintenance can you display company name, primary contact, email and phone and suburb"*.
+
+Four of the five already existed on `company_display`. **The primary contact did not**, and
+the suburb was only reachable inside `company_address`, which is the whole address as one
+line. So the view is widened and no table changes.
+
+#### Nothing is invented, because the fact is already modelled
+
+`company_contacts.company_contact_is_primary` has existed since `0082`. "The primary
+contact" is a flag somebody sets, not a guess this view makes — a company with nobody
+flagged gets **null** and the screen says so. Promoting the longest-serving employee would
+be exactly the plausible value this document keeps warning about. Ended employments are
+excluded: somebody who left is not who you ring.
+
+#### The person's email and phone are separate columns from the company's
+
+`company_primary_email` and `company_primary_phone` are the office. The four new columns
+are the person. They are **not** a coalesce, because "the mobile of the person you ring"
+and "the switchboard" are different facts and a view that silently substituted one would
+have the app ringing the wrong number. The app decides what to show when the person has
+neither, and labels it as the company's.
+
+#### What was watched failing, and the one that did not
+
+Dropping the `ended_on` filter named a person who had left; pointing the contact's email at
+the company named the office address; removing `security_invoker` reproduced the `0069`
+hole on a drop-and-create.
+
+**Removing the `company_contact_is_primary` filter reported ALL MIGRATIONS APPLIED
+CLEANLY.** Every employment in the fixture was inserted in one `do` block, so all three
+shared a transaction `now()` for `created_at` and all three had a null `started_on` — the
+lateral's `ORDER BY` had nothing to sort on and `limit 1` returned whichever row the
+planner reached first, which happened to be the right one. The probe passed on luck, on an
+ordering no rule guarantees. The fixture now gives the **non-primary** employee the
+earliest start date, so the filter has something to fail on, and the break was watched
+again reporting *the primary contact is Probe Extra 0117*.
+
+**Not yet applied to the live project.**
+
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

@@ -3254,3 +3254,30 @@ code { overflow-wrap: anywhere; }
 .issue-files { display: flex; flex-direction: column; gap: var(--space-4); width: 100%; }
 .issue-file { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); min-width: 0; }
 .issue-file > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ------------------------------------------------------------------- dropping files in
+   Amber, 14 September: attachments are "often dragged from emails and not saved", so the
+   attach control takes a drop as well as a click.
+
+   IT IS A `get-started-card`, NOT A BOX OF ITS OWN. Written first as its own padded,
+   dashed, filled container, the element sweep reported E11 up from 124 to 125 — "a padded,
+   bordered or filled box is a panel; each distinct recipe is another box that is almost a
+   panel" — and it was right. The Document Builder already draws a dashed card for exactly
+   this gesture, and its own comment says why: *"a dashed border is the standing convention
+   for 'nothing here yet, put something here' — the same reason a drop target is dashed"*.
+   So this rule sets only the direction, the gap and the drag state, and the container
+   recipe stays the one that already existed.
+
+   The input is hidden but NOT display:none and NOT removed: a file input the keyboard
+   cannot reach is a control half the building cannot use, so it keeps its place in the tab
+   order, the button forwards a click to it, and focusing it brings it back into view. */
+.file-drop-wrap { display: flex; flex-direction: column; gap: var(--space-4); width: 100%; }
+.file-drop { flex-direction: row; align-items: center; flex-wrap: wrap; gap: var(--space-8); }
+/* The card's own hover colours, reused for the drag state — the same signal, because it is
+   the same fact: this box is about to take what you are holding. */
+.file-drop.is-over { border-color: var(--primary-color); }
+.file-drop.is-disabled { opacity: 0.6; }
+/* Sized to nothing rather than hidden, so it stays focusable and still announced. */
+.file-drop-input { width: 1px; height: 1px; opacity: 0; flex: none; }
+.file-drop-input:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; width: auto; height: auto; opacity: 1; }
+.file-drop-note { margin: 0; }

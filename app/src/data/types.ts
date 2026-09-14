@@ -2474,6 +2474,21 @@ export interface Company {
   approvedBy: Uuid | null;
   primaryEmail: string | null;
   primaryPhone: string | null;
+  /**
+   * The person you ring, flagged on `company_contacts` and only while they still work
+   * there (0117). Null when nobody is flagged — the screen says so rather than promoting
+   * the longest-serving employee, which would be a guess quoted back as a fact.
+   *
+   * Their email and phone are their OWN, separate from `primaryEmail` and `primaryPhone`
+   * above, which are the company's. A mobile and a switchboard are different facts.
+   */
+  primaryContactId: Uuid | null;
+  primaryContactName: string | null;
+  primaryContactRole: string | null;
+  primaryContactEmail: string | null;
+  primaryContactPhone: string | null;
+  /** On its own beside `address`, because a contractor list is scanned by area. */
+  suburb: string | null;
   classificationIds: string[];
   peopleCount: number;
   openParties: number;

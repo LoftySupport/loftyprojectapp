@@ -11,6 +11,7 @@ import { Field, Problem } from "../components/Form";
 import { PersonSelect } from "../components/PersonSelect";
 import { Select } from "../components/Select";
 import { DateField } from "../components/DateField";
+import { FileDrop } from "../components/FileDrop";
 import { TypeaheadSelect } from "../components/TypeaheadSelect";
 import { LoadProblem } from "../components/SearchNotices";
 import {
@@ -19,7 +20,7 @@ import {
   MAINTENANCE_IDENTIFIED_AT, MAINTENANCE_IDENTIFIED_AT_LABELS,
   MAINTENANCE_ITEM_STATUS_LABELS, MAINTENANCE_PRIORITIES, MAINTENANCE_PRIORITY_LABELS,
   MAINTENANCE_SOURCE_LABELS, MAINTENANCE_STATUSES, MAINTENANCE_STATUS_LABELS,
-  type MaintenanceAssigneeKind, type MaintenanceIdentifiedAt, type MaintenanceItem, type MaintenanceMessage,
+  type Company, type MaintenanceAssigneeKind, type MaintenanceIdentifiedAt, type MaintenanceItem, type MaintenanceMessage,
   type MaintenancePriority, type MaintenanceRequest, type MaintenanceStatus
 } from "../data/types";
 import "../components/ui.css";
@@ -280,7 +281,9 @@ function NewRequests({ jobId, onDone }: { jobId: string | null; onDone: (ids: st
     const opt = (c: typeof pool[number]) => ({
       value: c.id,
       label: c.name,
-      sub: onThisJob.get(c.id) ?? null,
+      // Role on this job, or the suburb — whichever says more about which contractor this
+      // is. A list of twelve plumbers is told apart by where they are.
+      sub: onThisJob.get(c.id) ?? c.suburb ?? null,
       group: onThisJob.has(c.id) ? "On this job" : "Other contractors"
     });
     // Group order follows first appearance, so the job's companies are listed first here.
@@ -436,20 +439,15 @@ function NewRequests({ jobId, onDone }: { jobId: string | null; onDone: (ids: st
               )}
             </div>
           </Field>
-          {/* One input, not two. `accept` without `capture` is what gives an iPhone the
-              choice of Photo Library, Take Photo or Browse — adding `capture` would force
-              the camera and take away choosing one already taken, which is the commoner
-              half of what Amber asked for. Uploaded after the request exists to hold it. */}
+          {/* Chosen or dropped, and uploaded after the request exists to hold them.
+              `FileDrop` keeps no `capture` attribute on its input on purpose: without it
+              an iPhone offers Photo Library, Take Photo and Browse, and adding it would
+              force the camera and take away choosing a photo already taken. */}
           <Field label="Attach files">
             <div className="issue-files">
-              <input type="file" multiple accept="image/*,application/pdf"
-                aria-label={`Attach files to issue ${n + 1}`}
-                onChange={e => {
-                  const picked = Array.from(e.target.files ?? []);
-                  if (picked.length) patch(issue.key, { files: [...issue.files, ...picked] });
-                  // Cleared so picking the same file twice in a row still fires a change.
-                  e.target.value = "";
-                }} />
+              <FileDrop
+                ariaLabel={`Attach files to issue ${n + 1}`}
+                onFiles={picked => patch(issue.key, { files: [...issue.files, ...picked] })} />
               {issue.files.map((f, at) => (
                 <div className="issue-file" key={`${f.name}-${at}`}>
                   <Text type="text3" color="secondary" element="span">{f.name}</Text>
@@ -496,6 +494,20 @@ function RequestDetail({ id, onChanged }: { id: string; onChanged: () => void })
 
   const bump = () => { setReload(n => n + 1); onChanged(); };
   const { data: files } = useQuery(r => r.listMaintenanceDocuments(id), [], [id, reload]);
+  /**
+   * The contractor an external issue is with, fetched for their details rather than for
+   * their name — the name is already on the request through the view's join. Amber,
+   * 14 September: *"with the assigned contact to maintenance can you display company name,
+   * primary contact, email and phone and suburb"*.
+   *
+   * One company by id, not the whole list: this is a lookup of the one already chosen, and
+   * loading every contractor to find it would be a round trip that grows with the
+   * contractor list. Skipped entirely on an internal issue.
+   */
+  const assignedCompanyId = request?.assigneeKind === "external" ? request.assignedCompanyId : null;
+  const { data: assignedCompany } = useQuery<Company | null>(
+    r => assignedCompanyId ? r.getCompany(assignedCompanyId) : Promise.resolve(null), null, [assignedCompanyId]
+  );
   /**
    * `job-documents` is private, so there is no URL to render into an href — one is asked
    * for when somebody clicks and it expires in five minutes. Null when storage refuses,
@@ -584,6 +596,63 @@ function RequestDetail({ id, onChanged }: { id: string; onChanged: () => void })
         </div>
       </section>
 
+      {/* Who the issue is with. For a contractor that is five facts rather than a name —
+          Amber, 14 September — and the person's email and phone are THEIR OWN, held
+          separately from the company's by 0117, because a mobile and a switchboard are
+          different things to ring. Where the person has neither, the company's is shown
+          and labelled as the company's rather than passed off as theirs.
+
+          Nothing is invented: a company with nobody flagged primary says so. */}
+      {(r.assigneeKind === "external" ? r.assignedCompanyName : r.assigneeName) && (
+        <section className="panel">
+          <div className="panel-head">
+            <Text type="text2" weight="bold">Assigned to</Text>
+            <Text type="text3" color="secondary">{MAINTENANCE_ASSIGNEE_KIND_LABELS[r.assigneeKind]}</Text>
+          </div>
+          {r.assigneeKind === "internal" ? (
+            <Text type="text2" ellipsis={false} element="p">{r.assigneeName}</Text>
+          ) : (
+            <div className="stack-tight">
+              <Text type="text2" weight="medium" ellipsis={false} element="p">
+                {r.assignedCompanyName}
+                {assignedCompany?.suburb && <span className="slot-chip" style={{ marginLeft: 6 }}>{assignedCompany.suburb}</span>}
+              </Text>
+              {assignedCompany && (
+                assignedCompany.primaryContactName ? (
+                  <Text type="text3" color="secondary" ellipsis={false} element="p">
+                    {assignedCompany.primaryContactName}
+                    {assignedCompany.primaryContactRole && ` · ${assignedCompany.primaryContactRole}`}
+                  </Text>
+                ) : (
+                  <Text type="text3" color="secondary" ellipsis={false} element="p">
+                    No primary contact set — add one on the company under Contacts.
+                  </Text>
+                )
+              )}
+              {assignedCompany && (() => {
+                // The person's own, or the company's said to be the company's. Never the
+                // company's shown as though it were the person's.
+                const email = assignedCompany.primaryContactEmail ?? assignedCompany.primaryEmail;
+                const phone = assignedCompany.primaryContactPhone ?? assignedCompany.primaryPhone;
+                const theirs = (v: string | null, own: string | null) => v && v !== own ? "" : " (company)";
+                if (!email && !phone) {
+                  return <Text type="text3" color="secondary" ellipsis={false} element="p">No email or phone on file.</Text>;
+                }
+                return (
+                  <Text type="text3" ellipsis={false} element="p">
+                    {email && <a href={`mailto:${email}`} className="tap-link">{email}</a>}
+                    {email && <span className="muted">{theirs(assignedCompany.primaryContactEmail, email)}</span>}
+                    {email && phone && " · "}
+                    {phone && <a href={`tel:${phone.replace(/\s/g, "")}`} className="tap-link">{phone}</a>}
+                    {phone && <span className="muted">{theirs(assignedCompany.primaryContactPhone, phone)}</span>}
+                  </Text>
+                );
+              })()}
+            </div>
+          )}
+        </section>
+      )}
+
       {/* The photos and files on this issue (0115). Opened through a signed URL asked for
           at the moment somebody clicks — `job-documents` is private and has no permanent
           address, which is the choice Amber made on 14 September. Removing one here takes
@@ -604,13 +673,14 @@ function RequestDetail({ id, onChanged }: { id: string; onChanged: () => void })
           </div>
         ))}
         {canWrite && !isClosed && (
-          <input type="file" multiple accept="image/*,application/pdf" aria-label="Attach files to this issue"
-            style={{ marginTop: "var(--space-8)" }}
-            onChange={e => {
-              const picked = Array.from(e.target.files ?? []);
-              e.target.value = "";
-              if (picked.length) void run(() => repo.attachMaintenanceFiles({ requestId: r.id, jobId: r.jobId, files: picked }));
-            }} />
+          <div style={{ marginTop: "var(--space-8)" }}>
+            {/* The same control as the drawer's, so a file reaches an issue the same way
+                whether it is being logged or looked at later. Here it uploads at once —
+                the request already exists to hold it. */}
+            <FileDrop
+              ariaLabel="Attach files to this issue"
+              onFiles={picked => void run(() => repo.attachMaintenanceFiles({ requestId: r.id, jobId: r.jobId, files: picked }))} />
+          </div>
         )}
       </section>
 
