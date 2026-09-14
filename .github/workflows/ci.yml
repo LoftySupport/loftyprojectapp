@@ -88,6 +88,47 @@ jobs:
         run: npm run check:brain-dump
         working-directory: app
 
+      # ------------------------------------------------------------------ 14 September
+      # Six more that were written, committed, and then run by nobody. Each was built to
+      # guard a specific bug — the pipeline order, a drop that lands in the wrong column,
+      # a report block that silently returns nothing, a share link that a malformed hash
+      # should lock rather than open, a draft restored onto the wrong house. All six pass
+      # today. Nothing would have said the day one stopped, because a check that runs on
+      # one developer's machine when they remember is not a check, it is a habit.
+      #
+      # They are here rather than in the `browser` job because none of them needs
+      # Chromium. Together they add a few seconds to a job that already takes a minute.
+      - name: what a job is up to behaves
+        run: npm run check:pipeline
+        working-directory: app
+
+      - name: the pipeline order holds
+        run: npm run check:pipeline-order
+        working-directory: app
+
+      - name: a record dropped on a column lands where it was dropped
+        run: npm run check:process-move
+        working-directory: app
+
+      - name: every report block resolves, reads live data, and stays quiet when empty
+        run: npm run check:report-widgets
+        working-directory: app
+
+      - name: both ends of a share password agree, and a malformed hash locks the link
+        run: npm run check:share-password
+        working-directory: app
+
+      - name: a half-typed maintenance request is kept, and never on the wrong house
+        run: npm run check:maintenance-draft
+        working-directory: app
+
+      # Adding the seven above fixes the seven. This fixes the class: the eighth check
+      # somebody writes next month fails here on the day it is written unless the workflow
+      # runs it. It reads package.json and this file, and nothing else.
+      - name: CI runs every check this repository defines
+        run: npm run check:ci-coverage
+        working-directory: app
+
   docs:
     name: documentation links resolve
     runs-on: ubuntu-latest
@@ -199,6 +240,15 @@ jobs:
 
       - name: a Word document and a PDF become blocks
         run: npm run check:import
+        working-directory: app
+
+      # The seventh of the unwired checks, and the only one that needs Chromium: it drives
+      # real DataTransfer drops. Its own history is the argument for running it here —
+      # removing the `preventDefault` on dragover, the line that stops the browser
+      # navigating away to the dropped file, left the whole suite green until an explicit
+      # `defaultPrevented` assertion was added.
+      - name: a dragged file arrives, and a drop that carries nothing says so
+        run: npm run check:file-drop
         working-directory: app
 
       # A date set by accident used to be a date you were stuck with, and the property

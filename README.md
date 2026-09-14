@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 272 changes since then —
+Unreleased: 273 changes since then —
+- Fixed: The check that every database view runs as its caller now tests the setting's value rather than only that it was written, so a view with the protection turned off can no longer pass it
 - Changed: A pasted maintenance list splits at a colon - what is before it becomes the issue, what is after becomes the details
 - Fixed: A half-filled new maintenance request is kept when the drawer closes, so a stray click no longer loses a pasted list of issues
 - Added: Paste a list into a new maintenance request and each line becomes its own issue, bullets and numbering stripped
 - Added: Attachments can be dragged straight onto a maintenance issue, including from an email, and a drop that carries nothing says why
-- Added: A maintenance issue given to a contractor shows the company, the person you ring with their own email and phone, and the suburb
-- …and 267 more.
+- …and 268 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

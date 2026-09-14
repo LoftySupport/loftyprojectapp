@@ -5,16 +5,102 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 272 changes since then —
+Unreleased: 273 changes since then —
+- Fixed: The check that every database view runs as its caller now tests the setting's value rather than only that it was written, so a view with the protection turned off can no longer pass it
 - Changed: A pasted maintenance list splits at a colon - what is before it becomes the issue, what is after becomes the details
 - Fixed: A half-filled new maintenance request is kept when the drawer closes, so a stray click no longer loses a pasted list of issues
 - Added: Paste a list into a new maintenance request and each line becomes its own issue, bullets and numbering stripped
 - Added: Attachments can be dragged straight onto a maintenance issue, including from an email, and a drop that carries nothing says why
-- Added: A maintenance issue given to a contractor shows the company, the person you ring with their own email and phone, and the suburb
-- …and 267 more.
+- …and 268 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
+
+## 14 September — seven checks that ran nowhere, and one that asked the wrong question
+
+**Where it stands:** on `claude/sleepy-mendel-0birzy-checks`, off `main`. No migration, and
+nothing in the app changes. Amber, 14 September: *"check branches that have open tasks and
+check now all. fix issues"*.
+
+**First, the branches.** Four remain on the remote — `…-0birzy`, `…-braindump`, `…-drawer`,
+`…-maintenance`. Every commit on all four is already in `main` (`git cherry` reports `-` for
+each), and the only lines they hold that `main` lacks are older versions of text `main` has
+since rewritten, including an `open-questions.md` where 0c is still open and `main` has it
+answered. **Nothing is stranded.** They are safe to delete whenever you want them gone; they
+have been left alone because deleting is yours to say.
+
+**Then every check, run against `main`.** All of them pass: lint, typecheck, build, the
+twenty `check:*` scripts, the responsive sweep (216 page/size combinations), `./build.sh` and
+its five promised files, `check.sh` (79 constraint checks all biting, RLS holds, embeds
+resolve, seeds agree), documentation links, and the generated docs. The live database carries
+every migration through `0117`, and both `maintenance_request_display` and `company_display`
+carry every column the Maintenance page selects — the failure that broke that page twice this
+week is not present.
+
+### The first real finding: seven checks CI never ran
+
+| Check | What it guards |
+| --- | --- |
+| `check:pipeline` | what a job is up to |
+| `check:pipeline-order` | the stage order |
+| `check:process-move` | a record dropped on a column landing where it was dropped |
+| `check:report-widgets` | a report block resolving, reading live data, staying quiet when empty |
+| `check:share-password` | a malformed hash locking a share link rather than opening it |
+| `check:maintenance-draft` | a half-typed request kept, and never restored onto the wrong house |
+| `check:file-drop` | a real `DataTransfer` drop, including `dragover` being prevented |
+
+All seven passed when finally run, which is the point. Nothing would have reported the day one
+stopped being true. Six needed no browser and joined the `app` job; `check:file-drop` needs
+Chromium and joined the `browser` job.
+
+**And the class, not just the instance.** `npm run check:ci-coverage`
+(`app/scripts/check-ci-runs-every-check.mjs`) reads `package.json` against
+`.github/workflows/ci.yml` and fails when a `check:*` script is run by neither its npm name
+nor the file it points at. It holds itself to its own rule: before its workflow step existed,
+running it printed its own name. **Watched failing both ways** — a new check added to
+`package.json` and not to CI, and an existing check's CI step deleted.
+
+### The second: the one assertion that guards RLS was asking the wrong question
+
+`behaviour.sql`'s view sweep — the one written after `0055` silently dropped
+`security_invoker` from `job_display` and returned all 60 jobs to an account held at the demo
+gate — matched the **substring** `security_invoker=` in `reloptions`. That tests the option is
+*present* and says nothing about its value. A view created `with (security_invoker = false)`
+carries `{security_invoker=false}`, contains the substring, and **passed the one check written
+to catch exactly that**. Watched: a probe view with the protection deliberately off was
+reported `ok  every view in public sets security_invoker`.
+
+It now reads the option through `pg_options_to_table` and **casts it to boolean**, which is how
+Postgres itself reads it. That matters beyond the `false` case: Postgres stores the spelling
+you wrote, and this schema uses both — `{security_invoker=on}` on `feedback_display` and
+`job_latest_update`, `{security_invoker=true}` on the other nineteen. Any comparison against
+one literal marks the other as a hole, which is exactly the false alarm that turned this up.
+
+**Three proofs**, each run through `check.sh` against the replayed schema:
+
+| Case | Result |
+| --- | --- |
+| A view with `security_invoker = false` | `FAIL: view(s) executing as owner` |
+| A view with no option at all (the original `0055` failure) | `FAIL: view(s) executing as owner` |
+| A view spelt `on` rather than `true` | `ok` — the fix does not cry wolf |
+
+**To be clear about what was NOT found:** there is no open `security_invoker` hole. All 21
+views run as their caller, and every table in `public` has RLS enabled. The bug was in the
+check, and it was live for eleven days.
+
+### Two things that are yours, not code
+
+- **Leaked-password protection is off** in Supabase Auth. It checks new passwords against
+  HaveIBeenPwned. One toggle in the dashboard, and there is no reason not to.
+- **The `self-heal` job's push has still not run.** It has fired twice on `main` and taken the
+  no-op path both times, because each branch was hand-resolved before it merged. The first
+  merge that genuinely leaves the docs behind is the one that proves the push — and if that
+  run goes red on a 403, it is **Settings → Actions → General → Workflow permissions**.
+
+**Not touched, and still waiting on you:** photos in the printed report (blocked on the
+signed-URL decision), report stages 2 and 3, open questions 0b and 0d.
+
+---
 
 ## 14 September — a colon in a pasted line splits the issue from its details
 
