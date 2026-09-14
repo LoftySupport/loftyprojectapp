@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 260 changes since then —
+Unreleased: 264 changes since then —
+- Fixed: The person and company pickers show a chevron, so a field that only takes a name from the list no longer looks like a box you can type anything into
+- Added: Photos and files attach to a maintenance issue — from the phone's camera or library — and are filed against the job as well, so they appear in that job's Documents
+- Changed: Every slideout's form is condensed: no rules between rows, one column width for every field, and a Details box you can actually write in
+- Changed: New maintenance request takes the job, date, where it was identified and who reported it once, then as many issues as you need — each one its own request with its own number, assigned to a Lofty person or a contractor
 - Added: Setup - Properties flags every job and project field that no process collects, including the ones that are columns rather than properties, such as the address
-- Changed: The job record's Process section shows every process, including ones nobody has started, with a tick box that marks one off in a single action
-- Added: Kanban columns collapse to a narrow strip, with Completed, Closed, Cancelled and Acquisition & Development folded by default
-- Added: + New task on the Tasks board, which assigns a task to a person, a team and a job or project
-- Added: A Closed tasks view on the Tasks board, and the job-or-project filter moved onto the filter bar
-- …and 255 more.
+- …and 259 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
