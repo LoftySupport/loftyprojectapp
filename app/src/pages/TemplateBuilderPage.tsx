@@ -327,6 +327,18 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
   const { options: propertyOptions } = usePropertyOptions(reloadKey);
   const { data: propertyValues } = useQuery(r => r.listPropertyValues(), [], [reloadKey]);
   const { data: people } = useQuery(r => r.listProfiles(), []);
+  /**
+   * Every maintenance issue this person may see, open and closed (0114).
+   *
+   * `queue: "all"` rather than "open", because a report of what was fixed last quarter is
+   * as real a question as a report of what is outstanding — and the two blocks that read
+   * this both offer "Include closed…" as a tick box. Filtering here would make that tick
+   * box a lie.
+   *
+   * One request per issue, so this list IS the issues; `listMaintenanceItems` is not read
+   * and the blocks do not need it.
+   */
+  const { data: maintenance } = useQuery(r => r.listMaintenanceRequests({ queue: "all" }), []);
 
   /** Only the sections a document may actually use: in the library, and still current. */
   const sections = useMemo(
@@ -453,7 +465,7 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
       const base = {
         projects, jobs, teams, stageNames, people, processes,
         propertyDefs, propertyValues, propertyOptions,
-        partyRoles, parties,
+        partyRoles, parties, maintenance,
         sections, expandSection,
         subject
       };
@@ -515,7 +527,7 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
       };
     },
     [projects, jobs, teams, stageNames, people, processes,
-     propertyDefs, propertyValues, propertyOptions, partyRoles, parties,
+     propertyDefs, propertyValues, propertyOptions, partyRoles, parties, maintenance,
      sections, expandSection, subject,
      textSnippets, askToSaveSnippet]
   );
