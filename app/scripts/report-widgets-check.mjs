@@ -196,10 +196,42 @@ const parties = [
   { roleId: "council", contactName: null, companyName: "Tea Tree Gully Council", isPrimary: true, endedOn: null }
 ];
 
+/**
+ * Three maintenance issues on two jobs (0114): one assigned to a contractor, one to a
+ * Lofty person, one closed. THREE, not one, and each difference is load-bearing —
+ * without the contractor the repairer filter passes whether or not it reads the external
+ * half, without the closed one "Include closed…" passes whether or not it is honoured,
+ * and without the second job "group by job" makes one heading whatever it groups on.
+ *
+ * `identifiedOn` is null on the third on purpose: the date filter falls back to the
+ * report timestamp, and a filter that silently drops rows whose identification date
+ * somebody cleared is worse than one that finds none.
+ */
+const maintenance = [
+  { id: "m1", number: "1042-001-M1", jobId: "1042-001", projectId: 1042, jobAddress: "28 Corner Street",
+    summary: "Ensuite tap leaking", description: "Drips overnight, worse when the shower runs.",
+    identifiedOn: "2026-09-10", identifiedAt: "pci", reportedAt: "2026-09-12T00:30:00Z",
+    reportedByProfileName: "Deanna Rowe", reportedByName: null,
+    assigneeKind: "external", assigneeName: null, assignedCompanyName: "Ace Plumbing",
+    status: "in_progress", bookedOn: "2026-09-18", followUpOn: null, health: "no_sla" },
+  { id: "m2", number: "1042-001-M2", jobId: "1042-001", projectId: 1042, jobAddress: "28 Corner Street",
+    summary: "Laundry tile cracked", description: null,
+    identifiedOn: "2026-09-10", identifiedAt: "pci", reportedAt: "2026-09-12T00:30:00Z",
+    reportedByProfileName: "Deanna Rowe", reportedByName: null,
+    assigneeKind: "internal", assigneeName: "Ketan Shah", assignedCompanyName: null,
+    status: "new", bookedOn: null, followUpOn: "2026-09-21", health: "no_sla" },
+  { id: "m3", number: "1002-001-M1", jobId: "1002-001", projectId: 1002, jobAddress: "3 Wandoo Road",
+    summary: "Garage door sticks", description: "Only in the mornings.",
+    identifiedOn: null, identifiedAt: "inspection_3_month", reportedAt: "2026-08-02T00:30:00Z",
+    reportedByProfileName: null, reportedByName: null,
+    assigneeKind: "internal", assigneeName: null, assignedCompanyName: null,
+    status: "closed", bookedOn: null, followUpOn: null, health: "closed" }
+];
+
 const full = {
   projects, jobs, teams, stageNames, people, processes,
   propertyDefs, propertyValues, propertyOptions,
-  partyRoles, parties,
+  partyRoles, parties, maintenance,
   sections, expandSection,
   subject: { jobId: "1042-001", projectId: null },
   // The document's own widget list, which compileReport and the builder both supply.
@@ -224,7 +256,7 @@ const full = {
 const empty = {
   projects: [], jobs: [], teams, stageNames, people: [], processes: [],
   propertyDefs: [], propertyValues: [], propertyOptions: [],
-  partyRoles: [], parties: [],
+  partyRoles: [], parties: [], maintenance: [],
   sections: [], expandSection, subject: null
 };
 /** What `expandSection` resolves against; the screen keeps this in a ref for the same reason. */
@@ -1168,6 +1200,111 @@ console.log("--- the Lofty theme is the house document format, role for role");
   ok("anything that is not one of ours parses to null rather than a broken subject",
     junk.every(v => parseSubject(v) === null),
     junk.map(v => `${JSON.stringify(v)}→${JSON.stringify(parseSubject(v))}`).join(" "));
+}
+
+// ─── 18. The maintenance blocks answer the questions somebody asks ───────
+//
+// Amber, 14 September: *"stage 1 is building a section in the report builder that allows
+// you to add in a maintenance section which is a maintenance requests with details."*
+// One issue is one request (0114), so a maintenance section is a set of requests and the
+// filters below are the questions worth asking of them.
+//
+// The generic sweeps above already cover the two blocks — they resolve, they stay quiet
+// when there is nothing, and they read `ctx` rather than a copy. **That last one failed
+// first**: with no `maintenance` in either fixture both contexts produced the same
+// callout and section 3 reported "the resolver is not reading ctx". The fixtures are
+// three issues on two jobs precisely so these assertions cannot pass for the wrong
+// reason. What each difference is load-bearing for is written on the fixture itself.
+console.log("--- the maintenance blocks filter, group and page the way Amber asked");
+{
+  const table = LOFTY_WIDGETS.maintenanceTable;
+  const detail = LOFTY_WIDGETS.maintenanceDetail;
+  const tableWith = (o) => table.resolve({ ...table.defaults(), ...o }, full);
+  const detailWith = (o) => detail.resolve({ ...detail.defaults(), ...o }, full);
+  const rowsOf = (blocks) => blocks.find(b => b.type === "table")?.rows ?? [];
+  const flat = (row) => row.map(c => (c && typeof c === "object" ? c.text : c));
+
+  // The tick box has to be honoured in both directions, which is why both are asserted:
+  // a resolver that ignored it would give the same count twice.
+  ok("a closed issue is left out until it is asked for",
+    rowsOf(tableWith({})).length === 2 && rowsOf(tableWith({ includeClosed: true })).length === 3,
+    `${rowsOf(tableWith({})).length} then ${rowsOf(tableWith({ includeClosed: true })).length}`);
+
+  // The two assignee columns are one question on the page and two columns underneath.
+  // Watched by reading only `assigneeName`: the contractor's row went to an em dash.
+  const names = rowsOf(tableWith({})).map(flat).flat();
+  ok("a contractor and a Lofty person are both named in the one column",
+    names.includes("Ace Plumbing") && names.includes("Ketan Shah"), JSON.stringify(names));
+
+  // One filter across both keyspaces. A profile id and a company id cannot be compared,
+  // which is why the filter's value is the name. Watched failing by the same break as
+  // above: with only the internal half read, the contractor was unfilterable.
+  ok("the repairer filter narrows across internal and external alike",
+    rowsOf(tableWith({ assignedTo: ["Ace Plumbing"] })).length === 1);
+
+  // Newest first, so a report opens on what was found last rather than in insertion order.
+  // The fixture is in that order already, so this guards the sort against being removed
+  // rather than against being wrong — which is what it is for.
+  ok("issues are ordered by when they were identified, newest first",
+    flat(rowsOf(tableWith({}))[0])[0] === "1042-001-M1");
+
+  // Four different nothings, and the sentence has to say which. A filter that found
+  // nothing and a block pointed at the wrong job are different problems for the reader.
+  ok("a filter that matches nothing says which nothing it is",
+    /no maintenance issue matches/i.test(tableWith({ statuses: ["rejected"] })[0].text || ""),
+    JSON.stringify(tableWith({ statuses: ["rejected"] })[0]));
+  ok("a date window that excludes everything says so rather than drawing an empty grid",
+    tableWith({ since: "2026-09-11" })[0].type === "callout");
+
+  // The third issue has no identification date, so the window falls back to the report
+  // timestamp. BOTH directions, and the second is the one that matters.
+  //
+  //   The first assertion alone passed against a broken `dayOf` that read `identifiedOn`
+  //   only — it returns '' for that issue, `if (since && day && ...)` skips on the empty
+  //   string, and the row is kept for every window. Green, for precisely the wrong
+  //   reason. The August window is satisfied by a filter that cannot exclude it at all.
+  //
+  //   So the second asserts a window that must EXCLUDE it. Watched failing by that same
+  //   break: 3 rows instead of 2, because an issue reported in August sat in a report of
+  //   September onwards.
+  ok("an issue whose identification date was cleared still answers a date filter",
+    rowsOf(tableWith({ includeClosed: true, since: "2026-08-01", until: "2026-08-31" })).length === 1);
+  ok("and is excluded by a window it falls outside",
+    rowsOf(tableWith({ includeClosed: true, since: "2026-09-01" })).length === 2,
+    `${rowsOf(tableWith({ includeClosed: true, since: "2026-09-01" })).length} rows`);
+
+  ok("grouping by job makes one heading per job",
+    tableWith({ groupBy: "job", includeClosed: true }).filter(b => b.type === "subheading").length === 2);
+
+  // "Each issue being its own page" — the break goes BEFORE each issue but the first.
+  // Watched failing by putting it after each instead: two issues gave two breaks and the
+  // printed report ended on a blank page, which is the tell of a report built by a
+  // machine.
+  const pages = detailWith({});
+  ok("two issues give one page break, not two",
+    pages.filter(b => b.type === "divider" && b.pageBreak).length === 1);
+  ok("the first block is the issue, not a page break", pages[0].type === "subheading");
+  ok("one facts block per issue", pages.filter(b => b.type === "keyValues").length === 2);
+  ok("only the issue somebody wrote details on gets a paragraph",
+    pages.filter(b => b.type === "paragraph").length === 1);
+
+  // CLAUDE.md's rule, in the one place a report would break it: an unset field is an em
+  // dash. Watched failing by returning the raw value — the follow-up date on an issue
+  // nobody has set one for printed the word "null" into a document meant for a client.
+  const kv = pages.find(b => b.type === "keyValues");
+  ok("every fact has a value — an unset one is an em dash, never blank and never null",
+    kv.items.every(i => typeof i.value === "string" && i.value.trim() !== "" && i.value !== "null"),
+    JSON.stringify(kv.items));
+  ok("the inspection is named in Amber's words, not as a slug",
+    kv.items.some(i => i.label === "Identified at" && i.value === "PCI"),
+    JSON.stringify(kv.items.find(i => i.label === "Identified at")));
+
+  // Forty defects from one walk is forty pages, so the cap exists — and a cap that hides
+  // rows without saying so is the silent-filter fault this file exists to catch.
+  const capped = detailWith({ limit: 1 });
+  ok("the limit caps the issues and says that it did",
+    capped.filter(b => b.type === "keyValues").length === 1 &&
+    capped.some(b => b.type === "callout" && /showing the first/i.test(b.text || "")));
 }
 
 console.log(failures === 0

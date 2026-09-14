@@ -5,6 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
+Unreleased: 261 changes since then —
+- Added: A Maintenance section in the report builder — every issue as a table you can filter and group, or one page per issue with its details, saved as a template
+- Added: Setup - Properties flags every job and project field that no process collects, including the ones that are columns rather than properties, such as the address
+- Changed: The job record's Process section shows every process, including ones nobody has started, with a tick box that marks one off in a single action
+- Added: Kanban columns collapse to a narrow strip, with Completed, Closed, Cancelled and Acquisition & Development folded by default
+- Added: + New task on the Tasks board, which assigns a task to a person, a team and a job or project
+- …and 256 more.
 Unreleased: 266 changes since then —
 - Added: A maintenance issue carries the day it was booked and the day it was done, on the board and in the drawer, with the follow-up date beside them
 - Changed: The maintenance board shows Identified, Booked and Completed, and who the issue is assigned to, in place of Trade and Owner
@@ -16,6 +23,61 @@ Unreleased: 266 changes since then —
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
 
+## 14 September — the maintenance report, stage 1 of three
+
+**Where it stands:** on `claude/sleepy-mendel-0birzy-report`, off `main`. It depends on
+nothing else outstanding — `0114` is merged **and applied to the live project**.
+
+Amber set the report work out in three stages:
+
+> *"stage 1 is building a section in the report builder that allows you to add in a
+> maintenance section which is a maintenance requests with details. This can be saved as a
+> template. stage 2 is creating a report that is saved that shows all maintenance issues
+> with filters by job, project, contractor date or status etc… stage 3 is automating this
+> and reporting on it."*
+
+### Stage 1 is two blocks and a seed, and nothing in `core/`
+
+`features/reports/README.md` draws the line: *"if a change needs `core/` to know about a
+job or a project, it is in the wrong file — the thing missing is a widget"*. So this is
+entirely `adapters/lofty/widgets.js` plus one query in `TemplateBuilderPage`.
+
+| Block | What it is |
+| --- | --- |
+| **Maintenance issues** | The table. Filter by job, project, status, inspection, repairer and a date window; group by job, status, repairer or inspection; eleven columns to choose from |
+| **Maintenance issues in detail** | One block per issue — the facts, the details somebody typed, and **a page of its own**, which is what "each issue being its own page" asks for |
+| **Maintenance report** (seed) | A starting draft: the table grouped by job, then every issue in detail. Saved as a template like any other, which is Amber's *"this can be saved as a template"* |
+
+**One issue is one request** (`0114`), so a maintenance section is a set of requests and
+`listMaintenanceItems` is not read at all.
+
+### The repairer filter is by NAME, and that is not laziness
+
+A Lofty person is a `profile_id` and a contractor is a `company_id` — two keyspaces, and
+one filter has to match both. The options are built **from the issues themselves** rather
+than from the whole staff list and every company: a picker offering 46 people when four
+have ever been given an issue is a picker nobody uses.
+
+### Photos are counted, not shown, and this is the thing to solve next
+
+`job-documents` is private, so a photo has to be **signed at the moment it is read** — and
+`resolve` in the report builder is **synchronous**, so a block cannot fetch a signed URL
+while it renders. Printing a broken image would be worse than saying nothing.
+
+Three ways out, none chosen: resolve signed URLs into `ctx` before the compile; read the
+bytes into `data:` URLs at compile time, which is what a shared snapshot would need
+anyway; or give the bucket a narrow public path for maintenance photos, which reverses the
+choice Amber made on 14 September. **Ask her before building any of them.**
+
+### Stages 2 and 3 are not built
+
+- **Stage 2** — *"filters in maintenance section and then a create report button which
+  would set a report based on the custom filters that are there in the table"*. The
+  Maintenance queue's own toolbar does not yet carry filters for contractor, date or
+  inspection, and there is no button that turns a filtered table into a saved report. The
+  block options above are the same set of questions, so the work is a translation from the
+  table's filter state into a widget's options rather than a second filter model.
+- **Stage 3** — automation. Nothing exists.
 ## 14 September — the maintenance drawer, and the two things left for Amber to decide
 
 **Where it stands:** on `claude/sleepy-mendel-0birzy` (schema, [PR #76](https://github.com/LoftySupport/loftyprojectapp/pull/76)) and

@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- A Maintenance section in the report builder — every issue as a table you can filter and group, or one page per issue with its details, saved as a template
 - A maintenance issue carries the day it was booked and the day it was done, on the board and in the drawer, with the follow-up date beside them
 - Photos and files attach to a maintenance issue — from the phone's camera or library — and are filed against the job as well, so they appear in that job's Documents
 - Setup - Properties flags every job and project field that no process collects, including the ones that are columns rather than properties, such as the address
