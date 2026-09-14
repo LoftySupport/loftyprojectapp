@@ -229,6 +229,16 @@ export function TypeaheadSelect({
         autoComplete="off"
         size="small"
       />
+      {/* A chevron, so this reads as a picker rather than as a text box.
+          Amber, 14 September, of the drawer's Reported by: *"is reported by a dropdown to
+          select from internal username"* — it always was, and the field gave no sign of
+          it. Next to a Vibe `Dropdown` with its own chevron, a bare box says "type
+          anything here", which is exactly what this control does not accept.
+          Hidden while the × is showing: two glyphs in one corner is a target nobody can
+          hit, and the × is the one you want when there is a value to clear. */}
+      {!(clearable && value !== null) && !disabled && (
+        <span className="typeahead-chevron" aria-hidden>▾</span>
+      )}
       {clearable && value !== null && !disabled && (
         <button
           type="button"

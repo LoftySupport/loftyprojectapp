@@ -3112,6 +3112,20 @@ code { overflow-wrap: anywhere; }
 .typeahead-clear:hover { background: var(--primary-background-hover-color); color: var(--primary-text-color); }
 /* Room for the × so the last letters of a long name are not under it. */
 .typeahead:has(.typeahead-clear) input { padding-right: 32px; }
+/* The picker's own chevron. Not a button: clicking the field already opens the list, and a
+   control that looks clickable but only does what the thing under it does is a second
+   target for one action. `pointer-events: none` so the click lands on the input. */
+.typeahead-chevron {
+  position: absolute;
+  right: var(--space-8);
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--secondary-text-color);
+}
+.typeahead:has(.typeahead-chevron) input { padding-right: 28px; }
 
 /* ---- undo / redo in the header -------------------------------------------- */
 .undo-bar { display: inline-flex; align-items: center; gap: var(--space-4); }
