@@ -31,6 +31,20 @@ import "./ui.css";
  * from a July dataset is a real place. Here the set is closed — a person who is not on
  * the list is not a person the app knows — so free text that matches nothing is not a
  * value, and the field says so by reverting.
+ *
+ * `onCreate` OPENS THE LIST, DELIBERATELY NARROWLY
+ *
+ *   Amber, 14 September, on picking the trade for a maintenance issue: *"you should be
+ *   able to start typing the field and the name will come up if in the system, if it
+ *   isn't there they can type in and it can says 'Add new company' when no results and by
+ *   pressing enter it will add that company in as typed"*.
+ *
+ *   So a caller may pass `onCreate`, and the row appears **only when the typed text
+ *   matches nothing**. It is not a free-text field with a list attached: while anything
+ *   matches, the list is closed exactly as before, because offering to create a second
+ *   "Bianco Tiling" next to the one already there is how a contractor list becomes two
+ *   contractor lists. The caller does the creating and sets the value; this component
+ *   only reports the text that was typed.
  */
 
 export interface TypeaheadOption {
@@ -61,7 +75,9 @@ export function TypeaheadSelect({
   disabled,
   ordered = false,
   clearable = false,
-  emptyText = "No matches"
+  emptyText = "No matches",
+  onCreate,
+  createLabel = typed => `Add “${typed}”`
 }: {
   options: TypeaheadOption[];
   value: string | null;
@@ -76,6 +92,9 @@ export function TypeaheadSelect({
   /** Draw the × and let the field be emptied. Otherwise clearing reverts to the value. */
   clearable?: boolean;
   emptyText?: string;
+  /** Offered only when the typed text matches nothing. The caller creates and sets the value. */
+  onCreate?: (typed: string) => void;
+  createLabel?: (typed: string) => string;
 }) {
   const generated = useId();
   const inputId = id ?? `typeahead-${generated}`;
@@ -119,6 +138,14 @@ export function TypeaheadSelect({
     return out;
   }, [options, text, selected, ordered]);
 
+  /**
+   * The create row, when there is one. Only with something typed and nothing matching it:
+   * `shown.length` is the filtered list, so a query that narrows to one company offers
+   * that company rather than a second copy of it.
+   */
+  const typed = text.trim();
+  const canCreate = Boolean(onCreate) && typed !== "" && typed !== (selected?.label ?? "") && shown.length === 0;
+
   useEffect(() => {
     // The highlight follows the selection when the whole list is showing, and the first
     // match once typing has narrowed it — Enter then means "the one at the top".
@@ -157,6 +184,9 @@ export function TypeaheadSelect({
       return;
     }
     if (q === (selected?.label ?? "")) return;
+    // Leaving the field with a create on offer keeps the typed text rather than reverting:
+    // the name is the only copy of what was typed, and the person is one Enter from using it.
+    if (onCreate && shown.length === 0) return;
     const exact = shown.filter(o => norm(o.label) === norm(q));
     if (exact.length === 1) { choose(exact[0]); return; }
     if (shown.length === 1) { choose(shown[0]); return; }
@@ -173,6 +203,7 @@ export function TypeaheadSelect({
       if (shown.length) setActive(i => (i - 1 + shown.length) % shown.length);
     } else if (e.key === "Enter") {
       if (open && shown[active]) { e.preventDefault(); choose(shown[active]); }
+      else if (open && canCreate) { e.preventDefault(); setOpen(false); onCreate?.(typed); }
     } else if (e.key === "Tab") {
       // Tab commits the highlight and moves on — no preventDefault, focus should leave.
       if (open && shown[active] && text.trim() !== "" && text !== (selected?.label ?? "")) choose(shown[active]);
@@ -211,8 +242,20 @@ export function TypeaheadSelect({
       )}
       {open && (
         <ul className="suburb-suggestions typeahead-list" role="listbox" id={listId} aria-label={`${ariaLabel} options`}>
-          {shown.length === 0 && (
+          {shown.length === 0 && !canCreate && (
             <li className="typeahead-empty" aria-disabled="true">{emptyText}</li>
+          )}
+          {canCreate && (
+            <li>
+              <button
+                type="button"
+                className="suburb-suggestion typeahead-create is-active"
+                onMouseDown={e => { e.preventDefault(); setOpen(false); onCreate?.(typed); }}
+              >
+                <span>{createLabel(typed)}</span>
+                <span className="suburb-postcode typeahead-sub">Enter</span>
+              </button>
+            </li>
           )}
           {shown.map((o, i) => {
             const g = o.group ?? "";

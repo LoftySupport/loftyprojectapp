@@ -16,6 +16,61 @@ Unreleased: 260 changes since then —
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
 
+## 14 September — the maintenance drawer, and the two things left for Amber to decide
+
+**Where it stands:** on `claude/sleepy-mendel-0birzy` (schema, [PR #76](https://github.com/LoftySupport/loftyprojectapp/pull/76)) and
+`claude/sleepy-mendel-0birzy-drawer` (the drawer, PR #77). Amber asked for **small PRs**,
+one bit at a time, because she is low on credits — so the work is four, in this order:
+schema, drawer, attachments, report.
+
+### An issue is a request, and the header is typed once
+
+Amber: *"each one of these issues have its own record id but you only enter the job number,
+reported by, identifies at, date once so you can then have a status, date booked, and
+followup for each"*. Asked which shape, she chose **a request per issue** — so one drawer
+posts N requests, `1042-01-M3`, `-M4`, `-M5`, sharing a `maintenance_request_batch_id`.
+
+The form is now: **Job · Date identified · Identified at · Reported by**, then a repeating
+block of **Issue · Details · Assigned to · Attach files**, then **+ Add**. *How it arrived*,
+*Trade*, *Priority* and *Owner* came off it. The columns stay, because email and form intake
+still set them.
+
+**What that costs, and it is visible:** no trade means no SLA, so everything logged here
+reads **No SLA** in the queue. That is what the health derivation has always said about a
+request with no category, not a new fault.
+
+### Two placeholders, both deliberate, both needing Amber
+
+**1. Attach files is a labelled row with a note and no control.** Photos, PDFs and taking a
+photo need a storage bucket, a `document_links` row per issue and a signed read — that is a
+change of its own size, not a field. Amber, 14 September: *"if anything is a large chunk
+make a note of it in handoff and just leave a placeholder for it to be added in clearly
+identified but check first with me"*. This is that note. **Question 0c** in
+[`docs/open-questions.md`](docs/open-questions.md) asks which bucket the photos belong in.
+
+**2. "Trades or contractors" is read as the `contractor` classification**, because it is the
+only one in the system that means a trade — `classifications` holds client, contractor,
+supplier, consultant, authority, other. Companies already on the job are offered whatever
+they are classified as, since being the plumber on 1042-01 is stronger evidence. **Question
+0d** asks whether Lofty wants a separate *Trade* classification.
+
+### Identified at is a CHECK, not a lookup table
+
+The nine values are Amber's, in her order. Making the list editable means a lookup table,
+a Setup screen and a migration — the swap to make when adding a tenth matters, and not
+before. The drawer sorts nothing: PCI → the inspectors → handover → 1, 2 and 3 month is a
+sequence, so the picker is `ordered`.
+
+### Still to build
+
+- **Attachments per issue** — PR #78, blocked on question 0c.
+- **The maintenance report** — PR #79. Amber: select one or more jobs or projects, or
+  everything assigned to one person, and print or email a report with **each issue on its
+  own page**: job details, date reported, pictures, comments. Nothing of it is built.
+- **Date booked and follow-up have columns and no UI.** `0114` added
+  `maintenance_request_booked_on` and `_followup_on`; the request drawer does not yet show
+  them, so today they can only be set through the repository.
+
 ## 12 September, late — every job and project field has to belong to a process
 
 **Where it stands:** on `claude/tender-mayer-q39ffz`, in [PR #75](https://github.com/LoftySupport/loftyprojectapp/pull/75).

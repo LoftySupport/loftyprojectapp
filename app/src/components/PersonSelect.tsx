@@ -32,7 +32,9 @@ export function PersonSelect({
   clearable = true,
   className,
   disabled,
-  exclude
+  exclude,
+  only,
+  emptyText
 }: {
   value: string | null;
   onChange: (profileId: string | null) => void;
@@ -45,6 +47,16 @@ export function PersonSelect({
   disabled?: boolean;
   /** People not to offer — already voted, already holding the role. */
   exclude?: ReadonlySet<string> | string[];
+  /**
+   * Narrow the list to these teams. Amber, 14 September, on who fixes a maintenance
+   * issue: *"anyone on maintenance team or construction team from users"* — a genuinely
+   * shorter list, not a reordering, which is what `teamId` gives. The person already
+   * chosen stays offered even from another team, so an existing value is never silently
+   * dropped by a filter.
+   */
+  only?: readonly (TeamId | string)[];
+  /** What an empty list says. Worth setting when `only` is why it is empty. */
+  emptyText?: string;
 }) {
   const { data: profiles } = useQuery(r => r.listProfiles(), []);
   const { label: teamLabel, labels: teamLabels } = useTeamLabels();
@@ -54,6 +66,7 @@ export function PersonSelect({
     const own = teamId ? teamLabel(teamId) : null;
     return profiles
       .filter(p => p.active && !(skip?.has(p.id)) || p.id === value)
+      .filter(p => !only || p.id === value || only.some(t => p.teams.includes(t as TeamId)))
       .map(p => {
         const inTeam = Boolean(teamId && p.teams.includes(teamId as TeamId));
         // Null while the team lookup is in flight, and the sub is simply absent then —
@@ -66,7 +79,7 @@ export function PersonSelect({
           group: teamId ? (inTeam ? (own ?? "This team") : "Other teams") : null
         };
       });
-  }, [profiles, teamId, teamLabel, teamLabels, exclude, value]);
+  }, [profiles, teamId, teamLabel, teamLabels, exclude, value, only]);
 
   return (
     <TypeaheadSelect
@@ -78,7 +91,7 @@ export function PersonSelect({
       clearable={clearable}
       className={className}
       disabled={disabled}
-      emptyText="Nobody by that name"
+      emptyText={emptyText ?? "Nobody by that name"}
     />
   );
 }

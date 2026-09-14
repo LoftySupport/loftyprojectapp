@@ -3086,6 +3086,10 @@ code { overflow-wrap: anywhere; }
 }
 .typeahead li + li .typeahead-group { border-top: 1px solid var(--layout-border-color); margin-top: var(--space-4); }
 .typeahead-empty { padding: var(--space-8); font: var(--font-text3-normal); color: var(--secondary-text-color); }
+/* The create row takes the place of the empty line, so the list never shows both. It reads
+   as an action rather than as a match: the primary ink, and "Enter" where a team would be. */
+.typeahead-create { font: var(--font-text2-medium); color: var(--primary-color); }
+.typeahead-create .typeahead-sub { color: var(--secondary-text-color); }
 /* Name first and whole; the team gives way. "Sam Adams" must not wrap to two lines
    because "Design, Scheduling" sits beside it. */
 .typeahead-list .suburb-suggestion > span:first-child { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -3182,3 +3186,11 @@ code { overflow-wrap: anywhere; }
    tab already names it and controls whether it shows. No section chrome at all: the
    heading and the toggle would be a second name for the tab above it. */
 .panel-bare { min-width: 0; }
+
+/* ---------------------------------------------------------------- issues in one drawer
+   The new-maintenance-request drawer types the header once and repeats an issue block
+   below it (0114). The block is a `panel`, its title row is a `field-inline` and the
+   internal/external pair is a `stack-tight` — so the only rule here is the radio itself,
+   which nothing else in the app draws. Anything more would be a second way to draw a card. */
+.issue-draft-radio { display: inline-flex; align-items: center; gap: var(--space-4); cursor: pointer; }
+.issue-draft-radio input { margin: 0; }
