@@ -97,8 +97,11 @@ Nobody has answered these and nothing in the code assumes an answer:
 - **The twelve photographs filed before `0119`** are still in the private bucket, so a sheet
   generated for them carries pictures that expire. Moving them is ~20 lines through the
   Storage API and a change to live data, so it waits on Amber's yes.
-- **`0118` is still not applied to the live project.** A trigger, no columns, so nothing is
-  broken by the gap — but it is not doing its job either.
+- **`0118` IS applied** — ledger entry `20260914145252`, verified live on 14 September with a
+  rolled-back probe: a standing job followed the project's move, a job with its own lot kept
+  that lot, and a job re-addressed since stayed put. Earlier notes in this file said it was
+  not applied; that came from a migration list read before it landed and then repeated. **The
+  ledger is the answer to "is it applied", not a list read earlier in the session.**
 
 ---
 

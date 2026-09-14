@@ -3141,7 +3141,15 @@ street number, street, suburb and postcode at once, so any three of the four wer
 keep it standing still. There is now one job per field, differing from the project in that
 field alone.
 
-**Not yet applied to the live project.**
+**Applied to the live project** — ledger entry `20260914145252`, and verified there on
+14 September by a rolled-back probe rather than by the function merely existing: a project
+moved from Brodie Road to Corner Street, and a job standing exactly where the project stood
+followed; a job with its own lot 99 followed and **kept lot 99**; a job re-addressed to its
+own street since stayed put. Nothing written.
+
+*(This section read "Not yet applied" for several hours after it was applied, and the
+handoff repeated it. The migration ledger is the answer to that question — `list_migrations`
+read before the apply, then quoted afterwards, is not.)*
 
 
 ### 14 September — a defect photo is evidence you can link to (`0119`)
