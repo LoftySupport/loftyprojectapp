@@ -4,6 +4,7 @@ import type {
   AddressHistoryEntry,
   CloneOptions,
   NewDocumentUrl,
+  Doc,
   RecordDocument,
   NewReportDocument,
   NewReportDocumentShare,
@@ -206,7 +207,7 @@ export interface Repository {
    * "latest update". Exactly one of the two refs, matching the CHECK on `comments`.
    */
   listComments(
-    ref: { projectId?: number; jobId?: string; feedbackId?: string },
+    ref: { projectId?: number; jobId?: string; feedbackId?: string; maintenanceRequestId?: string },
     limit?: number
   ): Promise<CommentEntry[]>;
 
@@ -224,7 +225,7 @@ export interface Repository {
    * in `comment_mentions`, which is what the bell reads.
    */
   addComment(
-    ref: { projectId?: number; jobId?: string; feedbackId?: string },
+    ref: { projectId?: number; jobId?: string; feedbackId?: string; maintenanceRequestId?: string },
     body: string,
     mentions?: string[],
     /**
@@ -418,7 +419,7 @@ export interface Repository {
    * admin-only, and this panel would have rendered empty for almost everybody while
    * looking right to whoever built it.
    */
-  listRecordActivity(opts: { projectId?: number; jobId?: string; limit?: number }): Promise<RecordActivity[]>;
+  listRecordActivity(opts: { projectId?: number; jobId?: string; maintenanceRequestId?: string; limit?: number }): Promise<RecordActivity[]>;
 
   /**
    * The newest comment on each of these jobs, keyed by job number (0059).
@@ -457,6 +458,11 @@ export interface Repository {
    */
   listTasks(opts: {
     jobId?: string; projectId?: number; assigneeId?: string; teams?: TeamId[]; all?: boolean;
+    /**
+     * The tasks on one maintenance issue (0120). Narrows within a job rather than replacing
+     * it: a maintenance task keeps its `jobId`, which is what puts it on the board.
+     */
+    maintenanceRequestId?: string;
   }): Promise<TaskEntry[]>;
 
   /**
@@ -969,6 +975,26 @@ export interface Repository {
   jobDocumentUrl(path: string): Promise<string | null>;
 
   /**
+   * How to read ONE document, whichever bucket it turned out to be in (0119).
+   *
+   * There are two now and they behave oppositely: `job-documents` is private and every read
+   * is a signed URL good for five minutes; `maintenance-media` is public and its URL is
+   * permanent. A caller holding a list can hold both — the twelve photographs filed before
+   * 0119 are in the private one and the ones taken since are in the public one — so this
+   * asks the row rather than assuming, and every screen that opens a document goes through
+   * it instead of picking a bucket itself.
+   *
+   * Null when there is nothing to open: a row with no stored bytes (a document Lofty expects
+   * but has not received), or storage refusing. The caller shows "the copy is gone" rather
+   * than a link that opens on an error page.
+   *
+   * Synchronous callers cannot use this — signing is a round trip. That is the reason the
+   * generated maintenance sheet can only carry media from the PUBLIC bucket, and why 0119
+   * exists at all.
+   */
+  documentUrl(doc: Pick<Doc, "storagePath" | "storageBucket">): Promise<string | null>;
+
+  /**
    * The documents attached to one job or one project — 0032's `documents` joined through
    * `document_links`.
    *
@@ -1262,6 +1288,7 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "unshareReportDocument",
   "publishReportDocument",
   "jobDocumentUrl",
+  "documentUrl",
   "listRecordDocuments",
   "listMaintenanceDocuments",
   "attachMaintenanceFiles",
@@ -1479,6 +1506,7 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   unshareReportDocument: "report_documents",
   publishReportDocument: "report_documents + documents + document_links + storage: job-documents",
   jobDocumentUrl: "storage: job-documents",
+  documentUrl: "storage: job-documents + maintenance-media",
   listMaintenanceDocuments: "document_links",
   attachMaintenanceFiles: "documents + document_links + storage: job-documents",
   listRecordDocuments: "documents + document_links",

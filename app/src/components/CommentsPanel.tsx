@@ -26,10 +26,17 @@ import { CappedList } from "./CappedList";
  * the database reads both as one stream; a screen that wants that asks for it there.
  */
 export function CommentsPanel({
-  projectId, jobId, feedbackId, title = "Latest update", bare = false
+  projectId, jobId, feedbackId, maintenanceRequestId, title = "Latest update", bare = false
 }: {
   projectId?: number;
   jobId?: string;
+  /**
+   * One maintenance issue's thread (0120). Separate from `maintenance_messages`, which is
+   * still the record of what was SENT to a contractor or a homeowner with its channel and
+   * delivery — this is Lofty talking to itself about the defect, and it gets the @mentions,
+   * the bell and the edited marker the general thread already has.
+   */
+  maintenanceRequestId?: string;
   /** Inside the record's docked tab strip, where the tab already names it. */
   bare?: boolean;
   /**
@@ -48,9 +55,9 @@ export function CommentsPanel({
   const { can } = usePermission();
   const [reload, setReload] = useState(0);
   const { data: comments, loading, error } = useQuery(
-    r => r.listComments({ projectId, jobId, feedbackId }),
+    r => r.listComments({ projectId, jobId, feedbackId, maintenanceRequestId }),
     [],
-    [reload, projectId, jobId, feedbackId]
+    [reload, projectId, jobId, feedbackId, maintenanceRequestId]
   );
 
   const [draft, setDraft] = useState("");
@@ -94,7 +101,7 @@ export function CommentsPanel({
     try {
       // Only the people whose names survived the edit.
       const mentions = picked.filter(p => draft.includes(`@${p.name}`)).map(p => p.id);
-      await repo.addComment({ projectId, jobId, feedbackId }, draft, mentions,
+      await repo.addComment({ projectId, jobId, feedbackId, maintenanceRequestId }, draft, mentions,
         internal ? { internal: true } : undefined);
       setDraft("");
       setPicked([]);

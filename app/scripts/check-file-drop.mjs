@@ -142,15 +142,35 @@ try {
     afterMany.some(f => f.name === "Defect report.pdf") && afterMany.some(f => f.name === "Scope.docx"),
     JSON.stringify(afterMany));
 
-  // ---- a type the bucket does not take -------------------------------------------
+  // ---- video, which 0119 started accepting ----------------------------------------
+  // This assertion was the OPPOSITE until 14 September: a .mov was the example of a type
+  // the bucket refuses, and it was the right example until Amber said *"there may be
+  // videos as well. It is essential to keep these as a record"*. Left here as the video
+  // case rather than deleted, because a check that once proved the reverse is the clearest
+  // record that the rule changed on purpose.
+  const beforeVideo = (await taken()).length;
+  await drop([{ name: "leaking-shower.mov", type: "video/quicktime" }]);
+  const withVideo = await taken();
+  ok("a video reaches the caller now, where it used to be refused",
+    withVideo.length === beforeVideo + 1 && withVideo.some(f => f.name === "leaking-shower.mov"),
+    JSON.stringify(withVideo));
+  ok("and a video with no MIME type is taken on its extension too",
+    await (async () => {
+      const n = (await taken()).length;
+      await drop([{ name: "site-walk.mp4", type: "" }]);
+      const after = await taken();
+      return after.length === n + 1 && after.some(f => f.name === "site-walk.mp4");
+    })(), JSON.stringify(await taken()));
+
+  // ---- a type the bucket STILL does not take ---------------------------------------
   // `accept` filters the file PICKER and does nothing to a drop, so without the check in
   // FileDrop this would reach the caller and be refused by Storage with a message nobody
-  // can act on.
+  // can act on. The allowlist is still an allowlist — 0119 widened it, it did not open it.
   const before = (await taken()).length;
-  await drop([{ name: "walkthrough.mov", type: "video/quicktime" }]);
+  await drop([{ name: "site-backup.zip", type: "application/zip" }]);
   ok("a type the bucket refuses never reaches the caller", (await taken()).length === before);
   ok("and it is named, rather than silently ignored",
-    /walkthrough\.mov/.test(await note()), JSON.stringify(await note()));
+    /site-backup\.zip/.test(await note()), JSON.stringify(await note()));
 
   // ---- the Outlook-on-the-web case ------------------------------------------------
   await drop([]);

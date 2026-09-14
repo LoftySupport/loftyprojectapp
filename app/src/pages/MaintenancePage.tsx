@@ -8,6 +8,8 @@ import { supabaseUrl } from "../data/supabaseEnv";
 import { SidePanel } from "../components/SidePanel";
 import { useOneLine } from "../components/Toolbar";
 import { Field, Problem } from "../components/Form";
+import { CommentsPanel } from "../components/CommentsPanel";
+import { ActivityFeed } from "../components/ActivityFeed";
 import { PersonSelect } from "../components/PersonSelect";
 import { Select } from "../components/Select";
 import { splitBrainDump } from "../data/brainDump";
@@ -17,6 +19,8 @@ import { FileDrop } from "../components/FileDrop";
 import { TypeaheadSelect } from "../components/TypeaheadSelect";
 import { LoadProblem } from "../components/SearchNotices";
 import {
+  type TaskEntry,
+  type Doc,
   MAINTENANCE_ASSIGNEE_KINDS, MAINTENANCE_ASSIGNEE_KIND_LABELS,
   MAINTENANCE_ASSIGNMENT_STATUS_LABELS, MAINTENANCE_HEALTH_LABELS,
   MAINTENANCE_IDENTIFIED_AT, MAINTENANCE_IDENTIFIED_AT_LABELS,
@@ -603,6 +607,8 @@ function RequestDetail({ id, onChanged }: { id: string; onChanged: () => void })
   const [closeReason, setCloseReason] = useState("");
   const [note, setNote] = useState("");
   const [newItem, setNewItem] = useState({ description: "", location: "", categoryId: null as string | null });
+  const [newTask, setNewTask] = useState("");
+  const { data: tasks } = useQuery<TaskEntry[]>(r2 => r2.listTasks({ maintenanceRequestId: id }), [], [id, reload]);
 
   const bump = () => { setReload(n => n + 1); onChanged(); };
   const { data: files } = useQuery(r => r.listMaintenanceDocuments(id), [], [id, reload]);
@@ -621,13 +627,15 @@ function RequestDetail({ id, onChanged }: { id: string; onChanged: () => void })
     r => assignedCompanyId ? r.getCompany(assignedCompanyId) : Promise.resolve(null), null, [assignedCompanyId]
   );
   /**
-   * `job-documents` is private, so there is no URL to render into an href — one is asked
-   * for when somebody clicks and it expires in five minutes. Null when storage refuses,
-   * which says the copy is gone rather than opening an error page.
+   * Which bucket a file is in decides how it is opened, so the row is asked rather than
+   * assumed (0119): a photo or video taken since then is in the public bucket and its URL
+   * is permanent; a PDF on the same issue, and the twelve photographs filed before 0119,
+   * are private and signed for five minutes. Null when storage refuses, which says the
+   * copy is gone rather than opening an error page.
    */
-  const openFile = async (path: string | null) => {
-    if (!path) return;
-    const url = await repo.jobDocumentUrl(path);
+  const openFile = async (doc: Pick<Doc, "storagePath" | "storageBucket"> | null) => {
+    if (!doc?.storagePath) return;
+    const url = await repo.documentUrl(doc);
     if (url) window.open(url, "_blank", "noopener");
   };
   async function run(fn: () => Promise<unknown>) {
@@ -663,19 +671,32 @@ function RequestDetail({ id, onChanged }: { id: string; onChanged: () => void })
           {!r.dueOn && <span className="slot-chip muted">No SLA — pick a trade with one, or type a due date</span>}
         </div>
 
-        <div className="field-inline" style={{ flexWrap: "wrap", gap: "var(--space-12)", marginTop: "var(--space-8)" }}>
-          <label className="field-inline"><Text type="text3" element="span">Status</Text>
+        {/* THE SAME LAYOUT AS THE NEW-REQUEST DRAWER, and that was the ask — Amber,
+            14 September: *"when you click on a maintenance job to edit it you have same
+            type of format that is when you add a new job but at the additional fields for
+            status booked in"*.
+
+            `Field` rather than the hand-rolled `label.field-inline` row this used to be:
+            one label column, one control column, every control the same width. The old row
+            wrapped wherever it ran out of space, so Status sat beside Priority on a laptop
+            and under it on a phone, and nothing lined up with the drawer somebody had
+            filled in ten minutes earlier.
+
+            Every control writes on change. There is no Save: the record exists, so a
+            half-finished edit is not a state worth inventing. */}
+        <div style={{ marginTop: "var(--space-8)" }}>
+          <Field label="Status">
             {canWrite ? (
               <Select aria-label="Status" value={r.status} onChange={v => run(() => repo.updateMaintenanceRequest(r.id, { status: v as MaintenanceStatus }))}
                 options={MAINTENANCE_STATUSES.filter(s => s !== "closed").map(s => ({ value: s, label: MAINTENANCE_STATUS_LABELS[s] }))} />
             ) : <Text type="text3" element="span">{MAINTENANCE_STATUS_LABELS[r.status]}</Text>}
-          </label>
-          <label className="field-inline"><Text type="text3" element="span">Priority</Text>
+          </Field>
+          <Field label="Priority">
             {canWrite ? (
               <Select aria-label="Priority" value={r.priority} onChange={v => run(() => repo.updateMaintenanceRequest(r.id, { priority: v as MaintenancePriority }))}
                 options={MAINTENANCE_PRIORITIES.map(p => ({ value: p, label: MAINTENANCE_PRIORITY_LABELS[p] }))} />
             ) : <Text type="text3" element="span">{MAINTENANCE_PRIORITY_LABELS[r.priority]}</Text>}
-          </label>
+          </Field>
           {/* The three dates of an issue, editable in the drawer — Amber, 14 September:
               "add in the date booked, date completed into UI and drawer when clicked on."
               Follow-up joins them because 0114 added it at the same time on her earlier
@@ -685,40 +706,43 @@ function RequestDetail({ id, onChanged }: { id: string; onChanged: () => void })
               the browser's is not a promise (12 September). None of the three is derived
               from the status and none derives it — a repair finished on Tuesday that
               nobody has closed shows a completion date and In progress, which is true. */}
-          <label className="field-inline"><Text type="text3" element="span">Booked</Text>
+          <Field label="Booked">
             {canWrite ? (
               <DateField value={r.bookedOn} ariaLabel="Date booked"
                 onChange={v => run(() => repo.updateMaintenanceRequest(r.id, { bookedOn: v }))} />
             ) : <Text type="text3" element="span">{r.bookedOn ? new Date(r.bookedOn).toLocaleDateString() : "—"}</Text>}
-          </label>
-          <label className="field-inline"><Text type="text3" element="span">Completed</Text>
+          </Field>
+          <Field label="Completed">
             {canWrite ? (
               <DateField value={r.completedOn} ariaLabel="Date completed"
                 onChange={v => run(() => repo.updateMaintenanceRequest(r.id, { completedOn: v }))} />
             ) : <Text type="text3" element="span">{r.completedOn ? new Date(r.completedOn).toLocaleDateString() : "—"}</Text>}
-          </label>
-          <label className="field-inline"><Text type="text3" element="span">Follow-up</Text>
+          </Field>
+          <Field label="Follow-up">
             {canWrite ? (
               <DateField value={r.followUpOn} ariaLabel="Follow-up date"
                 onChange={v => run(() => repo.updateMaintenanceRequest(r.id, { followUpOn: v }))} />
             ) : <Text type="text3" element="span">{r.followUpOn ? new Date(r.followUpOn).toLocaleDateString() : "—"}</Text>}
-          </label>
-          <label className="field-inline"><Text type="text3" element="span">Trade</Text>
+          </Field>
+          <Field label="Trade">
             {canWrite ? (
               <Select aria-label="Trade" clearable placeholder="Trade…" value={r.categoryId} onChange={v => run(() => repo.updateMaintenanceRequest(r.id, { categoryId: v }))}
                 options={categories.map(c => ({ value: c.id, label: c.name }))} />
             ) : <Text type="text3" element="span">{r.categoryName ?? "—"}</Text>}
-          </label>
-          <label className="field-inline"><Text type="text3" element="span">Owner</Text>
+          </Field>
+          <Field label="Owner">
             {canWrite ? (
               <PersonSelect aria-label="Owner" placeholder="Lofty person…" value={r.ownerProfileId} onChange={v => run(() => repo.updateMaintenanceRequest(r.id, { ownerProfileId: v }))} />
             ) : <Text type="text3" element="span">{r.ownerName ?? "—"}</Text>}
-          </label>
+          </Field>
           {canWrite && (
-            <label className="field-inline"><Text type="text3" element="span">Due</Text>
-              <input type="date" className="date-input" aria-label="Due date" defaultValue={r.dueOn ?? ""} key={r.dueOn ?? "none"}
-                onBlur={e => { const v = e.target.value || null; if (v !== r.dueOn) run(() => repo.updateMaintenanceRequest(r.id, { dueOn: v })); }} />
-            </label>
+            <Field label="Due">
+              {/* A DateField like the three above, rather than the bare input this was.
+                  The browser's own clear is not a promise (12 September), and a due date
+                  taken back by accident used to be a due date you were stuck with. */}
+              <DateField value={r.dueOn} ariaLabel="Due date"
+                onChange={v => run(() => repo.updateMaintenanceRequest(r.id, { dueOn: v }))} />
+            </Field>
           )}
         </div>
 
@@ -805,7 +829,7 @@ function RequestDetail({ id, onChanged }: { id: string; onChanged: () => void })
         {files.length === 0 && <Text type="text3" color="secondary" ellipsis={false} element="p">Nothing attached. Add photos when the issue is logged, or here.</Text>}
         {files.map(f => (
           <div key={f.linkId} className="issue-file" style={{ padding: "var(--space-4) 0" }}>
-            <button type="button" className="link-button tap-link" onClick={() => void openFile(f.storagePath)}>{f.name}</button>
+            <button type="button" className="link-button tap-link" onClick={() => void openFile(f)}>{f.name}</button>
             {canWrite && (
               <Button size="xs" kind="tertiary" onClick={() => run(() => repo.removeRecordDocument(f.linkId))}>Remove</Button>
             )}
@@ -821,6 +845,59 @@ function RequestDetail({ id, onChanged }: { id: string; onChanged: () => void })
               onFiles={picked => void run(() => repo.attachMaintenanceFiles({ requestId: r.id, jobId: r.jobId, files: picked }))} />
           </div>
         )}
+      </section>
+
+      {/* ------------------------------------------------------------------ the four panels
+          Amber, 14 September: *"tasks activity comments documents that are the same format
+          as on the bottom of a job or project drawer"*. They are literally those components,
+          pointed at the issue — `0120` and `0121` made a maintenance request a parent the
+          general tables accept, which is what lets one CommentsPanel serve a job, a project,
+          a tracker request and now an issue rather than four that drift apart.
+
+          `bare` on the two shared ones: they sit under their own headings here, and a panel
+          that draws its own title inside a titled section says everything twice. */}
+      <section className="panel">
+        <div className="panel-head">
+          <Text type="text2" weight="bold">Tasks</Text>
+          <Text type="text3" color="secondary">{tasks.length === 0 ? "none yet" : `${tasks.filter(t => t.status === "done").length} of ${tasks.length} done`}</Text>
+        </div>
+        <Text type="text3" color="secondary" ellipsis={false} element="p">
+          Amber, 14 September: <em>an issue becomes a task</em>. A task added here carries this
+          job, so it shows on the Tasks board beside everything else being planned.
+        </Text>
+        {tasks.map(t => (
+          <div key={t.id} className="issue-file" style={{ padding: "var(--space-4) 0" }}>
+            <Link to={`/tasks?task=${t.id}`} className="tap-link">{t.name}</Link>
+            <span className={`health is-${t.health}`}>{t.status}</span>
+            {t.dueEffective && <span className="muted">due {new Date(t.dueEffective).toLocaleDateString()}</span>}
+            {t.assigneeName && <span className="muted">{t.assigneeName}</span>}
+          </div>
+        ))}
+        {canWrite && !isClosed && (
+          <div className="field-inline" style={{ flexWrap: "wrap", marginTop: "var(--space-8)" }}>
+            <TextField size="small" id={`task-${r.id}`} inputAriaLabel="New task" placeholder="What has to be done…" value={newTask} onChange={setNewTask} />
+            <Button size="small" disabled={!newTask.trim()} onClick={() => run(async () => {
+              await repo.createTask({ jobId: r.jobId, maintenanceRequestId: r.id, name: newTask.trim() });
+              setNewTask("");
+            })}>Add task</Button>
+          </div>
+        )}
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <Text type="text2" weight="bold">Comments</Text>
+          <Text type="text3" color="secondary">Lofty talking to itself about this defect</Text>
+        </div>
+        <CommentsPanel maintenanceRequestId={r.id} bare />
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <Text type="text2" weight="bold">Activity</Text>
+          <Text type="text3" color="secondary">who changed what, and when</Text>
+        </div>
+        <ActivityFeed maintenanceRequestId={r.id} bare />
       </section>
 
       <section className="panel">

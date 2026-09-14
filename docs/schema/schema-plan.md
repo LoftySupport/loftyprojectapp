@@ -3141,6 +3141,84 @@ street number, street, suburb and postcode at once, so any three of the four wer
 keep it standing still. There is now one job per field, differing from the project in that
 field alone.
 
+**Applied to the live project** — ledger entry `20260914145252`, and verified there on
+14 September by a rolled-back probe rather than by the function merely existing: a project
+moved from Brodie Road to Corner Street, and a job standing exactly where the project stood
+followed; a job with its own lot 99 followed and **kept lot 99**; a job re-addressed to its
+own street since stayed put. Nothing written.
+
+*(This section read "Not yet applied" for several hours after it was applied, and the
+handoff repeated it. The migration ledger is the answer to that question — `list_migrations`
+read before the apply, then quoted afterwards, is not.)*
+
+
+### 14 September — TWO MIGRATIONS SHARE EACH OF `0119` AND `0120`, deliberately left that way
+
+Two branches were open at once on 14 September and both took the next free number. The
+repository now holds:
+
+| Number | The two files |
+| --- | --- |
+| `0119` | `the_date_the_slas_say` (PR #88) and `a_defect_photo_is_evidence_you_can_link_to` (PR #89) |
+| `0120` | `a_community_title_job_shows_a_c` (#88) and `a_maintenance_issue_is_a_record_you_can_work_on` (#89) |
+
+**They were not renumbered, and the reason is not laziness.** All four are applied to the
+live project, and the maintenance three write their own number into **live column comments** —
+`documents.document_storage_bucket` says *"(0119)"* in the database right now. Renaming the
+file to `0122` would make the repository and the database disagree about what `0119` is,
+which is worse than two files sharing a number.
+
+Nothing breaks. `scripts/check-migrations.mjs` matches **by name with the number stripped**,
+the Supabase ledger keys by name, and `replay.sh` sorts by full filename so the order is
+deterministic. `0073` has had two files since 31 August for the same reason.
+
+**What to do about it:** when reading "see `0119`" in a comment, check which one is meant from
+the context — the SLA date or the photo bucket. When writing a new migration, take the next
+number after the highest, not the next after the one you remember.
+
+### 14 September — a defect photo is evidence you can link to (`0119`)
+
+**This reverses `0c`, and the reversal is Amber's.** Asked twice, with the cost stated both
+times: *"Keep them forever and there may be videos as well. It is essential to keep these as
+a record"*, then *"No videos or photos are private accept video and photos with permanent
+links"*.
+
+`0c` put a defect photo in `job-documents`: private, every read a signed URL good for five
+minutes. That answer was recorded on 14 September **with its consequence written down at the
+time** — *"an emailed report cannot simply point at these images … a signed link expires and
+a private object has no permanent URL"*. The generated maintenance sheet is now being built,
+so the consequence arrived, and she took the other side of it.
+
+**What it means, stated plainly because it is not a small thing:** a photograph of a defect
+inside somebody's house is fetchable by anyone who ever sees the URL, with no sign-in, for
+good. Those are the terms `report-images` has carried since 7 September. The `0c` row in
+`docs/open-questions.md` is kept rather than rewritten, for the reason this whole document
+exists: a schema choice without its reasoning gets "simplified" back into a bug.
+
+| Decision | Why |
+| --- | --- |
+| A **second bucket**, not a flag on the first | `public` is a property of the bucket, not of the object. Making `job-documents` public would put every contract, permit and published document on a permanent URL — not what was asked and not what anyone would want |
+| **`documents.document_storage_bucket`**, defaulting to `job-documents` | The path has never said which bucket it is in; it did not need to, because there was one. Two makes the repository's constant a guess, and a wrong guess renders a broken image rather than an error anybody notices |
+| 200 MB rather than `job-documents`' 25 MB | A two-minute clip of a leaking shower off a phone is tens of megabytes. Still a cap: the guard against somebody filing a site walkthrough, which belongs in SharePoint |
+| Four video types, not `video/*` | The allowlist reasoning `0110` gives — `image/*` makes a bucket a drive. quicktime is what an iPhone records, mp4 Android, webm a browser capture, mpeg the older cameras still on site |
+| **`video` joins `0032`'s category vocabulary** | The sheet shows a photo and links a video. Deriving that from the MIME type works and is what the first draft did; the category is where this schema keeps that vocabulary, and two places to ask "is this a video" is one place to get a different answer |
+| READ is the bucket's `public` flag; the `select` policy is staff-only | Being able to **fetch** a photo whose URL you hold is a different thing from being able to **enumerate** every photo Lofty holds. The first is what was asked for; the second was never on the table |
+| DELETE stays admin-only | `0062`, `0100` and `0110` all draw that line, and Amber's own reason for the change — *"essential to keep these as a record"* — makes the uploader tidying up later exactly the case to refuse |
+
+**The twelve already filed.** Twelve photographs sit in `job-documents` today, across jobs
+`1002-001` and `1991-001`. This migration does **not** move them and cannot: the bytes are
+objects in storage and no SQL statement copies them. They keep
+`document_storage_bucket = 'job-documents'`, which is true of them, and `repo.documentUrl`
+signs a private one and links a public one — **both paths are real, so both are handled
+rather than one being assumed**. Moving them is a separate deliberate act with her say-so,
+not a side effect of a migration.
+
+**Five assertions, each watched failing** through `replay.sh`: the default changed away from
+the old bucket (the twelve break), the check dropped (a typo'd bucket accepted), the column
+made nullable (the reader has to guess), the category check left as `0032` wrote it (`video`
+refused), and the vocabulary replaced rather than widened (`contract` refused).
+
+**Not yet applied to the live project.**
 **Applied to the live project on 14 September**, as
 `20260914145252_a_project_address_moves_its_jobs`. The proof block ran against the live
 database and cleaned up after itself: 119 projects, 83 jobs and 203 addresses before and
@@ -3326,6 +3404,110 @@ since `address_history` keeps superseded addresses searchable — is **open ques
 is deliberately not guessed at.
 
 **Applied to the live project? Not yet.**
+
+
+### 14 September — a maintenance issue is a record you can work on (`0120`)
+
+Amber: *"tasks activity comments documents that are the same format as on the bottom of a job
+or project drawer"*. One of the four already worked —
+`document_links.maintenance_request_id` since `0084`. The other three could not:
+`comments`, `activity_events` and `tasks` take a project, a job, a task or a variation, and a
+maintenance request is none of those. **The drawer was never the missing piece; the parent
+column was.**
+
+**The fork, and her answer.** An issue already has its own versions of two of these —
+`maintenance_items` is its work list, `maintenance_messages` its thread. Put to her with the
+cost of each, she chose **"Join the general tables"**, and the reason is the Tasks board: a
+repair booked for Tuesday should appear beside everything else a supervisor is planning, and
+a row in `maintenance_items` never will.
+
+| Table | Shape | Why |
+| --- | --- | --- |
+| `comments` | A **sixth parent**; `comments_one_parent` widened as `0064` widened it for `feedback_id` | The thread is about the issue, not the job |
+| `activity_events` | A **fifth parent**, same shape | The one panel with no source at all — an issue kept no history of who changed what |
+| `tasks` | A **qualifier**, not a parent; `tasks_one_parent` untouched | The board reads by job. A task whose only parent was an issue would vanish from the board, which is the exact thing this option was chosen to get |
+
+**The composite foreign key is the interesting part.** A maintenance task keeps its `job_id`,
+which leaves one way to be wrong: a task on `1042-01` pointing at an issue on `1055-01`,
+putting a repair to one house on another house's board and looking entirely normal.
+`tasks_maintenance_request_is_on_this_job` references the **pair** — which is why
+`maintenance_requests` gains a unique constraint on `(maintenance_request_id, job_id)` that is
+redundant against its primary key by design. A trigger could do the same job and would be a
+trigger somebody can forget to fire.
+
+**`task_display` had to be rebuilt.** It names its columns one by one rather than selecting
+`t.*`, so a column added to `tasks` does not reach the board. Dropped and recreated rather
+than replaced, because `create or replace view` can only APPEND a column and refuses with
+*cannot change name of view column "task_name" to "maintenance_request_id"* when one is
+inserted in the middle.
+
+**RLS is unchanged, and that was checked rather than assumed.** Every policy on these three
+tables is parent-agnostic — they test `is_active_user()` and `current_permission()`, never
+which record a row hangs off. A comment on a maintenance issue therefore reads and writes
+under exactly the same rule as a comment on a job. Recorded because "no policy change" in a
+migration that adds a parent column is normally a red flag, and here it is a finding.
+
+**Still open, and Amber's to settle.** An issue can now carry both `maintenance_items` (the
+defect broken down by trade, with cost and a done-stamp) and `tasks` (scheduled work on the
+board). They are different things and are treated as different things, but nothing stops
+somebody recording one repair as both. She has been told a rule is needed and has not given
+one, so none is invented here.
+
+**The first proof block proved nothing, and that is recorded in the migration.** It looked for
+two jobs already carrying issues, found none on the replay database, printed a notice and
+skipped every assertion — while `replay.sh` reported ALL MIGRATIONS APPLIED CLEANLY. It now
+builds its own fixtures, restoring the projects identity sequence the way `0114` does.
+
+**Six assertions watched failing:** `comments_one_parent` not widened, `activity_events_one_parent`
+not widened, a plain foreign key instead of the pair (*a task on the first job took the second
+job's issue*), a task given an issue but no job, the rebuilt view losing `security_invoker`
+(*view(s) executing as owner: task_display* — caught by the sweep repaired in `0086`'s PR), and
+the view not rebuilt at all (the column never reaches the board).
+
+**Not yet applied to the live project.**
+
+
+### 14 September — the audit trail knows which issue it is about (`0121`)
+
+**This corrects `0120`, and the mistake is the reason the entry exists.** `0120` gave
+`activity_events` a `maintenance_request_id` so an issue could have a history. Sound column,
+delivers nothing: **nothing in the app reads `activity_events`** — it is on `0080`'s
+audit-exempt list and appears in the repository only as a dictionary entry. The Activity panel
+reads **`activity_audit`**, through `listRecordActivity`, filtered on
+`activity_audit_job_id` and `activity_audit_project_id`.
+
+So `0120` added a parent to the table that *models* the feed and left the table that *feeds*
+it untouched. Caught while wiring the panel. The `0120` column stays — it is the right shape
+for that table and costs nothing.
+
+**A jsonb filter would have needed no migration and is still the wrong answer**, for two
+reasons. `0080`'s own note says the jsonb-path scans it inherited *"are gone with it"*: the
+denormalised `job_id` and `project_id` exist precisely so a record's history is an index
+lookup. And filtering `activity_audit_table = 'maintenance_requests'` would show only rows
+about the request — a photo attached, a task booked, a comment left all write audit rows on
+*other* tables, and every one belongs in the issue's history.
+
+So `private.audit_record_ids` gains a third OUT parameter and `log_activity_audit` stamps it,
+both the way the job and project already work. The trigger function is **rebuilt from its own
+`pg_get_functiondef` source** with three targeted replacements rather than retyped: `0080`'s
+body carries the exempt-table logic, the origin column and the snapshot handling, and a hand
+copy of all that is a copy that drifts.
+
+**Backfilled**, as `0080` backfilled the job and project when it added them — otherwise an
+issue's history would start the day the migration ran, on a record whose whole purpose is
+saying what happened. On the live project: **43 rows across 17 issues and 4 tables**.
+
+**Three assertions watched failing, and the third one twice.** The trigger not taught to stamp
+(*INSERT has more target columns than expressions*), the resolver never reading the column
+(*stamped &lt;NULL&gt;, expected …*), and the "carry the job up from the issue" branch removed.
+
+**That third break reported nothing the first time**, and the reason is worth keeping: a
+`maintenance_requests` row already holds `job_id` directly, so deleting the branch changed
+nothing about it. The branch exists for rows that name **only** the issue — a comment, a task
+— so the assertion now checks that a comment on the issue carries the job. Then the break
+bit: *a comment on the issue did not carry the job, so it is missing from the job's feed*.
+
+**Applied to the live project and verified there**, inside a rolled-back transaction.
 
 
 ## Verification

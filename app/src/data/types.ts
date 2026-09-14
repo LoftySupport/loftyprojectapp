@@ -1191,6 +1191,14 @@ export type { FieldChange };
 
 export interface RecordActivity {
   id: string;
+  /**
+   * The maintenance issue this line is about (0120), or null for the job and project feeds.
+   *
+   * Until 0120 an issue kept no history at all: a repair that changed hands, or a booking
+   * date that moved twice, left nothing behind — and that is the thing people argue about
+   * afterwards.
+   */
+  maintenanceRequestId: Uuid | null;
   at: IsoDateTime;
   /** '1042' or '1042-03' — what the line is about, since a project feed shows both. */
   subject: string;
@@ -1286,6 +1294,16 @@ export interface Task {
   /** Exactly one of these is set. Most work hangs off a job; some belongs to the site. */
   jobId: string | null;
   projectId: number | null;
+  /**
+   * The maintenance issue this task is the work for (0120), or null for ordinary work.
+   *
+   * NOT one of the two above — a qualifier beside them. The Tasks board reads by job, so a
+   * repair keeps its `jobId` and turns up beside everything else a supervisor is planning,
+   * which is the whole reason Amber chose this over a maintenance-only list. The database
+   * refuses a task whose job and issue disagree, so this can never point at a repair to a
+   * different house.
+   */
+  maintenanceRequestId: Uuid | null;
   name: string;
   description: string | null;
   /** Sub-tasks, for the steps that are really several. */
@@ -1431,6 +1449,14 @@ export interface StageCompletion {
 export interface NewTask {
   jobId?: string;
   projectId?: number;
+  /**
+   * The maintenance issue this task is the work for (0120). Amber, 14 September: *"an issue
+   * becomes a task"*.
+   *
+   * Sent WITH `jobId`, never instead of it — the database refuses a pair that disagree, and
+   * the job is what puts the task on the board.
+   */
+  maintenanceRequestId?: Uuid;
   name: string;
   description?: string | null;
   owningTeam?: TeamId | null;
@@ -1557,6 +1583,14 @@ export interface RecordRef {
   jobId: string | null;
   taskId: Uuid | null;
   variationId: Uuid | null;
+  /**
+   * The maintenance issue, since 0120 — Amber chose to *"join the general tables"* so an
+   * issue is a record like any other rather than something with its own parallel thread.
+   *
+   * Exactly one of these is set, and the database is what enforces it: `comments` grew a
+   * SIXTH parent the way `feedback_id` made a fifth in 0064.
+   */
+  maintenanceRequestId: Uuid | null;
 }
 
 /**
@@ -1573,6 +1607,21 @@ export interface Doc {
   description: string | null;
   /** Nullable: a row can exist for a document Lofty expects but has not received. */
   storagePath: string | null;
+  /**
+   * Which bucket `storagePath` is a path in (0119), and therefore how to read it.
+   *
+   * `job-documents` is PRIVATE — every read is a signed URL, asked for when somebody
+   * clicks, gone in five minutes. `maintenance-media` is PUBLIC — a permanent URL you can
+   * put straight in an `src` or an email. Amber, 14 September, reversing her own 0c
+   * answer: *"No videos or photos are private accept video and photos with permanent
+   * links"*, so a generated maintenance sheet points at a picture instead of embedding it
+   * or watching it expire.
+   *
+   * **Read it, never assume it.** Twelve photographs filed before 0119 are in the private
+   * bucket and stay there; the same list can hold both, so a reader that hard-codes one
+   * renders half the pictures as broken images.
+   */
+  storageBucket: StorageBucket;
   /**
    * Where it is when Lofty does not hold the bytes — a SharePoint link (0103).
    *
@@ -1596,9 +1645,29 @@ export interface Doc {
   updatedBy: Uuid | null;
 }
 
+/**
+ * The two buckets a document's bytes can be in (0119), and they behave oppositely.
+ *
+ * Contracts, permits and published documents go to `job-documents`, which is private.
+ * Maintenance photos and videos go to `maintenance-media`, which is public: anyone holding
+ * the URL can fetch it, with no sign-in, for good. That is the cost Amber accepted for a
+ * sheet whose pictures still work when it reaches a contractor, and it is stated here
+ * because a name alone does not say it.
+ *
+ * `report-images` is a third public bucket and is deliberately NOT in this union — it is
+ * owned by a document or a library entry rather than by a `documents` row, and reached
+ * through `uploadReportImage`.
+ */
+export const STORAGE_BUCKETS = ["job-documents", "maintenance-media"] as const;
+export type StorageBucket = typeof STORAGE_BUCKETS[number];
+
 export const DOCUMENT_CATEGORIES = [
   "contract", "drawing", "permit", "certificate",
-  "photo", "invoice", "report", "correspondence", "other"
+  // `video` joined the vocabulary in 0119, when the bucket first accepted one. It is a
+  // category rather than a MIME-type test because the generated maintenance sheet shows a
+  // photo and links a video, and two places to ask "is this a video" is one place to get a
+  // different answer.
+  "photo", "video", "invoice", "report", "correspondence", "other"
 ] as const;
 export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number];
 

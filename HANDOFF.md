@@ -5,17 +5,258 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 277 changes since then —
+Unreleased: 282 changes since then —
+- Changed: A maintenance issue is edited in the same layout it was logged in, with tasks, comments, activity and documents beneath it
 - Added: Community title jobs now carry a "c" in the job number itself — 1004-003c. Mark a job community title and its number updates everywhere it is used; correct it back and the c goes away. The project number and the three-digit job code never change, and the numbering still runs straight through both title types.
+- Added: A maintenance issue keeps a history of who changed what, including the photos, tasks and comments on it
+- Added: A maintenance issue carries its own comments, activity and tasks, so a repair shows on the Tasks board beside everything else
 - Added: Community title jobs now read with a "c" after the job number — 1004-003c. Torrens jobs and jobs whose title type is not set yet read without one, and the numbering still runs straight through both. The job's underlying number never changes, so nothing already written down goes stale.
-- Added: A calculated completion date on jobs — what the SLAs say the job will finish, beside the target somebody committed to and the day it actually did. Three columns on the Jobs table, off by default. Blank until the processes have estimates on them, with a count of how many are missing.
-- Fixed: A project's new address now carries its live jobs with it. A job still standing at the project's old address follows, keeping its own lot and res numbers, so "Lot 1, 14 Brodie Road" becomes "Lot 1, 28 Corner Street". A job given its own address since its title issued is left alone, as are closed and cancelled jobs.
-- Fixed: The check that every database view runs as its caller now tests the setting's value rather than only that it was written, so a view with the protection turned off can no longer pass it
-- …and 272 more.
+- …and 277 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
 
+## 14 September — START HERE IF YOU ARE A NEW CHAT: the maintenance drawer, and the rethink coming after it
+
+Amber, 14 September, ending the session: *"An issue becomes a task … I am rethinking the
+process/properties/task alignment and how they work together but that is a new car. Get the
+drawer right and do handoff for new chat as I might need to refactor and redefine how these
+work together."*
+
+**Read this section, then `docs/open-questions.md`, then the three migration entries in
+`docs/schema/schema-plan.md` (`0119`, `0120`, `0121`). Everything below is on
+[PR #89](https://github.com/LoftySupport/loftyprojectapp/pull/89) and all three migrations
+are applied to the live project.**
+
+### What is built and live
+
+| Piece | Where | State |
+| --- | --- | --- |
+| Maintenance photos and video on permanent links | `0119`, public `maintenance-media` bucket | Live |
+| An issue as a parent of comments, activity and tasks | `0120` | Live |
+| The audit trail stamping the issue, backfilled | `0121` | Live, 43 rows across 17 issues |
+| The edit drawer: new-request layout, plus Tasks, Comments, Activity and Documents | `MaintenancePage.tsx` → `RequestDetail` | On the branch |
+
+### The decision that sets up the rethink
+
+**"An issue becomes a task."** That is the answer to the question `0120` deliberately left
+open: an issue could carry both `maintenance_items` (the defect by trade, with cost and a
+done-stamp) and `tasks` (scheduled work on the board), and nothing said which was the truth.
+
+The drawer now reads **tasks**. `maintenance_items` is **not deleted and nothing is migrated
+off it** — she said in the same breath that the alignment is being reconsidered, and tearing
+out a table on the strength of a rule about to be revisited is how you do the work twice.
+**`maintenance_items` is the first thing to look at when the rethink lands.**
+
+### What the rethink has to decide, stated as questions rather than guesses
+
+Nobody has answered these and nothing in the code assumes an answer:
+
+1. **Does `maintenance_items` survive at all**, or does an issue's breakdown-by-trade become
+   sub-tasks? Items carry cost and a done-stamp that `tasks` does not.
+2. **What creates the task** — a person pressing *Add task* in the drawer, which is what is
+   built, or an issue generating one automatically when it is logged or booked? Automatic
+   creation was NOT built, because "becomes" could mean either and inventing it would be a
+   plausible value.
+3. **Where do properties sit** on maintenance work — `process_properties` binds properties to
+   processes, and a maintenance issue is not in a process today.
+4. **Does a repair belong to a process run?** `tasks.process_run_id` exists. A maintenance
+   task currently has none, so it is a task outside every process.
+
+### The two shapes to keep in mind before refactoring
+
+- **`tasks.maintenance_request_id` is a QUALIFIER, not a parent.** `tasks_one_parent` still
+  requires exactly one of `job_id` and `project_id`, because the Tasks board reads by job and
+  a task parented only to an issue would vanish from it. A composite foreign key ties the
+  issue to the same job, so a repair cannot land on another house's board.
+- **`comments` and `activity_events` took the issue as a genuine extra parent**, the way
+  `feedback_id` became a fifth in `0064`.
+
+### Two mistakes from this session, both fixed, both worth not repeating
+
+- **`0120` widened `activity_events`, which nothing in the app reads.** The Activity panel
+  reads `activity_audit`. Adding a parent to the table that *models* a feed is not the same as
+  adding it to the table that *feeds* it. `0121` fixed it.
+- **Two proof blocks proved nothing and still reported green.** One skipped every assertion
+  because the replay database had no jobs; one had a break that changed nothing because the
+  row already carried the field by another route. **If a deliberate break does not turn a
+  check red, the check was not testing what you think.**
+
+### Still not started
+
+- **The generated documents.** A maintenance request sheet per issue with its pictures, and an
+  overall document per job with every issue sorted by how it was identified, named
+  `<job number> - maintenance request`, linked from the job card, the project card and the
+  issue drawer. **The report builder is person-driven today** — a document is something
+  somebody *builds* from the library and publishes. Autogenerating one, and re-generating it
+  when an issue changes, is new machinery rather than a new widget. Agree the shape with Amber
+  before writing it; the unanswered part is what happens to a sheet already sent when the
+  issue behind it changes.
+- **A photo package to SharePoint when a job closes.** Recorded from *"It would be good to
+  maybe…"* — a maybe, not a commitment.
+- **The twelve photographs filed before `0119`** are still in the private bucket, so a sheet
+  generated for them carries pictures that expire. Moving them is ~20 lines through the
+  Storage API and a change to live data, so it waits on Amber's yes.
+- **`0118` IS applied** — ledger entry `20260914145252`, verified live on 14 September with a
+  rolled-back probe: a standing job followed the project's move, a job with its own lot kept
+  that lot, and a job re-addressed since stayed put. Earlier notes in this file said it was
+  not applied; that came from a migration list read before it landed and then repeated. **The
+  ledger is the answer to "is it applied", not a list read earlier in the session.**
+
+---
+
+## 14 September — the audit trail knows which issue it is about (`0121`), correcting `0120`
+
+**Where it stands:** same branch, applied live and verified. **This fixes a mistake I made in
+`0120` and it is worth reading before trusting that migration's Activity half.**
+
+`0120` gave `activity_events` a maintenance parent. Nothing in the app reads
+`activity_events` — the Activity panel reads `activity_audit`. So `0120` widened the table
+that *models* the feed and left the one that *feeds* it alone. `0121` adds
+`activity_audit_maintenance_request_id`, teaches `private.audit_record_ids` to resolve it and
+`log_activity_audit` to stamp it, and **backfills**: 43 rows across 17 issues and 4 tables on
+the live project, so an issue's history does not start today.
+
+A jsonb filter would have needed no migration and was still wrong twice over: `0080` removed
+exactly those scans on purpose, and it would have shown only rows about the request itself —
+not the photo, the task or the comment, which all belong in the issue's history.
+
+**One break reported nothing the first time**, which is the part worth keeping: removing the
+"carry the job up from the issue" branch changed nothing, because a `maintenance_requests` row
+already holds `job_id`. The branch exists for rows that name **only** the issue. The assertion
+now uses a comment, and the break bites.
+
+**What is left of Amber's ask:** the drawer itself. The data layer is done and verified —
+`listComments`, `addComment`, `listRecordActivity` and `listTasks` all take a
+`maintenanceRequestId` now. What remains is UI: `RequestDetail` laid out like `NewRequests`,
+and the four panels pointed at the issue.
+
+---
+
+## 14 September — a maintenance issue becomes a record you can work on (`0120`)
+
+**Where it stands:** same branch as `0119`, stacked on it. **Applied to the live project and
+verified there.** This is the schema half of the drawer; the drawer itself is next.
+
+**The finding that set the size of the job.** Amber asked for *"tasks activity comments
+documents … the same format as on the bottom of a job or project drawer"*. Only **documents**
+already worked. `comments`, `activity_events` and `tasks` take a project, a job, a task or a
+variation — a maintenance request is none of those. **The drawer was never the missing piece;
+the parent column was.**
+
+**Her answer to the fork.** An issue already has its own `maintenance_items` and
+`maintenance_messages`, so the choice was to render those in the panels' shape and change no
+schema, or to let the general tables take a maintenance request. She chose **"Join the general
+tables"**, for the Tasks board: a repair booked for Tuesday should sit beside everything else a
+supervisor is planning.
+
+| Table | Shape | Why |
+| --- | --- | --- |
+| `comments` | A sixth parent, as `0064` made a fifth | The thread is about the issue |
+| `activity_events` | A fifth parent | The one panel with no source at all |
+| `tasks` | A **qualifier**, not a parent | The board reads by job; a task parented only to an issue would vanish from it |
+
+**The composite foreign key is the interesting part.** A maintenance task keeps its job, which
+leaves one way to be wrong: a task on `1042-01` pointing at an issue on `1055-01` — a repair to
+one house on another house's board, looking entirely normal.
+`tasks_maintenance_request_is_on_this_job` references the **pair**, so it cannot happen.
+
+**`task_display` had to be dropped and recreated**, not replaced: it names its columns rather
+than selecting `t.*`, and `create or replace view` can only append.
+
+**Three things worth knowing:**
+
+- **RLS is unchanged, and that was checked rather than assumed.** Every policy on the three
+  tables is parent-agnostic. "No policy change" in a migration adding a parent column is
+  normally a red flag; here it is a finding.
+- **The first proof block proved nothing.** It looked for two jobs already carrying issues,
+  found none on the replay database, and skipped every assertion while `replay.sh` said ALL
+  MIGRATIONS APPLIED CLEANLY. It builds its own fixtures now.
+- **The `security_invoker` sweep repaired last session caught the view rebuild losing it** —
+  `FAIL: view(s) executing as owner: task_display`. That fix paid for itself the same day.
+
+**Still Amber's to settle:** an issue can now carry both `maintenance_items` and `tasks`, and
+nothing says which is the truth when somebody records a repair as both. She has been told a
+rule is needed; none is invented here.
+
+**Six assertions watched failing**, listed in `docs/schema/schema-plan.md`.
+
+---
+
+## 14 September — photos and videos get permanent links (`0119`), and what the maintenance rebuild still needs
+
+**Where it stands:** on `claude/sleepy-mendel-0birzy-mdrawer`, off `main`. **`0119` is applied
+to the live project and verified there.** This is the first of three pieces; the other two are
+named at the bottom and neither is started.
+
+### The decision, because it reverses one of yours
+
+Amber, 14 September, asked twice with the cost stated both times: *"Keep them forever and there
+may be videos as well. It is essential to keep these as a record"*, then *"No videos or photos
+are private accept video and photos with permanent links"*.
+
+That reverses **`0c`**, answered earlier the same day, which put a defect photo in the private
+`job-documents` bucket. **A photograph of a defect inside somebody's house is now fetchable by
+anyone who ever sees the URL, with no sign-in, for good** — the terms `report-images` has
+carried since 7 September. It was put to her before she chose it, weighed against a sheet whose
+pictures break minutes after it is emailed. The `0c` row is kept in
+[`docs/open-questions.md`](docs/open-questions.md) rather than rewritten.
+
+### What `0119` does
+
+- A public **`maintenance-media`** bucket: 200 MB rather than 25, and four video types beside
+  `0115`'s five image ones. Still an allowlist — `0110`'s reason, that `image/*` makes a bucket
+  a drive, has not changed.
+- **`documents.document_storage_bucket`**, defaulting to `job-documents`. The path never said
+  which bucket it was in because there was only one; two makes that a guess, and a wrong guess
+  is a broken image rather than an error anybody notices.
+- **`video` joins `0032`'s category vocabulary**, because the sheet shows a photo and links a
+  video, and deriving that from the MIME type would put the same question in two places.
+- `repo.documentUrl(doc)` asks the row which bucket it is in and signs or links accordingly.
+  `OpenStoredFile` and the maintenance drawer both go through it now.
+- `FileDrop` accepts video. Its comment used to end *"a check that was meant for a video"* —
+  that is corrected in place rather than deleted, and so is the check assertion that used a
+  `.mov` as its example of a refused type.
+
+**`job-documents` is untouched**: still private, still 25 MB, still holding the contracts.
+Making it public was never an option — `public` is a flag on the bucket, not the object.
+
+### The twelve already filed, and what you need to decide
+
+Twelve photographs sit in `job-documents` today, on jobs `1002-001` and `1991-001`. **`0119`
+does not move them and cannot** — the bytes are storage objects and no SQL statement copies
+them. They keep `document_storage_bucket = 'job-documents'`, which is true of them, and the app
+signs a private one and links a public one, so both keep working. **But a sheet generated for
+those twelve will carry pictures that expire.** Moving them is a copy through the Storage API,
+about twenty lines, and it is a change to live data — so it is **yours to say yes to**, not
+something a migration does behind you.
+
+### Watched failing
+
+Five through `replay.sh`: the default changed away from the old bucket (the twelve break), the
+check dropped (a typo'd bucket accepted), the column made nullable, the category check left as
+`0032` wrote it (`video` refused), the vocabulary replaced rather than widened (`contract`
+refused). Three through `check:file-drop`: the video MIME types removed, the video extensions
+removed, and the allowlist opened to everything (the `.zip` got through). Live, inside a rolled
+back transaction: the default holds, both checks bite, `video` is accepted, nothing written.
+
+### Still to build, and neither is started
+
+- **The maintenance edit drawer.** Amber: *"when you click on a maintenance job to edit it you
+  have same type of format that is when you add a new job but at the additional fields for
+  status booked in and they tasks activity comments documents that are the same format as on
+  the bottom of a job or project drawer"*. `RequestDetail` in `MaintenancePage.tsx` is the
+  screen; the panels to reuse are the ones at the bottom of the job and project drawers.
+- **The generated documents — a large chunk, flagged as one.** A maintenance request sheet per
+  issue with its pictures, and an overall document per job with every issue sorted by how it
+  was identified (PCI, site inspection, and the rest), named `<job number> - maintenance
+  request`, linked from the job card, the project card and the issue's own drawer. The report
+  builder is person-driven today: a document is something somebody *builds* from the library.
+  **Autogenerating one is new machinery, not a new widget**, and it is the piece to check the
+  shape of with Amber before it is written.
+- **A photo package when a job closes**, to SharePoint. Amber: *"It would be good to maybe when
+  a job closes to have the ability to download all jobs photos in a package and save to
+  SharePoint"* — a *maybe*, recorded here rather than acted on.
 ## 14 September, evening — where this stops, and what the next thread picks up
 
 **Amber is rethinking how properties, processes and tasks fit together, and is starting a

@@ -17,7 +17,9 @@ import { matchedAddress } from "./SearchProvider";
 import type {
   ActivityEntry,
   DocumentCategory,
+  StorageBucket,
   NewDocumentUrl,
+  Doc,
   RecordDocument,
   RecentDocument,
   SearchHit,
@@ -236,6 +238,38 @@ const REPORT_IMAGE_BUCKET = "report-images";
  * with real addresses, names and figures in it. Read by signed URL, like the screenshots.
  */
 const JOB_DOCUMENT_BUCKET = "job-documents";
+/**
+ * Where a maintenance photo or video goes (0119), and it behaves OPPOSITELY to the one
+ * above: this bucket is public, so its objects have permanent URLs and nothing is signed.
+ * Amber, 14 September, reversing her own 0c answer — *"No videos or photos are private
+ * accept video and photos with permanent links"* — so a generated sheet can point at a
+ * picture that still works when it reaches a contractor.
+ *
+ * Contracts, permits and published documents keep going to `JOB_DOCUMENT_BUCKET`. Read
+ * `documents.document_storage_bucket` to know which one a row is in; do not infer it.
+ */
+const MAINTENANCE_MEDIA_BUCKET = "maintenance-media";
+
+/**
+ * `photo`, `video`, or null for anything that is neither — a PDF quote, a Word scope.
+ *
+ * The extension fallback is the same one `FileDrop` carries and for the same reason: HEIC
+ * off a phone and a file dragged out of some mail clients arrive with an empty `type`, and
+ * refusing a real photograph because the browser did not label it is the wrong failure.
+ * Both lists are small and deliberately not `image/*` — see 0110 on why an allowlist is the
+ * cheapest guard against a bucket becoming a drive.
+ */
+function mediaKind(file: File): "photo" | "video" | null {
+  const type = file.type || EXTENSION_MEDIA[file.name.split(".").pop()?.toLowerCase() ?? ""] || "";
+  if (type.startsWith("image/")) return "photo";
+  if (type.startsWith("video/")) return "video";
+  return null;
+}
+const EXTENSION_MEDIA: Record<string, string> = {
+  jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp",
+  heic: "image/heic", heif: "image/heif",
+  mp4: "video/mp4", mov: "video/quicktime", webm: "video/webm", mpeg: "video/mpeg", mpg: "video/mpeg"
+};
 
 /**
  * What the tracker reads off `feedback_display` (0061, widened by 0068).
@@ -291,13 +325,14 @@ const toFeedbackItem = (
  * names its constraint — the PGRST201 rule, same as everywhere else.
  */
 const COMMENT_COLUMNS =
-  "comment_id, project_id, job_id, task_id, variation_id, feedback_id, comment_body, comment_is_pinned, comment_is_internal, comment_feedback_stage, parent_comment_id, comment_edited_at, comment_created_at, comment_created_by, comment_updated_at, comment_updated_by, author:profiles!comments_comment_created_by_fkey(profile_full_name)";
+  "comment_id, project_id, job_id, task_id, variation_id, feedback_id, maintenance_request_id, comment_body, comment_is_pinned, comment_is_internal, comment_feedback_stage, parent_comment_id, comment_edited_at, comment_created_at, comment_created_by, comment_updated_at, comment_updated_by, author:profiles!comments_comment_created_by_fkey(profile_full_name)";
 
 type CommentRow = {
   comment_id: string;
   project_id: number | null; job_id: string | null;
   task_id: string | null; variation_id: string | null;
   feedback_id?: string | null;
+  maintenance_request_id?: string | null;
   comment_is_pinned?: boolean | null;
   comment_is_internal?: boolean | null;
   comment_feedback_stage?: string | null;
@@ -314,10 +349,11 @@ type CommentRow = {
  * `tasks`, and re-read the row through the view.
  */
 const TASK_COLUMNS =
-  "task_id, job_id, project_id, task_name, task_description, parent_task_id, task_position, task_owning_team, task_assignee_id, task_status, task_due_date, task_scheduled_date, task_completed_at, task_completed_by, task_is_external, process_run_id, process_task_id, task_started_at, task_expected_days, task_at_risk_lead_days, task_created_at, task_created_by, task_updated_at, task_updated_by, task_assignee_name, task_completed_by_name, task_created_by_name, task_process_id, task_process_name, task_record_name, task_record_stage, task_due_effective, task_at_risk_date, task_health, task_checklist_total, task_checklist_done, task_subtask_total, task_subtask_done";
+  "task_id, job_id, project_id, maintenance_request_id, task_name, task_description, parent_task_id, task_position, task_owning_team, task_assignee_id, task_status, task_due_date, task_scheduled_date, task_completed_at, task_completed_by, task_is_external, process_run_id, process_task_id, task_started_at, task_expected_days, task_at_risk_lead_days, task_created_at, task_created_by, task_updated_at, task_updated_by, task_assignee_name, task_completed_by_name, task_created_by_name, task_process_id, task_process_name, task_record_name, task_record_stage, task_due_effective, task_at_risk_date, task_health, task_checklist_total, task_checklist_done, task_subtask_total, task_subtask_done";
 
 type TaskRow = {
   task_id: string; job_id: string | null; project_id: number | null;
+  maintenance_request_id?: string | null;
   task_name: string; task_description: string | null;
   parent_task_id: string | null; task_position: number;
   task_owning_team: string | null; task_assignee_id: string | null;
@@ -383,6 +419,7 @@ function toTask(r: TaskRow): TaskEntry {
     id: r.task_id,
     jobId: r.job_id,
     projectId: r.project_id,
+    maintenanceRequestId: r.maintenance_request_id ?? null,
     name: r.task_name,
     description: r.task_description,
     parentTaskId: r.parent_task_id,
@@ -426,6 +463,7 @@ function toComment(r: CommentRow): CommentEntry {
     id: r.comment_id,
     projectId: r.project_id,
     jobId: r.job_id,
+    maintenanceRequestId: r.maintenance_request_id ?? null,
     taskId: r.task_id,
     variationId: r.variation_id,
     body: r.comment_body,
@@ -467,7 +505,7 @@ type AuditRow = {
  * `fromAuditRow`, so the rename touched one place in the app rather than four.
  */
 const AUDIT_COLUMNS =
-  "activity_audit_id, activity_audit_table, activity_audit_operation, activity_audit_at, activity_audit_jwt_sub, activity_audit_old_row, activity_audit_new_row, activity_audit_profile_id, activity_audit_job_id, activity_audit_project_id, activity_audit_origin";
+  "activity_audit_id, activity_audit_table, activity_audit_operation, activity_audit_at, activity_audit_jwt_sub, activity_audit_old_row, activity_audit_new_row, activity_audit_profile_id, activity_audit_job_id, activity_audit_project_id, activity_audit_maintenance_request_id, activity_audit_origin";
 
 interface AuditDbRow {
   activity_audit_id: number;
@@ -592,7 +630,10 @@ function narrate(r: AuditRow, lookup: NameLookup, names: SubjectNames): RecordAc
     // An integration is an actor with a name, not "system" (0080's origin column).
     ?? (r.origin && r.origin !== "app" ? `${r.origin} sync` : null);
   const verb = headline(r);
-  const base = { id: String(r.id), at: r.changed_at, subject, href, who };
+  // The audit feed is about a row in a table, not about a maintenance issue: this null is
+  // honest rather than a stub. 0120's own activity_events rows carry the issue; this
+  // function reads the audit tables, which key by table and row id.
+  const base = { id: String(r.id), at: r.changed_at, subject, href, who, maintenanceRequestId: null };
 
   if (verb) return { ...base, summary: verb, changes: [] };
 
@@ -1301,7 +1342,7 @@ export function createSupabaseRepository(): Repository {
     },
 
     async listComments(
-      ref: { projectId?: number; jobId?: string; feedbackId?: string }, limit = 50
+      ref: { projectId?: number; jobId?: string; feedbackId?: string; maintenanceRequestId?: string }, limit = 50
     ): Promise<CommentEntry[]> {
       let q = client.from("comments").select(COMMENT_COLUMNS);
       // Exactly one ref, the same rule the CHECK enforces — asking with neither would
@@ -1309,7 +1350,8 @@ export function createSupabaseRepository(): Repository {
       if (ref.projectId != null) q = q.eq("project_id", ref.projectId);
       else if (ref.jobId != null) q = q.eq("job_id", ref.jobId);
       else if (ref.feedbackId != null) q = q.eq("feedback_id", ref.feedbackId);
-      else throw new Error("listComments needs a projectId, a jobId or a feedbackId.");
+      else if (ref.maintenanceRequestId != null) q = q.eq("maintenance_request_id", ref.maintenanceRequestId);
+      else throw new Error("listComments needs a projectId, a jobId, a feedbackId or a maintenanceRequestId.");
 
       const { data, error } = await q
         // Pinned first — the official answer sits above the discussion (0064). Then
@@ -1325,13 +1367,13 @@ export function createSupabaseRepository(): Repository {
     },
 
     async addComment(
-      ref: { projectId?: number; jobId?: string; feedbackId?: string },
+      ref: { projectId?: number; jobId?: string; feedbackId?: string; maintenanceRequestId?: string },
       body: string,
       mentions: string[] = [],
       standing: { internal?: boolean; stage?: FeedbackStage } = {}
     ): Promise<CommentEntry> {
-      if (ref.projectId == null && ref.jobId == null && ref.feedbackId == null) {
-        throw new Error("addComment needs a projectId, a jobId or a feedbackId.");
+      if (ref.projectId == null && ref.jobId == null && ref.feedbackId == null && ref.maintenanceRequestId == null) {
+        throw new Error("addComment needs a projectId, a jobId, a feedbackId or a maintenanceRequestId.");
       }
       // The author is NOT sent: comments_stamp_created_by fills it from the session,
       // which is the only version of "who wrote this" a client cannot forge.
@@ -1341,6 +1383,7 @@ export function createSupabaseRepository(): Repository {
           project_id: ref.projectId ?? null,
           job_id: ref.jobId ?? null,
           feedback_id: ref.feedbackId ?? null,
+          maintenance_request_id: ref.maintenanceRequestId ?? null,
           comment_body: body,
           // Both refused below admin by guard_comment_standing_on_insert(), so a
           // non-admin sending them gets 42501 rather than a comment that quietly is
@@ -2298,11 +2341,14 @@ export function createSupabaseRepository(): Repository {
      * its jobs' rows. The two jsonb-path scans 0058 needed are gone with it.
      */
     async listRecordActivity(
-      opts: { projectId?: number; jobId?: string; limit?: number }
+      opts: { projectId?: number; jobId?: string; maintenanceRequestId?: string; limit?: number }
     ): Promise<RecordActivity[]> {
       const limit = opts.limit ?? 50;
       let q = client.from("activity_audit").select(AUDIT_COLUMNS);
-      if (opts.jobId) q = q.eq("activity_audit_job_id", opts.jobId);
+      // The issue first: it is the narrowest scope, and an issue's rows also carry their
+      // job (0121), so asking by job would swamp the drawer with the whole house's history.
+      if (opts.maintenanceRequestId) q = q.eq("activity_audit_maintenance_request_id", opts.maintenanceRequestId);
+      else if (opts.jobId) q = q.eq("activity_audit_job_id", opts.jobId);
       else if (opts.projectId != null) q = q.eq("activity_audit_project_id", opts.projectId);
       else return [];
       const { data, error } = await q.order("activity_audit_at", { ascending: false }).limit(limit);
@@ -2422,12 +2468,17 @@ export function createSupabaseRepository(): Repository {
 
     async listTasks(opts: {
       jobId?: string; projectId?: number; assigneeId?: string; teams?: TeamId[]; all?: boolean;
+      maintenanceRequestId?: string;
     }): Promise<TaskEntry[]> {
       let q = client.from("task_display").select(TASK_COLUMNS);
       // Exactly one scope. Asking with none would quietly return every task in the
       // company — the Tasks board's "All tasks" tab does exactly that, which is why
       // `all` exists, but only as an explicit ask rather than the fallthrough.
-      if (opts.jobId != null) q = q.eq("job_id", opts.jobId);
+      // Narrows WITHIN a job rather than replacing it (0120): a maintenance task keeps its
+      // job_id, which is what puts it on the board, so this is checked first and the job
+      // filter below is the broader question.
+      if (opts.maintenanceRequestId != null) q = q.eq("maintenance_request_id", opts.maintenanceRequestId);
+      else if (opts.jobId != null) q = q.eq("job_id", opts.jobId);
       else if (opts.projectId != null) q = q.eq("project_id", opts.projectId);
       else if (opts.assigneeId != null) q = q.eq("task_assignee_id", opts.assigneeId);
       else if (opts.teams != null) q = q.in("task_owning_team", opts.teams);
@@ -2456,6 +2507,9 @@ export function createSupabaseRepository(): Repository {
         .insert({
           job_id: task.jobId ?? null,
           project_id: task.projectId ?? null,
+          // 0120: a qualifier beside the parent, not instead of it. The composite foreign
+          // key refuses a pair that disagree, so a task cannot carry another job's issue.
+          maintenance_request_id: task.maintenanceRequestId ?? null,
           task_name: name,
           task_description: task.description?.trim() || null,
           task_owning_team: task.owningTeam ?? null,
@@ -3786,8 +3840,15 @@ export function createSupabaseRepository(): Repository {
           // The uuid keeps two photos both called IMG_0042.jpg apart.
           const safe = file.name.replace(/[^a-zA-Z0-9.-]/g, "-").slice(-80) || "attachment";
           const path = `jobs/${input.jobId}/${crypto.randomUUID()}-${safe}`;
+          // Media goes to the public bucket, everything else stays private (0119). A photo
+          // and a video are evidence somebody outside Lofty has to be able to open from an
+          // emailed sheet; a PDF quote attached to the same issue is not, and putting it on
+          // a permanent URL because it arrived through the same drop zone would be a
+          // privacy decision nobody made.
+          const kind = mediaKind(file);
+          const bucket: StorageBucket = kind ? MAINTENANCE_MEDIA_BUCKET : JOB_DOCUMENT_BUCKET;
           const up = await db.storage
-            .from(JOB_DOCUMENT_BUCKET)
+            .from(bucket)
             .upload(path, file, { contentType: file.type || undefined, upsert: false });
           if (up.error) throw up.error;
 
@@ -3796,9 +3857,10 @@ export function createSupabaseRepository(): Repository {
             .insert({
               document_name: file.name,
               document_storage_path: path,
+              document_storage_bucket: bucket,
               document_mime_type: file.type || null,
               document_size_bytes: file.size,
-              document_category: file.type.startsWith("image/") ? "photo" : "other"
+              document_category: kind ?? "other"
             })
             .select("document_id")
             .single();
@@ -4356,6 +4418,16 @@ export function createSupabaseRepository(): Repository {
      * URL. Null when storage refuses, which the row renders as the copy being gone rather
      * than as a link that opens on an error page.
      */
+    async documentUrl(doc: Pick<Doc, "storagePath" | "storageBucket">): Promise<string | null> {
+      if (!doc.storagePath) return null;
+      // Public: the URL is permanent and there is nothing to sign, so no round trip.
+      if (doc.storageBucket === MAINTENANCE_MEDIA_BUCKET) {
+        const { data } = db.storage.from(MAINTENANCE_MEDIA_BUCKET).getPublicUrl(doc.storagePath);
+        return data?.publicUrl ?? null;
+      }
+      return this.jobDocumentUrl(doc.storagePath);
+    },
+
     async jobDocumentUrl(path: string): Promise<string | null> {
       const { data, error } = await client.storage
         .from(JOB_DOCUMENT_BUCKET)
@@ -4632,7 +4704,7 @@ const ilike = (s: string) => `%${s.replace(/[%_,()]/g, " ").trim()}%`;
  * shape that took sign-in down on 21 August, found here by a check rather than by a user.
  */
 const RECORD_DOCUMENT_COLUMNS =
-  "document_link_id, document_id, job_id, project_id, maintenance_request_id, document_link_created_at, document_link_created_by, documents!document_links_document_id_fkey(document_id, document_name, document_description, document_storage_path, document_url, document_mime_type, document_size_bytes, document_category, document_supersedes_id, document_created_at, document_created_by, document_updated_at, document_updated_by)";
+  "document_link_id, document_id, job_id, project_id, maintenance_request_id, document_link_created_at, document_link_created_by, documents!document_links_document_id_fkey(document_id, document_name, document_description, document_storage_path, document_storage_bucket, document_url, document_mime_type, document_size_bytes, document_category, document_supersedes_id, document_created_at, document_created_by, document_updated_at, document_updated_by)";
 
 type RecordDocumentRow = {
   document_link_id: string;
@@ -4647,6 +4719,7 @@ type RecordDocumentRow = {
     document_name: string;
     document_description: string | null;
     document_storage_path: string | null;
+    document_storage_bucket: StorageBucket;
     document_url: string | null;
     document_mime_type: string | null;
     document_size_bytes: number | null;
@@ -4678,6 +4751,7 @@ function toRecordDocument(r: RecordDocumentRow): RecordDocument | null {
     name: d.document_name,
     description: d.document_description,
     storagePath: d.document_storage_path,
+    storageBucket: d.document_storage_bucket,
     url: d.document_url,
     mimeType: d.document_mime_type,
     sizeBytes: d.document_size_bytes,
