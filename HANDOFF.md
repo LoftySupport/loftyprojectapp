@@ -5,16 +5,66 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 276 changes since then —
+Unreleased: 277 changes since then —
+- Added: A maintenance issue carries its own comments, activity and tasks, so a repair shows on the Tasks board beside everything else
 - Changed: A maintenance photo or video now has a permanent link, so a generated maintenance sheet still shows its pictures after it is emailed
 - Added: A maintenance issue takes video as well as photos
 - Fixed: A project's new address now carries its live jobs with it. A job still standing at the project's old address follows, keeping its own lot and res numbers, so "Lot 1, 14 Brodie Road" becomes "Lot 1, 28 Corner Street". A job given its own address since its title issued is left alone, as are closed and cancelled jobs.
 - Fixed: The check that every database view runs as its caller now tests the setting's value rather than only that it was written, so a view with the protection turned off can no longer pass it
-- Changed: A pasted maintenance list splits at a colon - what is before it becomes the issue, what is after becomes the details
-- …and 271 more.
+- …and 272 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
+
+## 14 September — a maintenance issue becomes a record you can work on (`0120`)
+
+**Where it stands:** same branch as `0119`, stacked on it. **Applied to the live project and
+verified there.** This is the schema half of the drawer; the drawer itself is next.
+
+**The finding that set the size of the job.** Amber asked for *"tasks activity comments
+documents … the same format as on the bottom of a job or project drawer"*. Only **documents**
+already worked. `comments`, `activity_events` and `tasks` take a project, a job, a task or a
+variation — a maintenance request is none of those. **The drawer was never the missing piece;
+the parent column was.**
+
+**Her answer to the fork.** An issue already has its own `maintenance_items` and
+`maintenance_messages`, so the choice was to render those in the panels' shape and change no
+schema, or to let the general tables take a maintenance request. She chose **"Join the general
+tables"**, for the Tasks board: a repair booked for Tuesday should sit beside everything else a
+supervisor is planning.
+
+| Table | Shape | Why |
+| --- | --- | --- |
+| `comments` | A sixth parent, as `0064` made a fifth | The thread is about the issue |
+| `activity_events` | A fifth parent | The one panel with no source at all |
+| `tasks` | A **qualifier**, not a parent | The board reads by job; a task parented only to an issue would vanish from it |
+
+**The composite foreign key is the interesting part.** A maintenance task keeps its job, which
+leaves one way to be wrong: a task on `1042-01` pointing at an issue on `1055-01` — a repair to
+one house on another house's board, looking entirely normal.
+`tasks_maintenance_request_is_on_this_job` references the **pair**, so it cannot happen.
+
+**`task_display` had to be dropped and recreated**, not replaced: it names its columns rather
+than selecting `t.*`, and `create or replace view` can only append.
+
+**Three things worth knowing:**
+
+- **RLS is unchanged, and that was checked rather than assumed.** Every policy on the three
+  tables is parent-agnostic. "No policy change" in a migration adding a parent column is
+  normally a red flag; here it is a finding.
+- **The first proof block proved nothing.** It looked for two jobs already carrying issues,
+  found none on the replay database, and skipped every assertion while `replay.sh` said ALL
+  MIGRATIONS APPLIED CLEANLY. It builds its own fixtures now.
+- **The `security_invoker` sweep repaired last session caught the view rebuild losing it** —
+  `FAIL: view(s) executing as owner: task_display`. That fix paid for itself the same day.
+
+**Still Amber's to settle:** an issue can now carry both `maintenance_items` and `tasks`, and
+nothing says which is the truth when somebody records a repair as both. She has been told a
+rule is needed; none is invented here.
+
+**Six assertions watched failing**, listed in `docs/schema/schema-plan.md`.
+
+---
 
 ## 14 September — photos and videos get permanent links (`0119`), and what the maintenance rebuild still needs
 

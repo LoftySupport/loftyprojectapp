@@ -325,13 +325,14 @@ const toFeedbackItem = (
  * names its constraint — the PGRST201 rule, same as everywhere else.
  */
 const COMMENT_COLUMNS =
-  "comment_id, project_id, job_id, task_id, variation_id, feedback_id, comment_body, comment_is_pinned, comment_is_internal, comment_feedback_stage, parent_comment_id, comment_edited_at, comment_created_at, comment_created_by, comment_updated_at, comment_updated_by, author:profiles!comments_comment_created_by_fkey(profile_full_name)";
+  "comment_id, project_id, job_id, task_id, variation_id, feedback_id, maintenance_request_id, comment_body, comment_is_pinned, comment_is_internal, comment_feedback_stage, parent_comment_id, comment_edited_at, comment_created_at, comment_created_by, comment_updated_at, comment_updated_by, author:profiles!comments_comment_created_by_fkey(profile_full_name)";
 
 type CommentRow = {
   comment_id: string;
   project_id: number | null; job_id: string | null;
   task_id: string | null; variation_id: string | null;
   feedback_id?: string | null;
+  maintenance_request_id?: string | null;
   comment_is_pinned?: boolean | null;
   comment_is_internal?: boolean | null;
   comment_feedback_stage?: string | null;
@@ -348,10 +349,11 @@ type CommentRow = {
  * `tasks`, and re-read the row through the view.
  */
 const TASK_COLUMNS =
-  "task_id, job_id, project_id, task_name, task_description, parent_task_id, task_position, task_owning_team, task_assignee_id, task_status, task_due_date, task_scheduled_date, task_completed_at, task_completed_by, task_is_external, process_run_id, process_task_id, task_started_at, task_expected_days, task_at_risk_lead_days, task_created_at, task_created_by, task_updated_at, task_updated_by, task_assignee_name, task_completed_by_name, task_created_by_name, task_process_id, task_process_name, task_record_name, task_record_stage, task_due_effective, task_at_risk_date, task_health, task_checklist_total, task_checklist_done, task_subtask_total, task_subtask_done";
+  "task_id, job_id, project_id, maintenance_request_id, task_name, task_description, parent_task_id, task_position, task_owning_team, task_assignee_id, task_status, task_due_date, task_scheduled_date, task_completed_at, task_completed_by, task_is_external, process_run_id, process_task_id, task_started_at, task_expected_days, task_at_risk_lead_days, task_created_at, task_created_by, task_updated_at, task_updated_by, task_assignee_name, task_completed_by_name, task_created_by_name, task_process_id, task_process_name, task_record_name, task_record_stage, task_due_effective, task_at_risk_date, task_health, task_checklist_total, task_checklist_done, task_subtask_total, task_subtask_done";
 
 type TaskRow = {
   task_id: string; job_id: string | null; project_id: number | null;
+  maintenance_request_id?: string | null;
   task_name: string; task_description: string | null;
   parent_task_id: string | null; task_position: number;
   task_owning_team: string | null; task_assignee_id: string | null;
@@ -417,6 +419,7 @@ function toTask(r: TaskRow): TaskEntry {
     id: r.task_id,
     jobId: r.job_id,
     projectId: r.project_id,
+    maintenanceRequestId: r.maintenance_request_id ?? null,
     name: r.task_name,
     description: r.task_description,
     parentTaskId: r.parent_task_id,
@@ -460,6 +463,7 @@ function toComment(r: CommentRow): CommentEntry {
     id: r.comment_id,
     projectId: r.project_id,
     jobId: r.job_id,
+    maintenanceRequestId: r.maintenance_request_id ?? null,
     taskId: r.task_id,
     variationId: r.variation_id,
     body: r.comment_body,
@@ -626,7 +630,10 @@ function narrate(r: AuditRow, lookup: NameLookup, names: SubjectNames): RecordAc
     // An integration is an actor with a name, not "system" (0080's origin column).
     ?? (r.origin && r.origin !== "app" ? `${r.origin} sync` : null);
   const verb = headline(r);
-  const base = { id: String(r.id), at: r.changed_at, subject, href, who };
+  // The audit feed is about a row in a table, not about a maintenance issue: this null is
+  // honest rather than a stub. 0120's own activity_events rows carry the issue; this
+  // function reads the audit tables, which key by table and row id.
+  const base = { id: String(r.id), at: r.changed_at, subject, href, who, maintenanceRequestId: null };
 
   if (verb) return { ...base, summary: verb, changes: [] };
 

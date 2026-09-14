@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- A maintenance issue carries its own comments, activity and tasks, so a repair shows on the Tasks board beside everything else
 - A maintenance issue takes video as well as photos
 - Paste a list into a new maintenance request and each line becomes its own issue, bullets and numbering stripped
 - Attachments can be dragged straight onto a maintenance issue, including from an email, and a drop that carries nothing says why

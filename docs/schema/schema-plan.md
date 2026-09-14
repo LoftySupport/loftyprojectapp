@@ -3189,6 +3189,67 @@ refused), and the vocabulary replaced rather than widened (`contract` refused).
 **Not yet applied to the live project.**
 
 
+### 14 September — a maintenance issue is a record you can work on (`0120`)
+
+Amber: *"tasks activity comments documents that are the same format as on the bottom of a job
+or project drawer"*. One of the four already worked —
+`document_links.maintenance_request_id` since `0084`. The other three could not:
+`comments`, `activity_events` and `tasks` take a project, a job, a task or a variation, and a
+maintenance request is none of those. **The drawer was never the missing piece; the parent
+column was.**
+
+**The fork, and her answer.** An issue already has its own versions of two of these —
+`maintenance_items` is its work list, `maintenance_messages` its thread. Put to her with the
+cost of each, she chose **"Join the general tables"**, and the reason is the Tasks board: a
+repair booked for Tuesday should appear beside everything else a supervisor is planning, and
+a row in `maintenance_items` never will.
+
+| Table | Shape | Why |
+| --- | --- | --- |
+| `comments` | A **sixth parent**; `comments_one_parent` widened as `0064` widened it for `feedback_id` | The thread is about the issue, not the job |
+| `activity_events` | A **fifth parent**, same shape | The one panel with no source at all — an issue kept no history of who changed what |
+| `tasks` | A **qualifier**, not a parent; `tasks_one_parent` untouched | The board reads by job. A task whose only parent was an issue would vanish from the board, which is the exact thing this option was chosen to get |
+
+**The composite foreign key is the interesting part.** A maintenance task keeps its `job_id`,
+which leaves one way to be wrong: a task on `1042-01` pointing at an issue on `1055-01`,
+putting a repair to one house on another house's board and looking entirely normal.
+`tasks_maintenance_request_is_on_this_job` references the **pair** — which is why
+`maintenance_requests` gains a unique constraint on `(maintenance_request_id, job_id)` that is
+redundant against its primary key by design. A trigger could do the same job and would be a
+trigger somebody can forget to fire.
+
+**`task_display` had to be rebuilt.** It names its columns one by one rather than selecting
+`t.*`, so a column added to `tasks` does not reach the board. Dropped and recreated rather
+than replaced, because `create or replace view` can only APPEND a column and refuses with
+*cannot change name of view column "task_name" to "maintenance_request_id"* when one is
+inserted in the middle.
+
+**RLS is unchanged, and that was checked rather than assumed.** Every policy on these three
+tables is parent-agnostic — they test `is_active_user()` and `current_permission()`, never
+which record a row hangs off. A comment on a maintenance issue therefore reads and writes
+under exactly the same rule as a comment on a job. Recorded because "no policy change" in a
+migration that adds a parent column is normally a red flag, and here it is a finding.
+
+**Still open, and Amber's to settle.** An issue can now carry both `maintenance_items` (the
+defect broken down by trade, with cost and a done-stamp) and `tasks` (scheduled work on the
+board). They are different things and are treated as different things, but nothing stops
+somebody recording one repair as both. She has been told a rule is needed and has not given
+one, so none is invented here.
+
+**The first proof block proved nothing, and that is recorded in the migration.** It looked for
+two jobs already carrying issues, found none on the replay database, printed a notice and
+skipped every assertion — while `replay.sh` reported ALL MIGRATIONS APPLIED CLEANLY. It now
+builds its own fixtures, restoring the projects identity sequence the way `0114` does.
+
+**Six assertions watched failing:** `comments_one_parent` not widened, `activity_events_one_parent`
+not widened, a plain foreign key instead of the pair (*a task on the first job took the second
+job's issue*), a task given an issue but no job, the rebuilt view losing `security_invoker`
+(*view(s) executing as owner: task_display* — caught by the sweep repaired in `0086`'s PR), and
+the view not rebuilt at all (the column never reaches the board).
+
+**Not yet applied to the live project.**
+
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

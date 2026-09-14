@@ -1167,6 +1167,14 @@ export type { FieldChange };
 
 export interface RecordActivity {
   id: string;
+  /**
+   * The maintenance issue this line is about (0120), or null for the job and project feeds.
+   *
+   * Until 0120 an issue kept no history at all: a repair that changed hands, or a booking
+   * date that moved twice, left nothing behind — and that is the thing people argue about
+   * afterwards.
+   */
+  maintenanceRequestId: Uuid | null;
   at: IsoDateTime;
   /** '1042' or '1042-03' — what the line is about, since a project feed shows both. */
   subject: string;
@@ -1262,6 +1270,16 @@ export interface Task {
   /** Exactly one of these is set. Most work hangs off a job; some belongs to the site. */
   jobId: string | null;
   projectId: number | null;
+  /**
+   * The maintenance issue this task is the work for (0120), or null for ordinary work.
+   *
+   * NOT one of the two above — a qualifier beside them. The Tasks board reads by job, so a
+   * repair keeps its `jobId` and turns up beside everything else a supervisor is planning,
+   * which is the whole reason Amber chose this over a maintenance-only list. The database
+   * refuses a task whose job and issue disagree, so this can never point at a repair to a
+   * different house.
+   */
+  maintenanceRequestId: Uuid | null;
   name: string;
   description: string | null;
   /** Sub-tasks, for the steps that are really several. */
@@ -1533,6 +1551,14 @@ export interface RecordRef {
   jobId: string | null;
   taskId: Uuid | null;
   variationId: Uuid | null;
+  /**
+   * The maintenance issue, since 0120 — Amber chose to *"join the general tables"* so an
+   * issue is a record like any other rather than something with its own parallel thread.
+   *
+   * Exactly one of these is set, and the database is what enforces it: `comments` grew a
+   * SIXTH parent the way `feedback_id` made a fifth in 0064.
+   */
+  maintenanceRequestId: Uuid | null;
 }
 
 /**
