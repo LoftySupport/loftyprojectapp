@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-746 properties across 100 tables.
+751 properties across 100 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 697 | In the migration and the types |
+| Created | 702 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -192,6 +192,11 @@ A company as the Contacts list reads it (0082): name, ABN, primary email and pho
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `company_display.company_primary_email` | Email | The primary email of possibly several. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `company_display.company_primary_phone` | Phone | The primary phone. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `company_display.company_primary_contact_name` | Primary contact | The person you ring — the one flagged primary on company_contacts, while they still work there. | `view` | — | Null when nobody is flagged; the screen says so rather than promoting the longest-serving employee. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `company_display.company_primary_contact_email` | Contact email | That person's own email, not the company's. | `view` | — | — | Separate from Email above: a mailbox and a person are different facts. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `company_display.company_primary_contact_phone` | Contact phone | That person's own mobile or phone, not the switchboard. | `view` | — | Mobile preferred over landline. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `company_display.company_primary_contact_role` | Contact role | Their job there — site supervisor, estimator. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `company_display.company_suburb` | Suburb | The suburb of the company's address, on its own. | `view` | — | — | Beside the whole address rather than parsed back out of it. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `company_display.company_classification_ids` | Classifications | Every classification the company carries. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `company_display.company_people_count` | People | How many people currently work there. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `company_display.company_open_parties` | On records | How many records the company is on, as the party or as the one who engaged the party. | `view` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
