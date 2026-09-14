@@ -3074,6 +3074,76 @@ again reporting *the primary contact is Probe Extra 0117*.
 **Not yet applied to the live project.**
 
 
+### 14 September — a project's new address moves the jobs that were still standing on it (`0118`)
+
+Amber: *"when a new address is added and updated to current project address this address
+needs to push to jobs so that the job address shown on the job drawer and project drawer
+is the current address"*.
+
+#### What was actually broken
+
+A job's address is its **own row** in `addresses`, not a pointer at the project's.
+`createJobsFromSplit` copies the project's address per lot and stamps the lot number on the
+copy, which is what lets a job say "Lot 1, 14 Brodie Road" while the project says "14
+Brodie Road", and what `job_original_address_id` means.
+
+`setProjectCurrentAddress` then repointed the project and nothing else. A project corrected
+to 28 Corner Street left twelve jobs sitting at 14 Brodie Road, both drawers read the old
+street, and the only way back was editing twelve job addresses by hand.
+
+#### The rule is Amber's, asked with three options
+
+| Option | What it meant | |
+| --- | --- | --- |
+| Only jobs still at the project's address | A job that never moved on its own follows, keeping its own lot and res number. One re-addressed since is left alone | **Taken** |
+| Every live job, lot number kept | Always consistent, and it overwrites a job deliberately given its own address once its title issued | |
+| Ask each time, with a preview | Most control, most clicks, and the drawers stay wrong until somebody presses the button | |
+
+So a job follows when its street number, street, street line 2, suburb, state and postcode
+all match the address the project is **leaving**. Closed and cancelled jobs are left alone,
+the line `pushProjectProperties` already draws (0045, 0057).
+
+#### "Its own lot number" is a comparison, not a field
+
+A lot number is only the job's own when it **differs** from the project's outgoing one. A
+job sharing the project's address row carries the project's lot number, and keeping it
+would strand "Lot 100" on a project that has just been given a street number instead. So
+each of res and lot is kept when it differs from the address being left, and taken from the
+new address when it does not. The split case and the shared case then fall out of one rule
+rather than two, and a job with nothing of its own to keep points **at** the project's new
+row rather than at a byte-identical copy of it.
+
+#### Why a trigger
+
+Because the repository is not the only writer: the import writes jobs and projects
+directly, `0107`-shaped corrections are plain SQL, and a rule written in TypeScript is a
+second opinion that can disagree with the database. `security definer`, matching
+`log_address_history` — not to widen anybody's reach, but so a job RLS hides from the
+caller cannot be silently left behind at the old street.
+
+Three things it deliberately does not do. It does not touch `job_original_address_id`
+(`guard_original_address` says only an admin moves that). It does not drag a job to a
+locality, because `guard_job_address_is_a_street` refuses one and a project may legitimately
+sit at a locality — so the project's own move still succeeds and nothing follows. And it
+writes no history of its own: `jobs_log_address_history` is already on `jobs` and files each
+job's outgoing address as it goes, which is `0042`'s promise kept.
+
+#### Fifteen mutations, all watched failing
+
+The function was mutated one line at a time — each of the six comparisons deleted in turn,
+`is_current` deleted, both guards deleted, the `UPDATE` deleted, the point-at-the-project
+branch disabled, and each of `kept_res` and `kept_lot` forced first to the job's value and
+then to the project's. Every one was reported by a named assertion.
+
+The per-field probe jobs are why. With only the four-field re-addressed job in the fixture,
+**dropping the street-name comparison read green**: that job differs from the project in its
+street number, street, suburb and postcode at once, so any three of the four were enough to
+keep it standing still. There is now one job per field, differing from the project in that
+field alone.
+
+**Not yet applied to the live project.**
+
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

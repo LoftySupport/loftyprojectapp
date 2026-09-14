@@ -832,7 +832,10 @@ function ProjectDetail({
   const [folderUrl, setFolderUrl] = useState(project.sharepointUrl ?? "");
   // The "Add another address" form. Null while closed; a NewAddress being edited while
   // open. Saving repoints the current address — the outgoing one lands in the history
-  // below by trigger (0042), which is what keeps an old contract's address findable.
+  // below by trigger (0042), which is what keeps an old contract's address findable —
+  // and, since 0118, carries the project's live jobs with it where they had not moved
+  // on their own. Both are triggers, so `refresh` below is what shows the result; this
+  // component asks for neither and cannot get either wrong.
   const [addingAddress, setAddingAddress] = useState<NewAddress | null>(null);
   const [savingAddress, setSavingAddress] = useState(false);
   const { data: pastAddresses } = useQuery(
@@ -1217,10 +1220,21 @@ function ProjectDetail({
               </Button>
             )}
           </div>
+          {/* One paragraph, not two. The element sweep counts prose in a page body and
+              only ratchets down (docs/design/element-sweep.md, E05), and a second <p>
+              here took ProjectsPage from 0 to 1.
+
+              The last three sentences are what 0118 does, said where the person is about
+              to cause it rather than after the fact: a write to twelve rows should not be
+              a surprise. The rule is Amber's, answered 14 September — only the jobs that
+              never moved on their own follow, and they keep the numbers that are theirs. */}
           <Text type="text3" color="secondary" element="p" ellipsis={false}>
             The original address never changes — it is what the site was bought as, and
             what old paperwork says. Adding a new address makes it the current one; every
-            previous address stays here and stays searchable.
+            previous address stays here and stays searchable. Live jobs still standing at
+            this address follow it, keeping their own lot and res numbers, so Lot 1 stays
+            Lot 1 on the new street. A job given its own address since, once its title
+            issued, is left where it is, and closed and cancelled jobs are not touched.
           </Text>
 
           {addingAddress !== null && (

@@ -250,6 +250,10 @@ export interface Project {
    *
    * The id alone is what every project screen had, which is why they all rendered
    * {{project_display.current_address}} over an address the database was holding.
+   *
+   * Moving it moves the project's live jobs too, where they had not moved on their own
+   * (0118) — so a caller showing the jobs re-reads them after `setProjectCurrentAddress`
+   * rather than assuming only this row changed.
    */
   currentAddress: string | null;
   /** The original address as text — null until the project has been renamed away from it. */
@@ -397,7 +401,14 @@ export interface Job {
    * job that existed before the column.
    */
   titleType: TitleType | null;
-  /** Same pair as projects, for the same reason. */
+  /**
+   * Same pair as projects, for the same reason — and since 0118 the current one is not
+   * only set by hand. A job standing at its project's address when the project is
+   * repointed follows it, keeping any lot and res number of its own: "Lot 1, 14 Brodie
+   * Road" becomes "Lot 1, 28 Corner Street". A job re-addressed on its own since, once
+   * its title issued, keeps what it was given. The rule is a trigger, so this id can
+   * change without the app having written it.
+   */
   originalAddressId: Uuid | null;
   currentAddressId: Uuid;
   /** The same set as projects. Not health — health is calculated, and not yet built. */
