@@ -2983,7 +2983,7 @@ well as on production — `0113`'s guarded probe is the counter-example, and it 
 silently on a database with no jobs. The projects identity sequence is captured and put
 back, so the probe does not take the number the next real project would get.
 
-**Not yet applied to the live project.**
+**Applied to the live project** as `20260914022630_an_issue_is_a_request_and_the_header_is_typed_once`. Read off `supabase_migrations.schema_migrations` on 14 September while applying `0118`; the line above said otherwise and was simply out of date.
 
 
 ### 14 September — a repair has a day it was booked and a day it was done (`0116`)
@@ -3071,7 +3071,7 @@ ordering no rule guarantees. The fixture now gives the **non-primary** employee 
 earliest start date, so the filter has something to fail on, and the break was watched
 again reporting *the primary contact is Probe Extra 0117*.
 
-**Not yet applied to the live project.**
+**Applied to the live project** as `20260914032258_a_company_carries_the_person_you_ring`. Read off `supabase_migrations.schema_migrations` on 14 September while applying `0118`.
 
 
 ### 14 September — a project's new address moves the jobs that were still standing on it (`0118`)
@@ -3141,7 +3141,19 @@ street number, street, suburb and postcode at once, so any three of the four wer
 keep it standing still. There is now one job per field, differing from the project in that
 field alone.
 
-**Not yet applied to the live project.**
+**Applied to the live project on 14 September**, as
+`20260914145252_a_project_address_moves_its_jobs`. The proof block ran against the live
+database and cleaned up after itself: 119 projects, 83 jobs and 203 addresses before and
+after, and no `0118` probe row left behind. It consumed **project number 1992** from the
+identity sequence, which the probe then deleted, so 1992 will never be a real project;
+that is the cost of a proof block that creates a project, and `0114` and `0081` paid it
+before this one.
+
+Two things were checked on the live function rather than assumed: `prosecdef` is true with
+`search_path` pinned to `public, pg_temp`, and `has_function_privilege('authenticated', …)`
+is **false**, so the revokes held. The security advisor's *Signed-In Users Can Execute
+SECURITY DEFINER Function* lint names four functions and this is not one of them — the four
+are the policy helpers `0012` deliberately granted.
 
 
 ## Verification
