@@ -14,11 +14,11 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- Community title jobs now carry a "c" in the job number itself — 1004-003c. Mark a job community title and its number updates everywhere it is used; correct it back and the c goes away. The project number and the three-digit job code never change, and the numbering still runs straight through both title types.
 - A maintenance issue keeps a history of who changed what, including the photos, tasks and comments on it
 - A maintenance issue carries its own comments, activity and tasks, so a repair shows on the Tasks board beside everything else
-- A maintenance issue takes video as well as photos
-- Community title jobs now carry a "c" in the job number itself — 1004-003c. Mark a job community title and its number updates everywhere it is used; correct it back and the c goes away. The project number and the three-digit job code never change, and the numbering still runs straight through both title types.
 - Community title jobs now read with a "c" after the job number — 1004-003c. Torrens jobs and jobs whose title type is not set yet read without one, and the numbering still runs straight through both. The job's underlying number never changes, so nothing already written down goes stale.
+- A maintenance issue takes video as well as photos
 - A calculated completion date on jobs — what the SLAs say the job will finish, beside the target somebody committed to and the day it actually did. Three columns on the Jobs table, off by default. Blank until the processes have estimates on them, with a count of how many are missing.
 - Paste a list into a new maintenance request and each line becomes its own issue, bullets and numbering stripped
 - Attachments can be dragged straight onto a maintenance issue, including from an email, and a drop that carries nothing says why

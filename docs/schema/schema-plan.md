@@ -3152,6 +3152,30 @@ handoff repeated it. The migration ledger is the answer to that question — `li
 read before the apply, then quoted afterwards, is not.)*
 
 
+### 14 September — TWO MIGRATIONS SHARE EACH OF `0119` AND `0120`, deliberately left that way
+
+Two branches were open at once on 14 September and both took the next free number. The
+repository now holds:
+
+| Number | The two files |
+| --- | --- |
+| `0119` | `the_date_the_slas_say` (PR #88) and `a_defect_photo_is_evidence_you_can_link_to` (PR #89) |
+| `0120` | `a_community_title_job_shows_a_c` (#88) and `a_maintenance_issue_is_a_record_you_can_work_on` (#89) |
+
+**They were not renumbered, and the reason is not laziness.** All four are applied to the
+live project, and the maintenance three write their own number into **live column comments** —
+`documents.document_storage_bucket` says *"(0119)"* in the database right now. Renaming the
+file to `0122` would make the repository and the database disagree about what `0119` is,
+which is worse than two files sharing a number.
+
+Nothing breaks. `scripts/check-migrations.mjs` matches **by name with the number stripped**,
+the Supabase ledger keys by name, and `replay.sh` sorts by full filename so the order is
+deterministic. `0073` has had two files since 31 August for the same reason.
+
+**What to do about it:** when reading "see `0119`" in a comment, check which one is meant from
+the context — the SLA date or the photo bucket. When writing a new migration, take the next
+number after the highest, not the next after the one you remember.
+
 ### 14 September — a defect photo is evidence you can link to (`0119`)
 
 **This reverses `0c`, and the reversal is Amber's.** Asked twice, with the cost stated both

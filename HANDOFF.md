@@ -5,20 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 279 changes since then —
+Unreleased: 282 changes since then —
 - Changed: A maintenance issue is edited in the same layout it was logged in, with tasks, comments, activity and documents beneath it
+- Added: Community title jobs now carry a "c" in the job number itself — 1004-003c. Mark a job community title and its number updates everywhere it is used; correct it back and the c goes away. The project number and the three-digit job code never change, and the numbering still runs straight through both title types.
 - Added: A maintenance issue keeps a history of who changed what, including the photos, tasks and comments on it
 - Added: A maintenance issue carries its own comments, activity and tasks, so a repair shows on the Tasks board beside everything else
-- Changed: A maintenance photo or video now has a permanent link, so a generated maintenance sheet still shows its pictures after it is emailed
-- Added: A maintenance issue takes video as well as photos
-- …and 274 more.
-Unreleased: 277 changes since then —
-- Added: Community title jobs now carry a "c" in the job number itself — 1004-003c. Mark a job community title and its number updates everywhere it is used; correct it back and the c goes away. The project number and the three-digit job code never change, and the numbering still runs straight through both title types.
 - Added: Community title jobs now read with a "c" after the job number — 1004-003c. Torrens jobs and jobs whose title type is not set yet read without one, and the numbering still runs straight through both. The job's underlying number never changes, so nothing already written down goes stale.
-- Added: A calculated completion date on jobs — what the SLAs say the job will finish, beside the target somebody committed to and the day it actually did. Three columns on the Jobs table, off by default. Blank until the processes have estimates on them, with a count of how many are missing.
-- Fixed: A project's new address now carries its live jobs with it. A job still standing at the project's old address follows, keeping its own lot and res numbers, so "Lot 1, 14 Brodie Road" becomes "Lot 1, 28 Corner Street". A job given its own address since its title issued is left alone, as are closed and cancelled jobs.
-- Fixed: The check that every database view runs as its caller now tests the setting's value rather than only that it was written, so a view with the protection turned off can no longer pass it
-- …and 272 more.
+- …and 277 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
