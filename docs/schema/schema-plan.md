@@ -2986,6 +2986,55 @@ back, so the probe does not take the number the next real project would get.
 **Not yet applied to the live project.**
 
 
+### 14 September — a repair has a day it was booked and a day it was done (`0116`)
+
+Amber, looking at the drawer: *"add in the date booked, date completed into UI and drawer
+when clicked on."*
+
+`maintenance_request_booked_on` already existed — `0114` added it with the follow-up date
+on her earlier ask, and **nothing had ever shown either**. *Completed* did not exist. The
+nearest things on the table are the `completed` **status**, which says where the issue is
+rather than when it got there, and `maintenance_request_closed_at`, which the guard stamps
+only on closed or rejected and which times an app action rather than a tradesperson's day.
+
+So one column, of the same kind as the two beside it: a date somebody sets, nullable.
+
+#### No trigger, on purpose
+
+The obvious next thought is that setting the date should move the status to `completed`, or
+that moving the status should stamp the date. **Neither is built.** Amber asked for a field,
+and a trigger writing one column from another is the coupling this document keeps finding at
+the bottom of a bug: the day the two disagree, nobody can say which is right.
+
+`maintenance_item_completed_at` **is** stamped by a trigger, and that is a different shape —
+it is stamped from the status it belongs to and cleared when the status leaves, one fact
+with one writer.
+
+The consequence is a real state rather than a gap: a request can carry a completion date
+while its status is still *In progress*, because the tradesperson finished on Tuesday and
+nobody has closed the ticket. The drawer shows both rather than reconciling them.
+
+#### The view is rebuilt again, and that is the cost `0114` named
+
+`maintenance_request_display` selects `r.*`, which expands at creation, so a column added
+afterwards does not reach it — and `create or replace view` refuses the reordering that
+re-expanding `r.*` implies. Every new column on this table means dropping and recreating the
+view verbatim. Worth knowing before the next one.
+
+#### What was watched failing
+
+Removing the `alter table` reported *column "maintenance_request_completed_on" of relation
+"maintenance_requests" does not exist*; removing `with (security_invoker = true)` from the
+rebuilt view reported *lost security_invoker — see 0069*, the hole reproduced and caught on
+a drop-and-create, which is exactly how it was made the first time.
+
+A first attempt at the column break edited the file badly and failed on a **syntax error**
+rather than on the probe. That is not evidence of anything and the break was redone cleanly
+— the same trap `0113`'s guarded probe records, in a different disguise.
+
+**Not yet applied to the live project.**
+
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in
