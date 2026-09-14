@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 274 changes since then —
+Unreleased: 277 changes since then —
+- Added: Community title jobs now carry a "c" in the job number itself — 1004-003c. Mark a job community title and its number updates everywhere it is used; correct it back and the c goes away. The project number and the three-digit job code never change, and the numbering still runs straight through both title types.
+- Added: Community title jobs now read with a "c" after the job number — 1004-003c. Torrens jobs and jobs whose title type is not set yet read without one, and the numbering still runs straight through both. The job's underlying number never changes, so nothing already written down goes stale.
+- Added: A calculated completion date on jobs — what the SLAs say the job will finish, beside the target somebody committed to and the day it actually did. Three columns on the Jobs table, off by default. Blank until the processes have estimates on them, with a count of how many are missing.
 - Fixed: A project's new address now carries its live jobs with it. A job still standing at the project's old address follows, keeping its own lot and res numbers, so "Lot 1, 14 Brodie Road" becomes "Lot 1, 28 Corner Street". A job given its own address since its title issued is left alone, as are closed and cancelled jobs.
 - Fixed: The check that every database view runs as its caller now tests the setting's value rather than only that it was written, so a view with the protection turned off can no longer pass it
-- Changed: A pasted maintenance list splits at a colon - what is before it becomes the issue, what is after becomes the details
-- Fixed: A half-filled new maintenance request is kept when the drawer closes, so a stray click no longer loses a pasted list of issues
-- Added: Paste a list into a new maintenance request and each line becomes its own issue, bullets and numbering stripped
-- …and 269 more.
+- …and 272 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
