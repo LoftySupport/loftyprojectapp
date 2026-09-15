@@ -84,6 +84,17 @@ the id its template row had and a column named for a table nobody has is a lie t
 fact. **Nothing of Stage 2 is applied live yet:** #105 and its follow-up have to merge first, and
 they go up in the same sitting.
 
+**#106 merged into a branch that had already merged, so `0131` did not reach `main`.** #105
+merged `claude/stage2-process-steps` into `main` at 11:35:09 on 15 September; #106 merged into
+that same branch sixteen seconds later, by which time it was no longer on the path to `main`.
+Its merge commit `70731c1` sits on that branch and nothing of `0131` is on `main`. #106 also
+merged `f7db721`, which predates the review fixes below — those went up twenty minutes after it
+closed. Both are re-opened against `main` as #108, with `claude/stage2-screens-read-steps` as
+its head, and #107 is stacked on that. **Nothing was lost**; the branch holds everything.
+**What `main` holds meanwhile:** `0130` creates `instantiate_process_steps` as SECURITY
+DEFINER, which `0131` corrects, so `0128`–`0130` must not be applied live without `0131`. The
+live project is unaffected — its ledger ends at `0127` and the function does not exist there.
+
 **A review of `0131` and the screens found fifteen things, and one was a hole.**
 `instantiate_process_steps` was SECURITY DEFINER and granted to `authenticated` — `0130`
 wrote it that way where the function it replaces had been invoker since `0081` — so the RPC
