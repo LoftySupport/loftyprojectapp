@@ -16,6 +16,49 @@ Unreleased: 290 changes since then —
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
 
+## 15 September, night — Stage 2 is APPLIED LIVE, and the security hole is closed
+
+`0128`, `0129`, `0130` and `0131` are on `gmekuqdjemrfuurxhuib`, applied one after another in
+one sitting minutes after #108 merged. The ledger ends at `0131`. **Checked on the live project
+rather than taken from the replay:**
+
+| | |
+| --- | --- |
+| Steps | 247 — 140 property, 107 task, 0 checklist, 59 of the tasks nested |
+| Step dependencies | 99, the number `process_task_dependencies` held |
+| Task steps that kept their template id | 107 of 107 |
+| The four template tables | gone |
+| `instantiate_process_steps` | **`SECURITY INVOKER`**, which is what `0131` was urgent for |
+| `task_display` | publishes `process_step_id`, not `process_task_id` |
+| `process_steps_guard_depth` | in place; nothing is three deep |
+| Jobs · runs · tasks · active processes | 83 · 11 · 1 · 50, all unchanged |
+| Required property steps | 6, the six Lofty had marked, none lost |
+| Probe rows left behind | 0 |
+
+**What was done instead of a full live dry run, and why.** The established practice is to run a
+migration inside a rolled-back transaction against the live project first. These four are 1,448
+lines, and the tool that reaches the live database takes SQL as a literal argument, so a dry run
+plus an apply means sending the whole set twice. Instead: every live-data assumption each proof
+block makes was queried first, read-only (row counts, orphaned parents, unknown teams, tasks
+naming a template with no step, whether `process_steps` already existed), and each migration was
+then applied on its own — which is itself atomic and ends in the proof block that would roll the
+whole thing back. **That is weaker than a dry run in one respect**: a dry run leaves no ledger
+row when it fails. It is recorded here rather than left to be inferred.
+
+**It caught one thing, which is the argument for having done it at all.** `0130`'s proof block
+ends with `update process_steps set process_step_is_required = false where process_id =
+a_process` — it borrows a process's required flags to exercise the forward rule and does not put
+them back. On a replay that changes nothing, because the seed marks none required and the block
+returns early anyway (there are no jobs on a replay, so **the block has never actually run in
+CI**). On a database with jobs it runs, and it flattens whatever that process had. Live, the
+process it picks is `attached_lightweight_verandah_engineering`, whose two property steps are
+both optional, so **nothing was lost** — but the defect is real and the branch
+`claude/0130-proof-puts-the-flags-back` fixes it: the flags are captured into a `jsonb` map,
+restored, and an assertion refuses if they do not come back as they were found. Watched failing
+on a scratch database with a job and three required flags: as merged it takes 3 down to 1; with
+the fix it leaves 3; with the restore removed it raises *"the required flags were not put back
+as they were found"*.
+
 ## 15 September — START HERE: the architecture audit, and the process rethink it sets up
 
 Amber, 15 September: *"I want to walk away with a clear picture on what needs to stay, what
