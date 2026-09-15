@@ -238,11 +238,17 @@ dead code~~ (asked first, per Amber's rule: *"Delete all three"*; the logo scrip
 live and is wired instead); ~~correct *"five phases"*~~ (done). **Stage 0 is complete** once #98
 and the dead-code PR merge and `0125` is applied.
 
-**Stage 1, one lifecycle and real sub-stages (medium, two migrations).** `lifecycle_stages`
-from `pipeline_stages`; `lifecycle_substages` backfilled from `process_stage_group`;
-`processes.substage_id` not null and `process_is_optional`; CHECKs become FKs; Setup → Processes
-gets sub-stages as objects; the board groups by sub-stage. Needs: decision 1, and names for the
-Maintenance and Acquisition & Development sub-stages.
+**Stage 1, one lifecycle and real sub-stages (medium, two migrations).** ~~`lifecycle_stages`
+from `pipeline_stages`~~ (`0126`, merged as #101 and applied live); ~~`lifecycle_substages`
+backfilled from `process_stage_group`~~; ~~`processes.substage_id` and `process_is_optional`~~;
+~~CHECKs become FKs~~; ~~Setup → Processes gets sub-stages as objects~~ (`0127`, #103). Both
+questions it needed are answered: decision 1, and the Maintenance and Acquisition & Development
+names (Amber: *"1 month, 2 Month and 3 Month"*, and *"Yes, as the data reads"* for the rest).
+**Two corrections to this line.** `processes.substage_id` is **not** `not null`: a retired
+process keeps its history with no sub-stage, so the rule is a CHECK that an *active* process has
+one. And *"the board groups by sub-stage"* is met for Setup → Processes, the screen that lists
+processes; a **job's** sub-stage is a derived value and belongs to Stage 3, under Stage 2's
+completion gate. See the *Stage 1* section below.
 
 **Stage 2, steps (medium to large).** `process_steps` backfilled from the three template tables;
 a completion gate (required steps done, *not applicable* as the honest way past); tasks created
@@ -386,3 +392,39 @@ in-app stays on"*; PR #98. Each carries its `schema-plan.md` entry. The fifth an
 so the two icon modules and the `NotWired` export go, and `build-logo.mjs`, which the audit had
 counted as dead, is wired as `build:logo` instead, because it generates the logo module the PDF
 and Word exports import.
+
+## Stage 1, 15 September: the lifecycle and its blocks become tables
+
+**`0126`, `claude/stage1-lifecycle-stages`, merged as #101 and applied live the same sitting.**
+`lifecycle_stages` carries the seven rows the board drew: slug key, unique display name, unique
+position, kind (open, won, archived, lost, from `pipeline_stage_type`), the two SLA columns
+`0047` gave `pipeline_stages`, `is_active`, stamps. Seeded from the `pipeline_stages` rows by
+name, so replay and live agree by construction. The four CHECKs become foreign keys of the same
+names to `lifecycle_stage_name`, and `lifecycle_position()` reads the table rather than a CASE.
+
+**The decision worth keeping: the key does not cascade a rename.** `on update cascade` was the
+obvious choice and is wrong here. A cascaded rename writes `job_stage` on every job in the
+stage, and every job's stage triggers fire: *in stage since* is restamped to today, the project
+clamp runs, and `notify_stage_changed` tells everyone the job moved. Renaming is not moving. So
+adding, reordering, retiring and re-timing a stage are data; renaming one that has rows is a
+migration.
+
+**Two corrections to this audit.** It counted *"six CHECKs"*; there were four. Its permissions
+matrix said the stage SLA needs superadmin; `0096` made it a manager's three weeks earlier, and
+the matrix was the stale copy.
+
+**`0127`, `claude/stage1-lifecycle-substages`, #103.** `lifecycle_substages`: uuid key, the stage
+it hangs off, a name unique within that stage, a position, `is_active`, stamps. Seventeen rows
+seeded from the groups the data already held, on Amber's *"Yes, as the data reads"*.
+`processes.lifecycle_substage_id` replaces the free-text `process_stage_group`, with a CHECK that
+an active process has one and a trigger that a process's sub-stage belongs to the process's own
+stage; `processes.process_is_optional` arrives false everywhere, for Stage 2's gate to read;
+`process_run_display` is rebuilt around the sub-stage.
+
+**What the backfill found, and what it refused to guess.** `0079` seeded the Acquisition &
+Development and Construction processes with **no group at all** — the groups they carry live were
+typed in the app afterwards — so nine of them are placed by key from the pairs the live database
+held on 15 September, and everything else by the (stage, group) join. Anything still active with
+nowhere to go is parked, retired and named in a notice rather than filed into a plausible block:
+live that is *Variation* alone, which waits until variations are records of their own under
+decision 7.
