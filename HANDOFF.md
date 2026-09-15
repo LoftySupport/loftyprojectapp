@@ -57,8 +57,18 @@ merged their code, so the deployed app asked `job_display` for `job_calculated_c
 the Jobs board showed *"The app is ahead of the database"* to everyone. The 14 September evening
 note in this file was right and `schema-plan.md`'s *"all four are applied"* was wrong. **`0119`
 was applied on 15 September** after a dry run in a rolled-back transaction, and the board reads
-again. `0120` renames nine live jobs and `0122` depends on it; both wait on Amber's yes, and
-open question 0g carries them.
+again. `0120` as merged could not be applied at all: its dry run was refused twice, and the
+file on this branch now reads drop the old rule, rename, add the new rule. **Amber said yes the
+same afternoon and `0120` (corrected) and `0122` are applied too**: nine jobs carry their `c`,
+every child row followed, and the ledger matches `main`. Open question 0g records it.
+
+Two standing costs of the proof blocks, both now visible live: `0119`'s and `0120`'s probes each
+consumed a project number (1995 and 1996 will never exist; `0122` restores its sequence, the
+other two do not), and **`0122`'s proof leaks three address rows** on every run, the two job
+addresses and the project address that `import_spine` inserts for the probe, because its
+cleanup deletes only the address it inserted itself. The three orphan *Probe Street 0122*
+rows and their audit-trail rows were removed live on 15 September; the leak in the file is not
+fixed, and is a one-line addition to the proof's cleanup for whoever next touches `0122`.
 
 ---
 

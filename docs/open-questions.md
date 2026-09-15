@@ -21,7 +21,7 @@ invent a value, and `CLAUDE.md` is explicit that an invented default is worse th
 
 ## Open — next question first
 
-### 0g. Do `0120` and `0122` get applied to the live project, and in that order?
+### 0g. Do `0120` and `0122` get applied to the live project, and in that order? *(answered 15 September: yes, and both are applied; see the update at the end and the Answered row)*
 
 **Verified against the live project on 15 September, not assumed:** neither of #88's two
 migrations is applied there. The ledger reports NEITHER IS APPLIED for
@@ -64,6 +64,13 @@ that order was watched passing live: nine jobs renamed (`1109-001c` to `006c`, `
 `1991-001c`, `1991-002c`), every task, request, run, document link and report document still
 attached, then rolled back. Applying `0120` and `0122` for real is the yes this question asks
 for; nothing else stands in the way once the corrected file is on `main`.
+
+**Answered, 15 September, later the same afternoon:** Amber chose *"Yes, apply 0120 (corrected)
+then 0122 now"* over *after #91 is merged* and *not yet*. Both were applied and recorded in the
+ledger from the audit session, `0120` in its corrected order. Nine jobs carry their `c`
+(`1109-001c` to `1109-006c`, `1123-001c`, `1991-001c`, `1991-002c`), every child row followed,
+`report_documents` is back to deleting with its job, and `check:migrations` has nothing
+outstanding against `main`. The bookmark cost `0120` names still stands and is question 0f.
 
 
 ### 0h. The twelve decisions the architecture audit turned on *(all answered 15 September)*

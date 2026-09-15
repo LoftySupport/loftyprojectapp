@@ -320,6 +320,16 @@ optional property key it stamps on completion; the derivation of sub-stage and s
 floor, never lower than the highest reached, so a variation's new attempt does not pull a job
 in Construction back to Stage 2.
 
+**Found and fixed the same afternoon.** The live ledger never carried `0119`
+`the_date_the_slas_say` or `0120` `a_community_title_job_shows_a_c` although PR #88 merged their
+code, so the deployed app asked `job_display` for `job_calculated_completion` and the Jobs board
+failed for everyone. `0119` was dry-run in a rolled-back transaction and applied. `0120` as
+merged could not be applied: its new CHECK came before the backfill, and with that moved,
+`0028`'s constraint of the same name refused the rename. The file was reordered (drop, rename,
+add), watched passing live, and on Amber's yes `0120` and `0122` were applied too. Nine jobs
+carry their `c` and the ledger matches `main`. The replay's blind spot, an empty `jobs` table,
+is recorded under `0120` in `schema-plan.md`.
+
 **Where this leaves the plan.** Nothing in Stage 0 waits on a decision any more, and Stages 1
 to 5 each have theirs. Nothing is built yet; the next step is the Stage 0 pull requests, one
 table each.
