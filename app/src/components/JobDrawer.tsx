@@ -331,8 +331,8 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
                  task change overwrites, which is worse than no picker: somebody would watch
                  it work. Assign the TASK and the job follows. Amber, 14 September: *"'currently
                  with' is the task's assignee, not the job's"*, and *"whoever holds tasks in the
-                 active process"*. Open question 0l asks whether an override belongs here
-                 before the Override Active Team handshake lands in Stage 4. */
+                 active process"*. Amber, 15 September, answering question 0l: the override is
+                 the Override Active Team handshake in Stage 4, not a picker here. */
               <PersonSelect
                 aria-label="Currently with"
                 teamId={job.teamId}
