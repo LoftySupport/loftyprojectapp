@@ -2850,6 +2850,16 @@ export interface DeliveryStat {
   lastSentAt: IsoDateTime | null;
 }
 
+/**
+ * The one-row switch (0125). Nothing on an external channel that was written before this
+ * moment is sent, ever; null means not switched on and nothing external goes out at all.
+ * In-app is not gated. Everyone reads it; an admin sets it, by SQL until there is a control.
+ */
+export interface NotificationSettings {
+  switchOnAt: IsoDateTime | null;
+  updatedAt: IsoDateTime;
+}
+
 // ---------------------------------------------------------------------------
 // Maintenance (0084)
 // ---------------------------------------------------------------------------

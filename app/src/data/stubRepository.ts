@@ -293,6 +293,7 @@ export function createStubRepository(): Repository {
     async watchRecord(): Promise<void> { throw new Error("Notifications need Supabase."); },
     async unwatchRecord(): Promise<void> { throw new Error("Notifications need Supabase."); },
     async listDeliveryStats(): Promise<never[]> { return []; },
+    async getNotificationSettings(): Promise<never> { throw new Error("Notifications need Supabase."); },
     async getMaintenanceSettings(): Promise<never> { throw new Error("Maintenance needs Supabase."); },
     async saveMaintenanceSettings(): Promise<never> { throw new Error("Maintenance needs Supabase."); },
     async listMaintenanceCategories(): Promise<never[]> { return []; },
