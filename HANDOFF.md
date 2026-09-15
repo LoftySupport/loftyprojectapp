@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 288 changes since then —
+Unreleased: 289 changes since then —
+- Added: A process on a job or project now says which step is holding it open, and lets you mark a step as not applicable to that record
 - Changed: The blocks inside a lifecycle stage are rows managers can add, rename and reorder in the app, instead of text typed on each process
 - Added: the Microsoft Graph modules for SharePoint folders, Teams channel posts and mailbox reading, with a check that mail routes to the right job, folder names are legal and Teams mentions resolve
 - Changed: The lifecycle's stages are a table managers can see, and superadmins can extend, instead of a list fixed in code
 - Fixed: Two Microsoft endpoints would answer anybody while their secret was unset
-- Fixed: the workbook import no longer stops at the first community-title job
-- …and 283 more.
+- …and 284 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
