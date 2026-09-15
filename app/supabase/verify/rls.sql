@@ -846,6 +846,13 @@ update profiles set profile_is_demo = true
  where profile_email = 'behaviour-test@lofty.com.au';
 
 \echo '=== the same person, held at the demo gate ==='
+-- A real run id, read as the OWNER before the role switch. The probe below has to CALL the
+-- RPC to prove anything: passing a run the caller cannot see is the whole test, and a run
+-- id the caller looked up themselves would be filtered to nothing first.
+-- Through a session setting rather than a psql variable: :'var' is not interpolated inside
+-- a dollar-quoted block, which this file learnt the hard way.
+select set_config('lofty.demo_run',
+  coalesce((select process_run_id::text from process_runs order by process_run_created_at limit 1), ''), false);
 set role authenticated;
 set request.jwt.claim.sub = :'uid';
 
@@ -854,6 +861,8 @@ declare
   is_demo boolean;
   demo_jobs int;
   demo_me int;
+  made int;
+  the_run uuid := nullif(current_setting('lofty.demo_run', true), '')::uuid;
 begin
   select p.profile_is_demo into is_demo from profiles p
    where p.profile_email = 'behaviour-test@lofty.com.au';
@@ -876,6 +885,23 @@ begin
   else
     raise warning 'FAIL: a demo account read % profile(s), expected exactly its own', demo_me;
   end if;
+
+  -- 0131: and cannot get round any of it through the one RPC that writes tasks. 0130 made
+  -- instantiate_process_steps SECURITY DEFINER and granted it to authenticated, which meant
+  -- a person who could not insert one task could call this and insert sixteen. It is
+  -- invoker again; this is the probe that says so. Watched failing against the definer
+  -- version, where it returned a count.
+  if the_run is null then
+    raise warning 'FAIL: no process run was planted, so the RPC probe below would prove nothing';
+  end if;
+  begin
+    made := instantiate_process_steps(the_run);
+    raise warning 'FAIL: a demo account made % tasks through instantiate_process_steps on a run it cannot see', made;
+  exception
+    when insufficient_privilege then raise notice 'ok  a demo account is refused instantiate_process_steps outright (0131)';
+    when sqlstate 'P0002' then raise notice 'ok  a demo account cannot reach a run through instantiate_process_steps (0131)';
+    when others then raise warning 'FAIL: unexpected on instantiate_process_steps at the gate (%)', sqlerrm;
+  end;
 end $$;
 reset role;
 

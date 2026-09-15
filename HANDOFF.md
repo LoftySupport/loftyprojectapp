@@ -84,6 +84,20 @@ the id its template row had and a column named for a table nobody has is a lie t
 fact. **Nothing of Stage 2 is applied live yet:** #105 and its follow-up have to merge first, and
 they go up in the same sitting.
 
+**A review of `0131` and the screens found fifteen things, and one was a hole.**
+`instantiate_process_steps` was SECURITY DEFINER and granted to `authenticated` — `0130`
+wrote it that way where the function it replaces had been invoker since `0081` — so the RPC
+was a way around RLS on `tasks`: a demo account that could not insert one task could call it
+and insert sixteen, which was proved on the replay before it was fixed. One word puts it
+right, because the trigger that calls it on run start is itself a definer. The other
+blocking one: a step could be put three levels deep from Setup in two clicks, where
+instantiation silently drops the grandchild's parent, so `guard_process_step_depth` now
+refuses both ways in and the screen stops offering what the rule refuses. Three more were
+real — a property arrived *required* where the list it replaced defaulted to optional, the
+*Waits on* picker offered steps the run machinery would drop, and *Add an automation* copied
+the name into the what-it-does column — and ten smaller ones are fixed with them. The full
+list is in [`docs/schema/schema-plan.md`](docs/schema/schema-plan.md).
+
 **A review of `0128`–`0130` found two things that mattered.** The completion gate was `BEFORE
 INSERT`, which meant it never fired on the path the app actually uses — ticking an unstarted
 process inserts a run already complete — so every insert passed while the probe watched the

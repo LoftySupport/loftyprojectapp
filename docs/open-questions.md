@@ -224,8 +224,8 @@ stage a field takes does not change with the scope vocabulary.
 
 **This is what the orphan sweep turned up, and it is a decision rather than a build.**
 Thirty-three fields on `jobs` and `projects` are collected by no process, and none of them
-*can* be until it has a `property_defs` row — `process_properties.property_key` points at
-that table. They are the address, the council, the owning team, the assignee, the status,
+*can* be until it has a `property_defs` row — a property step names one, and a column has
+none. They are the address, the council, the owning team, the assignee, the status,
 the stage, the SharePoint folder, both completion dates, the title type, the old job
 number, the notes, the project name, the dwelling counts and the project type.
 

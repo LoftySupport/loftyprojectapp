@@ -4,7 +4,7 @@ import { Button, Checkbox, Text, TextField } from "@vibe/core";
 import { MoveArrowDown, MoveArrowUp } from "@vibe/icons";
 import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
-import { useProcessProperties, useProcesses, usePropertyDefs, useStages, useTeams } from "../data/useLookups";
+import { useProcesses, usePropertyDefs, useStages, useTeams } from "../data/useLookups";
 import { Field, Problem } from "../components/Form";
 import { Tooltip } from "@vibe/tooltip";
 import { Select } from "../components/Select";
@@ -95,7 +95,10 @@ export function ProcessesSetupPage() {
   const { stageNames } = useStages();
   const { teams } = useTeams();
   const { data: deps } = useQuery(r => r.listProcessDependencies(), [], [reload]);
-  const { byProcess: propsByProcess } = useProcessProperties(reload);
+  // One read of the steps, not two. useProcessProperties() answers "which properties does
+  // this process collect" from the same table since 0131, so calling it here as well would
+  // refetch every step of every process on each edit to tell this page something it is
+  // already holding.
   const { data: allSteps } = useQuery(r => r.listProcessSteps(), [], [reload]);
   const { data: substages } = useQuery(r => r.listSubstages(), [], [reload]);
 
@@ -132,6 +135,11 @@ export function ProcessesSetupPage() {
   const tasksByProcess = useMemo(() => {
     const m = new Map<string, number>();
     allSteps.filter(st => st.kind === "task").forEach(st => m.set(st.processId, (m.get(st.processId) ?? 0) + 1));
+    return m;
+  }, [allSteps]);
+  const propsByProcess = useMemo(() => {
+    const m = new Map<string, number>();
+    allSteps.filter(st => st.kind === "property").forEach(st => m.set(st.processId, (m.get(st.processId) ?? 0) + 1));
     return m;
   }, [allSteps]);
   /**
@@ -452,7 +460,7 @@ export function ProcessesSetupPage() {
               onRenameGroup={renameSubstage}
               onRetireGroup={retireSubstage}
               teams={teams}
-              propertyCount={id => (propsByProcess.get(id) ?? []).length}
+              propertyCount={id => propsByProcess.get(id) ?? 0}
               taskCount={id => tasksByProcess.get(id) ?? 0}
               selectedId={selectedId}
               onSelect={select}
@@ -495,7 +503,7 @@ export function ProcessesSetupPage() {
                 {flat.map(p => (
                   <ProcessRow
                     key={p.id} p={p} n={p.position} teams={teams}
-                    properties={(propsByProcess.get(p.id) ?? []).length} tasks={tasksByProcess.get(p.id) ?? 0}
+                    properties={propsByProcess.get(p.id) ?? 0} tasks={tasksByProcess.get(p.id) ?? 0}
                     showStage canEdit={canEdit} selected={p.id === selectedId} onSelect={select}
                     confirming={confirmDelete === p.id} onAskDelete={setConfirmDelete} onDelete={remove}
                     columnsCount={columnsCount}
@@ -1278,6 +1286,7 @@ function StepsEditor({ process: p, teams, canEdit, onChanged, onError }: {
   const [addingProperty, setAddingProperty] = useState<string | null>(null);
   const [newTask, setNewTask] = useState("");
   const [newAutomation, setNewAutomation] = useState("");
+  const [newAutomationDoes, setNewAutomationDoes] = useState("");
 
   async function run(fn: () => Promise<unknown>) {
     onError(null);
@@ -1290,6 +1299,10 @@ function StepsEditor({ process: p, teams, canEdit, onChanged, onError }: {
 
   // Parents in position order, each followed by its children. Same shape the checklist
   // editor had, because a tick box under its task is how the list reads on paper.
+  // Two levels, and the database says so (0131): a step under a step that is already nested
+  // has nowhere to draw and nothing to instantiate it correctly, so it cannot exist. That is
+  // also why there is no orphan pass here — the parent key is ON DELETE CASCADE, so a step
+  // whose parent is gone is gone with it.
   const ordered = useMemo(() => {
     const out: ProcessStep[] = [];
     const children = (id: string) => steps.filter(st => st.parentId === id).sort((a, b) => a.position - b.position);
@@ -1297,8 +1310,6 @@ function StepsEditor({ process: p, teams, canEdit, onChanged, onError }: {
       out.push(st);
       children(st.id).forEach(c => out.push(c));
     });
-    // A step whose parent is gone still shows — better a stray row than a step nobody can find.
-    steps.filter(st => st.parentId != null && !steps.some(x => x.id === st.parentId)).forEach(st => out.push(st));
     return out;
   }, [steps]);
 
@@ -1330,7 +1341,6 @@ function StepsEditor({ process: p, teams, canEdit, onChanged, onError }: {
     steps.filter(x => x.parentId == null)
       .sort((a, b) => (order.get(a.id) ?? a.position) - (order.get(b.id) ?? b.position))
       .forEach(push);
-    steps.filter(x => x.parentId != null && !steps.some(y => y.id === x.parentId)).forEach(x => flat.push(x.id));
     run(() => repo.reorderProcessSteps(p.id, flat));
   };
   const siblingCount = (st: ProcessStep) => steps.filter(x => x.parentId === st.parentId).length;
@@ -1361,12 +1371,17 @@ function StepsEditor({ process: p, teams, canEdit, onChanged, onError }: {
     run(() => repo.createProcessStep({ processId: p.id, kind: "task", name: newTask.trim() }));
     setNewTask("");
   };
+  // Two fields, because they are two facts. Copying the name into "what it does" would put a
+  // stand-in in a column nobody filled, and the row would then read "Does <its own name>"
+  // until somebody noticed — which is the invented default this repository keeps warning
+  // about. The database requires the note (0128's CHECK), so the button waits for both.
   const addAutomation = () => {
-    if (!newAutomation.trim()) return;
+    if (!newAutomation.trim() || !newAutomationDoes.trim()) return;
     run(() => repo.createProcessStep({
-      processId: p.id, kind: "automation", name: newAutomation.trim(), automation: newAutomation.trim()
+      processId: p.id, kind: "automation", name: newAutomation.trim(), automation: newAutomationDoes.trim()
     }));
     setNewAutomation("");
+    setNewAutomationDoes("");
   };
 
   return (
@@ -1399,7 +1414,14 @@ function StepsEditor({ process: p, teams, canEdit, onChanged, onError }: {
             <Button size="small" disabled={!addingProperty}
               onClick={() => {
                 if (!addingProperty) return;
-                run(() => repo.createProcessStep({ processId: p.id, kind: "property", propertyKey: addingProperty }));
+                // Optional, deliberately. `process_properties` defaulted to not required and
+                // the old editor added one that way; `createProcessStep` defaults to required
+                // because that is the reading for TASK steps (open question 0j). Letting that
+                // default reach a property would mean adding one to a process immediately
+                // blocked every in-progress run of it until somebody recorded the value.
+                run(() => repo.createProcessStep({
+                  processId: p.id, kind: "property", propertyKey: addingProperty, isRequired: false
+                }));
                 setAddingProperty(null);
               }}>Add property</Button>
           </div>
@@ -1410,10 +1432,13 @@ function StepsEditor({ process: p, teams, canEdit, onChanged, onError }: {
             <Button size="small" disabled={!newTask.trim()} onClick={addTask}>Add task</Button>
           </div>
           <div className="field-inline" style={{ marginTop: "var(--space-8)", flexWrap: "wrap" }}>
-            <input className="pf-input" style={{ width: "min(320px, 100%)" }} aria-label="New automation" placeholder="Add an automation…"
+            <input className="pf-input" style={{ width: "min(220px, 100%)" }} aria-label="New automation" placeholder="Add an automation…"
               value={newAutomation} onChange={e => setNewAutomation(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") addAutomation(); }} />
-            <Button size="small" disabled={!newAutomation.trim()} onClick={addAutomation}>Add automation</Button>
+            <input className="pf-input" style={{ width: "min(280px, 100%)" }} aria-label="What the new automation does" placeholder="…and what it does"
+              value={newAutomationDoes} onChange={e => setNewAutomationDoes(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") addAutomation(); }} />
+            <Button size="small" disabled={!newAutomation.trim() || !newAutomationDoes.trim()} onClick={addAutomation}>Add automation</Button>
           </div>
           <Text type="text3" color="secondary" ellipsis={false} element="p" style={{ marginTop: "var(--space-8)" }}>
             A tick box is added under the task it belongs to. Job and project properties both — a process
@@ -1454,7 +1479,7 @@ function StepRow({
   const [newLine, setNewLine] = useState("");
   const byId = new Map(steps.map(x => [x.id, x]));
   const current = waitsOn.map(d => ({ stepId: d.dependsOnStepId, lagDays: d.lagDays }));
-  const others = steps.filter(x => x.id !== st.id);
+  const hasChildren = steps.some(x => x.parentId === st.id);
   const teamOptions = teams.filter(t => t.isActive).map(t => ({ value: t.id, label: t.name }));
   const def = st.kind === "property" ? defByKey.get(st.propertyKey ?? "") : undefined;
   const addLine = () => {
@@ -1497,11 +1522,16 @@ function StepRow({
             </label>
           </>
         )}
-        <label className="pf-check">
-          <input type="checkbox" checked={st.isRequired} disabled={!canEdit}
-            onChange={e => run(() => repo.updateProcessStep(st.id, { isRequired: e.target.checked }))} />
-          <Text type="text3" element="span">required to complete</Text>
-        </label>
+        {/* Not on an automation step: 0129's state view returns `not_tracked` for one and the
+            gate only blocks on `open`, so the flag would be a control that writes something
+            the rule can never read. It comes back when Stage 4 gives an automation a run log. */}
+        {st.kind !== "automation" && (
+          <label className="pf-check">
+            <input type="checkbox" checked={st.isRequired} disabled={!canEdit}
+              onChange={e => run(() => repo.updateProcessStep(st.id, { isRequired: e.target.checked }))} />
+            <Text type="text3" element="span">required to complete</Text>
+          </label>
+        )}
         {canEdit && (
           <>
             <Button size="xs" kind="tertiary" aria-label={`Move ${label} up`} disabled={index <= 0} onClick={() => onMove(st, -1)}>
@@ -1510,7 +1540,8 @@ function StepRow({
             <Button size="xs" kind="tertiary" aria-label={`Move ${label} down`} disabled={index < 0 || index >= siblings - 1} onClick={() => onMove(st, 1)}>
               <MoveArrowDown size={16} aria-hidden />
             </Button>
-            <Button size="xs" kind="tertiary" onClick={() => run(() => repo.deleteProcessStep(st.id))}>Remove</Button>
+            <Button size="xs" kind="tertiary" aria-label={`Remove ${STEP_KIND_LABELS[st.kind].toLowerCase()} ${label}`}
+              onClick={() => run(() => repo.deleteProcessStep(st.id))}>Remove</Button>
           </>
         )}
       </div>
@@ -1541,17 +1572,22 @@ function StepRow({
           </div>
         )}
 
+        {/* A list is two deep and the database holds that (0131), so the picker is not offered
+            to a step that already has steps of its own — it would be a control whose every
+            use is refused. The parents on offer are top-level tasks for the same reason. */}
         {(st.kind === "task" || st.kind === "checklist") && (
           <div className="field-inline" style={{ flexWrap: "wrap" }}>
             <Text type="text3" element="span">Under</Text>
-            {canEdit ? (
+            {canEdit && !hasChildren ? (
               <Select className="proc-control" aria-label={`Parent of ${label}`} clearable={st.kind === "task"}
                 placeholder={st.kind === "checklist" ? "Pick the task it sits under" : "No parent — a top-level task"}
                 options={taskSteps.filter(x => x.id !== st.id && x.parentId == null).map(x => ({ value: x.id, label: labelOf(x) }))}
                 value={st.parentId} onChange={(v: string | null) => run(() => repo.updateProcessStep(st.id, { parentId: v }))} />
             ) : (
               <Text type="text3" color="secondary" element="span">
-                {st.parentId ? labelOf(byId.get(st.parentId) ?? st) : "nothing — a top-level task"}
+                {hasChildren
+                  ? "nothing — it has steps of its own, and a list is two deep"
+                  : st.parentId ? labelOf(byId.get(st.parentId) ?? st) : "nothing — a top-level task"}
               </Text>
             )}
           </div>
@@ -1577,6 +1613,7 @@ function StepRow({
               <Text type="text3" color="secondary" element="span">days</Text>
               {canEdit && (
                 <Button size="xs" kind="tertiary"
+                  aria-label={`Stop ${label} waiting on ${byId.has(d.dependsOnStepId) ? labelOf(byId.get(d.dependsOnStepId)!) : "it"}`}
                   onClick={() => run(() => repo.setProcessStepDependencies(st.id, current.filter(c => c.stepId !== d.dependsOnStepId)))}>
                   Remove
                 </Button>
@@ -1586,8 +1623,13 @@ function StepRow({
         </ul>
         {canEdit && (
           <div className="field-inline" style={{ marginTop: "var(--space-4)", flexWrap: "wrap" }}>
-            <Select aria-label={`Add a step ${label} waits on`} clearable placeholder="Add a step this waits on…"
-              options={others.filter(x => !current.some(c => c.stepId === x.id)).map(x => ({ value: x.id, label: labelOf(x) }))}
+            {/* Task steps only. The database accepts a dependency between any two steps of a
+                process, but `instantiate_process_steps` builds its map from the task steps
+                and drops any edge whose ends are not both in it — so offering a property or
+                a tick box here would be accepting a rule and then ignoring it, which is
+                worse than refusing it, because nothing tells the person. */}
+            <Select aria-label={`Add a step ${label} waits on`} clearable placeholder="Add a task this waits on…"
+              options={taskSteps.filter(x => x.id !== st.id && !current.some(c => c.stepId === x.id)).map(x => ({ value: x.id, label: labelOf(x) }))}
               value={adding} onChange={v => setAdding(v)} />
             <Button size="small" disabled={!adding}
               onClick={() => {
@@ -1598,7 +1640,9 @@ function StepRow({
           </div>
         )}
 
-        {st.kind === "task" && canEdit && (
+        {/* Only on a top-level task: a tick box under a nested one would be three deep, which
+            the database refuses and instantiation could not carry anyway. */}
+        {st.kind === "task" && st.parentId == null && canEdit && (
           <div className="field-inline" style={{ marginTop: "var(--space-8)", flexWrap: "wrap" }}>
             <input className="pf-input" style={{ width: "min(320px, 100%)" }} aria-label={`New tick box for ${label}`} placeholder="Add a tick box…"
               value={newLine} onChange={e => setNewLine(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addLine(); }} />
