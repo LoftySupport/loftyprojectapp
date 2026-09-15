@@ -4578,6 +4578,80 @@ it; `0129`'s state view picked up the rename on its own because a view body is a
 rather than text; `ALL_METHODS`, `METHOD_TABLES` and `WIRED` agree with what is implemented;
 no component imports the Supabase client; and the data dictionary regenerates byte-identical.
 
+### 15 September — a job reads its place from its processes, and a pin overrides it (`0132`)
+
+Stage 3 of the audit, its first migration, on `claude/stage3-derived-position`.
+
+24 August decided a job does not advance on its own: a manager moves it through the confirm
+modal and nothing else may. Amber reversed that on 15 September, audit decision 3: *"1. as
+long as it can be manually overriddent"*. So the stage is derived, and the modal becomes the
+override rather than the only mover.
+
+**The sub-stage is the earliest sub-stage OF THE STAGE THE JOB IS IN** that still holds a
+non-optional active job-scoped process whose latest attempt is neither complete nor not
+applicable. *In its stage* is decision 3's own wording, not a paraphrase, and following it
+literally is what makes the pair coherent: the first build looked across every stage and
+put a job sitting in Acquisition & Development at a Pre-construction sub-stage, which reads
+as nonsense on a record. A process that has never run counts as open — nobody has done it,
+and the other reading puts a job with no runs past the end of the lifecycle.
+
+**The stage is where it is while that stage still holds work, otherwise the earliest later
+stage that does.** It only ever looks forward, so it cannot go backwards; what 24 August
+feared, an amendment dragging a job back through the board, is answered by attempts, because
+the derivation reads the LATEST attempt of each process.
+
+**Job-scoped only, and one consequence is worth saying out loud rather than discovering.**
+A project-scoped process runs on the project record, so a job has no attempt at it to read.
+Acquisition & Development holds two processes and both are project-scoped, so no job has
+work of its own there and every job derives to Pre-construction or later. Live that changes
+nothing — all 83 jobs are already in Pre-construction — but it is why a brand new job does
+not sit in A&D waiting.
+
+**`job_stage_pinned_at`, with who and why.** While it is set the derivation leaves the job
+alone. `moveJobStage` writes the pin, because since Stage 3 a hand-move that is not a pin is
+one the next completed process undoes, which is worse than no move at all — the person
+watched it work. The record drawer shows the pin with its reason and a manager releases it.
+The reason is optional and stays optional: a manager moving a job forwards may have nothing
+to add, and a reason invented to fill the box is worse than a blank. All three columns are
+one fact, so releasing takes the name and the reason with the time.
+
+**The stage column stays a column, and the migration says why.** The board's columns,
+`guard_lifecycle_is_linear`, the project cascade, `job_stage_entered_at` and
+`notify_stage_changed` all key off it, and a derived-on-read stage would mean rewriting every
+one of them in a migration about processes. So the column is the derivation's OUTPUT and
+`job_derived_stage()` is its DEFINITION, kept in step by a trigger on `process_runs` — with a
+proof that compares them, because a cached derivation nobody checks is how two sources of
+truth start. **The sub-stage is not stored at all**: nothing keyed off it before today.
+
+**Two things it refuses to do.** A job whose stage is *Cancelled* or *Closed* is not moved,
+because `guard_lifecycle_is_linear` would raise and this runs inside somebody's task tick —
+a cancelled job with open processes would make every write on it fail. Checked rather than
+caught, because catching an exception from a guard is how a guard stops being one. And a job
+with no open required process anywhere **does not move**: question 0k, answered the same
+night — *"No, it stays put"* — so a manager carries it to Completed through the modal, which
+is also where the handover conversation is.
+
+**The one exception carved into the permission guard.** `guard_job_stage_change` refuses any
+stage change below manager, and a person at `user` finishing the last task of a sub-stage is
+exactly what this exists for. So it gains one exception, as narrow as it can be written: the
+new stage is precisely what the derivation computes, and the job is not pinned. The
+derivation's own answer is not a person's decision, so it is not a person's permission.
+
+**Proof.** `behaviour.sql` gains step 47, which pins the fixture job, finishes every
+non-optional process of its stage, watches it not move, checks that the derivation disagrees
+with the pinned stage so the probe is not proving itself, releases the pin, confirms a write
+that is not a status change still does not move it, and then watches a status write carry it
+forwards. Watched failing twice: with the move trigger dropped the job stayed put and the
+last line reported it; with the pin ignored in the mover, the pinned job moved. `rls.sql`
+gains three: a user cannot pin, cannot rewrite the reason of a job that is pinned, and still
+cannot move a job by hand. The first two were watched failing with the guard dropped, and the
+reason probe had to be planted against an already-pinned job, because on an unpinned one a
+CHECK answers before the guard is reached and it would have gone on passing.
+
+**What Stage 3 still owes.** Owning team, assignee, status and end date are still set by
+hand, and health does not roll up yet. Those are the next migration; the rules for all of
+them were answered on 14 and 15 September and are in `docs/open-questions.md`.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

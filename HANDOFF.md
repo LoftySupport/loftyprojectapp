@@ -84,6 +84,20 @@ the id its template row had and a column named for a table nobody has is a lie t
 fact. **Nothing of Stage 2 is applied live yet:** #105 and its follow-up have to merge first, and
 they go up in the same sitting.
 
+**Stage 3 begins with `0132`, on `claude/stage3-derived-position`:** a job's sub-stage and
+stage are read from its processes, and a pin overrides them. The sub-stage is the earliest
+one **of the stage the job is in** that still holds a non-optional job-scoped process whose
+latest attempt is neither complete nor not applicable; the stage stays put while that stage
+holds work and otherwise moves to the earliest later stage that does, so it only ever looks
+forwards. `job_stage_pinned_at` with who and why is the override Amber asked for, and
+`moveJobStage` writes it — since the processes move the job now, a hand-move that is not a
+pin is one the next completed process undoes. **The stage column stays a column** because
+five other things key off it, so it is the derivation's output with a trigger keeping it in
+step and a proof comparing the two. A job with nothing open anywhere **does not move**:
+question 0k, answered the same night, *"No, it stays put"*. Owning team, assignee, status,
+end date and the health roll-up are the next migration. **Nothing of Stage 3 is applied
+live**, and it is stacked behind #105 and #106.
+
 **A review of `0131` and the screens found fifteen things, and one was a hole.**
 `instantiate_process_steps` was SECURITY DEFINER and granted to `authenticated` — `0130`
 wrote it that way where the function it replaces had been invoker since `0081` — so the RPC

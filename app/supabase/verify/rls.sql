@@ -258,9 +258,20 @@ begin
   -- But a user CAN move a job by hand no more than they ever could: the one exception 0132
   -- carved into the stage guard is for the derivation's own answer, and a stage the
   -- derivation does not compute is still a manager's.
+  -- A job still on the linear run: the fixture job is cancelled by the time this file runs,
+  -- and a cancelled job is refused by guard_lifecycle_is_linear before the permission guard
+  -- is ever reached, which would have made this probe report on the wrong rule.
+  declare live_job text;
   begin
-    update jobs set job_stage = 'Maintenance' where job_id = '9106-002';
-    raise warning 'FAIL: a user moved a job to a stage its processes do not say';
+    select job_id into live_job from jobs
+     where job_stage not in ('Cancelled', 'Closed') and lifecycle_position(job_stage) < lifecycle_position('Maintenance')
+     order by job_id limit 1;
+    if live_job is null then
+      raise notice 'note: no job on the linear run, so the hand-move probe did not run';
+    else
+      update jobs set job_stage = 'Maintenance' where job_id = live_job;
+      raise warning 'FAIL: a user moved a job to a stage its processes do not say';
+    end if;
   exception
     when insufficient_privilege then raise notice 'ok  a user still cannot move a job by hand (0038, narrowed by 0132)';
     when others then raise warning 'FAIL: unexpected moving a job at user (%)', sqlerrm;
@@ -816,7 +827,6 @@ begin
   end;
 end $$;
 reset role;
-update jobs set job_stage_pinned_at = null where job_id = '9106-002';  -- 0132: leave the fixture as it was found
 
 -- =============================================================================
 -- 0049 — THE DEMO GATE, AND A PROBE THAT WAS FAILING FOR A REASON OF ITS OWN
@@ -842,6 +852,10 @@ update jobs set job_stage_pinned_at = null where job_id = '9106-002';  -- 0132: 
 --   asserts its own setup: if the flag is not on, it says so instead of testing nothing.
 -- =============================================================================
 reset request.jwt.claim.sub;
+-- 0132: leave the fixture as it was found. AFTER the claim is cleared, not before: with a
+-- JWT still set the session is the owner by role but still a `user` by permission, and the
+-- pin guard refuses it — which is the guard working, and cost one red harness run to see.
+update jobs set job_stage_pinned_at = null where job_id = '9106-002';
 update profiles set profile_is_demo = true
  where profile_email = 'behaviour-test@lofty.com.au';
 
