@@ -16,6 +16,7 @@ where it says something is undecided, nothing should be built that assumes an an
 | File | What it is |
 | --- | --- |
 | [`schema/schema-plan.md`](schema/schema-plan.md) | **The current design, and the record of how it was decided.** Phase A is built and applied; Phase C waits on the business decisions at its end. A decision log, not a specification — reversed decisions are kept on purpose |
+| [`schema/architecture-audit-2026-09-15.md`](schema/architecture-audit-2026-09-15.md) | **The 15 September audit**: how a job moves today, what is inconsistent, what stays, updates or goes, and the six-stage plan that makes a process the thing that moves the job. Published with diagrams at <https://claude.ai/artifact/LnuPZkB65SW8uKhxnaVjCP>. Its twelve decisions are queued in `open-questions.md` |
 | [`schema/data-dictionary.md`](schema/data-dictionary.md) | Every property: Lofty name, definition, type, rules, relationships, status. **Generated** from `app/src/data/dictionary.ts` by `cd app && npm run dictionary` — never edit it by hand |
 | [`schema/concept-spec.md`](schema/concept-spec.md) | The original data-architecture write-up |
 | [`schema/supabase-schema.md`](schema/supabase-schema.md) | **Superseded**, and carries a banner saying so. Written before the migrations and never swept forward; it contradicts the plan on keys, naming, stages, teams, permissions and parties. Kept for its reasoning |

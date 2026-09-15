@@ -16,7 +16,53 @@ Unreleased: 285 changes since then —
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
 
-## 14 September — START HERE IF YOU ARE A NEW CHAT: the maintenance drawer, and the rethink coming after it
+## 15 September — START HERE: the architecture audit, and the process rethink it sets up
+
+Amber, 15 September: *"I want to walk away with a clear picture on what needs to stay, what
+needs updating and what needs to go and a staged plan to implement it."* The audit is
+[`docs/schema/architecture-audit-2026-09-15.md`](docs/schema/architecture-audit-2026-09-15.md),
+published with its diagrams at <https://claude.ai/artifact/LnuPZkB65SW8uKhxnaVjCP>. On branch
+`claude/app-schema-architecture-audit-v19mt9`. **No migration was written and nothing on the
+live project changed.**
+
+**The finding that sets everything else up:** three generations of "how a job moves" coexist
+(the `0029` pipeline tables, never written; the `job_stage` column and its triggers, the only
+thing that moves a job; the `0078` processes, which have no path to the stage, the team or a
+property). Completing a process run changes one column on its own row. The Construction
+schedule was loaded twice, as 107 date properties and 107 template tasks, and neither copy is
+linked to a process.
+
+**What the audit recommends, in one line each:** a `lifecycle_stages` table replacing
+`pipeline_stages` and six CHECKs; a `lifecycle_substages` table replacing the free-text
+`process_stage_group`; `process_steps` (kind: property, task, checklist, automation) replacing
+the two template lists; the job's stage, sub-stage, team and health derived from runs with a
+pin; an `automations` registry of the twelve things that already run without a person; then
+the dead tables dropped, one PR each. Six stages, in that order, in the audit.
+
+**All twelve decisions were asked in the chat the same afternoon, one at a time, and answered.**
+Amber's words are in the *Answered* table of [`docs/open-questions.md`](docs/open-questions.md)
+and what each moved is *Revision 2* of the audit. The ones that reshape the plan: a process
+everywhere is the size of Working Drawings, and Amber's walk-through of that process is the
+specification for steps; Construction stays as loaded because it runs in SiteBook and a feed
+will write into it; a maintenance issue and a variation each stay their own record and become
+things a process runs on; the offer machinery, the import staging table, the four pieces of
+scaffolding and the whole dictionary go; email and Teams stay, send nothing queued before
+switch-on, and default off until testing; the completion rule lives in the database; a job is
+overdue when its target completion has passed; Maintenance has three sub-stages, 1 Month, 2
+Month and 3 Month. **Nothing is built yet.** Stage 0 needs no further decision.
+
+**Found the same afternoon, and fixed in part:** the live ledger did not carry `0119`
+(`the_date_the_slas_say`) or `0120` (`a_community_title_job_shows_a_c`) although PR #88 had
+merged their code, so the deployed app asked `job_display` for `job_calculated_completion` and
+the Jobs board showed *"The app is ahead of the database"* to everyone. The 14 September evening
+note in this file was right and `schema-plan.md`'s *"all four are applied"* was wrong. **`0119`
+was applied on 15 September** after a dry run in a rolled-back transaction, and the board reads
+again. `0120` renames nine live jobs and `0122` depends on it; both wait on Amber's yes, and
+open question 0g carries them.
+
+---
+
+## 14 September — the maintenance drawer, and the rethink coming after it
 
 Amber, 14 September, ending the session: *"An issue becomes a task … I am rethinking the
 process/properties/task alignment and how they work together but that is a new car. Get the
