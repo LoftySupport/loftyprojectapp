@@ -7,8 +7,11 @@
 --    should be turned off in users settings by default until app is ready for testing but
 --    the functionality should exist"
 --
--- Three things follow, and this file is two of them; the third (the defaults) is the
--- statement near the end, made once Amber said whether in-app counts.
+-- Three things follow, and this file is all three. The third, the defaults, waited on one
+-- question: does "all off" include in-app? Amber, 15 September, given the choice: **"External
+-- off, in-app stays on."** So every type keeps in-app as its default and loses email; a person
+-- opts in to an external channel in User settings, and a manager can put one back on a type's
+-- defaults in Setup.
 --
 -- 1 · A SWITCH-ON MOMENT, IN ONE ROW
 --
@@ -205,9 +208,21 @@ update notification_deliveries
  where notification_delivery_channel <> 'in_app'
    and notification_delivery_status in ('queued', 'held');
 
+-- ================================================================== 5 · the defaults
+-- Amber, 15 September: "External off, in-app stays on." Every type keeps in-app where it had
+-- it (all fifteen do) and loses email, teams and sms from its defaults. On the day eight of
+-- fifteen carried email. A person's own preference rows are untouched: a choice already made
+-- is not a default. The column default stays array['in_app'], so a type added later starts
+-- the same way.
+update notification_types
+   set notification_type_default_channels = array_remove(array_remove(array_remove(
+         notification_type_default_channels, 'email'), 'teams'), 'sms')
+ where notification_type_default_channels && array['email', 'teams', 'sms'];
+
 -- ---------------------------------------------------------------------- proof
 -- Watched failing live, in a rolled-back transaction, against 0083's notify with only the
 -- settings row present: the email row came back `queued`, which is the thing this forbids.
+-- The defaults assertion was watched failing the same way: eight types carried email.
 do $$
 declare
   someone uuid; n integer; st text;
@@ -221,6 +236,14 @@ begin
   if exists (select 1 from notification_deliveries
               where notification_delivery_channel <> 'in_app' and notification_delivery_status in ('queued', 'held')) then
     raise exception '0125 proof: an external row is still queued or held';
+  end if;
+  if exists (select 1 from notification_types where notification_type_default_channels && array['email', 'teams', 'sms']) then
+    raise exception '0125 proof: a type still has an external channel in its defaults: %',
+      (select string_agg(notification_type_id, ', ') from notification_types where notification_type_default_channels && array['email', 'teams', 'sms']);
+  end if;
+  if exists (select 1 from notification_types where notification_type_is_active and not ('in_app' = any (notification_type_default_channels))) then
+    raise exception '0125 proof: an active type lost in-app from its defaults: %',
+      (select string_agg(notification_type_id, ', ') from notification_types where notification_type_is_active and not ('in_app' = any (notification_type_default_channels)));
   end if;
 
   -- A person with no preferences of their own, opted in to email for one type, so nothing
@@ -280,5 +303,5 @@ begin
           and coalesce(activity_audit_new_row, activity_audit_old_row) ->> 'notification_type_id' = 'task_assigned')
       or (activity_audit_table in ('notifications', 'notification_deliveries')
           and coalesce(activity_audit_new_row, activity_audit_old_row)::text like '%probe-0125-%');
-  raise notice '0125 proof: skipped before the switch-on, queued after it, and the worker claims only rows written after it.';
+  raise notice '0125 proof: skipped before the switch-on, queued after it, the worker claims only rows written after it, and no type defaults to an external channel.';
 end $$;

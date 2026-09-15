@@ -29,8 +29,10 @@ live project changed.**
 `notification_settings` with the switch-on moment, null until an admin sets it; `private.notify`
 writes every email, Teams and SMS row as skipped before it, and the worker's claim never takes a
 row written before it. The four rows waiting since 12 September are skipped. In-app is not
-gated. Setup → Notifications shows the state. One question stays open on it: whether *"all off
-by default"* includes in-app; the answer is one statement in the migration. Not applied live yet.
+gated. Setup → Notifications shows the state. The one question on it, whether *"all off by
+default"* includes in-app, Amber answered the same afternoon: *"External off, in-app stays on"*,
+so every type keeps in-app and loses email from its defaults. Not applied live yet: apply it in
+the same sitting as the merge.
 
 **The finding that sets everything else up:** three generations of "how a job moves" coexist
 (the `0029` pipeline tables, never written; the `job_stage` column and its triggers, the only

@@ -227,9 +227,11 @@ One table per PR throughout. Sizes: small is a session, medium a few, large a we
 **Stage 0, housekeeping (small, now).** ~~Fix the 26 `FAIL` lines~~ (done 15 September, and
 not what it seemed: see finding 10 and the *Stage 0* section below); ~~refuse a fourth
 duplicated migration number~~ (done); ~~add `process_runs` to the audit allowlist~~ (withdrawn,
-it already has one); rename or clear `property_def_automation`; decide the email worker; drop
-the profiles backup; index the hot foreign keys; fix the `login_activity` policy; delete the
-dead code; ~~correct *"five phases"*~~ (done). Needs: the backup drop, the email decision.
+it already has one); ~~rename or clear `property_def_automation`~~ (renamed `property_def_group`,
+`0124`, applied); ~~decide the email worker~~ (`0125`: a switch-on, nothing queued before it sent,
+external channels off by default, in-app on); ~~drop the profiles backup~~ (`0123`, applied);
+~~index the hot foreign keys~~ (`0123`); ~~fix the `login_activity` policy~~ (`0123`); delete the
+dead code (asked before deleting, per Amber's rule); ~~correct *"five phases"*~~ (done).
 
 **Stage 1, one lifecycle and real sub-stages (medium, two migrations).** `lifecycle_stages`
 from `pipeline_stages`; `lifecycle_substages` backfilled from `process_stage_group`;
@@ -366,6 +368,13 @@ table each.
   data dictionary regenerated. `StageTrack.tsx` still says five, correctly: it draws five of
   the seven on purpose. `savedViews.ts` narrates the 0035 cut as history.
 
-Left for the next Stage 0 branches: the hygiene migration (the backup drop, the six indexes,
-the `login_activity` policy), the `property_def_automation` rename, the notification defaults,
-and the dead code, which Amber's rule says to ask about before deleting.
+**The next three branches, the same afternoon.** `claude/stage0-hygiene` is `0123`: the profiles
+backup dropped, six foreign keys on the process tables indexed, `"read own login_activity"` in
+the once-per-query form; merged as #96 and applied live minutes later. `claude/stage0-property-group`
+is `0124`: `property_def_automation` becomes `property_def_group`, the workbook's own header, and
+the words turn out to be Construction's sub-stages and Pre-construction's processes, so Stages 1
+and 2 each take a half; merged as #97 and applied live. `claude/stage0-notifications` is `0125`:
+a one-row switch-on, every external row written before it skipped, the worker's claim gated by
+it, the four waiting rows skipped, and the defaults as Amber answered when asked: *"External off,
+in-app stays on"*; PR #98. Each carries its `schema-plan.md` entry. Left of Stage 0: the dead
+code, which is a question to Amber before any file goes.

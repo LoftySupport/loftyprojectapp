@@ -4008,9 +4008,13 @@ and asserts the same in the replay. `rls.sql`: a user cannot set the switch-on a
 Watched failing live in a rolled-back transaction against 0083's `notify` with only the
 settings row present: the email row came back `queued`.
 
-**The defaults** are the part of Amber's sentence this entry does not settle on its own: whether
-*"all notifications off by default"* includes in-app. Asked in the chat; the answer decides one
-`update notification_types` statement and is recorded here when given.
+**The defaults.** Whether *"all notifications off by default"* included in-app was asked in the
+chat the same afternoon, with three options. Amber: **"External off, in-app stays on."** So every
+type keeps in-app in its defaults (all fifteen had it) and loses email, Teams and SMS (eight of
+fifteen carried email). A person's own preference rows are untouched, because a choice already
+made is not a default; Amber's 25 rows, all off, stay as she set them. The column default stays
+`{in_app}`, so a type added later starts the same way. The proof asserts both halves: no type
+defaults to an external channel, and no active type has lost in-app.
 
 ## Verification
 
