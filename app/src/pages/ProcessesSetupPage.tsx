@@ -6,6 +6,7 @@ import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { useProcessProperties, useProcesses, usePropertyDefs, useStages, useTeams } from "../data/useLookups";
 import { Field, Problem } from "../components/Form";
+import { Tooltip } from "@vibe/tooltip";
 import { Select } from "../components/Select";
 import { SidePanel } from "../components/SidePanel";
 import { SortHeader, sortRows, type SortState } from "../components/SortableTable";
@@ -142,11 +143,47 @@ export function ProcessesSetupPage() {
       (byStage.get(stage) ?? []).filter(s => s.isActive).sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
   }, [substages]);
 
-  /** A new sub-stage from the picker: made here so the list reloads with it in. */
+  /** Sub-stage id → name, for the drawer's history, which holds ids and reads to people. */
+  const substageNames = useMemo(() => new Map(substages.map(x => [x.id, x.name])), [substages]);
+
+  /**
+   * A new sub-stage from the picker: made here so the list reloads with it in.
+   *
+   * A name that matches a RETIRED block of the same stage brings that one back instead of
+   * making a second. The database refuses the twin anyway (the name is unique within the
+   * stage), and "that name is taken by something you cannot see" is not an answer.
+   */
   async function createSubstage(stageName: string, name: string): Promise<string | null> {
     setError(null);
-    try { const s = await repo.createSubstage({ stageName, name }); bump(); return s.id; }
-    catch (e) { setError(e instanceof Error ? e.message : String(e)); return null; }
+    const wanted = name.trim().toLowerCase();
+    const retired = substages.find(x =>
+      x.stageName === stageName && !x.isActive && x.name.trim().toLowerCase() === wanted);
+    try {
+      if (retired) { await repo.updateSubstage(retired.id, { isActive: true }); bump(); return retired.id; }
+      const s = await repo.createSubstage({ stageName, name });
+      bump();
+      return s.id;
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); return null; }
+  }
+
+  /** Renaming a sub-stage is data: the processes carry its id, so nothing follows the name. */
+  async function renameSubstage(sub: LifecycleSubstage, name: string) {
+    const next = name.trim();
+    if (!next || next === sub.name) return;
+    setError(null);
+    try { await repo.updateSubstage(sub.id, { name: next }); bump(); }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  }
+
+  /**
+   * Retiring a sub-stage takes it out of the pickers and off this screen. Only an empty one:
+   * a block with processes in it would take them off the screen with it, and the honest way
+   * to empty it is to move them.
+   */
+  async function retireSubstage(sub: LifecycleSubstage) {
+    setError(null);
+    try { await repo.updateSubstage(sub.id, { isActive: false }); bump(); }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }
 
   const groupNames = useMemo(
@@ -193,19 +230,33 @@ export function ProcessesSetupPage() {
    */
   const pipeline = useMemo(() => stages.map(stage => {
     const ordered = stageOrder(processes.filter(p => p.stageName === stage));
-    const blocks: { key: string; group: string; list: { p: Process; n: number }[] }[] = [];
-    ordered.forEach((p, i) => {
-      const k = groupKey(p);
-      const last = blocks[blocks.length - 1];
-      const row = { p, n: i + 1 };
-      if (last && last.key === k) last.list.push(row);
-      else blocks.push({ key: k, group: groupLabel(p), list: [row] });
-    });
+    const numbered = new Map(ordered.map((p, i) => [p.id, i + 1]));
+    // The blocks are the stage's SUB-STAGES, in their own order — not the blocks its
+    // processes happen to form. A sub-stage with no processes in it is still a block: Amber
+    // seeded 2 Month and 3 Month empty on purpose, and a block nobody can see is a block
+    // nobody can rename, reorder or retire. The parked rows (no sub-stage, only ever a
+    // retired process) come last under their own heading, which has no controls because
+    // there is no row behind it.
+    const subs = substagesFor(stage);
+    const blocks = subs.map(sub => ({
+      key: sub.id,
+      group: sub.name,
+      sub: sub as LifecycleSubstage | null,
+      list: ordered.filter(p => p.substageId === sub.id).map(p => ({ p, n: numbered.get(p.id)! }))
+    }));
+    const parked = ordered.filter(p => p.substageId === null);
+    if (parked.length) {
+      blocks.push({ key: "", group: groupLabel(parked[0]), sub: null,
+        list: parked.map(p => ({ p, n: numbered.get(p.id)! })) });
+    }
+    // A filter hides rows, not blocks: a block keeps its place while anything in it matches,
+    // and a block that holds nothing at all stays so it can be managed.
     const kept = blocks
-      .map(b => ({ ...b, list: b.list.filter(r => visible.has(r.p.id)) }))
-      .filter(b => b.list.length > 0);
-    return { stage, blocks: kept, count: kept.reduce((n, b) => n + b.list.length, 0) };
-  }).filter(s => s.count > 0), [stages, processes, visible]);
+      .map(b => ({ ...b, list: b.list.filter(r => visible.has(r.p.id)), holds: b.list.length }))
+      .filter(b => b.list.length > 0 || b.holds === 0);
+    return { stage, blocks: kept, count: kept.reduce((n, b) => n + b.list.length, 0),
+      hasBlocks: kept.length > 0 };
+  }).filter(s => s.count > 0 || s.hasBlocks), [stages, processes, visible, substagesFor]);
 
   /**
    * One move, expressed as "rewrite this stage's order". `mutate` gets the stage's whole
@@ -230,8 +281,16 @@ export function ProcessesSetupPage() {
    * position changed are written.
    */
   async function reorderSubstages(stage: string, mutate: (subs: LifecycleSubstage[]) => LifecycleSubstage[]) {
-    const before = substagesFor(stage);
-    const orders = substageOrdersToWrite(before, mutate(before));
+    const active = substagesFor(stage);
+    // Retired blocks are not on screen and do not move, but they still hold positions. Renumber
+    // them after the active ones rather than leaving them where they were: 1..n over the active
+    // list alone collides with a retired 1, and `stageOrder` then breaks the tie on the name,
+    // which puts the blocks in alphabetical order for no reason a person could see.
+    const retired = substages
+      .filter(x => x.stageName === stage && !x.isActive)
+      .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
+    const before = [...active, ...retired];
+    const orders = substageOrdersToWrite(before, [...mutate(active), ...retired]);
     if (orders.length === 0) return;
     setError(null);
     try { await repo.reorderSubstages(orders); bump(); }
@@ -386,6 +445,8 @@ export function ProcessesSetupPage() {
               onDropProcess={onDropProcess}
               onMoveGroup={(group, dir) => moveGroupBy(s.stage, group, dir)}
               onMoveProcess={(id, dir) => moveProcessBy(s.stage, id, dir)}
+              onRenameGroup={renameSubstage}
+              onRetireGroup={retireSubstage}
               teams={teams}
               propertyCount={id => (propsByProcess.get(id) ?? []).length}
               taskCount={id => tasksByProcess.get(id) ?? 0}
@@ -470,6 +531,7 @@ export function ProcessesSetupPage() {
             teams={teams}
             stageNames={stages}
             substagesFor={substagesFor}
+            substageNames={substageNames}
             onCreateSubstage={createSubstage}
             canEdit={canEdit}
             onChanged={bump}
@@ -502,11 +564,11 @@ export function ProcessesSetupPage() {
  */
 function PipelineStageCard({
   stage, blocks, count, canEdit, dropOn, dragging, dragProps, onDropGroup, onDropProcess,
-  onMoveGroup, onMoveProcess, teams, propertyCount, taskCount, selectedId, onSelect,
-  confirmDelete, onAskDelete, onDelete, onRename, onAdd
+  onMoveGroup, onMoveProcess, onRenameGroup, onRetireGroup, teams, propertyCount, taskCount,
+  selectedId, onSelect, confirmDelete, onAskDelete, onDelete, onRename, onAdd
 }: {
   stage: string;
-  blocks: { key: string; group: string; list: { p: Process; n: number }[] }[];
+  blocks: { key: string; group: string; sub: LifecycleSubstage | null; holds: number; list: { p: Process; n: number }[] }[];
   count: number;
   canEdit: boolean;
   dropOn: string | null;
@@ -516,6 +578,8 @@ function PipelineStageCard({
   onDropProcess: (stage: string, targetId: string) => void;
   onMoveGroup: (group: string, dir: -1 | 1) => void;
   onMoveProcess: (id: string, dir: -1 | 1) => void;
+  onRenameGroup: (sub: LifecycleSubstage, name: string) => void;
+  onRetireGroup: (sub: LifecycleSubstage) => void;
   teams: readonly Team[];
   propertyCount: (id: string) => number;
   taskCount: (id: string) => number;
@@ -553,9 +617,19 @@ function PipelineStageCard({
             onDrop={e => { e.preventDefault(); if (b.key) onDropGroup(stage, b.key); }}
           >
             {canEdit && b.key && <span className="drag-dots" aria-hidden title="Drag to reorder this sub-stage">⠿</span>}
-            <Text type="text2" weight="bold" element="span">{b.group}</Text>
+            {/* The name is a box, like a process's: renaming a sub-stage is data, because the
+                processes carry its id and nothing follows the words. */}
+            {canEdit && b.sub ? (
+              <BlurText
+                value={b.group}
+                label={`Name of sub-stage ${b.group} in ${stage}`}
+                onCommit={v => onRenameGroup(b.sub!, v)}
+              />
+            ) : <Text type="text2" weight="bold" element="span">{b.group}</Text>}
             <Text type="text3" color="secondary" element="span">
-              runs {b.list[0].n}–{b.list[b.list.length - 1].n}
+              {b.list.length === 0
+                ? "no processes yet"
+                : `runs ${b.list[0].n}–${b.list[b.list.length - 1].n}`}
             </Text>
             {canEdit && b.key && (
               <Button size="xs" kind="tertiary" onClick={() => onAdd(stage, b.key)}
@@ -563,6 +637,28 @@ function PipelineStageCard({
                 + Add
               </Button>
             )}
+            {/* Retiring takes the block out of the pickers and off this screen. Only an empty
+                one: a block with processes would take them with it, and the honest way to
+                empty it is to move them. `holds` counts what is in the block before the
+                filters, so a filter cannot make a full block look retirable. */}
+            {canEdit && b.sub && (
+              <Tooltip content={b.holds > 0
+                ? "Move its processes out first — retiring a block would take them off this screen"
+                : "Retire this sub-stage: it leaves the pickers and this screen"}>
+                <span>
+                  <Button size="xs" kind="tertiary" disabled={b.holds > 0}
+                    aria-label={`Retire sub-stage ${b.group}`}
+                    onClick={() => onRetireGroup(b.sub!)}>
+                    Retire
+                  </Button>
+                </span>
+              </Tooltip>
+            )}
+            {/* The arrows step through the stage's sub-stages, and `bi` is this block's place
+                among the blocks DRAWN. They are the same list now that every active sub-stage
+                draws, empty or not — before that an empty block between two others made the
+                first click look like a broken button, because the move happened out of
+                sight. */}
             {canEdit && b.key && (
               <span className="pipeline-group-moves">
                 <Button size="xs" kind="tertiary" aria-label={`Move sub-stage ${b.group} earlier`}
@@ -570,7 +666,7 @@ function PipelineStageCard({
                   <MoveArrowUp size={16} aria-hidden />
                 </Button>
                 <Button size="xs" kind="tertiary" aria-label={`Move sub-stage ${b.group} later`}
-                  disabled={bi === blocks.length - 1} onClick={() => onMoveGroup(b.key, 1)}>
+                  disabled={bi === blocks.filter(x => x.sub).length - 1} onClick={() => onMoveGroup(b.key, 1)}>
                   <MoveArrowDown size={16} aria-hidden />
                 </Button>
               </span>
@@ -844,7 +940,7 @@ function NewProcessPanel({ stageNames, teams, stage, group, substagesFor, onCrea
 }
 
 // -------------------------------------------------------------------- the editor
-function ProcessEditor({ process: p, all, deps, teams, stageNames, substagesFor, onCreateSubstage, canEdit, onChanged, onError, onDeleted }: {
+function ProcessEditor({ process: p, all, deps, teams, stageNames, substagesFor, substageNames, onCreateSubstage, canEdit, onChanged, onError, onDeleted }: {
   process: Process;
   all: Process[];
   deps: ProcessDependency[];
@@ -852,6 +948,8 @@ function ProcessEditor({ process: p, all, deps, teams, stageNames, substagesFor,
   stageNames: string[];
   /** The sub-stages a stage has, active, in the stage's order (0127). */
   substagesFor: (stage: string) => LifecycleSubstage[];
+  /** Sub-stage id → name, so the history reads names where the trail holds uuids. */
+  substageNames: Map<string, string>;
   onCreateSubstage: (stageName: string, name: string) => Promise<string | null>;
   canEdit: boolean;
   onChanged: () => void;
@@ -977,7 +1075,7 @@ function ProcessEditor({ process: p, all, deps, teams, stageNames, substagesFor,
       <DependenciesEditor process={p} all={all} waitsOn={waitsOn} leadsTo={leadsTo} byId={byId} canEdit={canEdit} onChanged={onChanged} onError={setProblem} />
       <PropertiesEditor process={p} canEdit={canEdit} onChanged={onChanged} onError={setProblem} />
       <ChecklistEditor process={p} teams={teams} canEdit={canEdit} onError={setProblem} />
-      <ProcessHistory process={p} />
+      <ProcessHistory process={p} substageNames={substageNames} />
 
       {canEdit && (
         <section className="panel">
@@ -1037,7 +1135,15 @@ const FIELD_LABELS: Record<string, string> = {
 const fieldLabel = (f: string) =>
   FIELD_LABELS[f] ?? f.replace(/^process_/, "").replace(/_/g, " ").replace(/^./, c => c.toUpperCase());
 
-function ProcessHistory({ process: p }: { process: Process }) {
+function ProcessHistory({ process: p, substageNames }: {
+  process: Process;
+  /**
+   * Sub-stage id → name. The audit trail stores what the column holds, and since 0127 that
+   * is a uuid, so the drawer would read `Sub-stage 8f3c… → 0a17…` where it used to read
+   * `Group Stage 1 → Stage 2`. A trail nobody can read is not a trail.
+   */
+  substageNames: Map<string, string>;
+}) {
   const { data: history } = useQuery<ProcessHistoryEntry[]>(r => r.listProcessHistory(p.id), [], [p.id, p.updatedAt]);
 
   return (
@@ -1062,14 +1168,21 @@ function ProcessHistory({ process: p }: { process: Process }) {
               {h.changes.length === 0 && h.operation === "UPDATE" && (
                 <Text type="text3" color="secondary" element="div" ellipsis={false}>Saved with no field changed.</Text>
               )}
-              {h.changes.map(c => (
-                <Text type="text3" element="div" key={c.field} ellipsis={false}>
-                  <strong>{fieldLabel(c.field)}</strong>{" "}
-                  {/* An emptied field is shown as the word, not as nothing: "Team → " reads
-                      as a rendering bug, "Team → cleared" reads as what happened. */}
-                  {c.from == null || c.from === "" ? <em>blank</em> : c.from} → {c.to == null || c.to === "" ? <em>cleared</em> : c.to}
-                </Text>
-              ))}
+              {h.changes.map(c => {
+                // A sub-stage change is stored as two uuids; show the names they stand for,
+                // and fall back to the raw value for a block that has since been deleted.
+                const read = (v: string | null) =>
+                  c.field === "lifecycle_substage_id" && v ? substageNames.get(v) ?? v : v;
+                const from = read(c.from), to = read(c.to);
+                return (
+                  <Text type="text3" element="div" key={c.field} ellipsis={false}>
+                    <strong>{fieldLabel(c.field)}</strong>{" "}
+                    {/* An emptied field is shown as the word, not as nothing: "Team → " reads
+                        as a rendering bug, "Team → cleared" reads as what happened. */}
+                    {from == null || from === "" ? <em>blank</em> : from} → {to == null || to === "" ? <em>cleared</em> : to}
+                  </Text>
+                );
+              })}
             </li>
           ))}
         </ul>

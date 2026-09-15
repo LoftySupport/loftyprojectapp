@@ -4122,12 +4122,26 @@ records of their own to run on; it has never run. On the seed replay it is also 
 which `0079` seeded ungrouped and which somebody moved by hand later.
 
 **What the app changed.** Setup → Processes reads `listSubstages()` and groups by sub-stage id
-rather than by a string, so renaming a block moves nothing and two blocks cannot collide. The
+rather than by a string, so renaming a block moves nothing and two blocks cannot collide. **The
+screen's blocks are the stage's sub-stages, not the blocks its processes happen to form**, so an
+empty one still draws and can be renamed, reordered and retired — Amber's *2 Month* and *3 Month*
+are seeded empty on purpose, and a block nobody can see is a block nobody can manage. The
 group picker offers the stage's blocks and carries their ids, still able to name a new one,
 which is how the vocabulary grew in the first place; a name that already exists in any case
 joins that block instead of making a twin. Blocks now reorder as themselves, one write each,
 where before a block's place was wherever its first process happened to fall and moving it
 renumbered every process in the stage. The process drawer gains **Optional**.
+
+**What that one write costs, and what had to follow it.** The 8 September note said no schema
+change was needed for the ordering, *"a group's place in the stage IS the position of its first
+process … the number on screen and the number in the column can never disagree"*. `0127` takes
+the other side of that trade deliberately, and the named downside is real: a block now carries a
+position the processes do not, so **every screen that orders processes has to read it**. The
+board's columns (`pipelinePosition.ts`) and the record drawer's list (`ProcessesPanel.tsx`) sort
+by sub-stage position and then by the process's number, the same comparison as Setup's own
+`stageOrder`. Without that, a manager who moved a block would change Setup → Processes and
+nothing the rest of the company sees: the board would draw last week's columns under this week's
+headings. `check:pipeline` carries the case, watched failing against the old sort.
 
 **What "the board groups by sub-stage" means, and what it does not.** The audit's Stage 1 line
 is met for Setup → Processes, which is the screen that lists processes. A **job's** sub-stage is
@@ -4138,9 +4152,14 @@ skipped.
 **Proof.** Seventeen rows; no active process without a sub-stage; no process in another stage's
 sub-stage; the group column gone; the rebuilt view carrying the sub-stage name with the same row
 count as `process_runs`; a Construction process refused a Pre-construction sub-stage; an active
-process with no sub-stage refused; a sub-stage with processes refused deletion. `constraints.sql`
-gains those last two, `rls.sql` proves a user cannot add a sub-stage and a manager can add,
-rename and remove one, and `behaviour.sql`'s two process probes now carry a real sub-stage id.
+process with no sub-stage refused; a sub-stage with processes refused deletion; and neither guard
+trigger function callable over the API. Those run once, on the day it applies. **What runs on
+every check:** `constraints.sql` gains four probes — a process in another stage's sub-stage, an
+active process with none, a second block of the same name in the same stage, and deleting a block
+that holds processes — and `rls.sql` counts the sub-stages a plain user can read (17, because a
+policy tightened to nobody would empty every block on the screen and raise nothing), proves a user
+cannot add one and a manager can add, rename and remove one. `behaviour.sql`'s two process probes
+carry a real sub-stage id.
 Watched failing with the guard trigger dropped, with the CHECK dropped and with the manager
 write policy dropped, each reporting the one thing it guards.
 

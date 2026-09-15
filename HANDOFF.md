@@ -2054,6 +2054,14 @@ every reorder renumbers the stage so the blocks stay contiguous. That was worth 
 a `stage_group_position` column: the number on screen and the number in the column can never
 disagree.
 
+> **Reversed by `0127`, 15 September.** The blocks are rows now and a block carries its own
+> position, which is exactly the column this paragraph argued against. What changed the answer
+> is that a block became a thing you rename and retire, not just a heading: renaming it must
+> not renumber forty-nine processes. The downside named here is real and is paid where it has
+> to be — the board's columns and the record drawer both sort by the block's position before
+> the process's number, the same comparison Setup uses, so the two cannot disagree. Left in
+> place rather than rewritten, because the reasoning is why the column was avoided for a week.
+
 A reorder is expressed against the stage's **full** list, not what is on screen. Filtering to
 one team and dragging would otherwise shove every hidden process to the end of the stage.
 

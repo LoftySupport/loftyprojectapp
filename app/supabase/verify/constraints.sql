@@ -754,4 +754,25 @@ BEGIN
     RAISE WARNING 'FAIL: a share password with no share was accepted';
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  report_documents_password_needs_a_share rejected a password protecting nothing';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (password without a share)', SQLERRM; END;
+
+  -- 0127: a block's name is unique within its stage. This is what stops "Stage 1" and
+  -- "Stage 1" being two blocks that look like one, which is the failure the free-text
+  -- column had, and the picker leans on it ("the database refuses a second block of the
+  -- same name in the same stage"). The same words in a DIFFERENT stage are fine and stay
+  -- fine: Pre-construction and Maintenance may both have a "Stage 1" one day.
+  BEGIN
+    INSERT INTO lifecycle_substages (lifecycle_stage_id, lifecycle_substage_name, lifecycle_substage_position)
+    VALUES ('pre_construction', 'Stage 1', 98);
+    RAISE WARNING 'FAIL: a second sub-stage called "Stage 1" was accepted in Pre-construction';
+  EXCEPTION WHEN unique_violation THEN RAISE NOTICE 'ok  lifecycle_substages_name_is_unique_in_its_stage rejected a twin block';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (twin sub-stage)', SQLERRM; END;
+
+  -- 0127: a block holding processes cannot be deleted out from under them. The migration
+  -- proves this once, on the day it applies; this is the copy that runs on every check.
+  BEGIN
+    DELETE FROM lifecycle_substages
+     WHERE lifecycle_stage_id = 'pre_construction' AND lifecycle_substage_name = 'Stage 1';
+    RAISE WARNING 'FAIL: a sub-stage with processes in it was deleted';
+  EXCEPTION WHEN foreign_key_violation THEN RAISE NOTICE 'ok  processes_lifecycle_substage_id_fkey refused to delete a block that holds processes';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (deleting a full sub-stage)', SQLERRM; END;
 END $$;

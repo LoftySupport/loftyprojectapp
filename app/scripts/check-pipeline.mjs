@@ -94,8 +94,21 @@ say(columns.join(" · ") === "Invoice · Concept Plan · Site Survey · Footings
 say(!columns.includes("Project Creation"),
     "a project-scoped process is not a column on a board of jobs");
 
+// THE BLOCKS ORDER THE COLUMNS, SINCE 0127. A sub-stage is a row with its own position, and
+// moving one writes that row alone — so the board has to sort on the block before the process
+// number, or a manager reorders the blocks in Setup and every job stays under the old columns.
+// Watched failing by putting `stagePipeline` back to `a.position - b.position`: the columns
+// came out "Working Drawings · Site Survey", the pre-0127 answer.
+const blocked = [
+  { ...P("site_survey", "Site Survey", "Pre-construction", 9), substageName: "Stage 1", substagePosition: 1 },
+  { ...P("working_drawings", "Working Drawings", "Pre-construction", 2), substageName: "Stage 2", substagePosition: 2 }
+];
+const blockedColumns = pipelineColumns(blocked, ["Pre-construction"]);
+say(blockedColumns.join(" · ") === "Site Survey · Working Drawings",
+    `a block's position orders the columns, not its processes' numbers — ${blockedColumns.join(" · ")}`);
+
 await vite.close();
 console.log(failed === 0
-  ? `\nWHAT A JOB IS UP TO BEHAVES (${cases.length + 3} checks)`
+  ? `\nWHAT A JOB IS UP TO BEHAVES (${cases.length + 4} checks)`
   : `\n${failed} CHECK(S) FAILED`);
 process.exit(failed === 0 ? 0 : 1);

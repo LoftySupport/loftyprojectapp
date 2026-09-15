@@ -81,6 +81,9 @@ export const PERMISSION_RULES: readonly PermissionRule[] = [
   { object: "The lifecycle", action: "Set how long a stage should take", needs: "manager",
     enforcedBy: "lifecycle_stages UPDATE ≥ manager, the two SLA columns only (0096, carried into 0126)",
     note: "This row said superadmin until 0126, three weeks after 0096 made it a manager's. The matrix was the stale copy." },
+  { object: "The lifecycle", action: "Add, rename, reorder and retire a stage's sub-stages", needs: "manager",
+    enforcedBy: "lifecycle_substages ALL ≥ manager (0127)",
+    note: "The blocks inside a stage — Stage 1, Footings, 1 Month — are a manager's to run, where the stages themselves are a superadmin's. Renaming one is data: the processes carry its id, so nothing follows the words. A block with processes in it cannot be deleted (the key restricts) and is not offered for retiring until they are moved." },
 
   { object: "Comments", action: "Write one", needs: "user", enforcedBy: "comments INSERT ≥ user" },
   { object: "Comments", action: "Edit or delete one", needs: "user",

@@ -31,7 +31,8 @@
 --   The Construction "Variation" group is not a sub-stage. Under decision 7 a variation is a
 --   record of its own that processes run on, so the one Variation process is parked: retired
 --   (`process_is_active = false`) with no sub-stage, until variations exist as records and
---   it has something to run on. It has never run.
+--   it has something to run on. It has never run. Parking is named in advance and anything
+--   else raises rather than being retired quietly — see the block that does it.
 --
 -- WHAT THIS DOES
 --
@@ -53,6 +54,13 @@
 --   `create or replace view` cannot remove a column, and the view carried
 --   `process_stage_group`. Nothing depends on the view (`notify_scan` reads it by name from
 --   inside a function, which survives). security_invoker and the grants are restated.
+
+-- A LIVE APPLY TAKES `processes` EXCLUSIVELY, FOUR TIMES. 0126's first attempt died of a
+-- deadlock (40P01) against live traffic holding a read lock, and applied on the retry. This
+-- one adds two columns, adds a constraint and drops a column, and rebuilds a view people are
+-- reading. Rather than queue behind a reader and take the whole thing down with it, fail fast
+-- and retry: five seconds is longer than any read here and shorter than anybody notices.
+set lock_timeout = '5s';
 
 -- ================================================================== the table
 create table if not exists lifecycle_substages (
@@ -113,14 +121,18 @@ comment on column processes.lifecycle_substage_id is
 comment on column processes.process_is_optional is
   'True when a sub-stage can complete without this process finishing (0127). Read by Stage 2''s completion gate; false for every process on the day.';
 
--- Backfill by (stage, group). Same words, so the join is exact.
+-- Backfill by (stage, group). The names came FROM this column, so the join is the same
+-- words -- but the column is free text a person typed, which is the whole reason it is being
+-- replaced: "stage 1", "Stage 1 " and "Stage 1" are three strings and one block. So the join
+-- is on the trimmed, case-folded name, which cannot misplace a row (the seeded names differ
+-- by more than case and space) and absorbs exactly those twins.
 update processes p
    set lifecycle_substage_id = s.lifecycle_substage_id
   from lifecycle_substages s
   join lifecycle_stages ls on ls.lifecycle_stage_id = s.lifecycle_stage_id
  where p.lifecycle_substage_id is null
    and ls.lifecycle_stage_name = p.process_stage
-   and s.lifecycle_substage_name = p.process_stage_group;
+   and lower(trim(s.lifecycle_substage_name)) = lower(trim(p.process_stage_group));
 
 -- Maintenance's one process carried no group; Amber put it in 1 Month.
 update processes p
@@ -156,17 +168,47 @@ update processes p
    and p.process_stage = ls.lifecycle_stage_name;
 
 -- Whatever is still active with nowhere to go is PARKED: inactive, no sub-stage, kept.
--- Not guessed into a block, because a guess would be read back as a decision. On the live
--- database of 15 September this is one process, Variation, which waits until variations
--- are records of their own (schema-plan decision 7). On the seed replay it is also `pwa`
--- and `kbs`, which 0079 seeded without a group and which were moved by hand in the app.
--- The notice names them so an apply log shows what was parked.
+-- Not guessed into a block, because a guess would be read back as a decision.
+--
+-- PARKING IS NAMED IN ADVANCE, AND ANYTHING ELSE STOPS THE MIGRATION. Retiring a process is
+-- not a small thing: it leaves Setup's list, the board's columns and anything that would
+-- start a run. Silently retiring one because somebody typed a block name this migration
+-- does not know about would be the "plausible value" failure in reverse, so the expected
+-- set is written out and an unexpected member raises.
+--
+--   `variation`   — live and replay. Under decision 7 a variation is a record of its own
+--                   that processes run on; this process waits for that. It has never run.
+--   `pwa`, `kbs`  — THE SEED REPLAY ONLY. `0079` seeded both without a group, and on the
+--                   live database of 15 September both carry one somebody typed in the app
+--                   (`pwa` in Pre-construction's Stage 1, `kbs` in Stage 3), so live places
+--                   them by the join above and never reaches this statement for them.
+--
+-- And the evidence survives: the group each parked process held is written into its
+-- description before the column goes, so a wrong park can be undone by reading the row
+-- rather than by restoring a backup.
 do $$
-declare parked text;
+declare
+  parked    text;
+  unexpected text;
 begin
   select string_agg(process_key, ', ' order by process_stage, process_position) into parked
     from processes where process_is_active and lifecycle_substage_id is null;
-  update processes set process_is_active = false
+
+  select string_agg(process_key || ' (group ' || coalesce(quote_literal(process_stage_group), 'null')
+                    || ', stage ' || process_stage || ')', '; ' order by process_key)
+    into unexpected
+    from processes
+   where process_is_active and lifecycle_substage_id is null
+     and process_key not in ('variation', 'pwa', 'kbs');
+  if unexpected is not null then
+    raise exception '0127: % would be retired for want of a sub-stage, and that is not one of the three this migration expects. Add the sub-stage, or fix the group, and re-run.', unexpected;
+  end if;
+
+  update processes
+     set process_is_active = false,
+         process_description = trim(both from coalesce(process_description || ' ', '')
+           || '(Retired by 0127: it had no sub-stage to move into. Its group was '
+           || coalesce(quote_literal(process_stage_group), 'blank') || '.)')
    where process_is_active and lifecycle_substage_id is null;
   raise notice '0127: parked with no sub-stage: %', coalesce(parked, '(none)');
 end $$;

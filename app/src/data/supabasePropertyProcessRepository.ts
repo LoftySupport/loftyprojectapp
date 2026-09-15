@@ -324,10 +324,24 @@ export function propertyProcessMethods(client: SupabaseClient): PropertyProcessM
         .select("lifecycle_stage_id").eq("lifecycle_stage_name", input.stageName).maybeSingle();
       if (stageError) throw stageError;
       if (!stage) throw new Error(`${input.stageName} is not a lifecycle stage.`);
+      // LAST, NOT FIRST. The column defaults to 0, which is ahead of every seeded block, so
+      // a sub-stage named in the picker while filing a process would open the stage rather
+      // than close it — and the process filed into it would jump to the front of the flow.
+      // A new block goes after the ones that exist; the manager moves it from there.
+      let position = input.position;
+      if (position === undefined) {
+        const { data: last, error: lastError } = await client.from("lifecycle_substages")
+          .select("lifecycle_substage_position")
+          .eq("lifecycle_stage_id", stage.lifecycle_stage_id)
+          .order("lifecycle_substage_position", { ascending: false })
+          .limit(1).maybeSingle();
+        if (lastError) throw lastError;
+        position = (last?.lifecycle_substage_position ?? 0) + 1;
+      }
       const { data, error } = await client.from("lifecycle_substages").insert({
         lifecycle_stage_id: stage.lifecycle_stage_id,
         lifecycle_substage_name: input.name.trim(),
-        ...(input.position !== undefined ? { lifecycle_substage_position: input.position } : {}),
+        lifecycle_substage_position: position,
         ...(input.description !== undefined ? { lifecycle_substage_description: input.description || null } : {})
       }).select(SUBSTAGE_COLUMNS).single();
       if (error) throw error;

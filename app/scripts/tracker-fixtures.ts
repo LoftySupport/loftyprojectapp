@@ -163,7 +163,14 @@ const PROCESSES: Process[] = [
   key: key as string,
   name: name as string,
   stageName: (stage as string | undefined) ?? FIXTURE_STAGE,
-  stageGroup: group as string | null,
+  // Since 0127 a block is a row: the fixtures carry its id, name and position rather than
+  // the free text they used to. Without these the responsive harness draws every fixture
+  // process under "Not in a sub-stage" and the screen it is there to photograph is not the
+  // screen the app has.
+  substageId: group ? `fixture-substage-${(group as string).toLowerCase().replace(/[^a-z0-9]+/g, "-")}` : null,
+  substageName: (group as string | null) ?? null,
+  substagePosition: group ? Number(String(group).replace(/\D+/g, "") || 1) : null,
+  isOptional: false,
   scope: "job",
   owningTeam: i === 2 ? null : "design",
   expectedDays: i === 2 ? null : (i + 1) * 3,
@@ -257,7 +264,8 @@ const FIXTURE_RUNS: ProcessRun[] = [
     processKey: p.key,
     processName: p.name,
     stageName: p.stageName,
-    stageGroup: p.stageGroup,
+    substageId: p.substageId,
+    substageName: p.substageName,
     scope: "job",
     owningTeam: p.owningTeam,
     isMilestone: p.isMilestone,

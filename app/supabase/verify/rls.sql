@@ -132,6 +132,11 @@ select 'pipelines visible: '       || count(*) from pipelines;
 select 'pipeline stages visible: ' || count(*) from pipeline_stages;
 -- 0126: the board's columns come from here now.
 select 'lifecycle stages visible: ' || count(*) from lifecycle_stages;
+-- 0127: and the blocks inside them. Counted for the same reason: the probe below proves a
+-- user cannot WRITE one, and would pass just as happily if the read policy were tightened
+-- to nobody. Setup → Processes reads these through an embed on `processes`, so a user who
+-- cannot see the rows sees every process in "Not in a sub-stage" and no error at all.
+select 'lifecycle substages visible: ' || count(*) from lifecycle_substages;
 
 \echo '--- probes (each must print ok) ---'
 do $$
