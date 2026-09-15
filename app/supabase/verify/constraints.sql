@@ -957,6 +957,38 @@ BEGIN
       UPDATE process_steps SET process_step_is_required = was_required WHERE process_step_id = probe_step;
     END IF;
   END;
+  -- 0138: a milestone process is never optional. Amber, 15 September. Both directions,
+  -- because there are two ways into the pair and a rule tested one way is a rule somebody
+  -- can walk around. The flags are put back as they were found.
+  DECLARE
+    m_process   uuid;
+    was_stone   boolean;
+    was_opt     boolean;
+  BEGIN
+    SELECT process_id, process_is_milestone, process_is_optional
+      INTO m_process, was_stone, was_opt
+      FROM processes ORDER BY process_key LIMIT 1;
+    IF m_process IS NOT NULL THEN
+      UPDATE processes SET process_is_milestone = true, process_is_optional = false
+       WHERE process_id = m_process;
+      BEGIN
+        UPDATE processes SET process_is_optional = true WHERE process_id = m_process;
+        RAISE WARNING 'FAIL: a milestone process was made optional (0138)';
+      EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a milestone process cannot be made optional (0138)';
+        WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (milestone made optional)', SQLERRM; END;
+
+      UPDATE processes SET process_is_milestone = false, process_is_optional = true
+       WHERE process_id = m_process;
+      BEGIN
+        UPDATE processes SET process_is_milestone = true WHERE process_id = m_process;
+        RAISE WARNING 'FAIL: an optional process was made a milestone (0138)';
+      EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  an optional process cannot be made a milestone (0138)';
+        WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (optional made milestone)', SQLERRM; END;
+
+      UPDATE processes SET process_is_milestone = was_stone, process_is_optional = was_opt
+       WHERE process_id = m_process;
+    END IF;
+  END;
 END $$;
 
 

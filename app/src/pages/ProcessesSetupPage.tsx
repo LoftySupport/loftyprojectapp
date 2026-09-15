@@ -1060,14 +1060,31 @@ function ProcessEditor({ process: p, all, deps, teams, stageNames, substagesFor,
           <Field label="At-risk lead (days)" hint="how many days before the due date a run flags at risk — must be shorter than the duration">
             <NumberInput value={p.atRiskLeadDays} disabled={!canEdit || saving} label="At-risk lead days" min={0} onCommit={v => patch({ atRiskLeadDays: v })} />
           </Field>
+          {/* The two flags 0138 holds apart. The database refuses the pair outright; these two
+              controls stop anybody reaching the refusal, and say why rather than just greying
+              out. Amber, 15 September: "A milestone process can never be optional." */}
           <Field label="Milestone" hint="counted at the stage — never turned into a percentage">
-            <Checkbox label="Passing this process is a milestone of its stage" checked={p.isMilestone} disabled={!canEdit || saving} onChange={() => patch({ isMilestone: !p.isMilestone })} />
+            <Checkbox
+              label={p.isOptional
+                ? "An optional process cannot be a milestone — untick Optional first"
+                : "Passing this process is a milestone of its stage"}
+              checked={p.isMilestone}
+              disabled={!canEdit || saving || p.isOptional} onChange={() => patch({ isMilestone: !p.isMilestone })} />
           </Field>
           <Field label="External" hint="council, SA Water, a consultant — late is not the team's fault">
             <Checkbox label="Waits on somebody outside Lofty" checked={p.isExternal} disabled={!canEdit || saving} onChange={() => patch({ isExternal: !p.isExternal })} />
           </Field>
           <Field label="Optional">
-            <Checkbox label="Optional in its sub-stage" checked={p.isOptional} disabled={!canEdit || saving} onChange={() => patch({ isOptional: !p.isOptional })} />
+            {/* The reason rides on the LABEL rather than on a hint: a hint is a permanent line
+                under the control and the element sweep counts them, on Amber's rule of 10
+                September that a description belongs in a tooltip or nowhere. A disabled box
+                that does not say why is the worse half of both. */}
+            <Checkbox
+              label={p.isMilestone
+                ? "A milestone cannot be skipped — untick Milestone first"
+                : "Optional in its sub-stage: a job can skip it"}
+              checked={p.isOptional}
+              disabled={!canEdit || saving || p.isMilestone} onChange={() => patch({ isOptional: !p.isOptional })} />
           </Field>
           <Field label="Number in the stage" hint="its place in the flow. Dragging on the list renumbers the whole stage; this sets one">
             <NumberInput value={p.position} disabled={!canEdit || saving} label="Number in the stage" onCommit={v => patch({ position: v ?? 0 })} />
