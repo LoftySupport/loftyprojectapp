@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-762 properties across 101 tables.
+773 properties across 102 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 713 | In the migration and the types |
+| Created | 724 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -515,6 +515,24 @@ One dwelling's build — "1042-01", which is both what Lofty says out loud and t
 | `jobs.job_updated_by` | Updated by | Who last changed it. | `uuid` | — | Nullable. | FK → profiles(id). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `jobs.job_maintenance_seq_high_water` | Maintenance sequence high-water | The highest maintenance request sequence ever handed out on this job (0084) — the counter behind 1042-01-M3. Never goes down, so a deleted request's number is never reused. | `integer` | — | smallint. Not null, default 0. | Bumped by assign_maintenance_request_number() under the job row's lock. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
+## `lifecycle_stages`
+
+The lifecycle as rows (0126): the seven stages in position order, their kind, their SLA and whether they are active. Every stage column is a foreign key to the name. Superadmin changes what a stage is; a manager sets its SLA; a rename with rows in the stage is a migration.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `lifecycle_stages.lifecycle_stage_id` | Stage code | The slug code keys on: acquisition_development, pre_construction, construction, maintenance, completed, closed, cancelled. Sub-stages hang off it (Stage 1, second migration). | `text` | — | Primary key. CHECK: slug shape. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `lifecycle_stages.lifecycle_stage_name` | Stage | The display name, and the value every stage column holds: jobs.job_stage, projects.project_stage, processes.process_stage and property_defs.property_def_stage are foreign keys to it. The key does not cascade a rename, because a cascaded rename would fire every job's stage triggers as though the job had moved; renaming a stage with rows is a migration. | `text` | — | Not null. Unique. Not blank. | Referenced by the four stage columns (on update restrict, on delete restrict). Read by listStages(). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `lifecycle_stages.lifecycle_stage_position` | Order | Board order, and the order lifecycle_position() returns for the linear guard, the project clamp and the cascade. A stage inserted as a row is ordered the moment it exists. | `integer` | — | smallint. Not null. Unique. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `lifecycle_stages.lifecycle_stage_kind` | Kind | open (work is on), won (Completed), archived (Closed), lost (Cancelled). From pipeline_stage_type. What the ends of the lifecycle are, for code that should not spell the names out. | `text` | — | Not null, default open. CHECK in (open, won, archived, lost). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `lifecycle_stages.lifecycle_stage_expected_days` | Expected days in stage | How long a record should sit in this stage (0047, moved here from pipeline_stages). Null means no SLA is set, which is a real state and not zero. | `integer` | — | smallint. Nullable. CHECK (> 0). | Read by listTemplatePhases; set by a manager through updateStageSla. The at-risk lead must be shorter than it. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `lifecycle_stages.lifecycle_stage_at_risk_lead_days` | At-risk lead | How many days before the expected-days deadline a record starts flagging at risk (0047). | `integer` | — | smallint. Nullable. CHECK (> 0) and lifecycle_stages_at_risk_lead_fits_the_expectation: a lead needs an expectation and must be shorter than it. | Read by listTemplatePhases; set by a manager through updateStageSla. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `lifecycle_stages.lifecycle_stage_is_active` | Active | False retires a stage from pickers and new records; rows already in it keep the value, and the key refuses a delete while anything references the stage. | `boolean` | — | Not null, default true. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `lifecycle_stages.lifecycle_stage_created_at` | Created | When the row was made. | `timestamptz` | — | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `lifecycle_stages.lifecycle_stage_created_by` | Created by | Who made it; stamp_created_by fills it from the session. | `uuid` | — | Nullable. | FK → profiles(profile_id). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `lifecycle_stages.lifecycle_stage_updated_at` | Updated | When the row last changed; moddatetime stamps it. | `timestamptz` | — | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `lifecycle_stages.lifecycle_stage_updated_by` | Updated by | Who changed it. | `uuid` | — | Nullable. | FK → profiles(profile_id). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
 ## `login_activity`
 
 One row per authentication event, copied out of auth.users with the email denormalised so the row survives account deletion. Read most-recent-first, which is what its index is for. Built outside the numbered migrations.
@@ -832,8 +850,8 @@ A position within a pipeline — the build lifecycle's seven stages are its rows
 
 | Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `pipeline_stages.pipeline_stage_expected_days` | Expected days in stage | How long a record should sit in this stage — what "on time" means for it, and what overdue is measured past. Null means no SLA is set, which is a real state and not zero: an invented number was exactly what the old Gantt drew bars against. | `integer` | — | smallint. Nullable. CHECK (> 0). | Read by listTemplatePhases as TemplatePhase.expectedDays; edited per stage in Setup → Automations (superadmin, by the 0029 policy). The at-risk lead must be shorter than it. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `pipeline_stages.pipeline_stage_at_risk_lead_days` | At-risk lead | How many days before the expected-days deadline the record starts flagging at risk (Amber's Q1, 0047). Past the deadline itself is overdue — there is no third number. | `integer` | — | smallint. Nullable. CHECK pipeline_stages_at_risk_lead_is_positive (> 0) and pipeline_stages_at_risk_lead_fits_the_expectation — a lead needs an expectation to lead, and must be shorter than it, or it would flag the record at risk on arrival. Both proved biting in 0047. | Read by listTemplatePhases as TemplatePhase.atRiskLeadDays; edited beside the expectation in Setup → Automations. The health calculation (parked — see health_statuses) is its intended consumer. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `pipeline_stages.pipeline_stage_expected_days` | Expected days in stage | How long a record should sit in this stage — what "on time" means for it, and what overdue is measured past. Null means no SLA is set, which is a real state and not zero: an invented number was exactly what the old Gantt drew bars against. | `integer` | — | smallint. Nullable. CHECK (> 0). | Superseded by lifecycle_stages.lifecycle_stage_expected_days (0126); nothing reads this column now, and Stage 5 drops the table. The at-risk lead must be shorter than it. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `pipeline_stages.pipeline_stage_at_risk_lead_days` | At-risk lead | How many days before the expected-days deadline the record starts flagging at risk (Amber's Q1, 0047). Past the deadline itself is overdue — there is no third number. | `integer` | — | smallint. Nullable. CHECK pipeline_stages_at_risk_lead_is_positive (> 0) and pipeline_stages_at_risk_lead_fits_the_expectation — a lead needs an expectation to lead, and must be shorter than it, or it would flag the record at risk on arrival. Both proved biting in 0047. | Superseded by lifecycle_stages.lifecycle_stage_at_risk_lead_days (0126); nothing reads this column now, and Stage 5 drops the table. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `pipeline_stages.pipeline_stage_id` | Stage | A position within a pipeline. Rows, not an enum — which is what lets the vocabulary change (0035, 0045 both reseeded it) without an ALTER TYPE. | `uuid` | — | Primary key. Also unique with pipeline_id, the target of job_pipeline_positions' composite FK. | The build lifecycle's seven stages are its best-known rows. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `pipeline_stages.pipeline_id` | Pipeline | Which process the stage belongs to. | `uuid` | — | Not null. Unique with position. | FK → pipelines ON DELETE CASCADE. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `pipeline_stages.pipeline_stage_name` | Stage name | What the stage is called — the seven lifecycle names live here. | `text` | — | Not null. | Mirrored by the CHECKs on jobs.job_stage and projects.project_stage for the lifecycle pipeline. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |

@@ -38,10 +38,9 @@ PSQL="psql -h $HOST -p $PORT -U postgres -d lofty_verify -tAq"
 
 echo "--- seeded lookups vs the database ---"
 
-DB_STAGES=$($PSQL -c "select pipeline_stage_name from pipeline_stages ps
-                      join pipelines p using (pipeline_id)
-                      where p.pipeline_key = 'build_lifecycle'
-                      order by ps.pipeline_stage_position;")
+# lifecycle_stages since 0126; pipeline_stages carried the same seven until then.
+DB_STAGES=$($PSQL -c "select lifecycle_stage_name from lifecycle_stages
+                      order by lifecycle_stage_position;")
 DB_TEAMS=$($PSQL -c "select team_id from teams order by team_position;")
 
 if [ -z "$DB_STAGES" ] || [ -z "$DB_TEAMS" ]; then
@@ -116,7 +115,7 @@ def check(label, ok, detail=""):
 
 # 1 — the seeds agree with the database, in order.
 check(
-    f"{len(seed_stages)} seeded stages match pipeline_stages, in position order",
+    f"{len(seed_stages)} seeded stages match lifecycle_stages, in position order",
     seed_stages == db_stages,
     "seed: " + " | ".join(seed_stages) + "\ndb:   " + " | ".join(db_stages),
 )

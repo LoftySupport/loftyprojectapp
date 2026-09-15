@@ -1748,9 +1748,11 @@ export interface Tag {
  * TypeScript, the seed data and the saved views all still said "Sales & acquisition".
  * A job created through the UI would have been rejected by the enum.
  *
- * Due to be replaced by `pipeline_stages` rows, at which point this constant goes the
- * same way the team list just did. Until then it mirrors the database exactly, and the
- * order is board order.
+ * The database's copy is `lifecycle_stages` (0126), which `listStages()` reads and
+ * `verify/seeds.sh` checks this list against. This constant stays for the type
+ * (`StageName`) and for code that names a stage in a rule; it mirrors the table exactly,
+ * and the order is board order. A stage added as a row will not be in it, which is why
+ * anything that draws every stage reads `listStages()` instead.
  *
  * Position 4 was "Handover & Maintenance" until 0076 (Amber, 1 September): handover is
  * the last process of Construction, so the phase after it is just Maintenance.

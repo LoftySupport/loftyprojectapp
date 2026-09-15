@@ -4016,10 +4016,57 @@ made is not a default; Amber's 25 rows, all off, stay as she set them. The colum
 `{in_app}`, so a type added later starts the same way. The proof asserts both halves: no type
 defaults to an external channel, and no active type has lost in-app.
 
-**Applied live on 15 September** minutes after PR #98 merged; the proof block passed on the live
-database. Checked afterwards: the ledger carries it, the switch-on is null, the outbox reads
-in_app sent 4 and email skipped 4 with the reason on each, every type defaults to in-app only,
-and Amber's own 25 preference rows are as she left them. Stage 0 is complete once #99 merges.
+### 15 September — the lifecycle is a table (`0126`)
+
+Stage 1 of the audit, the first of its two migrations, on `claude/stage1-lifecycle-stages`.
+
+**What the lifecycle was.** Seven stages in three places at once: rows of `pipeline_stages`
+under the one `pipelines` row (`0029`), which the app read for the board's columns and the SLA
+editor; a CHECK repeated on four tables (jobs, projects, processes, property_defs), which is
+what refused a wrong value; and a CASE in `lifecycle_position()`, which is what ordered them for
+the linear guard, the project clamp and the cascade. Adding a stage meant a migration touching
+all three. Amber, 15 September: *"anything that can be changed or updated by the team and
+reordered … can be done by managers in the app without a migration"*.
+
+**What it is now.** `lifecycle_stages`: slug key, unique display name, unique position, kind
+(open, won, archived, lost, from `pipeline_stage_type`), the two SLA columns `0047` gave
+`pipeline_stages`, `is_active`, stamps. Seeded from the seven `pipeline_stages` rows by name, so
+replay and live agree by construction. The four CHECKs are foreign keys to the name under the
+same constraint names. `lifecycle_position()` reads the table, STABLE rather than IMMUTABLE;
+nothing indexed on it. Policies as before: active people read, superadmin changes what a stage
+is, a manager sets the two SLA columns and a guard trigger refuses the rest.
+
+**The decision worth keeping: the key does not cascade a rename.** `on update cascade` was the
+obvious choice. A cascaded rename writes `job_stage` on every job in the stage, and every job's
+stage triggers fire: *in stage since* is restamped to today, the project clamp runs, and
+`notify_stage_changed` tells everyone the job moved. Renaming is not moving. So the key is
+`on update restrict, on delete restrict`: adding, reordering, retiring and re-timing a stage are
+data; renaming a stage that has rows is a migration, which is also true of the three end-state
+names that `lifecycle_archive`, the cascade and the linear guard spell out. Retire with
+`is_active = false`.
+
+**What the app changed.** `listStages()`, `listTemplatePhases()` and `updateStageSla()` read and
+write `lifecycle_stages` in one query each; `owningTeamNames` is always empty, because the
+pipeline column was null on all seven and the audit's model derives a job's team from its
+processes. `verify/seeds.sh` proves the app's stage list against `lifecycle_stages`. The
+`STAGE_NAMES` constant, the saved views, the record strip and the colour map still spell the
+seven out: a stage added as a row appears as a board column and orders correctly, and has no
+colour or saved view until code names it. That is Stage 1's second half and Stage 3's business,
+recorded here rather than hidden.
+
+**Two corrections.** The audit said six CHECKs; there were four. The permissions matrix and
+`updateStageSla`'s error said the SLA needs superadmin; `0096` made it a manager's three weeks
+earlier, and the matrix was the stale copy. Both fixed.
+
+**What stays.** `pipelines`, `pipeline_stages`, `job_pipeline_positions` and `job_stage_events`,
+unread by the app from here, until Stage 5 drops them one by one.
+
+**Proof.** Seven rows matching the pipeline rows by name and position; four keys of type f; a
+property at stage *Framing* refused by the key; a stage with rows neither deletable nor
+renameable; `lifecycle_position` reading the table. `constraints.sql`'s two stage probes now
+expect the key's error rather than the CHECK's; `rls.sql` proves a manager sets the SLA on
+`lifecycle_stages`, cannot rename there, and a user cannot set the SLA. Watched failing as the
+file says.
 
 ## Verification
 

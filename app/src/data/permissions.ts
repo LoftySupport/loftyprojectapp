@@ -75,11 +75,12 @@ export const PERMISSION_RULES: readonly PermissionRule[] = [
 
   { object: "Teams", action: "Add or rename", needs: "admin", enforcedBy: "teams INSERT/UPDATE ≥ admin" },
 
-  { object: "The lifecycle", action: "Change what the phases are", needs: "superadmin",
-    enforcedBy: "pipeline_stages ALL ≥ superadmin",
-    note: "The line a manager's move does not cross: moving a job and renaming the lifecycle for the whole company are different acts." },
-  { object: "The lifecycle", action: "Set how long a phase should take", needs: "superadmin",
-    enforcedBy: "pipeline_stages ALL ≥ superadmin" },
+  { object: "The lifecycle", action: "Change what the stages are", needs: "superadmin",
+    enforcedBy: "lifecycle_stages ALL ≥ superadmin; guard_lifecycle_stage_shape_change",
+    note: "The line a manager's move does not cross: moving a job and changing the lifecycle for the whole company are different acts. Renaming a stage that has records in it is a migration, not a screen: the key does not cascade." },
+  { object: "The lifecycle", action: "Set how long a stage should take", needs: "manager",
+    enforcedBy: "lifecycle_stages UPDATE ≥ manager, the two SLA columns only (0096, carried into 0126)",
+    note: "This row said superadmin until 0126, three weeks after 0096 made it a manager's. The matrix was the stale copy." },
 
   { object: "Comments", action: "Write one", needs: "user", enforcedBy: "comments INSERT ≥ user" },
   { object: "Comments", action: "Edit or delete one", needs: "user",

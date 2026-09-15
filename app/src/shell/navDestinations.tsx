@@ -33,7 +33,7 @@ import type { FlyoutItem, NavDestination, NavPanel } from "./NavRail";
  *
  *   Nothing here is invented. The views are `JOB_VIEWS` and `PROJECT_VIEWS`, which are
  *   the same lists the boards' own tab strips render; the stage groupings are
- *   `listStages()`, which is the `pipeline_stages` table; the maintenance queues are the
+ *   `listStages()`, which is the `lifecycle_stages` table; the maintenance queues are the
  *   five options in that page's own picker. A flyout row that named a view the board did
  *   not have would be a link to a screen that quietly showed something else.
  *
