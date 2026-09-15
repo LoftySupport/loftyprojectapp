@@ -2,8 +2,8 @@ import { useMemo } from "react";
 import { useQuery } from "./DataProvider";
 import { useTeams } from "./useLookups";
 import {
-  teamName, type ProcessRunHealth, type ProcessRunStatus, type ProjectType, type PropertyValueData,
-  type RecordStatus, type TeamId, type TitleType
+  teamName, type JobHealth, type ProcessRunHealth, type ProcessRunStatus, type ProjectType,
+  type PropertyValueData, type RecordStatus, type TeamId, type TitleType
 } from "./types";
 
 /**
@@ -72,6 +72,8 @@ export interface BoardJob {
   stagePinnedAt: string | null;
   stagePinnedBy: string | null;
   stagePinReason: string | null;
+  /** Rolled up from the processes (0133). Not `status`, which is what somebody set. */
+  health: JobHealth;
   /** The display name, "Design" — what the toolbar's Team filter compares against. */
   team: string;
   /** The slug, for anything keyed rather than labelled. */
@@ -299,6 +301,7 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
       stagePinnedAt: j.stagePinnedAt,
       stagePinnedBy: j.stagePinnedBy,
       stagePinReason: j.stagePinReason,
+      health: j.health,
       team: teamName(j.owningTeam, teams),
       teamId: j.owningTeam,
       status: j.status,

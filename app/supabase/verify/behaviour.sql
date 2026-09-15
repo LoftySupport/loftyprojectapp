@@ -1298,3 +1298,80 @@ select case when job_stage is distinct from :'s47_before' and lifecycle_position
 from jobs where job_id = '9106-002';
 
 rollback;
+
+-- ============================================================================
+-- 48. Health rolls up: process → sub-stage → stage → job (0133)
+--
+-- In one transaction, rolled back: this step makes a real run overdue on the fixture job
+-- and moves its target completion date, and nothing after it should see either.
+-- ============================================================================
+\echo '--- 48. a sick process makes its sub-stage, its stage and its job sick (0133)'
+begin;
+
+select job_id as s48_job from jobs
+ where job_stage not in ('Completed', 'Closed', 'Cancelled') order by job_id limit 1 \gset
+
+select case when job_health(:'s48_job') in ('on_track', 'at_risk', 'overdue', 'no_expectation')
+  then 'ok  a live job has a health to read'
+  else 'FAIL: job_health said ' || coalesce(job_health(:'s48_job'), 'null') end;
+
+-- An open required process on this job, given an SLA it has already blown.
+select p.process_id as s48_proc, p.lifecycle_substage_id as s48_sub
+  from processes p
+ where p.process_is_active and not p.process_is_optional and p.process_scope = 'job'
+   and p.lifecycle_substage_id is not null
+   and private.substage_is_open(p.lifecycle_substage_id, :'s48_job')
+ order by p.process_position limit 1 \gset
+
+-- 0047's two rules on the pair: the lead is positive, and it fits inside the expectation.
+-- So 5 and 1. A run started thirty days ago is overdue either way, and this probe is about
+-- the roll-up rather than the arithmetic underneath it.
+update processes set process_expected_days = 5, process_at_risk_lead_days = 1
+ where process_id = :'s48_proc';
+insert into process_runs (process_id, job_id, process_run_status, process_run_started_at)
+values (:'s48_proc', :'s48_job', 'in_progress', now() - interval '30 days')
+on conflict do nothing;
+
+select case when substage_health = 'overdue'
+  then 'ok  the sub-stage takes the worst health of its open required processes'
+  else 'FAIL: the sub-stage reads ' || substage_health end
+from job_substage_health where job_id = :'s48_job' and substage_id = :'s48_sub';
+
+select case when stage_health = 'overdue'
+  then 'ok  and the stage takes the worst of its sub-stages'
+  else 'FAIL: the stage reads ' || stage_health end
+from job_stage_health g
+ where g.job_id = :'s48_job'
+   and g.stage = (select lifecycle_stage_name from lifecycle_stages st
+                   join lifecycle_substages s on s.lifecycle_stage_id = st.lifecycle_stage_id
+                  where s.lifecycle_substage_id = :'s48_sub');
+
+select case when job_health(:'s48_job') = 'at_risk'
+  then 'ok  and the job reads at risk, because an open required process is overdue'
+  else 'FAIL: the job reads ' || job_health(:'s48_job') end;
+
+-- The promise beats the work: a target completion date in the past is overdue whatever the
+-- processes say, and a job with no target is never overdue.
+update jobs set job_target_completion = current_date - 1 where job_id = :'s48_job';
+select case when job_health(:'s48_job') = 'overdue'
+  then 'ok  a job past its target completion is overdue, whatever its processes say'
+  else 'FAIL: the job reads ' || job_health(:'s48_job') end;
+
+update jobs set job_target_completion = null where job_id = :'s48_job';
+select case when job_health(:'s48_job') = 'at_risk'
+  then 'ok  and a job with no target completion is never overdue, only at risk'
+  else 'FAIL: the job reads ' || job_health(:'s48_job') end;
+
+-- A stopped job has no health at all.
+update jobs set job_stage = 'Cancelled' where job_id = :'s48_job';
+select case when job_health(:'s48_job') = 'not_tracked'
+  then 'ok  a cancelled job has no health — nothing fires while cancelled'
+  else 'FAIL: a cancelled job reads ' || job_health(:'s48_job') end;
+
+-- And job_display says the same thing the function does.
+select case when job_health is not distinct from job_health(:'s48_job')
+  then 'ok  job_display and job_health() agree'
+  else 'FAIL: the view says ' || coalesce(job_health, 'null') end
+from job_display where job_id = :'s48_job';
+
+rollback;

@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-795 properties across 103 tables.
+798 properties across 105 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 746 | In the migration and the types |
+| Created | 749 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -410,6 +410,7 @@ The read view behind the boards: jobs joined to their addresses and their projec
 | `job_display.job_calculated_completion` | Completion date (calculated) | What the SLAs say the job will finish, beside the target somebody committed to and the day it actually did. Amber, 14 September: a system field "based by when the job is likely to end based on slas and [the stage] it is up to so management can look at targeted completion date (when they want it to be done) versus the realistic calculated date based on slas and then the actual date it was completed for process optimisation". | `date` | — | Read-only, computed. NULL is the normal answer today and job_calculated_completion_missing says why — all 38 Pre-construction processes carry no estimate, so the forecast refuses to answer rather than projecting from the third of the pipeline that is populated. NULL for both columns means the job is not live. | The longest path through process_dependencies in CALENDAR days, from job_completion_forecast() (0119). A process costs its own process_expected_days when set and the sum of its task steps' process_step_expected_days otherwise — 3 of 51 processes use the first, 107 of 107 task steps feed the second (0131 moved it off the template table). Every start is floored at today, so an overrun is sunk rather than pushed forward. Counts every process on the path, optional or not: 0127 added process_is_optional and the forecast does not read it yet. It is Stage 2's completion gate that will, and the forecast follows it there. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `job_display.job_calculated_completion_missing` | Estimates missing | How many of the job's processes nobody has put a duration on. It is why the calculated completion date is blank when it is blank. | `integer` | — | Read-only, computed. 0 when the forecast is real. NULL when the job is not live. | From job_completion_forecast() (0119). Exists so an empty cell is a number somebody can act on rather than a mystery — the repository's rule that a blank invites configuring while a guess gets quoted back as agreed. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `job_display.project_type` | Job type (inherited) | The job's type, which is its project's type. Inherited through the view rather than copied onto the job, so there is nowhere for the two to disagree. | `view` | — | Read-only. | jobs ⋈ projects on project_id. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `job_display.job_health` | Health | How the job is going, rolled up from its processes (0133) — not its status, which is what somebody set. At risk when any open required process is at risk or overdue; overdue when the target completion date has passed; not_tracked once the job is Completed, Closed or Cancelled. A job with no target completion date is never overdue, only at risk (Amber, 15 September). | `view` | — | Read-only. Derived on every read by job_health(); stored nowhere. | The record's pill still reads job_status until that column becomes the pinnable On hold override. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `job_display.job_substage_id` | Sub-stage | Where in its stage the job's processes have it (0132): the earliest sub-stage of that stage still holding a non-optional job-scoped process whose latest attempt is neither complete nor not applicable. Null means the stage holds nothing open and the job has not moved yet. | `view` | — | Read-only. Derived on every read by job_open_substage(); stored nowhere, so there is no second copy to disagree. | Nothing keyed off a job's sub-stage before 0132, which is why it is a reading rather than a column. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `job_display.job_substage_name` | Sub-stage name | The name of the sub-stage above, resolved through lifecycle_substages. | `view` | — | Read-only. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `job_display.job_is_current` | Is current | Whether the job is still live — not completed, cancelled or archived. Derived from status every time it is read, never stored. | `view` | — | Read-only. is_current(jobs.job_status). | Mirrors the isCurrent() helper in the app. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
@@ -453,6 +454,14 @@ Every stage move, logged the moment it happens — because time in stage cannot 
 | `job_stage_events.job_stage_event_at` | When | The moment of the move — the timestamp durations are measured between. | `timestamptz` | — | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `job_stage_events.job_stage_event_by` | By | Who moved it. Null for a trigger or an import. | `uuid` | — | Nullable. | FK → profiles(profile_id). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
+## `job_stage_health`
+
+The same one level up (0133): the worst of a stage's sub-stages, for one job. It reads job_substage_health rather than the processes a second time, so a stage can never read healthier than a sub-stage inside it.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `job_stage_health.stage_health` | Stage health | The worst health of a stage's sub-stages, for one job (0133). Reads job_substage_health rather than the processes again. | `view` | — | Read-only. | Read by job_health(). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
 ## `job_stages`
 
 Dropped in 0006. One row per job per stage was the wrong shape for the question every board load asks — the current position moved onto the job as stage and stage_entered_at in 0004, and past transitions live in activity_audit.
@@ -461,6 +470,14 @@ Dropped in 0006. One row per job per stage was the wrong shape for the question 
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `job_stages.id` | Job stage (removed) | Removed. It was one row per job per stage with entered_at and exited_at, and answering "what stage is this job in" meant finding the row with a null exited_at — the wrong shape for a query the board makes on every load. 0004 moved the current position onto the job as stage and stage_entered_at, which left this table holding only the durations of stages a job had already left. Nothing wrote to it and no screen read it, so 0006 dropped it. | `uuid` | — | Table dropped in 0006. | Current position is jobs.stage + jobs.stage_entered_at. Past transitions are in activity_audit, whose trigger captures whole rows — an update changing jobs.stage leaves old_row->>'stage', new_row->>'stage' and changed_at. | Merged | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `job_stages.is_current` | Is current (removed) | Removed before the table itself was. Which stage a job is in now is jobs.stage; whether the job itself is current is is_current(status) — anything not completed, cancelled or archived. A third copy of that fact was a third thing to keep true. | `boolean` | — | Dropped from the schema. | Superseded by jobs.stage and the is_current(record_status) function. | Merged | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `job_substage_health`
+
+How every sub-stage that still holds work for a job is going (0133): the worst health of its open required processes. Nothing is stored — re-time a process and the roll-up re-reads.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `job_substage_health.substage_health` | Sub-stage health | The worst health of the open required processes in one sub-stage, for one job (0133). Overdue beats at risk beats on track; not_started and no_expectation are not ranked above on track, because a stage is not in trouble when somebody has simply not set an SLA. | `view` | — | Read-only. A sub-stage with nothing open is not a row here — finished is not a health. | Read by job_stage_health, so the two levels cannot drift apart. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `job_types`
 

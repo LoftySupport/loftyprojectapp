@@ -98,6 +98,16 @@ question 0k, answered the same night, *"No, it stays put"*. Owning team, assigne
 end date and the health roll-up are the next migration. **Nothing of Stage 3 is applied
 live**, and it is stacked behind #105 and #106.
 
+**`0133`, on the same branch, rolls health up.** A sub-stage and a stage take the worst health
+of their open required processes; a job is at risk when any of those is at risk or overdue, and
+overdue when its target completion date has passed — a job with no target is never overdue,
+only at risk. Overdue beats at risk beats on track; `not_started` and `no_expectation` are not
+ranked above on track, because a stage is not in trouble when somebody has simply not set an
+SLA. Three views, each reading the one below it, so a stage can never read healthier than a
+sub-stage inside it. **The record's pill still reads `job_status`** and changes when that column
+becomes the pinnable *On hold* override, because splitting the two halfway would leave two
+screens showing different things under the same word.
+
 **A review of `0131` and the screens found fifteen things, and one was a hole.**
 `instantiate_process_steps` was SECURITY DEFINER and granted to `authenticated` — `0130`
 wrote it that way where the function it replaces had been invoker since `0081` — so the RPC

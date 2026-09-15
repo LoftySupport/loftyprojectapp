@@ -433,6 +433,15 @@ export interface Job {
   stagePinnedAt: IsoDateTime | null;
   stagePinnedBy: Uuid | null;
   stagePinReason: string | null;
+  /**
+   * Health, rolled up from the processes (0133). Derived on read, never stored.
+   *
+   * The record's pill does not read this yet — it still shows `status`. That changes in the
+   * migration that makes `status` the pinnable *On hold* override, because splitting the two
+   * halfway would leave one screen showing health and another showing a typed status, both
+   * under the same word.
+   */
+  health: JobHealth;
   /** Who is primarily accountable. Drives board grouping. */
   owningTeam: TeamId;
   /**
@@ -2283,6 +2292,30 @@ export const PROCESS_RUN_STATUS_LABELS: Record<ProcessRunStatus, string> = {
 };
 
 /** What `process_run_display` derives from the SLA. Never stored. */
+/**
+ * A job's health, rolled up from its processes (0133).
+ *
+ * Not its status. Amber, 14 September: *"Status is what someone sets. Health is what the
+ * system works out"*. The rule, 15 September: a sub-stage and a stage take the worst health
+ * of their open required processes; the job is **at risk** when any of those is at risk or
+ * overdue, and **overdue** when its target completion date has passed. A job with no target
+ * is never overdue, only at risk.
+ *
+ * `not_tracked` is a job that has stopped — Completed, Closed or Cancelled. Nothing fires
+ * while cancelled, and a finished job is not healthy or unhealthy, it is finished.
+ * `no_expectation` means nothing is open anywhere, which is a different thing again.
+ */
+export type JobHealth =
+  | "on_track" | "at_risk" | "overdue" | "no_expectation" | "not_tracked";
+
+export const JOB_HEALTH_LABELS: Record<JobHealth, string> = {
+  on_track: "On track",
+  at_risk: "At risk",
+  overdue: "Overdue",
+  no_expectation: "Nothing open",
+  not_tracked: "Not tracked"
+};
+
 export type ProcessRunHealth =
   | "not_started" | "no_expectation" | "on_track" | "at_risk" | "overdue"
   | "complete" | "not_applicable";

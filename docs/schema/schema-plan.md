@@ -4652,6 +4652,59 @@ CHECK answers before the guard is reached and it would have gone on passing.
 hand, and health does not roll up yet. Those are the next migration; the rules for all of
 them were answered on 14 and 15 September and are in `docs/open-questions.md`.
 
+### 15 September — health rolls up from the processes (`0133`)
+
+Stage 3 of the audit, its second migration, on the same branch as `0132` because it is the
+same table.
+
+`process_run_display.process_run_health` has answered *is this process in trouble* since
+`0047`. Nothing above it had an answer at all: a sub-stage had none, a stage had none, and a
+job's card showed `job_status`, which is what somebody typed. Amber, 14 September: *"Status is
+what someone sets. Health is what the system works out"*.
+
+**The rule, in her words on 15 September.** A process is at risk or overdue against its own
+SLA, unchanged. **A sub-stage and a stage take the worst health of their open required
+processes.** The **job** is at risk when any open required process is at risk or overdue, and
+**overdue** when `job_target_completion` is in the past and the job is not complete. A job
+with no target is never overdue, only at risk.
+
+**What "worst" means, and what it deliberately does not.** Overdue beats at risk beats on
+track, her three words in her order. The other things `process_run_health` can say —
+`not_started` and `no_expectation` — are **not** ranked above on track. That is the
+conservative reading rather than an omission: they mean nobody has measured this, and a stage
+is not in trouble because somebody has not filled in an SLA. So a sub-stage whose only open
+process has no expectation reads `no_expectation` rather than `on_track` — the difference
+between *fine* and *nobody has said*, which this repository refuses to collapse.
+
+**Three objects, and each reads the one below it.** `job_substage_health` reads the processes;
+`job_stage_health` reads `job_substage_health` rather than the processes a second time, so a
+stage can never read healthier than a sub-stage inside it; `job_health()` reads
+`job_stage_health`. One chain, no parallel implementations to drift.
+
+**Open and required mean what `0132` made them mean** — the latest attempt is neither complete
+nor not applicable, or there is no attempt; and `not process_is_optional`. One definition,
+read by everything, so the board and the record cannot disagree.
+
+**A stopped job has no health.** Completed, Closed and Cancelled read `not_tracked`. Nothing
+fires while cancelled (`0043`), and a finished job is not healthy or unhealthy, it is
+finished.
+
+**What this does not do.** The record's pill **still reads `job_status`**. Amber's answer says
+it stops, and it will — in the migration that makes `job_status` the pinnable *On hold*
+override. Doing half of that split here would leave a screen showing health in one place and a
+typed status in another, both labelled the same. And a **project** has no health: it follows
+its slowest job for its stage (`0041`), and whether it follows the worst for health is a
+question nobody has been asked.
+
+**Proof.** The migration's own block compares `job_display.job_health` against `job_health()`,
+asserts no stage reads healthier than a sub-stage inside it, and moves a real job's target
+completion date to yesterday and back — reading the old value first, because restoring to null
+would quietly clear a date somebody committed to. `behaviour.sql` gains step 48, which gives an
+open required process an SLA it has already blown and watches the sub-stage, the stage and the
+job all turn, then the target date override both ways, then a cancelled job going untracked.
+Watched failing twice: with `private.worst_health` taking the BEST of the set, four probes
+reported; with the target-completion branch removed from `job_health`, the promise probe did.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in
