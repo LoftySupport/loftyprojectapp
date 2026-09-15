@@ -4454,6 +4454,50 @@ whole sequence on the fixture job — 16 tasks from 16 task steps, each naming i
 instantiation making none, the run staying open with a required step open, closing when it is
 answered, and not reopening when that answer is undone.
 
+### 15 September — the 801 staged rows become two spreadsheets (Stage 5's first step)
+
+Stage 5 of the audit, on `claude/stage5-export-the-import-staging`, off `main` rather than
+stacked: it adds files and drops nothing, so it does not need anything ahead of it.
+
+Audit decision 9, Amber: *"Export the rows to a spreadsheet in the repository and drop the
+lot."* Chosen over an `archive` schema and over leaving it in `public`. **This is the export
+half only.** The drop is its own migration and comes after, because dropping a table on the
+strength of a file nobody has checked is the thing this step exists to prevent.
+
+**The export reads a replay, not the live project**, because `0087` **is** the rows: 1.2 MB of
+INSERT literals generated from the workbook. The two were compared first — 801 rows, md5
+`daac704c522fc80b9d0aab0f8d2e10a9`, identical live and on a clean replay of every migration —
+so the export is proved equal to what is live rather than assumed to be.
+
+**Two files, because the rows carry two different things.** `-raw-` is the workbook as staged
+(801 rows, 110 columns, the sheet's own headers) and is the one somebody opens. `-spine-` is
+what the importer *decided* from each row (801 rows, 22 columns, 5 with a `skip_reason`), and
+`0087`'s own header says why that is the half worth keeping: *"Nothing is loaded here —
+`import_spine()` does that with the decisions the sheet does not carry."* The five skipped rows
+in the export are sheet rows 148, 149, 150, 439 and 557 against projects 1027, 1028, 1029, 1078
+and 1100, which is exactly what `0087`'s header lists.
+
+**Both end with a verbatim `json` column**, because a flat CSV cannot round-trip JSON on its
+own — every number, boolean and null comes back a string — and a file that is readable but not
+reloadable is the worse half of both.
+
+**Two defects in the tooling, both found by watching it fail.** `--verify` originally rewrote
+the files before checking them, so it could not fail: a row's JSON was mistyped by hand, the
+run overwrote the file with a fresh export and then checked its own output, which of course
+matched. A verification that repairs what it is checking proves the writer agrees with the
+reader and nothing about the file on disk. It does not write in verify mode now. And the first
+attempt to corrupt a row did not corrupt anything — the JSON inside a CSV cell is
+double-quoted, so the search string never matched, and the pass was the test's fault rather
+than the check's. With both fixed, one mistyped key in one row of 801 is reported with both
+digests and a non-zero exit.
+
+**What the drop migration will assert**, when it is written: the two digests recorded in
+`app/supabase/import/README.md`, so the table goes only against files that have been checked.
+
+**The 7 September note at the top of that README is superseded rather than rewritten.** It said
+nothing was removed from the database on purpose, which was true then and is the reasoning for
+why the rows survived to be exported at all.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in
