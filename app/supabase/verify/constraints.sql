@@ -346,7 +346,7 @@ BEGIN
     ELSE
       RAISE WARNING 'FAIL: a retired stage name was accepted on a job';
     END IF;
-  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  job_stage admits only the five lifecycle phases';
+  EXCEPTION WHEN foreign_key_violation THEN RAISE NOTICE 'ok  job_stage admits only the seven lifecycle stages (a key to lifecycle_stages since 0126)';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on retired stage name (%)', SQLERRM; END;
 
   BEGIN
@@ -463,7 +463,7 @@ BEGIN
                                property_def_stage, property_def_owning_team, property_def_format)
     VALUES ('fencing_type', 'Fencing type', 'project', 'Framing', 'design', 'text');
     RAISE WARNING 'FAIL: a property capturing at stage "Framing" was accepted — not a lifecycle stage';
-  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  property_defs_stage_is_a_lifecycle_stage rejected "Framing"';
+  EXCEPTION WHEN foreign_key_violation THEN RAISE NOTICE 'ok  property_defs_stage_is_a_lifecycle_stage rejected "Framing" (a key to lifecycle_stages since 0126)';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  property_defs_stage)', SQLERRM; END;
 
   BEGIN

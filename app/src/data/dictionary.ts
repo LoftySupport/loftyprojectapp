@@ -1458,19 +1458,35 @@ export const DICTIONARY: DictionaryEntry[] = [
   e("maintenance_item_display.maintenance_item_original_trade", "Original trade", "Who did this trade on the job during construction, from record_parties on the job and its runs in the category's party role \u2014 the default repairer (Amber, answer 3).", "view", "\u2014", "Shown beside the Offer button so the right contractor is one click.", "created"),
   e("maintenance_item_display.maintenance_assignment_status", "Current offer", "The item's current (or last) offer and its contractor, flattened onto the item.", "view", "\u2014", "\u2014", "created"),
 
+  // ------------------------------------------------------ lifecycle_stages (0126)
+  // The lifecycle as rows. Stage 1 of the 15 September audit: what pipeline_stages carried
+  // for the one build_lifecycle pipeline, as its own table, with the four stage columns
+  // keyed to it and lifecycle_position() reading it.
+  e("lifecycle_stages.lifecycle_stage_id", "Stage code", "The slug code keys on: acquisition_development, pre_construction, construction, maintenance, completed, closed, cancelled. Sub-stages hang off it (Stage 1, second migration).", "text", "Primary key. CHECK: slug shape.", "—", "created"),
+  e("lifecycle_stages.lifecycle_stage_name", "Stage", "The display name, and the value every stage column holds: jobs.job_stage, projects.project_stage, processes.process_stage and property_defs.property_def_stage are foreign keys to it. The key does not cascade a rename, because a cascaded rename would fire every job's stage triggers as though the job had moved; renaming a stage with rows is a migration.", "text", "Not null. Unique. Not blank.", "Referenced by the four stage columns (on update restrict, on delete restrict). Read by listStages().", "created"),
+  e("lifecycle_stages.lifecycle_stage_position", "Order", "Board order, and the order lifecycle_position() returns for the linear guard, the project clamp and the cascade. A stage inserted as a row is ordered the moment it exists.", "integer", "smallint. Not null. Unique.", "—", "created"),
+  e("lifecycle_stages.lifecycle_stage_kind", "Kind", "open (work is on), won (Completed), archived (Closed), lost (Cancelled). From pipeline_stage_type. What the ends of the lifecycle are, for code that should not spell the names out.", "text", "Not null, default open. CHECK in (open, won, archived, lost).", "—", "created"),
+  e("lifecycle_stages.lifecycle_stage_expected_days", "Expected days in stage", "How long a record should sit in this stage (0047, moved here from pipeline_stages). Null means no SLA is set, which is a real state and not zero.", "integer", "smallint. Nullable. CHECK (> 0).", "Read by listTemplatePhases; set by a manager through updateStageSla. The at-risk lead must be shorter than it.", "created"),
+  e("lifecycle_stages.lifecycle_stage_at_risk_lead_days", "At-risk lead", "How many days before the expected-days deadline a record starts flagging at risk (0047).", "integer", "smallint. Nullable. CHECK (> 0) and lifecycle_stages_at_risk_lead_fits_the_expectation: a lead needs an expectation and must be shorter than it.", "Read by listTemplatePhases; set by a manager through updateStageSla.", "created"),
+  e("lifecycle_stages.lifecycle_stage_is_active", "Active", "False retires a stage from pickers and new records; rows already in it keep the value, and the key refuses a delete while anything references the stage.", "boolean", "Not null, default true.", "—", "created"),
+  e("lifecycle_stages.lifecycle_stage_created_at", "Created", "When the row was made.", "timestamptz", "Not null, default now().", "—", "created"),
+  e("lifecycle_stages.lifecycle_stage_created_by", "Created by", "Who made it; stamp_created_by fills it from the session.", "uuid", "Nullable.", "FK → profiles(profile_id).", "created"),
+  e("lifecycle_stages.lifecycle_stage_updated_at", "Updated", "When the row last changed; moddatetime stamps it.", "timestamptz", "Not null, default now().", "—", "created"),
+  e("lifecycle_stages.lifecycle_stage_updated_by", "Updated by", "Who changed it.", "uuid", "Nullable.", "FK → profiles(profile_id).", "created"),
+
   // ----------------------------------------------------- pipeline_stages (SLA)
   // The lifecycle's lookup (0029, reseeded 0035 and 0045). Only its two SLA columns are
   // dictionaried so far — the first entries the table has had at all.
   e("pipeline_stages.pipeline_stage_expected_days", "Expected days in stage",
     "How long a record should sit in this stage — what \"on time\" means for it, and what overdue is measured past. Null means no SLA is set, which is a real state and not zero: an invented number was exactly what the old Gantt drew bars against.",
     "integer", "smallint. Nullable. CHECK (> 0).",
-    "Read by listTemplatePhases as TemplatePhase.expectedDays; edited per stage in Setup → Automations (superadmin, by the 0029 policy). The at-risk lead must be shorter than it.",
+    "Superseded by lifecycle_stages.lifecycle_stage_expected_days (0126); nothing reads this column now, and Stage 5 drops the table. The at-risk lead must be shorter than it.",
     "created"),
   e("pipeline_stages.pipeline_stage_at_risk_lead_days", "At-risk lead",
     "How many days before the expected-days deadline the record starts flagging at risk (Amber's Q1, 0047). Past the deadline itself is overdue — there is no third number.",
     "integer",
     "smallint. Nullable. CHECK pipeline_stages_at_risk_lead_is_positive (> 0) and pipeline_stages_at_risk_lead_fits_the_expectation — a lead needs an expectation to lead, and must be shorter than it, or it would flag the record at risk on arrival. Both proved biting in 0047.",
-    "Read by listTemplatePhases as TemplatePhase.atRiskLeadDays; edited beside the expectation in Setup → Automations. The health calculation (parked — see health_statuses) is its intended consumer.",
+    "Superseded by lifecycle_stages.lifecycle_stage_at_risk_lead_days (0126); nothing reads this column now, and Stage 5 drops the table.",
     "created"),
 
 
@@ -1805,6 +1821,8 @@ export const TABLE_DESCRIPTIONS: Record<string, string> = {
     "One dwelling's build — \"1042-01\", which is both what Lofty says out loud and the primary key. Carries the lifecycle stage, the owning team and assignee, both addresses, the engaged teams and the SharePoint folder: the board is mostly this table.",
   login_activity:
     "One row per authentication event, copied out of auth.users with the email denormalised so the row survives account deletion. Read most-recent-first, which is what its index is for. Built outside the numbered migrations.",
+  lifecycle_stages:
+    "The lifecycle as rows (0126): the seven stages in position order, their kind, their SLA and whether they are active. Every stage column is a foreign key to the name. Superadmin changes what a stage is; a manager sets its SLA; a rename with rows in the stage is a migration.",
   pipeline_stages:
     "A position within a pipeline — the build lifecycle's seven stages are its rows (0029, reseeded by 0035 and 0045), which is what lets the vocabulary change without an ALTER TYPE. Covered from its identity through the SLA pair the Setup → Automations editor writes.",
   pipelines:

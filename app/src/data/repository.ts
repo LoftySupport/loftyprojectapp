@@ -736,7 +736,8 @@ export interface Repository {
   /**
    * The SLA per lifecycle stage — expected days in stage and the at-risk lead (0047),
    * keyed by stage name. `null` clears a number; the fresh phase list comes back as
-   * proof the database accepted it. Superadmin, by the 0029 policy on pipeline_stages.
+   * proof the database accepted it. Manager and above: 0096's rule, on `lifecycle_stages`
+   * since 0126, with a guard trigger that lets a manager touch the two SLA columns only.
    */
   updateStageSla(
     stage: StageName,
@@ -1336,7 +1337,7 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   // Both became tables — `teams` in 0026, `pipeline_stages` in 0029. The labels
   // said "enum" long after that stopped being true, on the one screen whose entire
   // job is to say what is backed by what.
-  listStages: "pipeline_stages",
+  listStages: "lifecycle_stages",
   listTeams: "teams",
   updateTeam: "teams",
   createTeam: "teams",
@@ -1454,8 +1455,8 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   deleteRelease: "releases",
   listMyPreferences: "user_preferences",
   saveMyPreferences: "user_preferences",
-  listTemplatePhases: "pipeline_stages",
-  updateStageSla: "pipeline_stages",
+  listTemplatePhases: "lifecycle_stages",
+  updateStageSla: "lifecycle_stages",
   listTemplateMilestones: "processes (milestones)",
   listPropertyDefs: "property_defs",
   listDictionaryOverrides: "dictionary_overrides",

@@ -130,6 +130,8 @@ select 'teams visible: '  || count(*) from teams;
 -- is silent: an empty list is a legal answer to a SELECT.
 select 'pipelines visible: '       || count(*) from pipelines;
 select 'pipeline stages visible: ' || count(*) from pipeline_stages;
+-- 0126: the board's columns come from here now.
+select 'lifecycle stages visible: ' || count(*) from lifecycle_stages;
 
 \echo '--- probes (each must print ok) ---'
 do $$
@@ -166,6 +168,22 @@ begin
   exception
     when insufficient_privilege then raise notice 'ok  a user is refused the notifications switch-on outright (0125)';
     when others then raise warning 'FAIL: unexpected on the switch-on at user (%)', sqlerrm;
+  end;
+
+  -- 0126: the lifecycle's SLA is a manager's. At `user` the UPDATE matches no row.
+  declare
+    touched int;
+  begin
+    update lifecycle_stages set lifecycle_stage_expected_days = 30 where lifecycle_stage_id = 'construction';
+    get diagnostics touched = row_count;
+    if touched = 0 then
+      raise notice 'ok  a user cannot set a lifecycle stage''s SLA (0126)';
+    else
+      raise warning 'FAIL: a user set a lifecycle stage''s SLA (% row)', touched;
+    end if;
+  exception
+    when insufficient_privilege then raise notice 'ok  a user is refused a lifecycle stage''s SLA outright (0126)';
+    when others then raise warning 'FAIL: unexpected on a lifecycle SLA at user (%)', sqlerrm;
   end;
 
   -- 0048: a saved view is private. Two halves, because they are different mechanisms:
@@ -781,6 +799,8 @@ update profiles set profile_permission = 'manager'
 -- file's own scribble.
 create temp table sla_before as
   select pipeline_stage_id, pipeline_stage_expected_days from pipeline_stages;
+create temp table lifecycle_sla_before as
+  select lifecycle_stage_id, lifecycle_stage_expected_days from lifecycle_stages;
 
 \echo '=== a MANAGER ==='
 set role authenticated;
@@ -890,6 +910,30 @@ begin
     when others then raise warning 'FAIL: unexpected setting expected days (%)', sqlerrm;
   end;
 
+  -- 4b. 0126 moved the SLA to lifecycle_stages, which is what the app writes now. The same
+  --     manager sets it there, and the shape guard refuses the rename there too. Watched
+  --     failing with lifecycle_stages_guard_shape dropped: the rename went through to the
+  --     key and reported as the wrong error.
+  begin
+    update lifecycle_stages set lifecycle_stage_expected_days = 30;
+    if found then
+      raise notice 'ok  a manager sets how long a lifecycle stage should take (0126)';
+    else
+      raise warning 'FAIL: a manager could not set expected days on lifecycle_stages';
+    end if;
+  exception
+    when insufficient_privilege then raise warning 'FAIL: expected days on lifecycle_stages refused a manager (%)', sqlerrm;
+    when others then raise warning 'FAIL: unexpected setting expected days on lifecycle_stages (%)', sqlerrm;
+  end;
+  begin
+    update lifecycle_stages set lifecycle_stage_name = lifecycle_stage_name || ' (renamed)';
+    raise warning 'FAIL: a manager renamed a lifecycle stage — that is the lifecycle, not its SLA';
+  exception
+    when insufficient_privilege then raise notice 'ok  a manager cannot rename a lifecycle stage; the guard refused first (0126)';
+    when foreign_key_violation then raise warning 'FAIL: the rename reached the key, so the shape guard did not fire (0126)';
+    when others then raise warning 'FAIL: unexpected renaming a lifecycle stage (%)', sqlerrm;
+  end;
+
   -- 5. The column rule, which is a TRIGGER and not a policy — so it only shows at
   --    manager, exactly like 0060's stage guard only shows at admin. Probe 3 above
   --    covers insert, which the policy refuses; this covers the update the policy now
@@ -966,6 +1010,12 @@ update pipeline_stages ps
  where b.pipeline_stage_id = ps.pipeline_stage_id
    and ps.pipeline_stage_expected_days is distinct from b.pipeline_stage_expected_days;
 drop table sla_before;
+update lifecycle_stages s
+   set lifecycle_stage_expected_days = b.lifecycle_stage_expected_days
+  from lifecycle_sla_before b
+ where b.lifecycle_stage_id = s.lifecycle_stage_id
+   and s.lifecycle_stage_expected_days is distinct from b.lifecycle_stage_expected_days;
+drop table lifecycle_sla_before;
 
 -- =============================================================================
 -- AN ADMIN, THEN A SUPERADMIN — the one rule that needs both (0060)

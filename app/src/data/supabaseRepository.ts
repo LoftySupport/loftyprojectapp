@@ -643,48 +643,36 @@ function narrate(r: AuditRow, lookup: NameLookup, names: SubjectNames): RecordAc
 }
 
 const STAGE_COLUMNS =
-  "pipeline_stage_id, pipeline_stage_name, pipeline_stage_position, pipeline_stage_owning_team, pipeline_stage_expected_days, pipeline_stage_at_risk_lead_days, pipeline_stage_created_at, pipeline_stage_created_by, pipeline_stage_updated_at, pipeline_stage_updated_by";
+  "lifecycle_stage_id, lifecycle_stage_name, lifecycle_stage_position, lifecycle_stage_kind, lifecycle_stage_expected_days, lifecycle_stage_at_risk_lead_days, lifecycle_stage_is_active, lifecycle_stage_created_at, lifecycle_stage_created_by, lifecycle_stage_updated_at, lifecycle_stage_updated_by";
 
 interface StageRow {
-  pipeline_stage_id: string;
-  pipeline_stage_name: string;
-  pipeline_stage_position: number;
-  pipeline_stage_owning_team: TeamId | null;
-  pipeline_stage_expected_days: number | null;
-  pipeline_stage_at_risk_lead_days: number | null;
-  pipeline_stage_created_at: string;
-  pipeline_stage_created_by: string | null;
-  pipeline_stage_updated_at: string;
-  pipeline_stage_updated_by: string | null;
+  lifecycle_stage_id: string;
+  lifecycle_stage_name: string;
+  lifecycle_stage_position: number;
+  lifecycle_stage_kind: "open" | "won" | "archived" | "lost";
+  lifecycle_stage_expected_days: number | null;
+  lifecycle_stage_at_risk_lead_days: number | null;
+  lifecycle_stage_is_active: boolean;
+  lifecycle_stage_created_at: string;
+  lifecycle_stage_created_by: string | null;
+  lifecycle_stage_updated_at: string;
+  lifecycle_stage_updated_by: string | null;
 }
 
 /**
  * The stages of the build lifecycle, in order.
  *
- * Two round trips rather than one embed, deliberately. `pipelines` and `pipeline_stages`
- * reference each other in both directions — `pipeline_stages.pipeline_id` down, and
- * `pipelines.pipeline_parent_stage_id` back up for the nesting — and an embed across a
- * pair like that is exactly the shape that produced PGRST201 on sign-in. Two plain
- * queries cannot be ambiguous, and this runs once per page load.
- *
- * Filtered to `build_lifecycle` because a job sits in several pipelines at once: the
- * lifecycle, then a nested one per phase. Without the filter this would return every
- * stage of every pipeline as though they were one list.
+ * One query on `lifecycle_stages` (0126). Until then this was two round trips through
+ * `pipelines` and `pipeline_stages`, whose mutual references made an embed ambiguous; the
+ * lifecycle has its own table now and the pipeline tables wait for Stage 5 to drop them.
+ * Every row, retired ones included: a record can still sit in a retired stage, and the
+ * board has to be able to draw it. Pickers filter on `isActive` when there is one to filter.
  */
 async function loadLifecycleStages(client: SupabaseClient): Promise<StageRow[]> {
-  const { data: pipeline, error: pipelineError } = await client
-    .from("pipelines")
-    .select("pipeline_id")
-    .eq("pipeline_key", "build_lifecycle")
-    .maybeSingle();
-  if (pipelineError) throw pipelineError;
-  if (!pipeline) return [];
-
   const { data, error } = await client
-    .from("pipeline_stages")
+    .from("lifecycle_stages")
     .select(STAGE_COLUMNS)
-    .eq("pipeline_id", pipeline.pipeline_id)
-    .order("pipeline_stage_position");
+    .order("lifecycle_stage_position");
   if (error) throw error;
   return (data ?? []) as unknown as StageRow[];
 }
@@ -2068,13 +2056,13 @@ export function createSupabaseRepository(): Repository {
       return rows.map(r => ({
         // The position, not the uuid. `Stage.id` is a number the app uses only to key a
         // list, and position is the stable small integer the seed already used.
-        id: r.pipeline_stage_position,
-        name: r.pipeline_stage_name,
-        position: r.pipeline_stage_position,
-        createdAt: r.pipeline_stage_created_at,
-        createdBy: r.pipeline_stage_created_by,
-        updatedAt: r.pipeline_stage_updated_at,
-        updatedBy: r.pipeline_stage_updated_by
+        id: r.lifecycle_stage_position,
+        name: r.lifecycle_stage_name,
+        position: r.lifecycle_stage_position,
+        createdAt: r.lifecycle_stage_created_at,
+        createdBy: r.lifecycle_stage_created_by,
+        updatedAt: r.lifecycle_stage_updated_at,
+        updatedBy: r.lifecycle_stage_updated_by
       }));
     },
 
@@ -3327,31 +3315,30 @@ export function createSupabaseRepository(): Repository {
     },
 
     /**
-     * Who picks a job up at each phase, and how long it should take.
+     * How long each lifecycle stage should take.
      *
-     * Both come off `pipeline_stages` rather than a seed, which settles a disagreement:
-     * the app said Pre-Construction Admin owned Working Drawings & Contracts and the
+     * Off `lifecycle_stages` (0126) rather than a seed, which settled a disagreement long
+     * ago: the app said Pre-Construction Admin owned Working Drawings & Contracts and the
      * database said Design. Neither was authoritative, and two sources that disagree are
      * worse than one that is provisional.
      *
-     * `expectedDays` is null for all nine, because nobody has set one. It used to render
+     * `owningTeamNames` is always empty now. `pipeline_stages` had an owning-team column
+     * that was null on all seven stages, and the audit's model derives a job's team from
+     * its processes rather than stamping one on the stage, so `lifecycle_stages` did not
+     * carry the column. The field stays on the type so its callers do not change twice.
+     *
+     * `expectedDays` is null for all seven, because nobody has set one. It used to render
      * as 10, 14, 12, 90 — numbers written to fill the field, which the Gantt then drew
      * bars against. A blank reads as "not configured"; an invented 14 reads as an SLA.
      */
     async listTemplatePhases(): Promise<TemplatePhase[]> {
-      const [stages, teams] = await Promise.all([lifecycleStages(), repo.listTeams()]);
-      const nameOf = new Map(teams.map(t => [t.id, t.name]));
-
+      const stages = await lifecycleStages();
       return stages.map(r => ({
-        stageId: r.pipeline_stage_position,
-        stageName: r.pipeline_stage_name,
-        // One owning team per stage in the schema. An array because a phase genuinely can
-        // be shared, and widening this later should not be a type change on every caller.
-        owningTeamNames: r.pipeline_stage_owning_team
-          ? [nameOf.get(r.pipeline_stage_owning_team) ?? r.pipeline_stage_owning_team]
-          : [],
-        expectedDays: r.pipeline_stage_expected_days,
-        atRiskLeadDays: r.pipeline_stage_at_risk_lead_days
+        stageId: r.lifecycle_stage_position,
+        stageName: r.lifecycle_stage_name,
+        owningTeamNames: [],
+        expectedDays: r.lifecycle_stage_expected_days,
+        atRiskLeadDays: r.lifecycle_stage_at_risk_lead_days
       }));
     },
 
@@ -3361,33 +3348,26 @@ export function createSupabaseRepository(): Repository {
      * Keyed by stage name, the vocabulary every screen already shares. `null` clears —
      * an unset SLA is a real state — and the CHECKs (lead needs an expectation, lead
      * shorter than it) refuse here with their names, shown verbatim by the editor.
-     * Superadmin by the 0029 policy: the SLA is part of what the stages ARE.
+     * Manager and above, by 0096's rule carried into `lifecycle_stages` (0126): the SLA is
+     * the one part of a stage a manager may set; a guard trigger refuses everything else.
      */
     async updateStageSla(
       stage: StageName,
       patch: { expectedDays?: number | null; atRiskLeadDays?: number | null }
     ): Promise<TemplatePhase[]> {
       const row: Record<string, number | null> = {};
-      if ("expectedDays" in patch) row.pipeline_stage_expected_days = patch.expectedDays ?? null;
-      if ("atRiskLeadDays" in patch) row.pipeline_stage_at_risk_lead_days = patch.atRiskLeadDays ?? null;
+      if ("expectedDays" in patch) row.lifecycle_stage_expected_days = patch.expectedDays ?? null;
+      if ("atRiskLeadDays" in patch) row.lifecycle_stage_at_risk_lead_days = patch.atRiskLeadDays ?? null;
       if (Object.keys(row).length === 0) return await repo.listTemplatePhases();
 
-      const { data: pipeline, error: pipelineError } = await db
-        .from("pipelines")
-        .select("pipeline_id")
-        .eq("pipeline_key", "build_lifecycle")
-        .single();
-      if (pipelineError) throw pipelineError;
-
       const { data: updated, error } = await db
-        .from("pipeline_stages")
+        .from("lifecycle_stages")
         .update(row)
-        .eq("pipeline_id", pipeline.pipeline_id)
-        .eq("pipeline_stage_name", stage)
-        .select("pipeline_stage_id");
+        .eq("lifecycle_stage_name", stage)
+        .select("lifecycle_stage_id");
       if (error) throw error;
       if (!updated?.length) {
-        throw new Error(`The ${stage} stage was not updated — editing stage SLAs needs superadmin.`);
+        throw new Error(`The ${stage} stage was not updated — editing stage SLAs needs manager or above.`);
       }
       return await repo.listTemplatePhases();
     },
