@@ -91,9 +91,49 @@ Its merge commit `70731c1` sits on that branch and nothing of `0131` is on `main
 merged `f7db721`, which predates the review fixes below — those went up twenty minutes after it
 closed. Both are re-opened against `main` as #108, with `claude/stage2-screens-read-steps` as
 its head, and #107 is stacked on that. **Nothing was lost**; the branch holds everything.
-**What `main` holds meanwhile:** `0130` creates `instantiate_process_steps` as SECURITY
-DEFINER, which `0131` corrects, so `0128`–`0130` must not be applied live without `0131`. The
-live project is unaffected — its ledger ends at `0127` and the function does not exist there.
+**What `main` held meanwhile:** `0130` creates `instantiate_process_steps` as SECURITY
+DEFINER, which `0131` corrects, so `0128`–`0130` could not be applied live without `0131`.
+**Resolved on 15 September at 20:11**, when #108 merged: `0128`–`0131` went up to the live
+project in one sitting at 20:49 and the function is `SECURITY INVOKER` there. #112 carries the
+full applied record.
+
+**Stage 3 begins with `0132`, on `claude/stage3-derived-position`:** a job's sub-stage and
+stage are read from its processes, and a pin overrides them. The sub-stage is the earliest
+one **of the stage the job is in** that still holds a non-optional job-scoped process whose
+latest attempt is neither complete nor not applicable; the stage stays put while that stage
+holds work and otherwise moves to the earliest later stage that does, so it only ever looks
+forwards. `job_stage_pinned_at` with who and why is the override Amber asked for, and
+`moveJobStage` writes it — since the processes move the job now, a hand-move that is not a
+pin is one the next completed process undoes. **The stage column stays a column** because
+five other things key off it, so it is the derivation's output with a trigger keeping it in
+step and a proof comparing the two. A job with nothing open anywhere **does not move**:
+question 0k, answered the same night, *"No, it stays put"*. Owning team, assignee, status,
+end date and the health roll-up are the next migration. **Nothing of Stage 3 is applied
+live** until #107 merges; it is off `main` now that #108 has landed.
+
+**`0133`, on the same branch, rolls health up.** A sub-stage and a stage take the worst health
+of their open required processes; a job is at risk when any of those is at risk or overdue, and
+overdue when its target completion date has passed — a job with no target is never overdue,
+only at risk. Overdue beats at risk beats on track; `not_started` and `no_expectation` are not
+ranked above on track, because a stage is not in trouble when somebody has simply not set an
+SLA. Three views, each reading the one below it, so a stage can never read healthier than a
+sub-stage inside it. **The record's pill still reads `job_status`** and changes when that column
+becomes the pinnable *On hold* override, because splitting the two halfway would leave two
+screens showing different things under the same word.
+
+**`0134` derives the person on a job and the day it ended.** *Currently with* is the assignee
+of the earliest open task in the job's active process, kept in step by triggers on `tasks` and
+`process_runs`; `job_end_date` is stamped the day nothing required is open anywhere and is
+**never cleared** by the derivation, because a job that reopens work keeps the day it finished
+on. Two controls went read-only with it — the picker on the job record and the two job-assignee
+actions on the Jobs bulk bar — because a derived column and an editable control on the same
+field do not coexist. Assign the **task** and the job follows. **The owning team and the status
+are deliberately not in it:** the team's override is the *Override Active Team* handshake Amber
+parked into Stage 4, and taking the drop-down away before it lands would leave nobody able to
+move a job; the status derivation overlapped with health, which `0133` has now taken out of
+`job_status` entirely, so what is left to compute it from is worth asking again. **Question 0l**
+answered the first of those on 15 September: *wait for the handshake*, so the team drop-down
+stays as it is and Stage 4's Override Active Team is what unblocks the derivation.
 
 **A review of `0131` and the screens found fifteen things, and one was a hole.**
 `instantiate_process_steps` was SECURITY DEFINER and granted to `authenticated` — `0130`

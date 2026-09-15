@@ -118,6 +118,14 @@ begin
 end $$;
 
 \echo '=== a signed-in ACTIVE person, at permission level `user` ==='
+-- 0132: pinned before the role switch, by the owner, so the reason probe below is not
+-- vacuous. A reason on an unpinned job is refused by a CHECK before the guard is reached,
+-- so a probe that ran on one would go on passing with the guard dropped.
+update jobs set job_stage_pinned_at = now(),
+                job_stage_pinned_by = (select profile_id from profiles limit 1),
+                job_stage_pin_reason = 'planted for the rls probe'
+ where job_id = '9106-002';
+
 set role authenticated;
 set request.jwt.claim.sub = :'uid';
 select 'is_active_user: ' || is_active_user()::text;
@@ -216,6 +224,57 @@ begin
   exception
     when insufficient_privilege then raise notice 'ok  a user cannot add a step to a process (0128)';
     when others then raise warning 'FAIL: unexpected adding a step at user (%)', sqlerrm;
+  end;
+
+  -- 0132: pinning a job's stage is the override on the derivation, so it costs the same as
+  -- the move it replaces. The reason is part of the pin, not a note beside it.
+  -- Both columns together, and a valid pin: a probe that sends only the time is refused by
+  -- the CHECK rather than by the guard, so it would go on passing with the guard dropped.
+  begin
+    update jobs set job_stage_pinned_at = now(), job_stage_pinned_by = current_profile_id()
+     where job_id = '9106-002';
+    raise warning 'FAIL: a user pinned a job''s stage';
+  exception
+    when insufficient_privilege then raise notice 'ok  a user cannot pin a job''s stage (0132)';
+    when others then raise warning 'FAIL: unexpected pinning a stage at user (%)', sqlerrm;
+  end;
+  -- The reason on a job that IS pinned, for the same reason: on an unpinned job the CHECK
+  -- would answer first and the guard would never be reached.
+  declare touched int;
+  begin
+    update jobs set job_stage_pin_reason = 'sneaky'
+     where job_id = '9106-002' and job_stage_pinned_at is not null;
+    get diagnostics touched = row_count;
+    if touched = 0 then
+      raise warning 'FAIL: the pinned probe job is not there, so the reason probe proved nothing';
+    else
+      raise warning 'FAIL: a user rewrote a job''s pin reason';
+    end if;
+  exception
+    when insufficient_privilege then raise notice 'ok  and cannot rewrite the reason either (0132)';
+    when others then raise warning 'FAIL: unexpected rewriting a pin reason at user (%)', sqlerrm;
+  end;
+
+  -- But a user CAN move a job by hand no more than they ever could: the one exception 0132
+  -- carved into the stage guard is for the derivation's own answer, and a stage the
+  -- derivation does not compute is still a manager's.
+  -- A job still on the linear run: the fixture job is cancelled by the time this file runs,
+  -- and a cancelled job is refused by guard_lifecycle_is_linear before the permission guard
+  -- is ever reached, which would have made this probe report on the wrong rule.
+  declare live_job text;
+  begin
+    select job_id into live_job from jobs
+     where job_stage not in ('Cancelled', 'Closed') and lifecycle_position(job_stage) < lifecycle_position('Maintenance')
+     order by job_id limit 1;
+    if live_job is null then
+      raise notice 'note: no job on the linear run, so the hand-move probe did not run';
+    else
+      update jobs set job_stage = 'Maintenance' where job_id = live_job;
+      raise warning 'FAIL: a user moved a job to a stage its processes do not say';
+    end if;
+  exception
+    when insufficient_privilege then raise notice 'ok  a user still cannot move a job by hand (0038, narrowed by 0132)';
+    when others then raise warning 'FAIL: unexpected moving a job at user (%)', sqlerrm;
   end;
 
   -- 0129: but marking a step not applicable on a RUN is ordinary work, and that asymmetry is
@@ -793,6 +852,10 @@ reset role;
 --   asserts its own setup: if the flag is not on, it says so instead of testing nothing.
 -- =============================================================================
 reset request.jwt.claim.sub;
+-- 0132: leave the fixture as it was found. AFTER the claim is cleared, not before: with a
+-- JWT still set the session is the owner by role but still a `user` by permission, and the
+-- pin guard refuses it — which is the guard working, and cost one red harness run to see.
+update jobs set job_stage_pinned_at = null where job_id = '9106-002';
 update profiles set profile_is_demo = true
  where profile_email = 'behaviour-test@lofty.com.au';
 

@@ -124,7 +124,7 @@ const WIRED: RepositoryMethod[] = [
   "listProjects", "getProject", "listJobs", "getJob", "railCounts",
   "listMyPins", "pinPage", "unpinPage",
   "createProject", "createJob", "createJobsFromSplit", "deleteJob", "deleteProject",
-  "moveJobStage",
+  "moveJobStage", "pinJobStage", "unpinJobStage",
   "updateJob",
   "currentProfile", "listProfiles",
   "createProfile", "updateProfile", "setProfileActive", "listActivity",
@@ -201,7 +201,7 @@ const PROJECT_COLUMNS =
 //
 // Writes still go to `jobs` — a view is not the place to insert through.
 const JOB_COLUMNS =
-  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_sharepoint_url, job_created_at, job_created_by, job_updated_at, job_updated_by, job_current_address, job_original_address, project_current_address, project_sharepoint_url, project_type, job_title_type, job_council, job_target_completion, job_end_date, job_calculated_completion, job_calculated_completion_missing";
+  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_sharepoint_url, job_created_at, job_created_by, job_updated_at, job_updated_by, job_current_address, job_original_address, project_current_address, project_sharepoint_url, project_type, job_title_type, job_council, job_target_completion, job_end_date, job_calculated_completion, job_calculated_completion_missing, job_substage_id, job_substage_name, job_stage_pinned_at, job_stage_pinned_by, job_stage_pin_reason, job_health";
 
 /**
  * `""` and `"   "` are how a browser reports a field somebody did not fill in, and they
@@ -1823,9 +1823,15 @@ export function createSupabaseRepository(): Repository {
      * better than any message invented here.
      */
     async moveJobStage(id: string, stage: StageName): Promise<Job> {
+      // The move PINS the job (0132). Since Stage 3 the processes move it on their own, so a
+      // hand-move that is not a pin is a hand-move the next completed process undoes — which
+      // is worse than no move at all, because the person watched it work. Amber's own words
+      // for the derivation were "as long as it can be manually overriddent", and this is the
+      // override. The pin is released from the record when the job should follow the work
+      // again. The time and the name are the database's: the trigger stamps both.
       const { data: updated, error } = await client
         .from("jobs")
-        .update({ job_stage: stage })
+        .update({ job_stage: stage, job_stage_pinned_at: new Date().toISOString() })
         .eq("job_id", id)
         .select("job_id");
       if (error) throw error;
@@ -1838,6 +1844,45 @@ export function createSupabaseRepository(): Repository {
         .select(JOB_COLUMNS)
         .eq("job_id", id)
         .single();
+      if (readError) throw readError;
+      return toJob(data as unknown as JobRow);
+    },
+
+    /**
+     * The pin (0132). Only the time and the reason are sent: the trigger stamps who from the
+     * session and normalises the time, because a client that could choose them could pin a
+     * job last week in somebody else's name.
+     */
+    async pinJobStage(id: string, reason: string | null): Promise<Job> {
+      const { data: updated, error } = await client
+        .from("jobs")
+        .update({ job_stage_pinned_at: new Date().toISOString(), job_stage_pin_reason: reason?.trim() || null })
+        .eq("job_id", id)
+        .select("job_id");
+      if (error) throw error;
+      if (!updated?.length) {
+        throw new Error(`Job ${id} was not pinned — it no longer exists, or you do not have permission.`);
+      }
+      const { data, error: readError } = await client
+        .from("job_display").select(JOB_COLUMNS).eq("job_id", id).single();
+      if (readError) throw readError;
+      return toJob(data as unknown as JobRow);
+    },
+
+    async unpinJobStage(id: string): Promise<Job> {
+      // Only the time is cleared: the trigger takes the name and the reason with it, so a
+      // caller cannot release the pin and leave the reason standing as if it still applied.
+      const { data: updated, error } = await client
+        .from("jobs")
+        .update({ job_stage_pinned_at: null })
+        .eq("job_id", id)
+        .select("job_id");
+      if (error) throw error;
+      if (!updated?.length) {
+        throw new Error(`Job ${id} was not released — it no longer exists, or you do not have permission.`);
+      }
+      const { data, error: readError } = await client
+        .from("job_display").select(JOB_COLUMNS).eq("job_id", id).single();
       if (readError) throw readError;
       return toJob(data as unknown as JobRow);
     },
@@ -4522,6 +4567,10 @@ type JobRow = {
   job_original_address_id: string | null; job_current_address_id: string;
   job_status: Job["status"];
   job_stage: StageName; job_stage_entered_at: string;
+  // Derived on read by job_display (0132), never stored.
+  job_substage_id: string | null; job_substage_name: string | null;
+  job_stage_pinned_at: string | null; job_stage_pinned_by: string | null; job_stage_pin_reason: string | null;
+  job_health: Job["health"];
   job_owning_team: TeamId; job_engaged_teams: TeamId[];
   job_assignee_id: string | null;
   job_sharepoint_url: string | null;
@@ -4552,6 +4601,15 @@ function toJob(r: JobRow): Job {
     status: r.job_status,
     stage: r.job_stage,
     stageEnteredAt: r.job_stage_entered_at,
+    // 0132. The sub-stage is a reading of the job's processes, computed by the view on every
+    // read; the pin is the one stored fact, and it is what stops the reading moving the job.
+    substageId: r.job_substage_id,
+    substageName: r.job_substage_name,
+    stagePinnedAt: r.job_stage_pinned_at,
+    stagePinnedBy: r.job_stage_pinned_by,
+    stagePinReason: r.job_stage_pin_reason,
+    // 0133. Rolled up from the processes by the view, on every read.
+    health: r.job_health,
     owningTeam: r.job_owning_team,
     engagedTeams: r.job_engaged_teams ?? [],
     assigneeId: r.job_assignee_id,

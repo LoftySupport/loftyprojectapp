@@ -46,7 +46,6 @@ import { readPrefs } from "../data/preferences";
 import { Token, token } from "../components/Token";
 import { Toolbar } from "../components/Toolbar";
 import { Problem, Result } from "../components/Form";
-import { PersonSelect } from "../components/PersonSelect";
 import { Select, toOptions } from "../components/Select";
 import "../components/ui.css";
 
@@ -906,26 +905,12 @@ export function JobsPage() {
                     if (v) bulkApply("moved to the team", selectedJobs, j => repo.updateJob(j.jobNumber, { owningTeam: v as TeamId }));
                   }}
                 />
-                <PersonSelect
-                  aria-label="Assign the selected jobs to a person"
-                  placeholder="Assign to…"
-                  clearable={false}
-                  value={null}
-                  onChange={v => {
-                    if (!v) return;
-                    bulkApply("assigned", selectedJobs,
-                      j => repo.updateJob(j.jobNumber, { assigneeId: v }));
-                  }}
-                />
-                <Button
-                  size="small"
-                  kind="tertiary"
-                  disabled={selectedJobs.every(j => !j.assigneeId)}
-                  onClick={() => bulkApply("unassigned", selectedJobs,
-                    j => repo.updateJob(j.jobNumber, { assigneeId: null }))}
-                >
-                  Unassign
-                </Button>
+                {/* The two assignee actions are gone since 0134: a job's "currently with" is
+                    derived from the assignee of the earliest open task in its active process,
+                    so assigning fifty jobs to somebody would write fifty columns the next task
+                    change overwrites. Assign the TASKS — the Tasks board has the same bulk bar
+                    and it writes the fact the job reads. Amber answered question 0l on 15
+                    September: the override is Stage 4's handshake, not a control here. */}
               </div>
               {bulkBusy && <Text type="text3" color="secondary">Saving…</Text>}
               {bulkNote.ok && <Result>{bulkNote.ok}</Result>}

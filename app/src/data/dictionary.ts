@@ -807,11 +807,44 @@ export const DICTIONARY: DictionaryEntry[] = [
     "timestamptz", "Not null, default now(). Maintained by the jobs_touch_stage_entered_at trigger, so it cannot drift off stage when someone updates one without the other.",
     "Paired with jobs.stage. Was the alternative to job_stages.entered_at; job_stages was dropped in 0006, so this is the only record of when the current stage began.",
     "created"),
+  e("jobs.job_stage_pinned_at", "Stage pinned on",
+    "When somebody fixed this job's stage in place. Since 0132 a job's processes move it: finishing the last one in a stage carries it to the next. A pin stops that — an imported older job stays where it was put, and a manager who moved one by hand does not watch it move back. Null is the normal state, and it means the stage follows the work.",
+    "timestamptz", "Nullable. CHECK jobs_a_pin_has_a_person_and_a_time: set with job_stage_pinned_by or with neither.",
+    "Stamped by guard_job_stage_pin from the session, never from the caller. Written by moveJobStage (a hand-move IS a pin) and cleared by unpinJobStage.",
+    "created"),
+  e("jobs.job_stage_pinned_by", "Pinned by",
+    "Who pinned the stage. Read from the session rather than sent, because a client that could choose it could pin a job in somebody else's name.",
+    "uuid", "Nullable. FK → profiles(profile_id). Goes with job_stage_pinned_at and is cleared with it.",
+    "Manager and above, by trigger (0132).", "created"),
+  e("jobs.job_stage_pin_reason", "Why it is pinned",
+    "The reason a stage was fixed in place, shown on the record beside the release button. Optional and staying optional: a manager moving a job forwards may have nothing to add, and a reason invented to fill the box is worse than a blank.",
+    "text", "Nullable. Non-blank where set. Needs a pin (CHECK jobs_a_pin_reason_needs_a_pin) and is cleared with it.",
+    "Part of the pin, not a note beside it — rewriting it needs manager, the same as pinning.", "created"),
+
+  // ----------------------------------------------- job_substage_health, job_stage_health (0133)
+  e("job_substage_health.substage_health", "Sub-stage health",
+    "The worst health of the open required processes in one sub-stage, for one job (0133). Overdue beats at risk beats on track; not_started and no_expectation are not ranked above on track, because a stage is not in trouble when somebody has simply not set an SLA.",
+    "view", "Read-only. A sub-stage with nothing open is not a row here — finished is not a health.",
+    "Read by job_stage_health, so the two levels cannot drift apart.", "created"),
+  e("job_stage_health.stage_health", "Stage health",
+    "The worst health of a stage's sub-stages, for one job (0133). Reads job_substage_health rather than the processes again.",
+    "view", "Read-only.", "Read by job_health().", "created"),
 
   // -------------------------------------------------------------- job_display
   e("job_display.project_type", "Job type (inherited)",
     "The job's type, which is its project's type. Inherited through the view rather than copied onto the job, so there is nowhere for the two to disagree.",
     "view", "Read-only.", "jobs ⋈ projects on project_id.", "created"),
+  e("job_display.job_health", "Health",
+    "How the job is going, rolled up from its processes (0133) — not its status, which is what somebody set. At risk when any open required process is at risk or overdue; overdue when the target completion date has passed; not_tracked once the job is Completed, Closed or Cancelled. A job with no target completion date is never overdue, only at risk (Amber, 15 September).",
+    "view", "Read-only. Derived on every read by job_health(); stored nowhere.",
+    "The record's pill still reads job_status until that column becomes the pinnable On hold override.", "created"),
+  e("job_display.job_substage_id", "Sub-stage",
+    "Where in its stage the job's processes have it (0132): the earliest sub-stage of that stage still holding a non-optional job-scoped process whose latest attempt is neither complete nor not applicable. Null means the stage holds nothing open and the job has not moved yet.",
+    "view", "Read-only. Derived on every read by job_open_substage(); stored nowhere, so there is no second copy to disagree.",
+    "Nothing keyed off a job's sub-stage before 0132, which is why it is a reading rather than a column.", "created"),
+  e("job_display.job_substage_name", "Sub-stage name",
+    "The name of the sub-stage above, resolved through lifecycle_substages.",
+    "view", "Read-only.", "—", "created"),
   e("job_display.job_is_current", "Is current",
     "Whether the job is still live — not completed, cancelled or archived. Derived from status every time it is read, never stored.",
     "view", "Read-only. is_current(jobs.job_status).", "Mirrors the isCurrent() helper in the app.", "created"),
@@ -1967,6 +2000,10 @@ export const TABLE_DESCRIPTIONS: Record<string, string> = {
     "The outbox (0083): one row per channel per notification. in_app sent as written; email, teams and sms queued or held for the digest time, claimed by the worker with for update skip locked, retried with backoff, failed after five. SMS rows wait for a provider.",
   task_checklist_items:
     "Tick boxes under a task (0081): text, order, who ticked it when. Not a task — no assignee, due date, status or dependencies — so a task with twelve lines is one task, not thirteen. Made from the checklist steps under a task step when a run starts, each carrying the step it came from so the tick counts towards the run.",
+  job_substage_health:
+    "How every sub-stage that still holds work for a job is going (0133): the worst health of its open required processes. Nothing is stored — re-time a process and the roll-up re-reads.",
+  job_stage_health:
+    "The same one level up (0133): the worst of a stage's sub-stages, for one job. It reads job_substage_health rather than the processes a second time, so a stage can never read healthier than a sub-stage inside it.",
   task_display:
     "A task with its names, counts and derived dates (0081): due (typed, or start + expected days), at-risk (due − lead) and health, computed from today the way process_run_display does. Nothing here is stored — re-time a task and it re-dates.",
   stage_completion:

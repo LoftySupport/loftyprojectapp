@@ -4578,6 +4578,186 @@ it; `0129`'s state view picked up the rename on its own because a view body is a
 rather than text; `ALL_METHODS`, `METHOD_TABLES` and `WIRED` agree with what is implemented;
 no component imports the Supabase client; and the data dictionary regenerates byte-identical.
 
+### 15 September — a job reads its place from its processes, and a pin overrides it (`0132`)
+
+Stage 3 of the audit, its first migration, on `claude/stage3-derived-position`.
+
+24 August decided a job does not advance on its own: a manager moves it through the confirm
+modal and nothing else may. Amber reversed that on 15 September, audit decision 3: *"1. as
+long as it can be manually overriddent"*. So the stage is derived, and the modal becomes the
+override rather than the only mover.
+
+**The sub-stage is the earliest sub-stage OF THE STAGE THE JOB IS IN** that still holds a
+non-optional active job-scoped process whose latest attempt is neither complete nor not
+applicable. *In its stage* is decision 3's own wording, not a paraphrase, and following it
+literally is what makes the pair coherent: the first build looked across every stage and
+put a job sitting in Acquisition & Development at a Pre-construction sub-stage, which reads
+as nonsense on a record. A process that has never run counts as open — nobody has done it,
+and the other reading puts a job with no runs past the end of the lifecycle.
+
+**The stage is where it is while that stage still holds work, otherwise the earliest later
+stage that does.** It only ever looks forward, so it cannot go backwards; what 24 August
+feared, an amendment dragging a job back through the board, is answered by attempts, because
+the derivation reads the LATEST attempt of each process.
+
+**Job-scoped only, and one consequence is worth saying out loud rather than discovering.**
+A project-scoped process runs on the project record, so a job has no attempt at it to read.
+Acquisition & Development holds two processes and both are project-scoped, so no job has
+work of its own there and every job derives to Pre-construction or later. Live that changes
+nothing — all 83 jobs are already in Pre-construction — but it is why a brand new job does
+not sit in A&D waiting.
+
+**`job_stage_pinned_at`, with who and why.** While it is set the derivation leaves the job
+alone. `moveJobStage` writes the pin, because since Stage 3 a hand-move that is not a pin is
+one the next completed process undoes, which is worse than no move at all — the person
+watched it work. The record drawer shows the pin with its reason and a manager releases it.
+The reason is optional and stays optional: a manager moving a job forwards may have nothing
+to add, and a reason invented to fill the box is worse than a blank. All three columns are
+one fact, so releasing takes the name and the reason with the time.
+
+**The stage column stays a column, and the migration says why.** The board's columns,
+`guard_lifecycle_is_linear`, the project cascade, `job_stage_entered_at` and
+`notify_stage_changed` all key off it, and a derived-on-read stage would mean rewriting every
+one of them in a migration about processes. So the column is the derivation's OUTPUT and
+`job_derived_stage()` is its DEFINITION, kept in step by a trigger on `process_runs` — with a
+proof that compares them, because a cached derivation nobody checks is how two sources of
+truth start. **The sub-stage is not stored at all**: nothing keyed off it before today.
+
+**Two things it refuses to do.** A job whose stage is *Cancelled* or *Closed* is not moved,
+because `guard_lifecycle_is_linear` would raise and this runs inside somebody's task tick —
+a cancelled job with open processes would make every write on it fail. Checked rather than
+caught, because catching an exception from a guard is how a guard stops being one. And a job
+with no open required process anywhere **does not move**: question 0k, answered the same
+night — *"No, it stays put"* — so a manager carries it to Completed through the modal, which
+is also where the handover conversation is.
+
+**The one exception carved into the permission guard.** `guard_job_stage_change` refuses any
+stage change below manager, and a person at `user` finishing the last task of a sub-stage is
+exactly what this exists for. So it gains one exception, as narrow as it can be written: the
+new stage is precisely what the derivation computes, and the job is not pinned. The
+derivation's own answer is not a person's decision, so it is not a person's permission.
+
+**Proof.** `behaviour.sql` gains step 47, which pins the fixture job, finishes every
+non-optional process of its stage, watches it not move, checks that the derivation disagrees
+with the pinned stage so the probe is not proving itself, releases the pin, confirms a write
+that is not a status change still does not move it, and then watches a status write carry it
+forwards. Watched failing twice: with the move trigger dropped the job stayed put and the
+last line reported it; with the pin ignored in the mover, the pinned job moved. `rls.sql`
+gains three: a user cannot pin, cannot rewrite the reason of a job that is pinned, and still
+cannot move a job by hand. The first two were watched failing with the guard dropped, and the
+reason probe had to be planted against an already-pinned job, because on an unpinned one a
+CHECK answers before the guard is reached and it would have gone on passing.
+
+**What Stage 3 still owes.** Owning team, assignee, status and end date are still set by
+hand, and health does not roll up yet. Those are the next migration; the rules for all of
+them were answered on 14 and 15 September and are in `docs/open-questions.md`.
+
+### 15 September — health rolls up from the processes (`0133`)
+
+Stage 3 of the audit, its second migration, on the same branch as `0132` because it is the
+same table.
+
+`process_run_display.process_run_health` has answered *is this process in trouble* since
+`0047`. Nothing above it had an answer at all: a sub-stage had none, a stage had none, and a
+job's card showed `job_status`, which is what somebody typed. Amber, 14 September: *"Status is
+what someone sets. Health is what the system works out"*.
+
+**The rule, in her words on 15 September.** A process is at risk or overdue against its own
+SLA, unchanged. **A sub-stage and a stage take the worst health of their open required
+processes.** The **job** is at risk when any open required process is at risk or overdue, and
+**overdue** when `job_target_completion` is in the past and the job is not complete. A job
+with no target is never overdue, only at risk.
+
+**What "worst" means, and what it deliberately does not.** Overdue beats at risk beats on
+track, her three words in her order. The other things `process_run_health` can say —
+`not_started` and `no_expectation` — are **not** ranked above on track. That is the
+conservative reading rather than an omission: they mean nobody has measured this, and a stage
+is not in trouble because somebody has not filled in an SLA. So a sub-stage whose only open
+process has no expectation reads `no_expectation` rather than `on_track` — the difference
+between *fine* and *nobody has said*, which this repository refuses to collapse.
+
+**Three objects, and each reads the one below it.** `job_substage_health` reads the processes;
+`job_stage_health` reads `job_substage_health` rather than the processes a second time, so a
+stage can never read healthier than a sub-stage inside it; `job_health()` reads
+`job_stage_health`. One chain, no parallel implementations to drift.
+
+**Open and required mean what `0132` made them mean** — the latest attempt is neither complete
+nor not applicable, or there is no attempt; and `not process_is_optional`. One definition,
+read by everything, so the board and the record cannot disagree.
+
+**A stopped job has no health.** Completed, Closed and Cancelled read `not_tracked`. Nothing
+fires while cancelled (`0043`), and a finished job is not healthy or unhealthy, it is
+finished.
+
+**What this does not do.** The record's pill **still reads `job_status`**. Amber's answer says
+it stops, and it will — in the migration that makes `job_status` the pinnable *On hold*
+override. Doing half of that split here would leave a screen showing health in one place and a
+typed status in another, both labelled the same. And a **project** has no health: it follows
+its slowest job for its stage (`0041`), and whether it follows the worst for health is a
+question nobody has been asked.
+
+**Proof.** The migration's own block compares `job_display.job_health` against `job_health()`,
+asserts no stage reads healthier than a sub-stage inside it, and moves a real job's target
+completion date to yesterday and back — reading the old value first, because restoring to null
+would quietly clear a date somebody committed to. `behaviour.sql` gains step 48, which gives an
+open required process an SLA it has already blown and watches the sub-stage, the stage and the
+job all turn, then the target date override both ways, then a cancelled job going untracked.
+Watched failing twice: with `private.worst_health` taking the BEST of the set, four probes
+reported; with the target-completion branch removed from `job_health`, the promise probe did.
+
+### 15 September — the person and the end date are read from the work (`0134`)
+
+Stage 3, its third migration, on the same branch. Two of the four derivations Amber asked for
+on 14 September; the other two are not here and the reason is the point.
+
+**The person.** *"Is the assignee a job field?"* — **no**: *"'currently with' is the task's
+assignee, not the job's"*. And with several open at once: *"whoever holds tasks in the active
+process"*, which she chose over *earliest unfinished task anywhere on the job* because it is
+the only reading that cannot name somebody from a team that is not on the job.
+`job_active_process()` is the process `0132` already computes, so *who is this with* is one
+question asked of one place. `jobs.job_assignee_id` stays a column and becomes its output,
+kept in step by triggers on `tasks` and `process_runs`, because the Team filter matches through
+it, the board groups on it and `notification_recipients` reads it.
+
+**The day it ended.** *"Target entered, end date derived"* — *"a person commits to the target,
+so a contracted handover date is not overwritten by process maths; the end date is stamped when
+the work is actually done"*. So `job_end_date` is stamped the day nothing required is open
+anywhere, which is what `job_derived_stage()` returning null already means — the same question,
+not a second one that could answer differently. **It is never cleared by the derivation**: a
+job that reopens work keeps the day it finished on, because that is a fact about a day rather
+than a status. Clearing it stays a person's act and the column stays writable. A cancelled job
+gets none: it did not end, it stopped.
+
+**Two controls went read-only, and that is the change to look at.** A derived column and an
+editable control on the same field do not coexist — whatever somebody types is overwritten by
+the next task change, and they watched it work. So the *Currently with* picker on the job
+record is read-only and the two job-assignee actions are off the Jobs bulk bar. The Tasks board
+keeps its own, which is where the fact now lives.
+
+**The owning team is deliberately NOT here.** Its derivation is decided — *"it defaults to the
+earliest unfinished process in a jobs stage"* — but its override is not: Amber asked for a
+request-and-release handshake (*"Override Active Team"*, the active team's manager releases it
+or does not) and parked it into Automations. Deriving the column now would take the team
+drop-down away with nothing standing in for it, and building the handshake here would be
+building Stage 4 inside Stage 3. **Question 0l** put the choice to her and she answered it on
+15 September: **wait for the handshake.** Chosen over deriving both now with no override, and
+over deriving both with a manager pin of the kind `0132` gives the stage, which would have
+replaced the request-and-release she designed with a unilateral one. So the team column stays
+stored and hand-set, and Stage 4's Override Active Team is what unblocks the derivation.
+
+**The status is not here either.** *"Derived, but a person can override it"*, with On hold as
+the case no date maths produces. The override half is clear; the derivation half never was —
+and it overlapped with health, which `0133` has now taken out of `job_status` entirely. What is
+left for status to be computed from is a smaller question than it was on 14 September, and
+worth asking again rather than guessing at.
+
+**Proof.** `behaviour.sql` gains step 49: the active process sits in the sub-stage the job is
+up to; assigning the first task names the person on the job; finishing it lets the name go,
+as an em dash rather than a stand-in; closing the last required process stamps the end date;
+and reopening work does not take the day back. Watched failing twice — with the `tasks` trigger
+dropped the job named nobody, and with the end date following the derivation both ways it was
+cleared.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

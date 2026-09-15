@@ -1222,3 +1222,225 @@ select case when process_run_status = 'complete'
 from process_runs where process_run_id = :'prop_run';
 
 rollback;
+
+-- ============================================================================
+-- 47. A job reads its place from its processes, and a pin overrides it (0132)
+--
+-- Runs on 9106-002, which §40 and §46 left in Pre-construction with its processes
+-- part-finished. In one transaction, rolled back: this step finishes real processes on
+-- the fixture job, and the steps after it read that job's stage.
+-- ============================================================================
+\echo '--- 47. the job moves when its stage is finished, and a pin stops it (0132)'
+begin;
+
+select job_stage as s47_before from jobs where job_id = '9106-002' \gset
+
+select case when job_substage_name is not distinct from
+              (select lifecycle_substage_name from lifecycle_substages
+                where lifecycle_substage_id = job_open_substage('9106-002'))
+  then 'ok  job_display and job_open_substage give the same sub-stage'
+  else 'FAIL: the view says ' || coalesce(job_substage_name, 'null') || ' and the function says something else' end
+from job_display where job_id = '9106-002';
+
+-- Pin it, then finish everything its stage holds. The stage must not move.
+update jobs set job_stage_pinned_at = now(),
+                job_stage_pinned_by = (select profile_id from profiles limit 1),
+                job_stage_pin_reason = 'behaviour 47: imported from the old system'
+ where job_id = '9106-002';
+
+insert into process_runs (process_id, job_id, process_run_status)
+select p.process_id, '9106-002', 'not_applicable'
+  from processes p
+  join lifecycle_substages s using (lifecycle_substage_id)
+  join lifecycle_stages st on st.lifecycle_stage_id = s.lifecycle_stage_id
+ where p.process_is_active and not p.process_is_optional and p.process_scope = 'job'
+   and st.lifecycle_stage_name = :'s47_before'
+   and not exists (select 1 from process_runs r where r.process_id = p.process_id and r.job_id = '9106-002');
+
+update process_runs set process_run_status = 'not_applicable'
+ where job_id = '9106-002' and process_run_status not in ('complete', 'not_applicable')
+   and process_id in (
+     select p.process_id from processes p
+       join lifecycle_substages s using (lifecycle_substage_id)
+       join lifecycle_stages st on st.lifecycle_stage_id = s.lifecycle_stage_id
+      where st.lifecycle_stage_name = :'s47_before');
+
+select case when job_stage = :'s47_before'
+  then 'ok  a pinned job did not move when its stage finished'
+  else 'FAIL: a pinned job moved to ' || job_stage end
+from jobs where job_id = '9106-002';
+
+select case when job_derived_stage('9106-002') is distinct from :'s47_before'
+  then 'ok  and the derivation says it should have moved, so the pin is what held it'
+  else 'FAIL: the derivation agrees with the pinned stage, so this probe proves nothing' end;
+
+-- Release it, and the job goes where its processes say.
+update jobs set job_stage_pinned_at = null where job_id = '9106-002';
+select case when job_stage_pinned_by is null and job_stage_pin_reason is null
+  then 'ok  releasing the pin clears the name and the reason with the time'
+  else 'FAIL: the pin left ' || coalesce(job_stage_pinned_by::text, 'no name') || ' and ' || coalesce(job_stage_pin_reason, 'no reason') end
+from jobs where job_id = '9106-002';
+
+-- Nothing has changed on a run since the release, so the job is still where it was: the
+-- move is a consequence of work, not of unpinning. Touching one run is what triggers it.
+update process_runs set process_run_note = coalesce(process_run_note, '') || ' '
+ where process_run_id = (select process_run_id from process_runs where job_id = '9106-002' limit 1);
+select case when job_stage = :'s47_before'
+  then 'ok  and a write that is not a status change does not move it either'
+  else 'FAIL: a note moved the job to ' || job_stage end
+from jobs where job_id = '9106-002';
+
+update process_runs set process_run_status = process_run_status
+ where process_run_id = (select process_run_id from process_runs where job_id = '9106-002' limit 1);
+select case when job_stage is distinct from :'s47_before' and lifecycle_position(job_stage) > lifecycle_position(:'s47_before')
+  then 'ok  an unpinned job moved forwards to ' || job_stage || ' when its stage was finished'
+  else 'FAIL: the job is still at ' || job_stage end
+from jobs where job_id = '9106-002';
+
+rollback;
+
+-- ============================================================================
+-- 48. Health rolls up: process → sub-stage → stage → job (0133)
+--
+-- In one transaction, rolled back: this step makes a real run overdue on the fixture job
+-- and moves its target completion date, and nothing after it should see either.
+-- ============================================================================
+\echo '--- 48. a sick process makes its sub-stage, its stage and its job sick (0133)'
+begin;
+
+select job_id as s48_job from jobs
+ where job_stage not in ('Completed', 'Closed', 'Cancelled') order by job_id limit 1 \gset
+
+select case when job_health(:'s48_job') in ('on_track', 'at_risk', 'overdue', 'no_expectation')
+  then 'ok  a live job has a health to read'
+  else 'FAIL: job_health said ' || coalesce(job_health(:'s48_job'), 'null') end;
+
+-- An open required process on this job, given an SLA it has already blown.
+select p.process_id as s48_proc, p.lifecycle_substage_id as s48_sub
+  from processes p
+ where p.process_is_active and not p.process_is_optional and p.process_scope = 'job'
+   and p.lifecycle_substage_id is not null
+   and private.substage_is_open(p.lifecycle_substage_id, :'s48_job')
+ order by p.process_position limit 1 \gset
+
+-- 0047's two rules on the pair: the lead is positive, and it fits inside the expectation.
+-- So 5 and 1. A run started thirty days ago is overdue either way, and this probe is about
+-- the roll-up rather than the arithmetic underneath it.
+update processes set process_expected_days = 5, process_at_risk_lead_days = 1
+ where process_id = :'s48_proc';
+insert into process_runs (process_id, job_id, process_run_status, process_run_started_at)
+values (:'s48_proc', :'s48_job', 'in_progress', now() - interval '30 days')
+on conflict do nothing;
+
+select case when substage_health = 'overdue'
+  then 'ok  the sub-stage takes the worst health of its open required processes'
+  else 'FAIL: the sub-stage reads ' || substage_health end
+from job_substage_health where job_id = :'s48_job' and substage_id = :'s48_sub';
+
+select case when stage_health = 'overdue'
+  then 'ok  and the stage takes the worst of its sub-stages'
+  else 'FAIL: the stage reads ' || stage_health end
+from job_stage_health g
+ where g.job_id = :'s48_job'
+   and g.stage = (select lifecycle_stage_name from lifecycle_stages st
+                   join lifecycle_substages s on s.lifecycle_stage_id = st.lifecycle_stage_id
+                  where s.lifecycle_substage_id = :'s48_sub');
+
+select case when job_health(:'s48_job') = 'at_risk'
+  then 'ok  and the job reads at risk, because an open required process is overdue'
+  else 'FAIL: the job reads ' || job_health(:'s48_job') end;
+
+-- The promise beats the work: a target completion date in the past is overdue whatever the
+-- processes say, and a job with no target is never overdue.
+update jobs set job_target_completion = current_date - 1 where job_id = :'s48_job';
+select case when job_health(:'s48_job') = 'overdue'
+  then 'ok  a job past its target completion is overdue, whatever its processes say'
+  else 'FAIL: the job reads ' || job_health(:'s48_job') end;
+
+update jobs set job_target_completion = null where job_id = :'s48_job';
+select case when job_health(:'s48_job') = 'at_risk'
+  then 'ok  and a job with no target completion is never overdue, only at risk'
+  else 'FAIL: the job reads ' || job_health(:'s48_job') end;
+
+-- A stopped job has no health at all.
+update jobs set job_stage = 'Cancelled' where job_id = :'s48_job';
+select case when job_health(:'s48_job') = 'not_tracked'
+  then 'ok  a cancelled job has no health — nothing fires while cancelled'
+  else 'FAIL: a cancelled job reads ' || job_health(:'s48_job') end;
+
+-- And job_display says the same thing the function does.
+select case when job_health is not distinct from job_health(:'s48_job')
+  then 'ok  job_display and job_health() agree'
+  else 'FAIL: the view says ' || coalesce(job_health, 'null') end
+from job_display where job_id = :'s48_job';
+
+rollback;
+
+-- ============================================================================
+-- 49. The person on a job and the day it ended are read from the work (0134)
+--
+-- In one transaction, rolled back.
+-- ============================================================================
+\echo '--- 49. a job names whoever holds tasks in its active process, and stamps its end date (0134)'
+begin;
+
+select job_id as s49_job from jobs
+ where job_stage not in ('Completed', 'Closed', 'Cancelled') order by job_id limit 1 \gset
+
+select case when job_active_process(:'s49_job') is null
+            or (select p.lifecycle_substage_id from processes p
+                 where p.process_id = job_active_process(:'s49_job')) = job_open_substage(:'s49_job')
+  then 'ok  the active process sits in the sub-stage the job is up to'
+  else 'FAIL: the active process is somewhere else' end;
+
+-- Start the active process and give its first task to somebody.
+insert into process_runs (process_id, job_id, process_run_status)
+select job_active_process(:'s49_job'), :'s49_job', 'in_progress'
+ where job_active_process(:'s49_job') is not null
+on conflict do nothing;
+
+select process_run_id as s49_run from process_runs
+ where job_id = :'s49_job' and process_id = job_active_process(:'s49_job')
+ order by process_run_attempt desc limit 1 \gset
+
+select profile_id as s49_person from profiles where profile_is_active order by profile_email limit 1 \gset
+
+insert into tasks (job_id, task_name, process_run_id, task_assignee_id, task_position)
+values (:'s49_job', 'behaviour probe 0134', :'s49_run', :'s49_person', 1);
+
+select case when job_assignee_id = :'s49_person'
+  then 'ok  the job names whoever holds the first open task in its active process'
+  else 'FAIL: the job names ' || coalesce(job_assignee_id::text, 'nobody') end
+from jobs where job_id = :'s49_job';
+
+-- Finishing that task takes the name off again, because nobody holds an open one.
+update tasks set task_status = 'done' where task_name = 'behaviour probe 0134';
+select case when job_assignee_id is null
+  then 'ok  and lets it go when nobody holds an open task — an em dash, not a stand-in'
+  else 'FAIL: the job still names ' || job_assignee_id::text end
+from jobs where job_id = :'s49_job';
+
+-- The end date is stamped when nothing required is open anywhere, and never taken back.
+update jobs set job_end_date = null where job_id = :'s49_job';
+insert into process_runs (process_id, job_id, process_run_status)
+select p.process_id, :'s49_job', 'not_applicable'
+  from processes p
+ where p.process_is_active and not p.process_is_optional and p.process_scope = 'job'
+   and not exists (select 1 from process_runs r where r.process_id = p.process_id and r.job_id = :'s49_job');
+update process_runs set process_run_status = 'not_applicable'
+ where job_id = :'s49_job' and process_run_status not in ('complete', 'not_applicable');
+
+select case when job_end_date = current_date
+  then 'ok  the end date is stamped the day nothing required is left open'
+  else 'FAIL: the end date reads ' || coalesce(job_end_date::text, 'null') end
+from jobs where job_id = :'s49_job';
+
+-- Reopening work does not take the day back.
+update process_runs set process_run_status = 'in_progress'
+ where process_run_id = (select process_run_id from process_runs where job_id = :'s49_job' limit 1);
+select case when job_end_date = current_date
+  then 'ok  and reopening work does not take the day back — it is a fact about a day'
+  else 'FAIL: the end date was cleared to ' || coalesce(job_end_date::text, 'null') end
+from jobs where job_id = :'s49_job';
+
+rollback;

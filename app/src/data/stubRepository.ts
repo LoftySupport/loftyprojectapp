@@ -163,6 +163,8 @@ export function createStubRepository(): Repository {
     async moveJobStage(): Promise<Job> {
       throw new Error("Moving a job between stages needs Supabase.");
     },
+    async pinJobStage(): Promise<Job> { throw new Error("Pinning a job's stage needs Supabase."); },
+    async unpinJobStage(): Promise<Job> { throw new Error("Releasing a job's stage needs Supabase."); },
     async updateJob(): Promise<Job> {
       throw new Error("Editing a job needs Supabase.");
     },
