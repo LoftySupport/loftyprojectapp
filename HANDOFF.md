@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 286 changes since then —
+Unreleased: 287 changes since then —
+- Added: the Microsoft Graph modules for SharePoint folders, Teams channel posts and mailbox reading, with a check that mail routes to the right job, folder names are legal and Teams mentions resolve
 - Changed: The lifecycle's stages are a table managers can see, and superadmins can extend, instead of a list fixed in code
 - Fixed: Two Microsoft endpoints would answer anybody while their secret was unset
 - Fixed: the workbook import no longer stops at the first community-title job
 - Fixed: deleting a job removes its report documents again, as it did before 0120
-- Changed: A maintenance issue is edited in the same layout it was logged in, with tasks, comments, activity and documents beneath it
-- …and 281 more.
+- …and 282 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -252,6 +252,11 @@ somebody save a file from their phone or File Explorer and have it appear in the
   because a job moves between departments during its life.
 - **Private channels cannot be posted into at all** — no webhooks, connectors or bots. Any
   department whose nominated channel is private needs a standard one, or email.
+  **~~This was wrong and Amber disproved it by building one.~~** It is true of the classic Office
+  365 connector and false of what Teams offers now, a Power Automate **Workflows** flow, which
+  posts wherever its creator can post. The real constraint is that a flow **runs as the person who
+  made it** and stops when they leave — so every flow wants one long-lived owner. See the design
+  log, *Corrected 15 September: private channels CAN be posted into*.
 - **Milestones already exist** — `processes.process_is_milestone` (`0078`) plus `stage_completion`
   (`0081`). Amber's "all milestones reached on a job go to general" needs no new definition.
 
@@ -293,6 +298,28 @@ they are.
   return 503 when the secret is empty, the shape `report-share` already used. The validation-token
   echo in `maintenance-inbound` stays open on purpose: Graph does it before a subscription exists.
 - `APP_BASE_URL` in the README said `app.lofty.com.au`; the app answers at **`hub.lofty.au`**.
+
+### Since then: the three Graph modules, and a check that caught two bugs
+
+Amber, 15 September: *"can you continue to do the sharepoint and teams and reading mail while I
+wait for shared mailbox to be created"*. So the Graph surface for all three now exists under
+`app/supabase/functions/_shared/` — `sharepoint.ts` (template copy, ensure, rename, apply-template,
+adopt a pasted URL, upload sessions), `teams.ts` (Adaptive Card, `<at>` mentions, webhook post, and
+the channel's own email address as the flow-free fallback), `mail.ts` (send, read, the raw `.eml`,
+attachments, move, plus-address routing, subscription renewal).
+
+**Nothing has touched Microsoft.** No folder created, no card posted, no mail read — those need the
+tenant. What *can* be true before the tenant exists is now a check in CI, `npm run check:m365`, and
+it earned itself on its first run:
+
+- One routing pattern was doing two jobs, and read *"the 2024-2025 budget"* as job 2024-2025 — a
+  finance email filed onto a house. Address and subject now have separate patterns.
+- A tab in a folder name closed up the words either side of it: `GOLDEN⇥GROVE` → `GOLDENGROVE`,
+  which SharePoint accepts and nobody would ever spot.
+
+`GraphError` also changed shape. Its fields were constructor parameter properties, which node's
+type stripping refuses, so **no check could import anything under `_shared/` at all**. They are
+assigned in the body now.
 
 ### Next, in order
 

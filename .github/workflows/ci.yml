@@ -122,6 +122,18 @@ jobs:
         run: npm run check:maintenance-draft
         working-directory: app
 
+      # ------------------------------------------------------------------ 15 September
+      # Almost nothing in the Microsoft 365 modules can be checked without a tenant. These
+      # are the parts that can: which job a forwarded email lands on, that the address the
+      # app shows on a job is the one the receiver understands, that a folder name
+      # SharePoint would refuse never reaches it, and that a Teams @mention resolves rather
+      # than rendering the literal tag. Each of those fails silently and late — an email on
+      # the wrong house, a click-to-copy address that routes nothing — and none of them
+      # needs a browser, a database or a network.
+      - name: mail routes to the right job, folder names are legal, mentions resolve
+        run: npm run check:m365
+        working-directory: app
+
       # Adding the seven above fixes the seven. This fixes the class: the eighth check
       # somebody writes next month fails here on the day it is written unless the workflow
       # runs it. It reads package.json and this file, and nothing else.
