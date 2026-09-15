@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 287 changes since then —
+Unreleased: 288 changes since then —
+- Changed: The blocks inside a lifecycle stage are rows managers can add, rename and reorder in the app, instead of text typed on each process
 - Added: the Microsoft Graph modules for SharePoint folders, Teams channel posts and mailbox reading, with a check that mail routes to the right job, folder names are legal and Teams mentions resolve
 - Changed: The lifecycle's stages are a table managers can see, and superadmins can extend, instead of a list fixed in code
 - Fixed: Two Microsoft endpoints would answer anybody while their secret was unset
 - Fixed: the workbook import no longer stops at the first community-title job
-- Fixed: deleting a job removes its report documents again, as it did before 0120
-- …and 282 more.
+- …and 283 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->

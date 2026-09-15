@@ -224,6 +224,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- The blocks inside a lifecycle stage are rows managers can add, rename and reorder in the app, instead of text typed on each process
 - The lifecycle's stages are a table managers can see, and superadmins can extend, instead of a list fixed in code
 - A maintenance issue is edited in the same layout it was logged in, with tasks, comments, activity and documents beneath it
 - A maintenance photo or video now has a permanent link, so a generated maintenance sheet still shows its pictures after it is emailed
