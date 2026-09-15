@@ -3796,7 +3796,7 @@ a chat log. Recorded here in her words where they are shorter than a paraphrase.
 
 | Question | Answer |
 | --- | --- |
-| The mailbox, and plus addressing | **`hub@mail.lofty.au`**, and *"plus addressing can be switching on"*. So a job's address is `hub+1042-001@mail.lofty.au` and a project's is `hub+1042@mail.lofty.au` |
+| The mailbox, and plus addressing | **`hub@mail.lofty.au`**, and *"plus addressing can be switching on"*. **Corrected the same day: that mailbox does not exist yet.** `tech@lofty.com.au` does and works, so it is the sender — see below |
 | Finance renamed | *"Finance needs to be named Accounts in all areas"* |
 | Acquisition & Development's linked folder | *"every project"*, not on request |
 | Where notifications go | *"the team is called Hub and it will go to general for most notifications"* |
@@ -3812,6 +3812,27 @@ by leaving it.
 channel map is not needed to start. The per-team mapping stays designed and unbuilt, ready for the
 day "most" turns out to have exceptions. What *most* excludes has not been asked yet and is the
 next question.
+
+### The sending address is `tech@lofty.com.au`, and inbound is a separate question
+
+Amber named `hub@mail.lofty.au` and then corrected it: *"it doesn't exist at the moment however we
+have setup tech@lofty.com.au which works"*. So **outbound notifications send as
+`tech@lofty.com.au`**, which needs nothing created and unblocks the whole email step today. Note
+the domain: the everyday domain is `lofty.com.au`, not the `mail.lofty.au` first given.
+
+**Two things follow from using an existing mailbox.**
+
+- **Set its display name before the first send.** Graph sends under the mailbox's own name, so
+  notifications would arrive from *tech* and read as an IT message. The name people should see is
+  the app's.
+- **The Exchange application access policy scopes to this address**, which is the step that stops
+  `Mail.Send` letting the app send as anybody at Lofty. It is the one people skip.
+
+**Inbound is deliberately not answered by this.** Forwarding an email onto a job wants a mailbox
+whose name means something to the person typing it, and it wants bounces and out-of-office replies
+kept apart from genuine forwarded updates — which sharing one address with the sender defeats. That
+step is much later in the order, so nothing is blocked by leaving it open. `tech+1042-001@` would
+work if plus addressing is on; whether it *should* is the question, not whether it can.
 
 ### The A&D folder inside the project, and why the obvious build does not work
 
@@ -3839,14 +3860,16 @@ acceptable before it is built.
 
 ### Open, for Amber
 
-1. **Does a link satisfy "restricted inside the project", or must it be a real folder?** A real one
+1. **Which mailbox receives forwarded email?** Not the sender, ideally. Not blocking: that step is
+   late in the order.
+2. **Does a link satisfy "restricted inside the project", or must it be a real folder?** A real one
    needs `Sites.FullControl.All` and a permission set maintained per project.
-2. **What does "most notifications" exclude?** Everything to General until this is answered.
-3. **What subfolders go in the project template, and in the job template?** *"to be determined"*.
+3. **What does "most notifications" exclude?** Everything to General until this is answered.
+4. **What subfolders go in the project template, and in the job template?** *"to be determined"*.
    Not a blocker: whatever is in the folder on the day is what gets copied.
 
 Settled on 15 September: no new Teams, channels or sites; files in the Hub library only; Accounts
-(formerly Finance) named so everywhere a person reads it; `hub@mail.lofty.au` with plus addressing;
+(formerly Finance) named so everywhere a person reads it; `tech@lofty.com.au` as the sender;
 A&D's linked folder on every project.
 
 ## Verification
