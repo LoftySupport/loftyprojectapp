@@ -123,51 +123,12 @@ BEGIN
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  jobs_sequence_is_padded rejected ''0100''';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  jobs_sequence_is_padded rejected 0100)', SQLERRM; END;
 
-  BEGIN
-    -- The composite FK: a job parked in a stage belonging to a DIFFERENT pipeline.
-    INSERT INTO job_pipeline_positions (job_id, pipeline_id, pipeline_stage_id)
-    SELECT (SELECT max(job_id) FROM jobs WHERE project_id=9106),
-           (SELECT pipeline_id FROM pipelines WHERE pipeline_key='build_lifecycle'),
-           (SELECT ps.pipeline_stage_id FROM pipeline_stages ps JOIN pipelines p USING (pipeline_id)
-             WHERE p.pipeline_key='preconstruction' LIMIT 1);
-    RAISE WARNING 'FAIL: job parked in a stage from another pipeline';
-  EXCEPTION WHEN foreign_key_violation THEN RAISE NOTICE 'ok  composite FK rejected a stage from another pipeline';
-    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  composite FK rejected a stage from another pipeline)', SQLERRM; END;
+  -- The five probes that stood here guarded 0029's nested pipelines: the composite key that
+  -- held a job to a stage of its own pipeline, the cycle guard, waiting-on-nobody, one child
+  -- pipeline per stage, and the stage-event log. 0137 dropped all four tables — Stage 1 gave
+  -- the lifecycle a home of its own and nothing had read them since. The rules they guarded
+  -- are gone with the columns; there is nothing left to assert.
 
-  BEGIN
-    -- A pipeline cannot contain itself: point build_lifecycle at a stage of its own child.
-    UPDATE pipelines SET pipeline_parent_stage_id =
-      (SELECT ps.pipeline_stage_id FROM pipeline_stages ps JOIN pipelines p USING (pipeline_id)
-        WHERE p.pipeline_key='preconstruction' LIMIT 1)
-    WHERE pipeline_key='build_lifecycle';
-    RAISE WARNING 'FAIL: a pipeline was allowed to contain itself';
-  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  guard_pipeline_nesting rejected a cycle';
-    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  guard_pipeline_nesting rejected a cycle)', SQLERRM; END;
-
-  BEGIN
-    UPDATE job_pipeline_positions SET job_pipeline_position_state='waiting',
-           job_pipeline_position_waiting_on=NULL WHERE job_id='9106-002';
-    RAISE WARNING 'FAIL: waiting on nobody was accepted';
-  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  waiting must name a team';
-    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  waiting must name a team)', SQLERRM; END;
-
-  BEGIN
-    -- Two pipelines both claiming to be "what happens inside" the same stage.
-    INSERT INTO pipelines (pipeline_key, pipeline_name, pipeline_scope, pipeline_parent_stage_id)
-    SELECT 'rival', 'Rival', 'job', pipeline_parent_stage_id
-    FROM pipelines WHERE pipeline_key='preconstruction';
-    RAISE WARNING 'FAIL: two pipelines elaborate the same stage';
-  EXCEPTION WHEN unique_violation THEN RAISE NOTICE 'ok  one child pipeline per stage';
-    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  one child pipeline per stage)', SQLERRM; END;
-
-  BEGIN
-    INSERT INTO job_stage_events (job_id, pipeline_id, job_stage_event_to_stage_id)
-    SELECT '9106-002', (SELECT pipeline_id FROM pipelines WHERE pipeline_key='build_lifecycle'),
-           (SELECT ps.pipeline_stage_id FROM pipeline_stages ps JOIN pipelines p USING (pipeline_id)
-             WHERE p.pipeline_key='build_lifecycle' LIMIT 1);
-    RAISE NOTICE 'note: job_stage_events accepts a direct insert as the table owner — RLS has no INSERT policy, so `authenticated` cannot. Checked separately.';
-  EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'ok  job_stage_events refused a direct insert';
-    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  job_stage_events refused a direct insert)', SQLERRM; END;
 
   BEGIN
     -- The NULL that used to slip straight through the array validator.

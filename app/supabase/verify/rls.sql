@@ -124,13 +124,11 @@ select 'is_active_user: ' || is_active_user()::text;
 select 'permission: '     || current_permission()::text;
 select 'jobs visible: '   || count(*) from jobs;
 select 'teams visible: '  || count(*) from teams;
--- The board's columns. `listStages()` reads these two, so a policy that hid them would
--- render every board with no columns and every stage filter with no options — an app that
--- looks broken rather than one that says why. Worth a count precisely because the failure
--- is silent: an empty list is a legal answer to a SELECT.
-select 'pipelines visible: '       || count(*) from pipelines;
-select 'pipeline stages visible: ' || count(*) from pipeline_stages;
--- 0126: the board's columns come from here now.
+-- The board's columns. `listStages()` reads this, so a policy that hid it would render every
+-- board with no columns and every stage filter with no options — an app that looks broken
+-- rather than one that says why. Worth a count precisely because the failure is silent: an
+-- empty list is a legal answer to a SELECT. (`pipelines` and `pipeline_stages` were counted
+-- here until 0137 dropped them; 0126 had already moved the board onto this table.)
 select 'lifecycle stages visible: ' || count(*) from lifecycle_stages;
 -- 0127: and the blocks inside them. Counted for the same reason: the probe below proves a
 -- user cannot WRITE one, and would pass just as happily if the read policy were tightened
@@ -148,17 +146,6 @@ select 'run step states visible: ' || count(*) || ' (for ' || (select count(*) f
 \echo '--- probes (each must print ok) ---'
 do $$
 begin
-  begin
-    insert into job_stage_events (job_id, pipeline_id, job_stage_event_to_stage_id)
-    values ((select job_id from jobs limit 1),
-            (select pipeline_id from pipelines limit 1),
-            (select pipeline_stage_id from pipeline_stages limit 1));
-    raise warning 'FAIL: a real user wrote to the append-only stage log';
-  exception
-    when insufficient_privilege then raise notice 'ok  job_stage_events has no INSERT policy — the trigger writes it, nobody else';
-    when others then raise warning 'FAIL: unexpected on stage log (%)', sqlerrm;
-  end;
-
   -- 0125: everyone reads the switch-on state; nobody below admin sets it. At `user` the
   -- UPDATE matches no row (RLS filters rather than refuses), so the count is the refusal.
   -- Watched failing with the write policy widened to `>= 'user'`.
@@ -653,15 +640,6 @@ begin
   exception when others then raise warning 'FAIL: unexpected editing feedback (%)', sqlerrm;
   end;
 
-  begin
-    insert into pipelines (pipeline_key, pipeline_name, pipeline_scope)
-    values ('sneaky', 'Sneaky', 'job');
-    raise warning 'FAIL: a non-superadmin created a pipeline';
-  exception
-    when insufficient_privilege then raise notice 'ok  pipelines refused a write below superadmin';
-    when others then raise warning 'FAIL: unexpected on pipelines (%)', sqlerrm;
-  end;
-
   -- 0043, widened in 0077: defining what the company captures is a manager's work; a user is refused.
   begin
     insert into property_defs (property_def_key, property_def_label, property_def_scope,
@@ -871,15 +849,15 @@ update profiles set profile_is_demo = false
 -- stages and lifecycle stages."
 --
 -- The policies already permit it — `permission_level` is an ordered enum and every write
--- policy on `jobs` and `job_pipeline_positions` compares `>= 'user'`, which a manager
+-- policy on `jobs` compares `>= 'user'`, which a manager
 -- clears. Probed anyway, and this is the reason: nothing in the harness ran at `manager`
 -- at all, so "a manager can move a job" was a fact about how the enum sorts rather than
 -- an observed one. The next person to tighten a policy to `= 'user'`, or to reorder the
 -- enum, would break Lofty's stated rule and no check would say so.
 --
--- Both halves are probed because they are two different mechanisms wearing one sentence:
--- the lifecycle is a column on `jobs`, a team's own process is a row in
--- `job_pipeline_positions`, and a policy change could easily reach one and not the other.
+-- The lifecycle is a column on `jobs`. A team's own board was to be a row in
+-- `job_pipeline_positions` and was probed here beside it, until 0137 dropped the table that
+-- never had a row. What is left is the lifecycle, and the line a manager may not cross.
 -- The claim has to go first. `reset role` puts the session back to postgres but leaves
 -- request.jwt.claim.sub set, so guard_privileged_profile_columns() still saw the test
 -- user — at `user` level — and refused with "Only an admin may change a profile". The
@@ -892,8 +870,6 @@ update profiles set profile_permission = 'manager'
 -- unlike every other probe here it leaves numbers behind. Snapshot as postgres, restore
 -- after the block: a later probe reading an SLA nobody at Lofty set would be reading this
 -- file's own scribble.
-create temp table sla_before as
-  select pipeline_stage_id, pipeline_stage_expected_days from pipeline_stages;
 create temp table lifecycle_sla_before as
   select lifecycle_stage_id, lifecycle_stage_expected_days from lifecycle_stages;
 
@@ -946,65 +922,36 @@ begin
   exception when others then raise warning 'FAIL: unexpected moving a lifecycle phase (%)', sqlerrm;
   end;
 
-  -- 2. A team's own process. A row in job_pipeline_positions, moved to a different stage
-  --    of the SAME pipeline — the composite foreign key refuses a stage from another one,
-  --    so a careless probe here fails for that reason and reads as a permission problem.
+  -- 2. And the line that answer does NOT cross. Moving a job between stages and changing
+  --    what the stages ARE are different acts; the second is superadmin's. Without this the
+  --    probe above would still pass if somebody opened `lifecycle_stages` to everybody,
+  --    which is the change that would quietly let a manager add a stage for the whole
+  --    company. It asked this of `pipeline_stages` until 0137 dropped it; `lifecycle_stages`
+  --    is the same rule on the table the app actually reads.
   begin
-    update job_pipeline_positions jpp
-       set pipeline_stage_id = (
-             select ps.pipeline_stage_id from pipeline_stages ps
-             where ps.pipeline_id = jpp.pipeline_id
-               and ps.pipeline_stage_id is distinct from jpp.pipeline_stage_id
-             order by ps.pipeline_stage_position limit 1);
-    get diagnostics moved = row_count;
-    if moved > 0 then
-      raise notice 'ok  a manager moved % job(s) to another stage of their pipeline', moved;
-    else
-      raise warning 'FAIL: a manager could not move a job between pipeline stages';
-    end if;
-  exception when others then raise warning 'FAIL: unexpected moving a pipeline stage (%)', sqlerrm;
-  end;
-
-  -- 3. And the line that answer does NOT cross. Moving a job between stages and changing
-  --    what the stages ARE are different acts; the second is superadmin's. Without this
-  --    the two probes above would still pass if somebody opened `pipeline_stages` to
-  --    everybody, which is the change that would quietly let a manager rename the
-  --    lifecycle for the whole company.
-  begin
-    insert into pipeline_stages (pipeline_id, pipeline_stage_name, pipeline_stage_position)
-    values ((select pipeline_id from pipelines where pipeline_key = 'build_lifecycle'), 'Invented', 99);
+    insert into lifecycle_stages (lifecycle_stage_id, lifecycle_stage_name, lifecycle_stage_position)
+    values ('invented', 'Invented', 99);
     raise warning 'FAIL: a manager added a stage to the lifecycle';
   exception
     when insufficient_privilege then raise notice 'ok  a manager moves jobs between stages but cannot change what the stages are';
     when others then raise warning 'FAIL: unexpected adding a stage (%)', sqlerrm;
   end;
 
-  -- 4. How long a phase should take. Lofty's answer, 23 August: "there is no set limit for
-  --    how long a phase should take — this needs to be an editable property." Nullable
-  --    with no default is the "no set limit" half, and constraints.sql holds the check
-  --    that a nonsense one is refused. This is the other half: that it can be edited at
-  --    all, and by whom.
+  -- 3. How long a phase should take. Lofty's answer, 23 August: "there is no set limit for
+  --    how long a phase should take — this needs to be an editable property." Nullable with
+  --    no default is the "no set limit" half, and constraints.sql holds the check that a
+  --    nonsense one is refused. This is the other half: that it can be edited at all, and by
+  --    whom.
   --
-  --    **THIS PROBE ASSERTED THE OPPOSITE UNTIL 0096, AND THE REVERSAL IS THE POINT.**
-  --    It read "expected days is editable, but not below superadmin", per 0029's blanket
-  --    write policy and 0047's reasoning that the SLA is part of what a stage IS. Amber,
-  --    4 September, moved it: Settings is the managers' screen and its purpose is to
-  --    "allow managers and above update properties, processes, contact settings,
-  --    maintenance tabs, SLAs and automations". So the manager now gets the number, and
-  --    probe 3 above is what keeps the rest of 0047's reasoning true — the same person
-  --    still cannot rename the stage the number is about.
-  begin
-    update pipeline_stages set pipeline_stage_expected_days = 30;
-    if found then
-      raise notice 'ok  a manager sets how long a phase should take (0096)';
-    else
-      raise warning 'FAIL: a manager could not set expected days — Settings offers the control';
-    end if;
-  exception
-    when insufficient_privilege then raise warning 'FAIL: expected days refused a manager (%)', sqlerrm;
-    when others then raise warning 'FAIL: unexpected setting expected days (%)', sqlerrm;
-  end;
-
+  --    **THIS ASSERTED THE OPPOSITE UNTIL 0096, AND THE REVERSAL IS THE POINT.** It read
+  --    "expected days is editable, but not below superadmin", per 0029's blanket write policy
+  --    and 0047's reasoning that the SLA is part of what a stage IS. Amber, 4 September, moved
+  --    it: Settings is the managers' screen and its purpose is to "allow managers and above
+  --    update properties, processes, contact settings, maintenance tabs, SLAs and
+  --    automations". So the manager gets the number, and probe 2 above keeps the rest of
+  --    0047's reasoning true — the same person still cannot say what the stages are. It asked
+  --    this of `pipeline_stages` as well until 0137 dropped it; the probe below is the same
+  --    question on the table the app writes.
   -- 4b. 0126 moved the SLA to lifecycle_stages, which is what the app writes now. The same
   --     manager sets it there, and the shape guard refuses the rename there too. Watched
   --     failing with lifecycle_stages_guard_shape dropped: the rename went through to the
@@ -1050,19 +997,6 @@ begin
     delete from process_steps where process_step_name = 'Probe step 0128 renamed';
     raise notice 'ok  a manager adds, renames and removes a step (0128)';
   exception when others then raise warning 'FAIL: a manager could not manage a step (%)', sqlerrm;
-  end;
-
-  -- 5. The column rule, which is a TRIGGER and not a policy — so it only shows at
-  --    manager, exactly like 0060's stage guard only shows at admin. Probe 3 above
-  --    covers insert, which the policy refuses; this covers the update the policy now
-  --    ALLOWS and guard_stage_shape_change() has to stop. Drop that trigger and 3 and 4
-  --    both still pass while a manager quietly renames the company's lifecycle.
-  begin
-    update pipeline_stages set pipeline_stage_name = pipeline_stage_name || ' (renamed)';
-    raise warning 'FAIL: a manager renamed a stage — that is the process, not its SLA';
-  exception
-    when insufficient_privilege then raise notice 'ok  a manager sets the SLA on a stage but cannot rename it';
-    when others then raise warning 'FAIL: unexpected renaming a stage (%)', sqlerrm;
   end;
 
   -- 6. And who hears about it. The notification rules moved down with the SLAs (0096):
@@ -1122,12 +1056,6 @@ begin
   end;
 end $$;
 reset role;
-update pipeline_stages ps
-   set pipeline_stage_expected_days = b.pipeline_stage_expected_days
-  from sla_before b
- where b.pipeline_stage_id = ps.pipeline_stage_id
-   and ps.pipeline_stage_expected_days is distinct from b.pipeline_stage_expected_days;
-drop table sla_before;
 update lifecycle_stages s
    set lifecycle_stage_expected_days = b.lifecycle_stage_expected_days
   from lifecycle_sla_before b

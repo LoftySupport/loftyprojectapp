@@ -38,7 +38,7 @@ PSQL="psql -h $HOST -p $PORT -U postgres -d lofty_verify -tAq"
 
 echo "--- seeded lookups vs the database ---"
 
-# lifecycle_stages since 0126; pipeline_stages carried the same seven until then.
+# lifecycle_stages since 0126. pipeline_stages carried the same seven until 0137 dropped it.
 DB_STAGES=$($PSQL -c "select lifecycle_stage_name from lifecycle_stages
                       order by lifecycle_stage_position;")
 DB_TEAMS=$($PSQL -c "select team_id from teams order by team_position;")
@@ -148,7 +148,7 @@ check(
 # 2b — every stage a saved view names is a stage that exists.
 #
 #     savedViews.ts said, in its own header comment, that seeds.sh fails when its stage
-#     names and pipeline_stages disagree. It did not: nothing here had ever opened that
+#     names and the stage table disagree. It did not: nothing here had ever opened that
 #     file. The claim was written when the check felt obvious enough to be true, which is
 #     the same way five property definitions came to name "Sales & acquisition".
 #
@@ -175,7 +175,7 @@ for const in ("LIFECYCLE", "ENDED"):
 
 unknown = sorted(n for n in view_stage_names if n not in db_stages)
 check(
-    f"all {len(view_stage_names)} stage names in savedViews.ts exist in pipeline_stages",
+    f"all {len(view_stage_names)} stage names in savedViews.ts exist in lifecycle_stages",
     not unknown,
     "\n".join(f'a saved view names "{n}", which is not a stage' for n in unknown),
 )

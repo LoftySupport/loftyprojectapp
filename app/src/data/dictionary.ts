@@ -1498,51 +1498,13 @@ export const DICTIONARY: DictionaryEntry[] = [
   e("lifecycle_stages.lifecycle_stage_updated_at", "Updated", "When the row last changed; moddatetime stamps it.", "timestamptz", "Not null, default now().", "—", "created"),
   e("lifecycle_stages.lifecycle_stage_updated_by", "Updated by", "Who changed it.", "uuid", "Nullable.", "FK → profiles(profile_id).", "created"),
 
-  // ----------------------------------------------------- pipeline_stages (SLA)
-  // The lifecycle's lookup (0029, reseeded 0035 and 0045). Only its two SLA columns are
-  // dictionaried so far — the first entries the table has had at all.
-  e("pipeline_stages.pipeline_stage_expected_days", "Expected days in stage",
-    "How long a record should sit in this stage — what \"on time\" means for it, and what overdue is measured past. Null means no SLA is set, which is a real state and not zero: an invented number was exactly what the old Gantt drew bars against.",
-    "integer", "smallint. Nullable. CHECK (> 0).",
-    "Superseded by lifecycle_stages.lifecycle_stage_expected_days (0126); nothing reads this column now, and Stage 5 drops the table. The at-risk lead must be shorter than it.",
-    "created"),
-  e("pipeline_stages.pipeline_stage_at_risk_lead_days", "At-risk lead",
-    "How many days before the expected-days deadline the record starts flagging at risk (Amber's Q1, 0047). Past the deadline itself is overdue — there is no third number.",
-    "integer",
-    "smallint. Nullable. CHECK pipeline_stages_at_risk_lead_is_positive (> 0) and pipeline_stages_at_risk_lead_fits_the_expectation — a lead needs an expectation to lead, and must be shorter than it, or it would flag the record at risk on arrival. Both proved biting in 0047.",
-    "Superseded by lifecycle_stages.lifecycle_stage_at_risk_lead_days (0126); nothing reads this column now, and Stage 5 drops the table.",
-    "created"),
-
-
-  // -------------------------------------------------- the pipeline machinery (0029)
-  // The last uncovered live tables join the dictionary. Key columns first — the audit
-  // quartets follow the same shape as every other table's and are not repeated here.
-  e("pipelines.pipeline_id", "Pipeline", "A process, as a row. Pipelines nest: Pre-construction elaborates a lifecycle stage, Working Drawings elaborates a pre-construction stage, to whatever depth a team needs.", "uuid", "Primary key, default gen_random_uuid().", "Referenced by pipeline_stages, job_pipeline_positions and job_stage_events.", "created"),
-  e("pipelines.pipeline_key", "Pipeline key", "The stable machine name — 'build_lifecycle'. What seed data and the import reference; the name beside it is the renameable half.", "text", "Not null. Unique. CHECK: slug shape.", "How the app finds the lifecycle without hardcoding a uuid.", "created"),
-  e("pipelines.pipeline_name", "Pipeline name", "What the process is called on screen.", "text", "Not null.", "—", "created"),
-  e("pipelines.pipeline_scope", "Scope", "Whether the pipeline runs over projects or jobs.", "text", "Not null. CHECK in ('project','job').", "—", "created"),
-  e("pipelines.pipeline_parent_stage_id", "Elaborates", "The stage of another pipeline this one details — the nesting, in one column. Null means a root pipeline.", "uuid", "Nullable. No cascade: deleting a stage another pipeline hangs off fails loudly. Partial unique — a stage is elaborated by at most one pipeline. A trigger refuses cycles.", "FK → pipeline_stages(pipeline_stage_id).", "created"),
-  e("pipelines.pipeline_is_active", "Active", "Retiring a process is a flag, the same posture as teams and tags.", "boolean", "Not null, default true.", "—", "created"),
-
-  e("pipeline_stages.pipeline_stage_id", "Stage", "A position within a pipeline. Rows, not an enum — which is what lets the vocabulary change (0035, 0045 both reseeded it) without an ALTER TYPE.", "uuid", "Primary key. Also unique with pipeline_id, the target of job_pipeline_positions' composite FK.", "The build lifecycle's seven stages are its best-known rows.", "created"),
-  e("pipeline_stages.pipeline_id", "Pipeline", "Which process the stage belongs to.", "uuid", "Not null. Unique with position.", "FK → pipelines ON DELETE CASCADE.", "created"),
-  e("pipeline_stages.pipeline_stage_name", "Stage name", "What the stage is called — the seven lifecycle names live here.", "text", "Not null.", "Mirrored by the CHECKs on jobs.job_stage and projects.project_stage for the lifecycle pipeline.", "created"),
-  e("pipeline_stages.pipeline_stage_position", "Order", "Where the stage sits — the board's column order.", "integer", "smallint. Not null. Unique with pipeline_id.", "lifecycle_position() reads it for the lifecycle.", "created"),
-  e("pipeline_stages.pipeline_stage_type", "Kind", "open, won, lost — or archived (0045): what lets a board tell 'left the process' from 'stalled in it'.", "text", "Not null, default 'open'. CHECK on the four values.", "Completed is won, Closed is archived, Cancelled is lost.", "created"),
-  e("pipeline_stages.pipeline_stage_owning_team", "Owning team", "Which team picks the job up at this stage. Null on every lifecycle stage by decision — ownership lives on nested pipelines' stages.", "text", "Nullable.", "FK → teams(team_id) ON UPDATE CASCADE. Read by listTemplatePhases.", "created"),
-  e("pipeline_stages.pipeline_stage_is_external", "External wait", "Council, the EER consultant, SA Water — flagged so a statutory 28 days is not a team's overdue.", "boolean", "Not null, default false.", "Excluded from team SLA reporting when that lands.", "created"),
-
-  e("job_pipeline_positions.job_id", "Job", "Where a job is, per pipeline — one position in each process it runs through, which is the whole point: a single stage column can only hold one answer.", "text", "Part of the primary key with pipeline_id.", "FK → jobs ON UPDATE CASCADE ON DELETE CASCADE.", "created"),
-  e("job_pipeline_positions.pipeline_stage_id", "At stage", "The stage the job is parked at — guarded to belong to the same pipeline, or every board would disagree about where it is.", "uuid", "Not null. Composite FK (pipeline_id, pipeline_stage_id) → pipeline_stages.", "The board query groups on it.", "created"),
-  e("job_pipeline_positions.job_pipeline_position_state", "State", "active · waiting · done. Blocked is a STATE, not a stage: a job waiting on Estimating has not left the stage it is in — the card greys in place instead of lying about where it is.", "text", "Not null, default 'active'. CHECK on the three values, and waiting requires a team to be waiting on.", "—", "created"),
-  e("job_pipeline_positions.job_pipeline_position_waiting_on", "Waiting on", "Who it is waiting on, when it is waiting — a team, not free text, so 'what is Estimating holding up' is a query.", "text", "Nullable; required when the state is waiting.", "FK → teams(team_id) ON UPDATE CASCADE. Partially indexed.", "created"),
-  e("job_pipeline_positions.job_pipeline_position_entered_at", "Entered on", "When the job arrived at this stage of this pipeline.", "timestamptz", "Not null, default now().", "—", "created"),
-
-  e("job_stage_events.job_stage_event_id", "Stage event", "One move, logged the moment it happens — because time in stage CANNOT be reconstructed later. job_stages was dropped in 0006 and that history is gone once; this stops it happening twice.", "bigint", "Primary key, GENERATED ALWAYS AS IDENTITY.", "Written by trigger, never by the app. Durations are a window function over this log.", "created"),
-  e("job_stage_events.job_stage_event_from_stage_id", "From", "Where the job was. Nullable — the first event has no previous stage — and deliberately not an FK: a log must survive a stage being retired.", "uuid", "Nullable. No FK.", "—", "created"),
-  e("job_stage_events.job_stage_event_to_stage_id", "To", "Where it moved to. Same no-FK reasoning: it records what WAS true.", "uuid", "Not null. No FK.", "—", "created"),
-  e("job_stage_events.job_stage_event_at", "When", "The moment of the move — the timestamp durations are measured between.", "timestamptz", "Not null, default now().", "—", "created"),
-  e("job_stage_events.job_stage_event_by", "By", "Who moved it. Null for a trigger or an import.", "uuid", "Nullable.", "FK → profiles(profile_id).", "created"),
+  // ------------------------- the August position model (0029), dropped by 0137
+  // `pipelines`, `pipeline_stages`, `job_pipeline_positions` and `job_stage_events` were the
+  // first answer to "where is this job". Stage 1 of the 15 September audit replaced them with
+  // `lifecycle_stages` and `lifecycle_substages`, and Stage 5 dropped them: the first two held
+  // eight rows that said what `lifecycle_stages` already says, and the other two never held a
+  // row at all. Their entries are in the git history, where a dropped table's documentation
+  // belongs.
 
   // -------------------------------------------------- dictionary_overrides (0044)
   e("dictionary_overrides.dictionary_override_id", "Overridden entry", "Which dictionary entry Lofty reworded — the same table.column id the repo's array keys on. One row per edited entry; deleting the row restores the repo's wording.", "text", "Primary key. CHECK: table.column shape.", "Merged over DICTIONARY on read by the Dictionary page. Sweeping an override back into dictionary.ts and deleting the row is the maintenance path.", "created"),
@@ -1849,14 +1811,6 @@ export const TABLE_DESCRIPTIONS: Record<string, string> = {
     "The blocks inside each lifecycle stage, as rows (0127): what a group of processes belongs to and what a job is at inside a stage. Seeded from the workbook's process groups on Amber's yes; managers add, rename, reorder and retire them in Setup → Processes.",
   lifecycle_stages:
     "The lifecycle as rows (0126): the seven stages in position order, their kind, their SLA and whether they are active. Every stage column is a foreign key to the name. Superadmin changes what a stage is; a manager sets its SLA; a rename with rows in the stage is a migration.",
-  pipeline_stages:
-    "A position within a pipeline — the build lifecycle's seven stages are its rows (0029, reseeded by 0035 and 0045), which is what lets the vocabulary change without an ALTER TYPE. Covered from its identity through the SLA pair the Setup → Automations editor writes.",
-  pipelines:
-    "A process, as rows — and processes nest: Pre-construction elaborates a lifecycle stage, a team's own pipeline elaborates one of Pre-construction's, to whatever depth the team needs. Keyed twice on purpose: the slug for machines, the name for renaming. Retiring one is a flag.",
-  job_pipeline_positions:
-    "Where a job is, per pipeline — one position in each process it runs through, because a single stage column can only hold one answer. Blocked is a STATE here, not a stage: a waiting job greys in place and names the team it waits on, instead of pretending it moved.",
-  job_stage_events:
-    "Every stage move, logged the moment it happens — because time in stage cannot be reconstructed later, and the schema has already lost that history once (job_stages, dropped in 0006). Written by trigger only; deliberately no FKs to stages, so the log survives a vocabulary change.",
   dictionary_overrides:
     "Lofty's words on top of the repo's dictionary — one row per entry somebody reworded on the Dictionary page (0044), null fields meaning the repo's wording stands. Sweeping an override back into dictionary.ts and deleting the row is the maintenance path.",
   user_preferences:

@@ -22,7 +22,7 @@
  * **One list per board since 31 August.** They were one, and a view of jobs and a view of
  * projects turned out to be different questions — see PROJECT_VIEWS below.
  *
- * Names must match `pipeline_stages` exactly. `stagesInView` intersects against the live
+ * Names must match `lifecycle_stages` exactly. `stagesInView` intersects against the live
  * list, so a typo shows up as a phase that matches nothing rather than as an error — and
  * `verify/seeds.sh` compares every name here against the table. (That sentence was in
  * this comment before the check was: it said seeds.sh fails when the two disagree, and

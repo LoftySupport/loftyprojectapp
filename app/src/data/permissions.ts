@@ -65,9 +65,6 @@ export const PERMISSION_RULES: readonly PermissionRule[] = [
   { object: "Jobs", action: "Move between lifecycle phases", needs: "manager",
     enforcedBy: "guard_job_stage_change() trigger, 0038",
     note: "Lofty, 25 August. A column rule, so a trigger rather than a policy — RLS decides rows, not columns." },
-  { object: "Jobs", action: "Move within a team's own pipeline", needs: "user",
-    enforcedBy: "job_pipeline_positions UPDATE ≥ user",
-    note: "Deliberately lower than a lifecycle move, and no confirmation either: a team moving a card on its own board is not asking anyone." },
   { object: "Jobs", action: "Delete", needs: "admin", enforcedBy: "jobs DELETE ≥ admin" },
 
   { object: "People", action: "Add or edit anyone", needs: "admin",
