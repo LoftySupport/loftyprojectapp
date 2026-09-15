@@ -2,8 +2,9 @@
 
 **The readable version, with the two diagrams, is published at
 <https://claude.ai/artifact/LnuPZkB65SW8uKhxnaVjCP>. Show that one to people; edit this file.**
-Revision 1. Answers Amber gives in the chat are recorded in
-[`../open-questions.md`](../open-questions.md) and folded back here as dated revisions.
+Revision 2, 15 September. Revision 1 was written the same morning before the interview; the
+interview's answers are recorded in [`../open-questions.md`](../open-questions.md) and folded
+back here in *Revision 2* at the end.
 
 Amber, 15 September: *"I want to walk away with a clear picture on what needs to stay, what
 needs updating and what needs to go and a staged plan to implement it."* This is that record.
@@ -278,3 +279,47 @@ against every `create table` and `create view`; the `WIRED` list against the imp
 
 Not done: no migration was written and nothing on the live project was changed. `check.sh` was
 not run here; its 26 failures are `HANDOFF.md`'s report of 14 September.
+
+## Revision 2, 15 September: what was decided
+
+Every decision above was put to Amber in the chat the same day, one at a time, with the
+recommendation stated. Her answers are in `../open-questions.md` in her own words. The
+published page carries the same table and marks each catalogue chip that moved.
+
+**The specification that came out of it.** Asked what Construction's sub-stages were, Amber
+answered with a walk-through of the Working Drawings process instead. A process is owned by
+one team and may hold tasks for others; it starts when a property is recorded (*Planning
+approval received*) or a predecessor completes; on start the system creates and assigns the
+first task to the owning team's manager, sets the job's owner, stamps a property with today and
+starts the SLA; inside it people do tasks, tick checklists, record properties and upload files,
+and a task may record a date against a property when ticked; when every step is done the process
+completes itself, a milestone process notifies, and completion starts the next process and its
+first task. That is steps of four kinds with effects at three moments, which is the model above.
+
+| # | Asked | Answered | What it moved |
+| --- | --- | --- | --- |
+| 1 | Construction's sub-stages | Construction is not mapped yet and runs in SiteBook; a process everywhere is the size of Working Drawings | Stage 1 crosses the seven groups over mechanically, one sub-stage each holding its existing process, awaiting the SiteBook mapping |
+| 2 | Fold properties and tasks into one steps list | Yes | Stage 2 as written; a task step may name the property it stamps; every later edit stays a row a manager makes in Setup |
+| 3 | Processes move the job | Yes, as long as it can be manually overridden | Stage 3 as written, with the pin. Reverses 24 August |
+| 4 | What "automation" means | A registry of what runs, and later a HubSpot or Monday style builder; processes pick from either | Stage 4 gains 4c, the builder, recorded and not sized. One `automations` table with a kind column so there is one list |
+| 5 | The two Construction loads | Keep both; a SiteBook feed will write into them, then SiteBook retires | Nothing retired. Finding 3's cost accepted. Which copy the feed writes to is for the integration |
+| 6 | Maintenance | An issue is logged, stamped and assigned to a company or a person, and a process runs on it (report, send, follow up, check, confirm, invoice). Its own record, job only for now, no categories or trades | `process_runs` and `process_scope` gain *maintenance*. The offer machinery goes: items, assignments, categories, secrets, the offer and answer functions, the scan, the accept function, two notification types. Parties through `record_parties`. The project parent is added when a shared-property defect arrives |
+| 7 | Variations | Their own process and number (V01, V02); reopening a process in Construction starts it again without moving the job back | `variations` stays (Go became Update) as the record a *Variation* process runs on, a fourth scope; its effect is a new attempt linked by `process_runs.variation_id`; `variation_reopened_tasks`, its views and triggers go |
+| 8 | Email worker | Keep it; Teams, email and SharePoint are being connected; send nothing queued before switch-on; everyone off by default until testing | Stage 0: mark the four waiting rows as never to be sent, a switch-on date, default preferences off. The worker deploys with Amber's secrets |
+| 9 | Import staging | Export to a spreadsheet in the repository and drop it | Stage 5 (Archive became Go). Supersedes 7 September's "leave it" |
+| 10 | Profiles backup | Drop it | Stage 0 |
+| 11 | Scaffolding | All four go, and the dictionary itself | Stage 5. The fixed-columns list on Setup → Properties reads a catalogue view; the activity feed falls back to column names and property labels; `CLAUDE.md`'s four files become three |
+| 12 | Trades | No categories or trade types | Goes with 6. Question 0d closes |
+| + | Where the completion rule lives | In the database | Stage 2: a run cannot be complete while a required step is open; not applicable on the step is the recorded way past |
+| + | What makes a job overdue (question 8) | Its target completion date has passed | Stage 3's roll-up: at risk when an open required process is at risk or overdue; overdue when the target has passed; never overdue without a target |
+| + | Maintenance's sub-stage | 1 Month, 2 Month and 3 Month | Stage 1: three rows; *1 Month Checkin* in the first, the other two empty |
+
+**Three things this changes in the model, in words:** `process_runs` takes four parents (job,
+project, maintenance request, variation) under the same one-of check; a task step carries an
+optional property key it stamps on completion; the derivation of sub-stage and stage has a
+floor, never lower than the highest reached, so a variation's new attempt does not pull a job
+in Construction back to Stage 2.
+
+**Where this leaves the plan.** Nothing in Stage 0 waits on a decision any more, and Stages 1
+to 5 each have theirs. Nothing is built yet; the next step is the Stage 0 pull requests, one
+table each.

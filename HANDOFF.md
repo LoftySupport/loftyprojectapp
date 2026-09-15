@@ -39,11 +39,26 @@ the two template lists; the job's stage, sub-stage, team and health derived from
 pin; an `automations` registry of the twelve things that already run without a person; then
 the dead tables dropped, one PR each. Six stages, in that order, in the audit.
 
-**Twelve decisions are queued at the top of [`docs/open-questions.md`](docs/open-questions.md)**
-and are being asked in the chat one at a time. Nothing in the plan is built until its decision
-is answered. Stage 0 (housekeeping: the 26 `FAIL` lines, the audit allowlist, the misused
-`property_def_automation` column, the undeployed email worker, the RLS-less backup table) can
-start on the two decisions that are its own.
+**All twelve decisions were asked in the chat the same afternoon, one at a time, and answered.**
+Amber's words are in the *Answered* table of [`docs/open-questions.md`](docs/open-questions.md)
+and what each moved is *Revision 2* of the audit. The ones that reshape the plan: a process
+everywhere is the size of Working Drawings, and Amber's walk-through of that process is the
+specification for steps; Construction stays as loaded because it runs in SiteBook and a feed
+will write into it; a maintenance issue and a variation each stay their own record and become
+things a process runs on; the offer machinery, the import staging table, the four pieces of
+scaffolding and the whole dictionary go; email and Teams stay, send nothing queued before
+switch-on, and default off until testing; the completion rule lives in the database; a job is
+overdue when its target completion has passed; Maintenance has three sub-stages, 1 Month, 2
+Month and 3 Month. **Nothing is built yet.** Stage 0 needs no further decision.
+
+**Found the same afternoon, and fixed in part:** the live ledger did not carry `0119`
+(`the_date_the_slas_say`) or `0120` (`a_community_title_job_shows_a_c`) although PR #88 had
+merged their code, so the deployed app asked `job_display` for `job_calculated_completion` and
+the Jobs board showed *"The app is ahead of the database"* to everyone. The 14 September evening
+note in this file was right and `schema-plan.md`'s *"all four are applied"* was wrong. **`0119`
+was applied on 15 September** after a dry run in a rolled-back transaction, and the board reads
+again. `0120` renames nine live jobs and `0122` depends on it; both wait on Amber's yes, and
+open question 0g carries them.
 
 ---
 

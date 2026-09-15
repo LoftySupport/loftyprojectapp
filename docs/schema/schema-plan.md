@@ -3324,6 +3324,20 @@ Projects get no forecast: Amber asked about a job.
 
 ### 14 September — a community title job carries a `c`, in the number itself (`0120`)
 
+**Corrected 15 September, before it was ever applied.** This migration was on `main` and not
+in the live ledger, and its first dry run there, in a rolled-back transaction, was refused:
+*check constraint "jobs_id_matches_its_parts" of relation "jobs" is violated by some row*.
+The new CHECK was created before the backfill that gives the nine community-title jobs their
+`c`, and a CHECK validates every existing row as it is made. Moving the CHECK after the backfill
+failed differently, on the rename itself, because `0028`'s constraint of the same name, the rule
+without the `c`, was still standing. The order is now drop the old rule, rename, add the new
+rule, and that order was watched passing live inside a rolled-back transaction with all nine
+jobs renamed and every child row still attached. The replay never caught either failure
+because a replay starts from an empty `jobs` table, which is the lesson `0109` already
+recorded: **a migration set that replays is not a schema that works.** The statement below,
+that all four `0119`/`0120` files are applied, was wrong for two of them; see `0g` in
+`open-questions.md`.
+
 Amber: *"Any job that is listed as community title needs a 'c' suffix after the job number
 eg 1004-001c. Torrens title has no suffix. The jobs remain sequential eg 1004-001c /
 1004-002c / 1004-003 / 1004-004 Etc"*.

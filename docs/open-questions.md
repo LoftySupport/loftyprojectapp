@@ -49,6 +49,22 @@ tell the truth about a rename rule that is only in the repository.
 **Also needed before either can be applied:** the Supabase connector needs re-authorising in
 this session — it is asking for it again, so nothing can be applied from here until it is.
 
+**Update, 15 September afternoon, from the audit session (which had a working connector):**
+the third unapplied one, `0119` `the_date_the_slas_say`, was the one breaking the deployed app
+(*"It asked for job_display.job_calculated_completion, which is not there yet"*, on every load
+of the Jobs board since #88 merged). It changes no data, so it was dry-run in a rolled-back
+transaction on the live project and then **applied and recorded in the ledger on 15
+September**. `0120` and `0122` are not applied: `0120` renames nine live jobs and is a data
+change, so it is Amber's yes, and `0122` goes with it. **And `0120` as merged could not have been applied live at all**: its dry run in a
+rolled-back transaction was refused twice, first because the new `jobs_id_matches_its_parts`
+CHECK was created before the backfill (a CHECK validates existing rows as it is made), then,
+with the CHECK moved, because `0028`'s constraint of the same name and the old rule was still
+standing and refused the rename. The file on the audit branch now reads drop, rename, add, and
+that order was watched passing live: nine jobs renamed (`1109-001c` to `006c`, `1123-001c`,
+`1991-001c`, `1991-002c`), every task, request, run, document link and report document still
+attached, then rolled back. Applying `0120` and `0122` for real is the yes this question asks
+for; nothing else stands in the way once the corrected file is on `main`.
+
 
 ### 0h. The twelve decisions the architecture audit turned on *(all answered 15 September)*
 

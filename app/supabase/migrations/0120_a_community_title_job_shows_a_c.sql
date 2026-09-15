@@ -131,15 +131,22 @@ end $$;
 comment on function resync_job_id() is
   'Rebuilds job_id when any part of it changes: the project, the sequence, or — since 0120 — the title type, which appends or removes the community-title "c". The 16 ON UPDATE CASCADE foreign keys carry the rename to every child row; report_documents was made the 17th in 0120 because it would otherwise have refused the first one.';
 
--- --------------------------------------------------------------- the shape
-alter table jobs drop constraint if exists jobs_id_matches_its_parts;
-alter table jobs add constraint jobs_id_matches_its_parts
-  check (job_id = project_id::text || '-' || job_sequence
-                || case when job_title_type = 'community' then 'c' else '' end);
-
 -- ------------------------------------------------------------- the backfill
 -- The 9 community title jobs take their suffix. Every child row follows by cascade; no
 -- child id embeds the job number, which was checked before this was written.
+--
+-- DROP THE OLD RULE, RENAME, THEN ADD THE NEW RULE — THE ORDER IS THE FIX (15 September).
+-- As first written, the new CHECK was created before the backfill. A CHECK validates every
+-- existing row the moment it is created, and the live database held nine community-title
+-- jobs still called `1004-003`, so it was refused: *check constraint
+-- "jobs_id_matches_its_parts" of relation "jobs" is violated by some row*. Moving the whole
+-- block after the backfill failed differently: `0028`'s constraint of the same name, the
+-- rule WITHOUT the c, was still standing and refused the rename itself (*new row for
+-- relation "jobs" violates check constraint*, failing row `1991-001c`). The replay saw
+-- neither, because a replay starts from an empty `jobs`. Both watched failing in a
+-- rolled-back transaction on the live project; this order watched passing.
+alter table jobs drop constraint if exists jobs_id_matches_its_parts;
+
 do $$
 declare
   moved integer;
@@ -151,6 +158,11 @@ begin
   get diagnostics moved = row_count;
   raise notice '0120: % community title jobs took their c.', moved;
 end $$;
+
+-- --------------------------------------------------------------- the shape
+alter table jobs add constraint jobs_id_matches_its_parts
+  check (job_id = project_id::text || '-' || job_sequence
+                || case when job_title_type = 'community' then 'c' else '' end);
 
 -- ---------------------------------------------------------------------- proof
 -- Watched fail before it was watched pass, each mutation replayed into a fresh database:
