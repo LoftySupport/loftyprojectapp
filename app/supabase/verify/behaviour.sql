@@ -1222,3 +1222,79 @@ select case when process_run_status = 'complete'
 from process_runs where process_run_id = :'prop_run';
 
 rollback;
+
+-- ============================================================================
+-- 47. A job reads its place from its processes, and a pin overrides it (0132)
+--
+-- Runs on 9106-002, which §40 and §46 left in Pre-construction with its processes
+-- part-finished. In one transaction, rolled back: this step finishes real processes on
+-- the fixture job, and the steps after it read that job's stage.
+-- ============================================================================
+\echo '--- 47. the job moves when its stage is finished, and a pin stops it (0132)'
+begin;
+
+select job_stage as s47_before from jobs where job_id = '9106-002' \gset
+
+select case when job_substage_name is not distinct from
+              (select lifecycle_substage_name from lifecycle_substages
+                where lifecycle_substage_id = job_open_substage('9106-002'))
+  then 'ok  job_display and job_open_substage give the same sub-stage'
+  else 'FAIL: the view says ' || coalesce(job_substage_name, 'null') || ' and the function says something else' end
+from job_display where job_id = '9106-002';
+
+-- Pin it, then finish everything its stage holds. The stage must not move.
+update jobs set job_stage_pinned_at = now(),
+                job_stage_pinned_by = (select profile_id from profiles limit 1),
+                job_stage_pin_reason = 'behaviour 47: imported from the old system'
+ where job_id = '9106-002';
+
+insert into process_runs (process_id, job_id, process_run_status)
+select p.process_id, '9106-002', 'not_applicable'
+  from processes p
+  join lifecycle_substages s using (lifecycle_substage_id)
+  join lifecycle_stages st on st.lifecycle_stage_id = s.lifecycle_stage_id
+ where p.process_is_active and not p.process_is_optional and p.process_scope = 'job'
+   and st.lifecycle_stage_name = :'s47_before'
+   and not exists (select 1 from process_runs r where r.process_id = p.process_id and r.job_id = '9106-002');
+
+update process_runs set process_run_status = 'not_applicable'
+ where job_id = '9106-002' and process_run_status not in ('complete', 'not_applicable')
+   and process_id in (
+     select p.process_id from processes p
+       join lifecycle_substages s using (lifecycle_substage_id)
+       join lifecycle_stages st on st.lifecycle_stage_id = s.lifecycle_stage_id
+      where st.lifecycle_stage_name = :'s47_before');
+
+select case when job_stage = :'s47_before'
+  then 'ok  a pinned job did not move when its stage finished'
+  else 'FAIL: a pinned job moved to ' || job_stage end
+from jobs where job_id = '9106-002';
+
+select case when job_derived_stage('9106-002') is distinct from :'s47_before'
+  then 'ok  and the derivation says it should have moved, so the pin is what held it'
+  else 'FAIL: the derivation agrees with the pinned stage, so this probe proves nothing' end;
+
+-- Release it, and the job goes where its processes say.
+update jobs set job_stage_pinned_at = null where job_id = '9106-002';
+select case when job_stage_pinned_by is null and job_stage_pin_reason is null
+  then 'ok  releasing the pin clears the name and the reason with the time'
+  else 'FAIL: the pin left ' || coalesce(job_stage_pinned_by::text, 'no name') || ' and ' || coalesce(job_stage_pin_reason, 'no reason') end
+from jobs where job_id = '9106-002';
+
+-- Nothing has changed on a run since the release, so the job is still where it was: the
+-- move is a consequence of work, not of unpinning. Touching one run is what triggers it.
+update process_runs set process_run_note = coalesce(process_run_note, '') || ' '
+ where process_run_id = (select process_run_id from process_runs where job_id = '9106-002' limit 1);
+select case when job_stage = :'s47_before'
+  then 'ok  and a write that is not a status change does not move it either'
+  else 'FAIL: a note moved the job to ' || job_stage end
+from jobs where job_id = '9106-002';
+
+update process_runs set process_run_status = process_run_status
+ where process_run_id = (select process_run_id from process_runs where job_id = '9106-002' limit 1);
+select case when job_stage is distinct from :'s47_before' and lifecycle_position(job_stage) > lifecycle_position(:'s47_before')
+  then 'ok  an unpinned job moved forwards to ' || job_stage || ' when its stage was finished'
+  else 'FAIL: the job is still at ' || job_stage end
+from jobs where job_id = '9106-002';
+
+rollback;

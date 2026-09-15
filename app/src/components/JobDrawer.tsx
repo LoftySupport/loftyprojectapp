@@ -120,6 +120,9 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
   // the same rung (`user`+, backed by the `users update jobs` policy). One record here,
   // so the write saves on change and the board reloads behind the drawer.
   const { can } = usePermission();
+  // The release button's own busy flag: the drawer has several, and one shared one
+  // would grey out controls that are not doing anything.
+  const [releasing, setReleasing] = useState(false);
   const { teams } = useTeams();
   const [whoBusy, setWhoBusy] = useState(false);
   const [whoErr, setWhoErr] = useState<string | null>(null);
@@ -346,6 +349,15 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
                     the database draws (0038). Only later phases are offered — see
                     MoveStageControl for why — and choosing one asks for confirmation,
                     because a lifecycle move cannot be undone. */}
+                {/* Where the work is up to, which is not the same fact as where the job
+                    has been moved to (0132). They agree once a run changes; until then the
+                    difference is the honest answer and the panel shows both. */}
+                <div className="field-row">
+                  <div className="field-label"><Text type="text2">Up to</Text></div>
+                  <Text type="text2" element="span">
+                    {job.substageName ?? "nothing open in this stage"}
+                  </Text>
+                </div>
                 <div className="field-row">
                   <div className="field-label">
                     <Text type="text2">Move to a later stage</Text>
@@ -361,6 +373,32 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
                     onMoved={onMoved}
                   />
                 </div>
+                {/* The pin, and the way out of it. A job moved by hand stays where it was
+                    put; releasing hands it back to its processes, which may move it the
+                    moment the next one finishes. Manager and above, the same line the
+                    database draws. */}
+                {job.stagePinnedAt != null && (
+                  <div className="field-row">
+                    <div className="field-label">
+                      <Text type="text2">Stage is pinned</Text>
+                      {job.stagePinReason && <div className="field-hint">{job.stagePinReason}</div>}
+                    </div>
+                    {can("manager") ? (
+                      <Button size="small" kind="secondary" disabled={releasing}
+                        onClick={async () => {
+                          setReleasing(true);
+                          try { await repo.unpinJobStage(job.jobNumber); onMoved?.(); }
+                          finally { setReleasing(false); }
+                        }}>
+                        Let the processes move it
+                      </Button>
+                    ) : (
+                      <Text type="text3" color="secondary" element="span">
+                        A manager can release it.
+                      </Text>
+                    )}
+                  </div>
+                )}
               </div>
             }
           />

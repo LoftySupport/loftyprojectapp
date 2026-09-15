@@ -415,6 +415,24 @@ export interface Job {
   status: RecordStatus;
   stage: StageName;
   stageEnteredAt: IsoDateTime;
+  /**
+   * The sub-stage its processes put it at (0132), derived on read and stored nowhere.
+   *
+   * The earliest sub-stage OF THE STAGE IT IS IN that still holds a non-optional job-scoped
+   * process whose latest attempt is neither complete nor not applicable. Null means that
+   * stage is finished and the job has not moved yet — a state that lasts until the next
+   * change on one of its runs, which is what does the moving.
+   */
+  substageId: Uuid | null;
+  substageName: string | null;
+  /**
+   * The pin (0132). While it is set the processes do not move the job: an imported older
+   * job stays where somebody put it, and a manager who moved one by hand does not have to
+   * watch it move back. Null is the normal state — the stage follows the work.
+   */
+  stagePinnedAt: IsoDateTime | null;
+  stagePinnedBy: Uuid | null;
+  stagePinReason: string | null;
   /** Who is primarily accountable. Drives board grouping. */
   owningTeam: TeamId;
   /**

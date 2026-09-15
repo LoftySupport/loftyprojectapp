@@ -302,8 +302,29 @@ export interface Repository {
    * verbatim if one comes back. The app's `can()` check hides the control; it is not
    * the security. Returns the job re-read through `job_display`, because the move
    * restamps `job_stage_entered_at` and can advance the project underneath it (0041).
+   *
+   * **Since 0132 the move also PINS the job.** The processes move it now, so a hand-move
+   * that is not a pin is one the next completed process undoes — worse than no move,
+   * because the person watched it work. `unpinJobStage` hands it back to the work.
    */
   moveJobStage(id: string, stage: StageName): Promise<Job>;
+
+  /**
+   * Pin a job's stage, or release it (0132).
+   *
+   * Since Stage 3 the processes move the job: finishing the last one in a stage carries it
+   * to the next. The pin is the override Amber asked for — *"as long as it can be manually
+   * overriddent"* — and it is what the confirm modal now writes. While a job is pinned the
+   * derivation leaves it alone; releasing hands it back to the work.
+   *
+   *  is optional and stays optional: a manager moving a job forwards may have
+   * nothing to add, and a reason invented to fill the box is worse than a blank. The
+   * database stamps who and when from the session, so neither is the caller's to choose.
+   * Manager and above, by trigger; the refusal comes back in the database's own words.
+   */
+  pinJobStage(id: string, reason: string | null): Promise<Job>;
+  /** Release the pin. The name and the reason go with it — they are one fact. */
+  unpinJobStage(id: string): Promise<Job>;
 
   /**
    * Ownership and assignment on a job — the two facts the bulk bar and the drawer may
@@ -1162,6 +1183,8 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "deleteJob",
   "deleteProject",
   "moveJobStage",
+  "pinJobStage",
+  "unpinJobStage",
   "updateJob",
   "moveProjectStage",
   "updateProject",
@@ -1378,6 +1401,8 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   deleteJob: "jobs",
   deleteProject: "projects",
   moveJobStage: "jobs",
+  pinJobStage: "jobs",
+  unpinJobStage: "jobs",
   updateJob: "jobs",
   moveProjectStage: "projects",
   updateProject: "projects",

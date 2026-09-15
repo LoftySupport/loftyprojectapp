@@ -60,6 +60,18 @@ export interface BoardJob {
   /** '1042' as text, because it is an identifier on screen and in the URL. */
   projectNumber: string;
   stage: string;
+  /**
+   * Where in the stage the job's processes have it (0132), and the pin that overrides them.
+   *
+   * `substageName` is derived on every read by `job_display`; null means the stage holds
+   * nothing open for this job and it has not moved yet. `stagePinnedAt` is the one stored
+   * fact of the three, and it is what stops the work moving the job.
+   */
+  substageId: string | null;
+  substageName: string | null;
+  stagePinnedAt: string | null;
+  stagePinnedBy: string | null;
+  stagePinReason: string | null;
   /** The display name, "Design" — what the toolbar's Team filter compares against. */
   team: string;
   /** The slug, for anything keyed rather than labelled. */
@@ -282,6 +294,11 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
       titleType: j.titleType,
       projectNumber: String(j.projectId),
       stage: j.stage,
+      substageId: j.substageId,
+      substageName: j.substageName,
+      stagePinnedAt: j.stagePinnedAt,
+      stagePinnedBy: j.stagePinnedBy,
+      stagePinReason: j.stagePinReason,
       team: teamName(j.owningTeam, teams),
       teamId: j.owningTeam,
       status: j.status,
