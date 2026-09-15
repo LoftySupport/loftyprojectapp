@@ -201,6 +201,20 @@ create trigger processes_guard_substage_in_stage
   before insert or update of lifecycle_substage_id, process_stage on processes
   for each row execute function guard_process_substage_in_stage();
 
+-- Nobody calls a trigger function. `0010` and `0011` set the convention and every
+-- migration since has followed it: a SECURITY DEFINER function gets its EXECUTE revoked
+-- from public, anon and authenticated, because PostgREST publishes a zero-argument
+-- function at /rest/v1/rpc/<name> whether or not it makes sense to call.
+--
+-- The second revoke here is `0126`'s, not this migration's. Supabase's advisor flagged it
+-- the moment 0126 reached the live database ("Public Can Execute SECURITY DEFINER
+-- Function"), and 0126 is applied, so it cannot be edited. Calling either one over the API
+-- fails with "trigger functions can only be called as triggers" — watched, as the
+-- authenticated role — so this is the advisor's line rather than an open door; it rides
+-- here because it is one statement and a third migration for it would be churn.
+revoke execute on function guard_process_substage_in_stage() from public, anon, authenticated;
+revoke execute on function guard_lifecycle_stage_shape_change() from public, anon, authenticated;
+
 -- ================================================================== the view, then the column
 drop view if exists process_run_display;
 create view process_run_display with (security_invoker = true) as
@@ -327,5 +341,13 @@ begin
   exception when foreign_key_violation then null;
   end;
 
-  raise notice '0127 proof: 17 sub-stages, every active process in one of its own stage, the group column gone, the view rebuilt, the guard and the check biting.';
+  -- Neither guard is callable over the API. Watched failing by granting execute back.
+  if has_function_privilege('authenticated', 'guard_process_substage_in_stage()', 'execute')
+     or has_function_privilege('anon', 'guard_process_substage_in_stage()', 'execute')
+     or has_function_privilege('authenticated', 'guard_lifecycle_stage_shape_change()', 'execute')
+     or has_function_privilege('anon', 'guard_lifecycle_stage_shape_change()', 'execute') then
+    raise exception '0127 proof: a guard trigger function is still callable over the API';
+  end if;
+
+  raise notice '0127 proof: 17 sub-stages, every active process in one of its own stage, the group column gone, the view rebuilt, the guard and the check biting, and neither guard callable over the API.';
 end $$;

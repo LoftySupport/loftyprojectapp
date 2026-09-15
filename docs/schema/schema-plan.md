@@ -4144,6 +4144,16 @@ rename and remove one, and `behaviour.sql`'s two process probes now carry a real
 Watched failing with the guard trigger dropped, with the CHECK dropped and with the manager
 write policy dropped, each reporting the one thing it guards.
 
+**One thing it carries that is not its own.** Supabase's advisor flagged
+`guard_lifecycle_stage_shape_change()` the moment `0126` reached the live database: a
+SECURITY DEFINER function with no arguments is published by PostgREST at
+`/rest/v1/rpc/<name>`, and `0010` and `0011` set the convention that every such function has
+its EXECUTE revoked from public, anon and authenticated. Twenty-odd trigger functions follow
+it; `0126` and this one did not. Calling either over the API fails with *"trigger functions
+can only be called as triggers"*, watched as the authenticated role, so it is the advisor's
+line rather than an open door — but `0126` is applied and cannot be edited, and a third
+migration for one statement is churn, so `0127` revokes both and asserts neither is callable.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in
