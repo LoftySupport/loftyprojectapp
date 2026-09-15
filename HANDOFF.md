@@ -57,8 +57,10 @@ merged their code, so the deployed app asked `job_display` for `job_calculated_c
 the Jobs board showed *"The app is ahead of the database"* to everyone. The 14 September evening
 note in this file was right and `schema-plan.md`'s *"all four are applied"* was wrong. **`0119`
 was applied on 15 September** after a dry run in a rolled-back transaction, and the board reads
-again. `0120` renames nine live jobs and `0122` depends on it; both wait on Amber's yes, and
-open question 0g carries them.
+again. `0120` as merged could not be applied at all: its dry run was refused twice, and the
+file on this branch now reads drop the old rule, rename, add the new rule. **Amber said yes the
+same afternoon and `0120` (corrected) and `0122` are applied too**: nine jobs carry their `c`,
+every child row followed, and the ledger matches `main`. Open question 0g records it.
 
 ---
 
