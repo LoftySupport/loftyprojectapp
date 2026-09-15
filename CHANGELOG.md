@@ -223,6 +223,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Changed
 
+- The lifecycle's stages are a table managers can see, and superadmins can extend, instead of a list fixed in code
 - A maintenance issue is edited in the same layout it was logged in, with tasks, comments, activity and documents beneath it
 - A maintenance photo or video now has a permanent link, so a generated maintenance sheet still shows its pictures after it is emailed
 - A pasted maintenance list splits at a colon - what is before it becomes the issue, what is after becomes the details

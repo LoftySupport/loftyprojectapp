@@ -18,13 +18,13 @@ instead of showing a plausible guess.
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 285 changes since then —
+Unreleased: 286 changes since then —
+- Changed: The lifecycle's stages are a table managers can see, and superadmins can extend, instead of a list fixed in code
 - Fixed: Two Microsoft endpoints would answer anybody while their secret was unset
 - Fixed: the workbook import no longer stops at the first community-title job
 - Fixed: deleting a job removes its report documents again, as it did before 0120
 - Changed: A maintenance issue is edited in the same layout it was logged in, with tasks, comments, activity and documents beneath it
-- Added: Community title jobs now carry a "c" in the job number itself — 1004-003c. Mark a job community title and its number updates everywhere it is used; correct it back and the c goes away. The project number and the three-digit job code never change, and the numbering still runs straight through both title types.
-- …and 280 more.
+- …and 281 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
