@@ -775,4 +775,41 @@ BEGIN
     RAISE WARNING 'FAIL: a sub-stage with processes in it was deleted';
   EXCEPTION WHEN foreign_key_violation THEN RAISE NOTICE 'ok  processes_lifecycle_substage_id_fkey refused to delete a block that holds processes';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (deleting a full sub-stage)', SQLERRM; END;
+  -- 0128: a step is of one kind and carries that kind's fields. Four shapes the table refuses,
+  -- because a column that means something for one kind and nothing for another is how a table
+  -- with a kind column turns into four half-tables nobody can read.
+  BEGIN
+    INSERT INTO process_steps (process_id, process_step_kind)
+    SELECT process_id, 'property' FROM processes ORDER BY process_key LIMIT 1;
+    RAISE WARNING 'FAIL: a property step naming no property was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a property step must name a property (0128)';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (property step with no property)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO process_steps (process_id, process_step_kind)
+    SELECT process_id, 'task' FROM processes ORDER BY process_key LIMIT 1;
+    RAISE WARNING 'FAIL: a task step with no name was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a task step must have a name (0128)';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (task step with no name)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO process_steps (process_id, process_step_kind, process_step_owning_team)
+    SELECT process_id, 'property', 'design' FROM processes ORDER BY process_key LIMIT 1;
+    RAISE WARNING 'FAIL: a property step took an owning team';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  only a task step carries a team or an SLA (0128)';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (property step with a team)', SQLERRM; END;
+
+  -- 0128: a parent lives in the same process as its child. Said as a composite key, so a step
+  -- of another process is a foreign-key violation rather than a trigger's opinion.
+  BEGIN
+    INSERT INTO process_steps (process_id, process_step_kind, process_step_name, parent_process_step_id)
+    SELECT p.process_id, 'task', 'Constraint probe 0128',
+           (SELECT s.process_step_id FROM process_steps s
+             WHERE s.process_step_kind = 'task' AND s.process_id <> p.process_id LIMIT 1)
+      FROM processes p ORDER BY p.process_key DESC LIMIT 1;
+    RAISE WARNING 'FAIL: a step took a parent in another process';
+  EXCEPTION WHEN foreign_key_violation THEN RAISE NOTICE 'ok  a step''s parent is in its own process (0128)';
+    WHEN not_null_violation THEN RAISE NOTICE 'note: no task step in another process, so the parent probe did not run';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (parent in another process)', SQLERRM; END;
 END $$;
+

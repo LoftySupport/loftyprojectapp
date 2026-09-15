@@ -4285,6 +4285,56 @@ can only be called as triggers"*, watched as the authenticated role, so it is th
 line rather than an open door — but `0126` is applied and cannot be edited, and a third
 migration for one statement is churn, so `0127` revokes both and asserts neither is callable.
 
+### 15 September — a process is a list of steps (`0128`)
+
+Stage 2 of the audit, its first migration, on `claude/stage2-process-steps`.
+
+**What a process held, and why it was two shapes.** `0078` gave a process a list of properties
+to collect; `0079` gave it a list of template tasks. Nothing ever gave it both, and the live
+database says why: the 38 Pre-construction processes carry 140 property rows and no tasks, the
+7 Construction processes carry 107 tasks and no properties. **Zero processes have both.** So a
+*process* meant a property list in one stage and a task list in another, edited on different
+screens, counted by different rules, and completed by neither.
+
+**What it is now.** `process_steps`: one row per step with a `kind` — property, task, checklist,
+automation — and the fields that kind needs, guarded by a CHECK per kind rather than by
+convention. `process_step_dependencies` carries what a step waits on. Backfilled from all three
+template tables: 168 property steps and 107 task steps on the seed replay, 140 and 107 live,
+99 dependencies, no checklist lines because none exist.
+
+**The decision worth keeping: a task step keeps its template task's id.** `tasks.process_task_id`
+is the provenance column on every instantiated task, so reusing the uuid means a task instantiated
+today still names the right row when `process_tasks` goes, and the parent and dependency backfills
+need no mapping table. A step *is* that template task rather than a copy of it.
+
+**Two more, smaller.** A step's position is per process and **not unique**: no process holds both
+kinds, so carrying both numbering schemes across cannot collide, and a unique constraint would make
+a drag write every row twice to get past itself. And a parent or a dependency is held inside its
+process by a **composite key** — `(process_id, process_step_id)` is unique, and both foreign keys
+carry the process — so a step of another process is a foreign-key violation rather than something
+a trigger has to notice.
+
+**The one value that is a reading rather than a copy.** Property steps carry the `required` flag
+`process_properties` held, 6 of 140 live. Template tasks never had one, and the reading that
+follows from Amber's own step 9 — *"when all process steps are completed mark this process
+complete"* — is that a task in the list is work that has to be done, so task steps arrive
+required. It is one UPDATE to change and it is question 0j in
+[`open-questions.md`](../open-questions.md).
+
+**Nothing is dropped and nothing is rewired.** The three template tables stay, the screens go on
+reading them, `instantiate_process_tasks` goes on working, and the new read methods
+(`listProcessSteps`, `listProcessStepDependencies`) have no caller yet. The screens move in the
+next migration and the old tables go in the one after. A backfill is worth more when the thing it
+came from is still there to check it against.
+
+**Proof.** Counts are **relative** to the source tables rather than absolute, because the live
+database carries 140 property rows and the replay 168, and an absolute number would have been
+right on one and a lie on the other: a step per property row, per template task, per checklist
+line and per dependency; every template task has a step of the same id; the nesting count matches;
+every property step's definition exists. `constraints.sql` gains four probes that run every time —
+a property step naming no property, a task step with no name, a property step carrying a team, and
+a parent in another process. Watched failing by dropping each guard in turn.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

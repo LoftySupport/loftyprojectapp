@@ -2193,6 +2193,69 @@ export interface NewProcessTask {
 
 export type ProcessTaskPatch = Partial<Omit<NewProcessTask, "processId">>;
 
+/**
+ * `process_steps` — one step of a process, of one kind (0128).
+ *
+ * The four kinds are Amber's walk-through of Working Drawings read as a data shape: a property
+ * to record, a task to do, a checklist line to tick, an automation to fire. The kind decides
+ * which fields mean anything, and the database says so with a CHECK per kind rather than by
+ * convention — `property` carries a `propertyKey` and nothing else, `task` carries a team, an
+ * SLA and possibly the property it stamps, `checklist` hangs off a task, `automation` carries
+ * its note until Stage 4 gives it a vocabulary.
+ *
+ * A task step keeps the id its `process_tasks` row had, so a task instantiated from it still
+ * points at the right template when that table goes.
+ */
+export interface ProcessStep {
+  id: Uuid;
+  processId: Uuid;
+  position: number;
+  kind: ProcessStepKind;
+  /** A run cannot be marked complete while a required step is open (Stage 2's gate). */
+  isRequired: boolean;
+  /** The label. Null only for a property step, which is named by its definition. */
+  name: string | null;
+  /** The property a `property` step collects. */
+  propertyKey: string | null;
+  /** The property a `task` step stamps with today's date when it is ticked. */
+  stampsPropertyKey: string | null;
+  owningTeam: TeamId | null;
+  expectedDays: number | null;
+  isExternal: boolean;
+  parentId: Uuid | null;
+  /** What an `automation` step does, as a note. Stage 4 replaces this with an effect. */
+  automation: string | null;
+  importRef: number | null;
+}
+
+export const PROCESS_STEP_KINDS = ["property", "task", "checklist", "automation"] as const;
+export type ProcessStepKind = (typeof PROCESS_STEP_KINDS)[number];
+
+export interface NewProcessStep {
+  processId: Uuid;
+  kind: ProcessStepKind;
+  position?: number;
+  isRequired?: boolean;
+  name?: string | null;
+  propertyKey?: string | null;
+  stampsPropertyKey?: string | null;
+  owningTeam?: TeamId | null;
+  expectedDays?: number | null;
+  isExternal?: boolean;
+  parentId?: Uuid | null;
+  automation?: string | null;
+}
+
+export type ProcessStepPatch = Partial<Omit<NewProcessStep, "processId" | "kind">>;
+
+/** `process_step_dependencies` — what a step waits on, always inside its own process. */
+export interface ProcessStepDependency {
+  processId: Uuid;
+  stepId: Uuid;
+  dependsOnStepId: Uuid;
+  lagDays: number;
+}
+
 /** `process_task_dependencies` — a template task waits for another, plus lag. */
 export interface ProcessTaskDependency {
   taskId: Uuid;
