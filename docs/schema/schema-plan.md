@@ -3609,8 +3609,8 @@ exist to be hidden.
 **Watched failing** before it was applied, live: the backup present, zero of six indexes, the
 policy's expression carrying the bare call. **Dry-run live** in a rolled-back transaction the
 same afternoon: the file applies, its proof passes, and the rollback was checked to have held
-(47 backup rows, no new index, the old policy text). Not applied live by the branch: it drops a
-table, so the moment is Amber's call.
+(47 backup rows, no new index, the old policy text). **Applied live on 15 September** after PR #96
+merged, with `0124` straight after it; the proof block passed on the live database.
 
 ## 15 September — Microsoft 365: one home each, and a window onto it
 
@@ -3961,7 +3961,11 @@ going (audit decision 11).
 
 **Proof:** the old name absent, the new one present, and at least one row carrying a group,
 which `0090`'s seed guarantees on a replay. Watched failing live before the rename. Dry-run live
-in a rolled-back transaction and checked to have rolled back. Applied when Amber says.
+in a rolled-back transaction and checked to have rolled back. **Applied live on 15 September**
+after PR #97 merged: 139 rows carry a group under the new name, and the deployed app and the
+database agree again. Between the merge and the apply the Properties page would have shown *"The
+app is ahead of the database"*; the gap was minutes, and `scripts/check-migrations.mjs` with
+credentials is the check that would have named it.
 ### 15 September — notifications wait for the switch-on (`0125`)
 
 The fourth Stage 0 branch from the audit, `claude/stage0-notifications`. Amber, 15 September,
