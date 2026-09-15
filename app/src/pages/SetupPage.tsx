@@ -256,17 +256,19 @@ function Automations() {
         <NotificationsSetupPage />
       </div>
 
-      {/* Automations proper are still half-present in the schema — `property_defs.automation`
-          names one per field — but nothing defines or runs them. The tab keeps saying so
-          rather than showing an empty list. */}
+      {/* Nothing in the schema defines or runs an automation. The column that used to say so,
+          `property_defs.property_def_automation`, held the workbook's group words and is
+          `property_def_group` since 0124. The tab keeps saying "not built" rather than showing
+          an empty list; the registry that names what already runs on its own is Stage 4 of the
+          15 September plan. */}
       <section className="panel" style={{ marginTop: "var(--space-16)" }}>
         <div className="panel-head">
           <Text type="text2" weight="bold">Automations</Text>
         </div>
         <Text type="text2" color="secondary" ellipsis={false}>
-          Not built yet. A property definition can already name an automation — the field
-          that fills its value in without anyone typing it — but there is nothing here to
-          define or run them. When there is, it belongs on this tab.
+          Not built yet. Nothing here defines or runs an automation, and the things that
+          already change data on their own, such as the two scheduled scans, have no name in
+          the app. When they do, they belong on this tab.
         </Text>
       </section>
     </>

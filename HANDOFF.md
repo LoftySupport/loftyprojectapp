@@ -62,6 +62,12 @@ file on this branch now reads drop the old rule, rename, add the new rule. **Amb
 same afternoon and `0120` (corrected) and `0122` are applied too**: nine jobs carry their `c`,
 every child row followed, and the ledger matches `main`. Open question 0g records it.
 
+**Stage 0's third branch, `claude/stage0-property-group`, is `0124`:** `property_defs.property_def_automation`
+becomes `property_def_group`, the workbook's own header for what it holds (Footings, Frame,
+2nd Fix; Working Drawings, SA Water). Nothing rendered the old name. The words turn out to be
+Construction's sub-stages and Pre-construction's processes, so Stages 1 and 2 each take a half
+when they land; `schema-plan.md` has the counts. Not applied live yet.
+
 Two standing costs of the proof blocks, both now visible live: `0119`'s and `0120`'s probes each
 consumed a project number (1995 and 1996 will never exist; `0122` restores its sequence, the
 other two do not), and **`0122`'s proof leaks three address rows** on every run, the two job

@@ -1884,7 +1884,11 @@ export interface PropertyDef {
   format: PropertyFormat;
   /** Required to *leave* its stage, not required to create the record. */
   required: boolean;
-  automation?: string;
+  /** The group of work it belongs to, in the workbook's own header: a Construction
+   *  sub-stage (Footings, Frame, 2nd Fix) or a Pre-construction process (Working Drawings,
+   *  SA Water). Free text until Stages 1 and 2 give each half a home. Was `automation`
+   *  until 0124, and never held one. */
+  group?: string;
   /** Order among its stage's slots — data, not alphabet. */
   position: number;
   /** Opt-in: when true nobody but superadmin touches its values unless granted. */
@@ -1914,7 +1918,7 @@ export interface NewPropertyDef {
   teamId?: TeamId | null;
   format: PropertyFormat;
   required?: boolean;
-  automation?: string | null;
+  group?: string | null;
   position?: number;
   restricted?: boolean;
   createLevel?: PermissionLevel;

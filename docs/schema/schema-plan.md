@@ -3886,6 +3886,48 @@ Settled on 15 September: no new Teams, channels or sites; files in the Hub libra
 (formerly Finance) named so everywhere a person reads it; `tech@lofty.com.au` as the sender;
 A&D's linked folder on every project.
 
+### 15 September — the group column gets its name (`0124`)
+
+The third Stage 0 branch from the audit, `claude/stage0-property-group`. One rename, no new
+column, nothing rendered the old name.
+
+**What it was.** `property_defs.property_def_automation`, made by `0043` for a note about how a
+value might arrive on its own. Nothing ever wrote one. The workbook of 3 September had a column
+headed *Group*, and `0090` carried its words into this column because it was the spare text
+column, saying in its header that they *"look far more like a stage group than like an
+automation note"* and that moving them was a schema change Amber had not asked for. `0092`
+added eighteen more on the same terms. By 15 September: 139 of 266 rows carried a group word
+under a name that says automation, no view, function, policy or screen read it, and the
+Automations tab said *"Not built yet. A property definition can already name an automation"*,
+which was not true.
+
+**What it holds, on the day.**
+
+| Stage | Group words (rows) |
+| --- | --- |
+| Construction | Footings 15, Frame 12, Roof Cover 6, External Cladding 16, 2nd Fix 16, Practical Completion 28, Handover 14 |
+| Pre-construction | Working Drawings 3, Selections 6, Site Survey 2, Soil - Bore Logs 2, SA Water 6, Section 221 - Stormwater/Crossover Permits 2, Retaining, Fencing & BOB 11; 106 rows with none |
+| Everything else | none |
+
+**What that means for the model** (inference from the words, not a decision): the Construction
+words are the build's sub-stages in build order, and the Pre-construction words are the
+processes Amber walked through on 15 September. The column is two things wearing one header.
+Stage 1 makes sub-stages rows (`lifecycle_substages`) and Stage 2 gives processes their steps,
+so each takes its half then; until then the column is free text under the honest name, and the
+migration that gives each half a home moves these words with it, which is what `0092` said
+would happen.
+
+**Why a rename rather than a new column.** Postgres renames in place: values, grants and
+dependents come along, and there are no dependents. `types.ts` and the repository read `group`
+from the same deploy; the dictionary entry and the Automations tab's text are corrected. The
+dictionary's *proposed* entry for a `property_defs.automation` that would trigger things is left
+as it stands, because automations belong in the Stage 4 registry and the dictionary itself is
+going (audit decision 11).
+
+**Proof:** the old name absent, the new one present, and at least one row carrying a group,
+which `0090`'s seed guarantees on a replay. Watched failing live before the rename. Dry-run live
+in a rolled-back transaction and checked to have rolled back. Applied when Amber says.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in
