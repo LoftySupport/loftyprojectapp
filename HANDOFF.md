@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 289 changes since then —
+Unreleased: 290 changes since then —
+- Changed: A process is now one ordered list of steps in Setup → Processes — properties, tasks, tick boxes and automations together, in the order the process works through them, instead of two separate editors.
 - Added: A process on a job or project now says which step is holding it open, and lets you mark a step as not applicable to that record
 - Changed: The blocks inside a lifecycle stage are rows managers can add, rename and reorder in the app, instead of text typed on each process
 - Added: the Microsoft Graph modules for SharePoint folders, Teams channel posts and mailbox reading, with a check that mail routes to the right job, folder names are legal and Teams mentions resolve
 - Changed: The lifecycle's stages are a table managers can see, and superadmins can extend, instead of a list fixed in code
-- Fixed: Two Microsoft endpoints would answer anybody while their secret was unset
-- …and 284 more.
+- …and 285 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -84,6 +84,19 @@ the id its template row had and a column named for a table nobody has is a lie t
 fact. **Nothing of Stage 2 is applied live yet:** #105 and its follow-up have to merge first, and
 they go up in the same sitting.
 
+**#106 merged into a branch that had already merged, so `0131` did not reach `main`.** #105
+merged `claude/stage2-process-steps` into `main` at 11:35:09 on 15 September; #106 merged into
+that same branch sixteen seconds later, by which time it was no longer on the path to `main`.
+Its merge commit `70731c1` sits on that branch and nothing of `0131` is on `main`. #106 also
+merged `f7db721`, which predates the review fixes below — those went up twenty minutes after it
+closed. Both are re-opened against `main` as #108, with `claude/stage2-screens-read-steps` as
+its head, and #107 is stacked on that. **Nothing was lost**; the branch holds everything.
+**What `main` held meanwhile:** `0130` creates `instantiate_process_steps` as SECURITY
+DEFINER, which `0131` corrects, so `0128`–`0130` could not be applied live without `0131`.
+**Resolved on 15 September at 20:11**, when #108 merged: `0128`–`0131` went up to the live
+project in one sitting at 20:49 and the function is `SECURITY INVOKER` there. #112 carries the
+full applied record.
+
 **Stage 3 begins with `0132`, on `claude/stage3-derived-position`:** a job's sub-stage and
 stage are read from its processes, and a pin overrides them. The sub-stage is the earliest
 one **of the stage the job is in** that still holds a non-optional job-scoped process whose
@@ -96,7 +109,7 @@ five other things key off it, so it is the derivation's output with a trigger ke
 step and a proof comparing the two. A job with nothing open anywhere **does not move**:
 question 0k, answered the same night, *"No, it stays put"*. Owning team, assignee, status,
 end date and the health roll-up are the next migration. **Nothing of Stage 3 is applied
-live**, and it is stacked behind #105 and #106.
+live** until #107 merges; it is off `main` now that #108 has landed.
 
 **`0133`, on the same branch, rolls health up.** A sub-stage and a stage take the worst health
 of their open required processes; a job is at risk when any of those is at risk or overdue, and
