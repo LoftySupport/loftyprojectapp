@@ -191,6 +191,24 @@ they are.
    everything.
 5. Files on a record, then email onto a job, then Acquisition & Development's linked folder.
 
+### Amber answered all five, 15 September — and one answer needs a build decision
+
+Recorded in `docs/schema/schema-plan.md` → *Answered, 15 September*. In short: the mailbox is
+**`hub@mail.lofty.au`** with plus addressing, so a job's address is `hub+1042-001@mail.lofty.au`;
+**Hub's General channel carries most notifications**, so the eleven-row channel map is designed and
+not needed to start; A&D's linked folder is made for **every project**; the templates are still
+*"to be determined"*, which does not block anything because whatever is in the folder on the day is
+what gets copied.
+
+**The one that needs a decision before it is built.** The project template holds an A&D folder, and
+Amber chose *restricted inside the project* over open to everyone. **Graph cannot do that.** It can
+grant a permission on an item but has no operation for breaking inheritance from the library;
+that is SharePoint's own API, and reaching it with an application identity needs
+`Sites.FullControl.All`. A copy does not carry permissions either, so restricting the template once
+does not restrict its copies. The build that delivers the same outcome is a **link** in the project
+folder pointing at that project's folder in A&D's own site: everyone sees it, only A&D opens it,
+and there is no per-project permission set to maintain. Put to Amber before building.
+
 ### Waiting: Finance becomes Accounts, and it is not in this branch
 
 Amber, 15 September. It is a display name only — `teams.team_name`, the `types.ts` seed list, and
