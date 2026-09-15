@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 282 changes since then —
+Unreleased: 285 changes since then —
+- Fixed: Two Microsoft endpoints would answer anybody while their secret was unset
+- Fixed: the workbook import no longer stops at the first community-title job
+- Fixed: deleting a job removes its report documents again, as it did before 0120
 - Changed: A maintenance issue is edited in the same layout it was logged in, with tasks, comments, activity and documents beneath it
 - Added: Community title jobs now carry a "c" in the job number itself — 1004-003c. Mark a job community title and its number updates everywhere it is used; correct it back and the c goes away. The project number and the three-digit job code never change, and the numbering still runs straight through both title types.
-- Added: A maintenance issue keeps a history of who changed what, including the photos, tasks and comments on it
-- Added: A maintenance issue carries its own comments, activity and tasks, so a repair shows on the Tasks board beside everything else
-- Added: Community title jobs now read with a "c" after the job number — 1004-003c. Torrens jobs and jobs whose title type is not set yet read without one, and the numbering still runs straight through both. The job's underlying number never changes, so nothing already written down goes stale.
-- …and 277 more.
+- …and 280 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
@@ -133,6 +133,127 @@ Nobody has answered these and nothing in the code assumes an answer:
   that lot, and a job re-addressed since stayed put. Earlier notes in this file said it was
   not applied; that came from a migration list read before it landed and then repeated. **The
   ledger is the answer to "is it applied", not a list read earlier in the session.**
+
+---
+
+## Session of 2026-09-15 — Microsoft 365: the Hub team is the home
+
+Lofty made a Microsoft Team called **Hub** with its own SharePoint site, and it is where the app's
+documents, notifications and comments live from now on. This session is the decision, plus the
+plumbing that did not need any of the answers.
+
+**A readable version is published at <https://claude.ai/artifact/97eodMUneoxPkYQP4oCgcp>** — show
+that one to people. The five open questions can be answered **in the page**, and the answers are
+stored with it, so they do not have to come back through chat. The decision log entry is
+`docs/schema/schema-plan.md` → *15 September — Microsoft 365: one home each, and a window onto it*.
+
+### The rule, in one line
+
+Each thing has one home and the other system shows it: **files in SharePoint, comments in the app,
+templates as folders in SharePoint**. Nothing is ever copied between them, which is what lets
+somebody save a file from their phone or File Explorer and have it appear in the app.
+
+### Three findings that changed the plan
+
+- **`0083`'s Teams channel is expected not to work.** It sends a one-to-one chat with
+  `POST /chats/{id}/messages` using an application token, which Microsoft does not support, and it
+  has never run against a real tenant. Team notifications become a **channel webhook per team**;
+  personal Teams messages wait on a Teams app. The README now says this instead of implying the
+  path works.
+- **Nothing new is created in Microsoft.** Amber, 15 September: *"teams for each department are
+  setup already in the organisation and I don't want to double up by creating new teams and
+  sharepoint sites as it is confusing."* So a team's notifications go to **its existing department
+  Team**, Hub's **General** carries the company-wide ones, and the Hub site holds every project and
+  job folder. An earlier draft of this proposed a channel per department inside Hub; that is
+  reversed, because it gave everybody two places to watch. Files are the one exception, and only
+  because a job moves between departments during its life.
+- **Private channels cannot be posted into at all** — no webhooks, connectors or bots. Any
+  department whose nominated channel is private needs a standard one, or email.
+- **Milestones already exist** — `processes.process_is_milestone` (`0078`) plus `stage_completion`
+  (`0081`). Amber's "all milestones reached on a job go to general" needs no new definition.
+
+### Corrected after this branch merged main, 253 commits behind
+
+Two claims in the first version of this section were stale, and are worth knowing before anybody
+plans the Files step:
+
+- **Documents are live and wired, not dormant.** `0103` already lets a document *be* a SharePoint
+  URL, with Amber writing *"(integration coming)"* at the time. **This work is that integration.**
+  So the drive and item ids go beside `document_sharepoint_url` on `documents`, not into a parallel
+  structure, and the Files step teaches an existing system to reach Graph rather than building one.
+- **The next free migration number is `0123`,** not `0097`. `0119` and `0120` each have two files
+  deliberately; do not tidy them.
+
+**And the folder namer must read `job_id`, never rebuild it.** `0120` put a `c` in a community
+title job's number and `0122` exists because one place had composed the number by hand instead of
+reading it back. A folder name is `job_id` as the database made it, plus the suburb and address.
+
+### The schema is moving, so this does not touch projects or jobs
+
+Amber, 15 September: *"there is current work being done to supabase schema so the existing schema
+may change but sharepoint needs to be connected regardless."* The drive and item ids therefore go
+in a new **`m365_links`** table keyed to the record, not as columns on `projects` and `jobs`.
+Either piece of work can land first without colliding. `0040`'s two URL columns stay exactly as
+they are.
+
+### What actually changed in the repo this session
+
+**No migration.** Nothing here touches the schema — deliberately, given the above.
+
+- `app/supabase/functions/_shared/graph.ts` — **new, and the first thing under `_shared/`.** The
+  Graph token exchange cached for the isolate's life, `Retry-After` honoured on 429, and paging on
+  collections. Three functions were about to hold three copies of it.
+- **Two secret guards that failed open, now closed.** `deliver-notifications` and
+  `maintenance-inbound` both wrote `if (env(SECRET) && header !== env(SECRET))`, which **skips the
+  check when the secret is unset**. A deploy made before somebody set it answered anybody who found
+  the URL — one would send mail on demand, the other would open maintenance requests. Both now
+  return 503 when the secret is empty, the shape `report-share` already used. The validation-token
+  echo in `maintenance-inbound` stays open on purpose: Graph does it before a subscription exists.
+- `APP_BASE_URL` in the README said `app.lofty.com.au`; the app answers at **`hub.lofty.au`**.
+
+### Next, in order
+
+1. **Deploy `deliver-notifications` for email.** No new code — admin consent and the secrets. Note
+   `DELIVER_SECRET` is now required, not optional, or the function refuses everything.
+2. Hub settings and the channel map — eleven rows pointing at **existing** Microsoft teams and
+   channels, with the nightly membership mirror so nobody keeps two lists.
+3. Folders from the templates (`m365_outbox` + `m365-sync`, nothing in a trigger calls out).
+4. Channel posts — **collapsed one per channel, not one per person**, or Design gets six copies of
+   everything.
+5. Files on a record, then email onto a job, then Acquisition & Development's linked folder.
+
+### Amber answered all five, 15 September — and one answer needs a build decision
+
+Recorded in `docs/schema/schema-plan.md` → *Answered, 15 September*. In short: the mailbox is
+**`hub@mail.lofty.au`** with plus addressing, so a job's address is `hub+1042-001@mail.lofty.au`;
+**Hub's General channel carries most notifications**, so the eleven-row channel map is designed and
+not needed to start; A&D's linked folder is made for **every project**; the templates are still
+*"to be determined"*, which does not block anything because whatever is in the folder on the day is
+what gets copied.
+
+**The one that needs a decision before it is built.** The project template holds an A&D folder, and
+Amber chose *restricted inside the project* over open to everyone. **Graph cannot do that.** It can
+grant a permission on an item but has no operation for breaking inheritance from the library;
+that is SharePoint's own API, and reaching it with an application identity needs
+`Sites.FullControl.All`. A copy does not carry permissions either, so restricting the template once
+does not restrict its copies. The build that delivers the same outcome is a **link** in the project
+folder pointing at that project's folder in A&D's own site: everyone sees it, only A&D opens it,
+and there is no per-project permission set to maintain. Put to Amber before building.
+
+### Waiting: Finance becomes Accounts, and it is not in this branch
+
+Amber, 15 September. It is a display name only — `teams.team_name`, the `types.ts` seed list, and
+the label `0026` maps from. **Do not grep for the word.** `process_key = 'finance'` in `0079` is a
+pre-construction process and the `finance` property group beside it is a property group; neither is
+the team. The slug `team_id = 'finance'` stays as it is. Left out of the Microsoft 365 branch on
+purpose so it does not contend for a migration number with the schema work in flight.
+
+### Not verified in a browser, and not deployed
+
+The app is behind the Microsoft gate, so nothing was clicked. `tsc`, lint and the build are clean.
+**No edge function was deployed and no Graph call was made against Lofty's tenant** — including the
+two guards, which were reasoned about and not watched refusing. First person with tenant access
+should confirm a POST with no secret set returns 503 before trusting that.
 
 ---
 

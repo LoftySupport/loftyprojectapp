@@ -44,7 +44,13 @@ Deno.serve(async req => {
   const validation = url.searchParams.get("validationToken");
   if (validation) return new Response(validation, { status: 200, headers: { "content-type": "text/plain" } });
   if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
-  if (env("INBOUND_SECRET") && req.headers.get("x-inbound-secret") !== env("INBOUND_SECRET")) return json(403, { error: "forbidden" });
+  // FAIL CLOSED, for the same reason as deliver-notifications: the old form skipped the
+  // check when INBOUND_SECRET was unset, leaving an endpoint that would open a maintenance
+  // request for anybody who could POST to it. The validation-token echo above stays open
+  // on purpose — Graph performs it before a subscription exists, and it reveals nothing.
+  const secret = env("INBOUND_SECRET");
+  if (!secret) return json(503, { error: "Inbound mail is not switched on." });
+  if (req.headers.get("x-inbound-secret") !== secret) return json(403, { error: "forbidden" });
 
   let m: Inbound;
   try { m = (await req.json()) as Inbound; }

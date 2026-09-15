@@ -16,19 +16,31 @@ Application (not delegated) permissions, admin-consented:
 | Permission | For |
 |---|---|
 | `Mail.Send` | sending from the notifications mailbox |
-| `Chat.ReadWrite.All` and `Chat.Create` | one-to-one Teams messages |
+| `Chat.ReadWrite.All` and `Chat.Create` | one-to-one Teams messages — **see the warning below** |
 
 Restrict `Mail.Send` to the one mailbox with an Exchange application access policy, so
 the app can send as `notifications@lofty.com.au` and nobody else.
+
+**The Teams chat path is unproven and expected to fail.** Microsoft does not support
+sending a channel or chat message with an application permission; those two permissions
+let the app read and create chats, not post as itself into one. This has never been run
+against a real tenant. The 6 September design (`docs/schema/schema-plan.md`) replaces it
+with a **channel webhook per team** in the Hub team, which needs no Graph permission at
+all, and leaves personal Teams messages until a Teams app is registered. Deploy this
+function for **email** and expect the `teams` channel to report failures until then.
 
 ## 2. Secrets
 
 ```
 supabase secrets set MS_TENANT_ID=… MS_CLIENT_ID=… MS_CLIENT_SECRET=… \
   MS_SENDER_MAILBOX=notifications@lofty.com.au \
-  APP_BASE_URL=https://app.lofty.com.au \
+  APP_BASE_URL=https://hub.lofty.au \
   DELIVER_SECRET=$(openssl rand -hex 24)
 ```
+
+`DELIVER_SECRET` is **required**, not optional: with it unset the function refuses every
+request with `503 "Delivery is not switched on."`, so a deploy made before the secret is
+set is inert rather than an open endpoint that sends mail for anybody who finds the URL.
 
 `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are provided by the platform. The service
 role is the only role granted `claim_notification_deliveries()` and
@@ -84,6 +96,7 @@ on record); leave those in the mailbox for a person. The response summary gains 
 - SMS. The channel exists end to end except the send; pick a provider and add a `sendSms`
   beside `sendEmail`.
 - Teams channel posts. Rules can name a team; delivery is still one-to-one chats to each
-  member. A channel webhook per team is the next step.
+  member, on a Graph call Microsoft does not support for an application. A channel webhook
+  per team is the decided replacement — see the 6 September entry in the schema plan.
 - Reply handling for notifications. Replies to the notifications mailbox land in Outlook;
   nothing reads them. The maintenance mailbox is read (above); the notifications one is not.
