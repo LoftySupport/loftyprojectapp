@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 282 changes since then —
+Unreleased: 284 changes since then —
+- Fixed: the workbook import no longer stops at the first community-title job
+- Fixed: deleting a job removes its report documents again, as it did before 0120
 - Changed: A maintenance issue is edited in the same layout it was logged in, with tasks, comments, activity and documents beneath it
 - Added: Community title jobs now carry a "c" in the job number itself — 1004-003c. Mark a job community title and its number updates everywhere it is used; correct it back and the c goes away. The project number and the three-digit job code never change, and the numbering still runs straight through both title types.
 - Added: A maintenance issue keeps a history of who changed what, including the photos, tasks and comments on it
-- Added: A maintenance issue carries its own comments, activity and tasks, so a repair shows on the Tasks board beside everything else
-- Added: Community title jobs now read with a "c" after the job number — 1004-003c. Torrens jobs and jobs whose title type is not set yet read without one, and the numbering still runs straight through both. The job's underlying number never changes, so nothing already written down goes stale.
-- …and 277 more.
+- …and 279 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
