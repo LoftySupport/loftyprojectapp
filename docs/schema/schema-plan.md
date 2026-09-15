@@ -3907,6 +3907,101 @@ same mechanism as the outward link this entry already describes, pointing the ot
 link opens in a new place rather than expanding in the library, and that is the thing to check is
 acceptable before it is built.
 
+### Corrected 15 September, later: private channels CAN be posted into
+
+**The earlier claim in this entry was wrong, and Amber disproved it by building one.** The
+distinction is the mechanism, and this entry did not make it:
+
+| Route | Private channel? | Runs as |
+| --- | --- | --- |
+| Classic incoming webhook (Office 365 connector) | **No** | The connector |
+| **Power Automate Workflows** — *post to a channel when a webhook request is received* | **Yes** | **The person who created the flow** |
+
+Workflows is what the Teams UI now offers, and it is a flow, not a connector. It posts wherever
+its creator can post. So the argument for standard channels loses its technical half; what remains
+is only that a flow is owned by a person and stops when that person leaves or loses their licence.
+
+**That fragility is the thing to design around, not private channels.** Whoever creates these
+should be one long-lived owner for all of them — ideally a service account — so a broken
+notification path is one thing to fix rather than eleven people's flows to chase.
+
+### The Hub site, and a third way to reach a channel
+
+The SharePoint site is **`https://loftybg.sharepoint.com/sites/loftyhub`**, created 9 September,
+described *"This is for the new Lofty Hub app"*. Its Graph id is
+`loftybg.sharepoint.com,4674d34c-b4e9-4acc-933c-f86860cd0f7e,91bf0626-c255-46f9-a51d-4bc1d870c52d`
+— the whole three-part string is the id, not just the middle guid. Note the tenant is
+**`loftybg`**, not `lofty`.
+
+**Every Teams channel also has its own email address** (General's is a
+`…@au.teams.ms` address). That is a third route to a channel and the only one with no flow behind
+it: the app already needs `Mail.Send`, so emailing a channel needs no webhook, no Power Automate,
+and nothing that breaks when somebody leaves. The cost is formatting — an email rendered as a
+channel post is plainer than an Adaptive Card, and it is slower. Worth holding as the fallback if
+the flows prove fragile, and worth preferring outright if the cards turn out not to matter.
+
+**Webhook URLs are credentials.** They carry a signature that lets the holder post into that
+channel. They belong in Supabase Edge Function secrets and must never be committed here or pasted
+into a chat; two were, on 15 September, and should be regenerated once setup is finished.
+
+### 15 September, later still — the three modules, and what a check can prove without a tenant
+
+Lofty's shared mailbox does not exist yet, so the work that could be done without one was done:
+the Graph surface for all three jobs, written and type-checked, under
+`app/supabase/functions/_shared/`.
+
+| Module | What it holds |
+| --- | --- |
+| `sharepoint.ts` | Folders: the template copy (asynchronous, with its monitor), `ensureFolder`, rename, `applyTemplate` (adds only — never renames, moves or deletes), adoption of a pasted URL, and upload sessions the browser PUTs to directly |
+| `teams.ts` | The Adaptive Card, `<at>` mentions paired with `msteams.entities`, the webhook post, and `asEmail` — the channel's own address, the one route with no flow behind it |
+| `mail.ts` | Send, read, the raw `.eml`, attachments, `move` out of the inbox, the *Filed* folder, plus-address routing, and subscription renewal |
+
+**Two decisions in there are worth naming.** Every folder is addressed by its SharePoint **id**,
+never its path, which is what lets the app rename a folder when an address changes without
+breaking its own pointer. And bytes never pass through an edge function: the server decides who
+may upload and hands back an upload URL, the browser sends the file. A 200MB set of site photos
+through a Deno isolate is a timeout, and the isolate adds nothing to a stream it only forwards.
+
+**What can be proved today, and what cannot.** Almost nothing here can run without a tenant. Four
+things can, and all four fail silently and late, so they are a check —
+`app/scripts/m365-check.mjs`, `npm run check:m365`, in CI:
+
+1. **Which job a forwarded email lands on.** Wrong, and a private conversation about a variation
+   is on the wrong house's record.
+2. **That the address the app shows is the address the receiver understands.** `addressForRecord`
+   and `routingFromAddress` are different functions and nothing else makes them agree; drifting,
+   they put a click-to-copy address on every job that routes nothing.
+3. **That a folder name SharePoint would refuse never reaches it.** "Lot 3/5 Corner Street" is an
+   ordinary address and an illegal folder name.
+4. **That a Teams @mention resolves** rather than rendering the literal `<at>Ketan</at>`, which
+   looks like a formatting bug and is a delivery failure.
+
+Every assertion was watched failing before it was committed, and **it caught two real bugs on its
+first run**, which is the argument for having written it:
+
+- **One routing pattern was doing two jobs.** A plus address is deliberate and can be read
+  loosely; a subject line is prose. The single pattern read *"the 2024-2025 budget"* as job
+  2024-2025 and would have filed a finance email onto a house. There are now two, and the subject
+  one insists on a three-digit sequence — so the thousandth job in a project is routable by
+  address and not by subject, which is the right way round for the rarer case to break.
+- **A tab in a folder name closed up the words either side of it.** Control characters were
+  stripped before whitespace was collapsed, so `GOLDEN⇥GROVE` became `GOLDENGROVE` — accepted by
+  SharePoint, wrong forever, and invisible in a screenshot.
+
+**`routeMessage` proposes; it does not place.** A regex reading prose will eventually offer a
+number that is not a job, and the database is the only thing that knows. Whatever places mail
+must confirm the record exists and leave the mail in the inbox when it does not — the rule
+`maintenance-inbound` already follows when it answers 422 rather than inventing a match.
+
+**One thing already merged had to change.** `GraphError` declared its fields as constructor
+parameter properties, which is TypeScript that must be *compiled*; node's type stripping — what
+every `npm run check:*` relies on to read the shipping code rather than a copy of it — refuses
+them outright. One piece of syntax decided whether anything under `_shared/` could be checked at
+all. The fields are assigned in the body now.
+
+**None of it has touched Microsoft.** No folder has been created, no card posted, no mail read.
+Those need the tenant, and the design log says so rather than implying otherwise.
+
 ### Open, for Amber
 
 1. **Which mailbox receives forwarded email?** Not the sender, ideally. Not blocking: that step is
@@ -3916,6 +4011,12 @@ acceptable before it is built.
 3. **What does "most notifications" exclude?** Everything to General until this is answered.
 4. **What subfolders go in the project template, and in the job template?** *"to be determined"*.
    Not a blocker: whatever is in the folder on the day is what gets copied.
+5. **Who creates the channel flows?** Amber, 15 September: *"should I create a webhook for each
+   team to send message just to that team?"* — yes, one per channel, because a webhook posts to
+   exactly one channel and nothing else; the alternative is every notification in General.
+   The question underneath it is **who creates them**, because a Workflows flow runs as its
+   creator and stops when that person leaves. One long-lived owner for all of them, ideally a
+   service account. Not blocking: the app stores a URL per team either way.
 
 Settled on 15 September: no new Teams, channels or sites; files in the Hub library only; Accounts
 (formerly Finance) named so everywhere a person reads it; `tech@lofty.com.au` as the sender;
