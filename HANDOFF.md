@@ -18,6 +18,14 @@ Unreleased: 289 changes since then —
 
 ## 15 September — START HERE: the architecture audit, and the process rethink it sets up
 
+**Stage 5 has begun with its one additive step**, on `claude/stage5-export-the-import-staging`,
+branched off `main` rather than stacked behind the rest: `import_staging_jobs`'s 801 rows are
+written out as two CSVs under `app/supabase/import/` — the workbook as staged, and what the
+importer decided from each row — each ending with a verbatim `json` column so the files are
+reloadable and not merely readable. Nothing is dropped; the drop is its own migration and will
+assert the two digests. The export reads a clean replay rather than the live project, because
+`0087` **is** the rows, and the two were compared by digest first: 801 rows, identical.
+
 Amber, 15 September: *"I want to walk away with a clear picture on what needs to stay, what
 needs updating and what needs to go and a staged plan to implement it."* The audit is
 [`docs/schema/architecture-audit-2026-09-15.md`](docs/schema/architecture-audit-2026-09-15.md),

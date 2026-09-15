@@ -139,6 +139,60 @@ The three ways it *could* have gone:
 The migration is 1.2 MB. That is 801 rows × 194 columns of source kept verbatim, and it is
 the record of what was imported; nothing is trimmed to make the file smaller.
 
+## The export, 15 September — `export-staging-to-csv.py` and the two CSVs
+
+Audit decision 9, Amber, 15 September: ***"Export the rows to a spreadsheet in the repository
+and drop the lot."*** Chosen over moving `import_staging_jobs` to an `archive` schema and over
+leaving it in `public`. This **supersedes** the 7 September note at the top of this file, which
+said nothing was removed from the database on purpose — that still describes why it was left
+alone then, and the reasoning is kept rather than rewritten.
+
+```
+python3 export-staging-to-csv.py "postgresql://…"            # writes both files
+python3 export-staging-to-csv.py --verify "postgresql://…"   # checks them, writes nothing
+```
+
+It reads a database that has replayed `0087`, not the live project — `0087` **is** the rows.
+
+**Two files, because the rows carry two different things.**
+
+- `import-staging-jobs-raw-2026-08-31.csv` — the workbook as staged: 801 rows, 110 columns,
+  headers the sheet's own (`AI · STAGE 1  Concept Plan Signed Off (7 Days)`). The one you open.
+- `import-staging-jobs-spine-2026-08-31.csv` — what the importer **decided** from each row:
+  801 rows, 22 columns, 5 carrying a `skip_reason`. As this file says above, *"Nothing is
+  loaded here — `import_spine()` does that with the decisions the sheet does not carry"*, so
+  the spine is the half that would actually be lost.
+
+Both end with a `json` column holding the value verbatim. A flat CSV cannot round-trip JSON on
+its own: every number, boolean and null comes back a string. Without that column the files
+would be readable and **not reloadable**, which is the worse half of both. CSV rather than
+`.xlsx` so git can show what changed, a reviewer can read it in a pull request, and a future
+generator can parse it without a library.
+
+**`--verify` does not rewrite.** The first version did, which meant it could not fail: a row's
+JSON was mistyped by hand, the run overwrote the file with a fresh export and then checked its
+own output, which of course matched. A verification that repairs what it is checking proves
+the writer agrees with the reader and nothing about the file on disk. Watched failing
+afterwards with one key mistyped in one row of 801, reported with both digests and a non-zero
+exit.
+
+| File | md5 of the rebuilt rows |
+| --- | --- |
+| `import-staging-jobs-raw-2026-08-31.csv` | `34a28a9aa09ceb116a88187c0c055bbe` |
+| `import-staging-jobs-spine-2026-08-31.csv` | `83e6adac6145f88c805af9be3312057b` |
+
+These are **not** comparable to the `851f4495…` above: that one digests the whole staging row
+as this file defined it in September, and these two digest the rebuilt JSON of one column each.
+Both were computed fresh on 15 September, and the table itself was compared live against a
+clean replay of every migration before any of this was written — 801 rows, md5
+`daac704c522fc80b9d0aab0f8d2e10a9`, identical on both. `0087` and the live table are the same
+rows.
+
+**Reloading, if it is ever needed.** There is no script, deliberately: one written today
+against a table nobody has asked to restore would be a guess about a future shape. A new
+generator needs the `json` column of `-spine-`, which is exactly what `import_spine()` (`0086`)
+reads, and `0087` stays here as the worked example of the SQL it should produce.
+
 ## The template — `lofty-job-import-template.xlsx`
 
 `build_template.py` generates it; edit the script, not the workbook, so the dropdowns stay
