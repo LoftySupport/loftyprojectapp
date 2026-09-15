@@ -8,7 +8,7 @@ import { PersonSelect } from "../components/PersonSelect";
 import { Select } from "../components/Select";
 import {
   NOTIFICATION_AUDIENCES, NOTIFICATION_AUDIENCE_LABELS, NOTIFICATION_CHANNELS, NOTIFICATION_CHANNEL_LABELS, teamName,
-  type NotificationAudience, type NotificationChannel, type NotificationRule, type NotificationType
+  type NotificationAudience, type NotificationChannel, type NotificationRule, type NotificationSettings, type NotificationType
 } from "../data/types";
 import "../components/ui.css";
 import "../components/processes.css";
@@ -42,6 +42,7 @@ export function NotificationsSetupPage() {
   const { data: rules } = useQuery<NotificationRule[]>(r => r.listNotificationRules(), [], [reload]);
   const { data: profiles } = useQuery(r => r.listProfiles(), []);
   const { data: stats } = useQuery(r => r.listDeliveryStats(), [], [reload]);
+  const { data: settings } = useQuery<NotificationSettings | null>(r => r.getNotificationSettings(), null, [reload]);
   const [problem, setProblem] = useState<string | null>(null);
   const [draft, setDraft] = useState<{ typeId: string; audience: NotificationAudience; teamId: string | null; profileId: string | null; afterDays: number } | null>(null);
 
@@ -183,6 +184,11 @@ export function NotificationsSetupPage() {
             </table>
           </div>
         )}
+        <Text type="text3" color="secondary" ellipsis={false} element="p" style={{ marginTop: "var(--space-8)" }}>
+          {settings?.switchOnAt
+            ? `Switched on ${new Date(settings.switchOnAt).toLocaleString()}. Email and Teams rows written before then were marked skipped and will never be sent.`
+            : "Not switched on. Every email and Teams row written so far is marked skipped and will never be sent. An admin sets the switch-on once Microsoft is connected; rows written from that moment go out."}
+        </Text>
         <Text type="text3" color="secondary" ellipsis={false} element="p" style={{ marginTop: "var(--space-8)" }}>
           In-app rows are sent the moment they are written. Email and Teams need the delivery worker
           (<code>supabase/functions/deliver-notifications</code>) deployed with the Microsoft Graph secrets and a

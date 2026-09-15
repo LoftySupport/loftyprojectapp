@@ -3609,8 +3609,8 @@ exist to be hidden.
 **Watched failing** before it was applied, live: the backup present, zero of six indexes, the
 policy's expression carrying the bare call. **Dry-run live** in a rolled-back transaction the
 same afternoon: the file applies, its proof passes, and the rollback was checked to have held
-(47 backup rows, no new index, the old policy text). Not applied live by the branch: it drops a
-table, so the moment is Amber's call.
+(47 backup rows, no new index, the old policy text). **Applied live on 15 September** after PR #96
+merged, with `0124` straight after it; the proof block passed on the live database.
 
 ## 15 September — Microsoft 365: one home each, and a window onto it
 
@@ -3961,7 +3961,60 @@ going (audit decision 11).
 
 **Proof:** the old name absent, the new one present, and at least one row carrying a group,
 which `0090`'s seed guarantees on a replay. Watched failing live before the rename. Dry-run live
-in a rolled-back transaction and checked to have rolled back. Applied when Amber says.
+in a rolled-back transaction and checked to have rolled back. **Applied live on 15 September**
+after PR #97 merged: 139 rows carry a group under the new name, and the deployed app and the
+database agree again. Between the merge and the apply the Properties page would have shown *"The
+app is ahead of the database"*; the gap was minutes, and `scripts/check-migrations.mjs` with
+credentials is the check that would have named it.
+### 15 September — notifications wait for the switch-on (`0125`)
+
+The fourth Stage 0 branch from the audit, `claude/stage0-notifications`. Amber, 15 September,
+when the audit asked whether the undeployed email worker should stay: *"i am connecting
+microsoft teams and email and sharepont now so keep it in but don't send any previous
+notifications until they are all switched on. All notificatoins should be turned off in users
+settings by default until app is ready for testing but the functionality should exist"*.
+
+**The switch-on is one row.** `notification_settings`, in the shape of `maintenance_settings`
+(0084): a key pinned to 1, `notification_setting_switch_on_at`, null until an admin sets it.
+Everyone reads it; an admin updates it, by SQL until there is a control; the row is audited.
+Setup → Notifications shows the state, so *"notifications are on"* is never a claim the table
+cannot back.
+
+**Nothing written before it is sent, enforced twice.** `private.notify` writes an external row
+(email, teams, sms) as `skipped`, with the reason in the error column, while the switch-on is
+null or ahead; in-app is untouched, because it is delivered inside the app as it is written.
+`claim_notification_deliveries` claims only rows created at or after the switch-on, so a row
+that reached the outbox queued or held by any other path still never leaves once the worker
+exists; with the switch-on null the comparison is null and nothing is claimed. Two places
+because they are two failure modes: a row written wrongly, and a row written before the rule.
+
+**The four rows already waiting** (a task_assigned of 12 September and one task_overdue digest
+a day since, all email, all Gary's) are marked skipped with the same reason. The in-app twins
+were delivered on the day. One overdue task will keep producing a digest row daily until it is
+done; each will be written skipped.
+
+**Not gated:** the maintenance thread's outbox (`maintenance_messages`, 0084). Those are the
+offer to a contractor and the closing email to a homeowner, not notifications a person can
+switch off, and the table is empty. The worker's unset Graph secrets keep that path inert too.
+
+**Why a table and not the worker's secret.** `DELIVER_SECRET` already makes a deploy inert, but
+it is a fact about the function, invisible to the database and the app, and it says nothing
+about rows written before it. Amber's rule is about *when a row was written*, so it has to be a
+timestamp the database compares against, in a place the app can read.
+
+**Proof.** The migration's block: skipped before, queued after, and the worker claims only rows
+written after, moved both ways. `behaviour.sql` step 42 now opts the test person in explicitly
+and asserts the same in the replay. `rls.sql`: a user cannot set the switch-on and an admin can.
+Watched failing live in a rolled-back transaction against 0083's `notify` with only the
+settings row present: the email row came back `queued`.
+
+**The defaults.** Whether *"all notifications off by default"* included in-app was asked in the
+chat the same afternoon, with three options. Amber: **"External off, in-app stays on."** So every
+type keeps in-app in its defaults (all fifteen had it) and loses email, Teams and SMS (eight of
+fifteen carried email). A person's own preference rows are untouched, because a choice already
+made is not a default; Amber's 25 rows, all off, stay as she set them. The column default stays
+`{in_app}`, so a type added later starts the same way. The proof asserts both halves: no type
+defaults to an external channel, and no active type has lost in-app.
 
 ## Verification
 

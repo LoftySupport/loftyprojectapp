@@ -99,6 +99,7 @@ import type {
   RecordStaffRole,
   PartyTarget,
   Uuid,
+  NotificationSettings,
   NotificationType,
   NotificationRule,
   NewNotificationRule,
@@ -551,6 +552,8 @@ export interface Repository {
   unwatchRecord(target: { projectId?: number; jobId?: string }): Promise<void>;
   /** Admin: what the outbox holds, per channel and status. */
   listDeliveryStats(): Promise<DeliveryStat[]>;
+  /** The switch-on moment (0125). Everyone reads; an admin sets it. */
+  getNotificationSettings(): Promise<NotificationSettings>;
 
   // ---- maintenance (0084) ----------------------------------------------------
   getMaintenanceSettings(): Promise<MaintenanceSettings>;
@@ -1188,6 +1191,7 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "watchRecord",
   "unwatchRecord",
   "listDeliveryStats",
+  "getNotificationSettings",
   "getMaintenanceSettings",
   "saveMaintenanceSettings",
   "listMaintenanceCategories",
@@ -1402,6 +1406,7 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   watchRecord: "record_watchers",
   unwatchRecord: "record_watchers",
   listDeliveryStats: "notification_deliveries",
+  getNotificationSettings: "notification_settings",
   getMaintenanceSettings: "maintenance_settings",
   saveMaintenanceSettings: "maintenance_settings",
   listMaintenanceCategories: "maintenance_categories",

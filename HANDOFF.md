@@ -25,6 +25,18 @@ published with its diagrams at <https://claude.ai/artifact/LnuPZkB65SW8uKhxnaVjC
 `claude/app-schema-architecture-audit-v19mt9`. **No migration was written and nothing on the
 live project changed.**
 
+**Stage 0's fourth branch, `claude/stage0-notifications`, is `0125`:** a one-row
+`notification_settings` with the switch-on moment, null until an admin sets it; `private.notify`
+writes every email, Teams and SMS row as skipped before it, and the worker's claim never takes a
+row written before it. The four rows waiting since 12 September are skipped. In-app is not
+gated. Setup → Notifications shows the state. The one question on it, whether *"all off by
+default"* includes in-app, Amber answered the same afternoon: *"External off, in-app stays on"*,
+so every type keeps in-app and loses email from its defaults. Not applied live yet: apply it in
+the same sitting as the merge. **The fifth and last Stage 0 branch, `claude/stage0-dead-code`,**
+removes the two icon modules and the `NotWired` export on Amber's *"Delete all three"*, and wires
+`build-logo.mjs` as `npm run build:logo` instead of deleting it: the audit had counted it as dead,
+and it generates the logo module the PDF and Word exports import.
+
 **The finding that sets everything else up:** three generations of "how a job moves" coexist
 (the `0029` pipeline tables, never written; the `job_stage` column and its triggers, the only
 thing that moves a job; the `0078` processes, which have no path to the stage, the team or a
@@ -77,7 +89,9 @@ every child row followed, and the ledger matches `main`. Open question 0g record
 becomes `property_def_group`, the workbook's own header for what it holds (Footings, Frame,
 2nd Fix; Working Drawings, SA Water). Nothing rendered the old name. The words turn out to be
 Construction's sub-stages and Pre-construction's processes, so Stages 1 and 2 each take a half
-when they land; `schema-plan.md` has the counts. Not applied live yet.
+when they land; `schema-plan.md` has the counts. **Applied live on 15 September** once #97 merged,
+straight after `0123`: 139 rows carry a group under the new name, and the deployed Properties page
+and the database agree again.
 
 Two standing costs of the proof blocks, both now visible live: `0119`'s and `0120`'s probes each
 consumed a project number (1995 and 1996 will never exist; `0122` restores its sequence, the
@@ -91,8 +105,8 @@ fixed, and is a one-line addition to the proof's cleanup for whoever next touche
 foreign keys on the process tables indexed, and `"read own login_activity"` rewritten into the
 once-per-query form the advisor asks for. No column changes, so `types.ts` and `dictionary.ts`
 do not move; `schema-plan.md` carries the entry and `rls.sql` the probes. Dry-run live in a
-rolled-back transaction. **Not applied live yet**: it drops a table, so the moment is Amber's
-call, and the question is in the chat.
+rolled-back transaction. **Applied live on 15 September** once #96 merged: the ledger carries it,
+the backup is gone, the six indexes exist and the policy reads in the once-per-query form.
 
 ---
 
