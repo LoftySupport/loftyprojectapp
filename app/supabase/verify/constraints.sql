@@ -857,6 +857,7 @@ BEGIN
     probe_process uuid;
     probe_step    uuid;
     probe_run     uuid;
+    was_required  boolean;
   BEGIN
     SELECT job_id INTO probe_job FROM jobs ORDER BY job_id LIMIT 1;
     SELECT s.process_id, s.process_step_id INTO probe_process, probe_step
@@ -867,6 +868,10 @@ BEGIN
     IF probe_job IS NULL OR probe_step IS NULL THEN
       RAISE NOTICE 'note: no job or no property step, so the completion gate probe did not run';
     ELSE
+      -- Remember what the step said before the probe changed it. The old cleanup read the
+      -- flag back out of process_properties, which 0131 dropped; the step itself is now the
+      -- only record of it, so it is read here rather than reconstructed afterwards.
+      SELECT process_step_is_required INTO was_required FROM process_steps WHERE process_step_id = probe_step;
       UPDATE process_steps SET process_step_is_required = true WHERE process_step_id = probe_step;
       INSERT INTO process_runs (process_id, job_id, process_run_status)
       VALUES (probe_process, probe_job, 'in_progress') RETURNING process_run_id INTO probe_run;
@@ -906,13 +911,10 @@ BEGIN
         WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (exemption across processes)', SQLERRM; END;
 
       DELETE FROM process_runs WHERE process_run_id = probe_run;
-      -- Put the flag back to what the row it came from says, not to false: six property rows are
-      -- marked required on the live database, and a probe that flattens one is a probe that
+      -- Put the flag back to what it was, not to false: property steps carry the required
+      -- flag the old template list held, and a probe that flattens one is a probe that
       -- changes the thing it measures.
-      UPDATE process_steps s SET process_step_is_required = coalesce(
-          (SELECT pp.process_property_required FROM process_properties pp
-            WHERE pp.process_id = s.process_id AND pp.property_def_key = s.property_def_key), false)
-       WHERE s.process_step_id = probe_step;
+      UPDATE process_steps SET process_step_is_required = was_required WHERE process_step_id = probe_step;
     END IF;
   END;
 END $$;

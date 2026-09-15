@@ -69,7 +69,6 @@ import type {
   NewTask,
   TaskPatch,
   TaskChecklistItem,
-  ProcessTaskChecklistItem,
   StageCompletion,
   RecordTarget,
   PropertyDef,
@@ -117,12 +116,11 @@ const WIRED: RepositoryMethod[] = [
   "listPropertyValues", "setPropertyValue", "clearPropertyValue", "listPropertyValueHistory",
   "pushProjectProperties",
   "listProcesses", "createProcess", "updateProcess", "deleteProcess",
-  "listProcessDependencies", "setProcessDependencies", "listProcessProperties", "setProcessProperties",
-  "listProcessTasks", "createProcessTask", "updateProcessTask", "deleteProcessTask",
-  "listProcessTaskDependencies", "setProcessTaskDependencies",
-  "listProcessSteps", "listProcessStepDependencies",
+  "listProcessDependencies", "setProcessDependencies",
+  "listProcessSteps", "listProcessStepDependencies", "setProcessStepDependencies",
+  "createProcessStep", "updateProcessStep", "deleteProcessStep", "reorderProcessSteps",
   "listRunStepStates", "exemptRunStep", "clearRunStepExemption",
-  "listProcessRuns", "startProcessRun", "updateProcessRun", "deleteProcessRun", "instantiateProcessTasks",
+  "listProcessRuns", "startProcessRun", "updateProcessRun", "deleteProcessRun", "instantiateProcessSteps",
   "listProjects", "getProject", "listJobs", "getJob", "railCounts",
   "listMyPins", "pinPage", "unpinPage",
   "createProject", "createJob", "createJobsFromSplit", "deleteJob", "deleteProject",
@@ -142,7 +140,7 @@ const WIRED: RepositoryMethod[] = [
   "listMyPreferences", "saveMyPreferences",
   "listPropertyDefs", "createPropertyDef", "updatePropertyDef", "deletePropertyDef",
   "listDictionaryOverrides", "saveDictionaryOverride",
-  "listClassifications", "saveClassification", "listPartyRoles", "savePartyRole", "listStaffRoles", "saveStaffRole", "listContacts", "getContact", "createContact", "updateContact", "approveContact", "setContactClassifications", "listCompanies", "getCompany", "createCompany", "updateCompany", "approveCompany", "setCompanyClassifications", "listContactMethods", "addContactMethod", "updateContactMethod", "deleteContactMethod", "listCompanyContacts", "addCompanyContact", "updateCompanyContact", "listRecordParties", "addRecordParty", "updateRecordParty", "deleteRecordParty", "listRecordStaffRoles", "addRecordStaffRole", "endRecordStaffRole", "listTaskChecklist", "addTaskChecklistItem", "updateTaskChecklistItem", "deleteTaskChecklistItem", "listProcessTaskChecklist", "addProcessTaskChecklistItem", "updateProcessTaskChecklistItem", "deleteProcessTaskChecklistItem", "listStageCompletion",
+  "listClassifications", "saveClassification", "listPartyRoles", "savePartyRole", "listStaffRoles", "saveStaffRole", "listContacts", "getContact", "createContact", "updateContact", "approveContact", "setContactClassifications", "listCompanies", "getCompany", "createCompany", "updateCompany", "approveCompany", "setCompanyClassifications", "listContactMethods", "addContactMethod", "updateContactMethod", "deleteContactMethod", "listCompanyContacts", "addCompanyContact", "updateCompanyContact", "listRecordParties", "addRecordParty", "updateRecordParty", "deleteRecordParty", "listRecordStaffRoles", "addRecordStaffRole", "endRecordStaffRole", "listTaskChecklist", "addTaskChecklistItem", "updateTaskChecklistItem", "deleteTaskChecklistItem", "listStageCompletion",
   "listNotificationTypes", "saveNotificationType", "listNotificationRules", "addNotificationRule", "updateNotificationRule", "deleteNotificationRule", "listMyNotificationPreferences", "saveMyNotificationPreference", "listMyNotifications", "markNotificationsRead", "listMyWatches", "watchRecord", "unwatchRecord", "listDeliveryStats",
   "getMaintenanceSettings", "saveMaintenanceSettings", "listMaintenanceCategories", "saveMaintenanceCategory", "listMaintenanceRequests", "getMaintenanceRequest", "createMaintenanceRequest", "updateMaintenanceRequest", "listMaintenanceItems", "addMaintenanceItem", "updateMaintenanceItem", "deleteMaintenanceItem", "offerMaintenanceItem", "updateMaintenanceAssignment", "listMaintenanceMessages", "addMaintenanceNote", "getJobWarranty", "listMaintenanceOutboxStats",
   "listReportTemplates", "getReportTemplate", "createReportTemplate", "updateReportTemplate", "approveReportTemplate", "deleteReportTemplate",
@@ -351,7 +349,7 @@ type CommentRow = {
  * `tasks`, and re-read the row through the view.
  */
 const TASK_COLUMNS =
-  "task_id, job_id, project_id, maintenance_request_id, task_name, task_description, parent_task_id, task_position, task_owning_team, task_assignee_id, task_status, task_due_date, task_scheduled_date, task_completed_at, task_completed_by, task_is_external, process_run_id, process_task_id, task_started_at, task_expected_days, task_at_risk_lead_days, task_created_at, task_created_by, task_updated_at, task_updated_by, task_assignee_name, task_completed_by_name, task_created_by_name, task_process_id, task_process_name, task_record_name, task_record_stage, task_due_effective, task_at_risk_date, task_health, task_checklist_total, task_checklist_done, task_subtask_total, task_subtask_done";
+  "task_id, job_id, project_id, maintenance_request_id, task_name, task_description, parent_task_id, task_position, task_owning_team, task_assignee_id, task_status, task_due_date, task_scheduled_date, task_completed_at, task_completed_by, task_is_external, process_run_id, process_step_id, task_started_at, task_expected_days, task_at_risk_lead_days, task_created_at, task_created_by, task_updated_at, task_updated_by, task_assignee_name, task_completed_by_name, task_created_by_name, task_process_id, task_process_name, task_record_name, task_record_stage, task_due_effective, task_at_risk_date, task_health, task_checklist_total, task_checklist_done, task_subtask_total, task_subtask_done";
 
 type TaskRow = {
   task_id: string; job_id: string | null; project_id: number | null;
@@ -362,7 +360,7 @@ type TaskRow = {
   task_status: string; task_due_date: string | null; task_scheduled_date: string | null;
   task_completed_at: string | null; task_completed_by: string | null;
   task_is_external: boolean;
-  process_run_id: string | null; process_task_id: string | null;
+  process_run_id: string | null; process_step_id: string | null;
   task_started_at: string | null; task_expected_days: number | null; task_at_risk_lead_days: number | null;
   task_created_at: string; task_created_by: string | null;
   task_updated_at: string; task_updated_by: string | null;
@@ -404,18 +402,6 @@ const toChecklistItem = (r: ChecklistRow): TaskChecklistItem => ({
   doneByName: r.ticker?.profile_full_name ?? null
 });
 
-type TemplateChecklistRow = {
-  process_task_checklist_item_id: string; process_task_id: string;
-  process_task_checklist_item_position: number; process_task_checklist_item_text: string;
-};
-
-const toTemplateChecklistItem = (r: TemplateChecklistRow): ProcessTaskChecklistItem => ({
-  id: r.process_task_checklist_item_id,
-  processTaskId: r.process_task_id,
-  position: r.process_task_checklist_item_position,
-  text: r.process_task_checklist_item_text
-});
-
 function toTask(r: TaskRow): TaskEntry {
   return {
     id: r.task_id,
@@ -447,7 +433,7 @@ function toTask(r: TaskRow): TaskEntry {
     subtaskDone: r.task_subtask_done,
     isExternal: r.task_is_external,
     processRunId: r.process_run_id,
-    processTaskId: r.process_task_id,
+    processStepId: r.process_step_id,
     createdAt: r.task_created_at,
     createdBy: r.task_created_by,
     createdByName: r.task_created_by_name,
@@ -2594,45 +2580,6 @@ export function createSupabaseRepository(): Repository {
 
     async deleteTaskChecklistItem(id: string): Promise<void> {
       const { error } = await client.from("task_checklist_items").delete().eq("task_checklist_item_id", id);
-      if (error) throw error;
-    },
-
-    async listProcessTaskChecklist(processId: string): Promise<ProcessTaskChecklistItem[]> {
-      const { data, error } = await client
-        .from("process_task_checklist_items")
-        .select("process_task_checklist_item_id, process_task_id, process_task_checklist_item_position, process_task_checklist_item_text, process_tasks!inner(process_id)")
-        .eq("process_tasks.process_id", processId)
-        .order("process_task_checklist_item_position", { ascending: true });
-      if (error) throw error;
-      return ((data ?? []) as unknown as TemplateChecklistRow[]).map(toTemplateChecklistItem);
-    },
-
-    async addProcessTaskChecklistItem(processTaskId: string, text: string): Promise<ProcessTaskChecklistItem> {
-      const clean = text.trim();
-      if (!clean) throw new Error("Give the line some words first.");
-      const { data, error } = await client
-        .from("process_task_checklist_items")
-        .insert({ process_task_id: processTaskId, process_task_checklist_item_text: clean })
-        .select("process_task_checklist_item_id, process_task_id, process_task_checklist_item_position, process_task_checklist_item_text")
-        .single();
-      if (error) throw error;
-      return toTemplateChecklistItem(data as unknown as TemplateChecklistRow);
-    },
-
-    async updateProcessTaskChecklistItem(id: string, patch: { text?: string; position?: number }): Promise<ProcessTaskChecklistItem> {
-      const row: Record<string, unknown> = {};
-      if (patch.text !== undefined) row.process_task_checklist_item_text = patch.text.trim();
-      if (patch.position !== undefined) row.process_task_checklist_item_position = patch.position;
-      if (Object.keys(row).length === 0) throw new Error("Nothing to change.");
-      const { data, error } = await client
-        .from("process_task_checklist_items").update(row).eq("process_task_checklist_item_id", id)
-        .select("process_task_checklist_item_id, process_task_id, process_task_checklist_item_position, process_task_checklist_item_text").single();
-      if (error) throw error;
-      return toTemplateChecklistItem(data as unknown as TemplateChecklistRow);
-    },
-
-    async deleteProcessTaskChecklistItem(id: string): Promise<void> {
-      const { error } = await client.from("process_task_checklist_items").delete().eq("process_task_checklist_item_id", id);
       if (error) throw error;
     },
 

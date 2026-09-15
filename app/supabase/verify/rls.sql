@@ -1767,13 +1767,16 @@ begin
     else raise warning 'FAIL: a user could not remove a checklist line'; end if;
   exception when others then raise warning 'FAIL: unexpected on checklist items (%)', sqlerrm; end;
 
+  -- The same rule, on the table that replaced the template checklist (0131): a tick box is
+  -- part of the process definition, so a user may tick one on a run and not write one here.
   begin
-    insert into process_task_checklist_items (process_task_id, process_task_checklist_item_text)
-    select process_task_id, 'sneaky' from process_tasks limit 1;
-    if found then raise warning 'FAIL: a user wrote a template checklist line';
-    else raise notice 'note: no template task to probe against'; end if;
-  exception when insufficient_privilege then raise notice 'ok  template checklist lines refuse a write below manager';
-    when others then raise warning 'FAIL: unexpected on template checklist (%)', sqlerrm; end;
+    insert into process_steps (process_id, process_step_kind, process_step_name, parent_process_step_id)
+    select s.process_id, 'checklist', 'sneaky', s.process_step_id
+      from process_steps s where s.process_step_kind = 'task' limit 1;
+    if found then raise warning 'FAIL: a user wrote a checklist step';
+    else raise notice 'note: no task step to hang a probe line off'; end if;
+  exception when insufficient_privilege then raise notice 'ok  checklist steps refuse a write below manager';
+    when others then raise warning 'FAIL: unexpected on checklist steps (%)', sqlerrm; end;
 
   select count(*) into n from stage_completion where job_id = '9106-002';
   if n >= 1 then raise notice 'ok  a user reads stage_completion for a job (% stage rows)', n;
