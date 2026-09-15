@@ -750,7 +750,7 @@ export const DICTIONARY: DictionaryEntry[] = [
     "What the SLAs say the job will finish, beside the target somebody committed to and the day it actually did. Amber, 14 September: a system field \"based by when the job is likely to end based on slas and [the stage] it is up to so management can look at targeted completion date (when they want it to be done) versus the realistic calculated date based on slas and then the actual date it was completed for process optimisation\".",
     "date",
     "Read-only, computed. NULL is the normal answer today and job_calculated_completion_missing says why — all 38 Pre-construction processes carry no estimate, so the forecast refuses to answer rather than projecting from the third of the pipeline that is populated. NULL for both columns means the job is not live.",
-    "The longest path through process_dependencies in CALENDAR days, from job_completion_forecast() (0119). A process costs its own process_expected_days when set and the sum of its tasks' process_task_expected_days otherwise — 3 of 51 processes use the first, 107 of 107 tasks feed the second. Every start is floored at today, so an overrun is sunk rather than pushed forward. Counts every process on the path, optional or not: 0127 added process_is_optional and the forecast does not read it yet. It is Stage 2's completion gate that will, and the forecast follows it there.",
+    "The longest path through process_dependencies in CALENDAR days, from job_completion_forecast() (0119). A process costs its own process_expected_days when set and the sum of its task steps' process_step_expected_days otherwise — 3 of 51 processes use the first, 107 of 107 task steps feed the second (0131 moved it off the template table). Every start is floored at today, so an overrun is sunk rather than pushed forward. Counts every process on the path, optional or not: 0127 added process_is_optional and the forecast does not read it yet. It is Stage 2's completion gate that will, and the forecast follows it there.",
     "created"),
   e("job_display.job_calculated_completion_missing", "Estimates missing",
     "How many of the job's processes nobody has put a duration on. It is why the calculated completion date is blank when it is blank.",
@@ -1075,7 +1075,7 @@ export const DICTIONARY: DictionaryEntry[] = [
   e("lifecycle_substages.lifecycle_substage_updated_by", "Updated by", "Who changed it; stamp_updated_by fills it from the session.", "uuid", "Nullable.", "FK → profiles(profile_id).", "created"),
 
   // -------------------------------------------------------------------- processes (0078)
-  e("processes.process_id", "Process ID", "What happens inside a lifecycle stage, as a row: a named piece of work pinned to a stage, run on a project or a job, with a team, a duration and the properties it collects. Never stores a value — properties do.", "uuid", "Primary key.", "process_runs, process_dependencies, process_properties and process_tasks hang off it.", "created"),
+  e("processes.process_id", "Process ID", "What happens inside a lifecycle stage, as a row: a named piece of work pinned to a stage, run on a project or a job, with a team, a duration and the properties it collects. Never stores a value — properties do.", "uuid", "Primary key.", "process_runs, process_dependencies and process_steps hang off it.", "created"),
   e("processes.process_key", "Key", "The stable slug — the identity the seed and any integration address. The name is the renameable half.", "text", "Unique. Not null. CHECK: lowercase letters, digits and underscores.", "Seeded from the workbook's Processes sheet (0079).", "created"),
   e("processes.process_name", "Process", "What the process is called — \"Concept Plan\", \"1 - Footings\".", "text", "Not null, non-blank.", "—", "created"),
   e("processes.process_stage", "Lifecycle stage", "Which of the seven lifecycle stages this process belongs to. The same words as jobs.job_stage, enforced the same way.", "text", "Not null. CHECK against the seven names.", "Groups the process panel on a record and the Setup → Processes editor.", "created"),
@@ -1099,29 +1099,14 @@ export const DICTIONARY: DictionaryEntry[] = [
   e("process_dependencies.depends_on_process_id", "Waits on", "The process that has to finish first.", "uuid", "Part of the primary key. FK → processes ON DELETE CASCADE.", "guard_process_dependency_cycle() refuses a loop.", "created"),
   e("process_dependencies.process_dependency_lag_days", "Lag days", "Days after the predecessor completes before this one is expected to start. The workbook's SLAs sit on the arrows.", "integer", "Not null, default 0. CHECK >= 0.", "—", "created"),
 
-  // ----------------------------------------------------------- process_properties (0078)
-  e("process_properties.process_id", "Process", "The process that collects the property.", "uuid", "Part of the primary key. FK → processes ON DELETE CASCADE.", "The join is why a property has no process column: one fact can be collected by more than one process.", "created"),
-  e("process_properties.property_def_key", "Property", "The property collected.", "text", "Part of the primary key. FK → property_defs ON UPDATE CASCADE ON DELETE CASCADE.", "—", "created"),
-  e("process_properties.process_property_position", "Position", "The order the process asks for its properties in.", "integer", "Not null, default 0.", "—", "created"),
-  e("process_properties.process_property_required", "Required to complete", "Must be recorded before the run counts as complete. Read by the app; the database does not refuse the completion, because \"complete with a gap\" is sometimes the truth.", "boolean", "Not null, default false.", "—", "created"),
 
-  // ---------------------------------------------------------------- process_tasks (0078)
-  e("process_tasks.process_task_id", "Template task ID", "A line of the checklist a process instantiates — the Construction schedule's 107 lines live here under their seven processes.", "uuid", "Primary key.", "Copied into tasks by instantiate_process_tasks(); never read at runtime.", "created"),
-  e("process_tasks.process_id", "Process", "The process this line belongs to.", "uuid", "Not null. FK → processes ON DELETE CASCADE.", "—", "created"),
-  e("process_tasks.parent_process_task_id", "Parent line", "The schedule's summary lines — \"FOOTINGS, 18 days\" — are parents of the lines beneath them.", "uuid", "Nullable. FK → process_tasks ON DELETE CASCADE. Must belong to the same process (guard_process_task_parent).", "Becomes tasks.parent_task_id on instantiation.", "created"),
-  e("process_tasks.process_task_name", "Task", "What the line says — \"SLAB POUR\".", "text", "Not null, non-blank.", "—", "created"),
-  e("process_tasks.process_task_owning_team", "Team", "Who does it — the schedule's team column, mapped to a slug.", "text", "Nullable. FK → teams ON UPDATE CASCADE.", "—", "created"),
-  e("process_tasks.process_task_expected_days", "Days", "The schedule's duration for the line.", "integer", "Nullable. CHECK >= 0 — the schedule has 0-day claim lines.", "—", "created"),
-  e("process_tasks.process_task_is_external", "External", "Waiting on somebody outside Lofty.", "boolean", "Not null, default false.", "—", "created"),
-  e("process_tasks.process_task_position", "Position", "The order within the process.", "integer", "Not null, default 0.", "—", "created"),
-  e("process_tasks.process_task_import_ref", "Schedule line", "The schedule's own line number, so \"task 93\" in a conversation can be found.", "integer", "Nullable. Unique with the process where set.", "The seed wires parents and dependencies through it.", "created"),
 
   // ------------------------------------------------------------------ process_steps (0128)
-  e("process_steps.process_step_id", "Step ID", "One step of a process, of one kind: a property to record, a task to do, a checklist line to tick, an automation to fire. Folds process_properties, process_tasks and process_task_checklist_items into one ordered list, which is what Amber's walk-through of Working Drawings describes.", "uuid", "Primary key. A task step keeps the id its process_tasks row had, so tasks.process_task_id still names it.", "process_step_dependencies hangs off it; tasks are instantiated from the task steps.", "created"),
+  e("process_steps.process_step_id", "Step ID", "One step of a process, of one kind: a property to record, a task to do, a checklist line to tick, an automation to fire. The one list a process is, since 0131 dropped the three it folded in.", "uuid", "Primary key. A task step kept the id its template task had, which is why tasks.process_step_id was a rename rather than a rewrite.", "process_step_dependencies hangs off it; tasks are instantiated from the task steps.", "created"),
   e("process_steps.process_id", "Process", "The process this step belongs to.", "uuid", "Not null. FK → processes ON DELETE CASCADE. Unique with the step id, which is what makes a parent or a dependency in another process impossible.", "—", "created"),
   e("process_steps.process_step_position", "Position", "The order within the process, across every kind.", "integer", "Not null, default 0. Not unique: a drag renumbers the process 1..n.", "—", "created"),
   e("process_steps.process_step_kind", "Kind", "property, task, checklist or automation. Which columns mean anything depends on it, and a CHECK per kind says which.", "text", "Not null. CHECK: one of the four.", "—", "created"),
-  e("process_steps.process_step_is_required", "Required", "A run cannot be marked complete while a required step is open (Stage 2 gate). Property steps carry the flag process_properties held; task steps arrived required, which is a reading of Amber's \"when all process steps are completed\" rather than a copy of anything.", "boolean", "Not null, default true.", "—", "created"),
+  e("process_steps.process_step_is_required", "Required", "A run cannot be marked complete while a required step is open (Stage 2 gate). Property steps carry the flag the old template list held; task steps arrived required, which is a reading of Amber's \"when all process steps are completed\" rather than a copy of anything.", "boolean", "Not null, default true.", "—", "created"),
   e("process_steps.process_step_name", "Step", "What the step says. Null only for a property step, which is named by its definition.", "text", "Nullable, non-blank. CHECK: not null for task, checklist and automation.", "—", "created"),
   e("process_steps.property_def_key", "Property", "The property a property step collects. The step is the definition: label, format and who may see it all come from property_defs.", "text", "Nullable. FK → property_defs ON UPDATE CASCADE. CHECK: not null for a property step, null for every other kind.", "—", "created"),
   e("process_steps.process_step_stamps_property_key", "Stamps", "The property a task step writes today's date into when it is ticked — Amber, 15 September: \"when ticked off records the date against the propertry\".", "text", "Nullable. FK → property_defs. CHECK: only a task step may carry it.", "Nothing reads it until the run machinery does.", "created"),
@@ -1136,12 +1121,8 @@ export const DICTIONARY: DictionaryEntry[] = [
   e("process_step_dependencies.process_id", "Process", "The process both ends belong to. Not redundant: it is half of the composite key that makes a dependency on another process's step impossible.", "uuid", "Not null. Part of both foreign keys.", "—", "created"),
   e("process_step_dependencies.process_step_id", "Step", "The step that waits.", "uuid", "Part of the primary key. Composite FK to process_steps ON DELETE CASCADE. CHECK: not itself.", "—", "created"),
   e("process_step_dependencies.depends_on_process_step_id", "Waits on", "The step that has to finish first.", "uuid", "Part of the primary key. Composite FK to process_steps ON DELETE CASCADE.", "—", "created"),
-  e("process_step_dependencies.process_step_dependency_lag_days", "Lag days", "\"Handover is 10 days after the PCI walkthrough\". Carried from process_task_dependencies.", "integer", "Not null, default 0. CHECK >= 0.", "—", "created"),
+  e("process_step_dependencies.process_step_dependency_lag_days", "Lag days", "\"Handover is 10 days after the PCI walkthrough\" — 93+10 in the Construction schedule.", "integer", "Not null, default 0. CHECK >= 0.", "Copied into task_dependencies.task_dependency_lag_days on instantiation.", "created"),
 
-  // ---------------------------------------------------- process_task_dependencies (0078)
-  e("process_task_dependencies.process_task_id", "Task", "The template task that waits.", "uuid", "Part of the primary key. FK → process_tasks ON DELETE CASCADE. CHECK: not itself.", "Same process as the task it waits on, and no cycles (guard_process_task_dependency).", "created"),
-  e("process_task_dependencies.depends_on_process_task_id", "Waits on", "The template task that has to finish first.", "uuid", "Part of the primary key. FK → process_tasks ON DELETE CASCADE.", "—", "created"),
-  e("process_task_dependencies.process_task_dependency_lag_days", "Lag days", "\"Handover is 10 days after the PCI walkthrough\" — 93+10 in the schedule.", "integer", "Not null, default 0. CHECK >= 0.", "Copied into task_dependencies.task_dependency_lag_days on instantiation.", "created"),
 
   // ------------------------------------------------------ process_run_step_state (0129)
   e("process_run_step_state.process_run_id", "Run", "The run this state is about.", "uuid", "From process_runs.", "The completion gate reads this view, so a screen showing anything else is showing a second opinion.", "created"),
@@ -1176,7 +1157,7 @@ export const DICTIONARY: DictionaryEntry[] = [
 
   // ----------------------------------------------- tasks learn where they came from (0078)
   e("tasks.process_run_id", "Process run", "The run this task was instantiated for, when it was — a typed-in task has none.", "uuid", "Nullable. FK → process_runs ON DELETE CASCADE.", "0030 promised this column would arrive with the table it references. It did.", "created"),
-  e("tasks.process_task_id", "Template line", "The template line this task was copied from, for \"which jobs skipped the frame check\".", "uuid", "Nullable. FK → process_tasks ON DELETE SET NULL — survives the template being deleted.", "—", "created"),
+  e("tasks.process_step_id", "Step", "The task step this task was made from, for \"which jobs skipped the frame check\". Renamed from process_task_id by 0131, when process_tasks went; the values did not move.", "uuid", "Nullable. FK → process_steps ON DELETE SET NULL — survives the step being removed.", "—", "created"),
   e("tasks.task_started_at", "Started", "When work began (0081) — the anchor of the clock. Stamped when the status first leaves \"to do\"; editable afterwards, never cleared by the database.", "timestamptz", "Nullable.", "Due, when nobody typed one, is this plus task_expected_days.", "created"),
   e("tasks.task_expected_days", "Expected days", "How long it should take from its start (0081). Null is \"no agreed duration\", not zero: without it a task can be overdue but never at risk. Copied from the template line when a run is instantiated.", "integer", "Nullable. CHECK ≥ 0 (smallint).", "—", "created"),
   e("tasks.task_at_risk_lead_days", "At-risk lead", "Days before due that the task reads at risk (0081) — a 7-day task with lead 2 is at risk from day 5. The same rule a process has.", "integer", "Nullable. CHECK ≥ 0 and ≤ task_expected_days (smallint).", "—", "created"),
@@ -1190,11 +1171,6 @@ export const DICTIONARY: DictionaryEntry[] = [
   e("task_checklist_items.task_checklist_item_done_at", "Ticked at", "When it was ticked.", "timestamptz", "Nullable, stamped by trigger.", "—", "created"),
   e("task_checklist_items.task_checklist_item_done_by", "Ticked by", "Who ticked it — the signed-in person, or null for a migration.", "uuid", "Nullable. FK → profiles.", "—", "created"),
 
-  // ---------------------------------------------- process_task_checklist_items (0081)
-  e("process_task_checklist_items.process_task_checklist_item_id", "Template line", "One tick box on a template task (0081), copied to every run's task by instantiate_process_tasks().", "uuid", "Primary key.", "Managers write; every active user reads.", "created"),
-  e("process_task_checklist_items.process_task_id", "Template task", "The template line it belongs to.", "uuid", "Not null. FK → process_tasks ON DELETE CASCADE.", "—", "created"),
-  e("process_task_checklist_items.process_task_checklist_item_position", "Order", "Where in the list.", "integer", "Not null, default 0 (smallint).", "—", "created"),
-  e("process_task_checklist_items.process_task_checklist_item_text", "Line", "The words.", "text", "Not null. CHECK: not blank.", "—", "created"),
 
   // ---------------------------------------------------------- task_display (0081)
   e("task_display.task_due_effective", "Due", "The typed due date, or start + expected days when nobody typed one. Derived, never stored.", "view", "Null while neither is known.", "—", "created"),
@@ -1929,20 +1905,14 @@ export const TABLE_DESCRIPTIONS: Record<string, string> = {
     "What happens inside a lifecycle stage, as rows (0078): a named piece of work pinned to a stage, run on a project or a job, with a team, an expected duration and the properties it collects. Replaces the idea of nesting pipelines inside the lifecycle — a job holds many processes at once, which one position never could. Never stores a value; properties do. 49 were seeded from the workbook's Processes sheet; managers and above edit them in Setup → Processes.",
   process_dependencies:
     "What has to finish before a process can start (0078) — the graph, as a table, because twenty-one of the schedule's steps have two or more predecessors. The single source of ordering; a trigger refuses a cycle. 48 edges came from the workbook, read from its predecessor and successor columns with copy-pasted and backwards rows refused and listed at the end of 0079.",
-  process_properties:
-    "Which properties a process collects, in what order, and which must be recorded before it counts as complete (0078). The join is what lets one fact be collected by more than one process, and why a property has no process column of its own.",
   process_run_step_exemptions:
     "A step marked not applicable on one run (0129). The only part of a step's state the database stores, because every other part is already recorded where that kind of step keeps its truth — a property value on the record, a task's status, a checklist tick. Amber, 15 September, on where the completion rule lives: in the database, with not applicable as the recorded way past. Writing one is ordinary work at user and above; it carries the name of whoever decided and, ideally, why.",
   process_run_step_state:
     "The state of every step of every run (0129), derived rather than stored: done, open, not_applicable or not_tracked. It is what the completion gate reads, so a screen that showed anything else would be showing a second opinion. not_tracked is an automation step, which has no state until Stage 4 gives automations a run log.",
   process_steps:
-    "What a process is made of (0128): one ordered list of steps, each of one kind — a property to record, a task to do, a checklist line to tick, an automation to fire. It folds the three template lists into one, because a process meant a property list in Pre-construction and a task list in Construction and nothing could complete either. Backfilled from those tables, which are still there and still read until the screens move; a task step keeps the id its template task had, so an instantiated task still points at the right row when they go.",
+    "What a process is made of (0128): one ordered list of steps, each of one kind — a property to record, a task to do, a checklist line to tick, an automation to fire. It folded the three template lists into one, because a process meant a property list in Pre-construction and a task list in Construction and nothing could complete either. Those three tables went in 0131; a task step kept the id its template task had, so every instantiated task still points at the right row.",
   process_step_dependencies:
-    "What a step waits on, inside its own process (0128). Carried from process_task_dependencies. Both ends are held by a composite key that includes the process, so a dependency across processes is a foreign-key violation rather than something a trigger has to notice.",
-  process_tasks:
-    "The checklist a process instantiates on a record — template tasks with a team and a duration (0078). The Construction schedule's 107 lines live here under their seven processes; its summary lines are parents. Copied into tasks when a run is instantiated, never read at runtime.",
-  process_task_dependencies:
-    "The order of a process's template tasks, with lag (0078) — \"Handover is 10 days after the PCI walkthrough\". Same process only, no cycles, copied into task_dependencies on instantiation. 99 edges from the schedule, its Excel-mangled cells decoded and both columns read as one edge set.",
+    "What a step waits on, inside its own process (0128). Carried from the template tasks' own dependency table, which went in 0131. Both ends are held by a composite key that includes the process, so a dependency across processes is a foreign-key violation rather than something a trigger has to notice.",
   process_runs:
     "One process, on one record, one attempt (0078). A job holds many at once — that is the point — and an amendment is a second attempt rather than an overwrite, which is what makes \"how often does this repeat\" a query. Started and completed are stamped by the database; running a process is ordinary work at user, deleting a run is admin's.",
   process_run_display:
@@ -1996,9 +1966,7 @@ export const TABLE_DESCRIPTIONS: Record<string, string> = {
   notification_deliveries:
     "The outbox (0083): one row per channel per notification. in_app sent as written; email, teams and sms queued or held for the digest time, claimed by the worker with for update skip locked, retried with backoff, failed after five. SMS rows wait for a provider.",
   task_checklist_items:
-    "Tick boxes under a task (0081): text, order, who ticked it when. Not a task — no assignee, due date, status or dependencies — so a task with twelve lines is one task, not thirteen. Copied from the template line's checklist when a run is instantiated.",
-  process_task_checklist_items:
-    "The tick boxes a template line hands a job (0081), written by managers in Setup → Processes and copied by instantiate_process_tasks().",
+    "Tick boxes under a task (0081): text, order, who ticked it when. Not a task — no assignee, due date, status or dependencies — so a task with twelve lines is one task, not thirteen. Made from the checklist steps under a task step when a run starts, each carrying the step it came from so the tick counts towards the run.",
   task_display:
     "A task with its names, counts and derived dates (0081): due (typed, or start + expected days), at-risk (due − lead) and health, computed from today the way process_run_display does. Nothing here is stored — re-time a task and it re-dates.",
   stage_completion:

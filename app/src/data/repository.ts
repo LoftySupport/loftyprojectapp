@@ -49,7 +49,6 @@ import type {
   NewTask,
   TaskPatch,
   TaskChecklistItem,
-  ProcessTaskChecklistItem,
   StageCompletion,
   PropertyDef,
   PropertyDefPatch,
@@ -66,14 +65,11 @@ import type {
   ProcessPatch,
   ProcessDependency,
   ProcessHistoryEntry,
-  ProcessProperty,
   ProcessStep,
+  NewProcessStep,
+  ProcessStepPatch,
   ProcessStepDependency,
   ProcessRunStepState,
-  ProcessTask,
-  NewProcessTask,
-  ProcessTaskPatch,
-  ProcessTaskDependency,
   ProcessRun,
   ProcessRunPatch,
   ProcessRunStatus,
@@ -495,10 +491,6 @@ export interface Repository {
   /** Ticking is `isDone`; the database stamps who and when, and clears both on untick. */
   updateTaskChecklistItem(id: string, patch: { text?: string; isDone?: boolean; position?: number }): Promise<TaskChecklistItem>;
   deleteTaskChecklistItem(id: string): Promise<void>;
-  listProcessTaskChecklist(processId: string): Promise<ProcessTaskChecklistItem[]>;
-  addProcessTaskChecklistItem(processTaskId: string, text: string): Promise<ProcessTaskChecklistItem>;
-  updateProcessTaskChecklistItem(id: string, patch: { text?: string; position?: number }): Promise<ProcessTaskChecklistItem>;
-  deleteProcessTaskChecklistItem(id: string): Promise<void>;
   /** Stage completion for one record, or for every record when no target is given. */
   listStageCompletion(target?: RecordTarget): Promise<StageCompletion[]>;
 
@@ -839,10 +831,6 @@ export interface Repository {
   listProcessDependencies(): Promise<ProcessDependency[]>;
   /** Replace what one process waits on. The database refuses a cycle. */
   setProcessDependencies(processId: string, dependsOn: { processId: string; lagDays: number }[]): Promise<ProcessDependency[]>;
-  listProcessProperties(): Promise<ProcessProperty[]>;
-  /** Replace which properties one process collects, in order, and which are required to complete it. */
-  setProcessProperties(processId: string, properties: { propertyKey: string; required: boolean }[]): Promise<ProcessProperty[]>;
-  listProcessTasks(processId?: string): Promise<ProcessTask[]>;
   /**
    * The steps of one process, or of every process, in position order (0128).
    *
@@ -870,19 +858,39 @@ export interface Repository {
    */
   exemptRunStep(runId: string, stepId: string, reason: string | null): Promise<void>;
   clearRunStepExemption(runId: string, stepId: string): Promise<void>;
-  createProcessTask(input: NewProcessTask): Promise<ProcessTask>;
-  updateProcessTask(id: string, patch: ProcessTaskPatch): Promise<ProcessTask>;
-  deleteProcessTask(id: string): Promise<void>;
-  listProcessTaskDependencies(processId: string): Promise<ProcessTaskDependency[]>;
-  setProcessTaskDependencies(taskId: string, dependsOn: { taskId: string; lagDays: number }[]): Promise<ProcessTaskDependency[]>;
+  /**
+   * Add a step to a process (0131).
+   *
+   * The kind decides which fields mean anything, and the database says so with a CHECK per
+   * kind — a `property` step carrying an SLA is refused rather than quietly ignored. A step
+   * with no position given goes on the end.
+   */
+  createProcessStep(input: NewProcessStep): Promise<ProcessStep>;
+  /** Change one step. The kind is not in the patch: remove it and add the kind you meant. */
+  updateProcessStep(id: string, patch: ProcessStepPatch): Promise<ProcessStep>;
+  deleteProcessStep(id: string): Promise<void>;
+  /** Renumber a process's steps 1..n in the order given, and return the list. */
+  reorderProcessSteps(processId: string, stepIds: string[]): Promise<ProcessStep[]>;
+  /**
+   * Replace what one step waits on. Both ends are inside the same process, and the database
+   * holds that with the composite keys 0128 gave the table — a step from another process is
+   * a foreign-key violation rather than an opinion. It refuses a cycle.
+   */
+  setProcessStepDependencies(stepId: string, dependsOn: { stepId: string; lagDays: number }[]): Promise<ProcessStepDependency[]>;
+  /**
+   * Make a run's tasks from its process's task steps (0130).
+   *
+   * A run makes its own tasks when it starts, so this is the repair for a run that started
+   * before 0130 and never got them. It returns how many it made; a run that already has
+   * tasks makes none.
+   */
+  instantiateProcessSteps(runId: string): Promise<number>;
   /** Runs on one record, or — with no target — every run the person may see. */
   listProcessRuns(target?: RecordTarget): Promise<ProcessRun[]>;
   /** Begin a process on a record. Attempt is the next number for that process on that record. */
   startProcessRun(target: RecordTarget, processId: string, status?: ProcessRunStatus): Promise<ProcessRun>;
   updateProcessRun(id: string, patch: ProcessRunPatch): Promise<ProcessRun>;
   deleteProcessRun(id: string): Promise<void>;
-  /** Copy the process's checklist onto the run's record, once. Returns how many tasks were made. */
-  instantiateProcessTasks(runId: string): Promise<number>;
 
   // ---- the template library and its documents (0094) -------------------------
   /**
@@ -1181,10 +1189,6 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "addTaskChecklistItem",
   "updateTaskChecklistItem",
   "deleteTaskChecklistItem",
-  "listProcessTaskChecklist",
-  "addProcessTaskChecklistItem",
-  "updateProcessTaskChecklistItem",
-  "deleteProcessTaskChecklistItem",
   "listStageCompletion",
   "listClassifications",
   "saveClassification",
@@ -1309,24 +1313,21 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "listProcessHistory",
   "listProcessDependencies",
   "setProcessDependencies",
-  "listProcessProperties",
-  "setProcessProperties",
-  "listProcessTasks",
   "listProcessSteps",
   "listProcessStepDependencies",
   "listRunStepStates",
   "exemptRunStep",
   "clearRunStepExemption",
-  "createProcessTask",
-  "updateProcessTask",
-  "deleteProcessTask",
-  "listProcessTaskDependencies",
-  "setProcessTaskDependencies",
+  "createProcessStep",
+  "updateProcessStep",
+  "deleteProcessStep",
+  "reorderProcessSteps",
+  "setProcessStepDependencies",
+  "instantiateProcessSteps",
   "listProcessRuns",
   "startProcessRun",
   "updateProcessRun",
   "deleteProcessRun",
-  "instantiateProcessTasks",
   "listReportTemplates",
   "getReportTemplate",
   "createReportTemplate",
@@ -1405,10 +1406,6 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   addTaskChecklistItem: "task_checklist_items",
   updateTaskChecklistItem: "task_checklist_items",
   deleteTaskChecklistItem: "task_checklist_items",
-  listProcessTaskChecklist: "process_task_checklist_items",
-  addProcessTaskChecklistItem: "process_task_checklist_items",
-  updateProcessTaskChecklistItem: "process_task_checklist_items",
-  deleteProcessTaskChecklistItem: "process_task_checklist_items",
   listStageCompletion: "stage_completion",
   listClassifications: "classifications",
   saveClassification: "classifications",
@@ -1537,24 +1534,21 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   listProcessHistory: "activity_audit",
   listProcessDependencies: "process_dependencies",
   setProcessDependencies: "process_dependencies",
-  listProcessProperties: "process_properties",
-  setProcessProperties: "process_properties",
-  listProcessTasks: "process_tasks",
   listProcessSteps: "process_steps",
   listProcessStepDependencies: "process_step_dependencies",
   listRunStepStates: "process_run_step_state",
   exemptRunStep: "process_run_step_exemptions",
   clearRunStepExemption: "process_run_step_exemptions",
-  createProcessTask: "process_tasks",
-  updateProcessTask: "process_tasks",
-  deleteProcessTask: "process_tasks",
-  listProcessTaskDependencies: "process_task_dependencies",
-  setProcessTaskDependencies: "process_task_dependencies",
+  createProcessStep: "process_steps",
+  updateProcessStep: "process_steps",
+  deleteProcessStep: "process_steps",
+  reorderProcessSteps: "process_steps",
+  setProcessStepDependencies: "process_step_dependencies",
+  instantiateProcessSteps: "instantiate_process_steps()",
   listProcessRuns: "process_run_display",
   startProcessRun: "process_runs",
   updateProcessRun: "process_runs",
   deleteProcessRun: "process_runs",
-  instantiateProcessTasks: "instantiate_process_tasks()",
   listReportTemplates: "report_templates",
   getReportTemplate: "report_templates",
   createReportTemplate: "report_templates",

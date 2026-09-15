@@ -16,7 +16,7 @@ import type { ProcessProperty, PropertyDef } from "./types";
  * THE LAST SENTENCE IS THE HARD HALF, AND IT IS THE POINT
  *
  *   A "property" on this screen has meant a `property_defs` row — configurable, scoped,
- *   attachable to a process through `process_properties`. The current address is not one.
+ *   attachable to a process through a PROPERTY STEP. The current address is not one.
  *   Neither is the council, the owning team, the assignee, the title type, the SharePoint
  *   folder or either completion date: they are **columns on `jobs` and `projects`**. So a
  *   sweep that only looked at `property_defs` would report a clean board while the six
@@ -48,7 +48,7 @@ import type { ProcessProperty, PropertyDef } from "./types";
  *
  * AND WHAT IT CANNOT FIX
  *
- *   `process_properties.property_key` points at `property_defs`. A column has no def, so
+ *   A property step names a `property_defs` row. A column has no def, so
  *   **no process can collect it today** — the attachment has nowhere to hang. That is why
  *   a column reads as `unattachable` rather than as a plain `orphaned`: the first is a
  *   gap somebody can close on this screen, the second needs a decision about whether the

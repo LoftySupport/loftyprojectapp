@@ -358,7 +358,7 @@ const FIXTURE_TASKS: TaskEntry[] = TASK_SHAPES.map(([status, name, dueDate, star
     completedBy: null,
     isExternal: status === "blocked",
     processRunId: i % 2 === 0 ? FIXTURE_RUNS[0].id : null,
-    processTaskId: null,
+    processStepId: null,
     startedAt: startedOn ? `${startedOn}T08:00:00.000Z` : null,
     expectedDays: expectedDays || null,
     atRiskLeadDays: null,

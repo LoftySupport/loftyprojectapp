@@ -65,6 +65,35 @@ the new table. `check.sh` is 83 constraint checks now; CI runs all 21 check scri
 `CLAUDE.md`'s pre-PR list says to run them all after `check:pipeline-order` failed in CI on a
 branch whose four named checks were green.
 
+**Stage 2 is a process as one list of steps, and it is four migrations.** `0128`, on
+`claude/stage2-process-steps` (#105), builds `process_steps`: one ordered list per process with a
+`kind` — property, task, checklist, automation — a CHECK per kind so each carries its own fields
+and not another's, and composite keys that make a parent or a dependency in another process a
+foreign-key violation rather than a trigger's opinion. It backfills 275 steps from the three
+template tables and leaves them standing. `0129` puts the completion gate on it: a run cannot be
+marked complete while a required step is open, with `process_run_step_exemptions` as the recorded
+way past — *not applicable*, with a name on it. `0130` makes a run instantiate its own tasks when
+it starts and close itself when its required steps are answered, which is Amber's walk-through
+steps 2, 6 and 9. `0131`, on `claude/stage2-screens-read-steps`, moves the screens and then drops
+the three template lists: Setup → Processes edits one list instead of two editors that could not
+be interleaved, `useProcessProperties` reads the property steps, and `process_properties`,
+`process_tasks`, `process_task_dependencies` and `process_task_checklist_items` go, along with
+`instantiate_process_tasks` and two guards `process_steps` holds better. `tasks.process_task_id`
+became `tasks.process_step_id` — renamed, not just repointed, because `0128` gave every task step
+the id its template row had and a column named for a table nobody has is a lie that reads as a
+fact. **Nothing of Stage 2 is applied live yet:** #105 and its follow-up have to merge first, and
+they go up in the same sitting.
+
+**A review of `0128`–`0130` found two things that mattered.** The completion gate was `BEFORE
+INSERT`, which meant it never fired on the path the app actually uses — ticking an unstarted
+process inserts a run already complete — so every insert passed while the probe watched the
+update path and reported green; it is `AFTER INSERT OR UPDATE` now, with a probe on each path.
+And the cycle guard on template-task dependencies was not carried across to the steps, so a step
+could wait on itself through a chain; it is carried, with its recursive walk. Stage 2's open
+question, whether task and checklist steps should be required by default, is 0j in
+`docs/open-questions.md` and blocks nothing — they arrived required, which is a reading of *"when
+all process steps are completed"* rather than a copy of anything.
+
 **Stage 0's fourth branch, `claude/stage0-notifications`, is `0125`:** a one-row
 `notification_settings` with the switch-on moment, null until an admin sets it; `private.notify`
 writes every email, Teams and SMS row as skipped before it, and the worker's claim never takes a
