@@ -3907,6 +3907,43 @@ same mechanism as the outward link this entry already describes, pointing the ot
 link opens in a new place rather than expanding in the library, and that is the thing to check is
 acceptable before it is built.
 
+### Corrected 15 September, later: private channels CAN be posted into
+
+**The earlier claim in this entry was wrong, and Amber disproved it by building one.** The
+distinction is the mechanism, and this entry did not make it:
+
+| Route | Private channel? | Runs as |
+| --- | --- | --- |
+| Classic incoming webhook (Office 365 connector) | **No** | The connector |
+| **Power Automate Workflows** — *post to a channel when a webhook request is received* | **Yes** | **The person who created the flow** |
+
+Workflows is what the Teams UI now offers, and it is a flow, not a connector. It posts wherever
+its creator can post. So the argument for standard channels loses its technical half; what remains
+is only that a flow is owned by a person and stops when that person leaves or loses their licence.
+
+**That fragility is the thing to design around, not private channels.** Whoever creates these
+should be one long-lived owner for all of them — ideally a service account — so a broken
+notification path is one thing to fix rather than eleven people's flows to chase.
+
+### The Hub site, and a third way to reach a channel
+
+The SharePoint site is **`https://loftybg.sharepoint.com/sites/loftyhub`**, created 9 September,
+described *"This is for the new Lofty Hub app"*. Its Graph id is
+`loftybg.sharepoint.com,4674d34c-b4e9-4acc-933c-f86860cd0f7e,91bf0626-c255-46f9-a51d-4bc1d870c52d`
+— the whole three-part string is the id, not just the middle guid. Note the tenant is
+**`loftybg`**, not `lofty`.
+
+**Every Teams channel also has its own email address** (General's is a
+`…@au.teams.ms` address). That is a third route to a channel and the only one with no flow behind
+it: the app already needs `Mail.Send`, so emailing a channel needs no webhook, no Power Automate,
+and nothing that breaks when somebody leaves. The cost is formatting — an email rendered as a
+channel post is plainer than an Adaptive Card, and it is slower. Worth holding as the fallback if
+the flows prove fragile, and worth preferring outright if the cards turn out not to matter.
+
+**Webhook URLs are credentials.** They carry a signature that lets the holder post into that
+channel. They belong in Supabase Edge Function secrets and must never be committed here or pasted
+into a chat; two were, on 15 September, and should be regenerated once setup is finished.
+
 ### Open, for Amber
 
 1. **Which mailbox receives forwarded email?** Not the sender, ideally. Not blocking: that step is
