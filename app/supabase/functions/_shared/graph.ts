@@ -37,15 +37,26 @@ const env = (k: string) => Deno.env.get(k) ?? "";
 
 export const GRAPH = "https://graph.microsoft.com/v1.0";
 
-/** Thrown for any non-2xx Graph response, carrying enough to put in an outbox row's error. */
+/**
+ * Thrown for any non-2xx Graph response, carrying enough to put in an outbox row's error.
+ *
+ * The three fields are assigned in the body rather than declared as constructor parameter
+ * properties, which is the shorter form. Parameter properties are TypeScript that has to be
+ * COMPILED, and node's type stripping — what `scripts/register-ts.mjs` relies on, and so
+ * every `npm run check:*` that wants to exercise this code — refuses them outright. One
+ * piece of syntax here decided whether anything under `_shared/` could be checked at all.
+ */
 export class GraphError extends Error {
-  constructor(
-    readonly status: number,
-    readonly body: string,
-    readonly url: string,
-  ) {
+  readonly status: number;
+  readonly body: string;
+  readonly url: string;
+
+  constructor(status: number, body: string, url: string) {
     super(`Graph ${status} on ${url}: ${body.slice(0, 500)}`);
     this.name = "GraphError";
+    this.status = status;
+    this.body = body;
+    this.url = url;
   }
   /** 404 and 409 are answers, not faults: "no folder there yet", "one already". */
   get isNotFound() {
