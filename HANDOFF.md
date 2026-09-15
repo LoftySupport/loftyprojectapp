@@ -70,8 +70,15 @@ somebody save a file from their phone or File Explorer and have it appear in the
   has never run against a real tenant. Team notifications become a **channel webhook per team**;
   personal Teams messages wait on a Teams app. The README now says this instead of implying the
   path works.
-- **Private channels cannot be posted into at all**, and each one gets its own SharePoint site,
-  which would split the library. Hub uses **standard** channels: General plus one per app team.
+- **Nothing new is created in Microsoft.** Amber, 15 September: *"teams for each department are
+  setup already in the organisation and I don't want to double up by creating new teams and
+  sharepoint sites as it is confusing."* So a team's notifications go to **its existing department
+  Team**, Hub's **General** carries the company-wide ones, and the Hub site holds every project and
+  job folder. An earlier draft of this proposed a channel per department inside Hub; that is
+  reversed, because it gave everybody two places to watch. Files are the one exception, and only
+  because a job moves between departments during its life.
+- **Private channels cannot be posted into at all** — no webhooks, connectors or bots. Any
+  department whose nominated channel is private needs a standard one, or email.
 - **Milestones already exist** — `processes.process_is_milestone` (`0078`) plus `stage_completion`
   (`0081`). Amber's "all milestones reached on a job go to general" needs no new definition.
 
@@ -102,11 +109,20 @@ they are.
 
 1. **Deploy `deliver-notifications` for email.** No new code — admin consent and the secrets. Note
    `DELIVER_SECRET` is now required, not optional, or the function refuses everything.
-2. Hub settings and the channel map, with the nightly membership mirror so nobody keeps two lists.
+2. Hub settings and the channel map — eleven rows pointing at **existing** Microsoft teams and
+   channels, with the nightly membership mirror so nobody keeps two lists.
 3. Folders from the templates (`m365_outbox` + `m365-sync`, nothing in a trigger calls out).
 4. Channel posts — **collapsed one per channel, not one per person**, or Design gets six copies of
    everything.
 5. Files on a record, then email onto a job, then Acquisition & Development's linked folder.
+
+### Waiting: Finance becomes Accounts, and it is not in this branch
+
+Amber, 15 September. It is a display name only — `teams.team_name`, the `types.ts` seed list, and
+the label `0026` maps from. **Do not grep for the word.** `process_key = 'finance'` in `0079` is a
+pre-construction process and the `finance` property group beside it is a property group; neither is
+the team. The slug `team_id = 'finance'` stays as it is. Left out of the Microsoft 365 branch on
+purpose so it does not contend for a migration number with the schema work in flight.
 
 ### Not verified in a browser, and not deployed
 

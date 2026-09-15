@@ -2008,33 +2008,61 @@ point. The Hub team's ordinary document library is the answer.
 No new team, no new app registration. The existing Entra registration gains `Sites.Selected` on
 the Hub site, `Mail.Read`, and `GroupMember.Read.All` for the membership mirror.
 
-### Standard channels, because Microsoft refuses to post into a private one
+### No new Teams, no new channels — post where people already are
 
-One **General** channel, and one channel per team the app already has: Acquisition & Development,
-Sales Admin, Pre-Construction Admin, Construction Admin, Design, Scheduling, Estimating,
-Construction, Selections, Maintenance. Lofty General folds into General.
+Amber, 15 September: *"teams for each department are setup already in the organisation and I
+don't want to double up by creating new teams and sharepoint sites as it is confusing."* So the
+app creates nothing in Microsoft except folders:
 
-Private channels were the first instinct and are the wrong tool. Microsoft does not support
-incoming webhooks, connectors or bots in a private channel, and an application permission cannot
-post a channel message outside migration mode — so nothing the app could do would reach one. A
-private channel also gets **its own separate SharePoint site**, which would split the library.
-Since the access rule is everyone sees everything except Acquisition & Development's sensitive
-material, standard channels cost nothing.
+| | Where it goes | Created by this work? |
+|---|---|---|
+| Company-wide notices | **Hub → General** | No — Hub already exists |
+| A team's own notifications | **That department's existing Team**, in the channel they nominate | No |
+| Every project and job folder | **The Hub SharePoint site**, one library | Folders only |
+| A department's own documents | Their own site, untouched | No |
+
+The earlier version of this entry proposed a channel per department **inside Hub**. That is
+reversed: it would have given every person two places to watch — their department Team, where they
+already talk, and a Hub channel carrying the same names. Posting into the Team they already have
+open is the version with one place in it.
+
+**Files are the exception, and only because a job moves.** A job passes through Design, Scheduling,
+Construction and the rest during its life. A folder living in any one department's site would have
+to be moved at every stage change, or sit in the wrong place. So documents are the one thing that
+leaves the department sites: one library on the Hub site, and each department site keeps whatever
+internal material it already holds.
+
+**Mapping, not creating.** Each row in `teams` names an existing Microsoft team and the channel in
+it that should receive notifications. A team with no Microsoft counterpart gets **email only** —
+nothing is invented for it. That is also the answer for Accounts, which Amber confirmed should be
+treated like every other team.
+
+**Finance is renamed Accounts** (Amber, 15 September). It is a display name only: `teams.team_name`
+'Finance' → 'Accounts', the seed list in `types.ts`, and the enum label `0026` maps from. **The slug
+`team_id = 'finance'` stays**, and so does everything else called finance, because
+`process_key = 'finance'` in `0079` is a *pre-construction process*, not the team, and neither is the
+`finance` property group beside it. A rename that greps for the word breaks a process. This is not
+in the Microsoft 365 branch: it belongs with whatever schema work is in flight, so the two do not
+fight over a migration number.
+
+**One limitation to check per channel.** Microsoft does not allow an application to post into a
+*private* channel: incoming webhooks, connectors and bots are all unsupported there. Any department
+whose nominated channel is private needs either a standard channel nominated instead, or email.
 
 **Reversed on the same evidence:** the `teams` channel built in `0083` sends a one-to-one chat via
 `POST /chats/{id}/messages` with an application token. That call is not supported for an
 application and has never been run against a real tenant. Team notifications move to a channel
-webhook per team, which needs no Graph permission; personal Teams messages wait for a Teams app to
-be registered. `deliver-notifications/README.md` now says so rather than implying the path works.
+webhook; personal Teams messages wait for a Teams app to be registered.
+`deliver-notifications/README.md` now says so rather than implying the path works.
 
 ### What posts where
 
-| Event | Channel |
+| Event | Where |
 |---|---|
-| Project created · job moves lifecycle stage · milestone reached | General |
-| Job, project or task allocated to a team | That team's |
-| Allocated to a person, or a comment mentioning them | Their team's, mentioning them |
-| Update at project level | The owning team's |
+| Project created · job moves lifecycle stage · milestone reached | Hub → General |
+| Job, project or task allocated to a team | That team's existing channel |
+| Allocated to a person, or a comment mentioning them | Their team's channel, mentioning them |
+| Update at project level | The owning team's channel |
 
 Every post carries the number, what happened, who did it, and a link to that exact record.
 
@@ -2089,9 +2117,9 @@ from their private space**, never inward from the shared library, so nothing sen
 visible to anyone else. No file syncing between the two — copying documents across would put one
 file in two places.
 
-Open, and worth settling before their channel is used: a standard channel is readable by everyone
-in Hub, so if any of their *notifications* are sensitive, that one channel needs a different answer
-from the other nine.
+This is also tidier now that notifications go to the department's own Team: Acquisition &
+Development's notifications land in *their* Team, whose membership is already theirs, so the
+question of a Hub channel being readable by everybody does not arise.
 
 ### Email onto a job, without creating a thousand of anything
 
@@ -2134,12 +2162,15 @@ Three functions were about to hold three copies of it.
 
 ### Open, for Amber
 
-1. **Does Finance get a channel?** It is an active team in the app and was not on the channel list.
+1. **Which existing Microsoft team, and which channel in it, does each app team map to?** Eleven
+   mappings, Accounts included. Any that are private channels need a standard one, or email.
 2. **What goes inside the project and job templates?** Not a blocker — whatever is in the folder on
    the day is what gets copied.
 3. **Is Acquisition & Development's mirror folder made for every project, or only on request?**
 4. **What is the mailbox called, and can plus addressing be enabled?**
-5. **Is anything posted to the Acquisition & Development channel sensitive?**
+
+Settled on 15 September: no new Teams, channels or sites; files in the Hub library only; Accounts
+(formerly Finance) treated like every other team.
 
 ## Verification
 
