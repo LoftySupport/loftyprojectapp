@@ -909,8 +909,8 @@ export function JobsPage() {
                     derived from the assignee of the earliest open task in its active process,
                     so assigning fifty jobs to somebody would write fifty columns the next task
                     change overwrites. Assign the TASKS — the Tasks board has the same bulk bar
-                    and it writes the fact the job reads. Open question 0l asks whether an
-                    override belongs on a job before Stage 4's handshake lands. */}
+                    and it writes the fact the job reads. Amber answered question 0l on 15
+                    September: the override is Stage 4's handshake, not a control here. */}
               </div>
               {bulkBusy && <Text type="text3" color="secondary">Saving…</Text>}
               {bulkNote.ok && <Result>{bulkNote.ok}</Result>}

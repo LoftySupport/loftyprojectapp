@@ -21,42 +21,6 @@ invent a value, and `CLAUDE.md` is explicit that an invented default is worse th
 
 ## Open — next question first
 
-### 0l. The team and the person on a job are derived now. What happens to the two controls that set them?
-
-**Asked 15 September, while building Stage 3.** Blocks nothing — `0134` is written and not
-applied — but it decides whether two working controls stay on the screen.
-
-**What changed underneath them.** Amber, 14 September: the owning team *"is an assignment
-derived from the active process"* and *"it defaults to the earliest unfinished process in a
-jobs stage"*; and *"'currently with' is the task's assignee, not the job's"* — **whoever holds
-tasks in the active process**. `0134` builds the assignee half. A derived column and an
-editable control on the same field do not coexist: whatever somebody types is overwritten by
-the next task change, and they watched it work.
-
-**The override she asked for is not built.** *"a button next to it that requests control of
-job, eg 'Override Active Team' at which point the active team manager gets a notification that
-can either release the job to the new team or not … this process will need to be added as an
-automation in automations section to be refined."* That is Stage 4. Until it lands there is no
-sanctioned way to move a job to another team by hand.
-
-**What `0134` does meanwhile**, pending this answer: the *Currently with* picker on the job
-record is read-only and the two job-assignee actions are off the Jobs bulk bar. The Tasks board
-keeps its own, which is where the fact now lives. The owning team is untouched — its derivation
-is **not** in `0134`, because taking the team drop-down away without the handshake would leave
-nobody able to move a job at all.
-
-| Option | What it means |
-| --- | --- |
-| **Wait for the handshake** | Both controls stay as they are on the team, the assignee stays read-only, and the Override Active Team request lands in Stage 4 as the one way to move a job. Nothing is lost; the team column keeps being set by hand for a few weeks longer and the derivation waits |
-| **Derive both now, no override** | The team follows the active process immediately and the drop-down goes with the picker. Truthful, and it is what the 14 September answer says — but for those few weeks there is no way at all to move a job to another team, which is the thing the handshake exists to make possible |
-| **Derive both, keep a manager override** | Both derive, and a manager can pin either the way they pin the stage (`0132`). Cheap, consistent with the pin that already exists, and it quietly replaces the request-and-release she designed with a unilateral one |
-
-**Recommendation: wait for the handshake.** The assignee is safe to derive now because the
-Tasks board already has the control that sets it — the fact just moved one record down. The
-team has no such home until Stage 4, so deriving it now removes a capability with nothing
-standing in for it.
-
-
 ### 0j. Is every task inside a process required to finish it?
 
 **Stage 2 needs a value that has never existed.** `process_steps` (`0128`) gives every step a
@@ -597,6 +561,7 @@ decides how much retro-fitting to schedule, and in what order.
 
 | Date | Question | Answer |
 | --- | --- | --- |
+| 15 Sep | Stage 3, question 0l: the owning team and the person on a job derive from the work now. What happens to the two controls that set them? | **Wait for the handshake.** Chosen over *derive both now, no override* and *derive both, keep a manager override*. So `0134` ships as written: the *Currently with* picker on the job record is read-only and the two job-assignee actions are off the Jobs bulk bar, because the Tasks board already holds the control that sets it: assign the task and the job follows. **The owning team is not derived in Stage 3 at all.** Its drop-down stays exactly as it is, set by hand, until the *Override Active Team* request-and-release handshake lands in Stage 4 (14 September: a button that *"requests control of job"*, and *"the active team manager gets a notification that can either release the job to the new team or not"*). **The reason it matters:** deriving the team first would take the only way to move a job to another team off the screen with nothing standing in for it, and a manager pin would quietly replace the request-and-release she designed with a unilateral one. So Stage 4's handshake is what unblocks `job_owning_team`, and until it exists the column stays stored |
 | 15 Sep | Stage 3, question 0k: when every required process on a job is finished, does the job move itself to **Completed**? | **No — it stays put.** Chosen over *yes, it moves to Completed* and *yes, but only where a target completion date is set*. So `job_derived_stage()` returns null when nothing is open anywhere, and the trigger reads that as *no move*, not as *finished*: a manager carries a job to Completed through the confirm modal, which is also where the handover conversation is. **The reason it matters:** a process list that is merely incomplete — a step nobody has added yet, or a stage whose processes are still in SiteBook — reads exactly like a finished job to the derivation, and Completed is expensive to be wrong about. Everything else in Stage 3 derives and moves on its own; this one end of the lifecycle does not. `job_end_date` still stamps when the work is done (14 September), which is a separate fact from the stage |
 | 15 Sep | Stage 1 of the audit: are the process stage groups the data already holds the **sub-stages**, stage by stage? | **"Yes, as the data reads."** Chosen over *rename some of them first* and *Construction's seven are not sub-stages*. So `0127` seeds seventeen rows from the groups themselves: Project Creation and Job Creation; Stage 1, 2 and 3; Footings, Frame, External Cladding, Roof Cover, 2nd Fix, Practical Completion and Handover; 1 Month, 2 Month and 3 Month (her answer of the same day, since Maintenance's one process carried no group); PWA Cancellation and Contract Cancellation. Completed and Closed have none. Two things the yes does **not** cover, both recorded rather than assumed: *Variation* is not a sub-stage under decision 7, so its one process is parked (retired, no sub-stage, never run) until variations are records of their own; and Construction's seven stay the SiteBook placeholder her decision-1 answer describes, carried across mechanically and regrouped by nobody. A correction went with it: `0124`'s header had Roof Cover before External Cladding, and the workbook's process order is the other way round |
 | 15 Sep | The last Stage 0 item: delete `theme/houseIcons.tsx`, `theme/loftyIcons.tsx` and the `NotWired` export, all imported by nothing? (Amber's rule: ask before deleting a file.) | **"Delete all three."** Chosen over *delete the icon modules, keep NotWired* and *keep everything for now*. One correction went with the question: `scripts/build-logo.mjs`, which the audit had counted as dead, generates `src/data/export/logo.ts` for the PDF and Word exports and was only missing from `package.json`; it is wired as `build:logo` rather than deleted. Git keeps the icons |

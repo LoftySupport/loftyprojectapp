@@ -42,7 +42,10 @@
 --   request-and-release handshake (*"Override Active Team"*, the active team's manager
 --   releases it or does not) and parked it into Automations to be refined. Deriving the
 --   column now would silently take away the drop-down people use today, and building the
---   handshake here would be building Stage 4 inside Stage 3. It is question 0l.
+--   handshake here would be building Stage 4 inside Stage 3. That was question 0l, and
+--   Amber answered it on 15 September: **wait for the handshake.** So the team column stays
+--   stored and set by hand until Override Active Team lands in Stage 4, which is what
+--   unblocks it.
 --
 --   **The status.** *"Derived, but a person can override it"*, with On hold as the case no
 --   date maths produces. The override half is clear; the derivation half is not — and it
@@ -75,7 +78,7 @@ as $$
 $$;
 
 comment on function job_active_process(text) is
-  'The process a job is with (0134): the earliest unfinished non-optional job-scoped process of the sub-stage job_open_substage() says it is up to. Null when that sub-stage is finished, or the job is between stages. One question asked of one place — the owning team derivation will read the same function when its override is decided (question 0l).';
+  'The process a job is with (0134): the earliest unfinished non-optional job-scoped process of the sub-stage job_open_substage() says it is up to. Null when that sub-stage is finished, or the job is between stages. One question asked of one place — the owning team derivation will read the same function when Override Active Team lands in Stage 4 (question 0l, answered 15 September: wait for the handshake).';
 
 create or replace function job_derived_assignee(a_job text) returns uuid
 language sql stable

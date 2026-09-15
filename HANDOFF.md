@@ -119,7 +119,8 @@ are deliberately not in it:** the team's override is the *Override Active Team* 
 parked into Stage 4, and taking the drop-down away before it lands would leave nobody able to
 move a job; the status derivation overlapped with health, which `0133` has now taken out of
 `job_status` entirely, so what is left to compute it from is worth asking again. **Question 0l**
-is open on the first of those.
+answered the first of those on 15 September: *wait for the handshake*, so the team drop-down
+stays as it is and Stage 4's Override Active Team is what unblocks the derivation.
 
 **A review of `0131` and the screens found fifteen things, and one was a hole.**
 `instantiate_process_steps` was SECURITY DEFINER and granted to `authenticated` — `0130`

@@ -4739,8 +4739,11 @@ earliest unfinished process in a jobs stage"* — but its override is not: Amber
 request-and-release handshake (*"Override Active Team"*, the active team's manager releases it
 or does not) and parked it into Automations. Deriving the column now would take the team
 drop-down away with nothing standing in for it, and building the handshake here would be
-building Stage 4 inside Stage 3. **Question 0l** puts the choice to her, with *wait for the
-handshake* recommended.
+building Stage 4 inside Stage 3. **Question 0l** put the choice to her and she answered it on
+15 September: **wait for the handshake.** Chosen over deriving both now with no override, and
+over deriving both with a manager pin of the kind `0132` gives the stage, which would have
+replaced the request-and-release she designed with a unilateral one. So the team column stays
+stored and hand-set, and Stage 4's Override Active Team is what unblocks the derivation.
 
 **The status is not here either.** *"Derived, but a person can override it"*, with On hold as
 the case no date maths produces. The override half is clear; the derivation half never was —
