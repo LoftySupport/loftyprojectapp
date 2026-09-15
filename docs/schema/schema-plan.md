@@ -4264,6 +4264,17 @@ carry a real sub-stage id.
 Watched failing with the guard trigger dropped, with the CHECK dropped and with the manager
 write policy dropped, each reporting the one thing it guards.
 
+**Applied live, 15 September**, in the same sitting as #103 merged, recorded in the ledger as
+`the_sub_stages_are_rows`. Seventeen sub-stages; fifty active processes, every one in a sub-stage
+of its own stage; none left without one; `process_stage_group` gone; `process_run_display` still
+eleven rows for eleven runs; *Variation* retired with *"(Retired by 0127: it had no sub-stage to
+move into. Its group was 'Variation'.)"* appended to its description; both probe rows cleaned up;
+and neither guard trigger function executable by `anon` or `authenticated`. No deadlock this time:
+`lock_timeout` was set to five seconds and never needed.
+
+**Stage 1 of the audit is complete.** Stage 2 is next, and the completion gate it carries is what
+Stage 3's derivations stand on.
+
 **One thing it carries that is not its own.** Supabase's advisor flagged
 `guard_lifecycle_stage_shape_change()` the moment `0126` reached the live database: a
 SECURITY DEFINER function with no arguments is published by PostgREST at

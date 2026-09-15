@@ -413,7 +413,7 @@ migration.
 matrix said the stage SLA needs superadmin; `0096` made it a manager's three weeks earlier, and
 the matrix was the stale copy.
 
-**`0127`, `claude/stage1-lifecycle-substages`, #103.** `lifecycle_substages`: uuid key, the stage
+**`0127`, `claude/stage1-lifecycle-substages`, merged as #103 and applied live the same sitting.** `lifecycle_substages`: uuid key, the stage
 it hangs off, a name unique within that stage, a position, `is_active`, stamps. Seventeen rows
 seeded from the groups the data already held, on Amber's *"Yes, as the data reads"*.
 `processes.lifecycle_substage_id` replaces the free-text `process_stage_group`, with a CHECK that
@@ -428,3 +428,10 @@ held on 15 September, and everything else by the (stage, group) join. Anything s
 nowhere to go is parked, retired and named in a notice rather than filed into a plausible block:
 live that is *Variation* alone, which waits until variations are records of their own under
 decision 7.
+
+**Stage 1 is complete.** Both migrations are on `main` and on the live database, and the app reads
+the two tables rather than the pipeline rows and the free text. What Stage 1 does **not** do, said
+plainly so it is not read later as a gap: a job's sub-stage is not derived, the seven stage names
+are still spelled out in `STAGE_NAMES`, the saved views, the record strip and the colour map, and
+`pipelines`, `pipeline_stages`, `job_pipeline_positions` and `job_stage_events` are still there.
+Those are Stage 3's and Stage 5's. **Stage 2, the steps and the completion gate, is next.**

@@ -40,9 +40,30 @@ CHECK and a stage guard in place of the free-text `process_stage_group`;
 `processes.process_is_optional` for Stage 2's completion gate; `process_run_display` rebuilt
 around the sub-stage. Setup → Processes groups and reorders by sub-stage id, so renaming a block
 moves nothing. **A job's** sub-stage is still not derived: that is Stage 3, and it needs Stage
-2's completion gate underneath it. Nine Construction and Acquisition processes are placed by key
+2's completion gate underneath it. **Merged as #103 and applied live on 15 September**, in the
+same sitting: 17 sub-stages, all 50 remaining active processes in a sub-stage of their own stage,
+`process_stage_group` gone, `process_run_display` still 11 rows for 11 runs, *Variation* parked
+with the group it held written into its description, and neither guard trigger function callable
+over the API. **Stage 1 is complete.** Nine Construction and Acquisition processes are placed by key
 because `0079` seeded them with no group at all, and anything left with nowhere to go is parked
 rather than guessed — live that is *Variation* alone, under decision 7.
+
+**A review of that branch found nine things, and two of them mattered.** The backfill matched the
+group text exactly and retired silently whatever it could not place, which on 51 live processes
+(the workbook seeded 49) meant one typo could deactivate a real process and drop the column that
+said where it belonged: the join now folds case and trims, the processes that may be parked are
+named in advance, an unexpected one raises and stops the migration, and a parked process records
+its old group in its own description. And a block moved in Setup moved nothing else, because the
+board's columns and the record drawer still sorted on the process number: both now sort by the
+sub-stage's position first, the same comparison Setup uses. The 8 September argument against a
+position column, further down this file, is marked reversed where it stands. The other seven were
+the screen: a new block landed first rather than last, empty blocks never drew at all (so
+*2 Month* and *3 Month* were unmanageable from the day they were seeded), the reorder arrows
+skipped them, rename and retire existed in the repository and on no screen, a retired name
+collided with a raw database error, the history showed uuids, and `permissions.ts` had no row for
+the new table. `check.sh` is 83 constraint checks now; CI runs all 21 check scripts, and
+`CLAUDE.md`'s pre-PR list says to run them all after `check:pipeline-order` failed in CI on a
+branch whose four named checks were green.
 
 **Stage 0's fourth branch, `claude/stage0-notifications`, is `0125`:** a one-row
 `notification_settings` with the switch-on moment, null until an admin sets it; `private.notify`
