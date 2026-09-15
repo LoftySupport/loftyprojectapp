@@ -156,6 +156,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Fixed
 
+- Two Microsoft endpoints would answer anybody while their secret was unset
 - the workbook import no longer stops at the first community-title job
 - deleting a job removes its report documents again, as it did before 0120
 - A project's new address now carries its live jobs with it. A job still standing at the project's old address follows, keeping its own lot and res numbers, so "Lot 1, 14 Brodie Road" becomes "Lot 1, 28 Corner Street". A job given its own address since its title issued is left alone, as are closed and cancelled jobs.
