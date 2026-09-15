@@ -41,6 +41,15 @@
 --   happened. Named here rather than engineered around, because the alternative — a value per
 --   attempt — is the two-sources failure again.
 --
+-- WHAT IS NOT GATED, AND WHY THAT IS A DECISION RATHER THAN A HOLE
+--
+--   Marking the RUN not applicable is not gated. It is a different answer from marking a step
+--   not applicable: "this process does not apply to this record at all" rather than "this step
+--   does not". It is recorded on the run, it is visible on the record's process list, and
+--   gating it would leave somebody with a process they cannot start, cannot complete and cannot
+--   dismiss. The step-level answer is the honest way past a step; the run-level one is the
+--   honest way past a process.
+--
 -- WHAT THIS DOES
 --
 --   `process_run_step_exemptions`: run, step, reason, who, when. A step marked not applicable.
@@ -91,6 +100,48 @@ create index if not exists task_checklist_items_step_idx on task_checklist_items
 comment on column task_checklist_items.process_step_id is
   'The checklist step this tick came from (0129), so it can count towards its run''s completion. Written by the instantiation from steps; null on anything made before that.';
 
+-- ================================================================== has this been recorded?
+-- ONE ANSWER FOR THE VIEW AND THE GATE. The gate runs as definer and sees every value; the view
+-- runs as invoker so a person sees the runs they may see. Left as two readings of
+-- `property_values`, they disagree for anybody who cannot read a property: the screen says the
+-- step is open, the gate says it is done, and the tick succeeds with no explanation. Both read
+-- this function instead, so the answer is the same on both sides.
+--
+-- WHAT THIS DISCLOSES, SAID PLAINLY: somebody who cannot read a property can still learn whether
+-- it has been recorded. That is the price of a process card that can explain itself, and it is
+-- existence only — never the value, which stays behind `property_values`' own policy.
+--
+-- IT RESOLVES THE RECORD BY THE DEFINITION'S SCOPE. Three seeded property steps name a
+-- definition of the other kind: project_creation and job_creation are project-scoped processes
+-- naming job definitions, and variation is a job-scoped process naming a project definition. A
+-- literal match on the run's own record would never find those values, and marking one required
+-- would make it unsatisfiable for ever — an exemption on every run, which is not what "not
+-- applicable" is for. So a project-scoped definition on a job run reads the job's project.
+create or replace function private.property_is_recorded(
+  p_property_def_key text, p_job_id text, p_project_id integer
+) returns boolean
+language sql stable security definer set search_path = public, pg_temp as $$
+  select exists (
+    select 1
+      from property_defs d
+      left join lateral (
+        select v.property_value_id from property_values v
+         where v.property_def_key = d.property_def_key
+           and ((d.property_def_scope = 'project'
+                 and v.project_id = coalesce(p_project_id, (select j.project_id from jobs j where j.job_id = p_job_id)))
+             or (d.property_def_scope <> 'project' and p_job_id is not null and v.job_id = p_job_id)
+             or (d.property_def_scope <> 'project' and p_job_id is null and v.project_id = p_project_id))
+         limit 1
+      ) hit on true
+     where d.property_def_key = p_property_def_key
+       and hit.property_value_id is not null
+  )
+$$;
+revoke execute on function private.property_is_recorded(text, text, integer) from public, anon, authenticated;
+
+comment on function private.property_is_recorded(text, text, integer) is
+  'Whether a property has a value for this record (0129), resolving by the DEFINITION''S scope so a project-scoped definition named by a job''s process reads the job''s project. The state view and the completion gate both read it, so they cannot disagree about what is outstanding. Existence only: the value itself stays behind property_values'' policy.';
+
 -- ================================================================== the state of every step
 create or replace view process_run_step_state with (security_invoker = true) as
 select
@@ -104,14 +155,12 @@ select
   case
     -- Somebody said it does not apply. That answer wins over anything derived.
     when x.process_run_id is not null then 'not_applicable'
-    -- A property step is done when the record carries the value.
+    -- A property step is done when the record carries the value. Through the helper above, so
+    -- this reads the same on the screen as it does in the gate, and so a definition of the other
+    -- scope resolves to the right record instead of never matching.
     when s.process_step_kind = 'property' then
-      case when exists (
-        select 1 from property_values v
-         where v.property_def_key = s.property_def_key
-           and (v.job_id is not distinct from r.job_id)
-           and (v.project_id is not distinct from r.project_id)
-      ) then 'done' else 'open' end
+      case when private.property_is_recorded(s.property_def_key, r.job_id, r.project_id)
+        then 'done' else 'open' end
     -- A task step is done when the task instantiated from it is done. Cancelled is not done,
     -- and it is not an exemption either: cancelling a task says nothing about whether the step
     -- applies, so the step stays open and somebody has to say which it is.
@@ -176,9 +225,16 @@ begin
 end $$;
 revoke execute on function guard_process_run_completion() from public, anon, authenticated;
 
+-- AFTER, NOT BEFORE, AND THAT IS THE WHOLE POINT. A BEFORE INSERT trigger runs before the row
+-- is in `process_runs`, and the state view's first table IS `process_runs` — so the gate's query
+-- found no steps, `open_steps` came back null, and every INSERT passed. That is not a corner:
+-- `ProcessesPanel.tsx` ticks an unstarted process by inserting its run already complete, which
+-- is every process on every record today, so the gate was bypassed by the one affordance people
+-- use most. An AFTER trigger sees the row; the function only raises or returns, so its return
+-- value being ignored costs nothing.
 drop trigger if exists process_runs_guard_completion on process_runs;
 create trigger process_runs_guard_completion
-  before insert or update of process_run_status on process_runs
+  after insert or update of process_run_status on process_runs
   for each row execute function guard_process_run_completion();
 
 -- ================================================================== who may do what

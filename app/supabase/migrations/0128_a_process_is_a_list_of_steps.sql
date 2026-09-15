@@ -25,7 +25,9 @@
 --   and `tasks.process_task_id`, the provenance column on every instantiated task, still points
 --   at the right row when the old table goes.
 --
---   `process_step_dependencies`: what a step waits on, carried from `process_task_dependencies`.
+--   `process_step_dependencies`: what a step waits on, carried from `process_task_dependencies`,
+--   with its cycle guard carried across too — the composite keys replace the old guard's
+--   same-process half, and the recursive check is the half that has nowhere else to live.
 --
 --   **Nothing is dropped and nothing is rewired.** The three template tables stay, the app goes
 --   on reading them, and `instantiate_process_tasks` goes on working. This migration adds the
@@ -151,6 +153,36 @@ create table if not exists process_step_dependencies (
 );
 create index if not exists process_step_dependencies_depends_on_idx
   on process_step_dependencies (depends_on_process_step_id);
+
+-- THE COMPOSITE KEYS CARRY HALF OF THE OLD GUARD ACROSS, AND THIS IS THE OTHER HALF.
+-- `guard_process_task_dependency` enforced two rules: both ends in the same process, and no
+-- cycles. The keys above say the first better than a trigger can. The second has nowhere else to
+-- live: A waits on B waits on A is storable without it, the 99 edges carried across are acyclic
+-- only because the old guard refused one, and the first screen that writes a dependency could
+-- store one that whatever schedules from it would loop on.
+create or replace function guard_process_step_dependency() returns trigger
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare cycles boolean;
+begin
+  with recursive reachable as (
+    select new.depends_on_process_step_id as t
+    union
+    select d.depends_on_process_step_id
+      from process_step_dependencies d
+      join reachable r on d.process_step_id = r.t
+  )
+  select exists (select 1 from reachable where t = new.process_step_id) into cycles;
+  if cycles then
+    raise exception 'that dependency would make a cycle in the process''s steps'
+      using errcode = '23514';
+  end if;
+  return new;
+end $$;
+revoke execute on function guard_process_step_dependency() from public, anon, authenticated;
+drop trigger if exists process_step_dependencies_guard on process_step_dependencies;
+create trigger process_step_dependencies_guard
+  before insert or update on process_step_dependencies
+  for each row execute function guard_process_step_dependency();
 
 comment on table process_step_dependencies is
   'What a step waits on, within its own process (0128). Carried from process_task_dependencies. The process_id column is not redundant: it is half of the composite key that makes a dependency on another process''s step impossible.';
@@ -308,6 +340,10 @@ begin
 
   -- The kind CHECKs bite. Each of these is a shape the table must refuse.
   select process_id into other_process from processes order by process_key limit 1;
+  if other_process is null then
+    raise notice '0128 proof: no processes on this database, so the kind checks were not exercised.';
+    return;
+  end if;
   begin
     insert into process_steps (process_id, process_step_kind) values (other_process, 'property');
     raise exception '0128 proof: a property step with no property was accepted';
@@ -330,9 +366,14 @@ begin
     raise exception '0128 proof: an automation step that says nothing was accepted';
   exception when check_violation then null;
   end;
+  -- OTHERWISE VALID, deliberately. The first version of this probe used an automation step with
+  -- no automation note, so `process_steps_an_automation_step_says_what_it_does` fired first and
+  -- the probe passed with the constraint it names removed — a check that proves nothing. This
+  -- row is a complete, legal automation step apart from the one column under test.
   begin
-    insert into process_steps (process_id, process_step_kind, process_step_name, process_step_owning_team)
-    values (other_process, 'automation', 'Probe 0128', 'design');
+    insert into process_steps (process_id, process_step_kind, process_step_name,
+                               process_step_automation, process_step_owning_team)
+    values (other_process, 'automation', 'Probe 0128', 'notifies the design team', 'design');
     raise exception '0128 proof: a non-task step took an owning team';
   exception when check_violation then null;
   end;

@@ -792,25 +792,63 @@ BEGIN
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a task step must have a name (0128)';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (task step with no name)', SQLERRM; END;
 
+  -- OTHERWISE VALID, deliberately: an automation step complete in every way except the column
+  -- under test. The first version used a property step with no property, so the property CHECK
+  -- fired first and the probe passed with the constraint it names removed — a check that proves
+  -- nothing, which is the thing this file exists to stop.
   BEGIN
-    INSERT INTO process_steps (process_id, process_step_kind, process_step_owning_team)
-    SELECT process_id, 'property', 'design' FROM processes ORDER BY process_key LIMIT 1;
-    RAISE WARNING 'FAIL: a property step took an owning team';
+    INSERT INTO process_steps (process_id, process_step_kind, process_step_name,
+                               process_step_automation, process_step_owning_team)
+    SELECT process_id, 'automation', 'Constraint probe 0128', 'notifies the design team', 'design'
+      FROM processes ORDER BY process_key LIMIT 1;
+    RAISE WARNING 'FAIL: a non-task step took an owning team';
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  only a task step carries a team or an SLA (0128)';
-    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (property step with a team)', SQLERRM; END;
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (non-task step with a team)', SQLERRM; END;
+
+  -- 0128: a cycle in the steps' dependencies. The composite keys say "same process"; this is the
+  -- half of the old process_task_dependencies guard that had nowhere else to live.
+  DECLARE
+    step_a uuid;
+    step_b uuid;
+    proc_a uuid;
+  BEGIN
+    SELECT d.process_id, d.process_step_id, d.depends_on_process_step_id
+      INTO proc_a, step_a, step_b
+      FROM process_step_dependencies d LIMIT 1;
+    IF step_a IS NULL THEN
+      RAISE NOTICE 'note: no step dependencies, so the cycle probe did not run';
+    ELSE
+      BEGIN
+        INSERT INTO process_step_dependencies (process_id, process_step_id, depends_on_process_step_id)
+        VALUES (proc_a, step_b, step_a);
+        RAISE WARNING 'FAIL: a dependency cycle between two steps was accepted';
+      EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a dependency cycle between steps is refused (0128)';
+        WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (step dependency cycle)', SQLERRM; END;
+    END IF;
+  END;
 
   -- 0128: a parent lives in the same process as its child. Said as a composite key, so a step
   -- of another process is a foreign-key violation rather than a trigger's opinion.
+  -- The parent is nullable, so a null subselect would INSERT successfully and report FAIL for the
+  -- wrong reason — and leak the row. Find the pair first, and say so when there is none.
+  DECLARE
+    other_step uuid;
+    this_proc  uuid;
   BEGIN
-    INSERT INTO process_steps (process_id, process_step_kind, process_step_name, parent_process_step_id)
-    SELECT p.process_id, 'task', 'Constraint probe 0128',
-           (SELECT s.process_step_id FROM process_steps s
-             WHERE s.process_step_kind = 'task' AND s.process_id <> p.process_id LIMIT 1)
-      FROM processes p ORDER BY p.process_key DESC LIMIT 1;
-    RAISE WARNING 'FAIL: a step took a parent in another process';
-  EXCEPTION WHEN foreign_key_violation THEN RAISE NOTICE 'ok  a step''s parent is in its own process (0128)';
-    WHEN not_null_violation THEN RAISE NOTICE 'note: no task step in another process, so the parent probe did not run';
-    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (parent in another process)', SQLERRM; END;
+    SELECT p.process_id INTO this_proc FROM processes p ORDER BY p.process_key DESC LIMIT 1;
+    SELECT s.process_step_id INTO other_step FROM process_steps s
+     WHERE s.process_step_kind = 'task' AND s.process_id <> this_proc LIMIT 1;
+    IF other_step IS NULL THEN
+      RAISE NOTICE 'note: no task step in another process, so the parent probe did not run';
+    ELSE
+      BEGIN
+        INSERT INTO process_steps (process_id, process_step_kind, process_step_name, parent_process_step_id)
+        VALUES (this_proc, 'task', 'Constraint probe 0128', other_step);
+        RAISE WARNING 'FAIL: a step took a parent in another process';
+      EXCEPTION WHEN foreign_key_violation THEN RAISE NOTICE 'ok  a step''s parent is in its own process (0128)';
+        WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (parent in another process)', SQLERRM; END;
+    END IF;
+  END;
   -- 0129: a run does not close over an open required step. The fixture makes its own run so
   -- the probe does not depend on one existing, and marks a property step required first,
   -- because the seed marks none (the live database marks six).
@@ -839,6 +877,25 @@ BEGIN
       EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a run does not close over an open required step (0129)';
         WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (completion gate)', SQLERRM; END;
 
+      -- AND ON THE INSERT PATH, which is the one the app uses most: ticking an unstarted process
+      -- inserts its run already complete. The gate was BEFORE INSERT for one commit, which meant
+      -- the row was not in process_runs yet, the state view found no steps, and every insert
+      -- passed. Nothing here caught that, which is why this probe exists.
+      --
+      -- The in-progress run above goes first: one attempt per process per job, so leaving it
+      -- would make this probe report the unique key rather than the gate.
+      DELETE FROM process_runs WHERE process_run_id = probe_run;
+      BEGIN
+        INSERT INTO process_runs (process_id, job_id, process_run_status, process_run_started_at)
+        VALUES (probe_process, probe_job, 'complete', now());
+        RAISE WARNING 'FAIL: a run was INSERTED complete with an open required step';
+      EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  and it cannot be inserted complete either (0129)';
+        WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (completion gate on insert)', SQLERRM; END;
+
+      -- Put one back for the exemption probe below.
+      INSERT INTO process_runs (process_id, job_id, process_run_status)
+      VALUES (probe_process, probe_job, 'in_progress') RETURNING process_run_id INTO probe_run;
+
       -- And an exemption cannot reach into another process.
       BEGIN
         INSERT INTO process_run_step_exemptions (process_run_id, process_step_id, process_id)
@@ -849,7 +906,13 @@ BEGIN
         WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (exemption across processes)', SQLERRM; END;
 
       DELETE FROM process_runs WHERE process_run_id = probe_run;
-      UPDATE process_steps SET process_step_is_required = false WHERE process_step_id = probe_step;
+      -- Put the flag back to what the row it came from says, not to false: six property rows are
+      -- marked required on the live database, and a probe that flattens one is a probe that
+      -- changes the thing it measures.
+      UPDATE process_steps s SET process_step_is_required = coalesce(
+          (SELECT pp.process_property_required FROM process_properties pp
+            WHERE pp.process_id = s.process_id AND pp.property_def_key = s.property_def_key), false)
+       WHERE s.process_step_id = probe_step;
     END IF;
   END;
 END $$;

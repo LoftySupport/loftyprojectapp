@@ -44,6 +44,14 @@ would hold a process open and the gate would be decoration.
 that does not apply, and it is a fact the record keeps — which is what `0078` already says about a
 run: *"complete with a gap is sometimes the truth"*, recorded rather than assumed.
 
+**The same value was written for checklist lines**, for the same reason and with less evidence:
+no checklist line exists on any database, so nothing was copied and nothing was contradicted. If
+tasks turn out to be optional, checklist lines almost certainly are too, and the answer to this
+question sets both. One thing to know when you answer: a checklist line holds its run open on its
+own, **including a line under a task step somebody has marked not applicable** — the state view
+reads each step by itself and does not look at its parent. That is a sharp edge worth knowing
+about before the first checklist exists, and it is cheap to change while none does.
+
 **Blocked on this:** nothing today. Construction runs in SiteBook and no run exists. It is one
 UPDATE while that stays true, and a conversation with the site team once it does not.
 

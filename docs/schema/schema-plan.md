@@ -4331,9 +4331,17 @@ came from is still there to check it against.
 database carries 140 property rows and the replay 168, and an absolute number would have been
 right on one and a lie on the other: a step per property row, per template task, per checklist
 line and per dependency; every template task has a step of the same id; the nesting count matches;
-every property step's definition exists. `constraints.sql` gains four probes that run every time —
-a property step naming no property, a task step with no name, a property step carrying a team, and
-a parent in another process. Watched failing by dropping each guard in turn.
+every property step's definition exists. `constraints.sql` gains five probes that run every time —
+a property step naming no property, a task step with no name, a non-task step carrying a team, a
+dependency cycle, and a parent in another process.
+
+**A correction, and the reason the rule exists.** The team probe first used a property step with
+no property, so the *property* CHECK fired before the one under test and the probe passed with
+that constraint removed. A review caught it. The probe is now an otherwise-valid automation step,
+complete in every way except the column being tested, so only the named constraint can fire. The
+same review found the **cycle guard missing**: `process_task_dependencies` carried one and the
+composite keys only replace its same-process half, so A waiting on B waiting on A was storable.
+`guard_process_step_dependency` carries the recursive half across.
 
 ### 15 September — a run does not close over an open step (`0129`)
 
@@ -4377,12 +4385,34 @@ house has no retaining wall, and it is recorded with their name.
 back to the step it came from. Nothing writes it until the instantiation moves to steps; there
 are no checklist items on any database today.
 
+**The gate fires AFTER, and that was a real hole.** It was `before insert or update` for one
+commit. A BEFORE INSERT trigger runs before the row is in `process_runs`, and the state view's
+first table *is* `process_runs`, so the query found no steps, `open_steps` came back null, and
+**every insert passed**. That is not a corner: `ProcessesPanel.tsx` ticks an unstarted process by
+inserting its run already complete, which is every process on every record today, so the gate was
+bypassed by the one affordance people use most. A review found it; `constraints.sql` now probes
+the insert path as well as the update path, which is what would have caught it.
+
+**The view and the gate now read one function.** The gate is `security definer` and sees every
+value; the view is `security invoker` so a person sees the runs they may see. Left as two readings
+of `property_values` they disagreed for anybody who cannot read a property: the screen said open,
+the gate said done, and the tick succeeded with no explanation. Both call
+`private.property_is_recorded` instead. **What that discloses, said plainly:** somebody who cannot
+read a property can learn whether it has been recorded — existence only, never the value. That is
+the price of a process card that can explain itself.
+
+**And it resolves the record by the definition's scope.** Three seeded property steps name a
+definition of the other kind — `project_creation` and `job_creation` are project-scoped processes
+naming job definitions, `variation` is a job-scoped process naming a project definition. A literal
+match on the run's own record would never find those values, and marking one required would make
+it unsatisfiable for ever. A project-scoped definition on a job run reads the job's project.
+
 **Proof.** The view answers for every step of a run; a property step with no value reads `open`;
-the gate refuses; an exemption turns it to `not_applicable` and the run closes; an exemption
-cannot name a step of another process. Watched failing by dropping the trigger — a run with an
-open required step was marked complete and the database said nothing. `constraints.sql` gains the
-gate and the cross-process exemption, each with its own fixture so it does not depend on a run
-existing.
+the gate refuses on both the update and the insert path; an exemption turns it to
+`not_applicable` and the run closes; an exemption cannot name a step of another process. Watched
+failing by dropping the trigger — a run with an open required step was marked complete and the
+database said nothing. `rls.sql` proves a user cannot add a step, a manager can, a user *can* mark
+one not applicable and the row carries their name, and counts what each can read.
 
 ### 15 September — a run makes its own tasks, and closes itself (`0130`)
 

@@ -911,8 +911,27 @@ delete from tasks where task_name = 'behaviour probe 0083';
 
 \echo '--- 43. maintenance: warranty from the handover run; a number per job; due and health from the category; the scan does not repeat; mail nobody can match is refused'
 -- Handover completed 40 days ago: inside the settings'' three months.
-insert into process_runs (process_id, job_id, process_run_status, process_run_completed_at)
-select process_id, '9106-002', 'complete', now() - interval '40 days' from processes where process_key = 'handover';
+--
+-- THE LONG WAY ROUND, AND ON PURPOSE. This used to insert the run already complete, which 0129's
+-- gate now refuses: Handover carries 14 required task steps and a run cannot close over an open
+-- one. Marking them all not applicable would get the fixture green and prove nothing, so it runs
+-- the process the way a person would — start it, which makes its tasks (0130), finish them, which
+-- closes it (0130's forward rule) — and only then back-dates the completion. The warranty rule is
+-- what this step is about; that it now needs the real machinery to get there is the point of the
+-- stage.
+insert into process_runs (process_id, job_id, process_run_status)
+select process_id, '9106-002', 'in_progress' from processes where process_key = 'handover';
+update tasks set task_status = 'done'
+ where process_run_id = (select process_run_id from process_runs r join processes p using (process_id)
+                          where p.process_key = 'handover' and r.job_id = '9106-002');
+select case when (select process_run_status from process_runs r join processes p using (process_id)
+                   where p.process_key = 'handover' and r.job_id = '9106-002') = 'complete'
+  then 'ok  finishing the last task closed the Handover run without anybody pressing complete'
+  else 'FAIL: Handover is ' || (select process_run_status from process_runs r join processes p using (process_id)
+                                 where p.process_key = 'handover' and r.job_id = '9106-002') end;
+update process_runs set process_run_completed_at = now() - interval '40 days'
+ where process_run_id = (select process_run_id from process_runs r join processes p using (process_id)
+                          where p.process_key = 'handover' and r.job_id = '9106-002');
 select case when job_is_in_warranty and job_warranty_ends_on = ((now() - interval '40 days')::date + interval '3 months')::date
   then 'ok  job_warranty: handed over 40 days ago, in warranty until handover + 3 months'
   else 'FAIL: job_warranty said in_warranty=' || job_is_in_warranty || ' ends ' || job_warranty_ends_on end
