@@ -4335,6 +4335,55 @@ every property step's definition exists. `constraints.sql` gains four probes tha
 a property step naming no property, a task step with no name, a property step carrying a team, and
 a parent in another process. Watched failing by dropping each guard in turn.
 
+### 15 September — a run does not close over an open step (`0129`)
+
+Stage 2 of the audit, its second migration, on `claude/stage2-process-steps`.
+
+**What completing meant until now: nothing.** Ticking a run complete set `process_run_status`
+and stamped a time. The *"2 required missing"* chip is drawn by `ProcessesPanel.tsx`, which is to
+say a person can read it and the database cannot: 1002-001's *Invoice* run is in progress with
+both its properties blank and nothing will ever say so. Amber, 15 September, chose the database
+over the screen, with *not applicable* on the step as the recorded way past.
+
+**Where a step's state lives, and why it is not a column.** It is derived. Every kind of step
+already has a home for its truth — a property value on the record, the status of the task
+instantiated from the step, the tick on a checklist line — and storing a second copy per run
+would be the two-sources failure `0078` wrote in capitals about properties. So
+`process_run_step_state` is a **view**, and the only thing stored is the one thing nowhere else
+holds: `process_run_step_exemptions`, that somebody decided a step does not apply on this run,
+with their name and their reason.
+
+**The gate.** `guard_process_run_completion` refuses `complete` while any required step reads
+`open`, and names the steps: *"This process still needs: Ordered. Finish them, or mark the ones
+that do not apply to this record as not applicable."* A dead end with no way forward is what
+makes people work around a rule.
+
+**Three things named rather than engineered around.**
+
+- **A second attempt starts with its property steps done.** The value belongs to the record, not
+  to the attempt, so a variation reopening Working Drawings (decision 7) finds the dates already
+  recorded. That is the truth about the house; what the second attempt records is a new value,
+  and the run's own dates say when. A value per attempt would be two sources for one fact again.
+- **A cancelled task does not close its step.** Cancelling says nothing about whether the step
+  applies, so the step stays open until somebody says which it is.
+- **An automation step is `not_tracked`, not done.** It has no state until Stage 4 gives
+  automations a run log, and a step nobody can satisfy would be a gate nobody could pass.
+
+**Who may.** Reading is any active person. Marking a step not applicable is `user` and above —
+the same rung as running the process, because the person doing the job is the one who knows the
+house has no retaining wall, and it is recorded with their name.
+
+**One column arrives early.** `task_checklist_items.process_step_id`, so a tick can be matched
+back to the step it came from. Nothing writes it until the instantiation moves to steps; there
+are no checklist items on any database today.
+
+**Proof.** The view answers for every step of a run; a property step with no value reads `open`;
+the gate refuses; an exemption turns it to `not_applicable` and the run closes; an exemption
+cannot name a step of another process. Watched failing by dropping the trigger — a run with an
+open required step was marked complete and the database said nothing. `constraints.sql` gains the
+gate and the cross-process exemption, each with its own fixture so it does not depend on a run
+existing.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

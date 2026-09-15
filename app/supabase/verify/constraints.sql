@@ -811,5 +811,47 @@ BEGIN
   EXCEPTION WHEN foreign_key_violation THEN RAISE NOTICE 'ok  a step''s parent is in its own process (0128)';
     WHEN not_null_violation THEN RAISE NOTICE 'note: no task step in another process, so the parent probe did not run';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (parent in another process)', SQLERRM; END;
+  -- 0129: a run does not close over an open required step. The fixture makes its own run so
+  -- the probe does not depend on one existing, and marks a property step required first,
+  -- because the seed marks none (the live database marks six).
+  DECLARE
+    probe_job     text;
+    probe_process uuid;
+    probe_step    uuid;
+    probe_run     uuid;
+  BEGIN
+    SELECT job_id INTO probe_job FROM jobs ORDER BY job_id LIMIT 1;
+    SELECT s.process_id, s.process_step_id INTO probe_process, probe_step
+      FROM process_steps s JOIN processes p USING (process_id)
+     WHERE s.process_step_kind = 'property' AND p.process_scope = 'job'
+     ORDER BY p.process_key, s.process_step_position LIMIT 1;
+
+    IF probe_job IS NULL OR probe_step IS NULL THEN
+      RAISE NOTICE 'note: no job or no property step, so the completion gate probe did not run';
+    ELSE
+      UPDATE process_steps SET process_step_is_required = true WHERE process_step_id = probe_step;
+      INSERT INTO process_runs (process_id, job_id, process_run_status)
+      VALUES (probe_process, probe_job, 'in_progress') RETURNING process_run_id INTO probe_run;
+
+      BEGIN
+        UPDATE process_runs SET process_run_status = 'complete' WHERE process_run_id = probe_run;
+        RAISE WARNING 'FAIL: a run with an open required step was marked complete';
+      EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a run does not close over an open required step (0129)';
+        WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (completion gate)', SQLERRM; END;
+
+      -- And an exemption cannot reach into another process.
+      BEGIN
+        INSERT INTO process_run_step_exemptions (process_run_id, process_step_id, process_id)
+        SELECT probe_run, s.process_step_id, probe_process FROM process_steps s
+         WHERE s.process_id <> probe_process LIMIT 1;
+        RAISE WARNING 'FAIL: a step of another process was marked not applicable on this run';
+      EXCEPTION WHEN foreign_key_violation THEN RAISE NOTICE 'ok  an exemption names a step of the run''s own process (0129)';
+        WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (exemption across processes)', SQLERRM; END;
+
+      DELETE FROM process_runs WHERE process_run_id = probe_run;
+      UPDATE process_steps SET process_step_is_required = false WHERE process_step_id = probe_step;
+    END IF;
+  END;
 END $$;
+
 

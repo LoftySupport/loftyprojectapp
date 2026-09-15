@@ -15,6 +15,7 @@ import type {
   ProcessProperty,
   ProcessStep,
   ProcessStepDependency,
+  ProcessRunStepState,
   ProcessStepKind,
   ProcessRun,
   ProcessRunPatch,
@@ -63,6 +64,7 @@ type PropertyProcessMethods = Pick<Repository,
   | "listProcessTasks" | "createProcessTask" | "updateProcessTask" | "deleteProcessTask"
   | "listProcessTaskDependencies" | "setProcessTaskDependencies"
   | "listProcessSteps" | "listProcessStepDependencies"
+  | "listRunStepStates" | "exemptRunStep" | "clearRunStepExemption"
   | "listProcessRuns" | "startProcessRun" | "updateProcessRun" | "deleteProcessRun"
   | "instantiateProcessTasks"
 >;
@@ -521,6 +523,52 @@ export function propertyProcessMethods(client: SupabaseClient): PropertyProcessM
         dependsOnStepId: r.depends_on_process_step_id,
         lagDays: r.process_step_dependency_lag_days
       }));
+    },
+
+    async listRunStepStates(runId?: string): Promise<ProcessRunStepState[]> {
+      let q = client.from("process_run_step_state")
+        .select("process_run_id, process_id, process_step_id, process_step_position, process_step_kind, process_step_is_required, process_step_label, process_run_step_state")
+        .order("process_step_position");
+      if (runId) q = q.eq("process_run_id", runId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data as unknown as {
+        process_run_id: string; process_id: string; process_step_id: string;
+        process_step_position: number; process_step_kind: ProcessStepKind;
+        process_step_is_required: boolean; process_step_label: string;
+        process_run_step_state: ProcessRunStepState["state"];
+      }[]).map(r => ({
+        runId: r.process_run_id,
+        processId: r.process_id,
+        stepId: r.process_step_id,
+        position: r.process_step_position,
+        kind: r.process_step_kind,
+        isRequired: r.process_step_is_required,
+        label: r.process_step_label,
+        state: r.process_run_step_state
+      }));
+    },
+
+    async exemptRunStep(runId: string, stepId: string, reason: string | null): Promise<void> {
+      // The process comes from the run rather than the caller: it is half of both keys, and a
+      // caller that could choose it could point the exemption at another process's step.
+      const { data: run, error: runError } = await client.from("process_runs")
+        .select("process_id").eq("process_run_id", runId).maybeSingle();
+      if (runError) throw runError;
+      if (!run) throw new Error("That run is not there, or you may not see it.");
+      const { error } = await client.from("process_run_step_exemptions").upsert({
+        process_run_id: runId,
+        process_step_id: stepId,
+        process_id: run.process_id,
+        process_run_step_exemption_reason: reason?.trim() || null
+      });
+      if (error) throw error;
+    },
+
+    async clearRunStepExemption(runId: string, stepId: string): Promise<void> {
+      const { error } = await client.from("process_run_step_exemptions").delete()
+        .eq("process_run_id", runId).eq("process_step_id", stepId);
+      if (error) throw error;
     },
 
     async createProcessTask(input: NewProcessTask): Promise<ProcessTask> {

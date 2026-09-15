@@ -2248,6 +2248,27 @@ export interface NewProcessStep {
 
 export type ProcessStepPatch = Partial<Omit<NewProcessStep, "processId" | "kind">>;
 
+/**
+ * `process_run_step_state` — the state of one step on one run (0129).
+ *
+ * Derived, never stored: a property step reads the value on the record, a task step reads the
+ * status of the task instantiated from it, a checklist step reads its tick, and an automation
+ * step has no state until Stage 4 gives automations a run log. The one thing the database does
+ * store is `not_applicable`, because "somebody decided this does not apply here" is a fact
+ * nowhere else holds.
+ */
+export interface ProcessRunStepState {
+  runId: Uuid;
+  processId: Uuid;
+  stepId: Uuid;
+  position: number;
+  kind: ProcessStepKind;
+  isRequired: boolean;
+  /** The step's own name, or its property's label where the step is named by its definition. */
+  label: string;
+  state: "done" | "open" | "not_applicable" | "not_tracked";
+}
+
 /** `process_step_dependencies` — what a step waits on, always inside its own process. */
 export interface ProcessStepDependency {
   processId: Uuid;

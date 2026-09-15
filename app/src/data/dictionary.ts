@@ -1143,6 +1143,18 @@ export const DICTIONARY: DictionaryEntry[] = [
   e("process_task_dependencies.depends_on_process_task_id", "Waits on", "The template task that has to finish first.", "uuid", "Part of the primary key. FK → process_tasks ON DELETE CASCADE.", "—", "created"),
   e("process_task_dependencies.process_task_dependency_lag_days", "Lag days", "\"Handover is 10 days after the PCI walkthrough\" — 93+10 in the schedule.", "integer", "Not null, default 0. CHECK >= 0.", "Copied into task_dependencies.task_dependency_lag_days on instantiation.", "created"),
 
+  // ------------------------------------------------------ process_run_step_state (0129)
+  e("process_run_step_state.process_run_id", "Run", "The run this state is about.", "uuid", "From process_runs.", "The completion gate reads this view, so a screen showing anything else is showing a second opinion.", "created"),
+  e("process_run_step_state.process_step_id", "Step", "The step this state is about.", "uuid", "From process_steps.", "—", "created"),
+  e("process_run_step_state.process_step_label", "Step", "The step's name, or its property's label where the step is named by its definition. What the refusal message lists.", "text", "—", "—", "created"),
+  e("process_run_step_state.process_run_step_state", "State", "done, open, not_applicable or not_tracked. A property step reads the value on the record; a task step reads the status of the task instantiated from it; a checklist step reads its tick; an exemption beats all of them; an automation step is not_tracked until Stage 4 gives automations a run log.", "text", "—", "—", "created"),
+
+  // ------------------------------------------------- process_run_step_exemptions (0129)
+  e("process_run_step_exemptions.process_run_id", "Run", "The run a step was marked not applicable on.", "uuid", "Part of the primary key. Composite FK to process_runs ON DELETE CASCADE.", "—", "created"),
+  e("process_run_step_exemptions.process_step_id", "Step", "The step that does not apply to this record.", "uuid", "Part of the primary key. Composite FK to process_steps ON DELETE CASCADE.", "Read by process_run_step_state, which is what the completion gate reads.", "created"),
+  e("process_run_step_exemptions.process_id", "Process", "Not redundant: it is the half of both keys that makes exempting another process's step impossible.", "uuid", "Not null.", "—", "created"),
+  e("process_run_step_exemptions.process_run_step_exemption_reason", "Reason", "Why it does not apply — \"no retaining wall on this block\". Optional, and worth asking for: the reason is what makes the gap a decision rather than a silence.", "text", "Nullable.", "—", "created"),
+
   // ----------------------------------------------------------------- process_runs (0078)
   e("process_runs.process_run_id", "Run ID", "One process, on one record, one attempt. A job holds many at once — that is the point.", "uuid", "Primary key.", "process_run_display adds the derived dates and health.", "created"),
   e("process_runs.process_id", "Process", "Which process this is a run of.", "uuid", "Not null. FK → processes with NO cascade — a process with runs cannot be deleted, only retired.", "—", "created"),
@@ -1919,6 +1931,10 @@ export const TABLE_DESCRIPTIONS: Record<string, string> = {
     "What has to finish before a process can start (0078) — the graph, as a table, because twenty-one of the schedule's steps have two or more predecessors. The single source of ordering; a trigger refuses a cycle. 48 edges came from the workbook, read from its predecessor and successor columns with copy-pasted and backwards rows refused and listed at the end of 0079.",
   process_properties:
     "Which properties a process collects, in what order, and which must be recorded before it counts as complete (0078). The join is what lets one fact be collected by more than one process, and why a property has no process column of its own.",
+  process_run_step_exemptions:
+    "A step marked not applicable on one run (0129). The only part of a step's state the database stores, because every other part is already recorded where that kind of step keeps its truth — a property value on the record, a task's status, a checklist tick. Amber, 15 September, on where the completion rule lives: in the database, with not applicable as the recorded way past. Writing one is ordinary work at user and above; it carries the name of whoever decided and, ideally, why.",
+  process_run_step_state:
+    "The state of every step of every run (0129), derived rather than stored: done, open, not_applicable or not_tracked. It is what the completion gate reads, so a screen that showed anything else would be showing a second opinion. not_tracked is an automation step, which has no state until Stage 4 gives automations a run log.",
   process_steps:
     "What a process is made of (0128): one ordered list of steps, each of one kind — a property to record, a task to do, a checklist line to tick, an automation to fire. It folds the three template lists into one, because a process meant a property list in Pre-construction and a task list in Construction and nothing could complete either. Backfilled from those tables, which are still there and still read until the screens move; a task step keeps the id its template task had, so an instantiated task still points at the right row when they go.",
   process_step_dependencies:
