@@ -4578,6 +4578,54 @@ it; `0129`'s state view picked up the rename on its own because a view body is a
 rather than text; `ALL_METHODS`, `METHOD_TABLES` and `WIRED` agree with what is implemented;
 no component imports the Supabase client; and the data dictionary regenerates byte-identical.
 
+### 15 September, night — Stage 2 applied live, and a defect in `0130`'s own proof
+
+`0128`–`0131` are on `gmekuqdjemrfuurxhuib`, applied in sequence minutes after #108 merged.
+247 steps (140 property, 107 task, 59 nested), 99 dependencies, all 107 task steps carrying the
+id their template task had, the four template tables gone, `task_display` publishing
+`process_step_id`, the depth guard in place with nothing three deep, and
+**`instantiate_process_steps` back to `SECURITY INVOKER`** — which is the thing `0131` was
+urgent for and the reason nothing went up before it merged. Jobs, runs, tasks and active
+processes are 83, 11, 1 and 50, unchanged; the six required property steps Lofty had marked are
+all still marked.
+
+**How it was checked, and where that is weaker than the practice this file records.** The
+convention since `0119` is a live dry run inside a rolled-back transaction, then the apply. The
+four migrations are 1,448 lines and the tool that reaches the live project takes SQL as a
+literal argument, so a dry run plus an apply means sending the whole set twice. What was done
+instead: every live-data assumption the four proof blocks make was queried first, read-only —
+the four source-table counts, orphaned parents, unknown teams, negative expected days, tasks
+naming a template line with no step, whether `process_steps` already existed, and whether the
+three functions `0131` rewrites were there — and then each migration was applied on its own,
+which is atomic and ends in the proof block that rolls the whole thing back if it disagrees.
+**The one thing lost is that a failed apply leaves a ledger row where a failed dry run leaves
+none.** Recorded here rather than left to be inferred from the ledger.
+
+**What reading them against the live counts caught.** `0130`'s proof block borrows a process's
+`process_step_is_required` flags to exercise the forward rule, and ends with
+`update process_steps set process_step_is_required = false where process_id = a_process`. It
+does not put them back. Three things about that are worth keeping:
+
+1. **On a replay it is invisible**, twice over: the seed marks no property step required, and
+   the block returns early because a replayed database has no jobs. So **this proof has never
+   run in CI**, and the `raise notice` at its end has never been printed by the harness.
+2. **On the live database it runs**, because there are 83 jobs. The process it picks —
+   `attached_lightweight_verandah_engineering`, the first job-scoped process with a property
+   step by key — has two property steps and both are optional, so **nothing was lost.** The
+   defect is real; the impact today is zero. Had the six required flags been in that process
+   rather than another, they would have gone silently.
+3. **The fix captures the flags and puts them back**, and asserts that they came back as they
+   were found rather than trusting the update. Watched failing on a scratch database given one
+   job and three required flags: the merged file takes 3 to 1; the fixed file leaves 3; the
+   fixed file with the restore deleted raises *"0130 proof: the required flags were not put
+   back as they were found"*.
+
+**The general lesson, which is the reason this is a record rather than a commit message:** a
+proof block that writes to template data has to restore it, and a proof block whose first
+statement is `if <the fixture is missing> then return` has to be read as *not proved* rather
+than *proved*. `0129`'s block restores correctly and was the model for the fix; `0130`'s was
+written the same evening and did not.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

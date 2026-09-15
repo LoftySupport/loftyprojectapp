@@ -256,6 +256,13 @@ declare
   a_run     uuid;
   made      integer;
   status    text;
+  -- WHAT THIS PROOF BORROWS, IT PUTS BACK. The flags below are template data on the live
+  -- database — 6 of the 140 property rows are marked required by somebody at Lofty — and the
+  -- first version of this block set the whole process to false when it had finished, which on
+  -- a replay of an empty seed changed nothing and on the live database would have silently
+  -- flattened them. Caught before it was applied, by reading the migration against the live
+  -- counts rather than against the replay.
+  flags     jsonb;
 begin
   select job_id into a_job from jobs order by job_id limit 1;
   if a_job is null then
@@ -308,6 +315,9 @@ begin
    order by p.process_key, s.process_step_position limit 1;
 
   if a_step is not null then
+    select jsonb_object_agg(process_step_id::text, process_step_is_required) into flags
+      from process_steps where process_id = a_process;
+
     update process_steps set process_step_is_required = (process_step_id = a_step)
      where process_id = a_process;
 
@@ -330,7 +340,18 @@ begin
     end if;
 
     delete from process_runs where process_run_id = a_run;
-    update process_steps set process_step_is_required = false where process_id = a_process;
+
+    update process_steps s
+       set process_step_is_required = (flags ->> s.process_step_id::text)::boolean
+     where s.process_id = a_process and flags ? s.process_step_id::text;
+
+    if exists (
+      select 1 from process_steps s
+       where s.process_id = a_process
+         and s.process_step_is_required is distinct from (flags ->> s.process_step_id::text)::boolean
+    ) then
+      raise exception '0130 proof: the required flags were not put back as they were found';
+    end if;
   end if;
 
   raise notice '0130 proof: a run makes its tasks once when it starts, each naming its step, and closes itself when its last required step is answered.';
