@@ -67,6 +67,9 @@ import type {
   ProcessDependency,
   ProcessHistoryEntry,
   ProcessProperty,
+  ProcessStep,
+  ProcessStepDependency,
+  ProcessRunStepState,
   ProcessTask,
   NewProcessTask,
   ProcessTaskPatch,
@@ -840,6 +843,33 @@ export interface Repository {
   /** Replace which properties one process collects, in order, and which are required to complete it. */
   setProcessProperties(processId: string, properties: { propertyKey: string; required: boolean }[]): Promise<ProcessProperty[]>;
   listProcessTasks(processId?: string): Promise<ProcessTask[]>;
+  /**
+   * The steps of one process, or of every process, in position order (0128).
+   *
+   * One list where there were three: the properties a process collects, the template tasks it
+   * instantiates and the checklist lines under those tasks. Nothing on a screen reads this yet
+   * — the screens move in the migration after the one that filled it, and a read method with
+   * no reader is how that move stays a small change rather than a big one.
+   */
+  listProcessSteps(processId?: string): Promise<ProcessStep[]>;
+  /** What each step of a process waits on. */
+  listProcessStepDependencies(processId: string): Promise<ProcessStepDependency[]>;
+  /**
+   * The state of every step of one run (0129), or of every run on a record.
+   *
+   * What the completion gate reads, so a screen showing anything else would be showing a second
+   * opinion. `not_tracked` is an automation step, which has no state until Stage 4.
+   */
+  listRunStepStates(runId?: string): Promise<ProcessRunStepState[]>;
+  /**
+   * Mark a step not applicable on this run, with a reason, or take that back.
+   *
+   * The honest way past a step that does not apply to this record. It is ordinary work — the
+   * person doing the job is the one who knows the house has no retaining wall — and it is
+   * recorded with their name, which is what makes that safe.
+   */
+  exemptRunStep(runId: string, stepId: string, reason: string | null): Promise<void>;
+  clearRunStepExemption(runId: string, stepId: string): Promise<void>;
   createProcessTask(input: NewProcessTask): Promise<ProcessTask>;
   updateProcessTask(id: string, patch: ProcessTaskPatch): Promise<ProcessTask>;
   deleteProcessTask(id: string): Promise<void>;
@@ -1282,6 +1312,11 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "listProcessProperties",
   "setProcessProperties",
   "listProcessTasks",
+  "listProcessSteps",
+  "listProcessStepDependencies",
+  "listRunStepStates",
+  "exemptRunStep",
+  "clearRunStepExemption",
   "createProcessTask",
   "updateProcessTask",
   "deleteProcessTask",
@@ -1505,6 +1540,11 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   listProcessProperties: "process_properties",
   setProcessProperties: "process_properties",
   listProcessTasks: "process_tasks",
+  listProcessSteps: "process_steps",
+  listProcessStepDependencies: "process_step_dependencies",
+  listRunStepStates: "process_run_step_state",
+  exemptRunStep: "process_run_step_exemptions",
+  clearRunStepExemption: "process_run_step_exemptions",
   createProcessTask: "process_tasks",
   updateProcessTask: "process_tasks",
   deleteProcessTask: "process_tasks",

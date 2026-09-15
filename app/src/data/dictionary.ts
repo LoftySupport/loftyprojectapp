@@ -1116,10 +1116,44 @@ export const DICTIONARY: DictionaryEntry[] = [
   e("process_tasks.process_task_position", "Position", "The order within the process.", "integer", "Not null, default 0.", "—", "created"),
   e("process_tasks.process_task_import_ref", "Schedule line", "The schedule's own line number, so \"task 93\" in a conversation can be found.", "integer", "Nullable. Unique with the process where set.", "The seed wires parents and dependencies through it.", "created"),
 
+  // ------------------------------------------------------------------ process_steps (0128)
+  e("process_steps.process_step_id", "Step ID", "One step of a process, of one kind: a property to record, a task to do, a checklist line to tick, an automation to fire. Folds process_properties, process_tasks and process_task_checklist_items into one ordered list, which is what Amber's walk-through of Working Drawings describes.", "uuid", "Primary key. A task step keeps the id its process_tasks row had, so tasks.process_task_id still names it.", "process_step_dependencies hangs off it; tasks are instantiated from the task steps.", "created"),
+  e("process_steps.process_id", "Process", "The process this step belongs to.", "uuid", "Not null. FK → processes ON DELETE CASCADE. Unique with the step id, which is what makes a parent or a dependency in another process impossible.", "—", "created"),
+  e("process_steps.process_step_position", "Position", "The order within the process, across every kind.", "integer", "Not null, default 0. Not unique: a drag renumbers the process 1..n.", "—", "created"),
+  e("process_steps.process_step_kind", "Kind", "property, task, checklist or automation. Which columns mean anything depends on it, and a CHECK per kind says which.", "text", "Not null. CHECK: one of the four.", "—", "created"),
+  e("process_steps.process_step_is_required", "Required", "A run cannot be marked complete while a required step is open (Stage 2 gate). Property steps carry the flag process_properties held; task steps arrived required, which is a reading of Amber's \"when all process steps are completed\" rather than a copy of anything.", "boolean", "Not null, default true.", "—", "created"),
+  e("process_steps.process_step_name", "Step", "What the step says. Null only for a property step, which is named by its definition.", "text", "Nullable, non-blank. CHECK: not null for task, checklist and automation.", "—", "created"),
+  e("process_steps.property_def_key", "Property", "The property a property step collects. The step is the definition: label, format and who may see it all come from property_defs.", "text", "Nullable. FK → property_defs ON UPDATE CASCADE. CHECK: not null for a property step, null for every other kind.", "—", "created"),
+  e("process_steps.process_step_stamps_property_key", "Stamps", "The property a task step writes today's date into when it is ticked — Amber, 15 September: \"when ticked off records the date against the propertry\".", "text", "Nullable. FK → property_defs. CHECK: only a task step may carry it.", "Nothing reads it until the run machinery does.", "created"),
+  e("process_steps.process_step_owning_team", "Team", "Who does a task step. May differ from the process's own team: the Acquisitions approval inside Design's process is the example Amber gave.", "text", "Nullable. FK → teams. CHECK: only a task step may carry it.", "—", "created"),
+  e("process_steps.process_step_expected_days", "Days", "How long a task step should take.", "integer", "Nullable. CHECK >= 0, and only a task step may carry it.", "—", "created"),
+  e("process_steps.process_step_is_external", "External", "A task step waiting on somebody outside Lofty.", "boolean", "Not null, default false. CHECK: false unless a task step.", "—", "created"),
+  e("process_steps.parent_process_step_id", "Parent step", "A checklist line hangs off its task; a sub-task hangs off its task. Always in the same process.", "uuid", "Nullable. Composite FK to (process_id, process_step_id) ON DELETE CASCADE.", "—", "created"),
+  e("process_steps.process_step_automation", "Automation", "What an automation step does, as a note. Stage 4 gives this an effect vocabulary.", "text", "Nullable. CHECK: not null for an automation step.", "—", "created"),
+  e("process_steps.process_step_import_ref", "Schedule line", "Carried from the template task's own line number, so \"task 93\" can still be found.", "integer", "Nullable.", "—", "created"),
+
+  // ----------------------------------------------------- process_step_dependencies (0128)
+  e("process_step_dependencies.process_id", "Process", "The process both ends belong to. Not redundant: it is half of the composite key that makes a dependency on another process's step impossible.", "uuid", "Not null. Part of both foreign keys.", "—", "created"),
+  e("process_step_dependencies.process_step_id", "Step", "The step that waits.", "uuid", "Part of the primary key. Composite FK to process_steps ON DELETE CASCADE. CHECK: not itself.", "—", "created"),
+  e("process_step_dependencies.depends_on_process_step_id", "Waits on", "The step that has to finish first.", "uuid", "Part of the primary key. Composite FK to process_steps ON DELETE CASCADE.", "—", "created"),
+  e("process_step_dependencies.process_step_dependency_lag_days", "Lag days", "\"Handover is 10 days after the PCI walkthrough\". Carried from process_task_dependencies.", "integer", "Not null, default 0. CHECK >= 0.", "—", "created"),
+
   // ---------------------------------------------------- process_task_dependencies (0078)
   e("process_task_dependencies.process_task_id", "Task", "The template task that waits.", "uuid", "Part of the primary key. FK → process_tasks ON DELETE CASCADE. CHECK: not itself.", "Same process as the task it waits on, and no cycles (guard_process_task_dependency).", "created"),
   e("process_task_dependencies.depends_on_process_task_id", "Waits on", "The template task that has to finish first.", "uuid", "Part of the primary key. FK → process_tasks ON DELETE CASCADE.", "—", "created"),
   e("process_task_dependencies.process_task_dependency_lag_days", "Lag days", "\"Handover is 10 days after the PCI walkthrough\" — 93+10 in the schedule.", "integer", "Not null, default 0. CHECK >= 0.", "Copied into task_dependencies.task_dependency_lag_days on instantiation.", "created"),
+
+  // ------------------------------------------------------ process_run_step_state (0129)
+  e("process_run_step_state.process_run_id", "Run", "The run this state is about.", "uuid", "From process_runs.", "The completion gate reads this view, so a screen showing anything else is showing a second opinion.", "created"),
+  e("process_run_step_state.process_step_id", "Step", "The step this state is about.", "uuid", "From process_steps.", "—", "created"),
+  e("process_run_step_state.process_step_label", "Step", "The step's name, or its property's label where the step is named by its definition. What the refusal message lists.", "text", "—", "—", "created"),
+  e("process_run_step_state.process_run_step_state", "State", "done, open, not_applicable or not_tracked. A property step reads the value on the record; a task step reads the status of the task instantiated from it; a checklist step reads its tick; an exemption beats all of them; an automation step is not_tracked until Stage 4 gives automations a run log.", "text", "—", "—", "created"),
+
+  // ------------------------------------------------- process_run_step_exemptions (0129)
+  e("process_run_step_exemptions.process_run_id", "Run", "The run a step was marked not applicable on.", "uuid", "Part of the primary key. Composite FK to process_runs ON DELETE CASCADE.", "—", "created"),
+  e("process_run_step_exemptions.process_step_id", "Step", "The step that does not apply to this record.", "uuid", "Part of the primary key. Composite FK to process_steps ON DELETE CASCADE.", "Read by process_run_step_state, which is what the completion gate reads.", "created"),
+  e("process_run_step_exemptions.process_id", "Process", "Not redundant: it is the half of both keys that makes exempting another process's step impossible.", "uuid", "Not null.", "—", "created"),
+  e("process_run_step_exemptions.process_run_step_exemption_reason", "Reason", "Why it does not apply — \"no retaining wall on this block\". Optional, and worth asking for: the reason is what makes the gap a decision rather than a silence.", "text", "Nullable.", "—", "created"),
 
   // ----------------------------------------------------------------- process_runs (0078)
   e("process_runs.process_run_id", "Run ID", "One process, on one record, one attempt. A job holds many at once — that is the point.", "uuid", "Primary key.", "process_run_display adds the derived dates and health.", "created"),
@@ -1897,6 +1931,14 @@ export const TABLE_DESCRIPTIONS: Record<string, string> = {
     "What has to finish before a process can start (0078) — the graph, as a table, because twenty-one of the schedule's steps have two or more predecessors. The single source of ordering; a trigger refuses a cycle. 48 edges came from the workbook, read from its predecessor and successor columns with copy-pasted and backwards rows refused and listed at the end of 0079.",
   process_properties:
     "Which properties a process collects, in what order, and which must be recorded before it counts as complete (0078). The join is what lets one fact be collected by more than one process, and why a property has no process column of its own.",
+  process_run_step_exemptions:
+    "A step marked not applicable on one run (0129). The only part of a step's state the database stores, because every other part is already recorded where that kind of step keeps its truth — a property value on the record, a task's status, a checklist tick. Amber, 15 September, on where the completion rule lives: in the database, with not applicable as the recorded way past. Writing one is ordinary work at user and above; it carries the name of whoever decided and, ideally, why.",
+  process_run_step_state:
+    "The state of every step of every run (0129), derived rather than stored: done, open, not_applicable or not_tracked. It is what the completion gate reads, so a screen that showed anything else would be showing a second opinion. not_tracked is an automation step, which has no state until Stage 4 gives automations a run log.",
+  process_steps:
+    "What a process is made of (0128): one ordered list of steps, each of one kind — a property to record, a task to do, a checklist line to tick, an automation to fire. It folds the three template lists into one, because a process meant a property list in Pre-construction and a task list in Construction and nothing could complete either. Backfilled from those tables, which are still there and still read until the screens move; a task step keeps the id its template task had, so an instantiated task still points at the right row when they go.",
+  process_step_dependencies:
+    "What a step waits on, inside its own process (0128). Carried from process_task_dependencies. Both ends are held by a composite key that includes the process, so a dependency across processes is a foreign-key violation rather than something a trigger has to notice.",
   process_tasks:
     "The checklist a process instantiates on a record — template tasks with a team and a duration (0078). The Construction schedule's 107 lines live here under their seven processes; its summary lines are parents. Copied into tasks when a run is instantiated, never read at runtime.",
   process_task_dependencies:

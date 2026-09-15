@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-784 properties across 103 tables.
+810 properties across 107 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 735 | In the migration and the types |
+| Created | 761 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -922,6 +922,28 @@ A run with its process and its derived dates (0078): due (start + expected days)
 | `process_run_display.process_run_health` | Health | not_started · no_expectation · on_track · at_risk · overdue · complete · not_applicable — computed from today against the two dates. A run with no expectation reads no_expectation rather than on_track: "on track against nothing" is not a fact. | `view` | — | Derived. | The first real health figure in the app; the drawer, the board filter and the Processes report read it. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `process_run_display.process_run_days_taken` | Days taken | completed_at − started_at, in days, for a finished run. | `view` | — | Null until complete. | The Processes report averages it per process. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
+## `process_run_step_exemptions`
+
+A step marked not applicable on one run (0129). The only part of a step's state the database stores, because every other part is already recorded where that kind of step keeps its truth — a property value on the record, a task's status, a checklist tick. Amber, 15 September, on where the completion rule lives: in the database, with not applicable as the recorded way past. Writing one is ordinary work at user and above; it carries the name of whoever decided and, ideally, why.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `process_run_step_exemptions.process_run_id` | Run | The run a step was marked not applicable on. | `uuid` | — | Part of the primary key. Composite FK to process_runs ON DELETE CASCADE. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `process_run_step_exemptions.process_step_id` | Step | The step that does not apply to this record. | `uuid` | — | Part of the primary key. Composite FK to process_steps ON DELETE CASCADE. | Read by process_run_step_state, which is what the completion gate reads. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `process_run_step_exemptions.process_id` | Process | Not redundant: it is the half of both keys that makes exempting another process's step impossible. | `uuid` | — | Not null. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `process_run_step_exemptions.process_run_step_exemption_reason` | Reason | Why it does not apply — "no retaining wall on this block". Optional, and worth asking for: the reason is what makes the gap a decision rather than a silence. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `process_run_step_state`
+
+The state of every step of every run (0129), derived rather than stored: done, open, not_applicable or not_tracked. It is what the completion gate reads, so a screen that showed anything else would be showing a second opinion. not_tracked is an automation step, which has no state until Stage 4 gives automations a run log.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `process_run_step_state.process_run_id` | Run | The run this state is about. | `uuid` | — | From process_runs. | The completion gate reads this view, so a screen showing anything else is showing a second opinion. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `process_run_step_state.process_step_id` | Step | The step this state is about. | `uuid` | — | From process_steps. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `process_run_step_state.process_step_label` | Step | The step's name, or its property's label where the step is named by its definition. What the refusal message lists. | `text` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `process_run_step_state.process_run_step_state` | State | done, open, not_applicable or not_tracked. A property step reads the value on the record; a task step reads the status of the task instantiated from it; a checklist step reads its tick; an exemption beats all of them; an automation step is not_tracked until Stage 4 gives automations a run log. | `text` | — | — | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
 ## `process_runs`
 
 One process, on one record, one attempt (0078). A job holds many at once — that is the point — and an amendment is a second attempt rather than an overwrite, which is what makes "how often does this repeat" a query. Started and completed are stamped by the database; running a process is ordinary work at user, deleting a run is admin's.
@@ -939,6 +961,38 @@ One process, on one record, one attempt (0078). A job holds many at once — tha
 | `process_runs.process_run_completed_at` | Completed | When the run finished. Stamped on complete, cleared on reopen — a completion time on an open run is a lie. | `timestamptz` | — | Nullable. CHECK: set exactly when status = complete. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `process_runs.process_run_completed_by` | Completed by | Who completed it. | `uuid` | — | Nullable. FK → profiles. Stamped by the database. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `process_runs.process_run_note` | Note | A sentence about this run — why it is waiting, why it is not applicable. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `process_step_dependencies`
+
+What a step waits on, inside its own process (0128). Carried from process_task_dependencies. Both ends are held by a composite key that includes the process, so a dependency across processes is a foreign-key violation rather than something a trigger has to notice.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `process_step_dependencies.process_id` | Process | The process both ends belong to. Not redundant: it is half of the composite key that makes a dependency on another process's step impossible. | `uuid` | — | Not null. Part of both foreign keys. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `process_step_dependencies.process_step_id` | Step | The step that waits. | `uuid` | — | Part of the primary key. Composite FK to process_steps ON DELETE CASCADE. CHECK: not itself. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `process_step_dependencies.depends_on_process_step_id` | Waits on | The step that has to finish first. | `uuid` | — | Part of the primary key. Composite FK to process_steps ON DELETE CASCADE. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `process_step_dependencies.process_step_dependency_lag_days` | Lag days | "Handover is 10 days after the PCI walkthrough". Carried from process_task_dependencies. | `integer` | — | Not null, default 0. CHECK >= 0. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `process_steps`
+
+What a process is made of (0128): one ordered list of steps, each of one kind — a property to record, a task to do, a checklist line to tick, an automation to fire. It folds the three template lists into one, because a process meant a property list in Pre-construction and a task list in Construction and nothing could complete either. Backfilled from those tables, which are still there and still read until the screens move; a task step keeps the id its template task had, so an instantiated task still points at the right row when they go.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `process_steps.process_step_id` | Step ID | One step of a process, of one kind: a property to record, a task to do, a checklist line to tick, an automation to fire. Folds process_properties, process_tasks and process_task_checklist_items into one ordered list, which is what Amber's walk-through of Working Drawings describes. | `uuid` | — | Primary key. A task step keeps the id its process_tasks row had, so tasks.process_task_id still names it. | process_step_dependencies hangs off it; tasks are instantiated from the task steps. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `process_steps.process_id` | Process | The process this step belongs to. | `uuid` | — | Not null. FK → processes ON DELETE CASCADE. Unique with the step id, which is what makes a parent or a dependency in another process impossible. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `process_steps.process_step_position` | Position | The order within the process, across every kind. | `integer` | — | Not null, default 0. Not unique: a drag renumbers the process 1..n. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `process_steps.process_step_kind` | Kind | property, task, checklist or automation. Which columns mean anything depends on it, and a CHECK per kind says which. | `text` | — | Not null. CHECK: one of the four. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `process_steps.process_step_is_required` | Required | A run cannot be marked complete while a required step is open (Stage 2 gate). Property steps carry the flag process_properties held; task steps arrived required, which is a reading of Amber's "when all process steps are completed" rather than a copy of anything. | `boolean` | — | Not null, default true. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `process_steps.process_step_name` | Step | What the step says. Null only for a property step, which is named by its definition. | `text` | — | Nullable, non-blank. CHECK: not null for task, checklist and automation. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `process_steps.property_def_key` | Property | The property a property step collects. The step is the definition: label, format and who may see it all come from property_defs. | `text` | — | Nullable. FK → property_defs ON UPDATE CASCADE. CHECK: not null for a property step, null for every other kind. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `process_steps.process_step_stamps_property_key` | Stamps | The property a task step writes today's date into when it is ticked — Amber, 15 September: "when ticked off records the date against the propertry". | `text` | — | Nullable. FK → property_defs. CHECK: only a task step may carry it. | Nothing reads it until the run machinery does. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `process_steps.process_step_owning_team` | Team | Who does a task step. May differ from the process's own team: the Acquisitions approval inside Design's process is the example Amber gave. | `text` | — | Nullable. FK → teams. CHECK: only a task step may carry it. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `process_steps.process_step_expected_days` | Days | How long a task step should take. | `integer` | — | Nullable. CHECK >= 0, and only a task step may carry it. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `process_steps.process_step_is_external` | External | A task step waiting on somebody outside Lofty. | `boolean` | — | Not null, default false. CHECK: false unless a task step. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `process_steps.parent_process_step_id` | Parent step | A checklist line hangs off its task; a sub-task hangs off its task. Always in the same process. | `uuid` | — | Nullable. Composite FK to (process_id, process_step_id) ON DELETE CASCADE. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `process_steps.process_step_automation` | Automation | What an automation step does, as a note. Stage 4 gives this an effect vocabulary. | `text` | — | Nullable. CHECK: not null for an automation step. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `process_steps.process_step_import_ref` | Schedule line | Carried from the template task's own line number, so "task 93" can still be found. | `integer` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `process_task_checklist_items`
 

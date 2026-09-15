@@ -13,6 +13,10 @@ import type {
   ProcessHistoryEntry,
   ProcessPatch,
   ProcessProperty,
+  ProcessStep,
+  ProcessStepDependency,
+  ProcessRunStepState,
+  ProcessStepKind,
   ProcessRun,
   ProcessRunPatch,
   ProcessRunStatus,
@@ -59,6 +63,8 @@ type PropertyProcessMethods = Pick<Repository,
   | "listProcessProperties" | "setProcessProperties"
   | "listProcessTasks" | "createProcessTask" | "updateProcessTask" | "deleteProcessTask"
   | "listProcessTaskDependencies" | "setProcessTaskDependencies"
+  | "listProcessSteps" | "listProcessStepDependencies"
+  | "listRunStepStates" | "exemptRunStep" | "clearRunStepExemption"
   | "listProcessRuns" | "startProcessRun" | "updateProcessRun" | "deleteProcessRun"
   | "instantiateProcessTasks"
 >;
@@ -495,6 +501,76 @@ export function propertyProcessMethods(client: SupabaseClient): PropertyProcessM
       return (data as unknown as PTaskRow[]).map(toProcessTask);
     },
 
+    async listProcessSteps(processId?: string): Promise<ProcessStep[]> {
+      let q = client.from("process_steps").select(STEP_COLUMNS).order("process_step_position");
+      if (processId) q = q.eq("process_id", processId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data as unknown as StepRow[]).map(toProcessStep);
+    },
+
+    async listProcessStepDependencies(processId: string): Promise<ProcessStepDependency[]> {
+      const { data, error } = await client.from("process_step_dependencies")
+        .select("process_id, process_step_id, depends_on_process_step_id, process_step_dependency_lag_days")
+        .eq("process_id", processId);
+      if (error) throw error;
+      return (data as unknown as {
+        process_id: string; process_step_id: string;
+        depends_on_process_step_id: string; process_step_dependency_lag_days: number;
+      }[]).map(r => ({
+        processId: r.process_id,
+        stepId: r.process_step_id,
+        dependsOnStepId: r.depends_on_process_step_id,
+        lagDays: r.process_step_dependency_lag_days
+      }));
+    },
+
+    async listRunStepStates(runId?: string): Promise<ProcessRunStepState[]> {
+      let q = client.from("process_run_step_state")
+        .select("process_run_id, process_id, process_step_id, process_step_position, process_step_kind, process_step_is_required, process_step_label, process_run_step_state")
+        .order("process_step_position");
+      if (runId) q = q.eq("process_run_id", runId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data as unknown as {
+        process_run_id: string; process_id: string; process_step_id: string;
+        process_step_position: number; process_step_kind: ProcessStepKind;
+        process_step_is_required: boolean; process_step_label: string;
+        process_run_step_state: ProcessRunStepState["state"];
+      }[]).map(r => ({
+        runId: r.process_run_id,
+        processId: r.process_id,
+        stepId: r.process_step_id,
+        position: r.process_step_position,
+        kind: r.process_step_kind,
+        isRequired: r.process_step_is_required,
+        label: r.process_step_label,
+        state: r.process_run_step_state
+      }));
+    },
+
+    async exemptRunStep(runId: string, stepId: string, reason: string | null): Promise<void> {
+      // The process comes from the run rather than the caller: it is half of both keys, and a
+      // caller that could choose it could point the exemption at another process's step.
+      const { data: run, error: runError } = await client.from("process_runs")
+        .select("process_id").eq("process_run_id", runId).maybeSingle();
+      if (runError) throw runError;
+      if (!run) throw new Error("That run is not there, or you may not see it.");
+      const { error } = await client.from("process_run_step_exemptions").upsert({
+        process_run_id: runId,
+        process_step_id: stepId,
+        process_id: run.process_id,
+        process_run_step_exemption_reason: reason?.trim() || null
+      });
+      if (error) throw error;
+    },
+
+    async clearRunStepExemption(runId: string, stepId: string): Promise<void> {
+      const { error } = await client.from("process_run_step_exemptions").delete()
+        .eq("process_run_id", runId).eq("process_step_id", stepId);
+      if (error) throw error;
+    },
+
     async createProcessTask(input: NewProcessTask): Promise<ProcessTask> {
       const { data, error } = await client.from("process_tasks").insert({
         process_id: input.processId,
@@ -762,6 +838,44 @@ const toSubstage = (r: SubstageRow): LifecycleSubstage => ({
 
 type DepRow = { process_id: string; depends_on_process_id: string; process_dependency_lag_days: number };
 type ProcPropRow = { process_id: string; property_def_key: string; process_property_position: number; process_property_required: boolean };
+
+/** `process_steps` (0128): one ordered list per process, of four kinds. */
+const STEP_COLUMNS =
+  "process_step_id, process_id, process_step_position, process_step_kind, process_step_is_required, process_step_name, property_def_key, process_step_stamps_property_key, process_step_owning_team, process_step_expected_days, process_step_is_external, parent_process_step_id, process_step_automation, process_step_import_ref";
+
+type StepRow = {
+  process_step_id: string;
+  process_id: string;
+  process_step_position: number;
+  process_step_kind: ProcessStepKind;
+  process_step_is_required: boolean;
+  process_step_name: string | null;
+  property_def_key: string | null;
+  process_step_stamps_property_key: string | null;
+  process_step_owning_team: string | null;
+  process_step_expected_days: number | null;
+  process_step_is_external: boolean;
+  parent_process_step_id: string | null;
+  process_step_automation: string | null;
+  process_step_import_ref: number | null;
+};
+
+const toProcessStep = (r: StepRow): ProcessStep => ({
+  id: r.process_step_id,
+  processId: r.process_id,
+  position: r.process_step_position,
+  kind: r.process_step_kind,
+  isRequired: r.process_step_is_required,
+  name: r.process_step_name,
+  propertyKey: r.property_def_key,
+  stampsPropertyKey: r.process_step_stamps_property_key,
+  owningTeam: r.process_step_owning_team as ProcessStep["owningTeam"],
+  expectedDays: r.process_step_expected_days,
+  isExternal: r.process_step_is_external,
+  parentId: r.parent_process_step_id,
+  automation: r.process_step_automation,
+  importRef: r.process_step_import_ref
+});
 
 const PTASK_COLUMNS =
   "process_task_id, process_id, parent_process_task_id, process_task_name, process_task_owning_team, process_task_expected_days, process_task_is_external, process_task_position, process_task_import_ref";

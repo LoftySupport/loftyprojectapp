@@ -4285,6 +4285,175 @@ can only be called as triggers"*, watched as the authenticated role, so it is th
 line rather than an open door — but `0126` is applied and cannot be edited, and a third
 migration for one statement is churn, so `0127` revokes both and asserts neither is callable.
 
+### 15 September — a process is a list of steps (`0128`)
+
+Stage 2 of the audit, its first migration, on `claude/stage2-process-steps`.
+
+**What a process held, and why it was two shapes.** `0078` gave a process a list of properties
+to collect; `0079` gave it a list of template tasks. Nothing ever gave it both, and the live
+database says why: the 38 Pre-construction processes carry 140 property rows and no tasks, the
+7 Construction processes carry 107 tasks and no properties. **Zero processes have both.** So a
+*process* meant a property list in one stage and a task list in another, edited on different
+screens, counted by different rules, and completed by neither.
+
+**What it is now.** `process_steps`: one row per step with a `kind` — property, task, checklist,
+automation — and the fields that kind needs, guarded by a CHECK per kind rather than by
+convention. `process_step_dependencies` carries what a step waits on. Backfilled from all three
+template tables: 168 property steps and 107 task steps on the seed replay, 140 and 107 live,
+99 dependencies, no checklist lines because none exist.
+
+**The decision worth keeping: a task step keeps its template task's id.** `tasks.process_task_id`
+is the provenance column on every instantiated task, so reusing the uuid means a task instantiated
+today still names the right row when `process_tasks` goes, and the parent and dependency backfills
+need no mapping table. A step *is* that template task rather than a copy of it.
+
+**Two more, smaller.** A step's position is per process and **not unique**: no process holds both
+kinds, so carrying both numbering schemes across cannot collide, and a unique constraint would make
+a drag write every row twice to get past itself. And a parent or a dependency is held inside its
+process by a **composite key** — `(process_id, process_step_id)` is unique, and both foreign keys
+carry the process — so a step of another process is a foreign-key violation rather than something
+a trigger has to notice.
+
+**The one value that is a reading rather than a copy.** Property steps carry the `required` flag
+`process_properties` held, 6 of 140 live. Template tasks never had one, and the reading that
+follows from Amber's own step 9 — *"when all process steps are completed mark this process
+complete"* — is that a task in the list is work that has to be done, so task steps arrive
+required. It is one UPDATE to change and it is question 0j in
+[`open-questions.md`](../open-questions.md).
+
+**Nothing is dropped and nothing is rewired.** The three template tables stay, the screens go on
+reading them, `instantiate_process_tasks` goes on working, and the new read methods
+(`listProcessSteps`, `listProcessStepDependencies`) have no caller yet. The screens move in the
+next migration and the old tables go in the one after. A backfill is worth more when the thing it
+came from is still there to check it against.
+
+**Proof.** Counts are **relative** to the source tables rather than absolute, because the live
+database carries 140 property rows and the replay 168, and an absolute number would have been
+right on one and a lie on the other: a step per property row, per template task, per checklist
+line and per dependency; every template task has a step of the same id; the nesting count matches;
+every property step's definition exists. `constraints.sql` gains five probes that run every time —
+a property step naming no property, a task step with no name, a non-task step carrying a team, a
+dependency cycle, and a parent in another process.
+
+**A correction, and the reason the rule exists.** The team probe first used a property step with
+no property, so the *property* CHECK fired before the one under test and the probe passed with
+that constraint removed. A review caught it. The probe is now an otherwise-valid automation step,
+complete in every way except the column being tested, so only the named constraint can fire. The
+same review found the **cycle guard missing**: `process_task_dependencies` carried one and the
+composite keys only replace its same-process half, so A waiting on B waiting on A was storable.
+`guard_process_step_dependency` carries the recursive half across.
+
+### 15 September — a run does not close over an open step (`0129`)
+
+Stage 2 of the audit, its second migration, on `claude/stage2-process-steps`.
+
+**What completing meant until now: nothing.** Ticking a run complete set `process_run_status`
+and stamped a time. The *"2 required missing"* chip is drawn by `ProcessesPanel.tsx`, which is to
+say a person can read it and the database cannot: 1002-001's *Invoice* run is in progress with
+both its properties blank and nothing will ever say so. Amber, 15 September, chose the database
+over the screen, with *not applicable* on the step as the recorded way past.
+
+**Where a step's state lives, and why it is not a column.** It is derived. Every kind of step
+already has a home for its truth — a property value on the record, the status of the task
+instantiated from the step, the tick on a checklist line — and storing a second copy per run
+would be the two-sources failure `0078` wrote in capitals about properties. So
+`process_run_step_state` is a **view**, and the only thing stored is the one thing nowhere else
+holds: `process_run_step_exemptions`, that somebody decided a step does not apply on this run,
+with their name and their reason.
+
+**The gate.** `guard_process_run_completion` refuses `complete` while any required step reads
+`open`, and names the steps: *"This process still needs: Ordered. Finish them, or mark the ones
+that do not apply to this record as not applicable."* A dead end with no way forward is what
+makes people work around a rule.
+
+**Three things named rather than engineered around.**
+
+- **A second attempt starts with its property steps done.** The value belongs to the record, not
+  to the attempt, so a variation reopening Working Drawings (decision 7) finds the dates already
+  recorded. That is the truth about the house; what the second attempt records is a new value,
+  and the run's own dates say when. A value per attempt would be two sources for one fact again.
+- **A cancelled task does not close its step.** Cancelling says nothing about whether the step
+  applies, so the step stays open until somebody says which it is.
+- **An automation step is `not_tracked`, not done.** It has no state until Stage 4 gives
+  automations a run log, and a step nobody can satisfy would be a gate nobody could pass.
+
+**Who may.** Reading is any active person. Marking a step not applicable is `user` and above —
+the same rung as running the process, because the person doing the job is the one who knows the
+house has no retaining wall, and it is recorded with their name.
+
+**One column arrives early.** `task_checklist_items.process_step_id`, so a tick can be matched
+back to the step it came from. Nothing writes it until the instantiation moves to steps; there
+are no checklist items on any database today.
+
+**The gate fires AFTER, and that was a real hole.** It was `before insert or update` for one
+commit. A BEFORE INSERT trigger runs before the row is in `process_runs`, and the state view's
+first table *is* `process_runs`, so the query found no steps, `open_steps` came back null, and
+**every insert passed**. That is not a corner: `ProcessesPanel.tsx` ticks an unstarted process by
+inserting its run already complete, which is every process on every record today, so the gate was
+bypassed by the one affordance people use most. A review found it; `constraints.sql` now probes
+the insert path as well as the update path, which is what would have caught it.
+
+**The view and the gate now read one function.** The gate is `security definer` and sees every
+value; the view is `security invoker` so a person sees the runs they may see. Left as two readings
+of `property_values` they disagreed for anybody who cannot read a property: the screen said open,
+the gate said done, and the tick succeeded with no explanation. Both call
+`private.property_is_recorded` instead. **What that discloses, said plainly:** somebody who cannot
+read a property can learn whether it has been recorded — existence only, never the value. That is
+the price of a process card that can explain itself.
+
+**And it resolves the record by the definition's scope.** Three seeded property steps name a
+definition of the other kind — `project_creation` and `job_creation` are project-scoped processes
+naming job definitions, `variation` is a job-scoped process naming a project definition. A literal
+match on the run's own record would never find those values, and marking one required would make
+it unsatisfiable for ever. A project-scoped definition on a job run reads the job's project.
+
+**Proof.** The view answers for every step of a run; a property step with no value reads `open`;
+the gate refuses on both the update and the insert path; an exemption turns it to
+`not_applicable` and the run closes; an exemption cannot name a step of another process. Watched
+failing by dropping the trigger — a run with an open required step was marked complete and the
+database said nothing. `rls.sql` proves a user cannot add a step, a manager can, a user *can* mark
+one not applicable and the row carries their name, and counts what each can read.
+
+### 15 September — a run makes its own tasks, and closes itself (`0130`)
+
+Stage 2 of the audit, its third migration, on `claude/stage2-process-steps`.
+
+**Amber's walk-through, as machinery.** Her steps 2 and 6 — *"A task is created by the system and
+assigned to Design Team manager"*, *"Tasks for Design Teams internal processes are created"* — and
+step 9, *"when all process steps are completed mark this process complete"*. What the app did
+instead: nothing at 2 and 6 until somebody found the **Add checklist** button inside a row's
+disclosure, and nothing at all at 9. Step 11, moving the job on, is Stage 3.
+
+**`instantiate_process_steps(run)`** makes a run's tasks from its process's task steps, with their
+checklist lines, nesting and dependencies, each carrying `process_step_id` so a tick can be
+matched back. It runs **on start** — a trigger, when a run first reaches a status that means work
+has begun — and is idempotent by construction: a run that already has tasks makes none and returns
+zero rather than raising, because the trigger calls it on every start.
+
+**`close_run_if_its_steps_are_done(run)`** is `0129`'s gate read forwards, called from the four
+places a step's state can change: a property value written, a task finished, a checklist line
+ticked, an exemption recorded.
+
+**Three refusals worth keeping.**
+
+- **It never reopens a run.** Clearing the value that closed it does not un-complete it. A
+  completed run is a record of what happened; a second pass is a second attempt (`0078`), which
+  is also what decision 7 says a variation makes. Closing is automatic, reopening has a name on it.
+- **A process with no required step does not close itself.** That would be a no-op with a
+  timestamp rather than a run. Those close by hand, and the gate lets them.
+- **It does not touch the job's stage.** Step 11 is Stage 3, and burying the audit's biggest
+  reversal inside a migration about tasks would be the wrong place to find it later.
+
+**The old function stays.** `instantiate_process_tasks` still reads `process_tasks` and still
+works, for the eleven runs that predate this and have no tasks. It goes with the table.
+
+**Proof.** Watched failing twice: with the start trigger dropped a run began with no tasks, which
+is the state the app has been in since `0079`; with the close trigger dropped, the last required
+step was answered and the run stayed in progress. `behaviour.sql` gains step 46, which walks the
+whole sequence on the fixture job — 16 tasks from 16 task steps, each naming its step, a second
+instantiation making none, the run staying open with a required step open, closing when it is
+answered, and not reopening when that answer is undone.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

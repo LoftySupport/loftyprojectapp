@@ -21,6 +21,41 @@ invent a value, and `CLAUDE.md` is explicit that an invented default is worse th
 
 ## Open — next question first
 
+### 0j. Is every task inside a process required to finish it?
+
+**Stage 2 needs a value that has never existed.** `process_steps` (`0128`) gives every step a
+`required` flag, because the completion gate reads it: a run cannot be marked complete while a
+required step is open. Property steps brought their flag with them — 6 of the 140 rows on the
+live database are marked required, which is what the drawer's *"2 required missing"* chip counts.
+**Template tasks never had one.**
+
+The backfill set task steps to **required**, and that is a reading rather than a copy. It follows
+from your own step 9 of the Working Drawings walk-through: *"Automation/Rule fires that when all
+process steps are completed mark this process complete"*. If every task were optional, nothing
+would hold a process open and the gate would be decoration.
+
+| Option | What it means on the day Construction runs |
+| --- | --- |
+| **Every task is required** (what is built) | *Footings* cannot be marked complete until all 15 of its lines are done or marked not applicable. The gate is real, and a line that does not apply to this house is a recorded decision rather than a silence |
+| Tasks are optional unless ticked required | *Footings* can be completed with lines outstanding, and the ones that matter have to be marked by hand, one by one, on 107 lines |
+| Required only where the schedule has a claim | A third rule nobody has written down yet, and the workbook does not say which lines are claims |
+
+**Recommendation: leave it as built.** *Not applicable* on a step is the honest way past a line
+that does not apply, and it is a fact the record keeps — which is what `0078` already says about a
+run: *"complete with a gap is sometimes the truth"*, recorded rather than assumed.
+
+**The same value was written for checklist lines**, for the same reason and with less evidence:
+no checklist line exists on any database, so nothing was copied and nothing was contradicted. If
+tasks turn out to be optional, checklist lines almost certainly are too, and the answer to this
+question sets both. One thing to know when you answer: a checklist line holds its run open on its
+own, **including a line under a task step somebody has marked not applicable** — the state view
+reads each step by itself and does not look at its parent. That is a sharp edge worth knowing
+about before the first checklist exists, and it is cheap to change while none does.
+
+**Blocked on this:** nothing today. Construction runs in SiteBook and no run exists. It is one
+UPDATE while that stays true, and a conversation with the site team once it does not.
+
+
 ### 0g. Do `0120` and `0122` get applied to the live project, and in that order? *(answered 15 September: yes, and both are applied; see the update at the end and the Answered row)*
 
 **Verified against the live project on 15 September, not assumed:** neither of #88's two

@@ -138,8 +138,16 @@ cd app && for s in $(node -e "console.log(Object.keys(require('./package.json').
 done
 ```
 
-`check:import` and `responsive` need Chromium: in a container that has it under a version
-Playwright does not know, point at it with `LOFTY_CHROMIUM=/opt/pw-browsers/chromium-*/chrome-linux/chrome`.
+**Five of them need Chromium** — `check:import`, `check:builder-dnd`, `check:date-clear`,
+`check:file-drop` and `responsive` — and in a container that has it under a version Playwright
+does not know, they fail with *"Executable doesn't exist"* until you point at it:
+
+```bash
+export LOFTY_CHROMIUM=/opt/pw-browsers/chromium-*/chrome-linux/chrome
+```
+
+That is an environment fault, not a code one: on CI they run in the `browser` job with the
+browser installed.
 
 This was learnt on `0127`: the four lines above were run and green, and CI failed on
 `check:pipeline-order`, which builds its fixtures from the module the change had rewritten.

@@ -137,6 +137,13 @@ select 'lifecycle stages visible: ' || count(*) from lifecycle_stages;
 -- to nobody. Setup → Processes reads these through an embed on `processes`, so a user who
 -- cannot see the rows sees every process in "Not in a sub-stage" and no error at all.
 select 'lifecycle substages visible: ' || count(*) from lifecycle_substages;
+-- 0128 and 0129: the steps of a process, and the state of every step of the runs this person can
+-- see. Counted for the same reason as the line above: the write probes below would pass just as
+-- happily with the read policy tightened to nobody, and a screen reading an empty list shows a
+-- process with no steps rather than an error.
+select 'process steps visible: ' || count(*) from process_steps;
+select 'run step states visible: ' || count(*) || ' (for ' || (select count(*) from process_runs) || ' runs this person can see)'
+  from process_run_step_state;
 
 \echo '--- probes (each must print ok) ---'
 do $$
@@ -199,6 +206,53 @@ begin
   exception
     when insufficient_privilege then raise notice 'ok  a user cannot add a sub-stage (0127)';
     when others then raise warning 'FAIL: unexpected adding a sub-stage at user (%)', sqlerrm;
+  end;
+
+  -- 0128: the steps of a process are the managers' list, the same as the process itself.
+  begin
+    insert into process_steps (process_id, process_step_kind, process_step_name)
+    select process_id, 'task', 'Probe step 0128' from processes order by process_key limit 1;
+    raise warning 'FAIL: a user added a step to a process';
+  exception
+    when insufficient_privilege then raise notice 'ok  a user cannot add a step to a process (0128)';
+    when others then raise warning 'FAIL: unexpected adding a step at user (%)', sqlerrm;
+  end;
+
+  -- 0129: but marking a step not applicable on a RUN is ordinary work, and that asymmetry is
+  -- deliberate — the person on site is the one who knows the house has no retaining wall, and
+  -- the row carries their name. This is also the one user-level write that can unblock a
+  -- completion gate, which is why it is proved rather than assumed.
+  declare
+    probe_run  uuid;
+    probe_step uuid;
+    probe_proc uuid;
+    probe_job  text;
+  begin
+    -- The run is made here rather than found: at this point in the file none exists, and a probe
+    -- that quietly skips is a probe that proves nothing. A property-step process, so starting it
+    -- makes no tasks and closes nothing.
+    select j.job_id into probe_job from jobs j order by j.job_id limit 1;
+    select s.process_id, s.process_step_id into probe_proc, probe_step
+      from process_steps s
+      join processes p using (process_id)
+     where s.process_step_kind = 'property' and p.process_scope = 'job'
+     order by p.process_key, s.process_step_position limit 1;
+    if probe_job is null or probe_step is null then
+      raise notice 'note: no visible job or property step, so the exemption probe did not run';
+    else
+      insert into process_runs (process_id, job_id, process_run_status)
+      values (probe_proc, probe_job, 'in_progress') returning process_run_id into probe_run;
+      insert into process_run_step_exemptions (process_run_id, process_step_id, process_id,
+                                               process_run_step_exemption_reason)
+      values (probe_run, probe_step, probe_proc, 'rls probe: it does not apply here');
+      if (select process_run_step_exemption_created_by from process_run_step_exemptions
+           where process_run_id = probe_run and process_step_id = probe_step) is null then
+        raise warning 'FAIL: an exemption was written with nobody''s name on it';
+      else
+        raise notice 'ok  a user marks a step not applicable, and the row carries their name (0129)';
+      end if;
+      delete from process_runs where process_run_id = probe_run;
+    end if;
   end;
 
   -- 0048: a saved view is private. Two halves, because they are different mechanisms:
@@ -959,6 +1013,17 @@ begin
     delete from lifecycle_substages where lifecycle_substage_name = 'Probe sub-stage 0127 renamed';
     raise notice 'ok  a manager adds, renames and removes a sub-stage (0127)';
   exception when others then raise warning 'FAIL: a manager could not manage a sub-stage (%)', sqlerrm;
+  end;
+
+  -- 0128: and the steps inside a process, which is the same list a manager already owns.
+  begin
+    insert into process_steps (process_id, process_step_kind, process_step_name, process_step_position)
+    select process_id, 'task', 'Probe step 0128', 99 from processes order by process_key limit 1;
+    update process_steps set process_step_name = 'Probe step 0128 renamed'
+     where process_step_name = 'Probe step 0128';
+    delete from process_steps where process_step_name = 'Probe step 0128 renamed';
+    raise notice 'ok  a manager adds, renames and removes a step (0128)';
+  exception when others then raise warning 'FAIL: a manager could not manage a step (%)', sqlerrm;
   end;
 
   -- 5. The column rule, which is a TRIGGER and not a policy — so it only shows at

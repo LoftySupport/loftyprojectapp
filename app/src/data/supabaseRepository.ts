@@ -120,6 +120,8 @@ const WIRED: RepositoryMethod[] = [
   "listProcessDependencies", "setProcessDependencies", "listProcessProperties", "setProcessProperties",
   "listProcessTasks", "createProcessTask", "updateProcessTask", "deleteProcessTask",
   "listProcessTaskDependencies", "setProcessTaskDependencies",
+  "listProcessSteps", "listProcessStepDependencies",
+  "listRunStepStates", "exemptRunStep", "clearRunStepExemption",
   "listProcessRuns", "startProcessRun", "updateProcessRun", "deleteProcessRun", "instantiateProcessTasks",
   "listProjects", "getProject", "listJobs", "getJob", "railCounts",
   "listMyPins", "pinPage", "unpinPage",

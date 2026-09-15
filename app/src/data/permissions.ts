@@ -84,6 +84,12 @@ export const PERMISSION_RULES: readonly PermissionRule[] = [
   { object: "The lifecycle", action: "Add, rename, reorder and retire a stage's sub-stages", needs: "manager",
     enforcedBy: "lifecycle_substages ALL ≥ manager (0127)",
     note: "The blocks inside a stage — Stage 1, Footings, 1 Month — are a manager's to run, where the stages themselves are a superadmin's. Renaming one is data: the processes carry its id, so nothing follows the words. A block with processes in it cannot be deleted (the key restricts) and is not offered for retiring until they are moved." },
+  { object: "Processes", action: "Add, reorder and edit the steps inside a process", needs: "manager",
+    enforcedBy: "process_steps ALL ≥ manager; process_step_dependencies ALL ≥ manager (0128)",
+    note: "The same rung as the process itself: what a process is made of is a definition, and a definition is a manager's. A step's four kinds — a property to record, a task to do, a checklist line, an automation — each carry their own fields, and the database refuses a kind carrying another kind's." },
+  { object: "Processes", action: "Mark a step not applicable on one record", needs: "user",
+    enforcedBy: "process_run_step_exemptions ALL ≥ user (0129)",
+    note: "Deliberately a rung below editing the step. The person doing the job is the one who knows this house has no retaining wall, and this is the only way past the completion gate, so it is recorded with their name and their reason rather than left as a silence. Editing the step for everybody is still the manager's." },
 
   { object: "Comments", action: "Write one", needs: "user", enforcedBy: "comments INSERT ≥ user" },
   { object: "Comments", action: "Edit or delete one", needs: "user",
