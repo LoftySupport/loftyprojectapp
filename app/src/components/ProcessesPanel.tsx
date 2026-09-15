@@ -319,6 +319,13 @@ export function ProcessesPanel({
                         {run && can("user") && !taskCount && (
                           <ChecklistOffer processId={p.id} onCreate={() => act(p.id, () => repo.instantiateProcessTasks(run.id))} busy={rowBusy} />
                         )}
+                        {run && (
+                          <BlockingSteps
+                            run={run}
+                            canEdit={can("user")}
+                            onChanged={() => { setLocalReload(n => n + 1); onChanged?.(); }}
+                          />
+                        )}
                         {props.length > 0 ? (
                           <PropertySlots
                             scope={scope}
@@ -390,6 +397,74 @@ function RunNote({ run, disabled, onSave }: { run: ProcessRun; disabled: boolean
 }
 
 /** Offered only when the process actually has a checklist to copy. */
+/**
+ * What is holding this run open, and the one honest way past it.
+ *
+ * Since `0129` the database refuses to mark a run complete while a required step is open, and a
+ * refusal a screen cannot explain is a dead end: the person ticking the box needs to know which
+ * steps, and that "it does not apply to this house" is an answer they are allowed to give.
+ *
+ * It reads `listRunStepStates`, which is the same view the gate reads — a second opinion computed
+ * in the app would be a second source for one fact, which is the failure this whole stage is
+ * about. Steps that are done are not listed: this is the outstanding list, not an inventory.
+ */
+function BlockingSteps({ run, canEdit, onChanged }: {
+  run: ProcessRun;
+  canEdit: boolean;
+  onChanged: () => void;
+}) {
+  const repo = useRepository();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
+  const { data: states } = useQuery(r => r.listRunStepStates(run.id), [], [run.id, reload]);
+
+  const open = states.filter(st => st.isRequired && st.state === "open");
+  const waived = states.filter(st => st.state === "not_applicable");
+  if (open.length === 0 && waived.length === 0) return null;
+
+  const act = async (stepId: string, fn: () => Promise<void>) => {
+    setBusy(stepId);
+    try { await fn(); setReload(n => n + 1); onChanged(); }
+    finally { setBusy(null); }
+  };
+
+  return (
+    <div className="proc-steps">
+      {open.length > 0 && (
+        <Text type="text3" color="secondary" element="p" ellipsis={false}>
+          {open.length === 1 ? "This process is waiting on one step:" : `This process is waiting on ${open.length} steps:`}
+        </Text>
+      )}
+      <ul className="proc-steplist">
+        {open.map(st => (
+          <li key={st.stepId}>
+            <Text type="text3" element="span">{st.label}</Text>
+            {canEdit && (
+              <Button size="xs" kind="tertiary" disabled={busy === st.stepId}
+                aria-label={`Mark ${st.label} not applicable on this record`}
+                onClick={() => void act(st.stepId, () => repo.exemptRunStep(run.id, st.stepId, null))}>
+                Not applicable
+              </Button>
+            )}
+          </li>
+        ))}
+        {waived.map(st => (
+          <li key={st.stepId} className="is-waived">
+            <Text type="text3" color="secondary" element="span">{st.label} — not applicable</Text>
+            {canEdit && (
+              <Button size="xs" kind="tertiary" disabled={busy === st.stepId}
+                aria-label={`${st.label} does apply after all`}
+                onClick={() => void act(st.stepId, () => repo.clearRunStepExemption(run.id, st.stepId))}>
+                It does apply
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function ChecklistOffer({ processId, onCreate, busy }: { processId: string; onCreate: () => void; busy: boolean }) {
   const { data: templates } = useQuery(r => r.listProcessTasks(processId), [], [processId]);
   if (templates.length === 0) return null;

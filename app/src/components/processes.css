@@ -91,6 +91,13 @@ textarea.pf-input { height: auto; padding: var(--space-4) var(--space-8); line-h
 .proc-stage.is-current[open] > summary { border-bottom: 1px solid var(--layout-border-color); }
 .proc-list { margin: 0; padding: 0 var(--space-12) var(--space-8); list-style: none; }
 .proc-row { padding: var(--space-8) 0; border-top: 1px dashed var(--layout-border-color); }
+
+/* What is holding a run open (0129). A list, not a set of cards: these are the lines a person
+   reads and then acts on one of, and the action sits on the line it belongs to. */
+.proc-steps { margin: var(--space-8) 0; }
+.proc-steplist { list-style: none; margin: var(--space-4) 0 0; padding: 0; }
+.proc-steplist li { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; padding: var(--space-4) 0; }
+.proc-steplist li.is-waived { opacity: 0.75; }
 .proc-row-head { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; }
 /* The tick that marks a process off. 18px rather than the browser default 13: it is the
    control on this row people reach for most, and the 24px tap target the responsive
