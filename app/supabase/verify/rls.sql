@@ -102,6 +102,21 @@ end $$;
 update profiles set profile_permission = 'user'
  where profile_email = 'behaviour-test@lofty.com.au';
 
+-- 0123 rewrote "read own login_activity" into the once-per-query form. The probe inside the
+-- block below asserts that a `user` sees none of anybody else's sign-ins; this asserts, as the
+-- owner, that there ARE other people's sign-ins to hide — behaviour.sql's signin-test account —
+-- because a count of zero over an empty table would prove nothing.
+do $$
+declare
+  others int;
+begin
+  select count(*) into others from login_activity
+   where login_activity_email is distinct from 'behaviour-test@lofty.com.au';
+  if others = 0 then
+    raise warning 'FAIL: no other person''s sign-in is planted — the login_activity probe below would prove nothing';
+  end if;
+end $$;
+
 \echo '=== a signed-in ACTIVE person, at permission level `user` ==='
 set role authenticated;
 set request.jwt.claim.sub = :'uid';
@@ -625,6 +640,22 @@ begin
     end if;
   exception when others then raise warning 'FAIL: unexpected on ordinary update (%)', sqlerrm;
   end;
+
+  -- 0123: "read own login_activity" in the once-per-query form. The boundary must not have
+  -- moved: at `user`, another person's sign-ins are invisible. That there are some to hide
+  -- was asserted as the owner, above. Watched failing with the policy set to `using (true)`.
+  declare
+    others_logins int;
+  begin
+    select count(*) into others_logins from login_activity
+     where login_activity_email is distinct from 'behaviour-test@lofty.com.au';
+    if others_logins = 0 then
+      raise notice 'ok  login_activity: another person''s sign-ins are invisible at user (0123)';
+    else
+      raise warning 'FAIL: a user read % of other people''s login_activity rows', others_logins;
+    end if;
+  exception when others then raise warning 'FAIL: unexpected on login_activity read (%)', sqlerrm;
+  end;
 end $$;
 reset role;
 
@@ -937,6 +968,22 @@ do $$
 declare
   edited int;
 begin
+  -- 0123: the other half of "read own login_activity". An admin reads everyone's sign-ins,
+  -- so the `(select current_permission())` branch is exercised too, not only the own-row one.
+  -- Watched failing with the admin branch removed from the policy.
+  declare
+    others_logins int;
+  begin
+    select count(*) into others_logins from login_activity
+     where login_activity_email is distinct from 'behaviour-test@lofty.com.au';
+    if others_logins > 0 then
+      raise notice 'ok  login_activity: an admin reads other people''s sign-ins (0123)';
+    else
+      raise warning 'FAIL: an admin read none of other people''s login_activity rows';
+    end if;
+  exception when others then raise warning 'FAIL: unexpected on admin login_activity read (%)', sqlerrm;
+  end;
+
   -- The half an admin DOES have: the words. Probed first, because if this fails the next
   -- probe's refusal would prove nothing — a refusal is only interesting when the policy
   -- it sits behind is passing.

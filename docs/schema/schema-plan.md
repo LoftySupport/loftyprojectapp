@@ -3577,6 +3577,41 @@ exist live yet, and the delete-rule half is a no-op there (live still reads plai
 `ON DELETE CASCADE`). The half that *is* missing live is `on update cascade` — which only
 matters once `0120` lands. The order to apply them in is `0120` then `0122`, together.
 
+### 15 September — the advisors' housekeeping: a backup, six indexes and one policy (`0123`)
+
+The second Stage 0 branch from the audit, `claude/stage0-hygiene`. Three advisor findings, no
+change to the model, and the one decision it needed was Amber's on 15 September: *"Yes, drop
+it"*.
+
+**The backup.** `private.profiles_backup_pre_batch3` was a hand-made copy of `profiles` from
+16 August, in the pre-rename column names: 47 rows then, and `profiles` has 47 now. RLS off,
+nothing reading it, never in a migration, so no rebuild ever had it. The security advisor called
+it critical for what it held rather than for who could reach it, since `private` is not exposed
+through the API. Dropped, `if exists`, because the replay has nothing to drop.
+
+**Six indexes**, on the foreign keys of the tables the process rebuild writes into, each a
+column rows are looked up by: `notifications.notification_type_id`,
+`process_runs.process_run_waiting_on`, `property_values.property_value_profile_id`,
+`report_documents.report_template_id`, `report_documents.report_document_published_document_id`
+and `tasks.process_task_id`. Row counts on the day were 4, 11, 32, 8, 8 and 1, so nothing was
+slow and no index here can be watched making anything faster. They exist because the FK check
+on a parent's delete scans the child without one, and because an index on an empty table costs
+nothing where the same index on a full table later takes a lock. The hundred-odd `*_by` columns
+to `profiles` stay unindexed on purpose: stamped and read with the row, never searched, and a
+profile is deactivated rather than deleted.
+
+**The policy.** `"read own login_activity"` was the one policy left with a bare `auth.uid()` and
+`current_permission()`, evaluated per row; `0049` already used `(select …)` on `profiles`.
+Rewritten in that form: same rows to the same people. `rls.sql` proves it at `user`, none of
+another person's sign-ins visible, and first asserts as the owner that another person's sign-ins
+exist to be hidden.
+
+**Watched failing** before it was applied, live: the backup present, zero of six indexes, the
+policy's expression carrying the bare call. **Dry-run live** in a rolled-back transaction the
+same afternoon: the file applies, its proof passes, and the rollback was checked to have held
+(47 backup rows, no new index, the old policy text). Not applied live by the branch: it drops a
+table, so the moment is Amber's call.
+
 ## 15 September — Microsoft 365: one home each, and a window onto it
 
 Lofty has created a Microsoft Team called **Hub** with its own SharePoint site, and it is the
