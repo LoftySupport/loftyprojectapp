@@ -3436,7 +3436,7 @@ export function createSupabaseRepository(): Repository {
           property_def_owning_team: input.teamId || null,
           property_def_format: input.format,
           property_def_required: input.required ?? false,
-          property_def_automation: emptyToNull(input.automation),
+          property_def_group: emptyToNull(input.group),
           property_def_position: input.position ?? 0,
           ...(input.restricted != null ? { property_def_restricted: input.restricted } : {}),
           ...(input.createLevel ? { property_def_create_level: input.createLevel } : {}),
@@ -3460,7 +3460,7 @@ export function createSupabaseRepository(): Repository {
       if ("teamId" in patch) row.property_def_owning_team = patch.teamId || null;
       if ("format" in patch) row.property_def_format = patch.format;
       if ("required" in patch) row.property_def_required = patch.required;
-      if ("automation" in patch) row.property_def_automation = emptyToNull(patch.automation);
+      if ("group" in patch) row.property_def_group = emptyToNull(patch.group);
       if ("position" in patch) row.property_def_position = patch.position;
       if ("restricted" in patch) row.property_def_restricted = patch.restricted;
       if ("createLevel" in patch) row.property_def_create_level = patch.createLevel;
@@ -4480,7 +4480,7 @@ function toDictOverride(r: DictOverrideRow): DictionaryOverride {
 }
 
 const PROPERTY_DEF_COLUMNS =
-  "property_def_key, property_def_label, property_def_scope, property_def_stage, property_def_owning_team, property_def_format, property_def_required, property_def_automation, property_def_position, property_def_restricted, property_def_create_level, property_def_read_level, property_def_update_level, property_def_delete_level, property_def_sla_days, property_def_is_active, property_def_description, property_def_import_ref, teams!property_defs_property_def_owning_team_fkey(team_name)";
+  "property_def_key, property_def_label, property_def_scope, property_def_stage, property_def_owning_team, property_def_format, property_def_required, property_def_group, property_def_position, property_def_restricted, property_def_create_level, property_def_read_level, property_def_update_level, property_def_delete_level, property_def_sla_days, property_def_is_active, property_def_description, property_def_import_ref, teams!property_defs_property_def_owning_team_fkey(team_name)";
 
 type PropertyDefRow = {
   property_def_key: string;
@@ -4490,7 +4490,7 @@ type PropertyDefRow = {
   property_def_owning_team: TeamId | null;
   property_def_format: PropertyDef["format"];
   property_def_required: boolean;
-  property_def_automation: string | null;
+  property_def_group: string | null;
   property_def_position: number;
   property_def_restricted: boolean;
   property_def_create_level: PermissionLevel;
@@ -4514,7 +4514,7 @@ function toPropertyDef(r: PropertyDefRow): PropertyDef {
     teamName: r.property_def_owning_team ? (r.teams?.team_name ?? r.property_def_owning_team) : null,
     format: r.property_def_format,
     required: r.property_def_required,
-    automation: r.property_def_automation ?? undefined,
+    group: r.property_def_group ?? undefined,
     position: r.property_def_position,
     restricted: r.property_def_restricted,
     createLevel: r.property_def_create_level,
