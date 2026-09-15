@@ -4016,6 +4016,11 @@ made is not a default; Amber's 25 rows, all off, stay as she set them. The colum
 `{in_app}`, so a type added later starts the same way. The proof asserts both halves: no type
 defaults to an external channel, and no active type has lost in-app.
 
+**Applied live on 15 September** minutes after PR #98 merged; the proof block passed on the live
+database. Checked afterwards: the ledger carries it, the switch-on is null, the outbox reads
+in_app sent 4 and email skipped 4 with the reason on each, every type defaults to in-app only,
+and Amber's own 25 preference rows are as she left them. Stage 0 is complete once #99 merges.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in
