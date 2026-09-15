@@ -31,8 +31,9 @@ writes every email, Teams and SMS row as skipped before it, and the worker's cla
 row written before it. The four rows waiting since 12 September are skipped. In-app is not
 gated. Setup → Notifications shows the state. The one question on it, whether *"all off by
 default"* includes in-app, Amber answered the same afternoon: *"External off, in-app stays on"*,
-so every type keeps in-app and loses email from its defaults. Not applied live yet: apply it in
-the same sitting as the merge. **The fifth and last Stage 0 branch, `claude/stage0-dead-code`,**
+so every type keeps in-app and loses email from its defaults. **Applied live on 15 September**
+minutes after #98 merged: the ledger carries it, the switch-on row exists and is null, the four
+waiting rows read skipped, and all fifteen types default to in-app only. **The fifth and last Stage 0 branch, `claude/stage0-dead-code`,**
 removes the two icon modules and the `NotWired` export on Amber's *"Delete all three"*, and wires
 `build-logo.mjs` as `npm run build:logo` instead of deleting it: the audit had counted it as dead,
 and it generates the logo module the PDF and Word exports import.
