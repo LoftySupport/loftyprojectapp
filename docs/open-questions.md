@@ -21,6 +21,34 @@ invent a value, and `CLAUDE.md` is explicit that an invented default is worse th
 
 ## Open — next question first
 
+### 0g. Do `0120` and `0122` get applied to the live project, and in that order?
+
+**Verified against the live project on 15 September, not assumed:** neither of #88's two
+migrations is applied there. The ledger reports NEITHER IS APPLIED for
+`a_community_title_job_shows_a_c` and `the_date_the_slas_say`, `job_number()` does not exist
+live, and no job carries a `c`.
+
+That changes what each of them means today:
+
+| | State live, 15 September |
+| --- | --- |
+| `0120` — a community title job carries a `c` | Not applied. So live jobs are all plain `1004-003`, and the rename-carries-its-children machinery is not there |
+| `0122` — the importer reads the job id back | Not applied, and **the bug it fixes does not exist live yet**, because it only appears once `0120` gives a job a suffix |
+| `report_documents_job_id_fkey` | Live reads plain `ON DELETE CASCADE` with **no `ON UPDATE CASCADE`**. So `0122`'s delete-rule half is a no-op live, and the update half is genuinely missing |
+
+**Why the order matters.** Applying `0120` alone puts the live database in exactly the broken
+state `main` was in: community-title jobs get a `c`, and the next workbook load stops at the
+first one. Applying `0122` alone does nothing useful. They go together, `0120` first.
+
+**Recommendation: apply both, together, before Phase B.** The import is what they block, and
+the import is the next thing. Nothing depends on holding them back.
+
+**Blocked on this:** Phase B, the workbook load. Also `check.sh` against live, which cannot
+tell the truth about a rename rule that is only in the repository.
+
+**Also needed before either can be applied:** the Supabase connector needs re-authorising in
+this session — it is asking for it again, so nothing can be applied from here until it is.
+
 ### 0f. When a job number changes, should the old one stay findable?
 
 `0120` made the job number move: mark a job community title and `1004-003` becomes
