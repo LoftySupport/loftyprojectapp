@@ -118,6 +118,13 @@ begin
 end $$;
 
 \echo '=== a signed-in ACTIVE person, at permission level `user` ==='
+-- 0135: an automation id, read by the OWNER before the role switch. Selecting it inside the
+-- user block would return nothing the moment the READ policy is what is broken, the insert
+-- would write zero rows without raising, and the log probe would report a pass for the wrong
+-- reason — which is what it did the first time it was run against a dropped read policy.
+select set_config('lofty.an_automation',
+  coalesce((select automation_id::text from automations order by automation_key limit 1), ''), false);
+
 -- 0132: pinned before the role switch, by the owner, so the reason probe below is not
 -- vacuous. A reason on an unpinned job is refused by a CHECK before the guard is reached,
 -- so a probe that ran on one would go on passing with the guard dropped.
@@ -225,6 +232,40 @@ begin
     when insufficient_privilege then raise notice 'ok  a user cannot add a step to a process (0128)';
     when others then raise warning 'FAIL: unexpected adding a step at user (%)', sqlerrm;
   end;
+
+  -- 0135: the registry is a description of what the app already does, so everybody active
+  -- reads it; changing one is a manager's; and NOBODY writes the log, because a person who
+  -- could write it could write a history that did not happen.
+  declare seen int;
+  begin
+    select count(*) into seen from automations;
+    if seen >= 18 then raise notice 'ok  a user reads the automations registry (% rows) (0135)', seen;
+    else raise warning 'FAIL: a user read % automations, expected the eighteen', seen; end if;
+  exception when others then raise warning 'FAIL: unexpected reading automations at user (%)', sqlerrm; end;
+
+  declare touched int;
+  begin
+    update automations set automation_is_active = false where automation_key = 'notify_scan';
+    get diagnostics touched = row_count;
+    if touched = 0 then raise notice 'ok  a user cannot switch an automation off (0135)';
+    else raise warning 'FAIL: a user switched an automation off (% row)', touched; end if;
+  exception when insufficient_privilege then raise notice 'ok  a user is refused the automations registry outright (0135)';
+    when others then raise warning 'FAIL: unexpected writing automations at user (%)', sqlerrm; end;
+
+  -- The id comes from a setting read before the role switch. Selecting it here would return
+  -- nothing the moment the READ policy is the thing that is broken, the insert would write
+  -- zero rows without raising, and the probe would report a pass for the wrong reason —
+  -- which is exactly what it did the first time it was run against a widened read policy.
+  declare the_automation uuid := nullif(current_setting('lofty.an_automation', true), '')::uuid;
+  begin
+    if the_automation is null then
+      raise warning 'FAIL: no automation was planted, so the log probe would prove nothing';
+    end if;
+    insert into automation_runs (automation_id, automation_run_outcome, automation_run_detail)
+    values (the_automation, 'changed', 'a history that did not happen');
+    raise warning 'FAIL: a user wrote the automation log';
+  exception when insufficient_privilege then raise notice 'ok  nobody writes the automation log — it has no INSERT policy (0135)';
+    when others then raise warning 'FAIL: unexpected writing the automation log (%)', sqlerrm; end;
 
   -- 0132: pinning a job's stage is the override on the derivation, so it costs the same as
   -- the move it replaces. The reason is part of the pin, not a note beside it.

@@ -2316,6 +2316,45 @@ export const JOB_HEALTH_LABELS: Record<JobHealth, string> = {
   not_tracked: "Not tracked"
 };
 
+/**
+ * `automations` — something that changes a record because something happened (0135).
+ *
+ * The test, and the reason the plumbing is absent: an automation takes a decision on the
+ * business's behalf. `moddatetime`, the audit trigger, the sequence assigners and every
+ * `guard_*` make a write correct rather than deciding anything, so they are not here.
+ *
+ * `implementedBy` names the trigger, function or cron job that IS the automation, and the
+ * migration refuses to apply if any row names something the schema does not have. A registry
+ * that describes the schema and cannot be checked against it is a document, and documents
+ * drift.
+ *
+ * **`isActive` is not read by anything yet.** Gating the eighteen live mechanisms is its own
+ * migration, and the screen says so rather than offering a switch that does nothing.
+ */
+export interface Automation {
+  id: Uuid;
+  key: string;
+  name: string;
+  kind: AutomationKind;
+  /** What makes it happen, in the words somebody at Lofty would use. */
+  trigger: string;
+  /** What it changes. Words, not a vocabulary: the effect list is decision 4's second half. */
+  effect: string;
+  implementedBy: string;
+  isActive: boolean;
+  lastRunAt: IsoDateTime | null;
+  description: string | null;
+}
+
+export const AUTOMATION_KINDS = ["system", "step_effect", "rule"] as const;
+export type AutomationKind = (typeof AUTOMATION_KINDS)[number];
+
+export const AUTOMATION_KIND_LABELS: Record<AutomationKind, string> = {
+  system: "Built in",
+  step_effect: "Process step",
+  rule: "Rule"
+};
+
 export type ProcessRunHealth =
   | "not_started" | "no_expectation" | "on_track" | "at_risk" | "overdue"
   | "complete" | "not_applicable";

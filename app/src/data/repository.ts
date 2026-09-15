@@ -65,6 +65,7 @@ import type {
   ProcessPatch,
   ProcessDependency,
   ProcessHistoryEntry,
+  Automation,
   ProcessStep,
   NewProcessStep,
   ProcessStepPatch,
@@ -906,6 +907,16 @@ export interface Repository {
    * tasks makes none.
    */
   instantiateProcessSteps(runId: string): Promise<number>;
+
+  /**
+   * Everything that changes a record on its own (0135), in key order.
+   *
+   * Read-only on purpose. `automation_is_active` exists and nothing reads it yet, so a
+   * `setAutomationActive` here would write a column with no effect — a switch that looks
+   * like it works and does nothing, which is worse than no switch. The write arrives in the
+   * same change that gates the mechanisms.
+   */
+  listAutomations(): Promise<Automation[]>;
   /** Runs on one record, or — with no target — every run the person may see. */
   listProcessRuns(target?: RecordTarget): Promise<ProcessRun[]>;
   /** Begin a process on a record. Attempt is the next number for that process on that record. */
@@ -1347,6 +1358,7 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "reorderProcessSteps",
   "setProcessStepDependencies",
   "instantiateProcessSteps",
+  "listAutomations",
   "listProcessRuns",
   "startProcessRun",
   "updateProcessRun",
@@ -1570,6 +1582,7 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   reorderProcessSteps: "process_steps",
   setProcessStepDependencies: "process_step_dependencies",
   instantiateProcessSteps: "instantiate_process_steps()",
+  listAutomations: "automations",
   listProcessRuns: "process_run_display",
   startProcessRun: "process_runs",
   updateProcessRun: "process_runs",

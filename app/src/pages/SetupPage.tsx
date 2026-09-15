@@ -4,7 +4,10 @@ import { Heading, Tab, TabList, Text } from "@vibe/core";
 import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { Problem } from "../components/Form";
-import { WORKING_STAGES, type StageName } from "../data/types";
+import {
+  AUTOMATION_KIND_LABELS, AUTOMATION_KINDS, WORKING_STAGES,
+  type AutomationKind, type StageName
+} from "../data/types";
 import { PropertiesSetupPage } from "./PropertiesSetupPage";
 import { ProcessesSetupPage } from "./ProcessesSetupPage";
 import { ContactLookupsPage } from "./ContactLookupsPage";
@@ -256,21 +259,71 @@ function Automations() {
         <NotificationsSetupPage />
       </div>
 
-      {/* Nothing in the schema defines or runs an automation. The column that used to say so,
-          `property_defs.property_def_automation`, held the workbook's group words and is
-          `property_def_group` since 0124. The tab keeps saying "not built" rather than showing
-          an empty list; the registry that names what already runs on its own is Stage 4 of the
-          15 September plan. */}
-      <section className="panel" style={{ marginTop: "var(--space-16)" }}>
-        <div className="panel-head">
-          <Text type="text2" weight="bold">Automations</Text>
-        </div>
-        <Text type="text2" color="secondary" ellipsis={false}>
-          Not built yet. Nothing here defines or runs an automation, and the things that
-          already change data on their own, such as the two scheduled scans, have no name in
-          the app. When they do, they belong on this tab.
-        </Text>
-      </section>
+      <AutomationsSection />
     </>
+  );
+}
+
+/**
+ * Setup → Automations: everything that changes a record on its own, by name (0135).
+ *
+ * This tab said *"Not built yet"* until `0135` gave the eighteen mechanisms a registry. It is
+ * a LIST and not a control, deliberately: `automation_is_active` exists and nothing reads it
+ * yet, so a switch here would look like it worked and do nothing, which is worse than no
+ * switch. The note at the top says exactly that, and it comes off in the same change that
+ * gates them.
+ *
+ * Each row names the trigger, function or cron job that IS the automation, because the point
+ * of the tab is that somebody can check it against the database rather than take its word.
+ */
+function AutomationsSection() {
+  const { data: automations, loading } = useQuery(r => r.listAutomations(), [], []);
+  const byKind = (kind: AutomationKind) => automations.filter(a => a.kind === kind);
+
+  return (
+    <section className="panel" style={{ marginTop: "var(--space-16)" }}>
+      <div className="panel-head">
+        <Text type="text2" weight="bold">Automations ({automations.length})</Text>
+        <Text type="text3" color="secondary">all on; no switch yet</Text>
+      </div>
+
+      {loading && <Text type="text3" color="secondary">Reading…</Text>}
+      {!loading && automations.length === 0 && (
+        <Text type="text3" color="secondary" ellipsis={false}>
+          Nothing is registered. The registry ships with eighteen rows, so an empty list means
+          the migration has not been applied to this database.
+        </Text>
+      )}
+
+      {AUTOMATION_KINDS.filter(k => byKind(k).length > 0).map(kind => (
+        <div key={kind} style={{ marginTop: "var(--space-12)" }}>
+          <Text type="text3" weight="bold" element="div">{AUTOMATION_KIND_LABELS[kind]}</Text>
+          <div className="data-table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th scope="col">Automation</th>
+                  <th scope="col">When</th>
+                  <th scope="col">What it does</th>
+                  <th scope="col">Notes</th>
+                  <th scope="col">Where it lives</th>
+                </tr>
+              </thead>
+              <tbody>
+                {byKind(kind).map(a => (
+                  <tr key={a.id}>
+                    <td><Text type="text2" element="span">{a.name}</Text></td>
+                    <td><Text type="text3" element="span" ellipsis={false}>{a.trigger}</Text></td>
+                    <td><Text type="text3" element="span" ellipsis={false}>{a.effect}</Text></td>
+                    <td><Text type="text3" color="secondary" element="span" ellipsis={false}>{a.description}</Text></td>
+                    <td><code>{a.implementedBy}</code></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+    </section>
   );
 }

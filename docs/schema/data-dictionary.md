@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-798 properties across 105 tables.
+810 properties across 107 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 749 | In the migration and the types |
+| Created | 761 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -100,6 +100,32 @@ An address as a record, stored once and pointed at — addresses get corrected a
 | `addresses.address_created_by` | Created by | Who recorded it. | `uuid` | — | Nullable. | FK → profiles(id). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `addresses.address_updated_at` | Updated on | When the address was last corrected. | `timestamptz` | — | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `addresses.address_updated_by` | Updated by | Who last corrected it. | `uuid` | — | Nullable. | FK → profiles(id). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `automation_runs`
+
+What each automation did, and when (0135). Read by everyone active and written by nobody: the mechanisms write it through a SECURITY DEFINER helper, because a person who could write it could write a history that did not happen. Empty until the migration that gates the eighteen.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `automation_runs.automation_run_id` | Automation run | One thing one automation did, and when. | `uuid` | — | Primary key. | Written by nothing yet. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `automation_runs.automation_run_outcome` | Outcome | changed, nothing_to_do, held or failed. held is "switched off", so turning one off leaves a trail rather than silence. | `text` | — | Not null. CHECK on the four. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `automation_runs.automation_run_by` | Who was there | Whoever was in the session when it fired. Null for a cron job — the honest answer, rather than a service account standing in for a person. | `uuid` | — | Nullable. FK → profiles. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `automations`
+
+Everything that changes a record because something happened rather than because somebody asked (0135). One row per mechanism, each naming the trigger, function or cron job that IS it, so the list can be checked against the schema rather than believed. The plumbing — timestamps, audit rows, sequence assigners, guards — is deliberately absent: it makes a write correct rather than taking a decision on the business''s behalf. Eighteen rows; nothing reads automation_is_active yet.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `automations.automation_id` | Automation | Something that changes a record because something happened rather than because somebody asked. Eighteen were registered on 15 September: two scheduled scans, the twelve-month archive, five notification triggers, the project and address cascades, the job-number resync, the property push, the completion forecast, and the four things Stages 2 and 3 added. | `uuid` | — | Primary key. | automation_runs hangs off it. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `automations.automation_key` | Key | The slug, stable across renames. | `text` | — | Not null, unique. CHECK: lower snake case. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `automations.automation_name` | Name | What somebody at Lofty would call it. | `text` | — | Not null, non-blank. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `automations.automation_kind` | Kind | system — something the database already does; step_effect — an automation step inside a process; rule — one somebody built in the app. One table so a process picks from one list (Amber, audit decision 4). | `text` | — | Not null, default 'system'. CHECK on the three. | Only system rows exist today. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `automations.automation_trigger` | When | What makes it happen, in words. | `text` | — | Not null, non-blank. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `automations.automation_effect` | What it does | What it changes, in words. Free text on purpose: an effect vocabulary is decision 4's second half, and inventing one here would be quoted back as though it were agreed. | `text` | — | Not null, non-blank. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `automations.automation_implemented_by` | Where it lives | The trigger, function or cron job that IS this automation. | `text` | — | Not null, non-blank. | The migration refuses to apply if a row names a trigger or function the schema does not have — a registry that cannot be checked against the schema is a document, and documents drift. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `automations.automation_is_active` | On | Whether it should run. NOT YET READ BY ANYTHING: gating the eighteen live mechanisms is its own migration, and Setup → Automations is a list rather than a set of switches until then. | `boolean` | — | Not null, default true. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `automations.automation_last_run_at` | Last run | When it last did something. | `timestamptz` | — | Nullable. | Written when the mechanisms start logging. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `build_stages`
 

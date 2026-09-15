@@ -57,6 +57,16 @@ export const PERMISSION_RULES: readonly PermissionRule[] = [
   { object: "Projects", action: "Create and edit", needs: "user", enforcedBy: "projects INSERT/UPDATE ≥ user" },
   { object: "Projects", action: "Delete", needs: "admin", enforcedBy: "projects DELETE ≥ admin" },
 
+  { object: "Automations", action: "See what runs on its own", needs: "user",
+    enforcedBy: "automations SELECT ≥ active user (0135)",
+    note: "Everybody active reads the registry — it is a description of what the app already does, not a secret." },
+  { object: "Automations", action: "Change one", needs: "manager",
+    enforcedBy: "automations ALL ≥ manager (0135)",
+    note: "No screen writes it yet: automation_is_active is not read by anything, so Setup → Automations is a list rather than a set of switches until the migration that gates the eighteen mechanisms lands." },
+  { object: "Automations", action: "Write the run log", needs: null,
+    enforcedBy: "automation_runs has SELECT only — no INSERT, UPDATE or DELETE policy (0135)",
+    note: "The mechanisms write it through a SECURITY DEFINER helper. A person who could write it could write a history that did not happen. Same stance as job_stage_events (0039)." },
+
   { object: "Processes", action: "Make a run's tasks (repair a run started before 0130)", needs: "user",
     enforcedBy: "instantiate_process_steps() is SECURITY INVOKER, so the tasks INSERT policy decides",
     note: "0130 wrote it SECURITY DEFINER and granted it to authenticated, which made the RPC a way past RLS on tasks — a demo account that could not insert one task could call it and insert sixteen. 0131 put it back to invoker; the trigger that calls it on run start is the definer, so a run started by anyone still gets its tasks." },
