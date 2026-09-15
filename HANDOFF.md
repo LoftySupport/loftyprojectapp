@@ -25,6 +25,13 @@ published with its diagrams at <https://claude.ai/artifact/LnuPZkB65SW8uKhxnaVjC
 `claude/app-schema-architecture-audit-v19mt9`. **No migration was written and nothing on the
 live project changed.**
 
+**Stage 0's fourth branch, `claude/stage0-notifications`, is `0125`:** a one-row
+`notification_settings` with the switch-on moment, null until an admin sets it; `private.notify`
+writes every email, Teams and SMS row as skipped before it, and the worker's claim never takes a
+row written before it. The four rows waiting since 12 September are skipped. In-app is not
+gated. Setup → Notifications shows the state. One question stays open on it: whether *"all off
+by default"* includes in-app; the answer is one statement in the migration. Not applied live yet.
+
 **The finding that sets everything else up:** three generations of "how a job moves" coexist
 (the `0029` pipeline tables, never written; the `job_stage` column and its triggers, the only
 thing that moves a job; the `0078` processes, which have no path to the stage, the team or a

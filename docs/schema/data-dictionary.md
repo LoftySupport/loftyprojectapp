@@ -5,12 +5,12 @@
 > The Dictionary page in the app renders the same array, so this file and that page
 > cannot disagree. They can still disagree with Postgres — that is what **Status** is for.
 
-758 properties across 100 tables.
+762 properties across 101 tables.
 
 | Status | Count | Means |
 | --- | --- | --- |
 | To do | 33 | Specified here, not yet in the migration |
-| Created | 709 | In the migration and the types |
+| Created | 713 | In the migration and the types |
 | Updates required | 0 | Built or specified, but a decision is outstanding |
 | Merged | 16 | Folded into another property |
 | Archived | 0 | Retired, kept for history |
@@ -713,7 +713,7 @@ The outbox (0083): one row per channel per notification. in_app sent as written;
 | `notification_deliveries.notification_delivery_id` | Delivery | One channel's send of one notification (0083) — the outbox. in_app is sent as written; email, teams and sms wait for the worker (supabase/functions/deliver-notifications). | `bigint` | — | Primary key, identity. | The person reads their own; admins read all; the worker writes through two service-role RPCs. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `notification_deliveries.notification_id` | Notification | Which notification. | `bigint` | — | Not null. FK → notifications ON DELETE CASCADE. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `notification_deliveries.notification_delivery_channel` | Channel | in_app, email, teams or sms. | `text` | — | Not null. CHECK. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
-| `notification_deliveries.notification_delivery_status` | Status | queued (send now) · held (a digest, until next_attempt_at) · sending (claimed) · sent · failed (after five tries) · skipped. | `text` | — | Not null, default queued. CHECK. | Partial index on queued and held by next_attempt_at. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_deliveries.notification_delivery_status` | Status | queued (send now) · held (a digest, until next_attempt_at) · sending (claimed) · sent · failed (after five tries) · skipped, which since 0125 is also every external row written before the switch-on. | `text` | — | Not null, default queued. CHECK. | Partial index on queued and held by next_attempt_at. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `notification_deliveries.notification_delivery_address` | Address | The email or account the send goes to, resolved when the row was written. | `text` | — | Nullable. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `notification_deliveries.notification_delivery_attempts` | Attempts | How many times the worker has tried. | `integer` | — | Not null, default 0 (smallint). | Backoff 5, 25, 125 minutes; failed after five. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `notification_deliveries.notification_delivery_next_attempt_at` | Next attempt | When it is next due — now for immediate, the digest time for held, later after a failure. | `timestamptz` | — | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
@@ -747,6 +747,17 @@ Who hears each type (0083, Amber: "who they go to"): assignee, owning team, enga
 | `notification_rules.profile_id` | Person | For specific_person. | `uuid` | — | Nullable. FK → profiles. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `notification_rules.notification_rule_after_days` | After days | Escalation: fire only once the thing has been overdue this many days — "overdue 5 days → managers". | `integer` | — | Not null, default 0 (smallint). CHECK ≥ 0. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 | `notification_rules.notification_rule_is_active` | Active | A paused rule fires nothing. | `boolean` | — | Not null, default true. | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+
+## `notification_settings`
+
+One row (0125): the moment notifications were switched on, null until they are. Every email, Teams or SMS row written before it is skipped, never sent; in-app is not gated. Everyone reads; an admin sets it.
+
+| Supabase ID | Lofty name | Definition | Type | Values | Rules | Relationships | Status | Created | Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `notification_settings.notification_setting_id` | Settings row | The one row (0125). A CHECK pins the key to 1 so a second row cannot exist. | `integer` | — | Primary key, smallint, CHECK = 1. | Everyone reads; admins set it. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_settings.notification_setting_switch_on_at` | Switched on | The moment external delivery was switched on. Null until then. private.notify writes every email, teams and sms row created before it as skipped, and claim_notification_deliveries never claims a row created before it, so nothing queued before the switch-on is sent (Amber, 15 September). In-app is not gated. | `timestamptz` | — | Nullable. | Read by Setup → Notifications; set by an admin, by SQL until there is a control. | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_settings.notification_setting_updated_at` | Updated | When the row last changed; moddatetime stamps it. | `timestamptz` | — | Not null, default now(). | — | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
+| `notification_settings.notification_setting_updated_by` | Updated by | Who changed it. | `uuid` | — | Nullable. | FK → profiles(profile_id). | Created | 2026-08-01 · Amber Beaumont | 2026-08-01 · Amber Beaumont |
 
 ## `notification_types`
 

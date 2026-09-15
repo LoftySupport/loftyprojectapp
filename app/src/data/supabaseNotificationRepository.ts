@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Repository } from "./repository";
 import type {
-  DeliveryStat, NewNotificationRule, Notification, NotificationChannel, NotificationPreference, NotificationRule, NotificationType,
+  DeliveryStat, NewNotificationRule, Notification, NotificationChannel, NotificationPreference, NotificationRule, NotificationSettings, NotificationType,
   RecordWatch
 } from "./types";
 
@@ -16,7 +16,7 @@ import type {
 type NotificationMethods = Pick<Repository,
   | "listNotificationTypes" | "saveNotificationType" | "listNotificationRules" | "addNotificationRule" | "updateNotificationRule" | "deleteNotificationRule"
   | "listMyNotificationPreferences" | "saveMyNotificationPreference" | "listMyNotifications" | "markNotificationsRead"
-  | "listMyWatches" | "watchRecord" | "unwatchRecord" | "listDeliveryStats"
+  | "listMyWatches" | "watchRecord" | "unwatchRecord" | "listDeliveryStats" | "getNotificationSettings"
 >;
 
 export function notificationMethods(client: SupabaseClient): NotificationMethods {
@@ -119,6 +119,15 @@ export function notificationMethods(client: SupabaseClient): NotificationMethods
       q = target.jobId != null ? q.eq("job_id", target.jobId) : q.eq("project_id", target.projectId!);
       const { error } = await q;
       if (error) throw error;
+    },
+
+    async getNotificationSettings(): Promise<NotificationSettings> {
+      const { data, error } = await client.from("notification_settings")
+        .select("notification_setting_switch_on_at, notification_setting_updated_at")
+        .eq("notification_setting_id", 1).single();
+      if (error) throw error;
+      const r = data as { notification_setting_switch_on_at: string | null; notification_setting_updated_at: string };
+      return { switchOnAt: r.notification_setting_switch_on_at, updatedAt: r.notification_setting_updated_at };
     },
 
     async listDeliveryStats(): Promise<DeliveryStat[]> {

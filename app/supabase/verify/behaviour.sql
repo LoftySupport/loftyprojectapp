@@ -859,19 +859,27 @@ delete from companies where company_name = 'Behaviour Plumbing 0082';
 -- ============================================================================
 -- 42. Notifications: assigned fires once to the assignee; the scan fires once a day (0083)
 -- ============================================================================
-\echo '--- 42. a task assignment notifies its assignee once, in-app sent and email queued; the scan does not repeat itself'
+\echo '--- 42. a task assignment notifies its assignee once; email is skipped before the switch-on and held after it; the scan does not repeat itself'
+-- 0125: the assignee opts in explicitly, so this step proves the outbox whatever the type
+-- defaults are set to. The switch-on is null on a rebuild, so the first email row is skipped.
+insert into notification_preferences (profile_id, notification_type_id, notification_preference_channel, notification_preference_is_enabled)
+select p.profile_id, ty.t, ch.c, true
+  from profiles p, unnest(array['task_assigned', 'task_overdue']) as ty(t), unnest(array['in_app', 'email']) as ch(c)
+ where p.profile_email = 'behaviour-test@lofty.com.au';
 insert into tasks (job_id, task_name, task_assignee_id)
 select '9106-002', 'behaviour probe 0083', profile_id from profiles where profile_email = 'behaviour-test@lofty.com.au';
 select case when count(*) = 1 then 'ok  one task_assigned notification for the assignee'
   else 'FAIL: ' || count(*) || ' task_assigned notifications' end
 from notifications n join tasks t using (task_id) where t.task_name = 'behaviour probe 0083' and n.notification_type_id = 'task_assigned';
 select case when count(*) filter (where notification_delivery_channel = 'in_app' and notification_delivery_status = 'sent') = 1
-             and count(*) filter (where notification_delivery_channel = 'email' and notification_delivery_status = 'queued') = 1
-  then 'ok  in_app sent on the spot, email queued for the worker'
+             and count(*) filter (where notification_delivery_channel = 'email' and notification_delivery_status = 'skipped') = 1
+  then 'ok  in_app sent on the spot; email skipped because the switch-on is not set (0125)'
   else 'FAIL: deliveries were ' || string_agg(notification_delivery_channel || '=' || notification_delivery_status, ', ') end
 from notification_deliveries d join notifications n using (notification_id) join tasks t using (task_id)
 where t.task_name = 'behaviour probe 0083' and n.notification_type_id = 'task_assigned';
 
+-- Switched on: from here an external row is queued or held, as 0083 always did.
+update notification_settings set notification_setting_switch_on_at = now() - interval '1 minute' where notification_setting_id = 1;
 update tasks set task_status = 'in_progress', task_expected_days = 2 where task_name = 'behaviour probe 0083';
 update tasks set task_started_at = now() - interval '9 days' where task_name = 'behaviour probe 0083';
 select notify_scan() as first_scan \gset
@@ -886,6 +894,16 @@ select case when count(*) >= 1 then 'ok  seven days late escalates to a manager 
   else 'FAIL: no manager heard about a task 7 days overdue' end
 from notifications n join tasks t using (task_id) join profiles p on p.profile_id = n.profile_id
 where t.task_name = 'behaviour probe 0083' and n.notification_type_id = 'task_overdue' and p.profile_permission >= 'manager';
+select case when count(*) = 1 then 'ok  after the switch-on the assignee''s overdue digest email is held for the morning, not skipped (0125)'
+  else 'FAIL: ' || count(*) || ' held task_overdue email rows for the assignee after the switch-on' end
+from notification_deliveries d join notifications n using (notification_id) join tasks t using (task_id) join profiles p on p.profile_id = n.profile_id
+where t.task_name = 'behaviour probe 0083' and n.notification_type_id = 'task_overdue' and p.profile_email = 'behaviour-test@lofty.com.au'
+  and d.notification_delivery_channel = 'email' and d.notification_delivery_status = 'held';
+-- Left as found: switched off again, the opt-ins gone.
+update notification_settings set notification_setting_switch_on_at = null where notification_setting_id = 1;
+delete from notification_preferences
+ where profile_id = (select profile_id from profiles where profile_email = 'behaviour-test@lofty.com.au')
+   and notification_type_id in ('task_assigned', 'task_overdue');
 delete from tasks where task_name = 'behaviour probe 0083';
 
 \echo '--- 43. maintenance: warranty from the handover run; a number per job; due and health from the category; the scan does not repeat; mail nobody can match is refused'

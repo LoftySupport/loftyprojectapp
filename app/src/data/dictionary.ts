@@ -1309,13 +1309,19 @@ export const DICTIONARY: DictionaryEntry[] = [
   e("notification_deliveries.notification_delivery_id", "Delivery", "One channel's send of one notification (0083) — the outbox. in_app is sent as written; email, teams and sms wait for the worker (supabase/functions/deliver-notifications).", "bigint", "Primary key, identity.", "The person reads their own; admins read all; the worker writes through two service-role RPCs.", "created"),
   e("notification_deliveries.notification_id", "Notification", "Which notification.", "bigint", "Not null. FK → notifications ON DELETE CASCADE.", "—", "created"),
   e("notification_deliveries.notification_delivery_channel", "Channel", "in_app, email, teams or sms.", "text", "Not null. CHECK.", "—", "created"),
-  e("notification_deliveries.notification_delivery_status", "Status", "queued (send now) · held (a digest, until next_attempt_at) · sending (claimed) · sent · failed (after five tries) · skipped.", "text", "Not null, default queued. CHECK.", "Partial index on queued and held by next_attempt_at.", "created"),
+  e("notification_deliveries.notification_delivery_status", "Status", "queued (send now) · held (a digest, until next_attempt_at) · sending (claimed) · sent · failed (after five tries) · skipped, which since 0125 is also every external row written before the switch-on.", "text", "Not null, default queued. CHECK.", "Partial index on queued and held by next_attempt_at.", "created"),
   e("notification_deliveries.notification_delivery_address", "Address", "The email or account the send goes to, resolved when the row was written.", "text", "Nullable.", "—", "created"),
   e("notification_deliveries.notification_delivery_attempts", "Attempts", "How many times the worker has tried.", "integer", "Not null, default 0 (smallint).", "Backoff 5, 25, 125 minutes; failed after five.", "created"),
   e("notification_deliveries.notification_delivery_next_attempt_at", "Next attempt", "When it is next due — now for immediate, the digest time for held, later after a failure.", "timestamptz", "Not null, default now().", "—", "created"),
   e("notification_deliveries.notification_delivery_sent_at", "Sent", "When it went.", "timestamptz", "Nullable.", "—", "created"),
   e("notification_deliveries.notification_delivery_external_id", "Provider id", "Graph's request or message id, the receipt.", "text", "Nullable.", "—", "created"),
   e("notification_deliveries.notification_delivery_error", "Error", "The last failure, in the provider's words.", "text", "Nullable.", "—", "created"),
+
+  // ---------------------------------------------------- notification_settings (0125)
+  e("notification_settings.notification_setting_id", "Settings row", "The one row (0125). A CHECK pins the key to 1 so a second row cannot exist.", "integer", "Primary key, smallint, CHECK = 1.", "Everyone reads; admins set it.", "created"),
+  e("notification_settings.notification_setting_switch_on_at", "Switched on", "The moment external delivery was switched on. Null until then. private.notify writes every email, teams and sms row created before it as skipped, and claim_notification_deliveries never claims a row created before it, so nothing queued before the switch-on is sent (Amber, 15 September). In-app is not gated.", "timestamptz", "Nullable.", "Read by Setup → Notifications; set by an admin, by SQL until there is a control.", "created"),
+  e("notification_settings.notification_setting_updated_at", "Updated", "When the row last changed; moddatetime stamps it.", "timestamptz", "Not null, default now().", "—", "created"),
+  e("notification_settings.notification_setting_updated_by", "Updated by", "Who changed it.", "uuid", "Nullable.", "FK → profiles(profile_id).", "created"),
 
   // ------------------------------------------------------ stage_completion (0081)
   e("stage_completion.stage", "Stage", "One row per record and lifecycle stage: the active processes of that stage against the record's latest run of each.", "view", "—", "Read by the board, the drawer and the report so they count the same way.", "created"),
@@ -1921,6 +1927,8 @@ export const TABLE_DESCRIPTIONS: Record<string, string> = {
     "A task with its names, counts and derived dates (0081): due (typed, or start + expected days), at-risk (due − lead) and health, computed from today the way process_run_display does. Nothing here is stored — re-time a task and it re-dates.",
   stage_completion:
     "Per record and lifecycle stage (0081): how many active processes, how many still open, how many milestones and how many passed. Complete when nothing is open. Counts, never a percentage.",
+  notification_settings:
+    "One row (0125): the moment notifications were switched on, null until they are. Every email, Teams or SMS row written before it is skipped, never sent; in-app is not gated. Everyone reads; an admin sets it.",
   maintenance_settings:
     "One row (0084): the warranty months after handover (Amber: 3 standard), the hours a contractor has to answer an offer, the day-before reminder, how long an accept link lives, the intake mailbox. Managers edit; everyone reads. A CHECK keeps it to one row.",
   maintenance_categories:

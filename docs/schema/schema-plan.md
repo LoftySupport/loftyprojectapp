@@ -3886,6 +3886,52 @@ Settled on 15 September: no new Teams, channels or sites; files in the Hub libra
 (formerly Finance) named so everywhere a person reads it; `tech@lofty.com.au` as the sender;
 A&D's linked folder on every project.
 
+### 15 September — notifications wait for the switch-on (`0125`)
+
+The fourth Stage 0 branch from the audit, `claude/stage0-notifications`. Amber, 15 September,
+when the audit asked whether the undeployed email worker should stay: *"i am connecting
+microsoft teams and email and sharepont now so keep it in but don't send any previous
+notifications until they are all switched on. All notificatoins should be turned off in users
+settings by default until app is ready for testing but the functionality should exist"*.
+
+**The switch-on is one row.** `notification_settings`, in the shape of `maintenance_settings`
+(0084): a key pinned to 1, `notification_setting_switch_on_at`, null until an admin sets it.
+Everyone reads it; an admin updates it, by SQL until there is a control; the row is audited.
+Setup → Notifications shows the state, so *"notifications are on"* is never a claim the table
+cannot back.
+
+**Nothing written before it is sent, enforced twice.** `private.notify` writes an external row
+(email, teams, sms) as `skipped`, with the reason in the error column, while the switch-on is
+null or ahead; in-app is untouched, because it is delivered inside the app as it is written.
+`claim_notification_deliveries` claims only rows created at or after the switch-on, so a row
+that reached the outbox queued or held by any other path still never leaves once the worker
+exists; with the switch-on null the comparison is null and nothing is claimed. Two places
+because they are two failure modes: a row written wrongly, and a row written before the rule.
+
+**The four rows already waiting** (a task_assigned of 12 September and one task_overdue digest
+a day since, all email, all Gary's) are marked skipped with the same reason. The in-app twins
+were delivered on the day. One overdue task will keep producing a digest row daily until it is
+done; each will be written skipped.
+
+**Not gated:** the maintenance thread's outbox (`maintenance_messages`, 0084). Those are the
+offer to a contractor and the closing email to a homeowner, not notifications a person can
+switch off, and the table is empty. The worker's unset Graph secrets keep that path inert too.
+
+**Why a table and not the worker's secret.** `DELIVER_SECRET` already makes a deploy inert, but
+it is a fact about the function, invisible to the database and the app, and it says nothing
+about rows written before it. Amber's rule is about *when a row was written*, so it has to be a
+timestamp the database compares against, in a place the app can read.
+
+**Proof.** The migration's block: skipped before, queued after, and the worker claims only rows
+written after, moved both ways. `behaviour.sql` step 42 now opts the test person in explicitly
+and asserts the same in the replay. `rls.sql`: a user cannot set the switch-on and an admin can.
+Watched failing live in a rolled-back transaction against 0083's `notify` with only the
+settings row present: the email row came back `queued`.
+
+**The defaults** are the part of Amber's sentence this entry does not settle on its own: whether
+*"all notifications off by default"* includes in-app. Asked in the chat; the answer decides one
+`update notification_types` statement and is recorded here when given.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

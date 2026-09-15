@@ -130,6 +130,29 @@ begin
     when others then raise warning 'FAIL: unexpected on stage log (%)', sqlerrm;
   end;
 
+  -- 0125: everyone reads the switch-on state; nobody below admin sets it. At `user` the
+  -- UPDATE matches no row (RLS filters rather than refuses), so the count is the refusal.
+  -- Watched failing with the write policy widened to `>= 'user'`.
+  declare
+    seen int;
+    touched int;
+  begin
+    select count(*) into seen from notification_settings;
+    if seen <> 1 then
+      raise warning 'FAIL: a user read % notification_settings row(s), expected the one', seen;
+    end if;
+    update notification_settings set notification_setting_switch_on_at = now() where notification_setting_id = 1;
+    get diagnostics touched = row_count;
+    if touched = 0 then
+      raise notice 'ok  a user reads the notifications switch-on and cannot set it (0125)';
+    else
+      raise warning 'FAIL: a user set the notifications switch-on (% row)', touched;
+    end if;
+  exception
+    when insufficient_privilege then raise notice 'ok  a user is refused the notifications switch-on outright (0125)';
+    when others then raise warning 'FAIL: unexpected on the switch-on at user (%)', sqlerrm;
+  end;
+
   -- 0048: a saved view is private. Two halves, because they are different mechanisms:
   -- the WITH CHECK stops you writing a view onto somebody else, and the USING stops you
   -- reading or removing theirs. A policy with only the first would let anybody list the
@@ -1070,6 +1093,29 @@ begin
   exception
     when insufficient_privilege then raise notice 'ok  the changelog is superadmin''s, not admin''s';
     when others then raise warning 'FAIL: unexpected admin publishing a release (%)', sqlerrm;
+  end;
+end $$;
+reset role;
+
+-- 0125: the other half of the switch-on. Still the same person, still admin: the UPDATE
+-- matches the row, and the row is put back so the superadmin section and check.sh's later
+-- runs start switched off. Watched failing with the write policy dropped.
+set role authenticated;
+set request.jwt.claim.sub = :'uid';
+do $$
+declare
+  touched int;
+begin
+  begin
+    update notification_settings set notification_setting_switch_on_at = now() where notification_setting_id = 1;
+    get diagnostics touched = row_count;
+    if touched = 1 then
+      raise notice 'ok  an admin sets the notifications switch-on (0125)';
+    else
+      raise warning 'FAIL: an admin could not set the notifications switch-on (% rows)', touched;
+    end if;
+    update notification_settings set notification_setting_switch_on_at = null where notification_setting_id = 1;
+  exception when others then raise warning 'FAIL: unexpected on the switch-on at admin (%)', sqlerrm;
   end;
 end $$;
 reset role;
