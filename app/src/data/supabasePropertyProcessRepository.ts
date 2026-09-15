@@ -550,7 +550,9 @@ export function propertyProcessMethods(client: SupabaseClient): PropertyProcessM
         process_id: input.processId,
         process_step_kind: input.kind,
         process_step_position: position,
-        process_step_is_required: input.isRequired ?? true,
+        // Optional unless somebody ticks it (0136, Amber 15 September, question 0j). The
+        // column defaults to false too; this says the same thing where a reader looks first.
+        process_step_is_required: input.isRequired ?? false,
         process_step_name: input.name ?? null,
         property_def_key: input.propertyKey ?? null,
         process_step_stamps_property_key: input.stampsPropertyKey ?? null,

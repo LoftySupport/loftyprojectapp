@@ -4810,6 +4810,65 @@ vocabulary: `process_steps` already has an `automation` kind carrying a note, an
 *set a property, create the tasks, notify an audience, request a folder* is decision 4's
 second half, which needs the registry to point at first.
 
+
+### 15 September — a step is optional until somebody ticks it (`0136`)
+
+**Open question 0j, answered.** Amber, 15 September: tasks are **optional unless ticked
+required**. Chosen over *every task is required*, which is what `0128` built, and over
+*required only where the schedule has a claim*, which nobody has written down.
+
+**Why `0128` had it the other way, and why that was not a mistake to hide.** `process_tasks`
+never had a required flag, so the backfill had to choose a value for 107 rows that had none.
+`0128`'s header says what it chose and why: *"a task in the list is work that has to be done.
+So task steps arrive required"*, read off her step 9 of the Working Drawings walk-through. It
+was a reading rather than a copy, it was recorded as one, and question 0j is the question it
+raised. The answer replaces the reading.
+
+**What moves.** The column default becomes `false` for every kind; the 107 task steps and any
+checklist line are set optional. **Property steps are not touched.** Their flags came across
+from `process_properties`, where 6 of 140 rows were marked required by somebody at Lofty, and
+overwriting those would be this migration inventing a value in the one place the answer says
+not to. The tick box on Setup → Processes is how a step becomes required and it was already
+drawn on property, task and checklist steps, so only the value it starts at moves.
+
+**The half of the answer that does not fit on its own, and the reason this is a migration
+rather than an UPDATE.** `0130` completes a run when no *required* step is open and refuses to
+close one that has no required step at all. With tasks optional, Footings has no required step,
+so the sentence that asked for the rule would have switched the rule off for the seven
+Construction processes it was written about. `0136` reads *"when all process steps are
+completed mark this process complete"* literally, and the two halves then say different things
+on purpose:
+
+| | Reads |
+| --- | --- |
+| The gate (`0129`) | Refuses a **manual** complete only while a **required** step is open |
+| The forward rule (`0136`) | Completes the run by itself only when **no** step is open |
+
+So a person may close a process early over optional work, which is what optional means, and
+the system never closes one over work nobody has answered. `0078`'s *"complete with a gap is
+sometimes the truth"* becomes the person's call, recorded as theirs.
+
+**A run whose only steps are automations still does not close itself.** `0129`'s state view
+returns `not_tracked` for an automation step, which is neither open nor done, so counting only
+open steps would complete such a run the instant it started. The rule counts steps that *have*
+a state, and a run with none is left to a person — exactly where `0130` left a run with no
+required step.
+
+**Watched failing, all four:**
+
+| Broken | Reported |
+| --- | --- |
+| The forward rule left reading `process_step_is_required` | `0136 proof: the forward rule still reads process_step_is_required, so tasks going optional switches it off` |
+| The backfill not run | `0136 proof: 107 task or checklist steps are still required` |
+| The column default left at true | `0136 proof: the column default is true, expected false`, and with the proof blinded too, `FAIL: a step added with no flag arrived required` |
+| The no-trackable-step guard removed | `FAIL: it closed a run with nothing it can read` |
+
+**And one probe that proved nothing, caught the same way.** The automation-only probe first
+asserted the run's status after inserting it. Nothing on that run's steps can fire a trigger,
+so the run was still open whatever the function said, and the probe passed with the guard
+removed. It calls `close_run_if_its_steps_are_done` directly now, which is the only way the
+branch can be reached at all — and is itself the reason the refusal belongs in the function.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

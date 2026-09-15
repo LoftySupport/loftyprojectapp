@@ -134,6 +134,23 @@ than a set of switches** because a switch that looks like it works and does noth
 than no switch. `automation_runs` has no write policy at all, the way `job_stage_events` has
 none. Gating the eighteen and the step-effect vocabulary are the next two.
 
+**`0136` reverses what `0128` guessed about required tasks, on `claude/stage2-required-is-opt-in`.**
+Amber answered question 0j on 15 September: tasks are **optional unless ticked required**.
+`0128` had backfilled all 107 as required, because `process_tasks` carried no flag and the
+backfill had to choose; it chose the strict reading of her step 9 and recorded that it was a
+reading. So the column default becomes false for every kind and the task and checklist steps
+are set optional. **Property steps keep their flags**, which are real data from
+`process_properties` (6 of 140 marked required at Lofty) rather than a value anyone invented.
+
+**The consequence that made it a migration rather than an UPDATE:** `0130` completed a run when
+no *required* step was open, and refused to close a run with none. With tasks optional, the
+seven Construction processes have no required step, so her own step 9 would have stopped
+working for the processes it describes. `0136` reads *"when all process steps are completed"*
+literally, so the forward rule now waits for **every** step while `0129`'s gate still refuses a
+**manual** complete only over a **required** one. A person may close a process early over
+optional work; the system never does. A run whose only steps are automations still does not
+close itself, because an automation step has no state until Stage 4.
+
 **A review of `0131` and the screens found fifteen things, and one was a hole.**
 `instantiate_process_steps` was SECURITY DEFINER and granted to `authenticated` — `0130`
 wrote it that way where the function it replaces had been invoker since `0081` — so the RPC

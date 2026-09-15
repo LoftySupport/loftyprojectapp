@@ -1154,7 +1154,7 @@ rollback;
 delete from report_documents where report_document_title like '__behaviour__%';
 delete from report_templates where report_template_name like '__behaviour__%';
 
-\echo '--- 46. a run makes its tasks once when it starts, each naming its step, and closes itself when the last required step is answered (0128-0130)'
+\echo '--- 46. a run makes its tasks once when it starts, each naming its step, and closes itself when the last OPEN step is answered (0128-0130, 0136)'
 -- Stage 2, end to end, on the fixture job. What this proves that the constraint probes cannot:
 -- the run machinery is a SEQUENCE — start makes the tasks, finishing them closes the run — and
 -- a sequence only shows up when it is walked.
@@ -1186,14 +1186,16 @@ select case when instantiate_process_steps(:'task_run') = 0
   then 'ok  a run that already has its tasks makes no more'
   else 'FAIL: a second instantiation made more tasks' end;
 
--- Now the forward rule, on a process whose only required step is one property step.
+-- Now the forward rule. Since 0136 it reads EVERY step, not every required one, so the probe
+-- answers every step but one and then answers that. The flags are all set FALSE first: if the
+-- run still closes with nothing required, the rule is not reading the flag, which is the whole
+-- of what 0136 changed.
 select s.process_id as prop_process, s.process_step_id as prop_step
   from process_steps s join processes p using (process_id)
  where s.process_step_kind = 'property' and p.process_scope = 'job'
  order by p.process_key, s.process_step_position limit 1 \gset
 
-update process_steps set process_step_is_required = (process_step_id = :'prop_step')
- where process_id = :'prop_process';
+update process_steps set process_step_is_required = false where process_id = :'prop_process';
 
 insert into process_runs (process_id, job_id, process_run_status)
 values (:'prop_process', '9106-002', 'in_progress');
@@ -1201,8 +1203,21 @@ select process_run_id as prop_run from process_runs
  where process_id = :'prop_process' and job_id = '9106-002' order by process_run_created_at desc limit 1 \gset
 
 select case when process_run_status = 'in_progress'
-  then 'ok  a run with an open required step stays open'
+  then 'ok  a run with an open step stays open, required or not (0136)'
   else 'FAIL: it closed itself as ' || process_run_status end
+from process_runs where process_run_id = :'prop_run';
+
+-- Every step but one. A process with a single step writes no rows here, and the assertion
+-- below still holds because that one step is the one still open.
+insert into process_run_step_exemptions (process_run_id, process_step_id, process_id,
+                                         process_run_step_exemption_reason)
+select :'prop_run', s.process_step_id, :'prop_process', 'behaviour: it does not apply here'
+  from process_steps s
+ where s.process_id = :'prop_process' and s.process_step_id <> :'prop_step';
+
+select case when process_run_status = 'in_progress'
+  then 'ok  one step still open holds the run open, although none is required'
+  else 'FAIL: the run is ' || process_run_status || ' with a step still open' end
 from process_runs where process_run_id = :'prop_run';
 
 insert into process_run_step_exemptions (process_run_id, process_step_id, process_id,
@@ -1210,7 +1225,7 @@ insert into process_run_step_exemptions (process_run_id, process_step_id, proces
 values (:'prop_run', :'prop_step', :'prop_process', 'behaviour: it does not apply here');
 
 select case when process_run_status = 'complete' and process_run_completed_at is not null
-  then 'ok  answering the last required step closed the run, and stamped it'
+  then 'ok  answering the last open step closed the run, and stamped it'
   else 'FAIL: the run is ' || process_run_status end
 from process_runs where process_run_id = :'prop_run';
 
@@ -1220,6 +1235,38 @@ select case when process_run_status = 'complete'
   then 'ok  a completed run is not reopened by undoing what closed it'
   else 'FAIL: the run fell back to ' || process_run_status end
 from process_runs where process_run_id = :'prop_run';
+
+-- A run whose only step is an automation does not close itself (0136). An automation step reads
+-- `not_tracked`, which is neither open nor done, so a rule that asked only "is anything open"
+-- would answer no and complete the run. There is no such process in the seed, so the probe
+-- makes one. **It calls the rule directly** rather than waiting for a trigger: nothing on this
+-- run's steps can fire one, which is precisely why the refusal has to be in the function and
+-- why a probe that only watched the row would pass whatever the function said.
+insert into processes (process_key, process_name, process_stage, process_scope,
+                       lifecycle_substage_id)
+select 'probe_0136_automations_only', 'Probe: automations only', p.process_stage, p.process_scope,
+       p.lifecycle_substage_id
+  from processes p where p.process_id = :'prop_process';
+select process_id as auto_process from processes
+ where process_key = 'probe_0136_automations_only' \gset
+
+insert into process_steps (process_id, process_step_position, process_step_kind, process_step_name,
+                           process_step_automation)
+values (:'auto_process', 1, 'automation', 'Probe: something fires here', 'Nothing, it is a probe');
+
+insert into process_runs (process_id, job_id, process_run_status)
+values (:'auto_process', '9106-002', 'in_progress');
+select process_run_id as auto_run from process_runs
+ where process_id = :'auto_process' and job_id = '9106-002' \gset
+
+select case when close_run_if_its_steps_are_done(:'auto_run') = false
+  then 'ok  the rule refuses a run whose only step is an automation (0136)'
+  else 'FAIL: it closed a run with nothing it can read' end;
+
+select case when process_run_status = 'in_progress'
+  then 'ok  and the run is still open'
+  else 'FAIL: the run is ' || process_run_status end
+from process_runs where process_run_id = :'auto_run';
 
 rollback;
 

@@ -1415,10 +1415,11 @@ function StepsEditor({ process: p, teams, canEdit, onChanged, onError }: {
               onClick={() => {
                 if (!addingProperty) return;
                 // Optional, deliberately. `process_properties` defaulted to not required and
-                // the old editor added one that way; `createProcessStep` defaults to required
-                // because that is the reading for TASK steps (open question 0j). Letting that
-                // default reach a property would mean adding one to a process immediately
-                // blocked every in-progress run of it until somebody recorded the value.
+                // the old editor added one that way. Every step now arrives optional
+                // (0136, question 0j), so this says nothing the default does not — it stays
+                // because adding a property that blocked every in-progress run of the process
+                // is the failure this line was written for, and it should not come back on a
+                // change to the default somewhere else.
                 run(() => repo.createProcessStep({
                   processId: p.id, kind: "property", propertyKey: addingProperty, isRequired: false
                 }));

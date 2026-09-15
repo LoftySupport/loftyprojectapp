@@ -957,6 +957,35 @@ BEGIN
       UPDATE process_steps SET process_step_is_required = was_required WHERE process_step_id = probe_step;
     END IF;
   END;
+  -- 0136: a step arrives optional. The default is the whole of Amber's answer to question 0j
+  -- on the setup screen, so it is asserted where the column is rather than trusted.
+  DECLARE
+    d_process uuid;
+    d_step    uuid;
+    d_req     boolean;
+    d_left    integer;
+  BEGIN
+    SELECT process_id INTO d_process FROM processes ORDER BY process_key LIMIT 1;
+    IF d_process IS NOT NULL THEN
+      INSERT INTO process_steps (process_id, process_step_position, process_step_kind, process_step_name)
+      VALUES (d_process, 9136, 'task', 'Probe 0136: a step with no flag')
+      RETURNING process_step_id, process_step_is_required INTO d_step, d_req;
+      IF d_req THEN
+        RAISE WARNING 'FAIL: a step added with no flag arrived required (0136)';
+      ELSE
+        RAISE NOTICE 'ok  a step arrives optional until somebody ticks it (0136)';
+      END IF;
+      DELETE FROM process_steps WHERE process_step_id = d_step;
+
+      SELECT count(*) INTO d_left FROM process_steps
+       WHERE process_step_kind IN ('task', 'checklist') AND process_step_is_required;
+      IF d_left > 0 THEN
+        RAISE WARNING 'FAIL: % task or checklist steps are still required (0136)', d_left;
+      ELSE
+        RAISE NOTICE 'ok  no task or checklist step is required (0136)';
+      END IF;
+    END IF;
+  END;
 END $$;
 
 

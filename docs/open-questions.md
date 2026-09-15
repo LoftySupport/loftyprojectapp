@@ -21,41 +21,6 @@ invent a value, and `CLAUDE.md` is explicit that an invented default is worse th
 
 ## Open — next question first
 
-### 0j. Is every task inside a process required to finish it?
-
-**Stage 2 needs a value that has never existed.** `process_steps` (`0128`) gives every step a
-`required` flag, because the completion gate reads it: a run cannot be marked complete while a
-required step is open. Property steps brought their flag with them — 6 of the 140 rows on the
-live database are marked required, which is what the drawer's *"2 required missing"* chip counts.
-**Template tasks never had one.**
-
-The backfill set task steps to **required**, and that is a reading rather than a copy. It follows
-from your own step 9 of the Working Drawings walk-through: *"Automation/Rule fires that when all
-process steps are completed mark this process complete"*. If every task were optional, nothing
-would hold a process open and the gate would be decoration.
-
-| Option | What it means on the day Construction runs |
-| --- | --- |
-| **Every task is required** (what is built) | *Footings* cannot be marked complete until all 15 of its lines are done or marked not applicable. The gate is real, and a line that does not apply to this house is a recorded decision rather than a silence |
-| Tasks are optional unless ticked required | *Footings* can be completed with lines outstanding, and the ones that matter have to be marked by hand, one by one, on 107 lines |
-| Required only where the schedule has a claim | A third rule nobody has written down yet, and the workbook does not say which lines are claims |
-
-**Recommendation: leave it as built.** *Not applicable* on a step is the honest way past a line
-that does not apply, and it is a fact the record keeps — which is what `0078` already says about a
-run: *"complete with a gap is sometimes the truth"*, recorded rather than assumed.
-
-**The same value was written for checklist lines**, for the same reason and with less evidence:
-no checklist line exists on any database, so nothing was copied and nothing was contradicted. If
-tasks turn out to be optional, checklist lines almost certainly are too, and the answer to this
-question sets both. One thing to know when you answer: a checklist line holds its run open on its
-own, **including a line under a task step somebody has marked not applicable** — the state view
-reads each step by itself and does not look at its parent. That is a sharp edge worth knowing
-about before the first checklist exists, and it is cheap to change while none does.
-
-**Blocked on this:** nothing today. Construction runs in SiteBook and no run exists. It is one
-UPDATE while that stays true, and a conversation with the site team once it does not.
-
-
 ### 0g. Do `0120` and `0122` get applied to the live project, and in that order? *(answered 15 September: yes, and both are applied; see the update at the end and the Answered row)*
 
 **Verified against the live project on 15 September, not assumed:** neither of #88's two
@@ -561,6 +526,7 @@ decides how much retro-fitting to schedule, and in what order.
 
 | Date | Question | Answer |
 | --- | --- | --- |
+| 15 Sep | Stage 2, question 0j: is every task inside a process required to finish it? | **Optional unless ticked required.** Chosen over *every task is required*, which is what `0128` built, and over *required only where the schedule has a claim*. `process_tasks` never had a required flag, so the backfill had to pick a value and picked the strict one as a reading of her step 9; this is the answer replacing the reading. `0136` sets the column default to false for every kind and sets the 107 task steps optional. **Property steps are not touched:** their flags came from `process_properties`, where 6 of 140 rows were marked required by somebody at Lofty, and overwriting real data is the invented value this file exists to prevent. The tick box on Setup → Processes is how a step becomes required, and it was already there. **The half of the answer that does not fit on its own:** `0130` completed a run when no *required* step was open and refused to close a run with none, so tasks going optional would have switched auto-completion off for the seven Construction processes her step 9 was written about. `0136` reads *"when all process steps are completed"* literally, so the forward rule waits for **every** step while the gate still refuses a manual complete only over a **required** one. A person may close a process early over optional work, which is what optional means; the system never does. Checklist lines took the same answer, as the question said they would |
 | 15 Sep | Stage 3, question 0l: the owning team and the person on a job derive from the work now. What happens to the two controls that set them? | **Wait for the handshake.** Chosen over *derive both now, no override* and *derive both, keep a manager override*. So `0134` ships as written: the *Currently with* picker on the job record is read-only and the two job-assignee actions are off the Jobs bulk bar, because the Tasks board already holds the control that sets it: assign the task and the job follows. **The owning team is not derived in Stage 3 at all.** Its drop-down stays exactly as it is, set by hand, until the *Override Active Team* request-and-release handshake lands in Stage 4 (14 September: a button that *"requests control of job"*, and *"the active team manager gets a notification that can either release the job to the new team or not"*). **The reason it matters:** deriving the team first would take the only way to move a job to another team off the screen with nothing standing in for it, and a manager pin would quietly replace the request-and-release she designed with a unilateral one. So Stage 4's handshake is what unblocks `job_owning_team`, and until it exists the column stays stored |
 | 15 Sep | Stage 3, question 0k: when every required process on a job is finished, does the job move itself to **Completed**? | **No — it stays put.** Chosen over *yes, it moves to Completed* and *yes, but only where a target completion date is set*. So `job_derived_stage()` returns null when nothing is open anywhere, and the trigger reads that as *no move*, not as *finished*: a manager carries a job to Completed through the confirm modal, which is also where the handover conversation is. **The reason it matters:** a process list that is merely incomplete — a step nobody has added yet, or a stage whose processes are still in SiteBook — reads exactly like a finished job to the derivation, and Completed is expensive to be wrong about. Everything else in Stage 3 derives and moves on its own; this one end of the lifecycle does not. `job_end_date` still stamps when the work is done (14 September), which is a separate fact from the stage |
 | 15 Sep | Stage 1 of the audit: are the process stage groups the data already holds the **sub-stages**, stage by stage? | **"Yes, as the data reads."** Chosen over *rename some of them first* and *Construction's seven are not sub-stages*. So `0127` seeds seventeen rows from the groups themselves: Project Creation and Job Creation; Stage 1, 2 and 3; Footings, Frame, External Cladding, Roof Cover, 2nd Fix, Practical Completion and Handover; 1 Month, 2 Month and 3 Month (her answer of the same day, since Maintenance's one process carried no group); PWA Cancellation and Contract Cancellation. Completed and Closed have none. Two things the yes does **not** cover, both recorded rather than assumed: *Variation* is not a sub-stage under decision 7, so its one process is parked (retired, no sub-stage, never run) until variations are records of their own; and Construction's seven stay the SiteBook placeholder her decision-1 answer describes, carried across mechanically and regrouped by nobody. A correction went with it: `0124`'s header had Roof Cover before External Cladding, and the workbook's process order is the other way round |
