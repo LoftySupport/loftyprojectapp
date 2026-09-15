@@ -4,8 +4,8 @@ import { Select } from "./Select";
 import "./processes.css";
 
 /**
- * Which block inside a stage a process runs in — picked from the ones that exist, or
- * named for the first time.
+ * Which sub-stage a process runs in: picked from the ones its stage has, or named for
+ * the first time.
  *
  * Amber, 3 September: *"when adding a new process or sorting/filtering the group/pipeline
  * needs to be filterable and sortable so when a drop down so when adding a process to a
@@ -13,43 +13,48 @@ import "./processes.css";
  *
  * WHY A PICKER RATHER THAN A BOX
  *
- *   This was free text in the drawer and ABSENT from the create panel — so a new process
+ *   This was free text in the drawer and ABSENT from the create panel, so a new process
  *   could not be put in a block at all without saving it and opening it again, and an
  *   existing one joined "stage 1" or "Stage 1 " by typing, silently making a second block
- *   that looks like the first. Groups are a small closed vocabulary in practice (Stage 1,
- *   Stage 2, Stage 3, Variation); a list of what is already there is both faster and the
- *   only thing that keeps the blocks from multiplying by typo.
+ *   that looks like the first. Since 0127 the blocks are rows (`lifecycle_substages`) with
+ *   an id, so the picker offers the rows and carries the id, and the database refuses a
+ *   second block of the same name in the same stage.
  *
- *   Naming a NEW block still has to be possible — that is how the vocabulary grew in the
- *   first place — so the list carries one extra option that swaps in a text box. The new
- *   name is trimmed, and a name that already exists (in any case) selects that block
- *   rather than creating a twin.
+ *   Naming a NEW block still has to be possible, because that is how the vocabulary grew in
+ *   the first place, so the list carries one extra option that swaps in a text box. The new
+ *   name is trimmed, a name that already exists (in any case) selects that block rather
+ *   than creating a twin, and otherwise `onCreate` makes the row and hands back its id.
  */
 
-/** The option that turns the picker into a text box. Not a group name anybody would type. */
-const NEW_GROUP = "\u0000:new-group";
-/** "Not in a group" is a real answer — some processes stand alone inside their stage. */
-const NONE = "\u0000:no-group";
+/** The option that turns the picker into a text box. Not a uuid, so it cannot be a sub-stage id. */
+const NEW_GROUP = "__new-substage__";
+/** "Not in a sub-stage" is only ever true of a retired process, but it has to be showable. Not a uuid either. */
+const NONE = "__no-substage__";
 
-export function GroupPicker({ value, groups, noneLabel, onChange }: {
+export function GroupPicker({ value, groups, noneLabel, onChange, onCreate }: {
+  /** The chosen sub-stage's id. */
   value: string | null;
-  /** Every group name already in use, in the order the caller wants them offered. */
-  groups: readonly string[];
+  /** The stage's sub-stages, in the order the caller wants them offered. */
+  groups: readonly { id: string; name: string }[];
   noneLabel: string;
-  onChange: (group: string | null) => void;
+  onChange: (id: string | null) => void;
+  /** Make a new sub-stage in this stage and return its id; null when it could not be made. */
+  onCreate: (name: string) => Promise<string | null>;
 }) {
   const [naming, setNaming] = useState(false);
   const [draft, setDraft] = useState("");
 
-  const commit = (raw: string) => {
+  const commit = async (raw: string) => {
     const name = raw.trim();
     setNaming(false);
     setDraft("");
     if (name === "") return;
     // Case-insensitive match against what exists, so "stage 1" joins "Stage 1" rather
     // than opening a second block beside it.
-    const existing = groups.find(g => g.toLowerCase() === name.toLowerCase());
-    onChange(existing ?? name);
+    const existing = groups.find(g => g.name.toLowerCase() === name.toLowerCase());
+    if (existing) { onChange(existing.id); return; }
+    const id = await onCreate(name);
+    if (id) onChange(id);
   };
 
   if (naming) {
@@ -58,14 +63,14 @@ export function GroupPicker({ value, groups, noneLabel, onChange }: {
         <TextField
           value={draft}
           id="group-new"
-          inputAriaLabel="Name the new group"
-          placeholder="Stage 4, Variation…"
+          inputAriaLabel="Name the new sub-stage"
+          placeholder="Stage 4, Lock-up"
           onChange={setDraft}
           onKeyDown={(e: KeyboardEvent) => {
-            if (e.key === "Enter") commit(draft);
+            if (e.key === "Enter") void commit(draft);
             if (e.key === "Escape") { setNaming(false); setDraft(""); }
           }}
-          onBlur={() => commit(draft)}
+          onBlur={() => void commit(draft)}
         />
       </div>
     );
@@ -73,23 +78,22 @@ export function GroupPicker({ value, groups, noneLabel, onChange }: {
 
   return (
     <Select
-      aria-label="Group or pipeline"
+      aria-label="Sub-stage"
       placeholder={noneLabel}
       /*
        * Sorted by the CALLER, not by Select's alphabetical default.
        *
-       * Two of these entries are not group names: "Not in a group" is the empty answer
-       * and belongs at the top, "+ New group…" is an action and belongs at the bottom.
-       * Sorting the list by label put the action first, above every real block. The
-       * names between them arrive already ordered — this stage's blocks alphabetically,
-       * then the rest of the vocabulary — which is more useful here than one flat A–Z.
+       * Two of these entries are not sub-stage names: the empty answer belongs at the top
+       * and "+ New sub-stage" is an action that belongs at the bottom. Sorting the list by
+       * label put the action first, above every real block. The names between them arrive
+       * in the stage's own order, which is the order a job moves through them.
        */
       ordered
       value={value ?? NONE}
       options={[
         { value: NONE, label: noneLabel },
-        ...groups.map(g => ({ value: g, label: g })),
-        { value: NEW_GROUP, label: "+ New group…" }
+        ...groups.map(g => ({ value: g.id, label: g.name })),
+        { value: NEW_GROUP, label: "+ New sub-stage" }
       ]}
       onChange={v => {
         if (v === NEW_GROUP) { setDraft(""); setNaming(true); return; }

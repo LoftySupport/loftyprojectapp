@@ -761,8 +761,9 @@ select case when task_checklist_item_done_at is not null and task_checklist_item
 from task_checklist_items where task_checklist_item_text = 'probe line';
 
 -- A template line with expected days and a checklist line, instantiated onto a run.
-insert into processes (process_key, process_name, process_stage, process_scope, process_position)
-values ('behaviour_probe_0081', 'Behaviour probe 0081', 'Construction', 'job', 999)
+insert into processes (process_key, process_name, process_stage, process_scope, process_position, lifecycle_substage_id)
+select 'behaviour_probe_0081', 'Behaviour probe 0081', 'Construction', 'job', 999, lifecycle_substage_id
+  from lifecycle_substages where lifecycle_stage_id = 'construction' and lifecycle_substage_name = 'Footings'
 on conflict (process_key) do nothing;
 insert into process_tasks (process_id, process_task_name, process_task_expected_days)
 select process_id, 'probe template task', 4 from processes where process_key = 'behaviour_probe_0081';
@@ -825,8 +826,10 @@ select case when contact_company_name is null
 from contact_display where contact_last_name = 'Plumber 0082';
 
 -- A party on a process run of 9106-002 lists under the job.
-insert into processes (process_key, process_name, process_stage, process_scope, process_position)
-values ('behaviour_probe_0082', 'Behaviour probe 0082', 'Construction', 'job', 998) on conflict (process_key) do nothing;
+insert into processes (process_key, process_name, process_stage, process_scope, process_position, lifecycle_substage_id)
+select 'behaviour_probe_0082', 'Behaviour probe 0082', 'Construction', 'job', 998, lifecycle_substage_id
+  from lifecycle_substages where lifecycle_stage_id = 'construction' and lifecycle_substage_name = 'Footings'
+on conflict (process_key) do nothing;
 insert into process_runs (process_id, job_id, process_run_status)
 select process_id, '9106-002', 'in_progress' from processes where process_key = 'behaviour_probe_0082';
 insert into record_parties (process_run_id, company_id, party_role_id)

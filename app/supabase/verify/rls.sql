@@ -132,6 +132,11 @@ select 'pipelines visible: '       || count(*) from pipelines;
 select 'pipeline stages visible: ' || count(*) from pipeline_stages;
 -- 0126: the board's columns come from here now.
 select 'lifecycle stages visible: ' || count(*) from lifecycle_stages;
+-- 0127: and the blocks inside them. Counted for the same reason: the probe below proves a
+-- user cannot WRITE one, and would pass just as happily if the read policy were tightened
+-- to nobody. Setup → Processes reads these through an embed on `processes`, so a user who
+-- cannot see the rows sees every process in "Not in a sub-stage" and no error at all.
+select 'lifecycle substages visible: ' || count(*) from lifecycle_substages;
 
 \echo '--- probes (each must print ok) ---'
 do $$
@@ -184,6 +189,16 @@ begin
   exception
     when insufficient_privilege then raise notice 'ok  a user is refused a lifecycle stage''s SLA outright (0126)';
     when others then raise warning 'FAIL: unexpected on a lifecycle SLA at user (%)', sqlerrm;
+  end;
+
+  -- 0127: sub-stages are the managers' list. A user cannot add one.
+  begin
+    insert into lifecycle_substages (lifecycle_stage_id, lifecycle_substage_name, lifecycle_substage_position)
+    values ('construction', 'Probe sub-stage 0127', 99);
+    raise warning 'FAIL: a user added a sub-stage';
+  exception
+    when insufficient_privilege then raise notice 'ok  a user cannot add a sub-stage (0127)';
+    when others then raise warning 'FAIL: unexpected adding a sub-stage at user (%)', sqlerrm;
   end;
 
   -- 0048: a saved view is private. Two halves, because they are different mechanisms:
@@ -934,6 +949,18 @@ begin
     when others then raise warning 'FAIL: unexpected renaming a lifecycle stage (%)', sqlerrm;
   end;
 
+  -- 4c. 0127: a manager adds a sub-stage, renames it and removes it: the list Amber wants
+  --     editable without a migration. Watched failing with the write policy dropped.
+  begin
+    insert into lifecycle_substages (lifecycle_stage_id, lifecycle_substage_name, lifecycle_substage_position)
+    values ('construction', 'Probe sub-stage 0127', 99);
+    update lifecycle_substages set lifecycle_substage_name = 'Probe sub-stage 0127 renamed'
+     where lifecycle_substage_name = 'Probe sub-stage 0127';
+    delete from lifecycle_substages where lifecycle_substage_name = 'Probe sub-stage 0127 renamed';
+    raise notice 'ok  a manager adds, renames and removes a sub-stage (0127)';
+  exception when others then raise warning 'FAIL: a manager could not manage a sub-stage (%)', sqlerrm;
+  end;
+
   -- 5. The column rule, which is a TRIGGER and not a policy — so it only shows at
   --    manager, exactly like 0060's stage guard only shows at admin. Probe 3 above
   --    covers insert, which the policy refuses; this covers the update the policy now
@@ -1418,8 +1445,9 @@ begin
   end;
 
   begin
-    insert into processes (process_key, process_name, process_stage, process_scope)
-    values ('probe_sneaky', 'Sneaky', 'Construction', 'job');
+    insert into processes (process_key, process_name, process_stage, process_scope, lifecycle_substage_id)
+    select 'probe_sneaky', 'Sneaky', 'Construction', 'job', lifecycle_substage_id
+      from lifecycle_substages where lifecycle_stage_id = 'construction' and lifecycle_substage_name = 'Footings';
     raise warning 'FAIL: a user defined a process';
   exception
     when insufficient_privilege then raise notice 'ok  defining a process is refused below manager';
@@ -1493,8 +1521,9 @@ begin
   end;
 
   begin
-    insert into processes (process_key, process_name, process_stage, process_scope)
-    values ('probe_manager_process', 'Manager''s process', 'Construction', 'job');
+    insert into processes (process_key, process_name, process_stage, process_scope, lifecycle_substage_id)
+    select 'probe_manager_process', 'Manager''s process', 'Construction', 'job', lifecycle_substage_id
+      from lifecycle_substages where lifecycle_stage_id = 'construction' and lifecycle_substage_name = 'Footings';
     raise notice 'ok  a manager defines a process';
   exception when others then raise warning 'FAIL: a manager could not define a process (%)', sqlerrm; end;
 

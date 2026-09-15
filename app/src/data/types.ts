@@ -2049,8 +2049,16 @@ export interface Process {
   key: string;
   name: string;
   stageName: string;
-  /** The workbook's grouping inside a stage — "Stage 1", "Stage 2", "Stage 3", "Variation". */
-  stageGroup: string | null;
+  /**
+   * The sub-stage the process belongs to (0127): a `lifecycle_substages` row of its own
+   * stage. Null only on a retired process with nowhere to run yet, which today is Variation.
+   * The name and position ride along so lists group and order without a second query.
+   */
+  substageId: Uuid | null;
+  substageName: string | null;
+  substagePosition: number | null;
+  /** True when its sub-stage can complete without it (0127). Stage 2's gate reads this. */
+  isOptional: boolean;
   scope: PropertyScope;
   owningTeam: TeamId | null;
   /** How many days a run should take from its start. Null: no agreed duration, not zero. */
@@ -2104,7 +2112,9 @@ export interface NewProcess {
   name: string;
   stageName: string;
   scope: PropertyScope;
-  stageGroup?: string | null;
+  /** Required while the process is active: the database refuses an active process without one. */
+  substageId?: Uuid | null;
+  isOptional?: boolean;
   owningTeam?: TeamId | null;
   expectedDays?: number | null;
   atRiskLeadDays?: number | null;
@@ -2117,6 +2127,31 @@ export interface NewProcess {
 }
 
 export type ProcessPatch = Partial<Omit<NewProcess, "key">> & { isActive?: boolean };
+
+/**
+ * A block inside a lifecycle stage (0127): what a group of processes belongs to, and what a
+ * job is at inside a stage. Managers add, rename, reorder and retire these in Setup →
+ * Processes; a sub-stage with processes cannot be deleted.
+ */
+export interface LifecycleSubstage {
+  id: Uuid;
+  /** The stage's slug, `lifecycle_stages.lifecycle_stage_id`. */
+  stageId: string;
+  /** The stage's display name, resolved on the read. */
+  stageName: string;
+  name: string;
+  position: number;
+  isActive: boolean;
+  description: string | null;
+}
+export interface NewLifecycleSubstage {
+  /** The stage by its display name, the vocabulary every screen shares; the seam resolves the slug. */
+  stageName: string;
+  name: string;
+  position?: number;
+  description?: string | null;
+}
+export type LifecycleSubstagePatch = Partial<Omit<NewLifecycleSubstage, "stageName">> & { isActive?: boolean };
 
 /** `process_dependencies` — the process waits for `dependsOnProcessId`, plus lag. */
 export interface ProcessDependency {
@@ -2207,7 +2242,8 @@ export interface ProcessRun {
   processKey: string;
   processName: string;
   stageName: string;
-  stageGroup: string | null;
+  substageId: Uuid | null;
+  substageName: string | null;
   scope: PropertyScope;
   owningTeam: TeamId | null;
   isMilestone: boolean;

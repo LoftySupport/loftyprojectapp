@@ -129,7 +129,17 @@ export function ProcessesPanel({
   }
 
   const stages = (stageNames.length ? stageNames : [...new Set(applicable.map(p => p.stageName))])
-    .map(stage => ({ stage, processes: applicable.filter(p => p.stageName === stage).sort((a, b) => a.position - b.position) }))
+    // Sub-stage first, then the process's number: the same order as the board's columns
+    // (`stagePipeline`) and Setup's list (`stageOrder`). Since 0127 a block carries its own
+    // position, so sorting on the process number alone would show this drawer's processes
+    // in a different order from the board beside it.
+    .map(stage => ({
+      stage,
+      processes: applicable.filter(p => p.stageName === stage).sort((a, b) =>
+        (a.substagePosition ?? Number.MAX_SAFE_INTEGER) - (b.substagePosition ?? Number.MAX_SAFE_INTEGER)
+        || (a.substageName ?? "").localeCompare(b.substageName ?? "")
+        || a.position - b.position)
+    }))
     .filter(s => s.processes.length > 0);
 
   if (!loading && stages.length === 0) {
@@ -231,7 +241,7 @@ export function ProcessesPanel({
                         </span>
                         <span className="proc-sub">
                           {[
-                            p.stageGroup,
+                            p.substageName,
                             p.owningTeam ? teamName(p.owningTeam, teams) : null,
                             readable.length ? `${recordedHere} of ${readable.length} recorded` : null,
                             requiredMissing ? `${requiredMissing} required missing` : null,

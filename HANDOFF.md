@@ -25,6 +25,25 @@ published with its diagrams at <https://claude.ai/artifact/LnuPZkB65SW8uKhxnaVjC
 `claude/app-schema-architecture-audit-v19mt9`. **No migration was written and nothing on the
 live project changed.**
 
+**Stage 1 is the lifecycle, and it is two migrations.** `0126`, on
+`claude/stage1-lifecycle-stages` (#101, merged), makes `lifecycle_stages` a table: slug key,
+unique name, position, kind, the two SLA columns, `is_active`. The four repeated CHECKs on
+jobs, projects, processes and property_defs become foreign keys to the name, **not cascading a
+rename** — a cascaded rename would restamp every job's "in stage since" and tell everyone the
+job moved — and `lifecycle_position()` reads the table instead of a CASE. **Applied live on 15
+September** in the same sitting as the merge: seven rows in the board's order, four keys of type
+`f`, no CHECK of those names left. The first attempt hit a deadlock against live traffic and
+wrote nothing; the retry applied. `0127`, on `claude/stage1-lifecycle-substages`, makes the
+blocks inside a stage rows too: seventeen `lifecycle_substages` seeded from the groups the data
+already held, on Amber's *"Yes, as the data reads"*; `processes.lifecycle_substage_id` with a
+CHECK and a stage guard in place of the free-text `process_stage_group`;
+`processes.process_is_optional` for Stage 2's completion gate; `process_run_display` rebuilt
+around the sub-stage. Setup → Processes groups and reorders by sub-stage id, so renaming a block
+moves nothing. **A job's** sub-stage is still not derived: that is Stage 3, and it needs Stage
+2's completion gate underneath it. Nine Construction and Acquisition processes are placed by key
+because `0079` seeded them with no group at all, and anything left with nowhere to go is parked
+rather than guessed — live that is *Variation* alone, under decision 7.
+
 **Stage 0's fourth branch, `claude/stage0-notifications`, is `0125`:** a one-row
 `notification_settings` with the switch-on moment, null until an admin sets it; `private.notify`
 writes every email, Teams and SMS row as skipped before it, and the worker's claim never takes a
@@ -2061,6 +2080,14 @@ within the stage"; a group's place in the stage IS the position of its first pro
 every reorder renumbers the stage so the blocks stay contiguous. That was worth choosing over
 a `stage_group_position` column: the number on screen and the number in the column can never
 disagree.
+
+> **Reversed by `0127`, 15 September.** The blocks are rows now and a block carries its own
+> position, which is exactly the column this paragraph argued against. What changed the answer
+> is that a block became a thing you rename and retire, not just a heading: renaming it must
+> not renumber forty-nine processes. The downside named here is real and is paid where it has
+> to be — the board's columns and the record drawer both sort by the block's position before
+> the process's number, the same comparison Setup uses, so the two cannot disagree. Left in
+> place rather than rewritten, because the reasoning is why the column was avoided for a week.
 
 A reorder is expressed against the stage's **full** list, not what is on screen. Filtering to
 one team and dragging would otherwise shove every hidden process to the end of the stage.

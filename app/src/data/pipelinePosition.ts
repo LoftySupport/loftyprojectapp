@@ -33,11 +33,29 @@ import type { Process } from "./types";
  * current process is the first one that is neither.
  */
 
-/** Processes that make up one stage, in the order a job passes through them. */
+/**
+ * Processes that make up one stage, in the order a job passes through them.
+ *
+ * SUB-STAGE FIRST, SINCE 0127. Before it, a block's place in the stage was the position of
+ * its first process, so `position` alone was the whole order. Now a block is a row with a
+ * position of its own and moving one writes that row and nothing else — so a sort on
+ * `position` alone would leave the board drawing last week's column order while Setup →
+ * Processes drew this week's. Same comparison as `stageOrder` in `pipelineOrder.ts`, and
+ * the two must stay the same: one decides what a manager sees when they drag, the other
+ * decides what every job's column says.
+ *
+ * A process with no sub-stage sorts last rather than first, which is what a null would do
+ * on its own. It is only ever a retired one, and `isActive` has already excluded it.
+ */
 export function stagePipeline(processes: Process[], stage: string): Process[] {
+  const last = Number.MAX_SAFE_INTEGER;
   return processes
     .filter(p => p.isActive && p.stageName === stage && p.scope === "job")
-    .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
+    .sort((a, b) =>
+      (a.substagePosition ?? last) - (b.substagePosition ?? last)
+      || (a.substageName ?? "").localeCompare(b.substageName ?? "")
+      || a.position - b.position
+      || a.name.localeCompare(b.name));
 }
 
 /**

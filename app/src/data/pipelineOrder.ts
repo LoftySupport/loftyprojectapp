@@ -1,4 +1,4 @@
-import type { Process } from "./types";
+import type { LifecycleSubstage, Process } from "./types";
 
 /**
  * The maths behind dragging a process, lifted out of the screen so it can be checked.
@@ -14,81 +14,67 @@ import type { Process } from "./types";
  * screen should be a short ordered list you drag, rename in place and add to, rather
  * than a table with a handle hidden in one of its cells.
  *
+ * Since 0127 the groups are rows of their own, `lifecycle_substages`, with a position of
+ * their own. So there are two orders here and two things a drag can write: a process's
+ * number and sub-stage (`ordersToWrite`), and a sub-stage's position among its stage's
+ * sub-stages (`substageOrdersToWrite`). Before 0127 a block's order was wherever its first
+ * process happened to fall, which meant moving a block meant renumbering every process.
+ *
  * This lived inside the page component, which meant the rules below could only be proved
  * by dragging things in a browser against a database. They decide what a job's board
  * column IS (`pipelinePosition.ts` sorts on the `position` they write), so they are worth
  * a check that runs.
  */
 
-export const NO_GROUP = "Not in a group";
-export const groupLabel = (g: string | null) => g ?? NO_GROUP;
+/** What a parked process shows under: one with no sub-stage, which is only ever a retired one. */
+export const NO_GROUP = "Not in a sub-stage";
+/** The key a process is grouped by: its sub-stage's id, or the empty key for a parked one. */
+export const groupKey = (p: Pick<Process, "substageId">) => p.substageId ?? "";
+export const groupLabel = (p: Pick<Process, "substageName">) => p.substageName ?? NO_GROUP;
 
 /**
- * The stage's canonical order: groups as contiguous blocks in the order their first
- * process falls, each block in position order. Two processes with the same position fall
- * back to their names so the order is stable rather than whatever the array arrived in.
+ * The stage's canonical order: sub-stages as contiguous blocks in sub-stage position order,
+ * each block in process position order; a parked process (no sub-stage) last. Two processes
+ * with the same position fall back to their names so the order is stable rather than
+ * whatever the array arrived in.
  */
 export function stageOrder(list: Process[]): Process[] {
-  const sorted = [...list].sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
-  const seen: string[] = [];
-  const blocks = new Map<string, Process[]>();
-  for (const p of sorted) {
-    const k = groupLabel(p.stageGroup);
-    if (!blocks.has(k)) { blocks.set(k, []); seen.push(k); }
-    blocks.get(k)!.push(p);
-  }
-  return seen.flatMap(k => blocks.get(k)!);
+  const last = Number.MAX_SAFE_INTEGER;
+  return [...list].sort((a, b) =>
+    (a.substagePosition ?? last) - (b.substagePosition ?? last)
+    || (a.substageName ?? "").localeCompare(b.substageName ?? "")
+    || a.position - b.position
+    || a.name.localeCompare(b.name));
 }
 
-/** Lift one process out and drop it at `index`, taking `group` with it. */
-export function spliceProcess(arr: Process[], id: string, index: number, group: string | null): Process[] {
+type SubstageOf = Pick<Process, "substageId" | "substageName" | "substagePosition">;
+
+/** Lift one process out and drop it at `index`, taking the sub-stage of that place with it. */
+export function spliceProcess(arr: Process[], id: string, index: number, into: SubstageOf): Process[] {
   const from = arr.findIndex(p => p.id === id);
   if (from === -1) return arr;
   const out = arr.slice();
   const [moved] = out.splice(from, 1);
   const at = from < index ? index - 1 : index;
-  out.splice(at, 0, { ...moved, stageGroup: group });
+  out.splice(at, 0, { ...moved, substageId: into.substageId, substageName: into.substageName, substagePosition: into.substagePosition });
   return out;
 }
 
-/** Lift a whole group block out and drop it in front of the block at `index`. */
-export function spliceGroup(arr: Process[], group: string, index: number): Process[] {
-  const block = arr.filter(p => groupLabel(p.stageGroup) === group);
-  if (block.length === 0) return arr;
-  const rest = arr.filter(p => groupLabel(p.stageGroup) !== group);
-  const removedBefore = arr.slice(0, index).filter(p => groupLabel(p.stageGroup) === group).length;
-  const out = rest.slice();
-  out.splice(index - removedBefore, 0, ...block);
-  return out;
-}
-
-/** Step one process up or down, joining the group it steps into. */
+/** Step one process up or down, joining the sub-stage it steps into. */
 export function moveProcess(arr: Process[], id: string, dir: -1 | 1): Process[] {
   const i = arr.findIndex(p => p.id === id);
   const j = i + dir;
   if (i === -1 || j < 0 || j >= arr.length) return arr;
-  // Stepping past a group boundary joins the group you stepped into — which is what
+  // Stepping past a block boundary joins the block you stepped into, which is what
   // moving a process down out of "Stage 1" and into "Stage 2" is asking to do.
-  return spliceProcess(arr, id, dir === -1 ? j : j + 1, arr[j].stageGroup ?? null);
+  return spliceProcess(arr, id, dir === -1 ? j : j + 1, arr[j]);
 }
 
-/** Step a whole group block up or down, past the block beside it. */
-export function moveGroup(arr: Process[], group: string, dir: -1 | 1): Process[] {
-  const order = [...new Set(arr.map(p => groupLabel(p.stageGroup)))];
-  const i = order.indexOf(group);
-  const j = i + dir;
-  if (i === -1 || j < 0 || j >= order.length) return arr;
-  const target = dir === -1
-    ? arr.findIndex(p => groupLabel(p.stageGroup) === order[j])
-    : arr.map(p => groupLabel(p.stageGroup)).lastIndexOf(order[j]) + 1;
-  return spliceGroup(arr, group, target);
-}
-
-export type ProcessOrder = { id: string; stageGroup: string | null; position: number };
+export type ProcessOrder = { id: string; substageId: string | null; position: number };
 
 /**
  * What a move actually writes: the stage renumbered 1..n, narrowed to the rows whose
- * number or group changed.
+ * number or sub-stage changed.
  *
  * Two rules are load-bearing and neither is obvious.
  *
@@ -102,11 +88,42 @@ export type ProcessOrder = { id: string; stageGroup: string | null; position: nu
  *   should not claim somebody touched it this morning.
  */
 export function ordersToWrite(before: Process[], after: Process[]): ProcessOrder[] {
-  const was = new Map(before.map(p => [p.id, { position: p.position, group: p.stageGroup ?? null }]));
+  const was = new Map(before.map(p => [p.id, { position: p.position, substageId: p.substageId }]));
   return after
-    .map((p, i) => ({ id: p.id, stageGroup: p.stageGroup ?? null, position: i + 1 }))
+    .map((p, i) => ({ id: p.id, substageId: p.substageId, position: i + 1 }))
     .filter(o => {
       const b = was.get(o.id);
-      return !b || b.position !== o.position || b.group !== o.stageGroup;
+      return !b || b.position !== o.position || b.substageId !== o.substageId;
     });
+}
+
+// ---------------------------------------------------------------- the blocks themselves
+
+/** Lift one sub-stage out of its stage's list and drop it in front of the one at `index`. */
+export function spliceSubstage(subs: LifecycleSubstage[], id: string, index: number): LifecycleSubstage[] {
+  const from = subs.findIndex(s => s.id === id);
+  if (from === -1 || index < 0) return subs;
+  const out = subs.slice();
+  const [moved] = out.splice(from, 1);
+  const at = from < index ? index - 1 : index;
+  out.splice(Math.min(at, out.length), 0, moved);
+  return out;
+}
+
+/** Step one sub-stage up or down past the one beside it. */
+export function moveSubstage(subs: LifecycleSubstage[], id: string, dir: -1 | 1): LifecycleSubstage[] {
+  const i = subs.findIndex(s => s.id === id);
+  const j = i + dir;
+  if (i === -1 || j < 0 || j >= subs.length) return subs;
+  return spliceSubstage(subs, id, dir === -1 ? j : j + 1);
+}
+
+export type SubstageOrder = { id: string; position: number };
+
+/** The stage's sub-stages renumbered 1..n, narrowed to the rows whose position changed. */
+export function substageOrdersToWrite(before: LifecycleSubstage[], after: LifecycleSubstage[]): SubstageOrder[] {
+  const was = new Map(before.map(s => [s.id, s.position]));
+  return after
+    .map((s, i) => ({ id: s.id, position: i + 1 }))
+    .filter(o => was.get(o.id) !== o.position);
 }

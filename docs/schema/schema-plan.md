@@ -4169,6 +4169,111 @@ expect the key's error rather than the CHECK's; `rls.sql` proves a manager sets 
 `lifecycle_stages`, cannot rename there, and a user cannot set the SLA. Watched failing as the
 file says.
 
+**Applied live, 15 September**, in the same sitting as #101 merged, recorded in the ledger as
+`the_lifecycle_is_a_table`. Seven rows in the same order the board drew them, four constraints
+of type `f`, no CHECK of those names left, `lifecycle_position('Construction')` returning 3 from
+the table and the `probe_0126` property not leaked. The first attempt was refused by a deadlock
+(`40P01`) against live traffic holding a read lock while the migration waited to take the four
+tables exclusively; nothing had been written, and the retry a minute later applied cleanly.
+
+### 15 September — the sub-stages are rows (`0127`)
+
+Stage 1 of the audit, the second of its two migrations, on `claude/stage1-lifecycle-substages`.
+
+**What a sub-stage is.** Amber, 15 September, on Working Drawings: *"in pre-construction
+(lifecycle) stage 2 (substage) a number of processes occur"*. It is the block of a lifecycle
+stage a group of processes belongs to, and what a job is *at* inside a stage. Until now it was
+`processes.process_stage_group`, free text the workbook load wrote and Setup → Processes let a
+manager type: a heading, not a thing. Two people typing *Stage 1* and *stage 1* made two blocks
+that looked like one.
+
+**Where the list came from.** Asked whether the groups the data already held were the
+sub-stages, stage by stage, Amber: *"Yes, as the data reads."* So seventeen rows: Project
+Creation and Job Creation; Stage 1, 2 and 3; Footings, Frame, External Cladding, Roof Cover, 2nd
+Fix, Practical Completion and Handover; 1 Month, 2 Month and 3 Month (her answer of the same
+day); PWA Cancellation and Contract Cancellation. Completed and Closed have none, which is
+correct rather than missing. **A correction:** `0124`'s header listed Roof Cover before External
+Cladding, inferred from the property groups; the workbook's process order is the other way
+round, and the workbook is the record.
+
+**What the migration does.** `lifecycle_substages`: a uuid key (renaming is data, so the key is
+not the name), the stage slug it hangs off, the name unique within its stage, a position,
+`is_active`, a description, stamps. Managers write it, because adding, renaming, reordering and
+retiring a block are the edits Amber wants done in the app rather than in a migration.
+`processes.lifecycle_substage_id` replaces the group column, with a CHECK that an active process
+has one and a trigger that a process's sub-stage belongs to the process's own stage.
+`processes.process_is_optional`, false everywhere today, is the flag Stage 2's completion gate
+reads so a sub-stage can hold processes that do not have to finish.
+`process_run_display` is dropped and rebuilt (a `create or replace view` cannot remove a column)
+carrying `process_substage_id` and `process_substage_name` where it carried the free text.
+
+**The backfill, and why it is in three passes.** The first joins on (stage, group) and places
+everything the live database had typed. The second puts Maintenance's one process in *1 Month*,
+which is her answer. The third is the interesting one: `0079` seeded the Acquisition &
+Development and Construction processes with **no group at all**, and the groups they carry live
+were typed in the app afterwards, so a database replayed from the migrations alone has nine
+active processes the name join cannot place. Each is the only process of its block and is named
+for it, and the live rows of 15 September carry exactly those pairs, so those nine are written
+by key. That is reading the live data, not inventing it.
+
+**What is parked, rather than guessed.** Anything still active with nowhere to go is retired
+(`process_is_active = false`, no sub-stage) and named in a notice, never filed into a plausible
+block. Live that is one process, *Variation*, which under decision 7 waits until variations are
+records of their own to run on; it has never run. On the seed replay it is also `pwa` and `kbs`,
+which `0079` seeded ungrouped and which somebody moved by hand later.
+
+**What the app changed.** Setup → Processes reads `listSubstages()` and groups by sub-stage id
+rather than by a string, so renaming a block moves nothing and two blocks cannot collide. **The
+screen's blocks are the stage's sub-stages, not the blocks its processes happen to form**, so an
+empty one still draws and can be renamed, reordered and retired — Amber's *2 Month* and *3 Month*
+are seeded empty on purpose, and a block nobody can see is a block nobody can manage. The
+group picker offers the stage's blocks and carries their ids, still able to name a new one,
+which is how the vocabulary grew in the first place; a name that already exists in any case
+joins that block instead of making a twin. Blocks now reorder as themselves, one write each,
+where before a block's place was wherever its first process happened to fall and moving it
+renumbered every process in the stage. The process drawer gains **Optional**.
+
+**What that one write costs, and what had to follow it.** The 8 September note said no schema
+change was needed for the ordering, *"a group's place in the stage IS the position of its first
+process … the number on screen and the number in the column can never disagree"*. `0127` takes
+the other side of that trade deliberately, and the named downside is real: a block now carries a
+position the processes do not, so **every screen that orders processes has to read it**. The
+board's columns (`pipelinePosition.ts`) and the record drawer's list (`ProcessesPanel.tsx`) sort
+by sub-stage position and then by the process's number, the same comparison as Setup's own
+`stageOrder`. Without that, a manager who moved a block would change Setup → Processes and
+nothing the rest of the company sees: the board would draw last week's columns under this week's
+headings. `check:pipeline` carries the case, watched failing against the old sort.
+
+**What "the board groups by sub-stage" means, and what it does not.** The audit's Stage 1 line
+is met for Setup → Processes, which is the screen that lists processes. A **job's** sub-stage is
+a derived value that does not exist yet: it is the Stage 3 roll-up, and it needs the completion
+gate of Stage 2 underneath it. Recorded here so the line is not read later as a thing that was
+skipped.
+
+**Proof.** Seventeen rows; no active process without a sub-stage; no process in another stage's
+sub-stage; the group column gone; the rebuilt view carrying the sub-stage name with the same row
+count as `process_runs`; a Construction process refused a Pre-construction sub-stage; an active
+process with no sub-stage refused; a sub-stage with processes refused deletion; and neither guard
+trigger function callable over the API. Those run once, on the day it applies. **What runs on
+every check:** `constraints.sql` gains four probes — a process in another stage's sub-stage, an
+active process with none, a second block of the same name in the same stage, and deleting a block
+that holds processes — and `rls.sql` counts the sub-stages a plain user can read (17, because a
+policy tightened to nobody would empty every block on the screen and raise nothing), proves a user
+cannot add one and a manager can add, rename and remove one. `behaviour.sql`'s two process probes
+carry a real sub-stage id.
+Watched failing with the guard trigger dropped, with the CHECK dropped and with the manager
+write policy dropped, each reporting the one thing it guards.
+
+**One thing it carries that is not its own.** Supabase's advisor flagged
+`guard_lifecycle_stage_shape_change()` the moment `0126` reached the live database: a
+SECURITY DEFINER function with no arguments is published by PostgREST at
+`/rest/v1/rpc/<name>`, and `0010` and `0011` set the convention that every such function has
+its EXECUTE revoked from public, anon and authenticated. Twenty-odd trigger functions follow
+it; `0126` and this one did not. Calling either over the API fails with *"trigger functions
+can only be called as triggers"*, watched as the authenticated role, so it is the advisor's
+line rather than an open door — but `0126` is applied and cannot be edited, and a third
+migration for one statement is churn, so `0127` revokes both and asserts neither is callable.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

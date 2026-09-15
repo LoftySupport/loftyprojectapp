@@ -45,7 +45,8 @@ const is = (label, got, want) => {
 
 const PRE = "Pre-construction";
 const proc = (key, name, position, stageName = PRE) =>
-  ({ id: `id-${key}`, key, name, stageName, stageGroup: "Stage 1", scope: "job", position, isActive: true });
+  ({ id: `id-${key}`, key, name, stageName, substageId: "sub-stage-1", substageName: "Stage 1",
+     substagePosition: 1, isOptional: false, scope: "job", position, isActive: true });
 
 // A real Pre-construction run, in the order the SiteBook schedule has it.
 const PROCESSES = [

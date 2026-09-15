@@ -750,7 +750,7 @@ export const DICTIONARY: DictionaryEntry[] = [
     "What the SLAs say the job will finish, beside the target somebody committed to and the day it actually did. Amber, 14 September: a system field \"based by when the job is likely to end based on slas and [the stage] it is up to so management can look at targeted completion date (when they want it to be done) versus the realistic calculated date based on slas and then the actual date it was completed for process optimisation\".",
     "date",
     "Read-only, computed. NULL is the normal answer today and job_calculated_completion_missing says why — all 38 Pre-construction processes carry no estimate, so the forecast refuses to answer rather than projecting from the third of the pipeline that is populated. NULL for both columns means the job is not live.",
-    "The longest path through process_dependencies in CALENDAR days, from job_completion_forecast() (0119). A process costs its own process_expected_days when set and the sum of its tasks' process_task_expected_days otherwise — 3 of 51 processes use the first, 107 of 107 tasks feed the second. Every start is floored at today, so an overrun is sunk rather than pushed forward. Counts optional processes, because process_is_optional does not exist yet.",
+    "The longest path through process_dependencies in CALENDAR days, from job_completion_forecast() (0119). A process costs its own process_expected_days when set and the sum of its tasks' process_task_expected_days otherwise — 3 of 51 processes use the first, 107 of 107 tasks feed the second. Every start is floored at today, so an overrun is sunk rather than pushed forward. Counts every process on the path, optional or not: 0127 added process_is_optional and the forecast does not read it yet. It is Stage 2's completion gate that will, and the forecast follows it there.",
     "created"),
   e("job_display.job_calculated_completion_missing", "Estimates missing",
     "How many of the job's processes nobody has put a duration on. It is why the calculated completion date is blank when it is blank.",
@@ -1061,12 +1061,26 @@ export const DICTIONARY: DictionaryEntry[] = [
   e("property_value_history.property_value_history_at", "When", "When the change happened.", "timestamptz", "Not null, default now().", "—", "created"),
   e("property_value_history.property_value_history_by", "Who", "Who made the change.", "uuid", "Nullable. FK → profiles.", "—", "created"),
 
+  // --------------------------------------------------------- lifecycle_substages (0127)
+  // The blocks inside a lifecycle stage, as rows: what a group of processes belongs to.
+  e("lifecycle_substages.lifecycle_substage_id", "Sub-stage ID", "A uuid, not the name: renaming a sub-stage is data, and nothing has to follow.", "uuid", "Primary key, default gen_random_uuid().", "Referenced by processes.lifecycle_substage_id.", "created"),
+  e("lifecycle_substages.lifecycle_stage_id", "Stage", "The lifecycle stage this block sits in, by 0126's slug.", "text", "Not null.", "FK → lifecycle_stages(lifecycle_stage_id) ON UPDATE CASCADE ON DELETE RESTRICT.", "created"),
+  e("lifecycle_substages.lifecycle_substage_name", "Sub-stage", "What the block is called: Stage 1, Footings, 1 Month. Seeded from the process stage groups the workbook carried, on Amber's yes of 15 September.", "text", "Not null, not blank. Unique within its stage.", "—", "created"),
+  e("lifecycle_substages.lifecycle_substage_position", "Order", "Order within the stage: the flow a job moves through. Moving a block on Setup → Processes rewrites it.", "integer", "smallint. Not null, default 0.", "—", "created"),
+  e("lifecycle_substages.lifecycle_substage_is_active", "Active", "False retires a block from pickers; processes already in it keep their place, and a block with processes cannot be deleted.", "boolean", "Not null, default true.", "—", "created"),
+  e("lifecycle_substages.lifecycle_substage_description", "Description", "What the block is for, when a name is not enough.", "text", "Nullable.", "—", "created"),
+  e("lifecycle_substages.lifecycle_substage_created_at", "Created", "When the row was made.", "timestamptz", "Not null, default now().", "—", "created"),
+  e("lifecycle_substages.lifecycle_substage_created_by", "Created by", "Who made it; stamp_created_by fills it from the session.", "uuid", "Nullable.", "FK → profiles(profile_id).", "created"),
+  e("lifecycle_substages.lifecycle_substage_updated_at", "Updated", "When the row last changed; moddatetime stamps it.", "timestamptz", "Not null, default now().", "—", "created"),
+  e("lifecycle_substages.lifecycle_substage_updated_by", "Updated by", "Who changed it; stamp_updated_by fills it from the session.", "uuid", "Nullable.", "FK → profiles(profile_id).", "created"),
+
   // -------------------------------------------------------------------- processes (0078)
   e("processes.process_id", "Process ID", "What happens inside a lifecycle stage, as a row: a named piece of work pinned to a stage, run on a project or a job, with a team, a duration and the properties it collects. Never stores a value — properties do.", "uuid", "Primary key.", "process_runs, process_dependencies, process_properties and process_tasks hang off it.", "created"),
   e("processes.process_key", "Key", "The stable slug — the identity the seed and any integration address. The name is the renameable half.", "text", "Unique. Not null. CHECK: lowercase letters, digits and underscores.", "Seeded from the workbook's Processes sheet (0079).", "created"),
   e("processes.process_name", "Process", "What the process is called — \"Concept Plan\", \"1 - Footings\".", "text", "Not null, non-blank.", "—", "created"),
   e("processes.process_stage", "Lifecycle stage", "Which of the seven lifecycle stages this process belongs to. The same words as jobs.job_stage, enforced the same way.", "text", "Not null. CHECK against the seven names.", "Groups the process panel on a record and the Setup → Processes editor.", "created"),
-  e("processes.process_stage_group", "Stage group", "The workbook's grouping inside a stage — \"Stage 1\", \"Stage 2\", \"Stage 3\", \"Variation\". A heading on a board, not a rule.", "text", "Nullable.", "—", "created"),
+  e("processes.lifecycle_substage_id", "Sub-stage", "The sub-stage this process belongs to (0127): a lifecycle_substages row of its own stage. Required while the process is active. Replaces process_stage_group, the free-text group the workbook load wrote.", "uuid", "Nullable, but CHECK processes_active_has_substage: an active process has one. FK → lifecycle_substages ON UPDATE CASCADE ON DELETE RESTRICT. guard_process_substage_in_stage: the sub-stage belongs to the process's stage.", "Read into Process.substageId; Setup → Processes groups and reorders by it.", "created"),
+  e("processes.process_is_optional", "Optional", "True when its sub-stage can complete without this process finishing (0127). False for every process on the day.", "boolean", "Not null, default false.", "Stage 2's completion gate reads it.", "created"),
   e("processes.process_scope", "Level", "Whether the process runs on a project or on a job — the workbook's \"Type\" column.", "text", "Not null. CHECK in ('project','job').", "guard_process_run() refuses a run on the wrong kind of record.", "created"),
   e("processes.process_owning_team", "Owning team", "Which team does the work. Null when the workbook named nobody.", "text", "Nullable. FK → teams ON UPDATE CASCADE.", "—", "created"),
   e("processes.process_expected_days", "Expected days", "How many days a run should take from its start. Null means no agreed duration, not zero — the workbook gives none.", "integer", "Nullable. CHECK > 0.", "process_run_display derives due_date = started + this.", "created"),
@@ -1821,6 +1835,8 @@ export const TABLE_DESCRIPTIONS: Record<string, string> = {
     "One dwelling's build — \"1042-01\", which is both what Lofty says out loud and the primary key. Carries the lifecycle stage, the owning team and assignee, both addresses, the engaged teams and the SharePoint folder: the board is mostly this table.",
   login_activity:
     "One row per authentication event, copied out of auth.users with the email denormalised so the row survives account deletion. Read most-recent-first, which is what its index is for. Built outside the numbered migrations.",
+  lifecycle_substages:
+    "The blocks inside each lifecycle stage, as rows (0127): what a group of processes belongs to and what a job is at inside a stage. Seeded from the workbook's process groups on Amber's yes; managers add, rename, reorder and retire them in Setup → Processes.",
   lifecycle_stages:
     "The lifecycle as rows (0126): the seven stages in position order, their kind, their SLA and whether they are active. Every stage column is a foreign key to the name. Superadmin changes what a stage is; a manager sets its SLA; a rename with rows in the stage is a migration.",
   pipeline_stages:
