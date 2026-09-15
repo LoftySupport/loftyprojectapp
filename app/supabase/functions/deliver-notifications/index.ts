@@ -7,7 +7,12 @@
 //
 // Channels:
 //   email  — Microsoft Graph, sent from a Lofty mailbox so replies land in Outlook.
-//   teams  — Microsoft Graph, a chat message to the person (Teams later widens to channels).
+//   teams  — Microsoft Graph, a chat message to the person. UNPROVEN: Microsoft does not
+//            support sending a chat message with an APPLICATION permission, so this path is
+//            expected to be refused against a real tenant, and has never been run against one.
+//            The 6 September design moves team notifications to a channel webhook per team
+//            (Hub, one channel per department) and leaves personal Teams messages until a
+//            Teams app is registered. Do not treat this branch as working until it has sent.
 //   sms    — no provider yet (Amber, 2 Sep: "to be setup later"). Rows stay queued; this
 //            worker skips the channel and says so in its response.
 //
@@ -29,18 +34,21 @@
 //   MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET   an app registration with Mail.Send and
 //                                                  Chat.ReadWrite.All application permissions
 //   MS_SENDER_MAILBOX                           e.g. notifications@lofty.com.au
-//   APP_BASE_URL                                e.g. https://app.lofty.com.au, for the links
+//   APP_BASE_URL                                https://hub.lofty.au — the app's address, for the links
 //   MAINTENANCE_SENDER_MAILBOX                  e.g. maintenance@lofty.com.au — the maintenance thread's
 //                                              from address (replies go back to the intake mailbox);
 //                                              falls back to MS_SENDER_MAILBOX
 //   DELIVER_SECRET                              a shared secret the scheduler sends as
-//                                              `x-deliver-secret`, so nobody else can trigger sends
+//                                              `x-deliver-secret`. REQUIRED: with it unset this
+//                                              function refuses every request with 503, so a
+//                                              deploy made before it is set is inert, not open
 //
 // Deploy: `supabase functions deploy deliver-notifications --no-verify-jwt`, then set the
 // secrets, then schedule. Nothing here is live until those three steps are done, and the
 // app says so in Setup → Notifications until the first delivery is marked sent.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { graphConfigured, graphToken } from "../_shared/graph.ts";
 
 type Claimed = {
   notification_delivery_id: number;
@@ -59,21 +67,6 @@ type Claimed = {
 
 const env = (k: string) => Deno.env.get(k) ?? "";
 const APP = env("APP_BASE_URL").replace(/\/$/, "");
-
-async function graphToken(): Promise<string> {
-  const res = await fetch(`https://login.microsoftonline.com/${env("MS_TENANT_ID")}/oauth2/v2.0/token`, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: env("MS_CLIENT_ID"),
-      client_secret: env("MS_CLIENT_SECRET"),
-      scope: "https://graph.microsoft.com/.default",
-      grant_type: "client_credentials"
-    })
-  });
-  if (!res.ok) throw new Error(`Graph token: ${res.status} ${await res.text()}`);
-  return ((await res.json()) as { access_token: string }).access_token;
-}
 
 const escapeHtml = (s: string) => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
 
@@ -164,7 +157,14 @@ async function sendTeams(token: string, userPrincipalName: string, rows: Claimed
 }
 
 Deno.serve(async req => {
-  if (env("DELIVER_SECRET") && req.headers.get("x-deliver-secret") !== env("DELIVER_SECRET")) {
+  // FAIL CLOSED. This used to be `if (env("DELIVER_SECRET") && ...)`, which skipped the
+  // check entirely when the secret was unset — so a deploy made before somebody set it
+  // answered to anybody who found the URL, and sent real mail on demand. Empty is now a
+  // refusal, the same shape `report-share` uses for an unset origin allowlist: deploying
+  // before deciding gets an endpoint that does nothing, rather than one that is open.
+  const secret = env("DELIVER_SECRET");
+  if (!secret) return new Response("Delivery is not switched on.", { status: 503 });
+  if (req.headers.get("x-deliver-secret") !== secret) {
     return new Response("forbidden", { status: 403 });
   }
   const db = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"));
@@ -173,7 +173,7 @@ Deno.serve(async req => {
   for (const channel of ["email", "teams", "sms"] as const) {
     summary[channel] = { sent: 0, failed: 0 };
     if (channel === "sms") { summary.sms.skipped = "no provider configured (Amber, 2 Sep: later)"; continue; }
-    if (!env("MS_TENANT_ID")) { summary[channel].skipped = "Microsoft Graph secrets not set"; continue; }
+    if (!graphConfigured()) { summary[channel].skipped = "Microsoft Graph secrets not set"; continue; }
 
     const { data, error } = await db.rpc("claim_notification_deliveries", { p_channel: channel, p_limit: 100 });
     if (error) { summary[channel].skipped = `claim failed: ${error.message}`; continue; }

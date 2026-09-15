@@ -3563,6 +3563,244 @@ exist live yet, and the delete-rule half is a no-op there (live still reads plai
 `ON DELETE CASCADE`). The half that *is* missing live is `on update cascade` — which only
 matters once `0120` lands. The order to apply them in is `0120` then `0122`, together.
 
+## 15 September — Microsoft 365: one home each, and a window onto it
+
+Lofty has created a Microsoft Team called **Hub** with its own SharePoint site, and it is the
+home for the app's documents, notifications and comments from here on. Amber: *"This is to allow
+documents and notifications and comments to all sync so everything lives in Microsoft… so there
+is one source of truth and no one can miss anything."*
+
+**A readable version is published at <https://claude.ai/artifact/97eodMUneoxPkYQP4oCgcp>** — show
+that one to people. It carries the routing table, the folder tree with real names, the queue
+diagram, job `1042-001` seen from Deanna's phone and from Ketan's desk, and the open questions,
+which can be answered in the page itself.
+
+### The rule: one home each, and the other system shows it
+
+Duplication is what makes two systems worse than one, so each kind of thing gets exactly one home.
+
+| | Home | The other system |
+|---|---|---|
+| Files | SharePoint | The app stores a pointer and lists the folder live |
+| Comments and notifications | The app | Teams shows each one with a link back to the record |
+| Folder templates | SharePoint | The app copies them; it does not describe them |
+
+The templates being folders rather than settings is the part that keeps this maintainable. Amber:
+*"this template folder needs to be able to be updated without breaking the whole process"* — it
+cannot break anything, because the template is read only at the moment a folder is created.
+Editing it changes what new records get and touches nothing that exists. For folders already made,
+an explicit **Apply template updates** action adds what is missing and never renames, moves or
+deletes, so it cannot disturb a file somebody has open.
+
+### Not SharePoint Embedded, and no new Team
+
+Embedded storage was considered and rejected: its containers are reachable only by the app, so
+files would not appear in Teams, in SharePoint, in OneDrive sync or in File Explorer, and storage
+is billed separately. Amber's people save from phones and from File Explorer, which is the whole
+point. The Hub team's ordinary document library is the answer.
+
+No new team, no new app registration. The existing Entra registration gains `Sites.Selected` on
+the Hub site, `Mail.Read`, and `GroupMember.Read.All` for the membership mirror.
+
+### No new Teams, no new channels — post where people already are
+
+Amber, 15 September: *"teams for each department are setup already in the organisation and I
+don't want to double up by creating new teams and sharepoint sites as it is confusing."* So the
+app creates nothing in Microsoft except folders:
+
+| | Where it goes | Created by this work? |
+|---|---|---|
+| Company-wide notices | **Hub → General** | No — Hub already exists |
+| A team's own notifications | **That department's existing Team**, in the channel they nominate | No |
+| Every project and job folder | **The Hub SharePoint site**, one library | Folders only |
+| A department's own documents | Their own site, untouched | No |
+
+The earlier version of this entry proposed a channel per department **inside Hub**. That is
+reversed: it would have given every person two places to watch — their department Team, where they
+already talk, and a Hub channel carrying the same names. Posting into the Team they already have
+open is the version with one place in it.
+
+**Files are the exception, and only because a job moves.** A job passes through Design, Scheduling,
+Construction and the rest during its life. A folder living in any one department's site would have
+to be moved at every stage change, or sit in the wrong place. So documents are the one thing that
+leaves the department sites: one library on the Hub site, and each department site keeps whatever
+internal material it already holds.
+
+**Mapping, not creating.** Each row in `teams` names an existing Microsoft team and the channel in
+it that should receive notifications. A team with no Microsoft counterpart gets **email only** —
+nothing is invented for it. That is also the answer for Accounts, which Amber confirmed should be
+treated like every other team.
+
+**Finance is renamed Accounts** (Amber, 15 September). It is a display name only: `teams.team_name`
+'Finance' → 'Accounts', the seed list in `types.ts`, and the enum label `0026` maps from. **The slug
+`team_id = 'finance'` stays**, and so does everything else called finance, because
+`process_key = 'finance'` in `0079` is a *pre-construction process*, not the team, and neither is the
+`finance` property group beside it. A rename that greps for the word breaks a process. This is not
+in the Microsoft 365 branch: it belongs with whatever schema work is in flight, so the two do not
+fight over a migration number.
+
+**One limitation to check per channel.** Microsoft does not allow an application to post into a
+*private* channel: incoming webhooks, connectors and bots are all unsupported there. Any department
+whose nominated channel is private needs either a standard channel nominated instead, or email.
+
+**Reversed on the same evidence:** the `teams` channel built in `0083` sends a one-to-one chat via
+`POST /chats/{id}/messages` with an application token. That call is not supported for an
+application and has never been run against a real tenant. Team notifications move to a channel
+webhook; personal Teams messages wait for a Teams app to be registered.
+`deliver-notifications/README.md` now says so rather than implying the path works.
+
+### What posts where
+
+| Event | Where |
+|---|---|
+| Project created · job moves lifecycle stage · milestone reached | Hub → General |
+| Job, project or task allocated to a team | That team's existing channel |
+| Allocated to a person, or a comment mentioning them | Their team's channel, mentioning them |
+| Update at project level | The owning team's channel |
+
+Every post carries the number, what happened, who did it, and a link to that exact record.
+
+**Milestones already exist.** `processes.process_is_milestone` (`0078`) and the `stage_completion`
+view (`0081`) mean "a milestone was reached" is a milestone process run completing. Nothing new has
+to be defined for Amber's *"all milestones reached on a job go to general"*.
+
+**One post per channel, not one per person.** `private.notify()` writes a delivery row per
+recipient. Posted straight through, a change touching six people in Design would be six messages
+in the Design channel. A `teams_channel` delivery collapses recipients to distinct teams and writes
+one row per team per dedupe key. This is the difference between one place to look and a flood, and
+it is the single most important implementation detail in this entry.
+
+**Replies typed in Teams stay in Teams.** Turning them into comments needs a bot plus Graph change
+notifications on Teams messages, which Microsoft meters per message — and it would put one
+conversation in two places, which is what this design exists to prevent.
+
+### The library, and what the folders are called
+
+```
+Documents/
+  _Templates/Project/ and _Templates/Job/
+  1042 - GOLDEN GROVE, 28 Corner Street/
+    …project-level folders
+    1042-001 - GOLDEN GROVE, Lot 3 Corner Street/
+```
+
+Amber: *"projectnumber - SUBURB, Current Address — jobs should be the same but start with job
+number"*. Both are token patterns in settings, not code, and nothing is created until the site,
+the templates and the patterns are filled in.
+
+**The app renames a folder when the address changes**, which is only safe because it addresses
+folders by their drive item id, never by name or path. A folder somebody renames or moves by hand
+is still found; the one casualty is a full path pasted into an old document. This is also why
+`0040`'s two URL columns are not enough on their own: a URL is a name, and a name moves.
+
+### Corrected after merging main: documents are not dormant, and the integration was expected
+
+This entry was first written against a branch 253 commits behind `main`, and two of its claims
+were wrong by the time it merged. Both are corrected here rather than quietly edited, because the
+first version is what somebody may have read.
+
+- **`documents` and `document_links` are live and wired**, not dormant. `0103` already lets a
+  document *be* a SharePoint URL — Amber, 10 September: *"when adding a document I need to be able
+  to save it as a url in sharepoint (integration coming) but for now I need to be able to add and
+  delete them."* **This work is that integration.** `0110` publishes a built document to the job,
+  `0115` makes a defect photo a document about the job, and `0119` gave documents a storage bucket
+  column. So the Files work is not building a document system; it is teaching the one that exists
+  to reach Graph.
+- **The drive and item ids therefore sit beside `document_sharepoint_url` on `documents`**, not in
+  a parallel structure. Everything `0032` built — the links, the categories, the supersedes chain,
+  the RLS, the audit triggers — already works on them unchanged, which is the same argument `0103`
+  made for its own column.
+
+### A folder name is read from the job, never rebuilt
+
+`0120` put a `c` in the job number for a community title job — `1004-003c` — and `0122` is the
+repair for the one place that had rebuilt the number by hand instead of reading it back:
+*"import_spine stops rebuilding a job's id by hand and reads it back off the insert."* The folder
+namer must not repeat that mistake. It takes `job_id` as the database made it and puts the suburb
+and address after it; it never composes `project || '-' || sequence`, and it never calls
+`job_number()` as a second opinion. A future suffix then reaches SharePoint with nobody touching
+this code.
+
+### The folder link goes in its own table, because the schema is moving
+
+Amber, 15 September: *"there is current work being done to supabase schema so the existing schema
+may change but sharepoint needs to be connected regardless."* So the ids for a *record's folder* go in a new
+`m365_links` table keyed to the record, **not** as new columns on `projects` and `jobs`. A
+migration that reshapes those tables cannot then collide with this work, and either can land
+first. `0040`'s `project_sharepoint_url` and `job_sharepoint_url` stay where they are and keep
+being what the drawer reads; the new table carries what the API needs.
+
+A *document's* ids are the exception and go on `documents`, beside the URL column `0103` already
+added — see the correction below. That table is not the one being reshaped, and splitting a
+document's identity across two tables would be worse than the collision it avoided.
+
+**Next free migration number is `0123`.** `0119` and `0120` each have two files on purpose; the
+reason is recorded in this file and the numbers are not to be tidied.
+
+### Acquisition & Development
+
+They hold sensitive material the app does not capture, in their own Microsoft area. Amber's
+preference, adopted: *"creation of a project folder in their own team only, that has a
+link/shortcut to the project folder everyone can see for easy access."* The link points **outward
+from their private space**, never inward from the shared library, so nothing sensitive is named or
+visible to anyone else. No file syncing between the two — copying documents across would put one
+file in two places.
+
+This is also tidier now that notifications go to the department's own Team: Acquisition &
+Development's notifications land in *their* Team, whose membership is already theirs, so the
+question of a Hub channel being readable by everybody does not arise.
+
+### Email onto a job, without creating a thousand of anything
+
+Amber: *"I don't want 1000s of emails created… but notifications+projectnumber or
+notifications+jobnumber would keep it all as one email, but allow routing."* That is exactly right,
+and the fear is unfounded: plus addressing creates nothing. One shared mailbox answers every
+`jobs+…@` address, because the `+1042-001` is routing text, not an address that has to exist.
+
+The record shows its own address with click-to-copy, **derived from the number rather than stored**
+— the repository composes it from the configured mailbox, so it cannot go stale or disagree with
+the job it is on. Filed mail is moved out of the inbox, leaving only what could not be placed, and
+the forwarder is told. This extends `0084`'s `receive_maintenance_email()` ladder rather than
+rebuilding it.
+
+Two things to check before building: plus addressing has to be enabled for the tenant, or the mail
+bounces; and it should be its own mailbox rather than the notifications sender, so bounces and
+out-of-office replies do not mix in with genuine updates.
+
+### Nothing in a trigger calls Microsoft
+
+`0083` set the rule — *"nothing inside a trigger ever makes an HTTP call"* — and this obeys it. A
+trigger writes an `m365_outbox` row shaped like `notification_deliveries` (kind, payload, status,
+attempts, backoff); `m365-sync` drains it every minute. A project split into 300 jobs queues 300
+copies, paced against Graph throttling, each idempotent by checking for the folder by name first.
+If Microsoft is down, records are still created and nobody is blocked.
+
+### Two security guards that failed open, now closed
+
+`deliver-notifications` and `maintenance-inbound` both guarded their shared secret as
+`if (env(SECRET) && header !== env(SECRET))` — which **skips the check entirely when the secret is
+unset**. A deploy made before somebody set it answered to anyone who found the URL: one would send
+mail on demand, the other would open maintenance requests. Both now refuse with 503 when the secret
+is empty, which is the shape `report-share` already used for its origin allowlist. The
+validation-token echo in `maintenance-inbound` stays open deliberately: Graph performs it before a
+subscription exists, and it reveals nothing.
+
+`app/supabase/functions/_shared/graph.ts` is the first module under `_shared/`: the token exchange,
+cached for the life of the isolate, with `Retry-After` honoured on 429 and paging on collections.
+Three functions were about to hold three copies of it.
+
+### Open, for Amber
+
+1. **Which existing Microsoft team, and which channel in it, does each app team map to?** Eleven
+   mappings, Accounts included. Any that are private channels need a standard one, or email.
+2. **What goes inside the project and job templates?** Not a blocker — whatever is in the folder on
+   the day is what gets copied.
+3. **Is Acquisition & Development's mirror folder made for every project, or only on request?**
+4. **What is the mailbox called, and can plus addressing be enabled?**
+
+Settled on 15 September: no new Teams, channels or sites; files in the Hub library only; Accounts
+(formerly Finance) treated like every other team.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in
