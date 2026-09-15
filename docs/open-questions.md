@@ -21,17 +21,26 @@ invent a value, and `CLAUDE.md` is explicit that an invented default is worse th
 
 ## Open — next question first
 
-### 0i. What are the Acquisition & Development sub-stages?
+### 0i. Are the process stage groups the sub-stages, stage by stage?
 
 Stage 1 of the 15 September audit makes sub-stages rows (`lifecycle_substages`) and gives every
-process one. Three of the five live stages already have their lists: Construction's seven are the
-words in `property_def_group` (Footings, Frame, Roof Cover, External Cladding, 2nd Fix, Practical
-Completion, Handover); Maintenance's three are 1 Month, 2 Month and 3 Month (answered 15
-September); Pre-construction's are the `process_stage_group` values on its 38 processes, to be
-read live before building. Acquisition & Development has two processes and no sub-stage names
-anywhere. The audit's Stage 1 lists this as a need. Blocked on it: the second Stage 1 migration,
-which backfills `lifecycle_substages` and makes `processes.substage_id` not null. Not blocked:
-`lifecycle_stages` itself, and the Pre-construction and Construction rows.
+process one. `processes.process_stage_group`, read live on 15 September, already groups the 51
+processes, and `property_def_group` (0124) agrees for Construction. What the data says:
+
+| Lifecycle stage | Groups on its processes today | Reading |
+| --- | --- | --- |
+| Acquisition & Development | Project Creation (1), Job Creation (1) | two sub-stages, or one stage with two processes? |
+| Pre-construction | Stage 1 (15), Stage 2 (4), Stage 3 (19) | three sub-stages, as Amber's walk-through said (*"pre-construction (lifecycle) stage 2 (substage)"*) |
+| Construction | Footings, Frame, Roof Cover, External Cladding, 2nd Fix, Practical Completion, Handover (1 each), Variation (1) | the seven, in build order; *Variation* is its own record under decision 7, not a sub-stage |
+| Maintenance | (none) on its one process | 1 Month, 2 Month, 3 Month (answered 15 September); the one process sits in 1 Month |
+| Completed, Closed | no processes | no sub-stages |
+| Cancelled | PWA Cancellation (1), Contract Cancellation (1) | two sub-stages, or two processes in one? |
+
+Recommendation: take the table as it stands, with the two open readings resolved as two
+sub-stages each, because a sub-stage is what a process belongs to and these processes belong
+to different things. Blocked on the answer: the second Stage 1 migration, which backfills
+`lifecycle_substages` and makes `processes.substage_id` not null. Not blocked: `lifecycle_stages`
+itself.
 
 ### 0g. Do `0120` and `0122` get applied to the live project, and in that order? *(answered 15 September: yes, and both are applied; see the update at the end and the Answered row)*
 

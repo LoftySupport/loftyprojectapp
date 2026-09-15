@@ -53,11 +53,14 @@ replaces `pipeline_stages` and the six CHECKs; `lifecycle_substages` is backfill
 Setup → Processes gets sub-stages as objects; the board groups by sub-stage. Inputs already in
 hand: Construction's seven sub-stages in build order are the words in `property_def_group`
 (Footings, Frame, Roof Cover, External Cladding, 2nd Fix, Practical Completion, Handover);
-Maintenance's three are 1 Month, 2 Month and 3 Month (Amber, 15 September); Pre-construction's
-are whatever `process_stage_group` holds on its 38 processes, to be read live before building.
-**The first question for Amber is the Acquisition & Development sub-stage names**; the audit
-lists it as a need and nobody has asked. It is queued as 0i in `open-questions.md`. Ask it in
-the chat, one question at a time, and record the answer before the second migration.
+Maintenance's three are 1 Month, 2 Month and 3 Month (Amber, 15 September); and
+`processes.process_stage_group`, read live on 15 September, already groups the rest:
+Pre-construction *Stage 1* (15 processes), *Stage 2* (4), *Stage 3* (19); Acquisition &
+Development *Project Creation* and *Job Creation*; Cancelled *PWA Cancellation* and *Contract
+Cancellation*; Construction the seven plus a *Variation* group, which is a record of its own
+under decision 7, not a sub-stage. **The first question for Amber is whether those groups are
+the sub-stages**, queued as 0i in `open-questions.md` with the list. Ask it in the chat, one
+question at a time, and record the answer before the second migration.
 
 **How this session worked, and what the next one should copy.**
 
