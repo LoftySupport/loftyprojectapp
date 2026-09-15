@@ -29,8 +29,8 @@ sync — the whole point of the mirror is that those two can be compared.
   `@vibe/core` React components, which are the more complete implementation of the same
   contract. Two implementations of `Button` would be two things to keep in step.
 - **The 276 Vibe icons.** The app already has them through `@vibe/icons`. Only the Lofty
-  glyphs — the ones Vibe does not ship — are worth copying, and they live in
-  [`../theme/loftyIcons.tsx`](../theme/loftyIcons.tsx).
+  glyphs — the ones Vibe does not ship — are worth copying, and the six the rail uses live in
+  [`../theme/railIcons.tsx`](../theme/railIcons.tsx), traced from the 11 September handover.
 - **The six Fieldwork `.woff` files.** Fieldwork is for brand-led surfaces: decks, print,
   proposals. The design system is explicit that product screens use Figtree and Montserrat,
   so shipping ~300 KB of fonts no screen asks for would cost every visitor for nothing.

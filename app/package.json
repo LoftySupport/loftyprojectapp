@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "dictionary": "node scripts/generate-dictionary.mjs",
     "build:montserrat": "node scripts/build-montserrat.mjs",
+    "build:logo": "node scripts/build-logo.mjs",
     "responsive": "node scripts/responsive.mjs",
     "export-check": "node --import ./scripts/register-ts.mjs scripts/export-check.ts",
     "check:pipeline": "node scripts/check-pipeline.mjs",

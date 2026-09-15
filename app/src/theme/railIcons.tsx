@@ -25,13 +25,15 @@
  *   and break the family.
  *
  * The C2PA content-credential blob each source file carries — 7.5 kB per icon against
- * about 300 bytes of path — is not copied, for the same reason `loftyIcons.tsx` gives:
+ * about 300 bytes of path — is not copied, for the reason `loftyIcons.tsx` gave (removed 15
+ * September, in git):
  * provenance belongs with the signed original in the design project, and the app ships
  * the drawing.
  *
- * Same call contract as `@vibe/icons`, `houseIcons.tsx` and `loftyIcons.tsx` — a `size`
- * prop, paint from `currentColor` — so the rail treats all four identically and a row
- * does not care which family its glyph came from.
+ * Same call contract as `@vibe/icons` — a `size` prop, paint from `currentColor` — so the
+ * rail treats both families identically and a row does not care which one its glyph came
+ * from. (`houseIcons.tsx` and `loftyIcons.tsx` shared the contract until they went on
+ * 15 September, imported by nothing.)
  */
 interface IconProps {
   size?: number | string;

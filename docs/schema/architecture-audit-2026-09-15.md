@@ -125,8 +125,11 @@ typed `job_status`.
     migration numbers are used twice. `verify/constraints.sql` reports 26 `FAIL` lines on
     `main` (**corrected 15 September:** only when run on its own; the 26 are its fixtures
     missing, which `behaviour.sql` plants. `check.sh` on `main` is green, 79 probes, and the
-    file now says so in one line). Two icon modules, one export and one script are dead.
-    Stages 0 and 5.
+    file now says so in one line). Two icon modules and one export are dead (**corrected 15
+    September:** the first version counted `scripts/build-logo.mjs` as a dead script; it is
+    the generator of `src/data/export/logo.ts`, which the PDF and Word exports import, and
+    was merely not wired into `package.json`. Wired as `build:logo`; the three dead pieces
+    went the same day on Amber's *"Delete all three"*). Stages 0 and 5.
 11. **Advisors.** Critical: `private.profiles_backup_pre_batch3`, a 16 August copy of
     `profiles` with RLS off (not API-reachable, still a copy of every person's row). By design:
     `maintenance_message_secrets` no policy; four `SECURITY DEFINER` helpers callable by

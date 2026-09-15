@@ -19,8 +19,10 @@
  *   - `LOGO_PNG_BASE64` — the original PNG bytes, for the Word document's media part, which
  *     Word composites (transparency and all) itself.
  *
- * Run it with `node scripts/build-logo.mjs` after the source logo changes; it rewrites
- * logo.ts in place and prints a one-line summary.
+ * Run it with `npm run build:logo` after the source logo changes; it rewrites logo.ts in
+ * place and prints a one-line summary. Wired into package.json on 15 September: the audit
+ * had read it as an orphan because nothing referenced it, when it is the generator of a
+ * file two exporters import.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { inflateSync } from "node:zlib";
