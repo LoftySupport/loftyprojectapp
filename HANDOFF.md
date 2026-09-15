@@ -16,7 +16,76 @@ Unreleased: 285 changes since then —
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
 
-## 15 September — START HERE: the architecture audit, and the process rethink it sets up
+## 15 September, evening — START HERE: Stage 0 is done, Stage 1 is next
+
+**Where it stands.** Stage 0 of the 15 September audit, the housekeeping stage, is complete.
+Five pull requests merged the same day (#95 to #99) and three migrations were applied live the
+same sitting: `0123`, `0124` and `0125`. The live ledger matches `main` through `0125`. PR #100
+is this section and a two-sentence record that `0125` is applied; docs only. The audit itself,
+its findings and the staged plan are in
+[`docs/schema/architecture-audit-2026-09-15.md`](docs/schema/architecture-audit-2026-09-15.md)
+and on the published page <https://claude.ai/artifact/LnuPZkB65SW8uKhxnaVjCP> (Version 8).
+
+**What is live now that was not this morning.**
+
+| Change | Migration | State |
+| --- | --- | --- |
+| `verify/constraints.sql` says in one line when its fixtures are missing; a fourth shared migration number is refused in CI; *"five lifecycle phases"* reads seven | none (#95) | merged |
+| `private.profiles_backup_pre_batch3` dropped; six foreign-key indexes on the process tables; `"read own login_activity"` in the once-per-query form | `0123` (#96) | applied |
+| `property_defs.property_def_automation` is `property_def_group`, the workbook's own header; 139 rows carry a group | `0124` (#97) | applied |
+| `notification_settings`, one row, switch-on null; every external row written before it is skipped; the four waiting emails skipped; every type defaults to in-app only | `0125` (#98) | applied |
+| Two icon modules and the `NotWired` export deleted; `build-logo.mjs` wired as `npm run build:logo` | none (#99) | merged |
+
+**Amber's decisions today are in her own words** in the *Answered* table of
+[`docs/open-questions.md`](docs/open-questions.md): the twelve audit decisions, then two
+follow-ups asked while building: notification defaults, *"External off, in-app stays on"*, and
+the dead code, *"Delete all three"*.
+
+**Four corrections to the audit, found while doing the work,** all recorded in the audit file:
+`process_runs` already had the audit trigger; the Properties screen never showed an *Automation*
+label; the 26 `FAIL` lines were `constraints.sql` run without its fixtures, not a guard the
+harness could not read; and `build-logo.mjs` was never dead, it generates the logo module the
+PDF and Word exports import.
+
+**Stage 1 is next: one lifecycle and real sub-stages.** From the audit's plan: `lifecycle_stages`
+replaces `pipeline_stages` and the six CHECKs; `lifecycle_substages` is backfilled from
+`process_stage_group`; `processes.substage_id` becomes not null with `process_is_optional`;
+Setup → Processes gets sub-stages as objects; the board groups by sub-stage. Inputs already in
+hand: Construction's seven sub-stages in build order are the words in `property_def_group`
+(Footings, Frame, Roof Cover, External Cladding, 2nd Fix, Practical Completion, Handover);
+Maintenance's three are 1 Month, 2 Month and 3 Month (Amber, 15 September); Pre-construction's
+are whatever `process_stage_group` holds on its 38 processes, to be read live before building.
+**The first question for Amber is the Acquisition & Development sub-stage names**; the audit
+lists it as a need and nobody has asked. It is queued as 0i in `open-questions.md`. Ask it in
+the chat, one question at a time, and record the answer before the second migration.
+
+**How this session worked, and what the next one should copy.**
+
+- One branch and pull request per table, `claude/stage1-<topic>`, from `origin/main`; the four
+  files per schema change; a `Changelog:` trailer; a draft PR from the template; every new
+  assertion watched failing before it is trusted, and the PR body says how.
+- **Apply a merged migration live in the same sitting as the merge.** Three times today the
+  deployed app was ahead of the database for minutes. Dry-run first in a rolled-back transaction
+  through the Supabase MCP (`begin; … rollback;` is honoured), then `apply_migration`, which
+  records the ledger name. Two Supabase servers are configured; the one named `Supabase` works,
+  the lowercase `supabase` needs authorising and is not needed.
+- `check.sh` needs a local Postgres 16 on port 5433 with its socket in `/var/tmp`: `initdb` into
+  `/var/tmp/lofty_pg`, then `pg_ctl -D /var/tmp/lofty_pg -o '-p 5433 -k /var/tmp' start` as the
+  `postgres` user. The container loses it between sessions; `app/` needs `npm ci` again too.
+- Parallel branches that edit `HANDOFF.md`, `schema-plan.md` or `open-questions.md` conflict at
+  the same anchor. Insert at different paragraphs, or merge `main` in and keep both.
+- The published page is republished from any conversation by passing its URL; its HTML source
+  lives only in a session scratchpad, so read it back first.
+
+**Standing items, none blocking.** Switching notifications on is one statement by an admin,
+`update notification_settings set notification_setting_switch_on_at = now()`, once Microsoft is
+connected and the worker is deployed with its secrets; there is no control for it yet. The
+`0122` proof still leaks three address rows per run (below). The designated audit branch,
+`claude/app-schema-architecture-audit-v19mt9`, is merged history with nothing pending.
+
+---
+
+## 15 September, afternoon — the architecture audit, and the process rethink it sets up
 
 Amber, 15 September: *"I want to walk away with a clear picture on what needs to stay, what
 needs updating and what needs to go and a staged plan to implement it."* The audit is

@@ -21,6 +21,18 @@ invent a value, and `CLAUDE.md` is explicit that an invented default is worse th
 
 ## Open — next question first
 
+### 0i. What are the Acquisition & Development sub-stages?
+
+Stage 1 of the 15 September audit makes sub-stages rows (`lifecycle_substages`) and gives every
+process one. Three of the five live stages already have their lists: Construction's seven are the
+words in `property_def_group` (Footings, Frame, Roof Cover, External Cladding, 2nd Fix, Practical
+Completion, Handover); Maintenance's three are 1 Month, 2 Month and 3 Month (answered 15
+September); Pre-construction's are the `process_stage_group` values on its 38 processes, to be
+read live before building. Acquisition & Development has two processes and no sub-stage names
+anywhere. The audit's Stage 1 lists this as a need. Blocked on it: the second Stage 1 migration,
+which backfills `lifecycle_substages` and makes `processes.substage_id` not null. Not blocked:
+`lifecycle_stages` itself, and the Pre-construction and Construction rows.
+
 ### 0g. Do `0120` and `0122` get applied to the live project, and in that order? *(answered 15 September: yes, and both are applied; see the update at the end and the Answered row)*
 
 **Verified against the live project on 15 September, not assumed:** neither of #88's two
