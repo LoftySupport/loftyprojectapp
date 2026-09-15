@@ -4,6 +4,7 @@ import { Button, Checkbox, Text, TextField } from "@vibe/core";
 import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { useProcessProperties, useProcesses, usePropertyDefs, usePropertyOptions, useStages, useTeams } from "../data/useLookups";
+import { VERDICT_LABELS, fieldsByCollection, orphanCount } from "../data/orphanProperties";
 import { SidePanel } from "../components/SidePanel";
 import { Field, Problem } from "../components/Form";
 import { Select } from "../components/Select";
@@ -81,6 +82,10 @@ export function PropertiesSetupPage() {
   // Filters: which stage, only-unknown, retired shown, and a search.
   const [stageFilter, setStageFilter] = useState<string | null>(null);
   const [onlyUnknown, setOnlyUnknown] = useState(false);
+  /* Amber, 12 September: *"all properties should belong to a process if it is job or
+     project and if they don't they should be flagged as orphaned in the properties
+     setting"*. */
+  const [onlyOrphaned, setOnlyOrphaned] = useState(params.get("orphaned") === "1");
   const [showRetired, setShowRetired] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -102,6 +107,7 @@ export function PropertiesSetupPage() {
     (showRetired || d.isActive || d.key === selectedKey)
     && (!stageFilter || d.stageName === stageFilter)
     && (!onlyUnknown || d.format === "unknown")
+    && (!onlyOrphaned || ((d.scope === "job" || d.scope === "project") && (processesByProperty.get(d.key) ?? []).length === 0))
     && terms.every(t => `${d.label} ${d.key} ${d.teamName ?? ""} ${d.format} ${d.scope}`.toLowerCase().includes(t))
   );
   const stages = stageNames.length ? stageNames : [...new Set(propertyDefs.map(d => d.stageName))];
@@ -110,6 +116,33 @@ export function PropertiesSetupPage() {
     .filter(g => g.defs.length > 0);
 
   const selected = propertyDefs.find(d => d.key === selectedKey) ?? null;
+  /**
+   * Every field of a job or a project, and whether a process collects it.
+   *
+   * The second half is the part that needed building: a sweep of `property_defs` alone
+   * would report a clean board while the six things on the job record's Key properties
+   * panel — the address among them — were collected by nothing, because they are columns
+   * rather than property rows. See `orphanProperties.ts`.
+   */
+  const fields = useMemo(
+    () => fieldsByCollection(propertyDefs, processesByProperty),
+    [propertyDefs, processesByProperty]
+  );
+  const orphans = orphanCount(fields);
+  /* Grouped by verdict, gaps first — the same shape the property table above uses, and
+     it stops the Why column repeating one sentence thirty-three times. */
+  const notProperties = useMemo(() => {
+    const columns = fields.filter(f => f.source === "column" && f.verdict !== "gone");
+    return ([["unattachable", "Not a property"], ["system", "System"]] as const)
+      .map(([verdict, label]) => ({
+        verdict,
+        label,
+        rows: columns.filter(f => f.verdict === verdict).sort((a, b) => a.id.localeCompare(b.id))
+      }))
+      .filter(g => g.rows.length > 0);
+  }, [fields]);
+  const notPropertyCount = notProperties.reduce((n, g) => n + g.rows.length, 0);
+
   const unknownCount = propertyDefs.filter(d => d.isActive && d.format === "unknown").length;
   const restrictedCount = propertyDefs.filter(d => d.restricted).length;
   const activeProfiles = useMemo(() => profiles.filter(p => p.active).map(p => ({ id: p.id, name: p.fullName })), [profiles]);
@@ -125,6 +158,15 @@ export function PropertiesSetupPage() {
       <div className="panel-head">
         <Text type="text2" weight="bold">Property definitions ({propertyDefs.filter(d => d.isActive).length})</Text>
         <div className="panel-actions">
+          {orphans.orphaned > 0 && (
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => setOnlyOrphaned(true)}
+            >
+              {orphans.orphaned} orphaned
+            </button>
+          )}
           {unknownCount > 0 && <Text type="text3" color="secondary">{unknownCount} without a format</Text>}
           {restrictedCount > 0 && <span className="lock-badge">{restrictedCount} restricted</span>}
         </div>
@@ -144,6 +186,7 @@ export function PropertiesSetupPage() {
           value={stageFilter} onChange={setStageFilter} />
         <TextField size="small" id="props-search" inputAriaLabel="Search properties" placeholder="Search…" value={search} onChange={setSearch} />
         <Checkbox label="Only without a format" checked={onlyUnknown} onChange={() => setOnlyUnknown(v => !v)} />
+        <Checkbox label="Only orphaned" checked={onlyOrphaned} onChange={() => setOnlyOrphaned(v => !v)} />
         <Checkbox label="Show retired" checked={showRetired} onChange={() => setShowRetired(v => !v)} />
         {canEdit && <Button size="small" onClick={() => setParam({ new: "1", property: null })}>+ Add property</Button>}
       </div>
@@ -195,6 +238,69 @@ export function PropertiesSetupPage() {
               <Text type="text2" color="secondary" element="p" ellipsis={false}>Nothing matches — clear the search or the filters.</Text>
             )}
           </div>
+      </section>
+
+      {/* THE FIELDS THAT ARE NOT PROPERTY ROWS, AND THEREFORE CANNOT BELONG TO A PROCESS.
+          Amber, 12 September: *"this should have all properties including properties not
+          on the properties table eg address"*.
+
+          A sweep of `property_defs` alone reports a clean board while the address, the
+          council, the owning team, the assignee and both completion dates are collected
+          by nothing — they are columns on `jobs` and `projects`, and
+          `process_properties.property_key` points at `property_defs`, so there is nowhere
+          for the attachment to hang. That is the finding, said out loud rather than left
+          as a clean-looking count.
+
+          The System group is shown rather than hidden. Amber exempted *"a system property
+          such as a primary key"*, and an exemption list nobody can see is an exemption
+          list nobody can correct — every row says why it is exempt. */}
+      <section className="panel" style={{ marginTop: "var(--space-16)" }}>
+        <div className="panel-head">
+          <Text type="text2" weight="bold">Fields that are not properties ({notPropertyCount})</Text>
+          <div className="panel-actions">
+            {orphans.unattachable > 0 && (
+              <span className="slot-chip is-differs">{orphans.unattachable} no process can collect</span>
+            )}
+          </div>
+        </div>
+        <Text type="text2" color="secondary" ellipsis={false}>
+          Columns on <code>jobs</code> and <code>projects</code>, from the data dictionary. A process
+          collects a <strong>property</strong>, and these are not properties — so nothing can be attached
+          to them until they have a definition. System fields are exempt and listed here so the exemption
+          can be read and argued with.
+        </Text>
+        <div className="data-table-wrap">
+          <table className="data-table props-table">
+            <thead>
+              <tr><th>Field</th><th>Column</th><th>Record</th><th>Why</th></tr>
+            </thead>
+            {notProperties.map(g => (
+              <tbody className="group" key={g.verdict}>
+                <tr className="group-head">
+                  <th colSpan={4} scope="colgroup">
+                    {VERDICT_LABELS[g.verdict]} · {g.rows.length} field{g.rows.length === 1 ? "" : "s"}
+                    {g.verdict === "unattachable"
+                      ? " — no process can collect these until they have a definition"
+                      : " — exempt: nobody records these"}
+                  </th>
+                </tr>
+                {g.rows.map(f => (
+                  <tr key={f.id}>
+                    {/* The column in its own cell rather than as a second line under the
+                        label: the element sweep counts stacked metadata lines, and Amber
+                        had three of them removed from the slot rows on 10 September. */}
+                    <td><strong>{f.label}</strong></td>
+                    <td className="muted"><code>{f.id}</code></td>
+                    <td className="muted">{f.scope}</td>
+                    {/* Said once in the group heading for the thirty-three that share a
+                        reason; per-row only where the reason is the row's own. */}
+                    <td className="muted">{f.verdict === "system" ? f.because : ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            ))}
+          </table>
+        </div>
       </section>
 
       {creating && canEdit && (

@@ -1,7 +1,10 @@
 import { useMemo, useState } from "react";
-import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Button, Heading, Text, TextField } from "@vibe/core";
-import { useProcesses, usePropertyAccess, usePropertyDefs, useStages, useTeams } from "../data/useLookups";
+import { Duplicate } from "@vibe/icons";
+import { Tooltip } from "@vibe/tooltip";
+import { useProcesses, usePropertyAccess, usePropertyDefs, usePropertyOptions, useStages, useTeams } from "../data/useLookups";
+import { propertyColumnDefs } from "../data/propertyColumns";
 import { useAuth } from "../data/AuthProvider";
 import { useBoardRecords, type BoardProject } from "../data/boardModel";
 import {
@@ -15,11 +18,13 @@ import { LoadProblem, NoResults, NothingYet, PreviousAddressNote } from "../comp
 import { SavedViewTabs } from "../components/SavedViewTabs";
 import { useSavedViews } from "../data/useSavedViews";
 import { Board } from "../components/Board";
+import { BoardColumn } from "../components/BoardColumn";
 import { ProjectCard, StatusPill } from "../components/RecordCards";
 import { PropertySlots } from "../components/PropertySlots";
 import { ProcessesPanel } from "../components/ProcessesPanel";
 import { RecordDocuments } from "../components/RecordDocuments";
 import { PushToJobs } from "../components/PushToJobs";
+import { CloneJobDialog } from "../components/CloneDialog";
 import {
   PROJECT_TYPES, PROJECT_TYPE_LABELS, RECORD_STATUSES, RECORD_STATUS_LABELS, teamName,
   type StageName, type TeamId
@@ -34,12 +39,14 @@ import { MoveStageControl, PROJECT_MOVE_NOTE } from "../components/MoveStageDial
 import { daysSince } from "../data/boardModel";
 import { Token, token } from "../components/Token";
 import { SidePanel } from "../components/SidePanel";
-import { Toolbar } from "../components/Toolbar";
+import { Toolbar, useOneLine, type View } from "../components/Toolbar";
 import { accentStyle, columnAccent } from "../theme/accents";
 import { Select, toOptions } from "../components/Select";
+import { PersonSelect } from "../components/PersonSelect";
 import { NewProjectDialog, SplitProjectDialog } from "../components/CreateDialogs";
 import { InlineNewProjectRow } from "../components/InlineNewProjectRow";
 import { ProjectsGantt } from "../components/ProjectsGantt";
+import { ProjectsCalendar } from "../components/ProjectsCalendar";
 import { ActivityFeed } from "../components/ActivityFeed";
 import { CommentsPanel } from "../components/CommentsPanel";
 import { TasksPanel } from "../components/TasksPanel";
@@ -100,17 +107,55 @@ function projectInView(
     : p.jobs.some(j => viewStages.includes(j.stage));
 }
 
+/**
+ * All four, and the same list feeds the toolbar and the URL parser.
+ *
+ * The board offered three and `?view=Calendar` was still accepted, because
+ * `useBoardParams` validated against the app-wide `VIEWS` rather than against what
+ * this page can draw — so that link rendered an empty View control with nothing under
+ * it. One list, read by both, is what makes the two agree.
+ */
+const BOARD_VIEWS: readonly View[] = ["Board", "Table", "Gantt", "Calendar"];
+
 export function ProjectsPage() {
   const { stageNames } = useStages();
   const { teams, teamNames } = useTeams();
   const { processes } = useProcesses();
   const { propertyDefs } = usePropertyDefs();
   const { access: filterAccess } = usePropertyAccess();
+  const { byProperty: optionsByProperty } = usePropertyOptions();
+  const { data: pageProfiles } = useQuery(r => r.listProfiles(), []);
+  const people = useMemo(() => pageProfiles.map(p => ({ id: p.id, name: p.fullName })), [pageProfiles]);
   // The inline add row is hidden below `user`, matching the insert policy on `projects`.
   // A control that offers to do what RLS will refuse is worse than no control — this is
   // the app's can() hiding it, and the policy is what actually decides.
   const { can } = usePermission();
+  /** Below 720px the toolbar folds to one line and the create button moves to the head. */
+  const oneLine = useOneLine();
+  /**
+   * Creating, and `?new=1` is how somewhere else asks for it.
+   *
+   * It was `useState` alone, which made "create a project" the one act on this board
+   * that could not be linked to — and the rail's Projects flyout has a **+ New project**
+   * on it (11 September handoff, 7b), which is a link and has nowhere else to point.
+   * Same shape and the same key as the Maintenance page's own `?new=1`, so the two
+   * boards answer the same URL the same way rather than inventing a second dialect.
+   *
+   * Cleared by removing the param, not by a second piece of state: with both, closing
+   * the dialog would leave `?new=1` in the address bar and the next Back would open it
+   * again.
+   */
+  const [searchParams, setSearchParams] = useSearchParams();
   const [creating, setCreating] = useState(false);
+  const askedToCreate = searchParams.get("new") === "1";
+  const closeCreate = () => {
+    setCreating(false);
+    if (askedToCreate) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("new");
+      setSearchParams(next, { replace: true });
+    }
+  };
   // Bumped after a create so the board re-reads. There is no cache to invalidate.
   const [reload, setReload] = useState(0);
   const refresh = () => setReload(n => n + 1);
@@ -127,7 +172,7 @@ export function ProjectsPage() {
   // flat grid of cards — which answered "what sites are there" and not "where is the
   // portfolio up to", the question the jobs board has always been able to answer.
   const { view, setView, grouping, setGrouping, filters, setFilters, saved, setSaved, search } =
-    useBoardParams({ view: "Board", grouping: "Stage", views: PROJECT_VIEWS });
+    useBoardParams({ view: "Board", grouping: "Stage", views: PROJECT_VIEWS, boardViews: BOARD_VIEWS });
   // The teams this person is in — sharing a view offers their own team, and offers
   // nothing at all to somebody in none (0051).
   const { profile: me } = useAuth();
@@ -176,20 +221,20 @@ export function ProjectsPage() {
   const projectColumnDefs = useMemo<ColumnDef<BoardProject>[]>(() => [
     // Sorted as a number, exported as text: a project number is an identifier, and a
     // column of them typed as numbers invites a total at the bottom of it.
-    { key: "project", label: "Project", fixed: true, className: "nowrap",
+    { key: "project", group: "Identity", label: "Project", fixed: true, className: "nowrap",
       sort: p => Number(p.projectNumber), cell: p => p.projectNumber,
       text: p => p.projectNumber },
-    { key: "address", label: "Address", sort: p => p.currentAddress ?? null,
+    { key: "address", group: "Identity", label: "Address", sort: p => p.currentAddress ?? null,
       cell: p => p.currentAddress ?? <Token>project_display.current_address</Token>,
       text: p => p.currentAddress ?? token("project_display.current_address") },
-    { key: "suburb", label: "Suburb", sort: p => p.suburb ?? null,
+    { key: "suburb", group: "Identity", label: "Suburb", sort: p => p.suburb ?? null,
       cell: p => p.suburb ?? <Token>addresses.suburb</Token>,
       text: p => p.suburb ?? token("addresses.suburb") },
     // Pipeline position, not the alphabet — the same call the jobs table makes.
-    { key: "stage", label: "Stage",
+    { key: "stage", group: "Programme", label: "Stage",
       sort: p => { const at = viewStages.indexOf(p.stage); return at === -1 ? null : at; },
       cell: p => p.stage, text: p => p.stage },
-    { key: "type", label: "Type",
+    { key: "type", group: "Identity", label: "Type",
       sort: p => (p.projectType ? PROJECT_TYPE_LABELS[p.projectType] : null),
       cell: p => (p.projectType
         ? PROJECT_TYPE_LABELS[p.projectType]
@@ -197,11 +242,11 @@ export function ProjectsPage() {
       text: p => (p.projectType
         ? PROJECT_TYPE_LABELS[p.projectType]
         : token("projects.project_type")) },
-    { key: "team", label: "Owning team", offByDefault: true,
+    { key: "team", group: "People", label: "Owning team", offByDefault: true,
       sort: p => (p.owningTeam ? teamName(p.owningTeam) : null),
       cell: p => (p.owningTeam ? teamName(p.owningTeam) : "—"),
       text: p => (p.owningTeam ? teamName(p.owningTeam) : null) },
-    { key: "start", label: "Start date", offByDefault: true,
+    { key: "start", group: "Programme", label: "Start date", offByDefault: true,
       sort: p => p.startDate ?? null,
       // The date as the screen writes it, not the ISO string underneath: a download is
       // read by a person, and 2026-11-04 in an Australian office is ambiguous in the one
@@ -212,7 +257,7 @@ export function ProjectsPage() {
     // detail use, so a blank never turns into a column token or an "Invalid Date". In a
     // file that "Not set" is an absent value, so it exports as a blank cell rather than
     // as the words, which would read as something somebody typed.
-    { key: "target", label: "Target completion", sort: p => p.targetCompletion ?? null,
+    { key: "target", group: "Programme", label: "Target completion", sort: p => p.targetCompletion ?? null,
       cell: p => (p.targetCompletion
         ? new Date(p.targetCompletion).toLocaleDateString()
         : <span className="muted pf-unset">Not set</span>),
@@ -220,11 +265,11 @@ export function ProjectsPage() {
     // Intended lots, and the split between the two kinds of title (0053). Null on both
     // means nobody has said, which is not the same statement as zero — hence the dash
     // rather than "0 / 0".
-    { key: "lots", label: "Lots", offByDefault: true, className: "num",
+    { key: "lots", group: "Programme", label: "Lots", offByDefault: true, className: "num",
       sort: p => p.proposedDwellings,
       cell: p => (p.proposedDwellings == null ? "—" : p.proposedDwellings),
       text: p => p.proposedDwellings },
-    { key: "split", label: "Community / Torrens", offByDefault: true, className: "num",
+    { key: "split", group: "Programme", label: "Community / Torrens", offByDefault: true, className: "num",
       sort: p => p.communityTitleLots,
       cell: p => (p.communityTitleLots == null && p.torrensTitleLots == null
         ? "—"
@@ -237,8 +282,13 @@ export function ProjectsPage() {
     { key: "jobs", label: "Jobs", className: "num",
       sort: p => p.jobs.length, cell: p => p.jobs.length, text: p => p.jobs.length },
     { key: "status", label: "Status", sort: p => RECORD_STATUS_LABELS[p.status],
-      cell: p => <StatusPill status={p.status} />, text: p => RECORD_STATUS_LABELS[p.status] }
-  ], [viewStages]);
+      cell: p => <StatusPill status={p.status} />, text: p => RECORD_STATUS_LABELS[p.status] },
+    // Every project-scope property the reader may see, off until asked for (Amber, 7 Sep).
+    ...propertyColumnDefs<BoardProject>({
+      defs: propertyDefs, scopes: ["project"], canRead: k => filterAccess(k).canRead,
+      optionsByProperty, people
+    })
+  ], [viewStages, propertyDefs, filterAccess, optionsByProperty, people]);
 
   const projectLayout = useColumnLayout("projects", projectColumnDefs);
 
@@ -376,11 +426,12 @@ export function ProjectsPage() {
   const narrowed = terms.length > 0 || activeFilterCount(filters) > 0;
   const noMatches = narrowed && rows.length === 0;
   const stale = matchedOnPreviousAddress(rows.flatMap(p => [p, ...p.jobs]), terms);
-  const jobCount = all.reduce((n, p) => n + p.jobs.length, 0);
-
   const optionsFor = (field: string) => {
     switch (field) {
+      // The project's own phase and its jobs' stages are the same list of names — the
+      // one lifecycle — but two different questions; see projectMatchesFilters.
       case "Stage": return toOptions(viewStages);
+      case "Job stage": return toOptions(viewStages);
       case "Team": return toOptions(teamNames);
       case "Status": return statusOptions();
       case "Type": return PROJECT_TYPES.map(t => ({ value: t, label: PROJECT_TYPE_LABELS[t] }));
@@ -461,23 +512,23 @@ export function ProjectsPage() {
 
   return (
     <>
-      <div className="page-head">
+      {/* No line under the heading. Amber, 12 September: *"on all pages remove
+          descriptive line text under page header … we need the most above the fold
+          possible"*. The project count is said again by the toolbar and
+          by the tab; **the job total is the one number that only lived here**, and it
+          goes. Say so rather than discover it missing: "118 projects · 79 jobs" is now
+          "Showing 118 of 118 projects". */}
+      <div className="page-head page-head-row">
         <Heading type="h2" weight="bold">Projects</Heading>
-        <Text type="text2" color="secondary">
-          {loading
-            ? "Loading…"
-            // On All Projects the two totals ARE the answer; on any other view the
-            // interesting number is how much of the whole it is. The test used to be
-            // `saved.stages.length === 0` — "the view names no stages" — which no
-            // built-in view has ever satisfied, so the portfolio line never once
-            // rendered on the first screen the app shows.
-            : saved.slug === "all"
-              ? `${all.length} projects · ${jobCount} jobs`
-              // The view's name is not repeated here: the tab carrying it is the next
-              // thing down the page, bold and with its own count, and "projects with
-              // work in All Projects" is what embedding it produced.
-              : `${inView.length} of ${all.length} projects`}
-        </Text>
+        {/* On a phone the create button rides the heading's line, right-aligned — Amber,
+            12 September. At a desk it stays in the toolbar with Export and Columns,
+            which is the cluster it belongs to when there is room for one.
+
+            Rendered once, either here or there, never both: two buttons with the same
+            name is two things a screen reader reads and one of them does nothing. */}
+        {oneLine && can("user") && (
+          <Button size="small" className="page-head-action" onClick={() => setCreating(true)}>+ New project</Button>
+        )}
       </div>
 
       <SavedViewTabs
@@ -509,7 +560,7 @@ export function ProjectsPage() {
       />
 
       <Toolbar
-        views={["Board", "Table", "Gantt"]}
+        views={BOARD_VIEWS}
         view={view}
         onViewChange={setView}
         groupings={["None", "Stage", "Job stage", "Job process", "Type", "Status"]}
@@ -518,6 +569,10 @@ export function ProjectsPage() {
         filters={filters}
         onFiltersChange={setFilters}
         optionsFor={optionsFor}
+        /* The same fields as Group by (Amber, 7 Sep): the project's phase, its jobs'
+           stages, its type and its status. "Job process" groups; Process filters. */
+        primary={["Stage", "Job stage", "Type", "Status"]}
+        advanced={["Number", "Team", "Process", "Date", "Process health", "Property", "Recorded"]}
         count={`Showing ${rows.length} of ${inView.length} projects`}
         actions={
           <>
@@ -537,22 +592,27 @@ export function ProjectsPage() {
                 "the projects I am looking at, as a spreadsheet" is the same ask
                 whichever arrangement is on screen. */}
             <ExportMenu build={buildExport} disabled={loading || rows.length === 0} />
-            <Button size="small" onClick={() => setCreating(true)}>+ New project</Button>
+            {!oneLine && <Button size="small" onClick={() => setCreating(true)}>+ New project</Button>}
           </>
         }
       />
 
       <NewProjectDialog
-        show={creating}
-        onClose={() => setCreating(false)}
+        show={(creating || askedToCreate) && can("user")}
+        onClose={closeCreate}
         onCreated={refresh}
         onSplit={(id, count, community, torrens) =>
           setSplitting({ id, count, community, torrens, nextLot: 1 })}
       />
 
-      {splitDialog}
       {/* Over the board, the way the job drawer is — the board stays mounted behind it. */}
       {projectPanel}
+      {/* AFTER the project's panel, deliberately. Both are `SidePanel`s at the same
+          z-index, so document order decides which is on top — and with the split rendered
+          first it opened BEHIND the project it was creating jobs for. Nothing appeared to
+          happen on "+ Create jobs" until you closed the project (Amber, 7 Sep: "when
+          clicked it should open the interface not have to close out to create"). */}
+      {splitDialog}
 
       {stale && <PreviousAddressNote />}
 
@@ -581,28 +641,16 @@ export function ProjectsPage() {
         // column looks and behaves the same whichever record is in it.
         <Board>
           {projectGroups.map((g, gi) => (
-            <section
-              className="board-column"
+            <BoardColumn
+              board="projects"
               key={g.key}
-              style={accentStyle(columnAccent(grouping, g.key, gi))}
+              name={g.key}
+              grouping={grouping}
+              count={g.projects.length}
+              empty="No projects"
+              accent={accentStyle(columnAccent(grouping, g.key, gi))}
             >
-              <div className="board-column-head">
-                {grouping === "None" ? (
-                  <div><Text type="text3" color="secondary">All projects</Text></div>
-                ) : (
-                  <div>
-                    <Text type="text3" color="secondary">{grouping}</Text>
-                    <Text type="text2" weight="medium">{g.key}</Text>
-                  </div>
-                )}
-                <span className="col-count">{g.projects.length}</span>
-              </div>
-
-              {g.projects.length === 0 ? (
-                <div className="board-column-empty">
-                  <Text type="text3" color="secondary">No projects</Text>
-                </div>
-              ) : (
+              {(
                 g.projects.map(p => (
                   <ProjectCard
                     key={p.projectNumber}
@@ -619,11 +667,13 @@ export function ProjectsPage() {
                   />
                 ))
               )}
-            </section>
+            </BoardColumn>
           ))}
         </Board>
       ) : view === "Gantt" ? (
         <ProjectsGantt rows={rows} onOpen={openOne} />
+      ) : view === "Calendar" ? (
+        <ProjectsCalendar rows={rows} onOpen={openOne} />
       ) : (
         <div className="panel data-table-wrap">
           <table className="data-table">
@@ -680,6 +730,7 @@ function WhoHoldsIt({ project, onChanged, onError }: {
   const save = async (patch: { owningTeam?: TeamId; assigneeId?: string | null }) => {
     onError(null);
     try {
+      // Undoable from the header — the repository records the step (undoableRepository).
       await repo.updateProject(project.projectId, patch);
       onChanged();
     } catch (e) {
@@ -712,11 +763,11 @@ function WhoHoldsIt({ project, onChanged, onError }: {
       <div className="field-row">
         <div className="field-label"><Text type="text2">Assigned to</Text></div>
         {can("user") ? (
-          <Select
+          /* The project's own team first, everybody else under "Other teams" — pick the
+             team and the likely people rise to the top (Amber, 7 Sep). */
+          <PersonSelect
             aria-label="Assignee"
-            placeholder="— nobody —"
-            clearable
-            options={profiles.map(p => ({ value: p.id, label: p.fullName }))}
+            teamId={project.owningTeam}
             value={project.assigneeId}
             onChange={v => { if (v !== project.assigneeId) save({ assigneeId: v }); }}
           />
@@ -743,6 +794,16 @@ function ProjectDetail({
   const { toast } = useToasts();
   const [removing, setRemoving] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
+  /**
+   * Which job the clone panel is open on, or null.
+   *
+   * Amber, 12 September: *"clone job needs to be an icon button on the job line in
+   * projects screen"* — the entry point her 7 September call took off the job drawer
+   * (*"cloning jobs can only be done on projects"*) and left nowhere. `CloneDialog.tsx`
+   * and `repository.cloneJob()` were kept unreferenced against exactly this, so nothing
+   * about cloning is new here except where you press it.
+   */
+  const [cloning, setCloning] = useState<string | null>(null);
   // The push-to-jobs preview (Amber, 1 Sep). Open until pushed or cancelled.
   const [pushing, setPushing] = useState(false);
   const [propsReload, setPropsReload] = useState(0);
@@ -771,7 +832,10 @@ function ProjectDetail({
   const [folderUrl, setFolderUrl] = useState(project.sharepointUrl ?? "");
   // The "Add another address" form. Null while closed; a NewAddress being edited while
   // open. Saving repoints the current address — the outgoing one lands in the history
-  // below by trigger (0042), which is what keeps an old contract's address findable.
+  // below by trigger (0042), which is what keeps an old contract's address findable —
+  // and, since 0118, carries the project's live jobs with it where they had not moved
+  // on their own. Both are triggers, so `refresh` below is what shows the result; this
+  // component asks for neither and cannot get either wrong.
   const [addingAddress, setAddingAddress] = useState<NewAddress | null>(null);
   const [savingAddress, setSavingAddress] = useState(false);
   const { data: pastAddresses } = useQuery(
@@ -839,6 +903,175 @@ function ProjectDetail({
       </div>
 
       <div className="stack">
+        {/* FIRST, above the properties (Amber, 7 Sep: "create a job should be at the
+            top"). A project exists to hold its jobs, and the act this drawer is opened
+            for most is adding them; it sat under eleven other panels, below the fold of
+            a 460px drawer, with the create button the last control on the page. */}
+        <section className="panel">
+          <div className="panel-head">
+            <Text type="text2" weight="bold">Jobs on this project ({project.jobs.length})</Text>
+            <div className="panel-actions">
+              {project.proposedDwellings != null && (
+                <Text type="text3" color="secondary">
+                  {project.proposedDwellings} proposed
+                  {/* The mix, when the project has one (0053). Said as counts rather
+                      than as a ratio, because "3 community" is what somebody checks
+                      against the plan of division. */}
+                  {(project.communityTitleLots != null || project.torrensTitleLots != null) && (
+                    <>
+                      {" "}({project.communityTitleLots ?? 0} community,{" "}
+                      {project.torrensTitleLots ?? 0} Torrens)
+                    </>
+                  )}
+                  {project.jobs.length !== project.proposedDwellings &&
+                    ` · ${project.jobs.length} created`}
+                </Text>
+              )}
+              {/* Amber, 1 Sep: a project property is pushed to all jobs from here. The
+                  button opens a preview of what would move; the function does the copy. */}
+              <Button size="small" kind="secondary" onClick={() => setPushing(true)} disabled={pushing}>
+                Push to jobs…
+              </Button>
+              <Button size="small" onClick={onSplit}>+ Create jobs</Button>
+            </div>
+          </div>
+
+          {removeError && (
+            <div className="create-problem" role="alert">
+              <Text type="text2" ellipsis={false}>{removeError}</Text>
+            </div>
+          )}
+
+          {pushing && (
+            <PushToJobs
+              projectId={project.projectId}
+              jobCount={project.jobs.filter(j => j.stage !== "Closed" && j.stage !== "Cancelled").length}
+              onClose={() => setPushing(false)}
+              onDone={n => {
+                setPushing(false);
+                setPropsReload(k => k + 1);
+                toast(n === 0 ? "Nothing was pushed — the jobs already carry these values, or none is live." : `Pushed ${n} value${n === 1 ? "" : "s"} onto the jobs.`, "normal");
+              }}
+            />
+          )}
+
+          {/* The clone panel, one for the section rather than one per row: 30 rows would
+              otherwise mount 30 copies of it. It keeps the new job's number on screen
+              until dismissed — that number is the thing somebody came for. */}
+          <CloneJobDialog
+            show={cloning !== null}
+            jobNumber={cloning}
+            onClose={() => setCloning(null)}
+            onCloned={onChanged}
+          />
+
+          {project.jobs.length === 0 && (
+            <Text type="text3" color="secondary" ellipsis={false}>
+              No jobs yet. <strong>Create jobs</strong> splits this project into one per lot,
+              each with its own lot address.
+            </Text>
+          )}
+          {/* Search inside one project (Amber, 28 August: *"being able to search at a
+              job level or project level for a job or word is essential"*). The header
+              search narrows the whole portfolio, which is the wrong instrument once you
+              are standing on a thirty-lot project and want lot 17: it would take you off
+              this page and back to a filtered board. This one stays here and narrows
+              only what is in front of you.
+
+              Shown from four jobs up. On a project with two, a search box is furniture. */}
+          {project.jobs.length > 3 && (
+            <div className="panel-search">
+              <TextField
+                size="small"
+                id={`find-job-${project.projectId}`}
+                placeholder="Find a job on this project — number, lot, address, stage, team"
+                inputAriaLabel={`Find a job on project ${project.projectNumber}`}
+                value={jobQuery}
+                onChange={v => setJobQuery(v)}
+              />
+              {jobTerms.length > 0 && (
+                <Text type="text3" color="secondary">
+                  {shownJobs.length} of {project.jobs.length}
+                </Text>
+              )}
+            </div>
+          )}
+
+          {/* A search that matches nothing says so, rather than showing an empty table
+              that reads as "this project has no jobs". */}
+          {jobTerms.length > 0 && shownJobs.length === 0 && (
+            <Text type="text3" color="secondary" ellipsis={false}>
+              No job on this project matches “{jobQuery.trim()}”.
+            </Text>
+          )}
+
+          <div className="data-table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Job</th><th>Address</th><th>Stage</th><th>Team</th><th>Status</th>
+                  {/* One actions column, not two. Clone is `users write jobs` and Remove
+                      is `admins delete jobs` — two different policies, so a user sees one
+                      button and an admin sees both, in the same cell rather than in a
+                      column that appears and disappears.
+
+                      The hiding is courtesy, not security: RLS is what actually refuses
+                      the write, and these gates only stop somebody being offered a button
+                      the database will turn down. */}
+                  {can("user") && <th className="row-actions" aria-label="Actions"></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {shownJobs.map(j => (
+                  // Now that a job has an address of its own, this list is a set of links
+                  // rather than a printout — same click as a row on the Jobs table.
+                  <tr
+                    key={j.jobNumber}
+                    onClick={() => navigate(`/jobs/${encodeURIComponent(j.jobNumber)}`)}
+                  >
+                    <td>{j.jobNumber}</td>
+                    <td>{j.currentAddress ?? <Token>addresses.consolidated_address</Token>}</td>
+                    <td>{j.stage}</td>
+                    <td>{j.team}</td>
+                    <td><StatusPill status={j.status} /></td>
+                    {can("user") && (
+                      // `stopPropagation`, because the row itself navigates to the job.
+                      // Without it, cloning would open the panel AND leave the page.
+                      <td className="row-actions" onClick={e => e.stopPropagation()}>
+                        <div className="field-inline">
+                          {/* An icon, and the words in the tooltip and the accessible
+                              name. A row this narrow has no room for "Clone" beside
+                              "Remove", and a job list is somewhere people scan rather
+                              than read. */}
+                          <Tooltip content={`Clone ${j.jobNumber}`} position="top">
+                            <Button
+                              kind="tertiary"
+                              size="small"
+                              aria-label={`Clone job ${j.jobNumber}`}
+                              onClick={() => setCloning(j.jobNumber)}
+                            >
+                              <Duplicate size={16} aria-hidden />
+                            </Button>
+                          </Tooltip>
+                          {can("admin") && (
+                            <Button
+                              kind="tertiary"
+                              size="small"
+                              disabled={removing === j.jobNumber}
+                              onClick={() => removeJob(j.jobNumber)}
+                            >
+                              {removing === j.jobNumber ? "Removing…" : "Remove"}
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
         <section className="panel">
           <div className="panel-head">
             <Text type="text2" weight="bold">Project properties</Text>
@@ -987,10 +1220,21 @@ function ProjectDetail({
               </Button>
             )}
           </div>
+          {/* One paragraph, not two. The element sweep counts prose in a page body and
+              only ratchets down (docs/design/element-sweep.md, E05), and a second <p>
+              here took ProjectsPage from 0 to 1.
+
+              The last three sentences are what 0118 does, said where the person is about
+              to cause it rather than after the fact: a write to twelve rows should not be
+              a surprise. The rule is Amber's, answered 14 September — only the jobs that
+              never moved on their own follow, and they keep the numbers that are theirs. */}
           <Text type="text3" color="secondary" element="p" ellipsis={false}>
             The original address never changes — it is what the site was bought as, and
             what old paperwork says. Adding a new address makes it the current one; every
-            previous address stays here and stays searchable.
+            previous address stays here and stays searchable. Live jobs still standing at
+            this address follow it, keeping their own lot and res numbers, so Lot 1 stays
+            Lot 1 on the new street. A job given its own address since, once its title
+            issued, is left where it is, and closed and cancelled jobs are not touched.
           </Text>
 
           {addingAddress !== null && (
@@ -1064,138 +1308,8 @@ function ProjectDetail({
 
         {/* Same list as the job drawer, for a document about the whole site rather than
             one lot — a feasibility, a whole-project summary. */}
-        <RecordDocuments projectId={project.projectId} />
+        <RecordDocuments projectId={project.projectId} folderUrl={project.sharepointUrl} />
 
-        <section className="panel">
-          <div className="panel-head">
-            <Text type="text2" weight="bold">Jobs on this project ({project.jobs.length})</Text>
-            <div className="panel-actions">
-              {project.proposedDwellings != null && (
-                <Text type="text3" color="secondary">
-                  {project.proposedDwellings} proposed
-                  {/* The mix, when the project has one (0053). Said as counts rather
-                      than as a ratio, because "3 community" is what somebody checks
-                      against the plan of division. */}
-                  {(project.communityTitleLots != null || project.torrensTitleLots != null) && (
-                    <>
-                      {" "}({project.communityTitleLots ?? 0} community,{" "}
-                      {project.torrensTitleLots ?? 0} Torrens)
-                    </>
-                  )}
-                  {project.jobs.length !== project.proposedDwellings &&
-                    ` · ${project.jobs.length} created`}
-                </Text>
-              )}
-              {/* Amber, 1 Sep: a project property is pushed to all jobs from here. The
-                  button opens a preview of what would move; the function does the copy. */}
-              <Button size="small" kind="secondary" onClick={() => setPushing(true)} disabled={pushing}>
-                Push to jobs…
-              </Button>
-              <Button size="small" onClick={onSplit}>+ Create jobs</Button>
-            </div>
-          </div>
-
-          {removeError && (
-            <div className="create-problem" role="alert">
-              <Text type="text2" ellipsis={false}>{removeError}</Text>
-            </div>
-          )}
-
-          {pushing && (
-            <PushToJobs
-              projectId={project.projectId}
-              jobCount={project.jobs.filter(j => j.stage !== "Closed" && j.stage !== "Cancelled").length}
-              onClose={() => setPushing(false)}
-              onDone={n => {
-                setPushing(false);
-                setPropsReload(k => k + 1);
-                toast(n === 0 ? "Nothing was pushed — the jobs already carry these values, or none is live." : `Pushed ${n} value${n === 1 ? "" : "s"} onto the jobs.`, "normal");
-              }}
-            />
-          )}
-
-          {project.jobs.length === 0 && (
-            <Text type="text3" color="secondary" ellipsis={false}>
-              No jobs yet. <strong>Create jobs</strong> splits this project into one per lot,
-              each with its own lot address.
-            </Text>
-          )}
-          {/* Search inside one project (Amber, 28 August: *"being able to search at a
-              job level or project level for a job or word is essential"*). The header
-              search narrows the whole portfolio, which is the wrong instrument once you
-              are standing on a thirty-lot project and want lot 17: it would take you off
-              this page and back to a filtered board. This one stays here and narrows
-              only what is in front of you.
-
-              Shown from four jobs up. On a project with two, a search box is furniture. */}
-          {project.jobs.length > 3 && (
-            <div className="panel-search">
-              <TextField
-                size="small"
-                id={`find-job-${project.projectId}`}
-                placeholder="Find a job on this project — number, lot, address, stage, team"
-                inputAriaLabel={`Find a job on project ${project.projectNumber}`}
-                value={jobQuery}
-                onChange={v => setJobQuery(v)}
-              />
-              {jobTerms.length > 0 && (
-                <Text type="text3" color="secondary">
-                  {shownJobs.length} of {project.jobs.length}
-                </Text>
-              )}
-            </div>
-          )}
-
-          {/* A search that matches nothing says so, rather than showing an empty table
-              that reads as "this project has no jobs". */}
-          {jobTerms.length > 0 && shownJobs.length === 0 && (
-            <Text type="text3" color="secondary" ellipsis={false}>
-              No job on this project matches “{jobQuery.trim()}”.
-            </Text>
-          )}
-
-          <div className="data-table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Job</th><th>Address</th><th>Stage</th><th>Team</th><th>Status</th>
-                  {/* `admins delete jobs` is the policy. The column is hidden below that
-                      level so nobody is offered a button the database will refuse — but
-                      the hiding is courtesy, not security: RLS is what actually stops it. */}
-                  {can("admin") && <th aria-label="Remove"></th>}
-                </tr>
-              </thead>
-              <tbody>
-                {shownJobs.map(j => (
-                  // Now that a job has an address of its own, this list is a set of links
-                  // rather than a printout — same click as a row on the Jobs table.
-                  <tr
-                    key={j.jobNumber}
-                    onClick={() => navigate(`/jobs/${encodeURIComponent(j.jobNumber)}`)}
-                  >
-                    <td>{j.jobNumber}</td>
-                    <td>{j.currentAddress ?? <Token>addresses.consolidated_address</Token>}</td>
-                    <td>{j.stage}</td>
-                    <td>{j.team}</td>
-                    <td><StatusPill status={j.status} /></td>
-                    {can("admin") && (
-                      <td onClick={e => e.stopPropagation()}>
-                        <Button
-                          kind="tertiary"
-                          size="small"
-                          disabled={removing === j.jobNumber}
-                          onClick={() => removeJob(j.jobNumber)}
-                        >
-                          {removing === j.jobNumber ? "Removing…" : "Remove"}
-                        </Button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
       </div>
     </>
   );

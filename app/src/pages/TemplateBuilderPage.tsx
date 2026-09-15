@@ -9,10 +9,13 @@ import { useProcesses, usePropertyDefs, usePropertyOptions, useStages, useTeams 
 import { LoadProblem, NothingYet } from "../components/SearchNotices";
 import { Problem } from "../components/Form";
 import { Select, toOptions } from "../components/Select";
+import { parseSubject, subjectOptionsFor, type SubjectKind } from "./documentSubject";
 import { SidePanel } from "../components/SidePanel";
 import { useToasts } from "../components/Toasts";
 import {
   REPORT_TEMPLATE_SCOPE_LABELS,
+  snippetHtml,
+  snippetLayout,
   type ReportDocument,
   type ReportTemplate,
   type ReportTemplateKind
@@ -31,7 +34,11 @@ import {
   createReportEngine,
   createReportRegistry,
   createThemeSet,
+  makeFillTokens,
+  makeFillTextTokens,
   resolveTheme,
+  sanitizeHtml,
+  tokensFor,
   helpers
 } from "../features/reports/index.js";
 import "../features/reports/reports.css";
@@ -161,7 +168,63 @@ function GetStartedCard(
  *   because it is in the path — a link to the Section Library has to be a link somebody
  *   can send, and a tab held in component state is not one.
  */
-export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" | "section" }) {
+/**
+ * What each library lane calls the thing it holds.
+ *
+ * `scratchHint` is the only one that is not mechanical: what an empty template, an empty
+ * section and an empty snippet are FOR are three different sentences, and a generic
+ * "an empty one" would be the kind of copy that is technically correct and tells nobody
+ * anything.
+ */
+/**
+ * What an import could not carry, shown before it becomes a document.
+ *
+ * NOT a warning and not an error — it is a receipt. A .docx says how many images it left
+ * out; a .pdf says its headings were inferred from text size rather than read from the
+ * file, and that its tables arrived as text. All three are true and none of them means
+ * the import failed.
+ *
+ * It is here, above the Create button, rather than in a toast afterwards, because the
+ * useful moment to learn a PDF's tables did not survive is while deciding whether to
+ * import it — not once it is already a document with somebody's name on it.
+ */
+function ImportNotes({ fileName, notes }: { fileName: string; notes: string[] }) {
+  return (
+    <div className="import-notes">
+      <Text type="text3" weight="bold" ellipsis={false}>Read from {fileName}</Text>
+      {notes.length === 0 ? (
+        <Text type="text3" color="secondary" ellipsis={false}>
+          Everything in it came across.
+        </Text>
+      ) : (
+        <ul>
+          {notes.map((n, i) => (
+            <li key={i}><Text type="text3" color="secondary" ellipsis={false}>{n}</Text></li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+const LANE_WORDS: Record<ReportTemplateKind, {
+  one: string; One: string; many: string; egName: string; scratchHint: string;
+}> = {
+  template: {
+    one: "template", One: "Template", many: "templates", egName: "Progress report",
+    scratchHint: "An empty page. Drag blocks in from the palette on the left of the builder."
+  },
+  section: {
+    one: "section", One: "Section", many: "sections", egName: "Letterhead",
+    scratchHint: "An empty fragment. Build the blocks a template will drop in — a letterhead, a scope-of-works table, a sign-off."
+  },
+  snippet: {
+    one: "snippet", One: "Snippet", many: "snippets", egName: "Standard sign-off",
+    scratchHint: "Wording you reuse. Write it once here, then drop it into any letter from the editor's Insert snippet menu."
+  }
+};
+
+export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" | "section" | "snippet" }) {
   const repo = useRepository();
   const [params, setParams] = useSearchParams();
   const { can } = usePermission();
@@ -175,6 +238,16 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
   const [reloadKey, setReloadKey] = useState(0);
   const bump = useCallback(() => setReloadKey(k => k + 1), []);
   const [open, setOpen] = useState<OpenTarget | null>(null);
+  /**
+   * What is open, readable from inside `ctx` without `ctx` depending on it.
+   *
+   * Exactly the reasoning behind `ctxRef`: `ctx` is memoised because a fresh identity
+   * re-resolves every block, which makes typing in a text block feel broken. Adding
+   * `open` to the dependency list would rebuild it on every autosave — the row comes back
+   * as a new object each time it saves — so the upload reads the ref instead.
+   */
+  const openRef = useRef<OpenTarget | null>(null);
+  openRef.current = open;
   const [preview, setPreview] = useState<{ model: CompiledReport; theme: string } | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -191,7 +264,7 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
    * it"* — and the order that lets the three cards be live buttons rather than three
    * controls greyed out behind a field nobody has filled in yet.
    */
-  const [starting, setStarting] = useState<{ how: "template" | "clone" | "scratch" } | null>(null);
+  const [starting, setStarting] = useState<{ how: "template" | "clone" | "scratch" | "import" } | null>(null);
   /**
    * The record the new document is ABOUT, as one value rather than two.
    *
@@ -202,6 +275,14 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
    */
   const [subjectPick, setSubjectPick] = useState<string | null>(null);
   /**
+   * Job or project — asked before the list, not buried inside it.
+   *
+   * See `subjectOptions` for the number that made this its own control. It defaults to
+   * "job" because that is still the common case; what changed is that "project" is now
+   * one click away instead of 75 rows down.
+   */
+  const [subjectKind, setSubjectKind] = useState<SubjectKind>("job");
+  /**
    * The same thing for the library lanes: which card was clicked, so the panel knows
    * whether to ask for a source as well as a name.
    *
@@ -210,8 +291,18 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
    * covering both would need a lane check at every read — the kind of condition that is
    * right until somebody adds a fourth way in.
    */
-  const [startingLib, setStartingLib] = useState<{ how: "clone" | "scratch" } | null>(null);
-  const libKind: ReportTemplateKind = lane === "section" ? "section" : "template";
+  const [startingLib, setStartingLib] = useState<{ how: "clone" | "scratch" | "import" } | null>(null);
+  const libKind: ReportTemplateKind =
+    lane === "section" ? "section" : lane === "snippet" ? "snippet" : "template";
+
+  /**
+   * The lane's own words, in one place.
+   *
+   * This used to be a two-way ternary repeated at eight call sites, which was tolerable
+   * while there were two kinds. A third turns each of them into a nested conditional and
+   * the eighth one somebody forgets is a screen that calls a snippet a template.
+   */
+  const words = LANE_WORDS[libKind];
   const [busy, setBusy] = useState(false);
 
   // ── What is in the library, and what has been made from it ───────────────
@@ -236,6 +327,18 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
   const { options: propertyOptions } = usePropertyOptions(reloadKey);
   const { data: propertyValues } = useQuery(r => r.listPropertyValues(), [], [reloadKey]);
   const { data: people } = useQuery(r => r.listProfiles(), []);
+  /**
+   * Every maintenance issue this person may see, open and closed (0114).
+   *
+   * `queue: "all"` rather than "open", because a report of what was fixed last quarter is
+   * as real a question as a report of what is outstanding — and the two blocks that read
+   * this both offer "Include closed…" as a tick box. Filtering here would make that tick
+   * box a lie.
+   *
+   * One request per issue, so this list IS the issues; `listMaintenanceItems` is not read
+   * and the blocks do not need it.
+   */
+  const { data: maintenance } = useQuery(r => r.listMaintenanceRequests({ queue: "all" }), []);
 
   /** Only the sections a document may actually use: in the library, and still current. */
   const sections = useMemo(
@@ -244,6 +347,25 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
   );
   const libraryTemplates = useMemo(
     () => templates.filter(t => t.kind === "template" && t.approvedAt !== null && t.isActive),
+    [templates]
+  );
+
+  /**
+   * The snippets the editor offers, as the menu wants them.
+   *
+   * Same gate as sections — in the library and still current — because an unapproved
+   * snippet is its author's draft and a retired one is wording somebody deliberately
+   * stopped offering. `snippetHtml` is the one place that knows a snippet is a single
+   * text widget; see 0098 for why it is stored that way.
+   *
+   * A snippet with no wording yet is dropped rather than listed: it would be a menu entry
+   * that inserts nothing, which reads as broken rather than as empty.
+   */
+  const textSnippets = useMemo(
+    () => templates
+      .filter(t => t.kind === "snippet" && t.approvedAt !== null && t.isActive)
+      .map(t => ({ value: t.id, label: t.name, html: snippetHtml(t.layout) }))
+      .filter(sn => sn.html.trim() !== ""),
     [templates]
   );
 
@@ -282,20 +404,132 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
     []
   );
 
+  /**
+   * Saving a snippet: the wording is held here while the author names it.
+   *
+   * A string and not a boolean, because the html has to survive the trip through the
+   * panel — by the time somebody has typed a name the selection they saved is long gone,
+   * and re-reading it then would save whatever happens to be selected now.
+   */
+  /**
+   * A parsed import, held between choosing the file and naming what it becomes.
+   *
+   * The parse happens on the file picker's change, not on Create, and that is the point:
+   * a Word document with an unreadable table or a scanned PDF with no text at all should
+   * say so BEFORE somebody has typed a name and pressed a button, not after. `notes` is
+   * what the conversion could not carry, and the panel shows it.
+   */
+  const [imported, setImported] =
+    useState<{ widgets: ReportWidget[]; notes: string[]; fileName: string } | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+  /** Which lane asked, so the file picker knows which naming panel to open afterwards. */
+  const importLaneRef = useRef<"documents" | "library">("documents");
+
+  const [savingSnippet, setSavingSnippet] = useState<string | null>(null);
+  const [snippetName, setSnippetName] = useState("");
+
+  const askToSaveSnippet = useCallback((html: string) => {
+    setSnippetName("");
+    setSavingSnippet(html);
+  }, []);
+
   /** What the open document is about, so "the record this document is about" has an answer. */
   const subject = open?.lane === "document" ? open.subject : null;
+
+  // ── Who is on the record ─────────────────────────────────────────────────
+  //
+  // The roles are a short lookup and load with the page. The PARTIES are read per subject
+  // rather than for every record at once, which is the opposite of how the property values
+  // above are loaded and deliberately so: `listPropertyValues()` is one table the boards
+  // already need, while parties are only ever asked about one record — the one the open
+  // document is about — and fetching every party on every job to answer that would be a
+  // table scan per page load for a letter's first line.
+  //
+  // Empty until a document is open, and empty for a library entry: a template is not about
+  // anybody, so `{{purchaser_name}}` inside one stays a placeholder until it is used.
+  const { data: partyRoles } = useQuery(r => r.listPartyRoles(), []);
+  const { data: parties } = useQuery(
+    r => (subject?.jobId
+      ? r.listRecordParties({ jobId: subject.jobId })
+      : subject?.projectId != null
+        ? r.listRecordParties({ projectId: subject.projectId })
+        : Promise.resolve([])),
+    [],
+    [subject?.jobId, subject?.projectId, reloadKey]
+  );
 
   // Memoised, and it is not an optimisation: a fresh `ctx` identity re-resolves every
   // block on every render, which makes typing in a text block feel broken.
   const ctx = useMemo(
-    () => ({
-      projects, jobs, teams, stageNames, people, processes,
-      propertyDefs, propertyValues, propertyOptions,
-      sections, expandSection,
-      subject
-    }),
+    () => {
+      const base = {
+        projects, jobs, teams, stageNames, people, processes,
+        propertyDefs, propertyValues, propertyOptions,
+        partyRoles, parties, maintenance,
+        sections, expandSection,
+        subject
+      };
+      return {
+        ...base,
+        /**
+         * Placeholders in prose — `{{site_start_date}}` inside a letter.
+         *
+         * Two halves, both supplied by the app rather than the module: the list the
+         * editor's "Insert field" menu offers, and the function that fills them in when
+         * the block renders. `core/registry.js` knows only that a host may provide
+         * `fillTokens`; what a token means is Lofty's business, because a token is a
+         * name for one of Lofty's own fields.
+         *
+         * Built from `base` and not from `ctx`, which does not exist yet inside its own
+         * initialiser — and it needs the real subject, jobs and values, so it cannot be
+         * hoisted out of the memo either.
+         */
+        textTokens: tokensFor(base),
+        fillTokens: makeFillTokens(base),
+      // The same placeholders in a table's cells and headers (10 September). A second
+      // hook rather than a flag on the first: that one produces html for prose, this one
+      // produces text for a cell, and a cell printing `Smith &amp; Sons` is what sharing
+      // them would cost.
+      fillTextTokens: makeFillTextTokens(base),
+        /**
+         * Saved wording — the list the editor offers, and where a new one goes.
+         *
+         * Both host-supplied for the same reason the tokens are: the module knows a
+         * snippet is html to drop in at the caret, and nothing about the library it came
+         * out of, who may see it or the manager who has to sign it off.
+         *
+         * `saveTextSnippet` only opens the naming panel. Writing the row is deliberately
+         * NOT done here — the author has to name it, and a snippet called "Untitled" is
+         * one nobody finds again in a menu.
+         */
+        textSnippets,
+        saveTextSnippet: askToSaveSnippet,
+        /**
+         * Put an image in the bucket and hand back the URL the block renders.
+         *
+         * Host-supplied for the same reason everything else here is: the module knows a
+         * File goes in and a URL comes back, and nothing about buckets or who may write
+         * to them. Absent when nothing is open, which makes the settings control fall
+         * back to the URL box rather than offering an upload with nowhere to file it.
+         *
+         * The owner is what the object path is filed under (`documents/<id>/…`), not a
+         * second record of what the document carries — the layout is that, which is what
+         * "stores in the document only" meant (0100).
+         */
+        uploadImage: openRef.current
+          ? (file: File) => repo.uploadReportImage({
+              file,
+              owner: openRef.current!.lane === "document"
+                ? { kind: "document", id: openRef.current!.row.id }
+                : { kind: "library", id: openRef.current!.row.id }
+            })
+          : undefined
+      };
+    },
     [projects, jobs, teams, stageNames, people, processes,
-     propertyDefs, propertyValues, propertyOptions, sections, expandSection, subject]
+     propertyDefs, propertyValues, propertyOptions, partyRoles, parties, maintenance,
+     sections, expandSection, subject,
+     textSnippets, askToSaveSnippet]
   );
   ctxRef.current = ctx;
 
@@ -348,8 +582,25 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
   );
   const templateStore = useMemo(() => createLibraryStore(repo, "template"), [repo]);
   const sectionStore = useMemo(() => createLibraryStore(repo, "section"), [repo]);
+  // Snippets go through the same store as everything else in the library, because they
+  // are the same table and the same sign-off (0098). The store is parameterised by kind
+  // for exactly this reason — a third one costs a line, not a file.
+  const snippetStore = useMemo(() => createLibraryStore(repo, "snippet"), [repo]);
+  /**
+   * Kind → store, in one function.
+   *
+   * `kind === "section" ? sectionStore : templateStore` was correct while there were two
+   * kinds and became a silent bug the moment there were three: a snippet would have gone
+   * to the template store and been created as a template, under a name that said
+   * otherwise. A record lookup cannot fall through like that.
+   */
+  const libraryStoreFor = useCallback(
+    (kind: ReportTemplateKind) =>
+      ({ template: templateStore, section: sectionStore, snippet: snippetStore })[kind],
+    [templateStore, sectionStore, snippetStore]
+  );
   const storeFor = (t: OpenTarget) =>
-    t.lane === "document" ? documentStore : t.kind === "section" ? sectionStore : templateStore;
+    t.lane === "document" ? documentStore : libraryStoreFor(t.kind);
 
   const nameOf = useCallback(
     (id: string | null) => (id ? people.find(p => p.id === id)?.fullName ?? null : null),
@@ -372,33 +623,43 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
   /**
    * Every job and every project, in one list, jobs first.
    *
-   * Jobs first because a document is usually about one — a progress report for
-   * 1042-001, a client letter about that lot. A project-wide document (a feasibility, a
-   * whole-site summary) is the rarer case and sits below.
+   * ONE LIST OF ONE KIND, chosen above it — and the reason is a number.
+   *
+   * This was a single list of every job AND every project, jobs first on the reasoning
+   * that a document is usually about one. On 7 September the live database had 75 jobs
+   * and 117 projects, and of the 8 documents anybody had made, **6 were on a job and 0
+   * were on a project.** Not one, ever.
+   *
+   * Nothing was broken: the column, the foreign key, the RLS policy and the value this
+   * picker emits were all correct, and a project-linked document rendered on the project
+   * perfectly well once one existed. What was wrong was that you could not get to it.
+   * 192 options in one control, and `Select` sorts by label unless told not to — job
+   * labels start with a digit and project labels started with the word "Project", so
+   * every project sorted below every job. Reaching one meant scrolling past 75 jobs or
+   * guessing that "Project" was the word to type.
+   *
+   * "Rarer" was the wrong thing to optimise for. Rare is not the same as hidden, and a
+   * list that is technically complete but practically unreachable produces exactly this:
+   * a feature that works and that nobody has ever used. So the kind is its own control
+   * now, and each list holds one kind and is as long as that kind is.
    *
    * The label carries the address as well as the number, because "1042-001" is what
    * somebody types and "28 Corner Street" is what they remember, and the Select searches
-   * the label.
+   * the label. "Project" is no longer prefixed onto it — the control above already says
+   * which kind you are looking at, and repeating it in all 117 labels only made them
+   * sort away from the numbers people search by.
    */
-  const subjectOptions = useMemo(() => [
-    ...jobs.map(j => ({
-      value: `job:${j.jobNumber}`,
-      label: `${j.jobNumber}${j.currentAddress ? ` — ${j.currentAddress}` : ""}`
-    })),
-    ...projects.map(p => ({
-      value: `project:${p.projectNumber}`,
-      label: `Project ${p.projectNumber}${p.currentAddress ? ` — ${p.currentAddress}` : ""}`
-    }))
-  ], [jobs, projects]);
+  const subjectOptions = useMemo(
+    () => subjectOptionsFor(
+      subjectKind,
+      jobs.map(j => ({ number: j.jobNumber, currentAddress: j.currentAddress })),
+      projects.map(p => ({ number: p.projectNumber, currentAddress: p.currentAddress }))
+    ),
+    [subjectKind, jobs, projects]
+  );
 
-  /** `job:1042-001` → what createReportDocument wants. */
-  const pickedSubject = useMemo(() => {
-    if (!subjectPick) return null;
-    const [kind, id] = subjectPick.split(/:(.*)/s);
-    return kind === "project"
-      ? { jobId: null, projectId: Number(id) }
-      : { jobId: id, projectId: null };
-  }, [subjectPick]);
+  /** `job:1042-001` → what createReportDocument wants. See `documentSubject.ts`. */
+  const pickedSubject = useMemo(() => parseSubject(subjectPick), [subjectPick]);
 
   // ── Documents ────────────────────────────────────────────────────────────
 
@@ -427,12 +688,19 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
         title,
         layout: from
           ? { ...from.layout, widgets: engine.remapIds((from.layout?.widgets ?? []) as ReportWidget[]) }
-          : { widgets: [] },
+          // An import brings its own blocks. `remapIds` here too, for the same reason it
+          // is used on a clone: the importer generates ids, and importing the same file
+          // twice must not produce two documents whose blocks collide in the builder's
+          // drag-and-drop, which keys on block id.
+          : imported
+            ? { widgets: engine.remapIds(imported.widgets) }
+            : { widgets: [] },
         templateId: from?.id ?? null,
         ...subject
       });
       setDocTitle("");
       setDocFrom(null);
+      setImported(null);
       setSubjectPick(null);
       setStarting(null);
       bump();
@@ -494,6 +762,7 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
     setDocFrom(null);
     setCloneFrom(null);
     setSubjectPick(null);
+    setImported(null);
   };
 
   /**
@@ -504,9 +773,38 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
    * the subject a clone keeps are all decisions with reasons written where they are made,
    * and a second copy here would be a second place for them to drift.
    */
+  /**
+   * Read the chosen file, then open the naming panel with what came out of it.
+   *
+   * The parsers are loaded by `documentToWidgets` on demand — mammoth and pdfjs together
+   * are larger than the rest of the builder, and nobody who is not importing should wait
+   * for them. The name is suggested from the file's own, minus the extension, because
+   * "Site Report.docx" is what the thing is called and retyping it is a chore.
+   */
+  const takeImport = (file: File | undefined, lane: "documents" | "library") =>
+    run(async () => {
+      if (!file) return;
+      importLaneRef.current = lane;
+      const { documentToWidgets } = await import("../features/reports/index.js");
+      const { widgets, notes } = await documentToWidgets(file);
+      if (!widgets.length) {
+        throw new Error(`Nothing could be read out of ${file.name}.`);
+      }
+      const suggested = file.name.replace(/\.[^.]+$/, "");
+      setImported({ widgets: widgets as ReportWidget[], notes, fileName: file.name });
+      if (lane === "documents") {
+        setDocTitle(suggested);
+        setStarting({ how: "import" });
+      } else {
+        setLibName(suggested);
+        setStartingLib({ how: "import" });
+      }
+    });
+
   const confirmStart = () => {
     if (!starting) return;
     if (starting.how === "clone") cloneDocument();
+    else if (starting.how === "import") createDocument(null);
     else createDocument(starting.how === "template" ? docFrom : null);
   };
 
@@ -556,6 +854,38 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wanted, open, documentStore, repo]);
 
+  /**
+   * `?for=project:1042` — arriving from a record, with that record already chosen.
+   *
+   * The other half of the same problem `subjectOptions` describes. "New document" on a
+   * project used to drop you on the builder with an empty picker, so the first thing you
+   * did was hunt for the project you had just been looking at. Now the link carries it.
+   *
+   * It opens the naming panel too, because coming from that link IS the decision to make
+   * a document; stopping at the Get Started cards would be one more click to say what you
+   * have already said. "Start from scratch" is the assumption — the record is known, the
+   * template is not, and a template can be chosen on the next document.
+   *
+   * The parameter is cleared once read, exactly as `?open=` is and for the same reason:
+   * cancel the panel and it must stay cancelled, rather than springing back on the next
+   * render from a URL nobody updated.
+   */
+  const wantedFor = params.get("for");
+  useEffect(() => {
+    if (!wantedFor || open || starting) return;
+    const [kind, id] = wantedFor.split(/:(.*)/s);
+    if ((kind === "job" || kind === "project") && id) {
+      setSubjectKind(kind);
+      setSubjectPick(`${kind}:${id}`);
+      setStarting({ how: "scratch" });
+    }
+    const next = new URLSearchParams(params);
+    next.delete("for");
+    setParams(next, { replace: true });
+    // Same reasoning as the effect above: it clears the parameter it reads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantedFor, open, starting]);
+
   // NO `openDocument` AND NO `removeDocument` ON THIS SCREEN, AND THAT IS DELIBERATE.
   //
   // Both existed for the table that used to sit under the cards. Amber, 4 September:
@@ -577,9 +907,13 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
     run(async () => {
       const name = libName.trim();
       if (!name) return;
-      const store = libKind === "section" ? sectionStore : templateStore;
-      const row = await store.create({ title: name, layout: { widgets: [] } });
+      const store = libraryStoreFor(libKind);
+      const row = await store.create({
+        title: name,
+        layout: imported ? { widgets: engine.remapIds(imported.widgets) } : { widgets: [] }
+      });
       setLibName("");
+      setImported(null);
       setStartingLib(null);
       bump();
       setOpen({ lane: "library", row, kind: libKind });
@@ -598,7 +932,7 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
       const name = libName.trim();
       const source = ofKind.find(t => t.id === cloneFrom);
       if (!name || !source) return;
-      const store = libKind === "section" ? sectionStore : templateStore;
+      const store = libraryStoreFor(libKind);
       const full = await repo.getReportTemplate(source.id);
       if (!full) throw new Error("That is no longer in the library.");
       const row = await store.create({
@@ -615,22 +949,51 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
       setOpen({ lane: "library", row, kind: libKind });
     });
 
+  /**
+   * Keep the wording, under the name its author gave it.
+   *
+   * Through the same store as a template or a section, so the same trigger decides
+   * whether it is signed off on creation: a manager's snippet is in the library at once,
+   * a user's waits, and "save a snippet" is not a way around the sign-off.
+   *
+   * `bump()` is what puts it in the menu — the editor reads `textSnippets`, which comes
+   * off the same `listReportTemplates` query the rest of the page does.
+   */
+  const confirmSaveSnippet = () =>
+    run(async () => {
+      const name = snippetName.trim();
+      if (!name || savingSnippet === null) return;
+      await snippetStore.create({ title: name, layout: snippetLayout(savingSnippet) });
+      setSavingSnippet(null);
+      setSnippetName("");
+      bump();
+    });
+
+  const closeSaveSnippet = () => {
+    if (busy) return;
+    setSavingSnippet(null);
+    setSnippetName("");
+  };
+
   const closeStartingLib = () => {
     if (busy) return;
     setStartingLib(null);
     setLibName("");
     setCloneFrom(null);
+    setImported(null);
   };
 
   const confirmStartLib = () => {
     if (!startingLib) return;
     if (startingLib.how === "clone") cloneLibraryEntry();
+    // "scratch" and "import" both go to createLibraryEntry — it reads `imported` for the
+    // layout, so the only difference between them is whether that is set.
     else createLibraryEntry();
   };
 
   const openLibraryEntry = (t: ReportTemplate) =>
     run(async () => {
-      const store = t.kind === "section" ? sectionStore : templateStore;
+      const store = libraryStoreFor(t.kind);
       setOpen({ lane: "library", row: await store.get(t.id), kind: t.kind });
     });
 
@@ -739,6 +1102,11 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
                 hint="An empty page. Drag blocks in from the palette on the left of the builder."
                 onClick={() => setStarting({ how: "scratch" })}
               />
+              <GetStartedCard
+                title="Import A Document"
+                hint="A Word file, a PDF or an HTML page you already have. Its headings, prose and tables become blocks you can edit."
+                onClick={() => { importLaneRef.current = "documents"; importInputRef.current?.click(); }}
+              />
             </div>
           </div>
         ) : (
@@ -780,19 +1148,20 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
             <div className="get-started-grid">
               <GetStartedCard
                 title="Start From Scratch"
-                hint={
-                  libKind === "section"
-                    ? "An empty fragment. Build the blocks a template will drop in — a letterhead, a scope-of-works table, a sign-off."
-                    : "An empty page. Drag blocks in from the palette on the left of the builder."
-                }
+                hint={words.scratchHint}
                 onClick={() => setStartingLib({ how: "scratch" })}
               />
               <GetStartedCard
-                title={libKind === "section" ? "Clone An Existing Section" : "Clone An Existing Template"}
+                title={`Clone An Existing ${words.One}`}
                 hint="Copy one that already works and change what this one needs. The original is untouched."
                 disabled={!ofKind.length}
-                disabledNote={libKind === "section" ? "No sections to copy yet" : "No templates to copy yet"}
+                disabledNote={`No ${words.many} to copy yet`}
                 onClick={() => setStartingLib({ how: "clone" })}
+              />
+              <GetStartedCard
+                title="Import A Document"
+                hint="A Word file, a PDF or an HTML page you already have. Its headings, prose and tables become blocks you can edit."
+                onClick={() => { importLaneRef.current = "library"; importInputRef.current?.click(); }}
               />
             </div>
             {!canApprove && (
@@ -803,7 +1172,7 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
           </div>
         ) : templates.length === 0 ? (
           <NothingYet
-            title={libKind === "section" ? "No sections yet" : "No templates yet"}
+            title={`No ${words.many} yet`}
             description="Nothing has been added to the library yet."
           />
         ) : null}
@@ -927,6 +1296,7 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
         title={
           starting?.how === "template" ? "New document from a template"
           : starting?.how === "clone" ? "Copy an existing document"
+          : starting?.how === "import" ? "New document from a file"
           : "New empty document"
         }
         onClose={closeStarting}
@@ -947,6 +1317,9 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
         }
       >
         <div className="get-started-card-fields">
+          {starting?.how === "import" && imported && (
+            <ImportNotes fileName={imported.fileName} notes={imported.notes} />
+          )}
           <TextField
             id="new-document-title"
             title="Name"
@@ -970,13 +1343,36 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
               without a record to attach. What is required is the ANSWER on this screen,
               which is where somebody is choosing freely and could otherwise leave it
               blank without noticing. */}
-          <Select
-            aria-label="The job or project this document is about"
-            placeholder={subjectOptions.length ? "Which job or project…" : "No jobs or projects yet"}
-            options={subjectOptions}
-            value={subjectPick}
-            onChange={v => setSubjectPick(v)}
-          />
+          <div className="subject-pick">
+            <div className="subject-kind" role="radiogroup" aria-label="Is this document about a job or a project?">
+              {(["job", "project"] as const).map(k => (
+                <button
+                  key={k}
+                  type="button"
+                  role="radio"
+                  aria-checked={subjectKind === k}
+                  className={`subject-kind-option${subjectKind === k ? " is-on" : ""}`}
+                  /* Clearing the pick is the point, not tidiness: `job:1042-001` left in
+                     state while the Project list is showing would create a document
+                     against a job the panel is no longer offering. */
+                  onClick={() => { setSubjectKind(k); setSubjectPick(null); }}
+                >
+                  {k === "job" ? "A job" : "A project"}
+                </button>
+              ))}
+            </div>
+            <Select
+              aria-label={subjectKind === "project" ? "The project this document is about" : "The job this document is about"}
+              placeholder={
+                subjectOptions.length
+                  ? (subjectKind === "project" ? "Which project…" : "Which job…")
+                  : (subjectKind === "project" ? "No projects yet" : "No jobs yet")
+              }
+              options={subjectOptions}
+              value={subjectPick}
+              onChange={v => setSubjectPick(v)}
+            />
+          </div>
 
           {starting?.how === "template" && (
             <Select
@@ -1008,13 +1404,81 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
         </div>
       </SidePanel>
 
+      {/* ONE file input for both lanes, outside either panel.
+          Inside a SidePanel it would unmount with the panel — and the panel is exactly
+          what the file picker OPENS, so the element that fired the change would be gone
+          before the change was handled. `importLaneRef` is what remembers which card
+          asked, because the input cannot know. */}
+      <input
+        ref={importInputRef}
+        type="file"
+        accept=".docx,.pdf,.html,.htm,text/html,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        hidden
+        onChange={e => {
+          const file = e.target.files?.[0];
+          // Cleared immediately, so picking the SAME file twice still fires a change.
+          e.target.value = "";
+          takeImport(file, importLaneRef.current);
+        }}
+      />
+
+      {/* Naming a snippet. The wording is already decided — this asks the one thing the
+          editor cannot: what to call it in the menu. */}
+      <SidePanel
+        open={savingSnippet !== null}
+        title="Save as a snippet"
+        onClose={closeSaveSnippet}
+        footer={
+          <>
+            <Button onClick={confirmSaveSnippet} disabled={busy || !snippetName.trim()}>
+              {busy ? "Saving…" : "Save snippet"}
+            </Button>
+            <Button kind="tertiary" onClick={closeSaveSnippet} disabled={busy}>Cancel</Button>
+          </>
+        }
+      >
+        <div className="get-started-card-fields">
+          <TextField
+            id="new-snippet-name"
+            title="Name"
+            placeholder="Standard sign-off"
+            value={snippetName}
+            onChange={setSnippetName}
+            autoFocus
+            inputAriaLabel="Name for the snippet"
+          />
+
+          {/* What is actually being kept, rendered rather than described. Somebody who
+              meant to select one paragraph and caught two should be able to see that
+              here, before it is in the menu under a name that says otherwise. */}
+          <Text type="text3" color="secondary" ellipsis={false}>What you are keeping:</Text>
+          <div
+            className="snippet-preview"
+            /* Sanitised on the way in by the editor, and again here: this is the one
+               place the html is put back into the DOM outside the editor, and the rule
+               everywhere else in this app is that html is cleaned at the point of use
+               rather than trusted because of where it came from. */
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(savingSnippet ?? "") }}
+          />
+
+          <Text type="text3" color="secondary" ellipsis={false}>
+            {canApprove
+              ? "Signed into the library on saving, so everybody can use it."
+              : "Saved as your own draft until a manager signs it into the library."}
+            {" "}Inserting a snippet copies it — editing it later leaves documents already
+            written exactly as they are.
+          </Text>
+        </div>
+      </SidePanel>
+
       {/* The library's naming panel — the same one, asking the same question. */}
       <SidePanel
         open={startingLib !== null}
         title={
           startingLib?.how === "clone"
-            ? (libKind === "section" ? "Copy an existing section" : "Copy an existing template")
-            : (libKind === "section" ? "New empty section" : "New empty template")
+            ? `Copy an existing ${words.one}`
+            : startingLib?.how === "import" ? `New ${words.one} from a file`
+            : `New empty ${words.one}`
         }
         onClose={closeStartingLib}
         footer={
@@ -1030,20 +1494,23 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
         }
       >
         <div className="get-started-card-fields">
+          {startingLib?.how === "import" && imported && (
+            <ImportNotes fileName={imported.fileName} notes={imported.notes} />
+          )}
           <TextField
             id="new-library-name"
             title="Name"
-            placeholder={libKind === "section" ? "Letterhead" : "Progress report"}
+            placeholder={words.egName}
             value={libName}
             onChange={setLibName}
             autoFocus
-            inputAriaLabel={libKind === "section" ? "Name for a new section" : "Name for a new template"}
+            inputAriaLabel={`Name for a new ${words.one}`}
           />
 
           {startingLib?.how === "clone" && (
             <Select
-              aria-label={libKind === "section" ? "Section to copy" : "Template to copy"}
-              placeholder={libKind === "section" ? "Which section…" : "Which template…"}
+              aria-label={`${words.One} to copy`}
+              placeholder={`Which ${words.one}…`}
               options={toOptions(ofKind.map(t => t.name))}
               value={cloneFrom ? ofKind.find(t => t.id === cloneFrom)?.name ?? null : null}
               onChange={n => setCloneFrom(ofKind.find(t => t.name === n)?.id ?? null)}
@@ -1071,6 +1538,16 @@ export function TemplateBuilderPage({ lane }: { lane: "documents" | "template" |
           ctx={ctx}
           themes={themes}
           branding="Lofty"
+          // A document is a draft until it is published to SharePoint (0104), and every
+          // Preview & export from in here is a copy somebody could send. Read from the
+          // row rather than from the documents list: the builder's own autosave is what
+          // takes a publication back, and `onSaved` replaces this row with the answer the
+          // database gave, so the mark appears the moment an edit lands.
+          //
+          // Library entries never carry one. A template is not sent to anybody — it is
+          // the thing documents are made FROM — so watermarking it would be marking the
+          // mould rather than the casting.
+          watermark={open.lane === "document" && !open.row.publishedAt ? "DRAFT" : ""}
           // Only from a document, and it means "propose this layout as a template".
           // From a library entry it would be a template saved as a template.
           canSaveTemplate={open.lane === "document"}

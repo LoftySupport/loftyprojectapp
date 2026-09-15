@@ -1,9 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
 import { Button } from "@vibe/core";
-import { Bug, Idea } from "@vibe/icons";
 import { SidePanel } from "./SidePanel";
-import { ReportForm } from "./ReportForm";
+import { EMPTY_DRAFT, ReportForm, type ReportDraft } from "./ReportForm";
 import type { FeedbackKind } from "../data/types";
 import "./ui.css";
 
@@ -34,36 +32,88 @@ export function useFeedback(): FeedbackApi {
 }
 
 /**
- * The two footer controls. Rendered by the shell, so the shell decides where they go.
+ * The footer's reporting control. Rendered by the shell, so the shell decides where it goes.
  *
- * The second link is not decoration: "it is already planned" is the thing this whole
- * feature exists to say, and the person most likely to file a duplicate is the one about
- * to open this form.
+ * ONE CONTROL, NOT TWO. There was a "What's planned" beside it, going to `/updates` — on
+ * the argument that the person most likely to file a duplicate is the one about to open
+ * this form. Amber, 10 September: *"remove the 'whats planned' link from footer as there
+ * is already updates"*. She is right that it was a second door to one room: the footer's
+ * own **Updates** link is that page, three positions along the same row.
+ *
+ * NO ICON. It read `<Bug/> Report a bug or request a feature`, which is the only glyph in
+ * a row of six plain links — Amber, same message: *"don't use emojis or icons in links"*.
+ * The word "bug" is doing the work the picture was doing, and a lone icon in a text row
+ * reads as a mistake rather than as emphasis.
  */
 export function FeedbackButtons() {
   const { report } = useFeedback();
-  const navigate = useNavigate();
   return (
-    <>
-      <button type="button" className="foot-action" onClick={() => report()}>
-        <Bug size={16} aria-hidden />
-        Report a bug or request a feature
-      </button>
-      <button type="button" className="foot-action" onClick={() => navigate("/updates")}>
-        <Idea size={16} aria-hidden />
-        What's planned
-      </button>
-    </>
+    <button type="button" className="foot-action" onClick={() => report()}>
+      {/* "Report a bug or request a feature" is 33 characters, and the footer has to be
+          one line on a 390px phone (Amber, 12 September). The short form is the same
+          control saying the same thing in the room available; the long one is what a
+          desktop has room for. CSS chooses, so there is one button either way and a
+          screen reader is not read both — see `.wide-only` / `.narrow-only`. */}
+      <span className="wide-only">Report a bug or request a feature</span>
+      <span className="narrow-only">Feedback</span>
+    </button>
   );
 }
 
 /** The id the footer's Send submits, across the SidePanel boundary. */
 const PANEL_FORM_ID = "report-panel-form";
 
+/**
+ * Where the unsent draft lives between openings — this tab's session storage.
+ *
+ * Session, not local: a half-written bug report belongs to the sitting that started it,
+ * and turning up in next week's first report would be stranger than being lost. Files
+ * cannot go in and are kept in the provider's own state instead, which survives closing
+ * the panel and changing pages — the two ways text was being lost — but not a reload.
+ */
+const DRAFT_KEY = "lofty.report-draft";
+
+function readDraft(): ReportDraft {
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY);
+    if (!raw) return EMPTY_DRAFT;
+    const p = JSON.parse(raw) as Partial<ReportDraft>;
+    return {
+      kind: p.kind === "idea" ? "idea" : "bug",
+      title: typeof p.title === "string" ? p.title : "",
+      detail: typeof p.detail === "string" ? p.detail : "",
+      onBehalfOf: typeof p.onBehalfOf === "string" ? p.onBehalfOf : "",
+      files: []
+    };
+  } catch {
+    return EMPTY_DRAFT;
+  }
+}
+
+function writeDraft(d: ReportDraft) {
+  try {
+    const { files: _files, ...words } = d;
+    if (!words.title && !words.detail && !words.onBehalfOf && words.kind === "bug") {
+      sessionStorage.removeItem(DRAFT_KEY);
+    } else {
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify(words));
+    }
+  } catch {
+    // Storage refused — the draft still lives in state for this page.
+  }
+}
+
 export function FeedbackProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<ReportDraft>(readDraft);
+  const onDraftChange = useCallback((d: ReportDraft) => { setDraft(d); writeDraft(d); }, []);
 
-  const report = useCallback((_k?: FeedbackKind) => setOpen(true), []);
+  // A suggested kind only lands on a draft with nothing in it yet; a half-written idea
+  // is not turned into a bug because the button that reopened it said so.
+  const report = useCallback((k?: FeedbackKind) => {
+    if (k) setDraft(d => (d.title || d.detail ? d : { ...d, kind: k }));
+    setOpen(true);
+  }, []);
   const close = useCallback(() => setOpen(false), []);
   const api = useMemo(() => ({ report }), [report]);
 
@@ -89,9 +139,18 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
           </>
         }
       >
-        {/* Mounted only while open, so every opening starts from a blank form rather than
-            from whatever the last person typed and abandoned. */}
-        {open && <ReportForm formId={PANEL_FORM_ID} onSent={close} />}
+        {/* Mounted only while open, and the DRAFT is not: what was typed comes back with
+            the panel (Amber, 7 Sep: "it should persist when moving pages"). Sending is
+            what clears it — the form resets its draft to empty on success. */}
+        {open && (
+          <ReportForm
+            formId={PANEL_FORM_ID}
+            onSent={close}
+            onLeave={close}
+            draft={draft}
+            onDraftChange={onDraftChange}
+          />
+        )}
       </SidePanel>
     </Ctx.Provider>
   );

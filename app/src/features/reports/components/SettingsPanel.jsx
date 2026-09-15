@@ -24,6 +24,106 @@ import RichTextEditor from './RichTextEditor.jsx';
 const inputCls = 'w-full border border-neutral-200 rounded-lg px-2.5 py-1.5 text-sm text-[#00393f] focus:outline-none focus:border-[#00393f]';
 const labelCls = 'block text-xs font-semibold text-neutral-500 mb-1';
 
+/**
+ * Pick or drop an image file, or paste a URL — whichever the person has.
+ *
+ * WHY BOTH, AND WHY THE URL BOX STAYS
+ *
+ *   The block took a URL and nothing else, which meant hosting the picture somewhere
+ *   first. Uploading is the fix. But a URL is still a legitimate answer — a logo already
+ *   on the website, an image somebody was given a link to — and removing the box to make
+ *   the upload look tidier would take away the one path that needs no round trip.
+ *
+ * The upload itself belongs to the host. This component knows a file goes in and a URL
+ * comes back, and nothing about buckets, permissions or who may upload — the same
+ * boundary `tokens`, `snippets` and `expandSection` sit on. No `ctx.uploadImage`, no
+ * upload control: the URL box alone, which is exactly what this was before.
+ */
+function ImageField({ field, value, set, ctx }) {
+  const upload = typeof ctx?.uploadImage === 'function' ? ctx.uploadImage : null;
+  const [busy, setBusy] = React.useState(false);
+  const [problem, setProblem] = React.useState(null);
+  const [over, setOver] = React.useState(false);
+  const inputRef = React.useRef(null);
+
+  const take = async (file) => {
+    if (!file || !upload) return;
+    // Checked here as well as by the bucket, because the bucket's refusal arrives as a
+    // storage error after the whole file has gone up a site connection. This one is
+    // instant and says the same thing.
+    if (!file.type?.startsWith('image/')) {
+      setProblem(`${file.name} is not an image.`);
+      return;
+    }
+    setBusy(true);
+    setProblem(null);
+    try {
+      set(await upload(file));
+    } catch (e) {
+      // Verbatim. "Too large" and "wrong type" are different problems with different
+      // fixes, and a single "upload failed" would hide which one this is.
+      setProblem(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Field label={field.label} hint={field.hint}>
+      {upload && (
+        <div
+          /* The drop target is the whole box, and it is also a button: dragging a file
+             is not available to somebody using a keyboard, and an upload only reachable
+             by drag would be an upload some people do not have. */
+          role="button"
+          tabIndex={0}
+          data-image-drop
+          onClick={() => inputRef.current?.click()}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); inputRef.current?.click(); } }}
+          onDragOver={e => { e.preventDefault(); setOver(true); }}
+          onDragLeave={() => setOver(false)}
+          onDrop={e => { e.preventDefault(); setOver(false); take(e.dataTransfer?.files?.[0]); }}
+          className={`w-full mb-2 rounded-lg border border-dashed px-3 py-4 text-center text-xs cursor-pointer ${
+            over ? 'border-[#00393f] bg-[#00393f]/5' : 'border-neutral-300 text-neutral-500 hover:border-neutral-400'
+          }`}
+        >
+          {busy ? 'Uploading…' : 'Drop an image here, or click to choose one'}
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={e => { take(e.target.files?.[0]); e.target.value = ''; }}
+          />
+        </div>
+      )}
+
+      {problem && <p className="text-[11px] text-red-600 mb-2" role="alert">{problem}</p>}
+
+      <input
+        value={value ?? ''}
+        onChange={e => set(e.target.value)}
+        placeholder={field.placeholder || 'https://…'}
+        aria-label={field.label}
+        className={inputCls}
+      />
+
+      {/* The picture itself, once there is one. A URL in a box is not something anybody
+          can check; a thumbnail is. A broken link hides the img rather than leaving the
+          browser's torn-page icon, which reads as a bug in the builder. */}
+      {value && (
+        <img
+          src={value}
+          alt=""
+          className="mt-2 max-h-32 rounded border border-neutral-200"
+          onError={e => { e.currentTarget.style.display = 'none'; }}
+          onLoad={e => { e.currentTarget.style.display = ''; }}
+        />
+      )}
+    </Field>
+  );
+}
+
 function Field({ label, hint, children }) {
   return (
     <div className="mb-4">
@@ -116,9 +216,35 @@ function MultiSelect({ field, value = [], options, onChange }) {
 
 // ─── Free table editor ───────────────────────────────────────────────
 
-function TableEditor({ options, onChange }) {
+function TableEditor({ options, onChange, tokens = [] }) {
   const headers = options.headers?.length ? options.headers : ['Column 1'];
   const rows = options.rows?.length ? options.rows : [['']];
+
+  // WHICH BOX THE FIELD GOES INTO. A cell is an <input>, so there is no caret to insert
+  // at once focus has moved to the dropdown — the last input touched is remembered on
+  // focus instead, and the token is spliced in at the selection it had when it was left.
+  // Without this the menu would need a cell picked from a second list, which is a worse
+  // version of the click somebody already made.
+  const lastCell = useRef(null);
+
+  const insertToken = (key) => {
+    const at = lastCell.current;
+    if (!at || !key) return;
+    const el = at.el;
+    const current = String(at.get() ?? '');
+    const start = el?.selectionStart ?? current.length;
+    const end = el?.selectionEnd ?? current.length;
+    const token = `{{${key}}}`;
+    at.set(current.slice(0, start) + token + current.slice(end));
+    // Put the caret after what was just inserted, so a second field lands after the
+    // first rather than on top of it.
+    requestAnimationFrame(() => {
+      if (!el) return;
+      el.focus();
+      const to = start + token.length;
+      el.setSelectionRange(to, to);
+    });
+  };
 
   const setHeader = (ci, v) => onChange({ headers: headers.map((h, i) => (i === ci ? v : h)) });
   const setCell = (ri, ci, v) => onChange({ rows: rows.map((r, i) => (i === ri ? r.map((c, j) => (j === ci ? v : c)) : r)) });
@@ -129,11 +255,45 @@ function TableEditor({ options, onChange }) {
 
   return (
     <div className="space-y-3">
+      {/* Amber, 10 September: *"how do i add a single property … in a table"*. The same
+          field list the rich-text toolbar offers, because a table full of hand-typed
+          addresses goes stale the moment one of them changes on the record. Hidden when
+          there is nothing to insert — a library entry has no record to read. */}
+      {tokens.length > 0 && (
+        <label className="block">
+          <span className="text-xs font-semibold text-neutral-500 mb-1.5 uppercase tracking-wide block">Insert a field</span>
+          <select
+            className={inputCls}
+            value=""
+            aria-label="Insert a field into the last cell you were editing"
+            onChange={e => { insertToken(e.target.value); e.target.value = ''; }}
+          >
+            <option value="">Choose a field…</option>
+            {[...new Set(tokens.map(t => t.group))].map(group => (
+              <optgroup key={group} label={group}>
+                {tokens.filter(t => t.group === group).map(t => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          <span className="text-[10px] text-neutral-400 mt-1 block">
+            Goes into the last cell or header you were typing in. It fills with the
+            record's value when the document renders.
+          </span>
+        </label>
+      )}
       <div>
         <p className="text-xs font-semibold text-neutral-500 mb-1.5 uppercase tracking-wide">Column headers</p>
         {headers.map((h, ci) => (
           <div key={ci} className="flex gap-1 mb-1">
-            <input value={h} onChange={e => setHeader(ci, e.target.value)} className={`${inputCls} flex-1`} placeholder={`Column ${ci + 1}`} />
+            <input
+              value={h}
+              onChange={e => setHeader(ci, e.target.value)}
+              onFocus={e => { lastCell.current = { el: e.target, get: () => headers[ci], set: v => setHeader(ci, v) }; }}
+              className={`${inputCls} flex-1`}
+              placeholder={`Column ${ci + 1}`}
+            />
             {headers.length > 1 && (
               <button onClick={() => removeCol(ci)} className="px-2 py-1 rounded text-neutral-400 hover:text-red-500 hover:bg-red-50 text-sm" aria-label={`Remove column ${ci + 1}`}>×</button>
             )}
@@ -152,7 +312,13 @@ function TableEditor({ options, onChange }) {
             {headers.map((h, ci) => (
               <div key={ci} className="flex gap-1.5 items-center mb-1">
                 <span className="text-[10px] text-neutral-400 w-16 shrink-0 truncate">{h}</span>
-                <input value={row[ci] ?? ''} onChange={e => setCell(ri, ci, e.target.value)} className={`${inputCls} flex-1`} placeholder="—" />
+                <input
+                  value={row[ci] ?? ''}
+                  onChange={e => setCell(ri, ci, e.target.value)}
+                  onFocus={e => { lastCell.current = { el: e.target, get: () => rows[ri]?.[ci] ?? '', set: v => setCell(ri, ci, v) }; }}
+                  className={`${inputCls} flex-1`}
+                  placeholder="—"
+                />
               </div>
             ))}
           </div>
@@ -320,14 +486,24 @@ function SettingsField({ field, options, ctx, onSet }) {
           <MultiSelect field={field} value={value} options={choices} onChange={set} />
         </Field>
       );
+    case 'image':
+      return <ImageField field={field} value={value} set={set} ctx={ctx} />;
     case 'richtext':
       return (
         <Field label={field.label} hint={field.hint || 'Tip: you can also edit this text directly in the document.'}>
-          <RichTextEditor value={value || ''} onChange={set} />
+          {/* INTEGRATION EDIT — the host's fields, for the "Insert field" menu. Absent
+              on a host that supplies none, which hides the control. */}
+          <RichTextEditor
+            value={value || ''}
+            onChange={set}
+            tokens={ctx?.textTokens || []}
+            snippets={ctx?.textSnippets || []}
+            onSaveSnippet={ctx?.saveTextSnippet}
+          />
         </Field>
       );
     case 'table':
-      return <TableEditor options={options} onChange={onSet} />;
+      return <TableEditor options={options} onChange={onSet} tokens={ctx?.textTokens || []} />;
     case 'custom':
       // Escape hatch: an adapter supplies its own control when a field is
       // genuinely unlike the others. Keep these rare.

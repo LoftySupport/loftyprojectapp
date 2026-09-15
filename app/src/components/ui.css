@@ -172,9 +172,28 @@
   overflow: visible;
   text-overflow: clip;
 }
+/* THE CREATE BUTTON STAYS ON THE HEADING'S LINE, AND THE READOUT DROPS UNDER IT.
+   Amber, 12 September: *"on mobile view the add new button should be in top right on same
+   line as the header right aligned"*. On Maintenance and Contacts the row also holds a
+   counts readout, and at 390px heading + counts + button is three lines with the button
+   last — the opposite of what she asked for.
+
+   So the button is `order: 0` and pinned right, and the readout is `order: 3` at full
+   width, which is what pushes it to a second line instead of the button. Above 720px
+   nothing moves: all three sit on one line with room to spare. */
+.page-head-action { margin-inline-start: auto; flex: none; }
+@media (max-width: 720px) {
+  .page-head-count { order: 3; flex: 1 1 100%; }
+}
+
 .page-head-row {
+  flex-wrap: wrap;
   display: flex;
-  align-items: flex-start;
+  /* Centred, not top-aligned: with the descriptive line gone (12 September) the row is a
+     heading and a control, and a 32px button hung off the top of a 28px heading reads as
+     a mistake. It was `flex-start` for a two-line left side that no longer exists. */
+  align-items: center;
+  gap: var(--space-12);
   justify-content: space-between;
   gap: var(--space-16);
   flex-wrap: wrap;
@@ -196,6 +215,98 @@
   gap: var(--space-8);
   flex-wrap: wrap;
   margin-bottom: var(--space-12);
+}
+
+/* ---- a panel whose heading collapses it ----------------------------------
+   See CollapsiblePanel.tsx for why. The heading is a real <button> filling the
+   panel's width, so the whole row is the hit target rather than a 12px chevron —
+   at 460px in a docked drawer, a small target is the difference between using
+   this and not. */
+.panel-head-h { margin: 0; font: inherit; }
+.panel-toggle {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-8);
+  width: 100%;
+  /* Eats the panel's own padding so the row is edge to edge and the hit target
+     matches what looks clickable. Without this the button stops 16px short on
+     each side and the gap between two closed panels is dead space. */
+  margin: calc(var(--space-16) * -1);
+  padding: var(--space-16);
+  background: none;
+  border: 0;
+  border-radius: var(--border-radius-medium);
+  text-align: start;
+  cursor: pointer;
+  color: inherit;
+  transition: background-color var(--motion-productive-medium) var(--motion-timing-transition);
+}
+.panel-toggle:hover { background: var(--primary-background-hover-color); }
+.panel-toggle:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.panel-toggle-title { flex: 1 1 auto; min-width: 0; }
+/* Baseline-aligned with the title, and it wraps under it rather than truncating —
+   the same reasoning as .panel-head: half a count is worse than two lines. */
+.panel-toggle-summary {
+  flex: 0 1 auto;
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+}
+.panel-toggle-chevron {
+  display: inline-flex;
+  flex: 0 0 auto;
+  /* Nudged to sit on the text baseline rather than the line box's top. */
+  align-self: center;
+  color: var(--icon-color);
+  transition: transform var(--motion-productive-medium) var(--motion-timing-transition);
+}
+.panel-toggle[aria-expanded="true"] .panel-toggle-chevron { transform: rotate(90deg); }
+/* Collapse all / Expand all, at the top of the drawer body. Quiet by default — it is a
+   tool, not a heading — and right-aligned so it reads as belonging to the list below it
+   rather than to the record above. */
+.drawer-bulk {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-8);
+  font: var(--font-text3-normal);
+  color: var(--secondary-text-color);
+}
+.drawer-bulk-btn {
+  background: none;
+  border: 0;
+  padding: var(--space-4) var(--space-8);
+  border-radius: var(--border-radius-small);
+  font: inherit;
+  color: var(--link-color);
+  cursor: pointer;
+}
+.drawer-bulk-btn:hover { background: var(--primary-background-hover-color); text-decoration: underline; }
+.drawer-bulk-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* "Show all (N)" — see CappedList.tsx. Same quiet treatment as the bulk controls: it is
+   the last row of a list, not a call to action competing with the content above it. */
+.capped-more {
+  display: block;
+  width: 100%;
+  margin-top: var(--space-8);
+  padding: var(--space-8);
+  background: none;
+  border: 1px dashed var(--layout-border-color);
+  border-radius: var(--border-radius-small);
+  font: var(--font-text3-medium);
+  color: var(--link-color);
+  cursor: pointer;
+}
+.capped-more:hover { background: var(--primary-background-hover-color); border-style: solid; }
+.capped-more:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+/* Restores the gap the negative margin above removed, but only when there is a body
+   to separate from. A closed panel is just its heading and needs no bottom gap. */
+.panel-collapsible-body { margin-top: var(--space-16); padding-top: var(--space-16); border-top: 1px solid var(--layout-border-color); }
+/* A closed panel is a single row, so it should not carry the visual weight of a card
+   with content in it. */
+.panel-collapsible:has(> .panel-head-h > [aria-expanded="false"]) { padding-bottom: var(--space-16); }
+@media (prefers-reduced-motion: reduce) {
+  .panel-toggle, .panel-toggle-chevron { transition: none; }
 }
 
 .stack { display: flex; flex-direction: column; gap: var(--space-16); }
@@ -250,6 +361,67 @@
   margin-bottom: var(--space-12);
 }
 .board-column-empty { padding: var(--space-16) 0; text-align: center; }
+
+/* COLLAPSED, AND STILL A COLUMN. Amber, 12 September: *"on Kanban boards can you make
+   them collapsible so they have a narrow view like the side navigation"*. 48px rather
+   than the rail's 64: the rail keeps icons at that width and a column keeps its name,
+   written down the strip. The head turns into a vertical stack so the chevron, the name
+   and the count read top to bottom, and nothing is hidden — a card still drops in. */
+.board-column.is-shut {
+  width: 48px;
+  padding: var(--space-8) var(--space-4);
+}
+.board-column.is-shut .board-column-head {
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-8);
+  padding-bottom: 0;
+  border-bottom: 0;
+  margin-bottom: 0;
+}
+/* Bottom-to-top, so a column name reads upwards the way a book's spine does rather than
+   with the first letter at the floor. Capped so a long grouping value cannot make one
+   column taller than the board. */
+.board-column-spine {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  white-space: nowrap;
+  overflow: hidden;
+  max-height: 40vh;
+  text-overflow: ellipsis;
+}
+
+/* The chevron that opens and shuts it. 24px square is the WCAG 2.2 floor (2.5.8) the
+   responsive sweep asserts, and this is the smallest control on the board. */
+.board-column-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 24px;
+  min-height: 24px;
+  border: 0;
+  border-radius: var(--border-radius-small);
+  background: none;
+  padding: 0;
+  color: var(--secondary-text-color);
+  cursor: pointer;
+}
+.board-column-toggle:hover { background: var(--primary-background-hover-color); color: var(--primary-text-color); }
+.board-column-chevron { display: inline-flex; transition: transform 120ms var(--motion-timing-transition); }
+/* Open: pointing down, at the column under it. Shut: pointing right, at what opens. */
+.board-column-chevron:not(.is-shut) { transform: rotate(-90deg); }
+.board-column-chevron.is-shut { transform: rotate(180deg); }
+
+/* Cards were direct siblings with no gap, so they touched and read as one striped block
+   instead of as separate records — Amber, 7 September. The cards are block-level, so
+   adjacent margins COLLAPSE: the column head and .drag-hint already carry a 12px
+   margin-bottom, and this margin-top collapses against them to 12px rather than stacking
+   to 24px. One rule therefore spaces every board — Jobs and Projects both render their
+   cards as direct children of .board-column — without touching either page's markup or
+   double-spacing the head. */
+.board-column > * + * { margin-top: var(--space-12); }
+.board-column.is-shut > * + * { margin-top: 0; }
 
 /* The board's scrollbar, moved to the bottom of the screen.
    ---------------------------------------------------------------------------
@@ -433,6 +605,24 @@
    thing it has always done on a phone. */
 .data-table { width: max-content; min-width: 100%; border-collapse: collapse; }
 .data-table td { max-width: 320px; }
+/* The row's buttons stay on screen while the rest of the row scrolls under them.
+   A 460px drawer holding a five-column table scrolls sideways by design (see above), and
+   an action pinned to the far right of it is an action nobody finds: the clone icon
+   Amber asked for on 12 September was three columns past the panel's edge on the first
+   run. Sticky rather than a narrower table, because which columns a person wants is
+   theirs to choose and the buttons are not one of them. */
+.data-table .row-actions {
+  position: sticky;
+  right: 0;
+  /* The cell needs a ground of its own, or the row scrolls UNDER it and the address
+     prints through the buttons — which is what the first run looked like. `inherit`
+     rather than a token, so the hover wash, the picked row and the editing row all keep
+     working: whatever the row is painted, this cell is painted the same. */
+  background: inherit;
+}
+/* `inherit` needs something to inherit from, and a `tr` is transparent by default. */
+.data-table tbody tr { background: var(--primary-background-color); }
+.data-table thead tr { background: var(--allgrey-background-color); }
 .data-table th {
   height: 40px;
   padding: 0 var(--space-12);
@@ -479,6 +669,9 @@
 /* An identifier is one token: "1042-01" breaking into "1042-" / "01" is unreadable as
    the thing it names, and the thing it names is what the column is for. */
 .data-table .nowrap { white-space: nowrap; }
+/* A link in a table cell is a tap target and inline text is 16px tall — under the 24px
+   WCAG 2.2 AA floor (2.5.8) the sweep enforces everywhere else. */
+.data-table a { display: inline-block; min-height: 24px; line-height: 24px; }
 
 /* ---- configurable columns ------------------------------------------------
    Headings drag to reorder (Amber, 28 August). `grab` on the heading rather than a
@@ -493,9 +686,79 @@
 
 /* The picker's list: a checkbox and a name on the left, the two move buttons on the
    right, one row each. */
+/* ---- 6c: the column picker, as a 470px panel -----------------------------
+   A panel rather than a centred modal, because the table behind it is the thing you are
+   deciding about and it has to stay readable while you decide. 470 is the handoff's
+   measurement; `min()` is what keeps it on a phone, where it goes full width beside the
+   rail exactly as the job drawer does. */
+.column-panel {
+  position: fixed;
+  top: var(--shell-header-h, 0px);
+  right: 0;
+  bottom: 0;
+  width: min(470px, calc(100vw - var(--shell-rail-w, 0px)));
+  z-index: 41;
+  display: flex;
+  flex-direction: column;
+  background: var(--primary-background-color);
+  border-left: 1px solid var(--layout-border-color);
+  box-shadow: var(--box-shadow-large);
+  min-width: 0;
+}
+.column-panel-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  padding: var(--space-16);
+  border-bottom: 1px solid var(--layout-border-color);
+}
+.column-panel-top { flex: none; padding: var(--space-16) var(--space-16) var(--space-8); }
+.column-panel-find {
+  width: 100%;
+  height: 36px;
+  min-width: 0;
+  padding: 0 var(--space-12);
+  border: 1px solid var(--ui-border-color);
+  border-radius: var(--border-radius-small);
+  font: var(--font-text2-normal);
+  color: var(--primary-text-color);
+  background: var(--primary-background-color);
+  margin-bottom: var(--space-8);
+}
+/* The only part that scrolls — the header, the search and the footer all stay put, which
+   is the same three-sibling shape the record drawer uses and for the same reason. */
+.column-panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 var(--space-16) var(--space-16);
+}
+.column-panel-foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: var(--space-12) var(--space-16);
+  border-top: 1px solid var(--layout-border-color);
+  background: var(--lofty-flint-100);
+}
+/* 6c's Identity / Programme / People. Uppercase in CSS rather than typed, so a screen
+   reader is not read it letter by letter. */
+.column-group {
+  margin: var(--space-16) 0 var(--space-4);
+  font: var(--font-text3-medium);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--secondary-text-color);
+}
+.column-panel-body > section:first-child .column-group { margin-top: var(--space-4); }
+
 .column-list {
   list-style: none;
-  margin: var(--space-12) 0 0;
+  margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -645,7 +908,34 @@
 /* Fixed, not fluid: a Vibe dropdown fills whatever it is given, and given the rest of
    the row it filled six hundred pixels and turned three tasks into a page. */
 .task-control { width: 150px; flex: 0 0 150px; }
-.task-controls .date-input { width: 140px; }
+.task-controls /* ---- a date you can take back (12 September) ------------------------------
+   The ✕ beside a date field, because the browser's own clear is not a promise: Chrome
+   draws one, Safari draws nothing, and a phone gives you a wheel picker with no way back
+   to empty. See `DateField.tsx`. */
+.date-field { display: inline-flex; align-items: center; gap: var(--space-4); min-width: 0; }
+.date-field-input { flex: 1 1 auto; min-width: 0; }
+.date-field-clear {
+  flex: none;
+  /* 24px is WCAG 2.5.8's floor and this is a control people reach for in a hurry. */
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: none;
+  border-radius: var(--border-radius-small);
+  color: var(--secondary-text-color);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.date-field-clear:hover { background: var(--primary-background-hover-color); color: var(--primary-text-color); }
+/* Hidden, not absent: the row would jump by 28px the first time somebody picked a date,
+   and a layout that moves under the cursor is how you mis-click the thing beside it. */
+.date-field-clear.is-hidden { visibility: hidden; cursor: default; }
+
+.date-input { width: 140px; }
 /* The second row, for the one task being edited. Full width under it. */
 .task-more {
   flex: 1 0 100%;
@@ -876,6 +1166,10 @@
      the stopPropagation cell around it. */
 }
 .bulk-col { text-align: center; vertical-align: middle; }
+/* A picked row, so the selection is visible in the table as it is on the board. The
+   checkbox alone is 16px of state in a row 1200px wide, and on a long list the count
+   in the bulk bar was the only way to tell what was in it. */
+.data-table tr.is-picked > td { background: var(--primary-selected-color); }
 
 /* ---- drawer --------------------------------------------------------------
    The drawer and its overlay cover the MAIN AREA, not the app. Nav and header stay
@@ -960,9 +1254,72 @@
    the drawer's corner — scrolled to the end, the last row's value sat under it. */
 .drawer-body {
   flex: 1;
+  /* A flex child's default minimum is its content, so without this the body grows to fit
+     and pushes the docked footer off the bottom instead of scrolling. It is the same line
+     the RecordDrawer contract warns about, and the footer is why it is needed here now. */
+  min-height: 0;
   overflow-y: auto;
   padding: var(--space-16);
   padding-bottom: calc(48px + 2 * var(--space-24));
+}
+
+/* ---- 6b: the full page is the same record with the conversation beside it -----
+   `PanelGroup` renders a context provider and no DOM, so `.drawer-body` is a direct child
+   of `.drawer` and the two columns are a grid on the parent — no second JSX tree for the
+   expanded state, which is what stops 6a and 6b drifting into two designs.
+
+   The handoff's own words: 6a and 6b are *"the same record at two widths, not two
+   designs"*. They show the same properties in the same order; the page has room to keep
+   the conversation docked BESIDE the record instead of under it. */
+.drawer.is-expanded {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    "head head"
+    "body conv";
+}
+/* In the dock it is a row of the frame, not a panel over it: static, as wide as the main
+   area, and as tall as the space between the header and the footer. The border and the
+   shadow were the overlay saying "I am on top of something" — in the frame they draw a
+   seam where the page does not have one. */
+.app-dock > .drawer.is-expanded {
+  position: static;
+  width: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  z-index: auto;
+  border-left: 0;
+  box-shadow: none;
+}
+.drawer.is-expanded > .record-head { grid-area: head; }
+.drawer.is-expanded > .drawer-body { grid-area: body; padding: var(--space-24) var(--space-32); }
+.drawer.is-expanded > .record-foot {
+  grid-area: conv;
+  /* Beside, not below: no top margin, no cap, and a left border instead of a top one. */
+  margin-top: 0;
+  max-height: none;
+  min-height: 0;
+  border-top: 0;
+  border-inline-start: 1px solid var(--layout-border-color);
+  background: var(--primary-background-color);
+}
+/* Below the width where 400px of conversation and a readable record both fit, the page
+   goes back to the drawer's shape — one column, conversation docked at the foot. Arrived
+   at from the other direction, and the reason there is one component rather than two. */
+@media (max-width: 1100px) {
+  .drawer.is-expanded {
+    display: flex;
+    flex-direction: column;
+  }
+  .drawer.is-expanded > .record-foot {
+    margin-top: var(--space-12);
+    max-height: 52%;
+    border-top: 1px solid var(--layout-border-color);
+    border-inline-start: 0;
+    background: var(--lofty-flint-100);
+  }
 }
 
 /* ---- template phases ----------------------------------------------------- */
@@ -1042,6 +1399,20 @@ code { overflow-wrap: anywhere; }
   .toolbar-field, .filter-chips { flex: 1 1 100%; }
   .toolbar-control { flex: 1; min-width: 0; }
   .toolbar-spacer { margin-left: 0; }
+  /* EVERY CONTROL STARTS AND FINISHES IN THE SAME PLACE. Amber, 12 September, drawing an
+     arrow across a screenshot of the Tasks filters: *"ensure the properties are aligned
+     correctly so they start and finish same spot"*.
+
+     They did not, because each row was [label][control] with the label taking its own
+     width — "View" is 34px and "Assignee" is 62, so six controls began at six different
+     x positions and ended at six different ones. A fixed column fixes both ends at once:
+     the label box is the same width on every row, and the control takes what is left.
+
+     84px is "Job stage" and "Assignee", the longest labels any board uses, at 14px with
+     a little air. Longer than that wraps inside its box rather than pushing the control
+     along, because a ragged column is the thing being fixed. */
+  .toolbar-label { flex: none; width: 84px; white-space: normal; }
+  .toolbar-text { width: auto; flex: 1; min-width: 0; }
   .panel { padding: var(--space-12); }
   /* Label above value, not beside it: a right-aligned value in a 358px row leaves
      the two colliding in the middle. */
@@ -1155,6 +1526,30 @@ code { overflow-wrap: anywhere; }
    hashes its class names, but keeps the readable prefix. */
 [class*="circleText"] { background: var(--primary-color) !important; }
 [class*="circleText"] [class*="contentText"] { color: var(--text-color-on-primary) !important; }
+
+/* Vibe's tooltip eats the first letter of its own label.
+   Measured on the collapsed nav rail, where the tooltip IS the label and losing a
+   character makes it unreadable: "Projects" rendered as "rojects" and "Expand
+   navigation" as "xpand navigation".
+
+   The cause is paint order, not overflow — nothing clips the tooltip. Vibe builds it as
+
+       <div class="contentComponent right_…">   padding 6px
+         <div class="tooltip_… dark_…"><div class="content_…">Projects</div></div>
+         <div class="arrow_… dark_…" data-placement="right">        absolute, 12x12, rot 45deg
+
+   The arrow is a 12px square rotated 45°, so it measures 17px across and spans
+   x 62.5→79.5 while the text starts at x 70. Its inner half is MEANT to be hidden
+   behind the bubble, leaving only the pointer outside — but it is a later sibling with
+   no z-index, so it paints on top instead, in the same #323338 as the bubble. The first
+   glyph is not clipped or shifted; it is painted over in its own background colour.
+
+   So the fix is z-order, not geometry: lift the bubble above the arrow. Nothing moves,
+   the pointer still points, and the arrow's inner half goes back behind the bubble where
+   it was always supposed to be. Applied to every placement, because the same overlap
+   happens on each side — right is simply where this app puts a tooltip that has to be
+   read rather than glanced at. */
+[class*="contentComponent"] > [class*="tooltip_"] { position: relative; z-index: 1; }
 
 /* ---- the inline add row --------------------------------------------------
    "+ New project" as the last row of the table, monday-style. Only possible since
@@ -1521,7 +1916,12 @@ code { overflow-wrap: anywhere; }
    The screen-reader text beside each says which it is; the dot is decoration. */
 .perm-cell { text-align: center; }
 .perm-yes { color: var(--positive-ink); font-size: 14px; }
-.perm-no { color: var(--layout-border-color); }
+/* The "no" dot was --layout-border-color, which is 1.74:1 on white: a mark you cannot
+   see is indistinguishable from a cell that failed to render, and this grid is
+   seventy-two of them. --placeholder-color is the same family at 3.47:1 — readable,
+   and still far enough behind the yes dot's 8.13:1 that a column still reads as the
+   list of things a role DOES get. */
+.perm-no { color: var(--placeholder-color); }
 /* Visible to a screen reader, not on screen. The dot alone would announce as a
    character, or as nothing at all. */
 .sr-only {
@@ -1581,9 +1981,10 @@ code { overflow-wrap: anywhere; }
 .split-rows-head { margin-bottom: var(--space-8); }
 .split-row {
   display: grid;
-  /* Lot, old number, title type. The title column is widest of the three because
-     "Community title" is the longest thing any of them holds. */
-  grid-template-columns: 0.8fr 1.1fr 1.3fr;
+  /* Lot, street number, old job number, title type. The title column is the widest
+     because "Community title" is the longest thing any of them holds; the two numbers
+     are narrow because "2B" and "28" are the shape of what goes in them. */
+  grid-template-columns: 0.7fr 0.7fr 1.1fr 1.3fr;
   gap: var(--space-8);
   align-items: start;
   padding: var(--space-4) 0;
@@ -1776,7 +2177,15 @@ code { overflow-wrap: anywhere; }
   color: inherit;
   cursor: pointer;
 }
-.notif-bell-trigger:hover { background: var(--primary-selected-color); }
+/* The hover reads from the bar it is on. This used to be --primary-selected-color, the
+   peach selection tint (#fae4d5) — which is a LIGHT-surface token, and the header is dark
+   in every theme, so hovering the bell, the Ask button or the cog put a pale pink patch on
+   a near-black bar. Amber, 7 September: "remove the pale pink hover over icons from above".
+   Every other control on that bar already uses a white alpha (.app-nav-item,
+   .app-menu-button, .user-menu-trigger, .app-side-toggle), so the header now publishes
+   that value as --header-control-hover and this reads it. The fallback keeps the class
+   usable on a light surface if it is ever reused off the header. */
+.notif-bell-trigger:hover { background: var(--header-control-hover, var(--primary-background-hover-color)); }
 .notif-panel { width: min(400px, 80vw); padding: var(--space-4); }
 .notif-panel-head {
   display: flex;
@@ -1919,7 +2328,21 @@ code { overflow-wrap: anywhere; }
 }
 .cal-cell:nth-child(7n) { border-right: 0; }
 .cal-cell.is-weekend { background: var(--allgrey-background-color); }
-.cal-cell.is-outside { opacity: 0.45; }
+/* 0.45 put the day number at 1.91:1 — twenty-four of them across the two calendars,
+   the worst readable-bar failure the rendered sweep found. It also dimmed the job
+   entries inside the cell, which are buttons: a control at 45% is harder to read than
+   the text beside it and no less clickable.
+
+   0.75 is the lowest step that clears 3:1 on BOTH grounds a cell can have — 3.34 on
+   white, 3.12 on the weekend tint. 0.70 clears white at 3.02 and fails the weekend
+   cells at 2.85, which is exactly the kind of "fixed on the screen I was looking at"
+   this register exists to stop. Outside days still recede; they are no longer guesswork.
+
+   Note for whoever touches this next: UpdatesPage.css says the same thing a different
+   way — `.cal-cell.is-outside { background: var(--allgrey-background-color) }`, tinting
+   the ground instead of dimming the text. Two idioms for one idea. Neither is wrong,
+   but they should converge, and that is a design call rather than a readability one. */
+.cal-cell.is-outside { opacity: 0.75; }
 .cal-cell.is-today { box-shadow: inset 0 0 0 2px var(--lofty-orange, #f47e63); }
 .cal-date { display: flex; align-items: baseline; justify-content: space-between; font: var(--font-text3-normal); color: var(--secondary-text-color); }
 .cal-today-chip {
@@ -1937,16 +2360,43 @@ code { overflow-wrap: anywhere; }
   border-left: 3px solid var(--ui-border-color);
   background: var(--allgrey-background-color);
   border-radius: 0 var(--border-radius-small) var(--border-radius-small) 0;
-  padding: 1px var(--space-4);
+  padding: 4px var(--space-4);
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* 24px is the WCAG 2.2 AA floor (2.5.8) and these were 20. The sweep never caught it
+     because no calendar route had anything in it to draw until the tasks fixtures
+     landed — the entry was 20px tall on the jobs calendar too.
+     Reached with padding rather than `display:flex`: a flex container's automatic
+     minimum width is its content's, and the content here is deliberately `nowrap`, so
+     flex made every entry as wide as the task's name and pushed the page sideways. */
+  display: block;
+  min-height: 24px;
+  min-width: 0;
 }
 .cal-entry:hover { background: var(--primary-selected-color); }
 .cal-entry.is-due { border-left-color: var(--lofty-orange-strong, #b8482a); background: var(--lofty-orange-tint, #fdeee9); }
 .cal-more { font: var(--font-text3-normal); color: var(--secondary-text-color); }
 .cal-empty { display: flex; align-items: center; gap: var(--space-12); margin-top: var(--space-12); }
+/* ‹ and › are one glyph wide, so Vibe's small tertiary button came out 21px across. */
+.cal-nav { min-width: 24px; }
+/* The legend and the three month buttons are one nowrap row inside a `panel-head` that
+   does wrap — so at 320px the row itself was 371px wide and took the page sideways
+   with it. It wraps now, and the legend gives way first. */
+.cal-head { flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
+.cal-head > :first-child { min-width: 0; }
+
+/* A month grid has seven columns whatever the screen is, so the only thing that can
+   give at 320px is what is inside a cell. The chip goes first — the cell already has
+   an orange ring saying it is today — then the padding. Without this the page itself
+   scrolled sideways by 73px, which is the one thing the sweep never allows. */
+@media (max-width: 640px) {
+  .cal-cell { padding: var(--space-4) 2px; min-height: 72px; }
+  .cal-today-chip { display: none; }
+  .cal-entry { padding: 1px 2px; }
+  .cal-dow { font-size: 10px; }
+}
 
 @media (max-width: 900px) {
   .gantt { --gantt-left: 160px; }
@@ -2446,6 +2896,69 @@ code { overflow-wrap: anywhere; }
   .get-started-grid { grid-template-columns: 1fr; }
 }
 
+/* Job or project, asked before the list rather than buried inside it.
+   See subjectOptions in TemplateBuilderPage for the count that made this its own
+   control. Two real buttons in a radiogroup, so it is reachable by keyboard and says
+   which one is chosen to a screen reader — a pair of styled divs would look identical
+   and be neither. */
+.subject-pick { display: flex; flex-direction: column; gap: var(--space-8, 8px); }
+.subject-kind { display: flex; gap: var(--space-4, 4px); }
+.subject-kind-option {
+  flex: 1 1 0;
+  /* 36px, not the 32 the row would otherwise take: this is a primary choice on a panel
+     people use on a tablet on site, and the responsive sweep floors tap targets at 24. */
+  min-height: 36px;
+  padding: var(--space-4, 4px) var(--space-12, 12px);
+  border: 1px solid var(--ui-border-color, #d0d4e4);
+  border-radius: var(--radius-4, 4px);
+  background: var(--primary-background-color, #fff);
+  color: var(--primary-text-color, #00393f);
+  font: inherit;
+  cursor: pointer;
+}
+.subject-kind-option:hover { background: var(--primary-background-hover-color, #f5f6f8); }
+.subject-kind-option.is-on {
+  /* The filled orange, per DESIGN.md: --primary-action-color is the 4.54:1 step that
+     carries white text. --primary-color is for rings and tints and would not. */
+  background: var(--primary-action-color, #c2543c);
+  border-color: var(--primary-action-color, #c2543c);
+  color: #fff;
+}
+.subject-kind-option:focus-visible {
+  outline: 2px solid var(--primary-color, #f47e63);
+  outline-offset: 2px;
+}
+
+/* An import's receipt: what came across and what did not. Informational, so it is a
+   quiet panel and not the red of an error — a PDF whose tables arrived as text is a
+   successful import with a caveat, not a failure. */
+.import-notes {
+  border: 1px solid var(--ui-border-color, #d0d4e4);
+  border-radius: var(--radius-4, 4px);
+  padding: var(--space-8, 8px) var(--space-12, 12px);
+  background: var(--surface-subtle, #f6f7fb);
+}
+.import-notes ul { margin: var(--space-4, 4px) 0 0; padding-left: var(--space-16, 16px); }
+.import-notes li { margin-bottom: var(--space-4, 4px); }
+.import-notes li:last-child { margin-bottom: 0; }
+
+/* What a snippet is about to keep, shown rather than described.
+   Capped and scrollable: somebody who caught the whole block instead of one paragraph
+   should see that, and a panel that grew to the length of the selection would push its
+   own Save button off the screen. */
+.snippet-preview {
+  border: 1px solid var(--border-subtle, #d0d4e4);
+  border-radius: var(--radius-4, 4px);
+  padding: var(--space-8, 8px);
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--surface-subtle, #f6f7fb);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.snippet-preview > :first-child { margin-top: 0; }
+.snippet-preview > :last-child { margin-bottom: 0; }
+
 /* ── A record's documents ─────────────────────────────────────────────────
    The list on a job or a project. Plain rows: the title is the whole of what
    somebody is scanning for, and a table of one column with a header is furniture. */
@@ -2453,6 +2966,10 @@ code { overflow-wrap: anywhere; }
 .record-documents li {
   display: flex;
   align-items: baseline;
+  /* Wraps: a built document's row now carries a title, a state chip, two ways to open
+     it, Publish and Delete, and the drawer is 320px at its narrowest. Squeezing them
+     onto one line truncates the title, which is the one part that identifies the row. */
+  flex-wrap: wrap;
   gap: var(--space-8);
   padding: var(--space-8) 0;
   border-top: 1px solid var(--layout-border-color);
@@ -2464,3 +2981,303 @@ code { overflow-wrap: anywhere; }
   text-transform: uppercase;
   color: var(--secondary-text-color);
 }
+/* The row's actions sit hard right, so Remove lands in the same place on every row
+   rather than trailing a title of unpredictable length. */
+.record-documents li > a:first-child,
+.record-documents li > .record-documents-link { flex: 1 1 auto; min-width: 0; }
+.record-documents-confirm {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+/* ---- the search results page ---------------------------------------------
+   One panel per kind. The rows are the same shape as the dropdown's — title, then a
+   quiet subline — so a hit looks the same wherever you meet it. */
+.search-group + .search-group { margin-top: var(--space-16); }
+.search-hits { list-style: none; margin: var(--space-8) 0 0; padding: 0; }
+.search-hits li {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  padding: var(--space-8) 0;
+  border-top: 1px solid var(--layout-border-color);
+}
+.search-hits li:first-child { border-top: 0; }
+.search-hit-sub { color: var(--secondary-text-color); }
+
+/* ---- draft until published (0104) -----------------------------------------
+   A word, not a colour alone: the three states have to be legible to somebody who
+   cannot tell the chips apart, and "Draft — edited since publishing" is the one
+   that most needs reading rather than glancing at. */
+.doc-state {
+  font-size: 11px;
+  letter-spacing: .04em;
+  padding: 1px var(--space-4);
+  border-radius: var(--border-radius-small, 3px);
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+/* Orange for a draft, because Crisp Orange is what the watermark itself is set in
+   and the chip should read as the same fact. */
+.doc-state.is-draft { color: var(--lofty-orange-strong); background: var(--lofty-orange-tint); }
+/* The stale state is the loud one: a published document that has since been edited
+   is the only case where somebody may be reading something out of date. */
+.doc-state.is-edited-since-published { color: var(--negative-color); background: var(--negative-color-selected); }
+.doc-state.is-published { color: var(--positive-color); background: var(--positive-color-selected); }
+
+.doc-publish {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  flex: 1 1 100%;
+  margin-top: var(--space-8);
+  padding: var(--space-8);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-small, 4px);
+}
+.doc-publish > div:first-of-type { flex: 1 1 240px; min-width: 180px; }
+.doc-publish-hint { flex: 1 0 100%; margin: 0; }
+
+/* Saving a copy to the record (0110). Its own full-width row above the address, because
+   the two are alternatives rather than a pair of fields to fill in together — sitting them
+   side by side reads as "do both", which is exactly the requirement this half removes.
+   min-height on the control for the 24px tap target `npm run responsive` asserts: a native
+   file input is a shade under it on Chromium at the default font size. */
+.doc-publish-file { flex: 1 0 100%; display: flex; flex-direction: column; gap: var(--space-4); }
+.doc-publish-file input[type="file"] { min-height: 24px; max-width: 100%; }
+
+/* ---- filing a document that lives in SharePoint (0103) --------------------
+   Two fields and a button. Stacked below 520px rather than squeezed: a URL field
+   at 120px shows nothing useful about what was pasted, which is the one thing
+   somebody wants to check before saving. */
+.doc-link-add {
+  display: flex;
+  gap: var(--space-8);
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin: var(--space-8) 0;
+  padding: var(--space-8);
+  border: 1px solid var(--layout-border-color);
+  border-radius: var(--border-radius-small, 4px);
+}
+.doc-link-add > div:first-of-type { flex: 1 1 160px; min-width: 140px; }
+.doc-link-add > div:nth-of-type(2) { flex: 2 1 240px; min-width: 180px; }
+.doc-link-hint { flex: 1 0 100%; margin: 0; }
+@media (max-width: 520px) {
+  .doc-link-add > div { flex-basis: 100%; }
+}
+
+/* ---- the typeahead --------------------------------------------------------
+   `TypeaheadSelect`: the suburb field's list, for any closed set. It borrows the
+   suburb classes for the list and the rows so the two cannot drift apart, and adds
+   only what the suburb field never needed — a group heading, an empty line, a ×. */
+.typeahead { position: relative; min-width: 0; }
+.typeahead-list { z-index: 6; }
+.typeahead-group {
+  padding: var(--space-8) var(--space-8) var(--space-4);
+  font: var(--font-text3-medium);
+  color: var(--secondary-text-color);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.typeahead li + li .typeahead-group { border-top: 1px solid var(--layout-border-color); margin-top: var(--space-4); }
+.typeahead-empty { padding: var(--space-8); font: var(--font-text3-normal); color: var(--secondary-text-color); }
+/* The create row takes the place of the empty line, so the list never shows both. It reads
+   as an action rather than as a match: the primary ink, and "Enter" where a team would be. */
+.typeahead-create { font: var(--font-text2-medium); color: var(--primary-color); }
+.typeahead-create .typeahead-sub { color: var(--secondary-text-color); }
+/* Name first and whole; the team gives way. "Sam Adams" must not wrap to two lines
+   because "Design, Scheduling" sits beside it. */
+.typeahead-list .suburb-suggestion > span:first-child { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.typeahead-sub { flex: 0 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
+.typeahead-clear {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--border-radius-small);
+  background: none;
+  color: var(--secondary-text-color);
+  font: var(--font-text1-normal);
+  line-height: 1;
+  cursor: pointer;
+}
+.typeahead-clear:hover { background: var(--primary-background-hover-color); color: var(--primary-text-color); }
+/* Room for the × so the last letters of a long name are not under it. */
+.typeahead:has(.typeahead-clear) input { padding-right: 32px; }
+/* The picker's own chevron. Not a button: clicking the field already opens the list, and a
+   control that looks clickable but only does what the thing under it does is a second
+   target for one action. `pointer-events: none` so the click lands on the input. */
+.typeahead-chevron {
+  position: absolute;
+  right: var(--space-8);
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--secondary-text-color);
+}
+.typeahead:has(.typeahead-chevron) input { padding-right: 28px; }
+
+/* ---- undo / redo in the header -------------------------------------------- */
+.undo-bar { display: inline-flex; align-items: center; gap: var(--space-4); }
+.app-header .undo-btn, .app-header .undo-btn * { color: var(--fixed-light-color); }
+.undo-btn:disabled { opacity: 0.4; cursor: default; }
+.undo-btn:disabled:hover { background: transparent; }
+/* On a phone the header is the search box and four icons already; two more arrows left
+   the search 70px wide. Ctrl+Z has no phone equivalent either way, so below 600px the
+   pair steps aside and the toasts' "Undone" still names what the keyboard cannot. */
+@media (max-width: 600px) { .undo-bar { display: none; } }
+
+/* A link inside a sentence that still meets the 24px target floor (WCAG 2.2, 2.5.8) —
+   the padding grows the box and the negative margin gives the line its height back. */
+.text-link { display: inline-block; padding: 4px 0; margin: -4px 0; }
+
+/* ---- user settings: two columns ------------------------------------------
+   Your details and where you land stacked on the left; the notifications table, which
+   is the wide thing on the page, beside them. One column below 900px. */
+.settings-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+  gap: var(--space-16);
+  align-items: start;
+}
+.settings-grid > * { min-width: 0; }
+.settings-you { display: flex; flex-direction: column; gap: var(--space-16); min-width: 0; }
+@media (max-width: 900px) {
+  .settings-grid { grid-template-columns: minmax(0, 1fr); }
+}
+/* The notifications matrix fits its column: cells wrap, the two timing controls stack,
+   and the per-cell width cap comes off so the "When" column can take what is left. */
+.notif-table { width: 100%; }
+.notif-table th { white-space: normal; }
+.notif-table td { max-width: none; }
+.notif-timing { display: flex; flex-direction: column; gap: var(--space-4); min-width: 150px; }
+
+/* ---- the users table, editing --------------------------------------------- */
+.row-editing-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  flex-wrap: wrap;
+  /* Pinned to the left edge of whatever is in view. The editing row is wider than the
+     table's wrapper, so the wrapper scrolls — and Save must not scroll away with it. */
+  position: sticky;
+  left: 0;
+  width: fit-content;
+  max-width: 100%;
+}
+.notif-table .notif-timing { min-width: 130px; }
+.notif-table td { padding-left: var(--space-8); padding-right: var(--space-8); }
+/* The actions under a person's details in the edit panel. */
+.user-actions { display: flex; gap: var(--space-8); flex-wrap: wrap; margin-top: var(--space-8); }
+
+/* ---- the toolbar's two rows (7 September) --------------------------------
+   The Group-by fields are filters in the first row, always there; everything else is
+   one "Advanced" row that opens whole rather than one chip at a time. */
+.toolbar-advanced {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  flex-wrap: wrap;
+  padding-top: var(--space-8);
+  border-top: 1px dashed var(--layout-border-color);
+}
+.toolbar-text { width: 160px; }
+.toolbar-text input { font-variant-numeric: tabular-nums; }
+.toolbar-advanced-btn.is-on { background: var(--primary-selected-color); }
+
+/* A CollapsiblePanel rendered bare — inside the job record's docked tab strip, where the
+   tab already names it and controls whether it shows. No section chrome at all: the
+   heading and the toggle would be a second name for the tab above it. */
+.panel-bare { min-width: 0; }
+
+/* -------------------------------------------------------------- forms inside a slideout
+   Amber, 14 September, on the maintenance drawer: *"fix the spacing on the slideout drawer
+   by removing the separator between each row so it is condensed and ensuring all fillable
+   properties are same width and aligned and allow the details section to have more space
+   to write with"*.
+
+   Scoped to `.side-panel`, not to Maintenance. Every slideout in the app draws the same
+   `Field` rows, and fixing the spacing on one of them would leave Contacts, Setup and the
+   job drawer looking like a different app — which is the drift `Form.tsx` was written to
+   end. A page's own forms keep the dashed rule, because down a full-width page it is what
+   stops a long list of rows reading as one block.
+
+   THE ALIGNMENT IS A FIXED COLUMN, NOT A MINIMUM.
+     `.field-control` has a `min-width` everywhere else, so each control is as wide as it
+     wants to be and the left edges of a date, a dropdown and a text box all differ. Here
+     the column is one width and every control fills it, so they line up — which is the
+     whole of what "same width and aligned" asks for. It collapses to full width when the
+     row wraps on a narrow panel, or the controls would run off the edge. */
+.side-panel .field-row { padding: var(--space-4) 0; }
+.side-panel .field-row + .field-row { border-top: none; }
+.side-panel .field-control { flex: 0 0 240px; min-width: 0; max-width: 100%; }
+.side-panel .field-control > * { width: 100%; }
+/* Vibe draws its own wrappers inside the control, and a width on the outside of one of
+   those does not reach the textarea. The date field is deliberately NOT in this list:
+   it is a flex row of an input and a ✕, and forcing the input to 100% pushed the ✕ onto
+   a second line — watched doing exactly that before this note was written. */
+.side-panel .field-control textarea { width: 100%; box-sizing: border-box; }
+/* The clear ✕ moves to the LEFT of the date box here, which looks odd written down and
+   right on the screen: every control in this column is right-aligned to the same edge,
+   and a ✕ after the input pushes the date box 27px short of it — the one row that did not
+   line up. It cannot be overlaid inside the input the way `.typeahead-clear` is, because
+   a native date input's right-hand end is the browser's own calendar button. The space is
+   reserved whether or not there is a date to clear (`is-hidden` is visibility, not
+   display), so the box does not change width when one is set. */
+.side-panel .field-control .date-field { display: flex; flex-direction: row-reverse; }
+@media (max-width: 520px) {
+  .side-panel .field-control { flex: 1 1 100%; }
+}
+
+/* ---------------------------------------------------------------- issues in one drawer
+   The new-maintenance-request drawer types the header once and repeats an issue block
+   below it (0114). The block is a `panel`, its title row is a `field-inline` and the
+   internal/external pair is a `stack-tight` — so the only rule here is the radio itself,
+   which nothing else in the app draws. Anything more would be a second way to draw a card. */
+.issue-draft-radio { display: inline-flex; align-items: center; gap: var(--space-4); cursor: pointer; }
+.issue-draft-radio input { margin: 0; }
+
+/* The staged files on an issue, before the request exists to attach them to (0115). A
+   plain list of names with a way to take one off — not a gallery, because nothing has
+   been uploaded yet and a thumbnail would suggest otherwise. */
+.issue-files { display: flex; flex-direction: column; gap: var(--space-4); width: 100%; }
+.issue-file { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); min-width: 0; }
+.issue-file > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ------------------------------------------------------------------- dropping files in
+   Amber, 14 September: attachments are "often dragged from emails and not saved", so the
+   attach control takes a drop as well as a click.
+
+   IT IS A `get-started-card`, NOT A BOX OF ITS OWN. Written first as its own padded,
+   dashed, filled container, the element sweep reported E11 up from 124 to 125 — "a padded,
+   bordered or filled box is a panel; each distinct recipe is another box that is almost a
+   panel" — and it was right. The Document Builder already draws a dashed card for exactly
+   this gesture, and its own comment says why: *"a dashed border is the standing convention
+   for 'nothing here yet, put something here' — the same reason a drop target is dashed"*.
+   So this rule sets only the direction, the gap and the drag state, and the container
+   recipe stays the one that already existed.
+
+   The input is hidden but NOT display:none and NOT removed: a file input the keyboard
+   cannot reach is a control half the building cannot use, so it keeps its place in the tab
+   order, the button forwards a click to it, and focusing it brings it back into view. */
+.file-drop-wrap { display: flex; flex-direction: column; gap: var(--space-4); width: 100%; }
+.file-drop { flex-direction: row; align-items: center; flex-wrap: wrap; gap: var(--space-8); }
+/* The card's own hover colours, reused for the drag state — the same signal, because it is
+   the same fact: this box is about to take what you are holding. */
+.file-drop.is-over { border-color: var(--primary-color); }
+.file-drop.is-disabled { opacity: 0.6; }
+/* Sized to nothing rather than hidden, so it stays focusable and still announced. */
+.file-drop-input { width: 1px; height: 1px; opacity: 0; flex: none; }
+.file-drop-input:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; width: auto; height: auto; opacity: 1; }
+.file-drop-note { margin: 0; }

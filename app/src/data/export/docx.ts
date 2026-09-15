@@ -1,4 +1,4 @@
-import { HOUSE_COLOURS, ooxmlRgb } from "./houseFormat";
+import { HOUSE_COLOURS, HOUSE_FONT, ooxmlRgb } from "./houseFormat";
 import { zip, type ZipEntry } from "./zip";
 import { LOGO_PNG_BASE64, LOGO_ASPECT } from "./logo";
 import { stamp, type ExportDocument, type ExportTable } from "./table";
@@ -14,10 +14,10 @@ import { stamp, type ExportDocument, type ExportTable } from "./table";
  * WHY WORD, ALONGSIDE EXCEL AND PDF. A spreadsheet is for the reader who will sort and
  * total; a PDF is the fixed copy that prints or forwards; a Word document is for the reader
  * who will edit around the table. The house template's own guidance is explicit that the
- * Word file is "the one a client will edit", which is why it — and this — set Helvetica
+ * Word file is "the one a client will edit", which is why it — and this — set Montserrat
  * rather than the brand's Fieldwork Geo: embedding the brand font in a .docx needs Word's
- * embed-fonts option, and Helvetica is the template's only approved fallback (never Arial,
- * Calibri or Aptos).
+ * embed-fonts option, and Montserrat is the brand's named substitute (`houseFormat.ts`
+ * carries the decision; Helvetica, Calibri and Aptos are never used).
  *
  * WHY THIS IS HAND-WRITTEN, like the spreadsheet. The document is a fixed set of small XML
  * parts around one flat table; the `docx` npm package is a general document model none of
@@ -362,14 +362,15 @@ export function toDocx(doc: ExportDocument): Uint8Array {
         `</Relationships>`
     },
     {
-      // Helvetica as the document default — the template's approved fallback for the .docx a
-      // client edits (never Arial, Calibri or Aptos).
+      // Montserrat as the document default — the brand's substitute for the .docx a client
+      // edits; the reasoning is in houseFormat.ts. A reader without Montserrat installed
+      // sees Word's substitution, which is the trade the decision accepts.
       path: "word/styles.xml",
       body:
         `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
         `<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
         `<w:docDefaults><w:rPrDefault><w:rPr>` +
-        `<w:rFonts w:ascii="Helvetica" w:hAnsi="Helvetica" w:cs="Helvetica"/>` +
+        `<w:rFonts w:ascii="${HOUSE_FONT}" w:hAnsi="${HOUSE_FONT}" w:cs="${HOUSE_FONT}"/>` +
         `<w:sz w:val="${hp(10.5)}"/><w:szCs w:val="${hp(10.5)}"/><w:color w:val="${INK}"/>` +
         `</w:rPr></w:rPrDefault></w:docDefaults>` +
         `<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>` +

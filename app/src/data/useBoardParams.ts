@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 import { GROUPINGS, VIEWS, type Grouping, type ToolbarFilter, type View } from "../components/Toolbar";
+import type { SortState } from "../components/SortableTable";
 import { DEFAULT_SAVED_VIEW, savedViewBySlug, type SavedView } from "./savedViews";
 
 /**
@@ -39,11 +40,32 @@ const KEY_BY_FIELD: Record<string, string> = {
   "Process": "process",
   "Process health": "health",
   "Property": "property",
-  "Recorded": "recorded"
+  "Recorded": "recorded",
+  // 7 September: a number typed straight in, a job's project, and — on the projects
+  // board — the stage of the jobs as distinct from the project's own.
+  "Number": "no",
+  "Project": "project",
+  "Job stage": "jobstage",
+  // 0102, the tasks board. `Assignee` is its own filter here and deliberately not on the
+  // jobs board, where Team matches membership instead (Amber, 26 Aug).
+  "Assignee": "assignee",
+  "Created by": "creator",
+  "Source": "source",
+  "External": "external",
+  "Due": "due",
+  "Scheduled": "sched"
 };
-const FIELD_BY_KEY: Record<string, string> = Object.fromEntries(
-  Object.entries(KEY_BY_FIELD).map(([field, key]) => [key, field])
-);
+
+/**
+ * One key may mean two things on two boards, and only the board knows which.
+ *
+ * `health` is the case. On Jobs it is `Process health` — how a process run is going. On
+ * Tasks it is the task's own health, which is a different column with different values.
+ * Both want the short readable key, and neither wants the other's, so a board may
+ * override the map for itself; everything not named falls through to the shared list
+ * above, so `?team=` and `?stage=` still mean the same thing everywhere.
+ */
+export type FieldKeys = Record<string, string>;
 
 export interface BoardParams {
   view: View;
@@ -57,6 +79,13 @@ export interface BoardParams {
   saved: SavedView;
   setSaved: (slug: string) => void;
   /**
+   * The chosen sort, or null for the screen's natural order. In the URL like everything
+   * else — `?sort=due:desc` — because "sorted by who it is on" is part of what somebody
+   * means when they send you a board.
+   */
+  sort: SortState<string> | null;
+  setSort: (s: SortState<string> | null) => void;
+  /**
    * The current query string, to hang off a record link so that closing the drawer
    * returns you to the board you were on rather than to a reset one.
    */
@@ -64,10 +93,37 @@ export interface BoardParams {
 }
 
 export function useBoardParams(
-  defaults: { view: View; grouping: Grouping; views: SavedView[] }
+  defaults: {
+    view: View;
+    grouping: Grouping;
+    views: SavedView[];
+    /** The views this board actually renders — pass the same list the `Toolbar` gets. */
+    boardViews?: readonly View[];
+    fieldKeys?: FieldKeys;
+  }
 ): BoardParams {
   const [params, setParams] = useSearchParams();
   const location = useLocation();
+
+  /**
+   * Pass this as a module-level constant, not an inline object: it feeds the memo the
+   * filter list is built from, and a fresh identity every render would rebuild the
+   * filters — and everything memoised on them — on every render.
+   */
+  const overrides = defaults.fieldKeys;
+  const keyByField = useMemo<FieldKeys>(() => {
+    if (!overrides) return KEY_BY_FIELD;
+    // A key an override claims belongs to the override alone, or the reverse map would
+    // have two fields answering to `health` and the parse would pick one at random.
+    const claimed = new Set(Object.values(overrides));
+    const base = Object.entries(KEY_BY_FIELD)
+      .filter(([field, key]) => !claimed.has(key) || field in overrides);
+    return { ...Object.fromEntries(base), ...overrides };
+  }, [overrides]);
+  const fieldByKey = useMemo<FieldKeys>(
+    () => Object.fromEntries(Object.entries(keyByField).map(([field, key]) => [key, field])),
+    [keyByField]
+  );
 
   /**
    * Session-persistent view state (Amber's Q9, layer two): change board→table or set a
@@ -100,8 +156,19 @@ export function useBoardParams(
     }
   }, [boardKey, params]);
 
-  /** An unknown value falls back to the default — a mistyped link should land somewhere. */
-  const view = (VIEWS as readonly string[]).includes(params.get("view") ?? "")
+  /**
+   * An unknown value falls back to the default — a mistyped link should land somewhere.
+   *
+   * Validated against THIS BOARD's views when it says which it has, not against the
+   * app-wide list. `/projects?view=Calendar` passed the app-wide check and the projects
+   * page had no branch for Calendar, so it rendered the toolbar with an empty View
+   * control and nothing at all underneath — a blank board reached by a link that looked
+   * legitimate, which is how "the calendar view has disappeared" gets reported. The
+   * projects board has a calendar now; this is the half that stops the next board
+   * without one going blank the same way.
+   */
+  const offered = defaults.boardViews ?? VIEWS;
+  const view = (offered as readonly string[]).includes(params.get("view") ?? "")
     ? (params.get("view") as View)
     : defaults.view;
 
@@ -122,12 +189,25 @@ export function useBoardParams(
    */
   const filters = useMemo<ToolbarFilter[]>(() => {
     const out: ToolbarFilter[] = [];
-    for (const [key, field] of Object.entries(FIELD_BY_KEY)) {
+    for (const [key, field] of Object.entries(fieldByKey)) {
       if (!params.has(key)) continue;
       const raw = params.get(key) ?? "";
       out.push({ field, value: raw === "" ? null : raw });
     }
     return out;
+  }, [params, fieldByKey]);
+
+  /**
+   * `?sort=due` or `?sort=due:desc`. Ascending is the default and is left out of the
+   * URL, the same rule every other control here follows — a link carries the difference
+   * from the default and nothing else.
+   */
+  const sort = useMemo<SortState<string> | null>(() => {
+    const raw = params.get("sort");
+    if (!raw) return null;
+    const [key, direction] = raw.split(":");
+    if (!key) return null;
+    return { key, direction: direction === "desc" ? "desc" : "asc" };
   }, [params]);
 
   /**
@@ -164,11 +244,20 @@ export function useBoardParams(
     [write]
   );
 
+  const setSort = useCallback(
+    (s: SortState<string> | null) =>
+      write(next => {
+        if (!s) next.delete("sort");
+        else next.set("sort", s.direction === "desc" ? `${s.key}:desc` : s.key);
+      }),
+    [write]
+  );
+
   /** The filter keys, rewritten wholesale — shared by setFilters and setMany. */
   const writeFilterKeys = (next: URLSearchParams, list: ToolbarFilter[]) => {
-    for (const key of Object.values(KEY_BY_FIELD)) next.delete(key);
+    for (const key of Object.values(keyByField)) next.delete(key);
     for (const f of list) {
-      const key = KEY_BY_FIELD[f.field];
+      const key = keyByField[f.field];
       if (key) next.set(key, f.value ?? "");
     }
   };
@@ -204,6 +293,7 @@ export function useBoardParams(
     grouping, setGrouping,
     filters, setFilters, setMany,
     saved, setSaved,
+    sort, setSort,
     search: location.search
   };
 }

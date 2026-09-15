@@ -1,0 +1,15 @@
+:root{
+  --border-radius-2:2px;
+  --border-radius-4:4px;
+  --border-radius-8:8px;
+  --border-radius-12:12px;
+  --border-radius-16:16px;
+  --border-radius-small:var(--border-radius-4);
+  --border-radius-medium:var(--border-radius-8);
+  --border-radius-large:var(--border-radius-12);
+  --border-radius-big:var(--border-radius-16);
+  --border-radius-pill:100px;
+  --border-radius-circle:50%;
+  --border-width:1px;
+  --border-style:solid; /* @kind other */
+}

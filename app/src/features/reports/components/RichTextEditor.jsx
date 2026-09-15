@@ -6,6 +6,20 @@ const ALLOWED_TAGS = ['p','br','b','strong','i','em','u','s','strike','h1','h2',
 // alignment, colour and font size were all stripped on save, which is why
 // those controls appeared to do nothing.
 const ALLOWED_ATTR = ['href','target','rel','type','checked','data-checklist','style'];
+// The same list plus `class`, for RENDERING only. See sanitizeHtml below.
+const ALLOWED_ATTR_RENDER = [...ALLOWED_ATTR, 'class'];
+
+// The three marks fillTokens puts on a placeholder, and the only class values that
+// survive. Until 10 September `class` was refused outright, which made the marking dead
+// code: fillTokens' spans go through this sanitiser on the way to the canvas, so a
+// placeholder nobody had filled rendered as a bare em dash and a mistyped one as plain
+// text. The CSS for all three had never applied to anything.
+const TOKEN_CLASSES = new Set(['rb-token', 'rb-token-blank', 'rb-token-unknown']);
+
+// Set only for the duration of a render-time sanitise, because DOMPurify's hooks are
+// global and there is no per-call channel to them. Ugly, contained, and commented rather
+// than left to be rediscovered.
+let keepingTokenMarks = false;
 
 // The only CSS anyone needs to write a formatted note, and nothing that can
 // position, load or reveal anything: no url(), no background images, no
@@ -23,6 +37,13 @@ DOMPurify.addHook('uponSanitizeElement', (node) => {
 });
 
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.getAttribute && node.hasAttribute('class')) {
+    const kept = keepingTokenMarks
+      ? node.getAttribute('class').split(/\s+/).filter(c => TOKEN_CLASSES.has(c))
+      : [];
+    if (kept.length) node.setAttribute('class', kept.join(' '));
+    else node.removeAttribute('class');
+  }
   if (!node.getAttribute || !node.hasAttribute('style')) return;
   const kept = [];
   for (const decl of node.getAttribute('style').split(';')) {
@@ -40,13 +61,27 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   else node.removeAttribute('style');
 });
 
-export function sanitizeHtml(html) {
+/**
+ * `keepTokenMarks` is for RENDERING a resolved block, and nothing else.
+ *
+ * What the editor saves must never carry a token mark: the marks are produced at render
+ * time by fillTokens, and a `<span class="rb-token">` pasted out of a preview and back
+ * into a letter would be frozen text wearing the badge of a live placeholder — which
+ * reads as filled and is not. So the editor's own save path (and every other caller)
+ * strips `class`, exactly as before, and only ReportDocument asks for the marks.
+ */
+export function sanitizeHtml(html, { keepTokenMarks = false } = {}) {
   if (!html) return '';
-  return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS,
-    ALLOWED_ATTR,
-    ALLOWED_URI_REGEXP: /^(?:https?|mailto):/i,
-  });
+  keepingTokenMarks = keepTokenMarks;
+  try {
+    return DOMPurify.sanitize(html, {
+      ALLOWED_TAGS,
+      ALLOWED_ATTR: keepTokenMarks ? ALLOWED_ATTR_RENDER : ALLOWED_ATTR,
+      ALLOWED_URI_REGEXP: /^(?:https?|mailto):/i,
+    });
+  } finally {
+    keepingTokenMarks = false;
+  }
 }
 
 // execCommand's fontSize only speaks the seven legacy steps, so these are
@@ -74,6 +109,29 @@ export default function RichTextEditor({
   maxHeight = 480,
   className = '',
   saveDebounceMs = 600,
+  /**
+   * What "Insert field" offers: `[{ value, label, group }]`, supplied by the host.
+   *
+   * Empty or absent hides the control entirely. This component knows a token is
+   * `{{value}}` and nothing else about it — which fields exist, and what they mean, is
+   * the app's business.
+   */
+  tokens = [],
+  /**
+   * What "Insert snippet" offers: `[{ value, label, html, group }]`, supplied by the host.
+   *
+   * Same rule as `tokens`: empty or absent hides the control. This component knows a
+   * snippet is a piece of html to drop in at the caret and nothing else — where they are
+   * kept, who may see one and whether a manager has signed it off are the app's business.
+   */
+  snippets = [],
+  /**
+   * Called with the html the author wants to keep, if the host offers snippet-saving.
+   *
+   * Absent hides the button. The host does the naming and the storing; all this decides
+   * is WHICH html — the selection when there is one, the whole block when there is not.
+   */
+  onSaveSnippet = null,
 }) {
   const editorRef = useRef(null);
   const lastSavedRef = useRef(value || '');
@@ -136,6 +194,94 @@ export default function RichTextEditor({
     }
   };
 
+  /**
+   * Put `{{key}}` where the caret is.
+   *
+   * `insertText` rather than `insertHTML`: the token is literal characters, and letting
+   * the browser insert markup here is how a `<span>` ends up wrapped round half of it
+   * after the next edit.
+   *
+   * The editor is focused first, and this one is DEFENSIVE RATHER THAN PROVEN. A real
+   * click on a <select> moves focus to it, and `execCommand` acts on the document's
+   * selection — so without this the insert should land nowhere. `check:builder-dnd`
+   * does not demonstrate that: Playwright's `selectOption` dispatches the change without
+   * the focus move a mouse makes, so the check passes with this line commented out.
+   *
+   * Kept because the reasoning holds for a real pointer and the call costs nothing.
+   * Written down as unproven so nobody later reads a confident comment and trusts it.
+   */
+  const insertToken = (key) => {
+    if (!key) return;
+    const el = editorRef.current;
+    if (!el) return;
+    el.focus();
+    document.execCommand('insertText', false, `{{${key}}}`);
+    scheduleSave();
+  };
+
+  /**
+   * Drop a snippet's wording in at the caret.
+   *
+   * `insertHTML` and not `insertText`, because the whole point of a snippet is that it
+   * keeps its formatting — a sign-off with a bolded name arrives bolded. It goes through
+   * the same sanitiser as everything else on the way in: a snippet is html that came from
+   * the app's own store, which is exactly the sort of provenance that feels trustworthy
+   * right up until somebody writes a row by hand.
+   *
+   * A COPY, NOT A REFERENCE. That is the difference between a snippet and a library
+   * section, and it is a decision rather than an implementation detail — see 0098. Once
+   * this lands the text is the document's own, and editing the snippet afterwards leaves
+   * every letter already written exactly as it was sent.
+   */
+  const insertSnippet = (id) => {
+    if (!id) return;
+    const found = snippets.find(sn => sn.value === id);
+    if (!found?.html) return;
+    const el = editorRef.current;
+    if (!el) return;
+    el.focus();
+    document.execCommand('insertHTML', false, sanitizeHtml(found.html));
+    scheduleSave();
+  };
+
+  /**
+   * WHAT GETS SAVED: the selection, or the whole block when there is none.
+   *
+   * Selecting a paragraph and keeping that is the common case; but somebody who has just
+   * written a two-line sign-off and wants to keep it should not have to select it first,
+   * and a button that silently did nothing on an empty selection would look broken.
+   *
+   * `onMouseDown` with `preventDefault` on the button is NOT what makes the first case
+   * work, and the comment here said it was until the mutation was run. A DOM Selection is
+   * document-wide and survives focus moving to a button, so removing the handler leaves
+   * "saving one keeps the selection" green — the selection is still readable from here.
+   *
+   * What it does earn is the line after it in `check:builder-dnd`: without it the click
+   * focuses the button, and the next thing the author types goes nowhere. Somebody who
+   * keeps a sign-off and carries on writing should not have to click back into the text
+   * first. Watched both ways.
+   */
+  const saveSnippet = () => {
+    const el = editorRef.current;
+    if (!el || !onSaveSnippet) return;
+    const sel = typeof window !== 'undefined' ? window.getSelection() : null;
+    let html = '';
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+      const range = sel.getRangeAt(0);
+      // Only a selection that is actually inside THIS editor. Two blocks open at once
+      // and a selection left in the other one would otherwise be saved from here.
+      if (el.contains(range.commonAncestorContainer)) {
+        const holder = document.createElement('div');
+        holder.appendChild(range.cloneContents());
+        html = holder.innerHTML;
+      }
+    }
+    if (!html) html = el.innerHTML;
+    const clean = sanitizeHtml(html);
+    if (!clean.trim()) return;
+    onSaveSnippet(clean);
+  };
+
   const tbBtn = 'px-2 py-1 text-xs rounded text-neutral-700 hover:bg-neutral-100 border border-transparent hover:border-neutral-200';
 
   return (
@@ -155,6 +301,60 @@ export default function RichTextEditor({
         <button type="button" onClick={() => exec('insertOrderedList')} className={tbBtn}>1. List</button>
         <button type="button" onClick={insertChecklist} className={tbBtn} title="Checklist">☑ Todo</button>
         <button type="button" onClick={() => formatBlock('BLOCKQUOTE')} className={tbBtn}>❝</button>
+
+        {/* Only when the host offers fields. A menu with nothing in it is a control that
+            promises something the screen cannot do. */}
+        {tokens.length > 0 && (
+          <select
+            className={`${tbBtn} max-w-[150px]`}
+            value=""
+            aria-label="Insert a field"
+            title="Insert a field — it fills in with this document's record"
+            onChange={e => { insertToken(e.target.value); e.target.value = ''; }}
+          >
+            <option value="">Insert field…</option>
+            {[...new Set(tokens.map(t => t.group || 'Fields'))].map(group => (
+              <optgroup key={group} label={group}>
+                {tokens.filter(t => (t.group || 'Fields') === group).map(t => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        )}
+
+        {/* Same rule as the field menu: only when the host has snippets to offer. */}
+        {snippets.length > 0 && (
+          <select
+            className={`${tbBtn} max-w-[150px]`}
+            value=""
+            aria-label="Insert a snippet"
+            title="Insert saved wording — a copy, yours to edit"
+            onChange={e => { insertSnippet(e.target.value); e.target.value = ''; }}
+          >
+            <option value="">Insert snippet…</option>
+            {[...new Set(snippets.map(sn => sn.group || 'Snippets'))].map(group => (
+              <optgroup key={group} label={group}>
+                {snippets.filter(sn => (sn.group || 'Snippets') === group).map(sn => (
+                  <option key={sn.value} value={sn.value}>{sn.label}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        )}
+        {onSaveSnippet && (
+          <button
+            type="button"
+            className={tbBtn}
+            title="Save the selected wording as a snippet you can reuse"
+            aria-label="Save as snippet"
+            data-save-snippet
+            onMouseDown={e => e.preventDefault()}
+            onClick={saveSnippet}
+          >
+            Save snippet
+          </button>
+        )}
         <div className="h-4 w-px bg-neutral-200 mx-1" />
         {/* Alignment, size and colour were missing entirely — and even if they
             had been here they would have done nothing, because the sanitiser

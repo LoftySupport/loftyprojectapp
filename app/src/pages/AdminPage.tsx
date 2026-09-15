@@ -7,7 +7,7 @@ import {
 import { useQuery } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
 import { ActivityDialog, DeactivateDialog, UserDialog } from "../components/UserDialogs";
-import { Select, toOptions } from "../components/Select";
+import { MultiSelect, Select, toOptions } from "../components/Select";
 import { SortHeader, useTableSort } from "../components/SortableTable";
 import { UserRow } from "../components/UserRow";
 import { Problem } from "../components/Form";
@@ -21,10 +21,8 @@ import { useToasts } from "../components/Toasts";
 import { ExportMenu } from "../components/ExportMenu";
 import { tableFromFields, type ExportDocument } from "../data/export";
 import { DictionaryPage } from "./DictionaryPage";
-import { FeedbackList } from "./FeedbackList";
 import { PermissionsPage } from "./PermissionsPage";
 import { WiringPage } from "./WiringPage";
-import { Changelog, Roadmap } from "./UpdatesPage";
 import "../components/ui.css";
 
 /**
@@ -51,14 +49,25 @@ import "../components/ui.css";
  * an admin deactivating a person were sharing a tab strip for no better reason than that
  * both were "setup".
  *
- * Roadmap and Changelog are the SAME COMPONENTS the Updates page renders, imported rather
- * than copied. Updates stays where it is — in the footer, for everybody, because the queue
- * is the thing people are meant to read (0060) — and the planning and publishing controls
- * inside it were already admin's and superadmin's respectively. What this gives an admin
- * is one door with all of it behind it, not a second implementation to keep in step.
+ * THE TRACKER IS NOT HERE ANY MORE. On 4 September Roadmap and Changelog were rendered
+ * here as well, imported from Updates, with Bugs and Ideas as two triage lists beside
+ * them — one door with everything behind it. Amber said it twice on 7 September, to two
+ * sessions: *"there is duplication on footer and other page"*, which took Roadmap and
+ * Changelog out (#48), and *"the updates page is duplicated with the bugs/ideas/roadmap/
+ * changelog pages in admin. this only needs to be one page"*, which takes the other two.
+ * Being one component underneath was a fact about the code, not about the experience:
+ * two doors to identical rows is still a thing a person opens twice. Updates is the one
+ * page now. Nothing an admin could do here is lost — the stage, phase and kind controls,
+ * the merge and the export all live in a request's panel and the Requests table, and
+ * they are still admin's and superadmin's there (*"only admins and super admin get to see
+ * the bug manager"* — the manager is the controls, and those never opened to anybody
+ * else; the queue itself has been everybody's since 0060). The four old addresses forward
+ * to the matching view of Updates. The reasoning for having it here at all is kept in
+ * this paragraph so the next person does not re-import it for the same good-sounding
+ * reason.
  *
- * The section is in the URL, like Settings' and Updates', so a link to Teams or to the
- * bug queue is a link somebody can send.
+ * The section is in the URL, like Settings' and Updates', so a link to Teams is a link
+ * somebody can send.
  */
 const SECTIONS = [
   // People first: it is what "Admin" meant before today and what most visits are for.
@@ -68,14 +77,7 @@ const SECTIONS = [
   // shape of who may do what, which is this screen's own subject.
   { slug: "permissions", label: "Permissions" },
   { slug: "dictionary",  label: "Dictionary" },
-  { slug: "wiring",      label: "Wiring" },
-  // The tracker, from an administrator's side. Bugs and Ideas are the triage lists that
-  // were Setup's last two admin-only tabs; Roadmap and Changelog are Updates' own tabs,
-  // reachable here because planning and publishing are admin acts.
-  { slug: "bugs",        label: "Bugs" },
-  { slug: "ideas",       label: "Ideas" },
-  { slug: "roadmap",     label: "Roadmap" },
-  { slug: "changelog",   label: "Changelog" }
+  { slug: "wiring",      label: "Wiring" }
 ] as const;
 
 export function AdminPage() {
@@ -83,6 +85,24 @@ export function AdminPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const index = SECTIONS.findIndex(s => s.slug === section);
+
+  // The tracker's four tabs left this screen on 7 September. They were sections with URLs,
+  // and this file's own reasoning for putting the section in the URL was that "a link to
+  // Teams or to the bug queue is a link somebody can send" — so somebody has sent these.
+  // Forwarding them costs four lines; the alternative is an old link landing silently on
+  // Users, which looks like the page is broken rather than like the tab moved. Bugs and
+  // Ideas land on the Requests TABLE, filtered to their kind, which is the nearest thing
+  // to the triage list they were.
+  const MOVED: Record<string, string> = {
+    roadmap: "/updates/roadmap",
+    changelog: "/updates/changelog",
+    bugs: "/updates/requests?kind=bug&view=table",
+    ideas: "/updates/requests?kind=idea&view=table"
+  };
+  if (section && MOVED[section]) {
+    const target = MOVED[section];
+    return <Navigate to={target.includes("?") ? target : target + location.search} replace />;
+  }
 
   // `/admin` on its own is a reasonable thing to type, and `/admin?person=<id>` is what
   // every activity line links to — so the search string has to survive the redirect or
@@ -93,11 +113,12 @@ export function AdminPage() {
 
   return (
     <>
+      {/* No line under the heading. Amber, 12 September: *"on all pages remove
+          descriptive line text under page header … we need the most above the fold
+          possible"*. The pointer to Updates went with it; Updates is a
+          destination in the rail. */}
       <div className="page-head">
         <Heading type="h2" weight="bold">Admin</Heading>
-        <Text type="text2" color="secondary">
-          Who works here, what they may do, and how the app itself is defined.
-        </Text>
       </div>
 
       <TabList activeTabId={index} onTabChange={i => navigate(`/admin/${SECTIONS[i].slug}`)}>
@@ -110,10 +131,6 @@ export function AdminPage() {
         {section === "permissions" && <PermissionsPage />}
         {section === "dictionary"  && <DictionaryPage />}
         {section === "wiring"      && <WiringPage />}
-        {section === "bugs"        && <FeedbackList kind="bug" />}
-        {section === "ideas"       && <FeedbackList kind="idea" />}
-        {section === "roadmap"     && <Roadmap />}
-        {section === "changelog"   && <Changelog />}
       </div>
     </>
   );
@@ -143,7 +160,22 @@ function Users() {
   const [permission, setPermission] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
-  const [editing, setEditing] = useState<Profile | null>(null);
+  /**
+   * WHICH person the panel shows — an id, not a `Profile`.
+   *
+   * It held the object, captured at the click. Save a job title in the row underneath
+   * and the table re-read, but the panel went on showing the object it was handed, so
+   * "if you make changes inline then it doesn't persist to the side bar" (Amber, 7 Sep)
+   * was exactly right: it persisted everywhere except the one place still holding the
+   * stale copy. Resolving the id against `profiles` on every render means the panel and
+   * the row are the same read.
+   */
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editing = useMemo(
+    () => (editingId ? profiles.find(p => p.id === editingId) ?? null : null),
+    [profiles, editingId]
+  );
+  const setEditing = (p: Profile | null) => setEditingId(p?.id ?? null);
   const [adding, setAdding] = useState(false);
   const [editingRow, setEditingRow] = useState<string | null>(null);
   const [deactivating, setDeactivating] = useState<Profile | null>(null);
@@ -167,7 +199,7 @@ function Users() {
     if (!wanted || !profiles.length) return;
     const person = profiles.find(p => p.id === wanted);
     if (!person) return;
-    setEditing(person);
+    setEditingId(person.id);
     const next = new URLSearchParams(params);
     next.delete("person");
     setParams(next, { replace: true });
@@ -500,6 +532,7 @@ function Users() {
                 onEdit={() => setEditingRow(p.id)}
                 onDone={saved => { setEditingRow(null); if (saved) refresh(); }}
                 onActivity={() => setActivityFor(p)}
+                onOpen={() => { setEditingRow(null); setEditing(p); }}
                 onFullEdit={() => { setEditingRow(null); setEditing(p); }}
                 onDeactivate={() => void onStatusToggle(p)}
                 onToggleDemo={canEdit ? () => void onDemoToggle(p) : undefined}
@@ -513,8 +546,29 @@ function Users() {
 
       <UserDialog show={adding} profile={null}
         onClose={() => setAdding(false)} onSaved={refresh} />
+      {/* Settings and actions in one panel (Amber, 7 Sep: "when you click on the name it
+          should open the side panel with settings and actions"). The actions are the
+          row's — activity, the status switch, the gate — so nothing here is a third way
+          to do what the table already does; it is the same acts, beside the details. */}
       <UserDialog show={editing !== null} profile={editing}
-        onClose={() => setEditing(null)} onSaved={refresh} />
+        onClose={() => setEditing(null)} onSaved={refresh}
+        actions={editing && (
+          <div className="user-actions">
+            <Button size="small" kind="secondary" onClick={() => setActivityFor(editing)}>
+              View activity
+            </Button>
+            {canEdit && (
+              <Button size="small" kind="secondary" onClick={() => void onStatusToggle(editing)}>
+                {editing.active ? "Deactivate…" : "Restore access"}
+              </Button>
+            )}
+            {canEdit && (
+              <Button size="small" kind="secondary" onClick={() => void onDemoToggle(editing)}>
+                {editing.isDemo ? "Let into the app" : "Hold at the gate…"}
+              </Button>
+            )}
+          </div>
+        )} />
       <DeactivateDialog show={deactivating !== null} profile={deactivating}
         onClose={() => setDeactivating(null)} onSaved={refresh} />
 
@@ -603,6 +657,9 @@ function Teams() {
   // Rename state: which team, and the draft label.
   const [renaming, setRenaming] = useState<TeamId | null>(null);
   const [draft, setDraft] = useState("");
+  /** Which team's members are being edited, and the draft list of people. */
+  const [editingMembers, setEditingMembers] = useState<TeamId | null>(null);
+  const [memberDraft, setMemberDraft] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -614,6 +671,59 @@ function Teams() {
       await repo.updateTeam(id, patch);
       toast(done);
       setRenaming(null);
+      setReloadKey(k => k + 1);
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * Membership, edited from the TEAM rather than from each person.
+   *
+   * Amber, 5 September: *"the teams board should allwo you to select team members"*.
+   * It showed a count and a list of names and nothing else, so putting four people in
+   * Construction meant opening four profiles and adding the same team to each.
+   *
+   * MEMBERSHIP LIVES ON THE PROFILE, and that does not change here — `profiles.teams` is
+   * still the one place it is stored, so this writes the same column the People screen
+   * writes. What is different is only which end you hold it by.
+   *
+   * That means N writes for N changes, so only the DIFFERENCE is written: adding one
+   * person to a team of six is one update, not six. Sequential rather than in parallel —
+   * they are separate rows, but a half-applied change is easier to reason about when the
+   * failure is "these succeeded, then this one did not" than when six requests fail in an
+   * order nobody can reconstruct.
+   */
+  const saveMembers = async (teamId: TeamId, teamName: string) => {
+    if (busy) return;
+    const before = profiles.filter(pr => pr.active && pr.teams.includes(teamId)).map(pr => pr.id);
+    const after = memberDraft;
+    const added = after.filter(id => !before.includes(id));
+    const removed = before.filter(id => !after.includes(id));
+    if (!added.length && !removed.length) { setEditingMembers(null); return; }
+
+    setBusy(true);
+    setProblem(null);
+    try {
+      for (const id of added) {
+        const person = profiles.find(pr => pr.id === id);
+        if (!person || person.teams.includes(teamId)) continue;
+        await repo.updateProfile(id, { teams: [...person.teams, teamId] });
+      }
+      for (const id of removed) {
+        const person = profiles.find(pr => pr.id === id);
+        if (!person) continue;
+        await repo.updateProfile(id, { teams: person.teams.filter(t => t !== teamId) });
+      }
+      // Said as a count rather than a list: "3 added, 1 removed" is what somebody wants
+      // to confirm, and a toast naming six people is a toast nobody reads.
+      const parts = [];
+      if (added.length) parts.push(`${added.length} added`);
+      if (removed.length) parts.push(`${removed.length} removed`);
+      toast(`${teamName}: ${parts.join(", ")}.`);
+      setEditingMembers(null);
       setReloadKey(k => k + 1);
     } catch (e) {
       setProblem(e instanceof Error ? e.message : String(e));
@@ -750,11 +860,34 @@ function Teams() {
                 <td className="muted">{r.owned.join(", ") || "—"}</td>
                 <td className="num">{r.held}</td>
                 {/* Active members only: a deactivated person is not on the team any more
-                    in any sense that matters to somebody reading this column. */}
+                    in any sense that matters to somebody reading this column — and they
+                    are not offerable either, because adding somebody who has left is not
+                    a thing anybody means to do. */}
                 <td>
-                  {r.members.length
-                    ? r.members.map(m => m.fullName).join(", ")
-                    : <span className="muted">No members</span>}
+                  {editingMembers === r.id ? (
+                    <div className="field-inline">
+                      <MultiSelect
+                        aria-label={`Members of ${r.team}`}
+                        className="cell-edit-wide"
+                        options={profiles
+                          .filter(pr => pr.active)
+                          .map(pr => ({ value: pr.id, label: pr.fullName }))}
+                        value={memberDraft}
+                        onChange={setMemberDraft}
+                        placeholder="Nobody yet"
+                      />
+                      <Button size="small" disabled={busy} onClick={() => saveMembers(r.id, r.team)}>
+                        Save
+                      </Button>
+                      <Button size="small" kind="tertiary" disabled={busy} onClick={() => setEditingMembers(null)}>
+                        Cancel
+                      </Button>
+                    </div>
+                  ) : (
+                    r.members.length
+                      ? r.members.map(m => m.fullName).join(", ")
+                      : <span className="muted">No members</span>
+                  )}
                 </td>
                 {canEdit && (
                   <td className="num">
@@ -762,6 +895,21 @@ function Teams() {
                       {renaming !== r.id && (
                         <Button size="small" kind="tertiary" onClick={() => { setRenaming(r.id); setDraft(r.team); }}>
                           Rename
+                        </Button>
+                      )}
+                      {/* Offered on a retired team too. Somebody is still recorded in it
+                          until they are taken out, and the way to take them out should
+                          not be to restore the team first. */}
+                      {editingMembers !== r.id && (
+                        <Button
+                          size="small"
+                          kind="tertiary"
+                          onClick={() => {
+                            setEditingMembers(r.id);
+                            setMemberDraft(r.members.map(m => m.id));
+                          }}
+                        >
+                          Members
                         </Button>
                       )}
                       {r.isActive ? (

@@ -1,0 +1,131 @@
+# The element sweep
+
+`app/scripts/check-elements.mjs`, run by CI on every pull request as **"no screen invents a new
+way to draw something"**.
+
+```bash
+cd app
+npm run check:elements                  # compare against the baseline
+npm run check:elements -- --report      # the live census
+npm run check:elements -- --update      # write the baseline from the live census
+```
+
+## What it is for
+
+Every other check in this repository asks whether something is **present**. So do the design
+rules. *Interface Must-Haves* in [`PRODUCT.md`](../../PRODUCT.md) is written as behaviours —
+"every comparable column sorts", "the filters are persistent and inline", "the empty state says
+what to do" — and a behaviour is satisfied by **any** implementation that produces it.
+
+That is the whole mechanism behind the drift. Each screen satisfied the rules its own way,
+honestly, and passed. By 11 September the app was carrying thirty-seven header idioms, thirteen
+hand-built filter rows, six table classes and a hundred and ten container recipes, and the
+same app was *more* token-disciplined than the prototype it replaced — no hex in any component,
+seventy-eight per cent of spacing on tokens against the prototype's nineteen. Compliance went up
+the entire time consistency went down, because nothing was counting the second thing.
+
+The other half is propagation. Amber, 4 September: *"fix the other 2 pages as well to have same
+format."* A fix lands on the screen that was asked about and not on the twelve with the same
+fault. The date-picker rule was agreed on 1 September and honoured in three files; ten days later
+sixteen raw `type="date"` inputs were still in the tree and nothing went red.
+
+So the sweep does not ask whether a screen is correct. It counts **how many different ways the app
+does each thing**, and holds that number down. A fix that reaches one screen and not the other
+twelve leaves the count where it was — which is the point. It is not finished, and now something
+says so.
+
+## The ratchet
+
+[`app/scripts/elements-baseline.json`](../../app/scripts/elements-baseline.json) holds what each
+family measured when it was last agreed. The check fails in **both** directions:
+
+| | |
+| --- | --- |
+| The count went **up** | A screen did something its own way. The failure names the new selector, or the file whose count rose, and the component that already does the job. Fix it there — do not add a baseline entry. |
+| The count went **down** | Somebody fixed something. The baseline has to come down with it in the same commit, or the ground gained is free to be given back tomorrow with nothing noticing. `--update` writes it. |
+
+The diff of the baseline file is therefore the record of which idioms were retired, and by which
+change.
+
+### The one case where a rise is re-baselined rather than fixed
+
+**A surface that did not exist when the baseline was taken has nothing to fix at the source.**
+The sweep landed on `main` at `3a132fa` while #72 — the navigation rail, the job record as a
+drawer and a full page, and the column picker — was already in flight. Merging `main` into it
+raised five families, and not one of the rises was a screen doing its own version of something
+that already existed: they are the box recipes, head rows and tabs of two surfaces the census had
+never seen. The baseline was re-taken at that merge, and the diff names every entry.
+
+That is the exception, and it is narrow. A rise is re-baselined only when the new entries belong
+to a surface added in the same change; a rise in a file the baseline already knew about is the
+ordinary case and gets fixed at the source. Both are visible in the same place — the baseline
+diff — so the exception cannot be taken quietly.
+
+**Two matchers count things that are not what the family is about**, found by that merge and
+worth tightening in the script rather than worked around in the screens:
+
+- **E16 counts the string `type="date"`**, so `<FieldRow type="date">` — a prop naming a field's
+  format, which renders no input of its own — is counted as a raw date input. One of the two the
+  merge added is a prop, not an input.
+- **E12 matches any `.is-empty`**, including `.stage-bar-date.is-empty`, which is a stage on the
+  pipeline strip with no date yet rather than a screen with nothing on it.
+- **E02 matches any class containing `head`**, and fired three times on 12 September for things
+  that are not page headers: `.app-header-logo` (the Lofty mark in the phone bar),
+  `.page-head-action` (the create button that sits on the heading's line) and `.page-head-count`
+  (the readout beside it). An image, a button and a span of text, all inside a header, none of
+  them a header. **This is the matcher that most needs tightening** — every future utility class
+  named after the head it sits in will trip it, and each trip spends a re-baseline.
+
+Neither is worth renaming a class to dodge. A census that can be gamed by renaming is not
+measuring anything, so the fix belongs in `measure()`.
+
+## The twelve families
+
+The numbers are those measured on `main` at `3a132fa`, 11 September 2026, and re-taken when #72
+merged `main` in: **E02 37 → 41, E08 8 → 9, E11 110 → 124, E12 6 → 7, E16 16 → 18**, with E05
+45 → 44 and E14 25 → 24 coming down in the same write.
+
+Re-taken once more on 12 September, for the mobile pass: **E02 41 → 42** (`.app-header-logo`, the
+matcher note above) — and two that came DOWN and are locked in with it, **E05 44 → 39** and
+**E04 13 → 11**. Those two are the descriptive lines removed from every page header and the
+filters folded into one row on a phone: ground gained, so the baseline follows it down.
+
+| | Family | Now | Target | The rule |
+| --- | --- | --- | --- | --- |
+| E02 | page header | 37 | 1 | One header component. A page that draws its own is a new idiom. |
+| E07 | table | 6 | 1 | One data table. `SortableTable` sorts; a screen does not bring its own. |
+| E08 | record card | 8 | 1 | The Jobs card and the Tasks card are two drawings of one object. |
+| E11 | container recipe | 110 | — | A padded, bordered or filled box is a `panel`. Each distinct recipe is another box that is almost a panel. |
+| E12 | empty state | 6 | 1 | PRODUCT.md requires an empty state to say what to do. It does not require a new class each time. |
+| E04 | bespoke filter row | 13 | 0 | The filters are `Toolbar`'s. A control outside it gets no `toolbar-field` wrapper, so Vibe's `width:100%` takes the whole row — this is the full-width filters Amber has been pointing at. |
+| E05 | prose in the page body | 45 | — | Ratchet only. Empty-state copy is required and is counted here too: the number is not meant to reach zero, it is meant never to rise. |
+| E14 | unbound token | 25 | 0 | `<Token>` prints `{{column.name}}` on the screen. A token that names its column beats a guess — but a person should never be the one reading it. |
+| E17 | field hint line | 88 | 0 | `Form.tsx:39` turns every `hint` into a permanent line under its control. A description belongs in a tooltip or nowhere. |
+| E17 | slot metadata line | 32 | 0 | `PropertySlots.tsx` prints team · format · SLA under every row. Amber, 10 September, on those three: *"Remove all three"*. |
+| E16 | raw date input | 16 | 0 | Agreed 1 September: every date filter is `DateRangeFilter`. These are the files the fix never reached. |
+| — | hex colour in a component | 0 | 0 | Already zero, and held there. The one rule written as a value rather than a behaviour is the one that never drifted. |
+
+Two shapes sit behind those rows. **Variant** families (E02, E07, E08, E11, E12) store every
+distinct idiom by name, so a failure can say `.maint-panel-head` is new rather than "37 became
+38". **Site** families (the rest) store a count per file rather than per line, because line
+numbers churn on every edit above them and a check that cries wolf gets deleted.
+
+## What it does not do
+
+- **It does not judge a design.** A family at 1 is consistent, not correct: the single `FieldRow`
+  could still be the wrong row. The sweep catches divergence, which was the invisible thing.
+- **E03 is absent on purpose.** Where a page puts its record count has no mechanical signature,
+  and an approximate measure fires on the wrong thing, gets muted, and a muted check is worse
+  than none.
+- **It reads through Node, not `grep`.** `TasksPage.tsx` declares two deliberate NUL-prefixed
+  sentinels (`const NONE = "\0none"`). Those bytes make `grep` class the file as binary and skip
+  it in silence — counted with `grep` the raw date inputs came to thirteen, and the true figure
+  is sixteen. A census that quietly drops a file is worse than no census, because the number
+  still looks like one.
+
+## Adding a family
+
+Add an entry to `families` in the script with an `id`, a `name`, a `kind`, the `rule` a person
+reads when it fails, and a `measure()` returning either `{key, where}` (variants) or
+`{where, count}` (sites). Then `--update`, and **watch it fail** before committing it: break the
+thing it guards, see it report, restore. A check nobody has watched fail is not evidence.

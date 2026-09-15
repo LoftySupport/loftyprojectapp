@@ -142,6 +142,173 @@ try {
   ok("clicking a palette card adds one at the end", afterClick === blocks + 1,
     `${blocks} → ${afterClick}`);
 
+  // ── Placeholders in prose ─────────────────────────────────────────────
+  //
+  // The resolver is covered in Node by `check:report-widgets`. What is checked here is
+  // the round trip: the menu exists in the editor people actually write in, choosing an
+  // item puts the token in the text, and the preview then shows the value.
+  //
+  // NOT COVERED, and worth saying: whether `el.focus()` before `insertText` is needed.
+  // Commenting it out leaves this green, because `selectOption` does not move focus the
+  // way a real click on a <select> does. The line stays for the real pointer; the claim
+  // that it is load-bearing is not one this check earns.
+  await dragIn("Text");
+  const editor = pg.locator('[contenteditable="true"]').first();
+  await editor.click();
+  await pg.keyboard.type("Booked for ");
+  // Scoped to the canvas. There are two of these — the settings panel renders the same
+  // editor — and the one that matters is the one you write in. An unscoped locator is
+  // ambiguous, which is Playwright telling you the same thing.
+  const menu = pg.locator('main select[aria-label="Insert a field"]');
+  ok("the editor you write in offers the host's fields", await menu.count() === 1,
+    `${await pg.locator('select[aria-label="Insert a field"]').count()} on the page`);
+
+  if (await menu.count()) {
+    await menu.selectOption("slab_cost");
+    await pg.waitForTimeout(400);
+    const typed = await editor.innerText();
+    // Broken by removing the `insertToken` call, or the menu's onChange.
+    ok("choosing one puts the token where the caret is",
+      typed.includes("{{slab_cost}}"), JSON.stringify(typed.slice(0, 80)));
+
+    // And once you step away, the canvas shows the VALUE rather than the token.
+    //
+    // The deselect is the point, not a workaround: a SELECTED text block is the editor,
+    // and it has to show the literal `{{slab_cost}}` or the token could never be edited
+    // or deleted. Only the resolved preview substitutes. Getting this wrong in the check
+    // would have meant "asserting the editor does not resolve", which is nothing.
+    //
+    // Broken by removing the fillTokens call in core/registry.js: the preview keeps
+    // showing the braces.
+    await pg.locator("main").first().click({ position: { x: 5, y: 5 } });
+    await pg.waitForTimeout(900);
+    const canvas = await pg.locator("main").first().innerText();
+    ok("and the document shows what it resolves to",
+      /A\$18[,.]?400/.test(canvas), JSON.stringify(canvas.slice(0, 160)));
+
+    // AND IT IS MARKED AS COMING FROM THE RECORD. This is the assertion that was
+    // missing on 10 September, and its absence hid a real bug for as long as the
+    // feature had existed: the sanitiser's ALLOWED_ATTR had no `class`, so every
+    // rb-token span reached the canvas stripped, the CSS in reports.css applied to
+    // nothing, and a field nobody had recorded printed as a bare em dash indistinguishable
+    // from a typed one. The Node check asserted `rb-token` on the string BEFORE the
+    // sanitiser, which is why it stayed green throughout.
+    //
+    // Broken by dropping `keepTokenMarks` at the ReportDocument call site, or by taking
+    // `class` back out of ALLOWED_ATTR_RENDER.
+    const marks = await pg.locator("main .rb-token").count();
+    ok("and marks it as a field rather than as typed text", marks >= 1, `${marks} marked`);
+  }
+
+  // ── Snippets: saved wording, inserted and kept ────────────────────────
+  //
+  // Two claims, and they fail for different reasons, so they are two assertions.
+  //
+  // The block is re-selected first: the token half above deselected it to read the
+  // resolved preview, and a deselected text block is not an editor.
+  await pg.locator('main [data-block="text"]').last().click();
+  await pg.waitForTimeout(300);
+  const rte = pg.locator('main [contenteditable="true"]').first();
+
+  const snipMenu = pg.locator('main select[aria-label="Insert a snippet"]');
+  ok("the editor offers the host's saved wording", await snipMenu.count() === 1,
+    `${await pg.locator('select[aria-label="Insert a snippet"]').count()} on the page`);
+
+  if (await snipMenu.count()) {
+    // Broken by making insertSnippet use insertText: the tags arrive as visible
+    // characters and `<b>` never becomes an element, so this reports.
+    await snipMenu.selectOption("sn_signoff");
+    await pg.waitForTimeout(400);
+    const html = await rte.innerHTML();
+    ok("inserting one brings its formatting with it",
+      html.includes("Kind regards") && /<b>\s*Lofty\s*<\/b>/i.test(html),
+      JSON.stringify(html.slice(-140)));
+  }
+
+  // WHICH HTML "Save snippet" HANDS OVER.
+  //
+  // Select the word "Lofty" only, then click the button, and the host should be handed
+  // that word rather than the whole block.
+  //
+  // This is what proves `onMouseDown={e => e.preventDefault()}` on the button is
+  // load-bearing rather than decoration. Watched both ways: with the handler removed,
+  // the real click moves focus, the contenteditable's selection collapses before the
+  // click handler runs, and `saveSnippet` falls through to the whole-block branch —
+  // `__savedSnippet` comes back with "Booked for" in it and this reports.
+  await pg.evaluate(() => {
+    const el = document.querySelector('main [contenteditable="true"]');
+    const bold = el?.querySelector("b");
+    if (!bold) return;
+    const range = document.createRange();
+    range.selectNodeContents(bold);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  });
+  await pg.locator("main [data-save-snippet]").first().click();
+  await pg.waitForTimeout(300);
+  const saved = await pg.evaluate(() => window.__savedSnippet ?? null);
+  ok("saving one keeps the selection, not the whole block",
+    typeof saved === "string" && saved.includes("Lofty") && !saved.includes("Booked for"),
+    JSON.stringify(saved));
+
+  // AND THE CARET IS STILL IN THE EDITOR AFTERWARDS.
+  //
+  // This is the claim `onMouseDown={e => e.preventDefault()}` on the button actually
+  // earns. Reading the selection does NOT need it — a DOM Selection is document-wide and
+  // survives focus moving to a button, which is why removing the handler leaves the
+  // assertion above green. What it earns is this: without it the click focuses the
+  // button, and the next thing the author types goes nowhere.
+  //
+  // Watched both ways: with the handler removed, "!" lands outside the editor and this
+  // reports.
+  await pg.keyboard.type("!");
+  await pg.waitForTimeout(300);
+  const afterSave = await rte.innerText();
+  ok("and the caret stays in the editor, so typing carries on",
+    afterSave.trimEnd().endsWith("!"), JSON.stringify(afterSave.slice(-60)));
+
+  // ── Dropping an image in, instead of pasting a URL ────────────────────
+  //
+  // The block took a URL and nothing else, so putting a site photo in a report meant
+  // hosting it somewhere first. Three claims, and they break for different reasons.
+  await pg.locator("aside button", { hasText: "Image" }).first().click();
+  await pg.waitForTimeout(400);
+  await pg.locator('main [data-block="image"]').last().click();
+  await pg.waitForTimeout(400);
+
+  const dropZone = pg.locator("[data-image-drop]").first();
+  // Broken by leaving the field as `type: 'text'` in the registry: the settings panel
+  // renders the plain URL box and there is nothing to drop onto.
+  ok("selecting an image block offers somewhere to drop a file",
+    await dropZone.count() === 1,
+    `${await pg.locator("[data-image-drop]").count()} drop targets`);
+
+  if (await dropZone.count()) {
+    // A real file on a real DataTransfer, dispatched as a real drop. Building the event
+    // by hand is the only way — Playwright cannot drag a file in from the desktop, and
+    // asserting against a click-to-choose input would test a different code path from
+    // the one the feature is named after.
+    await dropZone.evaluate(el => {
+      const dt = new DataTransfer();
+      dt.items.add(new File([new Uint8Array([137, 80, 78, 71])], "site-photo.png", { type: "image/png" }));
+      el.dispatchEvent(new DragEvent("drop", { dataTransfer: dt, bubbles: true, cancelable: true }));
+    });
+    await pg.waitForTimeout(600);
+
+    // It reached the host with the file intact. Broken by passing `e.target.files` from
+    // the drop handler, which is undefined — a drop carries dataTransfer.files.
+    const got = await pg.evaluate(() => window.__uploaded ?? null);
+    ok("the dropped file reaches the host's uploader",
+      got?.name === "site-photo.png" && got?.type === "image/png", JSON.stringify(got));
+
+    // And the URL it gave back is now the block's image. Broken by not calling `set`:
+    // the file uploads and the block stays empty, which looks like the upload failed.
+    const src = await pg.locator('main [data-block="image"] img').last().getAttribute("src").catch(() => null);
+    ok("and the URL it returns becomes the block's image",
+      typeof src === "string" && src.includes("site-photo.png"), JSON.stringify(src));
+  }
+
   ok("nothing threw while doing it", crashes.length === 0, crashes[0]?.slice(0, 200));
 } finally {
   await browser?.close().catch(() => {});
@@ -150,6 +317,6 @@ try {
 }
 
 console.log(failures === 0
-  ? "\nthe builder accepts blocks: dragged in, and clicked in"
+  ? "\nthe builder accepts blocks: dragged in, clicked in, and its editor keeps wording"
   : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

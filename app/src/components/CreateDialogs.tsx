@@ -78,6 +78,35 @@ export function AddressFields({
     onChange({ ...value, [key]: v });
 
   /**
+   * The lot and res boxes hold what was TYPED; the value they publish is a number.
+   *
+   * `0106` made both columns integers — a lot number is only ever a number, and it is
+   * the STREET number that carries "2-4" and "83a". An integer column rejects the cast
+   * before any trigger runs, so the tolerance the database used to provide (typing
+   * "Lot 3" and having the label stripped) lives here now, which is where input
+   * tolerance belongs. Keeping the raw string in state is what lets somebody type "1"
+   * without the box fighting them mid-keystroke.
+   */
+  const [lotTyped, setLotTypedRaw] = useState(value.lotNumber?.toString() ?? "");
+  const [resTyped, setResTypedRaw] = useState(value.resNumber?.toString() ?? "");
+  const bare = (typed: string, label: "lot" | "res") =>
+    typed.trim().replace(label === "lot" ? /^lot[\s.:#-]*/i : /^res(idence)?[\s.:#-]*/i, "").trim();
+  const numberProblem = (typed: string, label: "lot" | "res") =>
+    typed.trim() === "" || /^\d+$/.test(bare(typed, label))
+      ? undefined
+      : { status: "error" as const, text: "digits only — a number with a letter or dash in it is a street number" };
+  const setLotTyped = (v: string) => {
+    setLotTypedRaw(v);
+    const b = bare(v, "lot");
+    set("lotNumber", /^\d+$/.test(b) ? Number(b) : null);
+  };
+  const setResTyped = (v: string) => {
+    setResTypedRaw(v);
+    const b = bare(v, "res");
+    set("resNumber", /^\d+$/.test(b) ? Number(b) : null);
+  };
+
+  /**
    * Typing a suburb fills in its council.
    *
    * From the list Lofty supplied — "Councils by Suburb/Locality as at 1 July 2026" —
@@ -135,16 +164,34 @@ export function AddressFields({
   // A job needs one of the two numbers, and either will do. Drives the hints, so the form
   // explains the rule as it is being met rather than only when it is broken.
   const buildable = needs === "street";
-  const hasNumber = filled(value.lotNumber) || filled(value.streetNumber);
+  const hasNumber = value.lotNumber != null || filled(value.streetNumber);
 
   return (
     <>
+      {/* First, because it leads the address once it is set: "Res 1, Lot 3, 13 Tester
+          Street, Testville, SA, 5000". Empty until the res number is allocated, which
+          is the normal state of a job for months.
+
+          On EVERY address, a project's included. It was gated to jobs on 10 September
+          and Amber corrected it the same day: *"it just needs to not have the option of
+          only adding a res to jobs not projects which is a ux thing... however on a
+          project you might update the res number there as well."* */}
+      <Field label="Res number" hint="the residence number on the plan — leads the address once it is set">
+        <TextField
+          value={resTyped}
+          onChange={setResTyped}
+          id="addr-res-number"
+          inputAriaLabel="Res number"
+          validation={numberProblem(resTyped, "res")}
+        />
+      </Field>
       <Field label="Lot number" hint="as it appears on the plan of division">
         <TextField
-          value={value.lotNumber ?? ""}
-          onChange={v => set("lotNumber", v || null)}
+          value={lotTyped}
+          onChange={setLotTyped}
           id="addr-lot-number"
           inputAriaLabel="Lot number"
+          validation={numberProblem(lotTyped, "lot")}
         />
       </Field>
       {/* Second, not fourth. An address is said "Lot 12A, Unit 3, 42 Ironbark Road" —
@@ -346,7 +393,7 @@ const addressIsValid = (a: NewAddress): boolean =>
  * 0069, at a road with no number on it either. A project may be at any of those.
  */
 const jobAddressIsValid = (a: NewAddress): boolean =>
-  addressIsValid(a) && filled(a.street1) && (filled(a.lotNumber) || filled(a.streetNumber));
+  addressIsValid(a) && filled(a.street1) && (a.lotNumber != null || filled(a.streetNumber));
 
 export function NewProjectDialog({
   show,
@@ -708,6 +755,7 @@ export function NewJobDialog({
   const [owningTeam, setOwningTeam] = useState<TeamId | null>(FIRST_TEAM);
   const [ownAddress, setOwnAddress] = useState(false);
   const [address, setAddress] = useState<NewAddress>(EMPTY_ADDRESS);
+  const [siteBookNo, setSiteBookNo] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<string | null>(null);
@@ -720,6 +768,7 @@ export function NewJobDialog({
     setOwningTeam(FIRST_TEAM);
     setOwnAddress(false);
     setAddress(EMPTY_ADDRESS);
+    setSiteBookNo("");
     setError(null);
     setCreated(null);
     setSaving(false);
@@ -733,7 +782,8 @@ export function NewJobDialog({
       const job = await repo.createJob({
         projectId: Number(projectId),
         owningTeam,
-        address: ownAddress ? address : undefined
+        address: ownAddress ? address : undefined,
+        jobNumberOld: siteBookNo.trim() || null
       });
       setCreated(job.id);
       onCreated?.();
@@ -786,6 +836,25 @@ export function NewJobDialog({
               onChange={setOwningTeam}
               hint="who is accountable for this job"
             />
+
+            {/* At creation, not only afterwards in the drawer (Amber, 7 Sep: "you should
+                be able to add a sitebook number as well at the time").
+
+                CALLED THE OLD JOB NUMBER, NOT THE SITEBOOK NUMBER (Amber, 10 Sep:
+                *"sitebook number isn't created until after construction. so creating a
+                new project we need old job number"*). The column is `job_number_old` and
+                always was — the old system's number, which SiteBook and Trello then
+                reference. Labelling it "SiteBook number" on a CREATE form asked for a
+                number that cannot exist yet: SiteBook does not issue one until the job
+                is in construction. */}
+            <Field label="Old job number" hint="the number this job already has in the old system, Trello or on the paperwork — leave blank for a job that is new here">
+              <TextField
+                value={siteBookNo}
+                onChange={setSiteBookNo}
+                id="job-sitebook"
+                inputAriaLabel="Old job number"
+              />
+            </Field>
 
             {/* Most jobs sit at the project's address, so that is the default and the
                 fields stay out of the way until someone says otherwise. */}
@@ -919,6 +988,7 @@ export function SplitProjectDialog({
     : countValid && lotValid
       ? Array.from({ length: n }, (_, i) => ({
           lotNumber: String(first + i),
+          streetNumber: "",
           jobNumberOld: "",
           titleType: seedTitle(i)
         }))
@@ -1038,16 +1108,23 @@ export function SplitProjectDialog({
                     {rows.length} job{rows.length === 1 ? "" : "s"}, each at the project's address
                   </Text>
                   <Text type="text3" color="secondary" ellipsis={false}>
-                    A lot number can be anything on the plan — 2B as readily as 2. The old
-                    job number is the one this job has in SiteBook or Trello; leave it
-                    blank for a job that is new here. Job numbers themselves are issued by
-                    the database, continuing from any that already exist. Title type is
-                    seeded from the project's mix — check it per lot, since nothing says
-                    which lots take which title.
+                    A lot number is a number — 2, not 2B; anything with a letter or a
+                    dash in it is a street number, not a lot. The
+                    A street number left blank inherits the project's, which is what the
+                    rest of the address already does — a lot before titles is still at the
+                    project's number, and leaving it out is what made jobs read
+                    "Lot 3, Corner Street" with no number in them. Type one to give a lot
+                    its own. The old job number is the one this job already has in the old
+                    system, Trello or on the paperwork; leave it blank for a job that is
+                    new here. It is not the SiteBook number, which is not issued until
+                    construction. Job numbers themselves are
+                    issued by the database, continuing from any that already exist. Title
+                    type is seeded from the project's mix — check it per lot, since nothing
+                    says which lots take which title.
                   </Text>
                 </div>
                 <div className="split-row split-row-head" aria-hidden="true">
-                  <span>Lot</span><span>Old job number</span><span>Title</span>
+                  <span>Lot</span><span>Street #</span><span>Old job number</span><span>Title</span>
                 </div>
                 {rows.map((row, i) => (
                   <div className="split-row" key={i}>
@@ -1064,6 +1141,17 @@ export function SplitProjectDialog({
                             ? { status: "error", text: "Listed twice" }
                             : undefined
                       }
+                    />
+                    {/* Blank inherits the project's street number. No placeholder: the
+                        design system's forms rule is that a placeholder is an example
+                        and never a label, and the paragraph above says what blank
+                        means — which is the thing that needs saying. */}
+                    <TextField
+                      value={row.streetNumber ?? ""}
+                      onChange={v => editRow(i, { streetNumber: v })}
+                      size="small"
+                      id={`split-street-${i}`}
+                      inputAriaLabel={`Street number for job ${i + 1} — blank uses the project's`}
                     />
                     <TextField
                       value={row.jobNumberOld ?? ""}

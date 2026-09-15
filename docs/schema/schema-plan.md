@@ -9,9 +9,13 @@ dependencies, properties and checklists, `process_runs`, and the workbook seed o
 processes and 174 properties. See *1 September — the workbook lands* at the end of this
 file.
 
-**Phase B (the import) has not run** — the 9 projects and 66 jobs on the live database were
-created in the app. `HANDOFF.md` carries the running order, including which kinds of change
-are cheaper before it than after.
+**Phase B (the import) is closed and never ran** — the 9 projects and 66 jobs on the live
+database were created in the app, and that is now the only way they will be. Amber,
+7 September: *"i don't need any jobs imported from spreadsheets. all jobs that need to be
+created from now on will be created from the projects in the app"*. The staging table, its
+801 rows and `import_spine()` stay applied and inert, because *"if I need to import other
+areas I will let you know"* — just not jobs or projects. `app/supabase/import/README.md`
+carries the closure and its reasoning.
 
 **What changed against this plan while building it**, each with its reasoning in the
 migration header: teams became a lookup table before the rest rather than in Phase C, since
@@ -1493,6 +1497,19 @@ only overdue. `task_display` derives health the way `process_run_display` does;
 `stage_completion` counts milestones per record and stage once, for the board, the drawer
 and the report.
 
+**0102 gives tasks a board of their own** — every task, across every job and project,
+filtered and sorted the way the Jobs board is, opening on "my tasks" with a manager's team
+on top and three slices of the due-date question (overdue, due today, due this week). Two
+things `task_display` did not carry: `task_scheduled_date`, a plain nullable date beside
+`task_due_date` for when the task is *planned* to be worked rather than when it is due —
+it does not feed `task_health`, which stays anchored to the due date; and the record and
+process a task sits on, resolved rather than left as bare keys — `job_display`'s own
+address and stage for a job task, `projects`' name and stage for a project task, and
+`process_runs` → `processes`' name for a task instantiated from a run, null for one somebody
+typed in. The last of those is also how the board reads Amber's distinction between the two
+kinds of task without a separate column: a resolved process name is a system-generated task,
+and its absence is a person's own.
+
 ### Notifications: five tables, one outbox
 
 `notification_types` (defaults per type) · `notification_rules` (audience: assignee, owning
@@ -1697,9 +1714,12 @@ The unique key on `job_number_old` earned its place here: it is the one constrai
 noticed. Five of the seven carry no old number the app already holds, and nothing else in
 the schema would have objected to the same house existing twice.
 
-**Not decided.** Whether the workbook or the app is the record for those seven sites is
-Amber's call, and the load waits on it; the three ways are set out in
-`app/supabase/import/README.md` → *What stopped the live load*. Worth knowing while
+**Decided, 7 September — by closing the import rather than by choosing.** The app is the
+record, for those seven and for everything else: no jobs or projects will ever be loaded
+from a spreadsheet, so there is no second copy to reconcile. The three ways are still set
+out in `app/supabase/import/README.md` → *What stopped the live load*, because they are the
+clearest statement of what the collision was, and the same hazard now belongs to whoever
+creates those jobs by hand. Worth knowing while
 deciding: between them the seven hold two comments ("Job cancelled", "here is a test
 update") and nothing else — no tasks, parties, documents, property values or process runs.
 
@@ -1782,6 +1802,47 @@ nothing over copy and paste. The cost is a recursion risk: a section containing 
 block pointing at itself is two clicks to build, so the expander carries a depth counter.
 Without it the stack blows and the reader gets "this block failed to render".
 
+### 7 September — snippets are a third kind, and the reason is *when*, not *what* (`0098`)
+
+Amber: *"i also want to be able to save text snippets and reusue them"*, in the same
+breath as asking for property placeholders in prose. The two go together — once a letter
+can carry `{{site_start_date}}`, the paragraph around it is worth keeping too.
+
+**The tempting answer is "that is what a section is", and it is wrong.** A section and a
+snippet differ in *when* they are read, and the section above is the reason that matters:
+
+| | read | so editing it later |
+|---|---|---|
+| **section** | every time the document is opened | changes every template using it |
+| **snippet** | once, at the caret, when you insert it | changes nothing already written |
+
+"Please find attached our progress report for" is wording somebody adjusts per client. If
+that edit rewrote it in forty other letters nobody would dare touch it. Storing snippets as
+sections and copying them anyway would work right up until the first person opened one
+expecting the behaviour the kind promises.
+
+So it is a third value on `report_template_kind` — which is the discriminator earning its
+keep. The whole migration is one CHECK: the `(kind, scope)` index already covers it, the
+per-kind uniqueness already lets a template, a section and a snippet share a name, and the
+audit trigger is on the table rather than the kind.
+
+**The part that had to be checked rather than assumed:** none of the four policies on
+`report_templates` look at `kind`. That is what makes a one-line migration safe — a snippet
+inherits the visibility bands, the sign-off and the delete rules already proved, rather
+than arriving unguarded. The assumption is invisible in the diff that depends on it, so
+`verify/rls.sql` now asserts it directly: add a policy that branches on kind and the check
+reports. Watched both ways.
+
+The wording itself lives in `report_template_layout` as a single `text` widget, so the same
+`layout_has_widgets` CHECK guards it and the same builder edits it. `snippetHtml` /
+`snippetLayout` in `types.ts` are the only code that knows that, because every way of
+reaching into `widgets[0].options.html` by hand returns `undefined` rather than throwing —
+a snippet saved through a typo'd path would be a menu entry that inserts nothing, silently.
+
+A **Snippet Library** lane sits beside the template and section lanes. Not decoration: a
+user's snippet needs a manager to sign it off, and without a screen for that the feature
+would save a snippet and then hide it forever.
+
 ### Share links: the columns exist and nothing writes them
 
 `report_document_share_token`, its **mandatory** expiry (a link that never ends is one
@@ -1849,8 +1910,11 @@ Three things fell out of it that were not the point but are worth keeping:
   endpoint verifies from the plaintext the viewer sends. `npm run check:share-password`
   imports both real implementations and asserts they agree.
 
-What is left is not a decision: the endpoint has to be **deployed** and given
-`SHARE_ALLOWED_ORIGINS`. Until it is, the Share panel makes a link that will not open.
+What was left was not a decision: the endpoint had to be **deployed** and given
+`SHARE_ALLOWED_ORIGINS`. **Both are done** — deployed 4 September, and the secret set some
+PRs later. Confirmed against the live endpoint on 10 September: `hub.lofty.au` is allowed and
+`example.com` is refused with 403. This paragraph said the work was outstanding for longer
+than it was, because a secret set outside the repository is invisible to it.
 
 ## 4 September — Settings is the managers', Admin is the administrators'
 
@@ -1955,19 +2019,1549 @@ The paths did not swap. `/settings` is the personal screen and has been for week
 them would break every bookmark and Teams link in the company to save a word in a URL
 nobody reads. So the rename is a label and a permission, not an address.
 
-### Open, for Amber
+### Answered by Amber, 7 September — all three
 
-1. **Should a manager see the Bugs and Ideas triage tabs?** They are on Admin now, and a
-   manager still reads the same queue on Updates — which is the screen built for it. If
-   triage is a manager's job too, the tabs move and no policy changes (`0060` already opens
-   the read to everybody).
-2. **Roadmap and Changelog appear in two places** — the cog for admins, the footer for
-   everybody. Same component, same rows, no second implementation; but if that reads as
-   doubling up the way the notifications tab did, the Admin tabs come out and the cog links
-   to `/updates` instead.
-3. **Notification *types* went down to manager with the *rules*.** A rule is who hears a
-   thing; a type is whether that kind of notification exists at all. If creating a type
-   should stay admin's, that is a second policy, not a second screen.
+1. **Should a manager see the Bugs and Ideas triage tabs?** **No.** *"Only admins and super
+   admin get to see the bug manager."* Already how it behaved, so no code changed — but the
+   half that is easy to get backwards is now written down beside the tabs: **filing is not
+   triage.** `ReportForm` carries no permission gate, so anybody with app access, viewers
+   included, can send one.
+2. **Roadmap and Changelog appear in two places.** **Removed from Admin.** *"there is
+   duplication on footer and other page."* The cog links to `/updates`, and
+   `/admin/roadmap` and `/admin/changelog` forward there rather than falling through to the
+   section guard — those URLs were shareable, so some are in bookmarks. Being one component
+   underneath was a fact about the code, not about the experience.
+3. **Notification *types* went down to manager with the *rules*.** **Types come back to
+   admin; the rules stay a manager's** — `0097`.
+
+#### `0097` — and why it is three policies, not one
+
+The obvious change is to swap `0096`'s `for all … >= 'manager'` on `notification_types` for
+`for all … >= 'admin'`. **That would have broken Settings → Automations for every manager**,
+and the reason is worth keeping: `for all` covers UPDATE, and a manager's only type write
+today *is* an update — `saveNotificationType()` sets default channels, default timing and
+the active flag on an existing row. Amber was asked about **creating** a type and answered
+about creating a type, so the policy splits by command:
+
+| Command | Who | Why |
+| --- | --- | --- |
+| `insert` | **admin** | Inventing a kind of notification is defining the vocabulary |
+| `delete` | **admin** | Gating creation while leaving destruction open makes no sense |
+| `update` | manager | Changing an existing type's defaults is configuring it |
+| `select` | every active user | `0083`, untouched — what will happen to you is not a secret |
+
+A type is a row that `notification_rules`, `notification_preferences`, `notifications` and
+`notification_deliveries` all point at by foreign key, which is what puts it on the "what
+the app IS" side of the line Admin and Settings were split on. `0096` is not wrong and is
+not being corrected: it bundled two tables under one argument, and only one of them was
+load-bearing for that argument. **The bundling is what `0097` undoes.**
+
+**One edge deliberately not assumed.** Deactivating a type through that UPDATE stays a
+manager's, even though `notification_type_is_active` is close to "does this exist". Making
+it admin's needs a column guard like `0096`'s `guard_stage_shape_change()`, not a policy,
+and nobody asked for it.
+
+**No app change accompanies it.** There is no create-a-type or delete-a-type control and no
+repository method for either — today a type is only ever created by a migration. `0097`
+tightens the database boundary so that stays true when somebody builds the screen.
+
+Proved in `verify/rls.sql`, manager block, probes 6–8, each watched failing first: a manager
+writes a rule (6), is refused a new type (7), and still sets an existing type's defaults
+(8). Probe 8 is the one that catches the `for all` mistake. The migration's own structural
+block additionally refuses to apply if a superseded policy is still attached — permissive
+policies OR together, so leaving `0096`'s in place would have made `0097` look applied while
+changing nothing.
+
+### 7 September — images a document carries (`0100`)
+
+Amber: *"upload to public bucket that stores in the document only"*. The Image block took
+a URL and nothing else, so putting a site photo in a report meant hosting it first.
+
+**Public, and asked for after the trade was put.** The alternative offered was a signed URL
+written into the share snapshot with the same expiry as the link, so revoking a shared
+document revoked its pictures; Claude recommended it, because `0095` had already decided a
+shared document is a snapshot with an end date. Amber chose the public bucket, and the
+consequence is recorded rather than buried: **an image in a shared document stays fetchable
+at its URL after the link expires.** What that costs is bounded by what goes in — a logo, a
+site photo, a diagram, things somebody is deliberately putting in front of a client. It is
+not a hole in RLS; nothing derived from a job, a property or a person lives in the bucket.
+The way back, if it is revisited, is two moves: flip `public` to false, and sign each image
+URL in `compileForShare` with the link's expiry. The layout stores a URL either way.
+
+**No attachments table, which is what "stores in the document only" means.** `0062` needed
+`feedback_attachments` because storage.objects has no column saying which report a
+screenshot belongs to. A report image does not have that problem: the block holds the URL
+and the block is in `report_document_layout`. A row here as well would be a second record
+of the same fact, disagreeing the first time somebody deleted the block. The cost accepted
+is that an image whose block was deleted is orphaned in the bucket — housekeeping, not
+correctness.
+
+The object path (`documents/<id>/…`, `library/<id>/…`) is a convenience for auditing and
+prefix-listing, **not** a source of truth. Nothing reads it to decide anything. Uploading is
+floored at `user` rather than at the specific document's editability: every user can create
+a document anyway, so the cross-table lookup would buy a slower upload and a policy to
+rewrite whenever the document rules move. The path *shape* is enforced, so the bucket cannot
+become a flat dumping ground — matched with a regex and not a cast, because `'x'::uuid`
+raises inside a policy and an error is not a refusal.
+
+### 7 September — what the security advisor still says, and why most of it stays (`0099`)
+
+`get_advisors` was run against the live project after `0098`. Five findings; **one was
+fixed, and the rest are recorded here so nobody re-investigates them next month.**
+
+`0099` — **fixed.** `function_search_path_mutable` on `private.audit_exempt_tables()` and
+`public.stage_sla_columns()`. Both are now pinned to `pg_catalog, pg_temp`. Worth being
+honest about the size of it: the danger this warning usually names is a SECURITY DEFINER
+function resolving an unqualified table name against a caller-controlled path, and neither
+of these is that — neither is DEFINER, and each is one `select array[…]` of string
+literals. It is hygiene. The reason to do it anyway is that an advisor carrying permanent
+warnings is an advisor nobody reads, and the next real finding lands in the same list.
+
+`pg_graphql_anon_table_exposed` (93) and `pg_graphql_authenticated_table_exposed` (94) —
+**left, and checked rather than assumed.** These say the tables are visible in the GraphQL
+schema because those roles hold `SELECT`. Visible is not readable: every one of the 93 has
+RLS on with no policy reaching `anon`, and `set role anon; select count(*)` returns **0**
+from `profiles`, `teams`, `addresses` and `activity_audit`. `report_documents` is stronger
+still — `0095` revoked the grant outright, so anon cannot even reach it to be refused. What
+IS exposed is the shape: table and column names are discoverable by introspection. Whether
+that matters is a decision, and it is in `docs/open-questions.md` rather than guessed at.
+*(Decided the same evening — `0101`, below.)*
+
+`authenticated_security_definer_function_executable` (4) — **left, and correct as it is.**
+`current_permission()`, `current_profile_id()`, `is_active_user()` and `is_signed_in_staff()`
+are the RLS helpers. They are SECURITY DEFINER on purpose: they read `profiles`, which RLS
+on `profiles` would otherwise block, and that would deadlock the policies that call them.
+Reachable over `/rest/v1/rpc/`, each tells a caller a fact about *themselves* — their own
+permission, their own id. There is nothing there to leak.
+
+`rls_enabled_no_policy` on `maintenance_message_secrets` (INFO) — **left, and deliberate.**
+RLS on with no policy is deny-all, which is exactly what a parked reply token should be.
+`verify/rls.sql` already proves it: *"the parked token is invisible to a user"*.
+
+`auth_leaked_password_protection` — **not decided.** Turning it on is a dashboard setting
+that changes what happens to a real person choosing a password, so it is a question rather
+than a change Claude makes on its own.
+
+### 7 September, evening — anon sees no shape (`0101`)
+
+Amber, asked the question the section above left open: **"yes"**. `0101` revokes every
+table privilege from `anon` across `public` — `all tables` covers the 21 views as well as the
+74 tables — and revokes the default privilege too, so the next `create table` does not
+quietly put one object back on the map. Sequences are left alone: the advisor does not name
+them, and `USAGE` on a sequence `anon` cannot insert into is not a capability.
+
+Two things are worth keeping straight about it:
+
+- **It closes discoverability, not a read.** RLS was already refusing `anon` everywhere,
+  and the proof had watched it refuse. What changes is the *kind* of refusal — a query as
+  `anon` now fails on privilege before RLS gets a say — and that is what removes the table
+  from the schema pg_graphql builds for that role. `verify/rls.sql` probes exactly that
+  difference: a table that answers `anon` with zero rows is now a FAIL, because zero rows
+  means it is back in the GraphQL schema.
+- **Nothing runs as `anon`.** Every app read and write is a signed-in session; the one thing
+  a person with no account reaches (`/shared/:token`) is an edge function holding the
+  service role, as are the other three functions. The `postgres` role is what creates every
+  table here, so revoking *its* default is the one that matters; Supabase's parallel default
+  under `supabase_admin` applies only to tables that role creates, and no migration is one.
+
+`pg_graphql_anon_table_exposed` should read 0 on the next `get_advisors` run;
+`pg_graphql_authenticated_table_exposed` (94) is unchanged and correct — signed-in staff are
+meant to see the schema they query.
+
+### 10 September — a document can be a URL (`0103`)
+
+*A readable version with diagrams is published at
+<https://claude.ai/code/artifact/fe4d0004-6c9d-4fe7-96ee-41b9f773c066> — show that one to
+people; edit this file.*
+
+Amber: *"when adding a document I need to be able to save it as a url in sharepoint
+(integration coming) but for now I need to be able to add and delete them"*.
+
+**This is one column, and the first draft of it was a whole table.** That draft —
+`document_links`, with a title, a URL and a job or project to hang it off — got as far as
+being written before somebody read `0032`, which had already built exactly that table under
+exactly that name, three months earlier, and for a better reason. The near-miss is recorded
+rather than tidied away, because the mistake was cheap to make and would have been expensive
+to keep: two tables called `document_links`, one of them a subset of the other.
+
+`0032`'s pair is the right shape:
+
+| | |
+| --- | --- |
+| `documents` | **The file, held once.** Named once, categorised once, versioned once. |
+| `document_links` | **Where it is attached.** One row per record it hangs off. |
+
+The exclusive arc is on the LINK rather than on the document, because the same soil report
+genuinely belongs to a project *and* to every job on it. That property is stronger for a
+SharePoint link than for an upload: the contract for project 1042 is one document in one
+place, and it is relevant to the project and to the one job it governs. A per-record table
+would have made those two rows two documents.
+
+So `0103` adds `documents.document_url`, and everything `0032` already built — the links,
+the nine categories, the supersedes chain, the RLS, the audit triggers — works on it
+unchanged.
+
+**`documents` now means one of three things, and the third was already there.**
+
+| `storage_path` | `url` | What it is |
+| --- | --- | --- |
+| set | null | An upload. Lofty holds the bytes. (`0032`) |
+| null | set | A pointer. The bytes are in SharePoint. (`0103`) |
+| null | null | Expected, not arrived — *"the signed contract"* as an outstanding item. (`0032`) |
+
+Both set is allowed and deliberately not constrained against: the coming integration is the
+case for it, and a check refusing it would have to be dropped the week that lands.
+
+**The URL is unique, and the check on it is loose.** `^https://\S+$` and nothing tighter,
+the same shape as `0040`'s folder check — SharePoint URLs come in at least three forms
+(tenant paths, personal sites, shortened `:b:/s/` share links) and a pattern strict enough
+to be useful about one of them refuses the other two. What it catches is what people
+actually paste by accident: a Windows path off the file server. The uniqueness is the half
+that carries a rule rather than a validation — **one SharePoint address is one document** —
+which is what makes filing the same contract against a project and against its job a second
+*attachment* rather than a second copy, and it is the premise the whole "held once" design
+rests on.
+
+**A pointer with no links is reaped, and an upload is not.** `0032` made detaching ordinary
+work and deleting a document admin-only, which is right for a file: the link goes, the file
+stays. A pointer is different — it has no bytes, it is only ever reachable through its
+links, and once the last one goes it is a row nobody below admin can see or remove. So an
+`after delete` trigger on `document_links` deletes the document when nothing points at it
+*and* `document_storage_path is null`.
+
+Three things about that are worth having written down:
+
+- **The guard is the storage path, not the URL.** Both would cover the SharePoint case; the
+  storage test also covers the third state above, which is exactly as unreachable once
+  detached. And it is the safe half of the pair — it is the presence of a stored object,
+  not the absence of a URL, that makes deleting the row lose something.
+- **It is a trigger because the app cannot do it.** `admins delete documents` means an
+  ordinary user's cleanup is refused *silently* — RLS returns "no rows" rather than an
+  error — so the app would report a success it had not achieved. Widening that policy was
+  the alternative and it is worse: it would let a user delete an uploaded file's row and
+  orphan the object in the bucket.
+- **It is `after delete`, and it was watched failing as `before`.** As a BEFORE trigger the
+  link being deleted is still visible to the `not exists`, so it deletes nothing, ever —
+  a trigger that fires, succeeds and does nothing.
+
+**Nothing about who may open the file changed, and the app does not pretend otherwise.**
+This schema stores an address; SharePoint governs the bytes, under Microsoft's own
+permissions. Somebody who opens a link they should not have gets SharePoint's refusal, not
+the document. RLS here protects the knowledge that the document exists and where it is —
+which is worth protecting, and is not the same thing. Filing a link is not a way of sharing
+a file, and the panel says so above the field.
+
+**What the integration will need, and why none of it is here.** A sync will want a drive id,
+an item id, an eTag, a synced-at, probably a webhook subscription. None of that has been
+scoped, and guessing at it now gives either a row of nulls nothing writes or a shape the
+integration has to work around. Adding those columns later is `alter table add column`.
+Removing invented ones after something reads them is not.
+
+### 10 September — a document is a draft until it is published (`0104`)
+
+Amber: *"they need to be able to edit it in the app and pull in information, but it should
+be linked in sharepoint.. until it is published… have a DRAFT watermark across it while
+editable and saved to the job. and as soon as it is ready to share or publish it, you
+choose the sharepoint location to save it to (which should default to job file) … if
+editing it in the app it reverts to draft"*.
+
+Three columns on `report_documents` — `published_at`, `published_by`, `published_url` —
+and a trigger.
+
+**There is no `status` column, and that is the decision.** `check (status in ('draft',
+'published'))` was the obvious shape and it records the conclusion rather than the fact.
+"Published" would then be a word somebody sets, and the first write that forgot to set it
+back would leave a draft wearing a published label — which is precisely what the watermark
+exists to prevent, and it would be invisible. `published_at is not null` cannot drift,
+because the trigger that sets it is the trigger that clears it.
+
+**Editing reverts it, and the database does that rather than the screen.** Four places
+write a layout today — the builder's autosave, the record panel, the importer, the share
+compile — and an unknown number tomorrow. `0052`'s undo already taught this repo what a
+per-caller opt-in is worth: *"a per-screen opt-in is a promise every future screen has to
+remember to keep, and the first one did not"*. So `guard_report_document_publication()`
+watches `report_document_layout` and `report_document_title`, and clears the publication in
+the same statement, with no cooperation from the caller.
+
+What deliberately does **not** count as an edit: sharing, moving the document to another
+record, and the audit quartet. Nothing a reader would see has changed, and reverting on a
+share would take the publication back at the moment it is most needed.
+
+**The URL survives the revert.** Amber: *"to download it again you need to add the link
+again"* — so `published_at` goes and re-publishing is an act somebody performs. The address
+stays, because a document re-published after an edit almost always goes back to the same
+place, and sending somebody into SharePoint to find that address again is how a document
+ends up filed somewhere new. That gives a third readable state, which the app shows as its
+own chip: **a URL with no `published_at` means what is in SharePoint is out of date.**
+
+Written as an implication rather than an equivalence for exactly that reason — published
+requires a URL, a URL does not require a publication.
+
+**`0095`'s column grant bit, on schedule.** That migration took the table-level SELECT off
+`report_documents` so the share snapshot and password hash could not be read back, and said
+what it would cost: *"a column added later is NOT readable until somebody adds it here.
+That is the failure mode worth having — a visible one, on the day the column is added."*
+This was that day. `verify/rls.sql` stopped with `permission denied for table
+report_documents` the first time it read the new columns as `authenticated`; without the
+three-line grant in `0104` the app's own document query fails for every user on the first
+page load. The prediction was accurate and the check was where it said it would be.
+
+**The watermark is not schema, but it is the reason for the schema.** It reaches four
+renderers — screen, Print/Save PDF, the `.html` download and the `.docx` — because a
+document watermarked in three of them is worse than one watermarked in none, since somebody
+will send the fourth. `npm run check:watermark` asserts all four, and asserts the negative:
+a published document comes out clean.
+
+Two limits are worth writing down rather than discovering. The screen and print mark is a
+fixed tiled layer, which Chromium repeats on every printed page and **Firefox paints on the
+first page only**. And Word gets a spaced stamp in the page header rather than the diagonal
+ghost behind the text, because the `docx` package exposes no VML shape and hand-writing XML
+into somebody else's document part breaks on their next release.
+
+### 10 September — a job's address carries a Res number (`0105`)
+
+Amber, giving the shape of an address at each level:
+
+> *"A project needs to record the following address details at a project level: Lot # /
+> Street Number / Street Name / Suburb / Postcode / State / Council. A Job needs to
+> record all of that information PLUS Res #.*
+>
+> *when formatting the address, it should show Lot #, Street Number, Street Name, Suburb,
+> State, Postcode. Only after a Res # is added to the job, does the It go Res #, Lot #,
+> Street Number, Suburb, State, Postcode*
+>
+> *e.g Res 1, Lot 3, 13 Tester Street, Testville, SA, 5000"*
+
+**`addresses.address_res_number`, not `jobs.job_res_number`.** She describes it as one of
+the address details a job records, and the seven it joins are all on `addresses`. Putting
+it on `jobs` would split one address across two tables and take the rendering away from
+`build_consolidated_address()` — the app would have to compose `"Res 1, "` in front of a
+string the database built, everywhere an address is shown, exported or searched. The
+generated column exists so there is one answer to "what is this address".
+
+**The database does not forbid a res number on a project's address**, and that is a
+decision rather than an omission. An address row is not owned by one record —
+`address_history` exists precisely because addresses move between records and through
+time — so there is nothing on the row to hang "this one belongs to a job" from. The app
+is where the distinction lives: `AddressFields` takes a `showResNumber` flag, and only a
+job's address passes it.
+
+**Text, though she wrote "(number)".** She wrote "(number)" against Lot # too, and
+`address_lot_number` is text on purpose: Lofty's own example of a lot number is "2B"
+(`0034`). A res number is the same kind of thing — a label off a plan, usually a numeral,
+never arithmetic — so it takes the type of the two numbers either side of it. "1" stored
+as text is still "1"; if it must be strictly numeric that is a CHECK to add, not a type
+to change back. Not unique either: res numbers repeat across sites by definition, and
+whether they may repeat *within* one has not been stated.
+
+**Three changes to the format, all read off her worked example.** `Res N, ` leads when
+set; suburb, state and postcode became comma-separated (they were space-separated); and
+the trailing `, AU` is gone. The country **column** stays — this changed what is
+rendered, not what is recorded.
+
+| | reads |
+| --- | --- |
+| lot only | `Lot 3, Tester Street, Testville, SA, 5000` |
+| street only | `13 Tester Street, Testville, SA, 5000` |
+| lot + street | `Lot 3, 13 Tester Street, Testville, SA, 5000` |
+| res + lot + street | `Res 1, Lot 3, 13 Tester Street, Testville, SA, 5000` |
+| with a unit | `Unit 2, Res 1, Lot 3, 13 Tester Street, Testville, SA, 5000` |
+
+`address_street_2` — the unit line — is not in her list and is **not** dropped: it holds
+real data, and hiding a populated column is a worse answer than placing it by the rule
+already in force, which put it outermost.
+
+**This is not a display change**, which `0034` made the point of saying: `address_consolidated`
+is the column `pg_trgm` indexes and every address search reads. Dropping `, AU` removes a
+token nobody searches for; the commas sit between tokens rather than inside them, so
+trigram matching on a suburb or a street is unaffected; and `Res 1` becomes newly
+findable, which is the point.
+
+**Watched failing before trusted.** The composition was evaluated against the live
+database with each guarded thing broken in turn:
+
+| broke | bare res | typed label | unit line |
+| --- | --- | --- | --- |
+| no res normalisation | passes | **FAILS** | passes |
+| Res placed after Lot | **FAILS** | **FAILS** | **FAILS** |
+| old space-separated tail | **FAILS** | **FAILS** | **FAILS** |
+
+The first row is why the typed-label probe exists and is not decoration: with the res
+normalisation removed, the other two pass happily — their res number is already a bare
+"1" — and only the probe that types `Res 1` catches `Res Res 1`. A probe set without it
+would have reported green on a real bug.
+
+**Applied to the live database**, and the 197 existing addresses rebuilt through the
+trigger: none still carries `, AU`, none carries a res number yet, and the five probes
+rolled back leaving nothing behind.
+
+**`setJobCurrentAddress` came with it.** Amber: *"A project address needs to be
+updatable. A Job address needs to be updatable."* Only the project half existed, which
+is the wrong way round — a job's address is the one that moves, from "Lot 3" to "13
+Tester Street" when titles issue, and it is where the res number arrives months into a
+build. Three lines, deliberately identical to `setProjectCurrentAddress`: insert,
+repoint, read back. Every rule that makes it safe is a trigger rather than a check
+written in the app — `guard_original_address`, `0042`'s history trigger, and
+`guard_job_address_is_a_street`, which is the one a job has and a project does not.
+
+### 10 September — a lot number is a number; a street number is not (`0106`, `0107`)
+
+Amber, correcting `0105` and, behind it, `0034`:
+
+> *"a lot number or res number is only a number not a number and digitl. however a
+> street number can be something like 100-105 (as text) or 12B"*
+
+`0105` had given the res number the type the lot number already had, and justified it by
+quoting `0034` — *"Text, not a number — 12A, 5-7 and Lot 3 are as common as 12"* — which
+the split dialog also said on screen as *"2B as readily as 2"*. All three were wrong
+about **which** of the three numbers carries the letters, and had been since August.
+
+**The live data settled it rather than the argument.** 13 of 13 lot numbers are digits
+only. 12 of 178 street numbers are not, and they are exactly Amber's examples: `2-4`,
+`42-44`, `60-62`, `84-88`, `337-339`, `3&5`, `4-11/9`, `1a`, `2A`, `4a`, `83a`. Not one
+lot number in the database has ever had a letter in it.
+
+| column | was | is |
+| --- | --- | --- |
+| `address_lot_number` | text | **integer** |
+| `address_res_number` | text | **integer** |
+| `address_street_number` | text | text, and now with a reason on file |
+
+**Where the input tolerance went.** `0034` taught the trigger to strip a typed "Lot 3",
+after a fixture produced "Lot Lot 3, Corner Street". An integer column cannot: the cast
+happens when the INSERT is parsed, before any BEFORE trigger runs. So the tolerance
+moved to the app, which is where input tolerance belongs — `AddressFields` and the split
+rows strip a leading label and refuse anything that is not digits, with a message,
+before sending. The database is now the thing that cannot be talked into holding "2B".
+
+**A migration ordering bug, caught by the migration.** The first run put the
+street-number trim above the function replacement and failed:
+
+```
+ERROR: 22P02: invalid input syntax for type integer: ""
+CONTEXT: PL/pgSQL function build_consolidated_address() line 3 at assignment
+```
+
+`alter table … type` does not fire row triggers, so the casts were fine alone. The trim
+is an UPDATE, and it fired the **old** trigger, whose first act was
+`coalesce(new.address_lot_number, '')` on a column that had just become an integer. The
+whole migration rolled back — the columns were still `text` afterwards and nothing was
+half-done. Cast, replace the function, and only then touch a row.
+
+**Two things Amber confirmed at the same time**, both of which `0105` had flagged as
+guesses: addresses being their own table displayed on a job or project is *"correct"*,
+and the `street_2` line *"is important"* — so it stays, leading the address. And the res
+number is **not** job-only: *"it just needs to not have the option of only adding a res
+to jobs not projects which is a ux thing... however on a project you might update the
+res number there as well."* Every address form offers it now.
+
+### `0107` — 64 jobs were living at somebody else's house
+
+Amber: *"check against Brodie ave project as that has lots and a street number and street
+number wasn't showing."*
+
+Project 1002 is **14 Brodie Road, Reynella**. Its three jobs read `1 Brodie Road`,
+`2 Brodie Road`, `3 Brodie Road` — three different houses, belonging to other people.
+This is `0034`'s bug again, except `0034` fixed the *rendering* and this is the *data*:
+the lot number was sitting in `address_street_number`, `address_lot_number` was null,
+and the project's own street number was never carried down.
+
+It was **64 of 79 jobs**, and the fingerprint is unmistakable once projects are listed
+beside their jobs — every project's jobs run 1..n from 1:
+
+| project | at | its jobs |
+| --- | --- | --- |
+| 1002 | 14 Brodie Road | 1, 2, 3 |
+| 1004 | 27 Howard Street | 1, 2, 3, 4 |
+| 1006 | 83a Awoonga Road | 1 … 30 |
+| 1007 | 2007 St clair ave | 1 … 16 |
+
+Thirty consecutive houses on Awoonga Road, when the project is at 83a, is not a street
+numbering — it is a plan of division. `1002-001` now reads
+**`Lot 1, 14 Brodie Road, Reynella, SA, 5161`**.
+
+**What it does not claim.** That all 64 are subdivisions. A genuine infill — three
+separate houses at 1, 2 and 3 grouped under a project at 14 — would be caught too and
+would be wrong. Nothing in the data distinguishes them; the 1..n run starting at 1 in
+*every* project is why this is the safer reading. Reversing it is the same statement
+with the two columns swapped, so the mapping is not lossy.
+
+The code bug behind it was fixed earlier the same day: `splitProject` hard-coded
+`address_street_number: null` on every job it created.
+
+**The guard was rewritten after `replay.sh` caught it.** The first draft ended with
+`if moved = 0 then raise exception` — and a replay from an empty database has no jobs,
+so a migration that was *correct* reported `FAILED: 0107 … nothing matched`. The
+condition worth stopping for is not "moved nothing", it is "left something behind", and
+the post-condition assertion already says that on every run. The count is now reported
+and not judged, and the whole statement is skipped when there are no jobs to judge it on.
+
+### 10 September — the council: recorded, and now readable on a job (`0108`)
+
+Amber, on the format `0105` and `0106` settled: *"ok the council area still needs to be
+recorded, but just not in the full address line. it stays as a property field"* — and,
+on how it is stored: *"the council is in the lookup table in supabase and already
+connected and working."*
+
+Two of the three were already true, and are worth stating rather than assuming:
+
+- **Recorded.** `addresses.address_council` is an `sa_council` value on every address,
+  filled in from the suburb off the LGA list. `0106` did not touch it. It is not a
+  `property_defs` row and this did not make it one — the council is an attribute of an
+  address, it moves when the address moves, and a `property_values` copy would be a
+  second place for it to disagree with the column.
+- **Not in the line.** `build_consolidated_address()` has never composed it in — not in
+  `0034`, not in `0105`, not in `0106`.
+
+The third was not. **A job's council could be set and never read.** A project shows
+"Council region" as a field, from `project_display.project_council`. A job showed
+nothing of the kind — and since `0105` a job's address can be *changed* from the drawer,
+through the same `AddressFields` that carries the council picker. Pick a council on a
+job's new address, save, and nowhere in the app said so again.
+
+The cause is `job_display`'s column list: it resolves `job_suburb` off the job's own
+address and stopped there, with `address_council` one column away on the same joined
+row. `0055`'s lesson — *a view's column list is frozen at creation* — for the third
+time. `0108` appends `cur.address_council as job_council`, off `cur` and not `pcur`,
+because a job moved off its project's site can sit in a different LGA.
+
+Two things the probes had to do properly:
+
+- **`security_invoker` is named in the `create or replace`,** because that statement
+  drops reloptions silently — the `0069` hole — and the first assertion reads
+  `pg_class.reloptions` back. Watched: with the `with` clause removed it raises
+  `reloptions (none)`.
+- **The cur/pcur probe manufactures its own disagreement.** All 79 jobs today carry
+  their project's council, so comparing the two proves nothing; the probe moves one
+  job's address to another council inside a sub-transaction, reads the view, and rolls
+  back. Watched failing with `pcur` in place of `cur`:
+  *"job_council read 'City of Onkaparinga' when the job's own address said 'City of
+  Adelaide'"*.
+
+### `0109` — the importer still thought a lot number was text
+
+`0106` made `address_lot_number` an integer. `import_spine()` inserts the lot straight
+out of the staged spine — `sp ->> 'lot_number'`, which is text — and Postgres does not
+coerce text to integer in an INSERT, so from `0106` onwards the loader could not have
+inserted a single row.
+
+Found by `verify/check.sh`, not by reading: step 44 of `behaviour.sql` loads the whole
+staged workbook and that is what failed. The migration set replayed cleanly on its own,
+which is exactly the difference between a schema that applies and a schema that works.
+
+**Nothing was pending and no data is affected.** Amber closed the import on 7 September
+and said the machinery stays applied and inert — *"everything that is in supabase now is
+correct. If I need to import other areas I will let you know as properties may change"*.
+This is worth a migration anyway on two counts: a function that contradicts its own
+table is a trap set for whoever calls it next, and *"I will let you know"* is exactly
+that call; and the verify suite runs it every time, so leaving it broken leaves
+`check.sh` red.
+
+The change is one expression — `nullif(trim(sp ->> 'lot_number'), '')::integer`. Blank
+becomes null, because an empty spreadsheet cell is not a lot number and `''::integer`
+raises about the wrong thing. Anything else non-numeric still fails the load loudly: all
+181 staged lot numbers are digits today, so a workbook that disagrees with *"a lot number
+is only a number"* is news rather than something to coalesce away.
+
+`behaviour.sql` step 36 was rewritten in the same pass. It still expected `0034`'s
+format — `", AU"`, a space-separated tail, and a typed `"Lot 4"` the column can no
+longer hold — and now asserts `0105`'s format including a `Res` line, plus the refusal
+of `"Lot 4"` as a negative. Without that negative the step would pass just as happily
+with the lot number still text, which is how *"2B is a lot number"* survived from August.
+
+### 10 September — a document can be published to the job (`0110`)
+
+*Numbered `0105` first, then `0106`, and now `0110`. **Three collisions with the same branch
+in one day**, and the third is the one worth learning from: checking
+`supabase_migrations.schema_migrations` catches a number another branch has APPLIED, which
+is what the first two were. It does not catch a number another branch has WRITTEN and not
+yet applied, and it does not stop that branch taking three more numbers while this one is
+open. The live table is a better source than the repository and it is still not a lock.*
+
+*And it has already happened once without being noticed: `0073_job_numbers_are_three_digits`
+and `0073_only_the_locality_is_required` both sit in `app/supabase/migrations/` on `main`
+today. Two files, one number, applied in whatever order the shell sorted them. Nothing broke,
+which is exactly why nobody caught it — a duplicate only bites when the two touch the same
+table.*
+
+*What would actually settle it: a number claimed at the moment a branch is created rather
+than at the moment a migration is written, or names without numbers and an explicit order
+file. Both are changes to how this repository works, so both are Amber's call rather than
+something to do quietly inside a documents PR — recorded here as the fourth piece of evidence
+that it needs deciding.*
+
+Amber, once `0104` had shipped: *"until Documents are integrated to Sharepoint, please
+allow the option of saving to Job in the system and/or downloading it and adding a link to
+that document file"*.
+
+`0104` made publishing require a SharePoint address, which was right for the case it was
+built for and wrong as the only case. SharePoint is not integrated, so "publish" meant *go
+and save this somewhere else first, then come back and paste where you put it* — and for
+any job whose folder has not been set up yet, that is a door with no handle.
+
+So there are now **two ways to be published, and "and/or" is literal**:
+
+| `published_url` | `published_document_id` | What it means |
+| --- | --- | --- |
+| set | null | It went to SharePoint. Somebody put it there and wrote down where. |
+| null | set | It is saved on the job, in Lofty's own storage. |
+| set | set | Both, and neither makes the other a lie: the copy on the job is what was sent, the address is where the version people edit lives. |
+| null | null | Refused whenever `published_at` is set. That is the half of `0104`'s rule that had to keep biting. |
+
+The constraint `report_documents_published_names_where` is **dropped and recreated** rather
+than added beside, because as `0104` wrote it, it refuses the new case outright and two
+checks would be unsatisfiable together.
+
+**The file goes in `documents`, which is where files already go.** A pointer from
+`report_documents` into `0032`'s table, not a second place to keep files — and that choice
+is what puts the published copy in the record's own Documents list beside the contract and
+the survey, rather than somewhere only this table knows about. The bytes go in a new
+private `job-documents` bucket, read by signed URL. The opposite call to `0100`'s public
+`report-images`, and deliberately: a picture inside a report is decoration a client is
+being sent anyway, and a published document is the work product.
+
+**`on delete set null` was written first, and it does not work.** This is worth keeping
+rather than tidying away, because it looked right and reviewed clean. The FK reads as *the
+pointer goes, the publication survives*; what actually happens is that the nulling is an
+UPDATE, the UPDATE leaves a published row naming neither a file nor a link, and the check
+refuses it — so the DELETE fails. Watched on the replay database:
+
+```
+DELETE REFUSED: 23514 / new row for relation "report_documents"
+violates check constraint "report_documents_published_names_where"
+```
+
+An admin reaping a file got a message about a constraint they have never heard of and no
+way to act on it. The fix is not to weaken the check but to answer the question the FK was
+ducking: **what is a published document whose published file has been deleted?** It is a
+draft. That is `0104`'s own rule applied honestly — the state is derived from a fact
+precisely so it cannot say "published" about something that is not.
+`reap_publication_of_deleted_document()` clears the publication when the file it names goes
+and no URL is left, and leaves it alone when a URL is, because then the document really did
+go somewhere and still is there.
+
+**What was watched failing**, all six, before any of it was trusted:
+
+| Broken on purpose | What reported |
+| --- | --- |
+| The widened check replaced with `check (true)` | the migration's own probe: *a published document was allowed to name neither a file nor a link* |
+| `0104`'s narrow check left in place | the new case refused — `published_names_where` on the file-only publish |
+| The reap trigger's `published_url is null` carve-out removed | *deleting the stored copy un-published a document that also went to SharePoint* |
+| The reap trigger not created at all | the original bug, reproduced through the app's real path: `verify/rls.sql` reporting *an admin could not delete a published file — 23514* |
+| `0104`'s guard made to clear the file pointer on a revert | *the revert threw away the file the document was published as* |
+
+**What is not proved here.** The bucket and its three object policies do not exist on the
+replay database — Supabase Storage is not part of it — so the path shape, the 25MB limit
+and the six allowed types are checked by hand against the live project, exactly as `0062`
+and `0100` record for their own buckets. The policy and the app agree on the object path
+(`jobs/<job key>/…` or `projects/<number>/…`) because both were written from this
+paragraph; a policy the app does not match is a refusal nobody can read.
+
+### 10 September — one published copy per document (`0111`)
+
+Amber, asked whether the copies a document leaves on a job are a version history or
+clutter: *"only onver version of the document. if they want another copy they can download
+it"*.
+
+`0106` let a document be published by saving the file against the record. Publish, edit,
+publish again, and the job held **two** files — both under the document's title, one out of
+date, nothing on either row saying which was current.
+
+**The version chain is deliberately not used.** `documents.supersedes_id` exists for exactly
+this shape, and `0032` argues for it well: *"a version integer cannot say WHICH document a
+revision revises"*. It is the right tool for a drawing at revision C whose revision B
+somebody still needs, and the wrong one here — Amber's answer is not "show the old one
+behind the new one", it is that the old one is not wanted. The second half of her sentence
+says what to do instead.
+
+**One carve-out, and it is not a hedge.** A copy somebody has since filed on ANOTHER record
+is unpointed, not deleted: `documents` holds a file once and `document_links` says where it
+is attached, so deleting it would take a document off a job nobody was publishing to.
+
+**`SECURITY DEFINER` is load-bearing here rather than habitual.** `0032` makes deleting a
+`documents` row admin-only, while re-publishing is ordinary `user` work. Without the definer
+the delete matches no rows, silently, for everybody except an admin — the worst of the three
+possible failures, because it looks like it worked. `verify/rls.sql` proves it as a real
+signed-in user for that reason.
+
+**The bytes outlive the row, and the LIVE database is what said so.** The trigger first
+deleted the storage object beside the row. It replayed perfectly — the harness rebuilds into
+a plain Postgres with no storage schema, so the whole branch was guarded away — and
+production refused it on the first apply:
+
+```
+42501: Direct deletion from storage tables is not allowed. Use the Storage API instead.
+CONTEXT: PL/pgSQL function storage.protect_delete()
+```
+
+So a superseded copy stays in the `job-documents` bucket, unreachable from the app because
+nothing points at it, costing storage and nothing else — the same shape `0062` already lives
+with. Sweeping them needs the Storage API and is an admin or scheduled job, not a trigger's.
+Left undone deliberately: the alternative was widening the bucket's admin-only delete policy
+to every member of staff, which buys tidiness with the rule that stops somebody removing a
+published contract. **Worth keeping for its own sake** — a replay proves the DDL applies, and
+this is a rule no replay could catch, because the thing it guards does not exist there.
+
+**Three things were written the obvious way first and all three were wrong.**
+
+*The trigger as `BEFORE`.* It does not merely misbehave, it does not terminate:
+
+```
+ERROR:  stack depth limit exceeded
+```
+
+BEFORE, the row still holds the old pointer, so deleting the superseded file fires `0106`'s
+reap — which finds a document still naming that file and clears the pointer, which fires
+this trigger again, which deletes again, all the way down. AFTER, the new pointer is already
+in the row, `0110`'s reap matches nothing, and the two never see each other.
+
+*No guard on a pointer being CLEARED.* An admin deleting a published file fires `0106`'s
+reap, the reap clears the pointer, and this trigger then tried to delete the row the outer
+command was already deleting:
+
+```
+27000 / tuple to be deleted was already modified by an operation triggered by the current
+command
+```
+
+Found by `verify/rls.sql`, not by the migration — and the reason the migration missed it is
+worth keeping: its first probe left a SharePoint URL set, so `0110`'s reap declined, the
+pointer was cleared by the foreign key *after* the delete finished, and nothing collided.
+Only a **file-only** publication reproduces it. Clearing a pointer is never this trigger's
+business; only replacing one is.
+
+**Watched failing**, six:
+
+| Broken on purpose | What reported |
+| --- | --- |
+| The delete removed from the trigger | *publishing again left the previous copy on the record* |
+| The moved-pointer test written as `is not null` | *writing the pointer back unchanged deleted the copy it names* |
+| The filed-elsewhere carve-out removed | *a copy filed on another record was deleted by a re-publish* |
+| The trigger made `BEFORE` | *stack depth limit exceeded* |
+| The cleared-pointer guard removed | *27000 / tuple to be deleted was already modified…* |
+| `SECURITY DEFINER` dropped | `verify/rls.sql`: *a user publishing again left the previous copy on the record* |
+
+The seventh was not a sabotage and could not have been one: the storage delete, refused by
+the live database on apply.
+
+**And one probe that passed against a broken trigger**, which is worth more than the six.
+The first version of the delete-the-file probe left a SharePoint URL set, so `0110`'s reap
+declined, the pointer was cleared by the foreign key *after* the delete had finished, and
+nothing collided. Only a **file-only** publication reproduces the deadlock. `verify/rls.sql`
+caught it because its admin deletes exactly that; the probe was then rewritten to clear the
+URL first, and only then did it report.
+
+
+### 11 September — five pages you keep (`0112`)
+
+The rail's **Pinned** section, from the design handoff. Amber, asked what Pinned pins:
+*"pinned is new and allows people to save/bookmark a page"* — **any page**, a URL with a
+name. A filtered board, a settings screen, a job, a report.
+
+**The mockup draws this as projects, and the difference is the whole table.** 7a renders
+pinned rows as projects, each with an 8px health dot in orange, teal or grey. That would
+be a second, weaker list of projects sitting directly above the Projects destination — and
+a bookmark has no health. So `pinned_pages` has no status column, and the rail draws an
+icon for the *kind* of page instead. It is correction 3 in
+[`docs/design/handoff/README.md`](../design/handoff/README.md).
+
+**The kind is not a column.** `/jobs/1209-002` is a job, `/projects?saved=current` is a
+board, `/setup/processes` is a settings screen: the URL already says which, so `pinKind()`
+in `types.ts` reads it off the path. A `pinned_page_kind` column would be a second source
+for a fact the first column already carries, and the two would disagree the first time
+somebody edited one.
+
+#### Five, and how five is enforced
+
+*"max five"* — and **not with a counting trigger**, which is the obvious build and is racy:
+two browser tabs pinning at once both count four and both insert.
+
+```sql
+pinned_page_position integer not null check (pinned_page_position between 1 and 5),
+constraint pinned_pages_five_slots_per_person unique (profile_id, pinned_page_position)
+```
+
+A CHECK of 1..5 plus a UNIQUE per person caps it declaratively and race-safely: the sixth
+pin has nowhere to go, because there is no sixth slot. The loser of a race gets a 23505
+and is told the pin was not saved, rather than silently overwriting the winner. The slot
+doubles as the order the rail draws in, which a `created_at` sort would only approximate
+the moment somebody wanted to move a row up.
+
+#### Why the URL is constrained, and why in the database
+
+```sql
+check (pinned_page_url like '/%' and pinned_page_url not like '//%')
+```
+
+This value is **written by a person and rendered by the app into an anchor's `href`**, in
+the one component that is on every screen and that people use without reading. Left free,
+`https://…` and the protocol-relative `//evil.example` would both be stored happily and
+both navigate off Lofty from inside the navigation rail. A leading single slash is the
+whole of the rule.
+
+It is in the database rather than only in the repository for the reason `CLAUDE.md` gives
+about every `can()`: the app's checks are politeness and the policy is the boundary. The
+app checks it too, so the commonest mistake gets a sentence instead of a constraint
+violation — but the app's check is the message, not the rule.
+
+#### What was watched failing
+
+Every assertion in the migration's proof block was watched reporting before it was
+trusted, by breaking the thing it guards and replaying:
+
+| Broken | Reported |
+| --- | --- |
+| the URL CHECK → `check (true)` | `an off-site pin URL was accepted` |
+| the blank-label CHECK → `check (true)` | `a blank pin label was accepted` |
+| the 1..5 CHECK widened to 1..99 | `a sixth pin slot was accepted` |
+| the slot UNIQUE widened with `pinned_page_id` | `a sixth pin was accepted into an occupied slot` |
+| the per-URL UNIQUE widened with `pinned_page_id` | `the same page was pinned twice` |
+| the RLS policy → `using (true) with check (true)` | `FAIL: a pinned page was written onto somebody else` |
+
+**And one thing the harness caught that nobody had written a probe for.** The first
+replay reported `FAIL: tables without the audit trigger: pinned_pages` — `0080` removed
+the allowlist from `log_activity_audit()` and made `verify/behaviour.sql` assert that
+every non-log table in `public` carries `trg_activity_audit_row`, *"so the table created
+next month fails here the day it is created without one"*. That is exactly what happened,
+a fortnight later, to this table.
+
+#### Applied, 11 September
+
+**Applied to the live project on Amber's say-so** and read back rather than taken on the
+apply's own word: RLS on, one policy, both triggers (`pinned_pages_touch` and
+`trg_activity_audit_row`), all seven CHECK and UNIQUE constraints present, and the table
+empty — the proof block cleans up after itself, so applying it leaves nothing behind.
+
+The proof block running on production is itself the evidence that the constraints bite
+*there*, not only in the replay: every one of those six probes raises and aborts the
+migration if the rule it guards has stopped holding.
+
+The security advisor gained nothing from it. `pinned_pages` appears only in the standing
+`pg_graphql_authenticated_table_exposed` list, which names all 95 tables and is discussed
+under *what the security advisor still says* above — visible in the schema, not readable,
+because `0101` revoked `anon` and RLS decides the rest.
+
+
+### 11 September — a job has its own completion dates (`0113`)
+
+The sixth key property on the job record, and **the only schema change the design handoff
+needs**. Amber, over two turns:
+
+> *"each job has its own completion date. and completion date is at a job level… there is
+> also a project completion level which is when all jobs in the project are completed"*
+
+then, asked which of the two dates a job's is:
+
+> *"project date and job dates are separate and [it] depends [on] each other. [Both] are
+> needed and relevant"*
+
+So `jobs` gains the pair `projects` has carried since `0028`, and the two pairs are
+separate columns on separate tables that **relate** rather than one deriving the other.
+
+| Column | What it is |
+| --- | --- |
+| `job_target_completion` | The date being worked towards. Set in advance — the handoff draws an empty `dd/mm/yyyy` box on a job still in Pre-construction — and the thing an overdue calculation needs to compare against. Without it a job cannot be late, only finished or not |
+| `job_end_date` | When the job actually finished. What 6b reads under *Complete*: *"Job completed (or Target completion)"* — the actual once there is one, the target until then |
+
+Collapsing them into one column loses the distinction the moment a job finishes on a
+different day from the one planned, which is most jobs. `projects` learned this in `0028`
+and the comment there still says it: *"actual, as opposed to target"*.
+
+**The seeding variant was offered and not taken.** The alternative put to Amber was
+pre-filling a new job's target from `project_target_completion`. She took the plain
+version, so a job with no target says so rather than inheriting a date nobody set for it —
+the house rule about plausible values, applied to a date.
+
+**This is not a rename.** "Handover date" was a label in a mockup for a field that existed
+on neither table: there is nothing to migrate and no column anywhere called handover.
+`job_stage_entered_at` stays exactly what it is.
+
+**A project's completion is still derived** — *"when all jobs in the project are
+completed"* — and `0113` deliberately adds no trigger to write it. Deriving it on read
+cannot go stale; a trigger that writes it can, and the day it disagrees with the jobs is
+the day nobody can tell which is right.
+
+#### What was watched failing, and the probe that was not evidence
+
+| Broken | Reported |
+| --- | --- |
+| `j.job_target_completion` dropped from the view's select | `job_display does not carry job_target_completion` |
+| `with (security_invoker = true)` removed | `job_display lost security_invoker — see 0069` |
+| the end-date CHECK → `check (true)` | `A CONSTRAINT DID NOT BITE` |
+
+The third row is the one worth reading. The end-date probe started inside the migration's
+own proof block, guarded with `if a_job is null` because **a replay from empty has no
+jobs** — so with the constraint deliberately removed, the replay reported
+`ALL MIGRATIONS APPLIED CLEANLY`. A probe that quietly tests nothing is the exact failure
+this directory exists to prevent, and it took breaking the constraint to notice.
+
+The probe moved to `app/supabase/verify/constraints.sql`, which runs after
+`behaviour.sql` has made job `9106-002`, and only then did it report. The guarded block
+stays in the migration because it *does* bite on production, where there are 79 jobs — but
+it is not what the rule is proved by, and the migration now says so.
+
+#### Applied, 11 September
+
+**Applied to the live project on Amber's say-so**, and read back rather than taken on the
+apply's own word: 79 jobs, **none** carrying a date (the guarded probe puts back what it
+set, so applying writes nothing), `job_display` carrying both new columns, and
+`security_invoker=true` still on the view after the `create or replace` — which is the
+0069 hole checked rather than assumed, on the database it actually matters on.
+
+The guarded probe DOES bite here, because production has 79 jobs where a replay from empty
+has none. That is the whole reason it stays in the migration despite not being what the
+rule is proved by.
+
+#### And one self-inflicted near-miss in the dictionary
+
+The two `dictionary.ts` entries were first inserted by a regex that matched the opening
+line of the multi-line `e("jobs.job_title_type", …)` call and landed **inside its
+arguments**. `npm run dictionary` reported no error; the generated table said
+`jobs.job_title_type | Title type | [object Object]` and the property count went *down* by
+one. Caught by reading the generated diff rather than trusting the script that wrote it,
+which is the only reason it is a footnote and not a shipped defect.
+
+
+### 14 September — an issue is a request, and the header is typed once (`0114`)
+
+Amber rewrote the new-maintenance-request drawer: *"each one of these issues have its own
+record id but you only enter the job number, reported by, identifies at, date once so you
+can then have a status, date booked, and followup for each"*.
+
+Asked whether an issue should be a line inside one request or a request of its own, she
+took the second. So **1042-01-M3, -M4, -M5 are three issues from one PCI walk**, created
+together from one drawer, and no new table exists: `maintenance_requests` grows eleven
+columns and `maintenance_request_display` is rebuilt to carry them.
+
+| Column | What it is |
+| --- | --- |
+| `maintenance_request_identified_on` | The day it was identified. Defaults to today in the drawer, **and can be cleared** |
+| `maintenance_request_identified_at` | PCI · Building Inspector (Client) · Building Inspector (House Inspect) · Handover Inspection · Site Inspection · 1/2/3 Month Inspection · Other |
+| `maintenance_request_reported_by_profile_id` | The Lofty person, not the homeowner contact |
+| `maintenance_request_batch_id` | The issues typed in one sitting |
+| `maintenance_request_assignee_kind` | `internal` or `external`, defaulting to internal |
+| `maintenance_request_assignee_profile_id` / `_assigned_company_id` | The one the kind allows; the other is refused |
+| `maintenance_request_booked_on` / `_followup_on` | Per issue, and nothing derives either |
+
+#### Why identified-on is not a rewrite of `reported_at`
+
+`maintenance_request_reported_at` is not null, starts the SLA clock and is what the warranty
+flag compares against handover. Amber's *Date Identified* defaults to today **and can be
+cleared** — a nullable business date, which is a different fact from the moment the row was
+logged. Collapsing them means either a nullable SLA clock or refusing to clear the field she
+asked to be clearable.
+
+Whether the SLA should run from the identification date is a real question and it is in
+[`docs/open-questions.md`](../open-questions.md) rather than answered here. It changes
+nothing today: this drawer sets no category, and no category has always meant no SLA.
+
+#### What the drawer stops asking, and what that costs
+
+How it arrived, the trade, the priority and the owner come off the form. **The columns
+stay** — email and form intake still set them, and the queue still reads them. Dropping
+them would be a data loss for a path that still runs.
+
+The consequence, stated rather than hidden: **a request logged this way has no trade, so it
+has no SLA and the queue reads "No SLA" for it.** That is the honest readout the health
+derivation has always given a request with no category, not a new defect.
+
+#### Assignment here is not an offer
+
+`maintenance_assignments` is an *offer*: a signed accept link, an expiry, a decline that
+keeps its row. The two new assignee columns are the plain answer to whose job it is, set
+when the issue is logged and before anybody has been asked. Offering still goes through
+`offer_maintenance_item()` and still emails the contractor; nothing in `0114` sends
+anything.
+
+#### What was watched failing
+
+Each CHECK body was removed in turn and the migration's proof raised each time:
+widening `identified_at` to accept `over_the_fence` reported *an unknown identified_at was
+accepted*; removing the assignee pairing reported *an internal request took a company*.
+The probe makes its own job rather than reading one, so it bites on a replay from empty as
+well as on production — `0113`'s guarded probe is the counter-example, and it skipped
+silently on a database with no jobs. The projects identity sequence is captured and put
+back, so the probe does not take the number the next real project would get.
+
+**Applied to the live project** as `20260914022630_an_issue_is_a_request_and_the_header_is_typed_once`. Read off `supabase_migrations.schema_migrations` on 14 September while applying `0118`; the line above said otherwise and was simply out of date.
+
+
+### 14 September — a repair has a day it was booked and a day it was done (`0116`)
+
+Amber, looking at the drawer: *"add in the date booked, date completed into UI and drawer
+when clicked on."*
+
+`maintenance_request_booked_on` already existed — `0114` added it with the follow-up date
+on her earlier ask, and **nothing had ever shown either**. *Completed* did not exist. The
+nearest things on the table are the `completed` **status**, which says where the issue is
+rather than when it got there, and `maintenance_request_closed_at`, which the guard stamps
+only on closed or rejected and which times an app action rather than a tradesperson's day.
+
+So one column, of the same kind as the two beside it: a date somebody sets, nullable.
+
+#### No trigger, on purpose
+
+The obvious next thought is that setting the date should move the status to `completed`, or
+that moving the status should stamp the date. **Neither is built.** Amber asked for a field,
+and a trigger writing one column from another is the coupling this document keeps finding at
+the bottom of a bug: the day the two disagree, nobody can say which is right.
+
+`maintenance_item_completed_at` **is** stamped by a trigger, and that is a different shape —
+it is stamped from the status it belongs to and cleared when the status leaves, one fact
+with one writer.
+
+The consequence is a real state rather than a gap: a request can carry a completion date
+while its status is still *In progress*, because the tradesperson finished on Tuesday and
+nobody has closed the ticket. The drawer shows both rather than reconciling them.
+
+#### The view is rebuilt again, and that is the cost `0114` named
+
+`maintenance_request_display` selects `r.*`, which expands at creation, so a column added
+afterwards does not reach it — and `create or replace view` refuses the reordering that
+re-expanding `r.*` implies. Every new column on this table means dropping and recreating the
+view verbatim. Worth knowing before the next one.
+
+#### What was watched failing
+
+Removing the `alter table` reported *column "maintenance_request_completed_on" of relation
+"maintenance_requests" does not exist*; removing `with (security_invoker = true)` from the
+rebuilt view reported *lost security_invoker — see 0069*, the hole reproduced and caught on
+a drop-and-create, which is exactly how it was made the first time.
+
+A first attempt at the column break edited the file badly and failed on a **syntax error**
+rather than on the probe. That is not evidence of anything and the break was redone cleanly
+— the same trap `0113`'s guarded probe records, in a different disguise.
+### 14 September — a company carries the person you ring (`0117`)
+
+Amber, on a maintenance issue given to a contractor: *"with the assigned contact to
+maintenance can you display company name, primary contact, email and phone and suburb"*.
+
+Four of the five already existed on `company_display`. **The primary contact did not**, and
+the suburb was only reachable inside `company_address`, which is the whole address as one
+line. So the view is widened and no table changes.
+
+#### Nothing is invented, because the fact is already modelled
+
+`company_contacts.company_contact_is_primary` has existed since `0082`. "The primary
+contact" is a flag somebody sets, not a guess this view makes — a company with nobody
+flagged gets **null** and the screen says so. Promoting the longest-serving employee would
+be exactly the plausible value this document keeps warning about. Ended employments are
+excluded: somebody who left is not who you ring.
+
+#### The person's email and phone are separate columns from the company's
+
+`company_primary_email` and `company_primary_phone` are the office. The four new columns
+are the person. They are **not** a coalesce, because "the mobile of the person you ring"
+and "the switchboard" are different facts and a view that silently substituted one would
+have the app ringing the wrong number. The app decides what to show when the person has
+neither, and labels it as the company's.
+
+#### What was watched failing, and the one that did not
+
+Dropping the `ended_on` filter named a person who had left; pointing the contact's email at
+the company named the office address; removing `security_invoker` reproduced the `0069`
+hole on a drop-and-create.
+
+**Removing the `company_contact_is_primary` filter reported ALL MIGRATIONS APPLIED
+CLEANLY.** Every employment in the fixture was inserted in one `do` block, so all three
+shared a transaction `now()` for `created_at` and all three had a null `started_on` — the
+lateral's `ORDER BY` had nothing to sort on and `limit 1` returned whichever row the
+planner reached first, which happened to be the right one. The probe passed on luck, on an
+ordering no rule guarantees. The fixture now gives the **non-primary** employee the
+earliest start date, so the filter has something to fail on, and the break was watched
+again reporting *the primary contact is Probe Extra 0117*.
+
+**Applied to the live project** as `20260914032258_a_company_carries_the_person_you_ring`. Read off `supabase_migrations.schema_migrations` on 14 September while applying `0118`.
+
+
+### 14 September — a project's new address moves the jobs that were still standing on it (`0118`)
+
+Amber: *"when a new address is added and updated to current project address this address
+needs to push to jobs so that the job address shown on the job drawer and project drawer
+is the current address"*.
+
+#### What was actually broken
+
+A job's address is its **own row** in `addresses`, not a pointer at the project's.
+`createJobsFromSplit` copies the project's address per lot and stamps the lot number on the
+copy, which is what lets a job say "Lot 1, 14 Brodie Road" while the project says "14
+Brodie Road", and what `job_original_address_id` means.
+
+`setProjectCurrentAddress` then repointed the project and nothing else. A project corrected
+to 28 Corner Street left twelve jobs sitting at 14 Brodie Road, both drawers read the old
+street, and the only way back was editing twelve job addresses by hand.
+
+#### The rule is Amber's, asked with three options
+
+| Option | What it meant | |
+| --- | --- | --- |
+| Only jobs still at the project's address | A job that never moved on its own follows, keeping its own lot and res number. One re-addressed since is left alone | **Taken** |
+| Every live job, lot number kept | Always consistent, and it overwrites a job deliberately given its own address once its title issued | |
+| Ask each time, with a preview | Most control, most clicks, and the drawers stay wrong until somebody presses the button | |
+
+So a job follows when its street number, street, street line 2, suburb, state and postcode
+all match the address the project is **leaving**. Closed and cancelled jobs are left alone,
+the line `pushProjectProperties` already draws (0045, 0057).
+
+#### "Its own lot number" is a comparison, not a field
+
+A lot number is only the job's own when it **differs** from the project's outgoing one. A
+job sharing the project's address row carries the project's lot number, and keeping it
+would strand "Lot 100" on a project that has just been given a street number instead. So
+each of res and lot is kept when it differs from the address being left, and taken from the
+new address when it does not. The split case and the shared case then fall out of one rule
+rather than two, and a job with nothing of its own to keep points **at** the project's new
+row rather than at a byte-identical copy of it.
+
+#### Why a trigger
+
+Because the repository is not the only writer: the import writes jobs and projects
+directly, `0107`-shaped corrections are plain SQL, and a rule written in TypeScript is a
+second opinion that can disagree with the database. `security definer`, matching
+`log_address_history` — not to widen anybody's reach, but so a job RLS hides from the
+caller cannot be silently left behind at the old street.
+
+Three things it deliberately does not do. It does not touch `job_original_address_id`
+(`guard_original_address` says only an admin moves that). It does not drag a job to a
+locality, because `guard_job_address_is_a_street` refuses one and a project may legitimately
+sit at a locality — so the project's own move still succeeds and nothing follows. And it
+writes no history of its own: `jobs_log_address_history` is already on `jobs` and files each
+job's outgoing address as it goes, which is `0042`'s promise kept.
+
+#### Fifteen mutations, all watched failing
+
+The function was mutated one line at a time — each of the six comparisons deleted in turn,
+`is_current` deleted, both guards deleted, the `UPDATE` deleted, the point-at-the-project
+branch disabled, and each of `kept_res` and `kept_lot` forced first to the job's value and
+then to the project's. Every one was reported by a named assertion.
+
+The per-field probe jobs are why. With only the four-field re-addressed job in the fixture,
+**dropping the street-name comparison read green**: that job differs from the project in its
+street number, street, suburb and postcode at once, so any three of the four were enough to
+keep it standing still. There is now one job per field, differing from the project in that
+field alone.
+
+**Applied to the live project** — ledger entry `20260914145252`, and verified there on
+14 September by a rolled-back probe rather than by the function merely existing: a project
+moved from Brodie Road to Corner Street, and a job standing exactly where the project stood
+followed; a job with its own lot 99 followed and **kept lot 99**; a job re-addressed to its
+own street since stayed put. Nothing written.
+
+*(This section read "Not yet applied" for several hours after it was applied, and the
+handoff repeated it. The migration ledger is the answer to that question — `list_migrations`
+read before the apply, then quoted afterwards, is not.)*
+
+
+### 14 September — TWO MIGRATIONS SHARE EACH OF `0119` AND `0120`, deliberately left that way
+
+Two branches were open at once on 14 September and both took the next free number. The
+repository now holds:
+
+| Number | The two files |
+| --- | --- |
+| `0119` | `the_date_the_slas_say` (PR #88) and `a_defect_photo_is_evidence_you_can_link_to` (PR #89) |
+| `0120` | `a_community_title_job_shows_a_c` (#88) and `a_maintenance_issue_is_a_record_you_can_work_on` (#89) |
+
+**They were not renumbered, and the reason is not laziness.** All four are applied to the
+live project, and the maintenance three write their own number into **live column comments** —
+`documents.document_storage_bucket` says *"(0119)"* in the database right now. Renaming the
+file to `0122` would make the repository and the database disagree about what `0119` is,
+which is worse than two files sharing a number.
+
+Nothing breaks. `scripts/check-migrations.mjs` matches **by name with the number stripped**,
+the Supabase ledger keys by name, and `replay.sh` sorts by full filename so the order is
+deterministic. `0073` has had two files since 31 August for the same reason.
+
+**What to do about it:** when reading "see `0119`" in a comment, check which one is meant from
+the context — the SLA date or the photo bucket. When writing a new migration, take the next
+number after the highest, not the next after the one you remember.
+
+### 14 September — a defect photo is evidence you can link to (`0119`)
+
+**This reverses `0c`, and the reversal is Amber's.** Asked twice, with the cost stated both
+times: *"Keep them forever and there may be videos as well. It is essential to keep these as
+a record"*, then *"No videos or photos are private accept video and photos with permanent
+links"*.
+
+`0c` put a defect photo in `job-documents`: private, every read a signed URL good for five
+minutes. That answer was recorded on 14 September **with its consequence written down at the
+time** — *"an emailed report cannot simply point at these images … a signed link expires and
+a private object has no permanent URL"*. The generated maintenance sheet is now being built,
+so the consequence arrived, and she took the other side of it.
+
+**What it means, stated plainly because it is not a small thing:** a photograph of a defect
+inside somebody's house is fetchable by anyone who ever sees the URL, with no sign-in, for
+good. Those are the terms `report-images` has carried since 7 September. The `0c` row in
+`docs/open-questions.md` is kept rather than rewritten, for the reason this whole document
+exists: a schema choice without its reasoning gets "simplified" back into a bug.
+
+| Decision | Why |
+| --- | --- |
+| A **second bucket**, not a flag on the first | `public` is a property of the bucket, not of the object. Making `job-documents` public would put every contract, permit and published document on a permanent URL — not what was asked and not what anyone would want |
+| **`documents.document_storage_bucket`**, defaulting to `job-documents` | The path has never said which bucket it is in; it did not need to, because there was one. Two makes the repository's constant a guess, and a wrong guess renders a broken image rather than an error anybody notices |
+| 200 MB rather than `job-documents`' 25 MB | A two-minute clip of a leaking shower off a phone is tens of megabytes. Still a cap: the guard against somebody filing a site walkthrough, which belongs in SharePoint |
+| Four video types, not `video/*` | The allowlist reasoning `0110` gives — `image/*` makes a bucket a drive. quicktime is what an iPhone records, mp4 Android, webm a browser capture, mpeg the older cameras still on site |
+| **`video` joins `0032`'s category vocabulary** | The sheet shows a photo and links a video. Deriving that from the MIME type works and is what the first draft did; the category is where this schema keeps that vocabulary, and two places to ask "is this a video" is one place to get a different answer |
+| READ is the bucket's `public` flag; the `select` policy is staff-only | Being able to **fetch** a photo whose URL you hold is a different thing from being able to **enumerate** every photo Lofty holds. The first is what was asked for; the second was never on the table |
+| DELETE stays admin-only | `0062`, `0100` and `0110` all draw that line, and Amber's own reason for the change — *"essential to keep these as a record"* — makes the uploader tidying up later exactly the case to refuse |
+
+**The twelve already filed.** Twelve photographs sit in `job-documents` today, across jobs
+`1002-001` and `1991-001`. This migration does **not** move them and cannot: the bytes are
+objects in storage and no SQL statement copies them. They keep
+`document_storage_bucket = 'job-documents'`, which is true of them, and `repo.documentUrl`
+signs a private one and links a public one — **both paths are real, so both are handled
+rather than one being assumed**. Moving them is a separate deliberate act with her say-so,
+not a side effect of a migration.
+
+**Five assertions, each watched failing** through `replay.sh`: the default changed away from
+the old bucket (the twelve break), the check dropped (a typo'd bucket accepted), the column
+made nullable (the reader has to guess), the category check left as `0032` wrote it (`video`
+refused), and the vocabulary replaced rather than widened (`contract` refused).
+
+**Not yet applied to the live project.**
+**Applied to the live project on 14 September**, as
+`20260914145252_a_project_address_moves_its_jobs`. The proof block ran against the live
+database and cleaned up after itself: 119 projects, 83 jobs and 203 addresses before and
+after, and no `0118` probe row left behind. It consumed **project number 1992** from the
+identity sequence, which the probe then deleted, so 1992 will never be a real project;
+that is the cost of a proof block that creates a project, and `0114` and `0081` paid it
+before this one.
+
+Two things were checked on the live function rather than assumed: `prosecdef` is true with
+`search_path` pinned to `public, pg_temp`, and `has_function_privilege('authenticated', …)`
+is **false**, so the revokes held. The security advisor's *Signed-In Users Can Execute
+SECURITY DEFINER Function* lint names four functions and this is not one of them — the four
+are the policy helpers `0012` deliberately granted.
+
+
+### 14 September — the date the SLAs say, beside the date somebody wanted (`0119`)
+
+Amber: *"A new calculated/derived property needs to be created called 'calculated
+completion date' which is a system field that shows calculated completions date based by
+when the job is likely to end based on slas and [the stage] it is up to so management can
+look at targeted completion date (when they want it to be done) versus the realistic
+calculated date based on slas and then the actual date it was completed for process
+optimisation."*
+
+Three dates, and the point is the gaps between them:
+
+| | What it is | Since |
+| --- | --- | --- |
+| `job_target_completion` | What somebody committed to | Entered, 14 Sep |
+| `job_calculated_completion` | What the SLAs say will happen | **This migration** |
+| `job_end_date` | What actually happened | Derived, 14 Sep |
+
+#### What the data supports, checked before a line was written
+
+The SLAs are **not on `processes`**. Three of 51 processes carry `process_expected_days`;
+**107 of 107 `process_tasks` carry `process_task_expected_days`**. So a process costs the
+sum of its tasks, and its own column is the override. Reading the process column alone
+would have valued 48 of 51 processes at nothing and produced a confidently wrong date.
+
+Sequencing did not need inventing either: **`process_dependencies` holds 49 edges with
+`process_dependency_lag_days`**. So this is a longest path through that graph. Summing
+Construction's tasks gives 302 days; the critical path through them is shorter, and the
+sum would have been wrong on every job in the pessimistic direction.
+
+And the coverage is thin where it matters: **all 38 Pre-construction processes have no
+tasks and no expected days**, as do both Acquisition & Development ones. Only Construction
+is populated. Amber was shown this and chose *"Build it, and I will fill in the SLAs
+first"* — so the mechanism lands now and stays dark until she does.
+
+#### Four rules, all hers
+
+- **Calendar days**, not working days. No weekday skip, no holiday table.
+- **An overrun is sunk.** A process 15 days past its SLA is assumed to finish today and
+  everything after runs to SLA. Chosen over re-charging its full SLA, over scaling the
+  remainder by how late it is running, and over refusing to project past a blockage.
+- **Blank rather than partial.** If any process still to run has no duration, the answer is
+  null — not a number built from the third of the pipeline that happens to be filled in.
+  That is the *"45% on track computed from a fixed array"* this repository already shipped
+  once and had to take back.
+- The blank is **not silent**: `job_calculated_completion_missing` says how many processes
+  have no estimate, so an empty cell is a number somebody can act on.
+
+#### Where it is shown, and where it deliberately is not
+
+Three columns on the **Jobs table**, off by default. Not a seventh row in the drawer's Key
+properties: Amber settled on 11 September that those *"will always be those key 6"*, and
+comparing three dates **across** jobs is a table's job anyway. Off by default because a
+column that is blank on every row today is worse than one somebody turns on the day the
+estimates are in.
+
+#### `create or replace view`, not drop and create
+
+`task_display` depends on `job_display`, so a drop is refused — which is the better
+outcome, because the `DROP … CASCADE` that would have "fixed" it takes `task_display` with
+it and nothing in the migration would put it back. Replace also enforces what the change
+claims: it permits columns **appended** and rejects any rename, retype or reorder of the
+existing ones.
+
+#### Eight mutations, and the two that exposed the probe rather than the code
+
+Each of the six comparisons, the lag, the completed-run lookup, the liveness check, the
+blank guard, `max` → `min`, and both halves of the duration fallback were broken in turn.
+**Two passed on the first attempt, and both were the fixture's fault:**
+
+- Deleting the **task-sum fallback** read green, because all three probe processes carried
+  their own `process_expected_days`. The branch 48 of Lofty's 51 processes depend on was
+  never executed. The probe's tail process now has no column of its own and two tasks.
+- Deleting the **`greatest(current_date, …)` floor** read green, because the overrunning
+  process was a *root* of the graph, which never reaches the recursive branch — and the
+  later test completed its predecessor at `now()`, so `max()` hid the difference. Test 6
+  now finishes **every** predecessor a hundred days ago, which is the only shape where the
+  floor decides the answer. Without it the forecast comes back in the past.
+
+#### Known overestimate, recorded rather than papered over
+
+**Optional processes are all counted**, because `process_is_optional` does not exist yet —
+it is on the list from the same interview. Until it does, a process nobody will run still
+lengthens the path. **Title type does not filter the set** either, for the same reason.
+Projects get no forecast: Amber asked about a job.
+
+**Applied to the live project? Not yet.**
+
+
+### 14 September — a community title job carries a `c`, in the number itself (`0120`)
+
+Amber: *"Any job that is listed as community title needs a 'c' suffix after the job number
+eg 1004-001c. Torrens title has no suffix. The jobs remain sequential eg 1004-001c /
+1004-002c / 1004-003 / 1004-004 Etc"*.
+
+#### The first answer, and why it was reversed — kept, not deleted
+
+The first build put the suffix on a **generated display column** and left `job_id` alone.
+The case for it was real and is still true:
+
+- `job_id` is the primary key, pinned by `jobs_id_matches_its_parts`.
+- **67 of the 83 live jobs have no title type set**, so most jobs would take their suffix
+  *long after creation*, by somebody changing a dropdown — and the title type was settled
+  the same morning as editable during a build.
+- A job number is what sits in contracts, emails, SharePoint folder names and SiteBook, and
+  **no cascade reaches any of those**.
+
+Amber read that and pushed back: *"But the primary key can it be updated that is also
+linked so it show the c on the end (like the address when updated) but the project 4 digits
+and 3 digit job code always remains with job too"*.
+
+**She is right that it can, and the reversal is hers knowingly.** What tipped it is that the
+machinery already exists and was built on purpose: `resync_job_id` has rebuilt `job_id` from
+its parts since `0028`, and 16 of the 17 referencing tables were already `ON UPDATE
+CASCADE`. The schema was designed for a job number that moves. A display column beside it
+would have been a second answer to *what is this job called*, which is the thing this
+repository keeps refusing to have. The external cost stands, and she has accepted it twice.
+
+#### What it does
+
+| | |
+| --- | --- |
+| `job_number(project, sequence, title_type)` | The one definition. `1004` + `-` + `003` + `c` when community |
+| `assign_job_sequence` | Builds it at insert |
+| `resync_job_id` | Rebuilds it when the project, the sequence **or the title type** changes |
+| `jobs_id_matches_its_parts` | Holds the shape, inlined rather than calling the function |
+
+Her constraint is honoured exactly: **the 4-digit project and 3-digit sequence never move.**
+`job_sequence` stays digits-only under its two existing checks, so `1004-003` can become
+`1004-003c` and back, and can never become `1004-004`. The counter counts dwellings, not
+community-title dwellings, which is why her own example runs `001c, 002c, 003, 004`.
+
+The CHECK inlines the expression instead of calling `job_number()` deliberately: **a CHECK
+built on a function is not re-verified when the function changes**, so it would go on
+passing rows it no longer describes. Assertion 8 asserts the two agree, which is what stops
+them drifting without leaving the rule written twice and unwatched.
+
+#### The one table that would have refused
+
+`report_documents` referenced `jobs(job_id)` with **NO ACTION**, with 6 rows already linked,
+so the very first rename would have been rejected by a table nobody would think to look at.
+Made the seventeenth cascade here — and the mutation that puts it back to `NO ACTION` fails
+with a foreign key violation, so that fix is proved load-bearing rather than assumed.
+
+#### Checked before committing to it
+
+Nothing embeds the job number inside its own key — `maintenance_request_id` is a uuid, not
+`1042-01-M3` as the naming suggests, so no child id goes stale. No job has a SharePoint
+folder yet (0 of 83), so no stored URL breaks today. Nine community title jobs are renamed
+by the backfill; the 7 torrens and 67 undecided do not move.
+
+#### Six mutations, each replayed into a fresh database
+
+Suffix everything, suffix torrens instead, an upper-case `C`, no suffix at all, drop
+`job_title_type` from `resync_job_id`'s test, and put `report_documents` back to `NO
+ACTION`. All six reported. **Five were caught by `jobs_id_matches_its_parts` itself** rather
+than by a named assertion, which is the better outcome: the schema refuses the wrong shape
+before a probe has to notice it.
+
+The probe also proves the suffix is **not a one-way door** — corrected back to torrens, the
+`c` goes away — that a child row follows the rename and nothing is left pointing at the old
+number, and that the project and sequence are untouched throughout.
+
+#### The cost, stated plainly
+
+A bookmarked `/jobs/1004-003` stops resolving once that job is marked community title.
+Whether the old number should stay findable — the other half of Amber's address analogy,
+since `address_history` keeps superseded addresses searchable — is **open question 0f** and
+is deliberately not guessed at.
+
+**Applied to the live project? Not yet.**
+
+
+### 14 September — a maintenance issue is a record you can work on (`0120`)
+
+Amber: *"tasks activity comments documents that are the same format as on the bottom of a job
+or project drawer"*. One of the four already worked —
+`document_links.maintenance_request_id` since `0084`. The other three could not:
+`comments`, `activity_events` and `tasks` take a project, a job, a task or a variation, and a
+maintenance request is none of those. **The drawer was never the missing piece; the parent
+column was.**
+
+**The fork, and her answer.** An issue already has its own versions of two of these —
+`maintenance_items` is its work list, `maintenance_messages` its thread. Put to her with the
+cost of each, she chose **"Join the general tables"**, and the reason is the Tasks board: a
+repair booked for Tuesday should appear beside everything else a supervisor is planning, and
+a row in `maintenance_items` never will.
+
+| Table | Shape | Why |
+| --- | --- | --- |
+| `comments` | A **sixth parent**; `comments_one_parent` widened as `0064` widened it for `feedback_id` | The thread is about the issue, not the job |
+| `activity_events` | A **fifth parent**, same shape | The one panel with no source at all — an issue kept no history of who changed what |
+| `tasks` | A **qualifier**, not a parent; `tasks_one_parent` untouched | The board reads by job. A task whose only parent was an issue would vanish from the board, which is the exact thing this option was chosen to get |
+
+**The composite foreign key is the interesting part.** A maintenance task keeps its `job_id`,
+which leaves one way to be wrong: a task on `1042-01` pointing at an issue on `1055-01`,
+putting a repair to one house on another house's board and looking entirely normal.
+`tasks_maintenance_request_is_on_this_job` references the **pair** — which is why
+`maintenance_requests` gains a unique constraint on `(maintenance_request_id, job_id)` that is
+redundant against its primary key by design. A trigger could do the same job and would be a
+trigger somebody can forget to fire.
+
+**`task_display` had to be rebuilt.** It names its columns one by one rather than selecting
+`t.*`, so a column added to `tasks` does not reach the board. Dropped and recreated rather
+than replaced, because `create or replace view` can only APPEND a column and refuses with
+*cannot change name of view column "task_name" to "maintenance_request_id"* when one is
+inserted in the middle.
+
+**RLS is unchanged, and that was checked rather than assumed.** Every policy on these three
+tables is parent-agnostic — they test `is_active_user()` and `current_permission()`, never
+which record a row hangs off. A comment on a maintenance issue therefore reads and writes
+under exactly the same rule as a comment on a job. Recorded because "no policy change" in a
+migration that adds a parent column is normally a red flag, and here it is a finding.
+
+**Still open, and Amber's to settle.** An issue can now carry both `maintenance_items` (the
+defect broken down by trade, with cost and a done-stamp) and `tasks` (scheduled work on the
+board). They are different things and are treated as different things, but nothing stops
+somebody recording one repair as both. She has been told a rule is needed and has not given
+one, so none is invented here.
+
+**The first proof block proved nothing, and that is recorded in the migration.** It looked for
+two jobs already carrying issues, found none on the replay database, printed a notice and
+skipped every assertion — while `replay.sh` reported ALL MIGRATIONS APPLIED CLEANLY. It now
+builds its own fixtures, restoring the projects identity sequence the way `0114` does.
+
+**Six assertions watched failing:** `comments_one_parent` not widened, `activity_events_one_parent`
+not widened, a plain foreign key instead of the pair (*a task on the first job took the second
+job's issue*), a task given an issue but no job, the rebuilt view losing `security_invoker`
+(*view(s) executing as owner: task_display* — caught by the sweep repaired in `0086`'s PR), and
+the view not rebuilt at all (the column never reaches the board).
+
+**Not yet applied to the live project.**
+
+
+### 14 September — the audit trail knows which issue it is about (`0121`)
+
+**This corrects `0120`, and the mistake is the reason the entry exists.** `0120` gave
+`activity_events` a `maintenance_request_id` so an issue could have a history. Sound column,
+delivers nothing: **nothing in the app reads `activity_events`** — it is on `0080`'s
+audit-exempt list and appears in the repository only as a dictionary entry. The Activity panel
+reads **`activity_audit`**, through `listRecordActivity`, filtered on
+`activity_audit_job_id` and `activity_audit_project_id`.
+
+So `0120` added a parent to the table that *models* the feed and left the table that *feeds*
+it untouched. Caught while wiring the panel. The `0120` column stays — it is the right shape
+for that table and costs nothing.
+
+**A jsonb filter would have needed no migration and is still the wrong answer**, for two
+reasons. `0080`'s own note says the jsonb-path scans it inherited *"are gone with it"*: the
+denormalised `job_id` and `project_id` exist precisely so a record's history is an index
+lookup. And filtering `activity_audit_table = 'maintenance_requests'` would show only rows
+about the request — a photo attached, a task booked, a comment left all write audit rows on
+*other* tables, and every one belongs in the issue's history.
+
+So `private.audit_record_ids` gains a third OUT parameter and `log_activity_audit` stamps it,
+both the way the job and project already work. The trigger function is **rebuilt from its own
+`pg_get_functiondef` source** with three targeted replacements rather than retyped: `0080`'s
+body carries the exempt-table logic, the origin column and the snapshot handling, and a hand
+copy of all that is a copy that drifts.
+
+**Backfilled**, as `0080` backfilled the job and project when it added them — otherwise an
+issue's history would start the day the migration ran, on a record whose whole purpose is
+saying what happened. On the live project: **43 rows across 17 issues and 4 tables**.
+
+**Three assertions watched failing, and the third one twice.** The trigger not taught to stamp
+(*INSERT has more target columns than expressions*), the resolver never reading the column
+(*stamped &lt;NULL&gt;, expected …*), and the "carry the job up from the issue" branch removed.
+
+**That third break reported nothing the first time**, and the reason is worth keeping: a
+`maintenance_requests` row already holds `job_id` directly, so deleting the branch changed
+nothing about it. The branch exists for rows that name **only** the issue — a comment, a task
+— so the assertion now checks that a comment on the issue carries the job. Then the break
+bit: *a comment on the issue did not carry the job, so it is missing from the job's feed*.
+
+**Applied to the live project and verified there**, inside a rolled-back transaction.
+
+
+### 15 September — the importer asks the database what it just named the job (`0122`)
+
+**`check.sh` was failing on `main`, and what it was failing on was Phase B.** The workbook
+load raised
+
+```
+ERROR: insert or update on table "import_staging_jobs" violates foreign key
+       constraint "import_staging_jobs_import_staging_job_job_id_fkey"
+```
+
+796 jobs across 116 projects stopped at the first community-title one.
+
+**How it got there.** `0120` (#88's, the community-title one) made `job_number()` the single
+source of a job's id, so a community-title job is `1004-003c`. `import_spine` never got the
+message: it inserted the job, the trigger named it `1004-003c`, and three lines later the
+function wrote the id it *expected* into the staging row —
+`import_staging_job_job_id = project_no::text || '-' || seq`, `1004-003`. That column has a
+foreign key to `jobs`. No such job.
+
+**The fix is not the one first proposed, and the difference is the whole lesson.** Calling
+`job_number(project_no, seq, title_type)` in the importer too would work today — the break
+that substituted it **passed**, which is the proof it would have. It also rebuilds the same
+failure the next time the naming rule changes, because it is still a *second place computing
+a job's name*. So the importer stops computing the id at all and reads it back:
+
+```sql
+insert into jobs (…) values (…) returning job_id into made_job;
+```
+
+Nothing else in the function changes. `0109`'s body, verbatim, with one declared variable,
+the `returning`, and `made_job` in the update.
+
+**A second failure was hiding behind the first.** `check.sh` aborted at the load, so every
+assertion after it had not run in days. With the import working, the next one along failed:
+*FAIL: 1 documents survived their job*. `0120` needed `on update cascade` on
+`report_documents_job_id_fkey` so a job renamed to `1004-003c` carried its documents, and
+rebuilt the constraint to get it — **changing the delete half from `cascade` to `set null` at
+the same time, without saying so** in the header, the comment or the changelog. Its four
+siblings on `jobs` (`comments`, `document_links`, `tasks`, `variations`) are all still
+`on delete cascade`. Restored, keeping the update cascade `0120` correctly added.
+
+**Three breaks watched.** The hand-built id restored → the original foreign key violation
+returns. `job_number()` substituted → **passes**, recorded above. The delete rule set back to
+`set null` → *FAIL: 1 documents survived their job*.
+
+**Not applied live, and it does not need to be yet.** Verified on 15 September against the
+live project: **neither of #88's two migrations is applied there** — the ledger reports
+NEITHER IS APPLIED for `a_community_title_job_shows_a_c` and `the_date_the_slas_say`,
+`job_number()` does not exist, and no job carries a `c`. So the bug `0122` fixes does not
+exist live yet, and the delete-rule half is a no-op there (live still reads plain
+`ON DELETE CASCADE`). The half that *is* missing live is `on update cascade` — which only
+matters once `0120` lands. The order to apply them in is `0120` then `0122`, together.
 
 ## 15 September — Microsoft 365: one home each, and a window onto it
 
@@ -2099,14 +3693,49 @@ folders by their drive item id, never by name or path. A folder somebody renames
 is still found; the one casualty is a full path pasted into an old document. This is also why
 `0040`'s two URL columns are not enough on their own: a URL is a name, and a name moves.
 
-### The link goes in its own table, because the schema is moving
+### Corrected after merging main: documents are not dormant, and the integration was expected
+
+This entry was first written against a branch 253 commits behind `main`, and two of its claims
+were wrong by the time it merged. Both are corrected here rather than quietly edited, because the
+first version is what somebody may have read.
+
+- **`documents` and `document_links` are live and wired**, not dormant. `0103` already lets a
+  document *be* a SharePoint URL — Amber, 10 September: *"when adding a document I need to be able
+  to save it as a url in sharepoint (integration coming) but for now I need to be able to add and
+  delete them."* **This work is that integration.** `0110` publishes a built document to the job,
+  `0115` makes a defect photo a document about the job, and `0119` gave documents a storage bucket
+  column. So the Files work is not building a document system; it is teaching the one that exists
+  to reach Graph.
+- **The drive and item ids therefore sit beside `document_sharepoint_url` on `documents`**, not in
+  a parallel structure. Everything `0032` built — the links, the categories, the supersedes chain,
+  the RLS, the audit triggers — already works on them unchanged, which is the same argument `0103`
+  made for its own column.
+
+### A folder name is read from the job, never rebuilt
+
+`0120` put a `c` in the job number for a community title job — `1004-003c` — and `0122` is the
+repair for the one place that had rebuilt the number by hand instead of reading it back:
+*"import_spine stops rebuilding a job's id by hand and reads it back off the insert."* The folder
+namer must not repeat that mistake. It takes `job_id` as the database made it and puts the suburb
+and address after it; it never composes `project || '-' || sequence`, and it never calls
+`job_number()` as a second opinion. A future suffix then reaches SharePoint with nobody touching
+this code.
+
+### The folder link goes in its own table, because the schema is moving
 
 Amber, 15 September: *"there is current work being done to supabase schema so the existing schema
-may change but sharepoint needs to be connected regardless."* So the drive and item ids go in a
-new `m365_links` table keyed to the record, **not** as new columns on `projects` and `jobs`. A
+may change but sharepoint needs to be connected regardless."* So the ids for a *record's folder* go in a new
+`m365_links` table keyed to the record, **not** as new columns on `projects` and `jobs`. A
 migration that reshapes those tables cannot then collide with this work, and either can land
 first. `0040`'s `project_sharepoint_url` and `job_sharepoint_url` stay where they are and keep
 being what the drawer reads; the new table carries what the API needs.
+
+A *document's* ids are the exception and go on `documents`, beside the URL column `0103` already
+added — see the correction below. That table is not the one being reshaped, and splitting a
+document's identity across two tables would be worse than the collision it avoided.
+
+**Next free migration number is `0123`.** `0119` and `0120` each have two files on purpose; the
+reason is recorded in this file and the numbers are not to be tidied.
 
 ### Acquisition & Development
 

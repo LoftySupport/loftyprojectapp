@@ -18,6 +18,11 @@ export {
 } from './core/blocks.js';
 
 export { reportToMarkdown, blockToMarkdown } from './core/markdown.js';
+/**
+ * Word and PDF in. The parsers themselves are loaded on demand inside these, so
+ * importing this name costs nothing until somebody actually imports a file.
+ */
+export { documentToWidgets, htmlToWidgets, sniffKind } from './core/import.js';
 export { reportToHtml, blockToHtml } from './core/html.js';
 // `core/docx.js` is deliberately NOT re-exported. It statically imports the ~1.5 MB
 // `docx` package, and a static export here would put that in the main bundle for
@@ -58,3 +63,4 @@ export { default as RichTextEditor, sanitizeHtml } from './components/RichTextEd
 export { LOFTY_WIDGETS, LOFTY_GROUPS, LOFTY_SEEDS } from './adapters/lofty/widgets.js';
 export { LOFTY_THEME, LOFTY_THEME_QUIET, LOFTY_THEME_SPECS } from './adapters/lofty/theme.js';
 export { createLibraryStore, createDocumentStore } from './adapters/lofty/store.js';
+export { makeFillTokens, makeFillTextTokens, tokensFor } from './adapters/lofty/tokens.js';

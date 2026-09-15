@@ -6,6 +6,8 @@ import { Problem } from "./Form";
 import { Token } from "./Token";
 import { FEEDBACK_STAGE_LABELS, type CommentEntry } from "../data/types";
 import "./ui.css";
+import { CollapsiblePanel } from "./CollapsiblePanel";
+import { CappedList } from "./CappedList";
 
 /**
  * The comment thread on one record, and the composer that adds to it.
@@ -24,10 +26,19 @@ import "./ui.css";
  * the database reads both as one stream; a screen that wants that asks for it there.
  */
 export function CommentsPanel({
-  projectId, jobId, feedbackId, title = "Latest update"
+  projectId, jobId, feedbackId, maintenanceRequestId, title = "Latest update", bare = false
 }: {
   projectId?: number;
   jobId?: string;
+  /**
+   * One maintenance issue's thread (0120). Separate from `maintenance_messages`, which is
+   * still the record of what was SENT to a contractor or a homeowner with its channel and
+   * delivery — this is Lofty talking to itself about the defect, and it gets the @mentions,
+   * the bell and the edited marker the general thread already has.
+   */
+  maintenanceRequestId?: string;
+  /** Inside the record's docked tab strip, where the tab already names it. */
+  bare?: boolean;
   /**
    * A tracker request (0064's fifth parent on `comments`).
    *
@@ -44,9 +55,9 @@ export function CommentsPanel({
   const { can } = usePermission();
   const [reload, setReload] = useState(0);
   const { data: comments, loading, error } = useQuery(
-    r => r.listComments({ projectId, jobId, feedbackId }),
+    r => r.listComments({ projectId, jobId, feedbackId, maintenanceRequestId }),
     [],
-    [reload, projectId, jobId, feedbackId]
+    [reload, projectId, jobId, feedbackId, maintenanceRequestId]
   );
 
   const [draft, setDraft] = useState("");
@@ -90,7 +101,7 @@ export function CommentsPanel({
     try {
       // Only the people whose names survived the edit.
       const mentions = picked.filter(p => draft.includes(`@${p.name}`)).map(p => p.id);
-      await repo.addComment({ projectId, jobId, feedbackId }, draft, mentions,
+      await repo.addComment({ projectId, jobId, feedbackId, maintenanceRequestId }, draft, mentions,
         internal ? { internal: true } : undefined);
       setDraft("");
       setPicked([]);
@@ -106,13 +117,13 @@ export function CommentsPanel({
   const [latest, ...earlier] = comments;
 
   return (
-    <section className="panel">
-      <div className="panel-head">
-        <Text type="text2" weight="bold">{title}</Text>
-        {comments.length > 1 && (
-          <Text type="text3" color="secondary">{comments.length} updates</Text>
-        )}
-      </div>
+    <CollapsiblePanel
+      bare={bare}
+      id="job-comments"
+      title={title}
+      defaultOpen={false}
+      summary={comments.length > 1 ? <>{comments.length} updates</> : undefined}
+    >
 
       {/* The composer first: "add the latest update" is the action this panel is for,
           and it should not sit under a long thread. `user` and above is the insert
@@ -199,7 +210,7 @@ export function CommentsPanel({
         </div>
       )}
 
-      {earlier.map(c => (
+      <CappedList items={earlier} noun="earlier updates">{c => (
         <div className="comment" key={c.id}>
           <div className="comment-meta">
             <Text type="text3" weight="medium">
@@ -214,8 +225,8 @@ export function CommentsPanel({
           </div>
           <Text type="text3" ellipsis={false}>{c.body}</Text>
         </div>
-      ))}
-    </section>
+      )}</CappedList>
+    </CollapsiblePanel>
   );
 }
 

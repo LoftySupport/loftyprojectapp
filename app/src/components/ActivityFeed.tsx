@@ -4,6 +4,7 @@ import { changeSentence } from "../data/auditNarrative";
 import { useQuery } from "../data/DataProvider";
 import { LoadProblem } from "./SearchNotices";
 import "./ui.css";
+import { CappedList } from "./CappedList";
 
 /**
  * A record's history, as the prototype drew it (Amber, 28 Aug: "projects also need to
@@ -25,21 +26,33 @@ import "./ui.css";
 export function ActivityFeed({
   projectId,
   jobId,
-  title = "Activity"
+  maintenanceRequestId,
+  title = "Activity",
+  bare = false
 }: {
   projectId?: number;
   jobId?: string;
+  /**
+   * One maintenance issue's history (0121). Narrower than the job it belongs to and
+   * deliberately so: an issue's rows also carry their job, so asking by job here would
+   * bury three lines about a cracked tile under the whole house's history.
+   */
+  maintenanceRequestId?: string;
   title?: string;
+  /** Inside the record's docked tab strip, where the tab already names it. */
+  bare?: boolean;
 }) {
   const { data: entries, loading, error } = useQuery(
-    r => r.listRecordActivity({ projectId, jobId }),
+    r => r.listRecordActivity({ projectId, jobId, maintenanceRequestId }),
     [],
-    [projectId, jobId]
+    [projectId, jobId, maintenanceRequestId]
   );
 
   return (
-    <section className="panel">
-      <div className="panel-head">
+    <section className={bare ? "panel-bare" : "panel"}>
+      {/* The heading goes inside the record's docked tab strip, where the tab is already
+          called Activity Log and naming it twice in 36 pixels is the fault this avoids. */}
+      <div className="panel-head" hidden={bare}>
         <Text type="text2" weight="bold">{title}</Text>
         {entries.length > 0 && (
           <Text type="text3" color="secondary">
@@ -58,7 +71,7 @@ export function ActivityFeed({
 
       {entries.length > 0 && (
         <ol className="activity-feed">
-          {entries.map(e => (
+          <CappedList items={entries} noun="events">{e => (
             <li key={e.id}>
               {/* The date first, in the prototype's ISO form. It sorts, it is
                   unambiguous between AU and US readers, and it lines up down the
@@ -92,7 +105,7 @@ export function ActivityFeed({
                 )}
               </Text>
             </li>
-          ))}
+          )}</CappedList>
         </ol>
       )}
     </section>

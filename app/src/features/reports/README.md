@@ -103,8 +103,8 @@ Two blocks are worth knowing about because neither is in the module:
 `adapters/lofty/theme.js` builds the Lofty theme from **`src/data/export/houseFormat.ts`**
 — the same palette the app's PDF and Word writers have used since 0026 (Foundation Black
 ink, Eco Green headings, the Crisp Orange Level 2 rule, the `#f6f7f7` table header) and
-the same font rule (Helvetica first; the brand face Fieldwork Geo cannot be embedded in a
-`.docx`, and Arial is never the fallback).
+the same font rule (Montserrat first, since 9 September; the brand face Fieldwork Geo
+cannot be embedded in a `.docx`, and Helvetica, Calibri and Aptos are never substituted).
 
 The first version of this file read `theme/tokens.css` instead and produced a teal-inked
 document. It looked like Lofty and was wrong: a document built here and a table exported
@@ -141,8 +141,10 @@ sending a document has always meant — the Share panel and the shared page both
 | The public page | `pages/SharedDocumentPage.tsx`, outside `RequireAuth` and outside `AppShell` |
 | The endpoint | `supabase/functions/report-share/` — read its README before deploying |
 
-**The endpoint still has to be deployed and given `SHARE_ALLOWED_ORIGINS`.** Until then it
-refuses everything, so the Share panel produces a link that will not open.
+**The endpoint is deployed and `SHARE_ALLOWED_ORIGINS` is set**, so the Share panel produces
+links that open. (This said the opposite until 10 September: the secret was set outside a
+session and nothing in the repository could see it. Confirmed by asking the live endpoint —
+`hub.lofty.au` allowed, `example.com` refused with 403.)
 
 **`SharedReportPage.jsx` is still not vendored.** It resolves widgets against a ctx it
 fetches, which is the design this integration deliberately does not use;

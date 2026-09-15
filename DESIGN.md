@@ -1,21 +1,19 @@
 # Design — Lofty Hub
 
 **The single design file.** What binds every screen, where each value lives in code, and
-which decisions are not cheap to reopen. If a value appears here and in a source file, the
-source file wins and this page is the bug.
+which decisions are not cheap to reopen.
 
-The design system is [**Vibe**](https://vibe.monday.com), monday.com's, adopted whole —
-its type ramp, 4px spacing scale, radii, motion curves, elevation, neutrals, semantic
-colours and its accessibility contract. Three things are Lofty's and override Vibe: the
-logo, **Lofty green `#005058`** and **Lofty orange `#f47e63`**.
+**The source of truth is [Lofty's App Design System](https://claude.ai/design/p/491d6888-cf3b-4d56-bdaa-4ac8a6948e99),
+a Claude Design project.** It is mirrored verbatim into
+[`app/src/design-system/`](app/src/design-system/), and
+[that directory's README](app/src/design-system/README.md) is how the mirror is kept in
+step. If a value here disagrees with the mirror, the mirror is right and this page is the
+bug.
 
-> The **record of how this was decided** — the July 2026 evaluation of the prototype
-> against Vibe, with the before/after measurements — is
-> [`docs/history/design-system-evaluation.md`](docs/history/design-system-evaluation.md),
-> and the component-by-component audit is
-> [`docs/history/vibe-catalog-status.md`](docs/history/vibe-catalog-status.md). Both
-> describe the **prototype**, not the React app. They are kept for their reasoning and
-> their numbers; this page is what binds now.
+The system is Lofty's brand kit applied to **[Vibe](https://vibe.monday.com)**,
+monday.com's design system. The brand palette, the logo and the Fieldwork typeface are
+Lofty's; layout, component behaviour, spacing, motion and the icon set are Vibe's — on the
+explicit instruction that readability and familiar product patterns come first.
 
 ---
 
@@ -23,42 +21,151 @@ logo, **Lofty green `#005058`** and **Lofty orange `#f47e63`**.
 
 | File | What it owns |
 | --- | --- |
-| `app/src/theme/loftyTheme.ts` | The 8 primary/brand tokens Vibe's `ThemeProvider` can carry, per theme |
-| `app/src/theme/tokens.css` | Everything `ThemeProvider` **cannot** carry — the accessible orange, the semantic inks, the header colours — plus the same brand tokens again at `body` level, for portals |
-| `app/src/theme/accents.ts` | The board's colour rule: the seven-position lifecycle ramp and the cycle used by groupings with no fixed order |
-| `app/src/theme/houseIcons.tsx` | The icons Vibe does not ship |
-| `app/tailwind.config.js` | Utility layer. It does not define colour — the tokens above do |
+| `app/src/design-system/tokens/` | **The values.** The mirror — every hex, size, radius, shadow and duration |
+| `app/src/theme/tokens.css` | The application layer: imports the mirror, then re-declares the semantic tokens at the specificity Vibe requires |
+| `app/src/theme/loftyTheme.ts` | The brand tokens Vibe's `ThemeProvider` carries, as literals it can read — 24 values across three themes, checked against the mirror |
+| `app/src/theme/accents.ts` | The board's colour rule — the lifecycle ramp |
+| `app/src/theme/loftyIcons.tsx` | The eight Lofty construction glyphs from the design system |
+| `app/src/theme/houseIcons.tsx` | Three hand-drawn nav icons that predate the design system |
 
-There is no fourth place. A colour that is not in one of these files is a colour nobody
-decided.
+There is no fifth place. A colour that is not in one of these is a colour nobody decided.
 
-## The colours, and the contrast decision behind each
+**Why `tokens.css` repeats what the mirror already says:** the mirror declares its tokens on
+`:root`; Vibe declares its own palette on the class it puts on `<body>`, and a class beats
+an element selector. A bare `:root` declaration loses and every Vibe component paints
+monday.com blue. The names repeat; the values do not — each re-declaration is a
+`var(--lofty-*)` reference back into the mirror.
 
-**Lofty orange `#f47e63` is 2.6:1 on white.** That is below the 3:1 a UI indicator needs
-and well below the 4.5:1 text needs, so it is not diluted and it is not used for meaning.
-It keeps the hero role — logo, decorative fills — and a darker sibling does the work that
-has to be legible on its own.
+## The five brand colours, and the hierarchy between them
 
-| Token | Light | Dark / black | Role |
-| --- | --- | --- | --- |
-| `--primary-color` / `--brand-color` | `#005058` | `#4db3bd` | Lofty green in Vibe's primary slot: primary buttons, selection, focus rings, links |
-| `--lofty-orange` | `#f47e63` | `#f47e63` | Logo and decorative fills **only**. 2.6:1 on white; 6.4:1 on Vibe's dark canvas |
-| `--lofty-orange-strong` | `#b8482a` (5.3:1) | `#ff9478` | Anything carrying text or meaning |
-| `--positive-ink` | `#005c35` | `#7ce8bd` | Text on Vibe's positive tint |
-| `--negative-ink` | `#a32436` | `#ffb3bc` | Text on Vibe's negative tint |
-| `--warning-ink` | `#6b5000` | `#ffdf80` | Text on Vibe's warning tint |
-| `--lofty-header-bg` | `#00393f` | `#12141f` | The top bar |
+Nothing outside these except status.
 
-**Why the three inks exist.** Vibe ships `-selected` tints but no ink to sit on them, and
-its own pairings do not clear 4.5:1 — `--positive-color` on `--positive-color-selected` is
-3.2:1, negative is 2.9:1. Vibe uses those pairs on Label, where the text is short and
-colour is not the sole carrier of meaning. This app leans on status colour heavily, so each
-ink is the darkest member of its Vibe family that clears 4.5:1 on its own tint.
+| Token | Hex | Role |
+| --- | --- | --- |
+| **Crisp Orange** | `#f47e63` | **Primary.** The active tab underline, the selected nav item, focus rings, the first data series, and the *filled button* — see below |
+| **Eco Green** | `#005058` | **Minimal highlight only.** Small decorative accents and later data series. **Never a shell, a panel fill, or a link colour** |
+| **Foundation Black** | `#414042` | Text, inverted surfaces, brand panels. The secondary |
+| **Finisher White** | `#ffffff` | Pages, shells, cards |
+| **Mid Grey** | `#d1d3d4` | **The logo, print and brand-led surfaces only.** A cool grey that fought Crisp Orange, so since 7 September it draws nothing in the UI — Flint does |
 
-**Dark needed two departures from Vibe**, both because Vibe's own value fails on Vibe's own
-canvas: Lofty green is 1.3:1 there, so it lightens to `#4db3bd`; and Vibe's dark
-`--secondary-text-color` `#9699a6` is 4.38:1 on its grey — just under AA — so it lifts to
-`#a8abb8`.
+> **This inverted what the app did before 6 September**, when Eco Green sat in Vibe's
+> primary slot and orange was decorative. Every primary button, focus ring, link and
+> selected state changed. The design system is the newer, deliberate artefact and it wins.
+
+**The contrast problem, and the brand rule that decides it.** White on Crisp Orange is
+**2.62:1**. Three answers have been on the table, and the third is the one in force:
+
+| | Answer | Cost |
+| --- | --- | --- |
+| Before 6 Sep | Darken the orange to `#b8482a`, keep white text | Loses the brand hue |
+| 6 Sep | Keep the hue, move the text to `#191819` ink (**6.75:1**) | Black on orange |
+| **7 Sep — in force** | **Keep the hue, keep white text** | **2.62:1** |
+
+**Black is never placed on Crisp Orange — not text, not icons.** That is a brand rule, and
+it outranks the arithmetic. It is also the expensive one, and the cost should be stated
+plainly rather than buried: at 2.62:1, white on Crisp Orange clears **neither** the 4.5:1
+normal-text floor **nor** the 3:1 large-text floor, so the design system's carve-out —
+orange fills reserved for "large or semibold labels, never small body copy" — does not
+reach AA either. Restricting the size reduces the exposure; it does not remove it.
+
+**The remedy the design system names** is the pressed step `--lofty-orange-pressed`
+`#c2543c`, which is **4.54:1** with white, wherever AA text on an orange field is required.
+`check-contrast.mjs` asserts that step so the escape hatch cannot rot, and asserts the rule
+itself as an identity — because a check optimising for the ratio alone would put the ink
+back, and the rule outranks the ratio.
+
+**Amber took that remedy for filled buttons on 7 September, and reversed it on 9 September.**
+Shown the 2.62:1 twice and offered the pressed step, she chose the brand: *"Make sure buttons
+are crisp orange."* A filled button is therefore Crisp Orange and behaves as the design
+system's Button does — **on hover the fill drops out, and Crisp Orange becomes the ink and
+the line.** So:
+
+| Surface | Paint | Contrast |
+| --- | --- | --- |
+| **Filled primary button** | white on `--primary-action-color` `#f47e63` | **2.62:1** ✗ recorded |
+| …hovered or focused | `--primary-action-hover-ink` `#f47e63` ink and 1px line on `--primary-action-hover-ground` (the card white) | **2.62:1** ✗ recorded |
+| …hovered, dark theme | `#f47e63` ink and line on the dark panel | **5.95:1** ✓ |
+| Focus rings, selected tints, accents, chart series | `--primary-color` `#f47e63` | *carries no text* |
+| Toasts, tipseens, filled labels | `--primary-color` `#f47e63` | **2.62:1** ✗ recorded |
+
+The button rows are the owner's decision, made with the number in front of her, and they are
+held the way every other shortfall here is held: measured in `check-contrast.mjs`, never
+allowed to get worse, printed on every run. The remedy has not gone anywhere —
+`--primary-action-color` is the one place the fill is decided, and the pressed step is a
+one-line change if the decision is ever revisited.
+
+**How the override works, and why it is shaped that way.** Vibe is the layout system; the
+brand system overrides it. Vibe's filled button is `.kindPrimary.colorPrimary { background:
+var(--primary-color) }`, so `theme/tokens.css` **rebinds `--primary-color` on the button
+element** rather than overriding `background`. Working with Vibe's cascade instead of
+against it means hover, focus and active follow for free and there is no specificity race to
+lose. The class hashes move between Vibe versions, so the selector matches the stable part
+of the name.
+
+**Why the hover inverts rather than darkens.** The design system's `Button.jsx` draws its one
+filled orange action inverting on hover — *"fill drops out, orange becomes ink and line"* —
+and Amber chose that component as the truth. The derived hover `#9a4330` that stood between
+7 and 9 September is gone; nothing in this repo darkens an orange any more. The pressed-step
+version of the same motion (fill `#c2543c`, ink `#c2543c`, both 4.54:1) was built, probed and
+offered on 9 September, and declined in favour of the brand colour; it is in the history of
+`theme/tokens.css` if wanted.
+
+**One brand-kit contradiction, resolved.** The kit prints `HEX #000000` next to
+`RGB 65 64 66` for Foundation Black. The RGB is authoritative, so the token is `#414042`.
+
+### Derived steps, and Flint — the one neutral family
+
+Tints and shades of the five above — no new hues. Hover `#d9634a`, pressed `#c2543c`,
+selected `#fae4d5`, and two lighter orange steps for charts, Orange 70 `#f8a48c` and
+Orange 40 `#fbd8cd`. Selection is **tinted, not filled**, and the tints lean warm peach:
+earlier magenta-leaning values were retired because a selected state read as a different
+colour family.
+
+**Flint is the neutral: one material, numbered steps** (design system, 7 September).
+
+| Step | Hex | Draws |
+| --- | --- | --- |
+| Flint 50 | `#f9f9f6` | A softer page — dense tables, long forms |
+| Flint 100 | `#f4f3ee` | **The page.** What the app shell paints behind everything |
+| Flint 200 | `#e1e1d9` | Recessed fills, tracks, quiet chips, disabled fills |
+| Flint 300 | `#c6c5ba` | **Every card, panel and table rule** |
+| Flint 400 | `#b6b6ac` | Chart neutrals and disabled states — never a text ground |
+| Flint 700 · 800 · 900 | `#3a3a33` · `#24241f` · `#1a1a18` | Dark mode's rule, surface and page |
+
+One page tint per screen. Flint 300 is a layout rule: it carries no information, so it is
+exempt from the 3:1 boundary floor (it is 1.74:1 on white), and a control boundary still
+uses Black-60 `#8a898d`.
+
+**What Flint retired.** The three warm tones — Paper `#fcfaee`, Mineral `#eae3df`, Stone
+`#dbd0be` — and the two cool greys the shell used to be drawn in, `#f6f7f7` and `#e7e8e9`.
+The cool greys fought Crisp Orange; the warm tones were a second neutral family. All five
+are gone from the mirror, so a reference to `--lofty-gray-light` or `--lofty-gray-surface`
+is a dangling `var()` now, not a fallback — `theme/tokens.css` moved to Flint 300 and Flint
+100 in the same sync.
+
+### Status
+
+Positive `#00854d`, negative `#d83a52`, warning `#ffcb00` — **Vibe's values, kept**,
+because the brand palette has no legible status greens or reds. Vibe ships `-selected`
+tints but no ink to sit on them, so three inks are derived as the darkest member of each
+family that clears 4.5:1 on its own tint: `--positive-ink`, `--negative-ink`,
+`--warning-ink`.
+
+### Charts
+
+**One accent per view.** The data ramp `--data-1` to `--data-6` is Crisp Orange, Orange 70,
+the orange hover step, Foundation Black, Flint 400, Flint 200 — orange carries the series,
+the rest is value. Eco Green is not in it: the two accents never appear together, so a green
+chart is green plus Flint with no orange in the view. On dark the third step flips to Orange
+40 and the neutrals invert so nothing melts into the panel. No screen draws from the ramp
+yet.
+
+**Quantity is a second ramp.** `--data-scale-1` to `--data-scale-5` (9 September) is for a
+continuous value — heat, load, density, a progress fill — and climbs the orange ladder only:
+the orange tint, Orange 40, Orange 70, Crisp Orange, the pressed step. One hue, so it reads
+as a single scale; `--data-gradient` is the same five as a fill. On dark it starts at Flint
+700 so the low end lifts off the panel, and climbs to the light tint. Category takes
+`--data-1…6`; quantity takes the scale — never the categorical ramp for a heat map.
 
 ### The board's colour rule
 
@@ -72,79 +179,215 @@ the first cut's two (teal for office phases, rust for site) on the live board, 2
 What it gives up is Cancelled shouting in red; if it should, that is a one-line change in
 `accents.ts`. Every ink/tint pair clears 4.5:1.
 
-## The foundations, as they bind
+## Dark mode
 
-| Foundation | The rule |
+`data-theme="dark"` on `<html>`, which `App.tsx` stamps alongside the body classes Vibe
+needs. Grounds are the dark Flint steps — page `#1a1a18`, surface `#24241f`, raised
+`#2f2e28` — with Flint 700 `#3a3a33` as the rule and `#807f74` as a control boundary
+(3.86:1 on the surface). Text lifts to `#f2f1f2` and muted `#b9b8bc`: 13.8:1 and 7.9:1 on
+the surface, both above the 7:1 AAA floor. Crisp Orange keeps its hex **and its white ink** —
+dark does not redefine `--primary-color`, so white on orange is the same 2.62:1 pairing in
+both themes, not a separate one. Eco Green lifts to `#20707a` as a fill (white on it
+**5.74:1**); green as text or an icon uses `--lofty-green-dark-ink` `#57c3cc` (7.48:1) and
+is never a fill. Status fills lift too, so their ink flips to the dark page
+(`--text-color-on-status`): 6.6:1 on positive, 5.8:1 on negative. **Elevation is shown by
+the surface stepping lighter as much as by shadow.**
+
+The app has three themes — light, dark and black — and the design system has one dark, which
+both of the latter take.
+
+## The foundations
+
+| | The rule |
 | --- | --- |
-| **Type** | Vibe's six sizes with their paired line heights — 12/16, 14/20, 16/22, 18/24, 24/30, 32/40 — plus one 48px display step for the dashboard hero figure. **Figtree** body, **Poppins** headings. **No text below 12px.** |
-| **Case** | **No all-caps text at any size.** Vibe has no all-caps style; caps at small sizes with positive tracking is the hardest combination to read at speed, and it was used on exactly the things people scan fastest. Sentence case, and Vibe's own heading tracking (`-0.5px` h1, `-0.1px` h2/h3) |
-| **Spacing** | Vibe's scale: 2/4/8/12/16/20/24/32/40/48/64/80. Nothing off it |
-| **Radius** | small 4 / medium 8 / big 16. **The full pill is reserved for Avatar and Counter**, as Vibe reserves it — not for buttons, chips, tags, filters, badges or progress tracks |
-| **Elevation** | Vibe's four — xs, small, medium, large — and only on things that genuinely float: modal, drawer, assistant dock, menus. Panels and cards separate with a 1px `--layout-border-color` |
-| **Motion** | Productive 70/100/150ms, expressive 250/400ms, Vibe's four cubic-béziers. `prefers-reduced-motion: reduce` is honoured |
-| **Themes** | Light, dark and black, switchable in Settings, remembered in `localStorage`, defaulting from `prefers-color-scheme` |
+| **Type** | Vibe's screen scale: h1 32/40, h2 24/30, h3 18/24; text1 16/22, text2 14/20, text3 12/16. **Montserrat** titles, **Figtree** body, Arial the last fallback for both (Helvetica until 9 September). Tracking negative on headings only (−0.5px h1, −0.1px h2/h3). **No text below 12px** |
+| **Brand type** | **Fieldwork Geo** display, **Fieldwork Hum** body, for brand-led surfaces only — decks, print, proposals. Product screens use Figtree and Montserrat, which is also the brand kit's own print substitute. Supplied in six cuts at 300 and 600 only, so the brand scale uses those two weights. Not shipped in the app bundle; the token chain falls back to Montserrat, then Arial |
+| **Case** | **Sentence case everywhere.** No Title Case, no ALL CAPS except the 12px navigation eyebrow |
+| **Spacing** | 2/4/8/12/16/20/24/32/40/48/64/80. Nothing off it, ever — no 6, no 10, no 14. Controls on an 8px rhythm; cards pad 24, compact tiles 16; page gutters 32 |
+| **Radius** | 2 checkbox · 4 buttons, inputs, chips, tabs · 8 cards, menus, dialogs · 12 panels · 16 the full-view modal only · pill toggles, tracks, counters · 50% avatars, radios, loaders. **Never a literal** |
+| **Borders** | 1px solid, always. Black-60 `#8a898d` on controls (Mid Grey is 1.5:1 on white and fails the 3:1 a boundary needs); Flint 300 `#c6c5ba` on card, panel and table rules, Flint 200 on decorative rules inside a control. The border goes Foundation Black on input hover and Crisp Orange on focus. **No coloured left-border accent strips** |
+| **Elevation** | xs row hover · small dropdowns · medium menus, toasts, tooltips · large modals. Neutral Foundation Black at 10–30%, **never tinted orange**. Cards have no shadow at rest |
+| **Motion** | Productive 70/100/150ms for what the user drives; expressive 250/400ms for entrances. Vibe's easings. **Nothing bounces** except the chip pop. No parallax, no scroll-triggered animation |
+| **Press** | Buttons `scale(0.95)`, icon buttons `scale(0.9)`, over 70ms. This is why the system feels physical rather than flat |
+| **Hover** | A neutral wash, not a colour change: `rgba(65,64,66,.08)`. Filled elements darken to their `-hover` step instead |
+| **Backgrounds** | Flat colour. **No gradients, no photographic hero imagery, no patterns, no grain, no illustration set** — none exist in the supplied material, and inventing one would be a guess |
+| **Transparency** | Two places only: the hover wash and the modal backdrop. **No frosted glass, no backdrop blur** |
+| **Z-index** | `--z-sticky` 10 · `--z-dropdown` 20 · `--z-tooltip` 30 · `--z-dialog` 40 · `--z-toast` 50. Never a literal |
 
 ## The accessibility contract
 
-Not aspirations — each one is a thing that was broken and was fixed, and re-breaking it is
-a regression rather than a preference:
+Each of these was a thing that was broken and was fixed. Re-breaking one is a regression,
+not a preference.
 
-- **Zero AA contrast failures across all three themes**, checked with a composited-alpha
-  audit rather than by eye — semi-transparent overlays are measured against what is
-  actually behind them.
+- **Focus is a 3px orange-at-50% ring plus a 1px inset** (`--focus-ring`). Never removed,
+  never replaced by a colour change alone. It is re-stated as an `outline` under
+  `forced-colors: active`, where a `box-shadow` ring disappears entirely.
+- **Readable is the bar, not AA.** Amber, 11 September: *"it needs to be readable but not
+  meet full accessibility guidelines — like Crisp Orange and white, or Flint together, are
+  ok."* This line used to claim zero AA failures across all three themes. That claim is
+  retired on both counts: AA stopped being the target, and `npm run contrast:sweep` —
+  which builds the app, walks twenty-six routes in a browser and measures every text node
+  **as painted**, composited through every ancestor's opacity — found 143 nodes under 3:1.
+  Most are the accepted white-on-Crisp-Orange at 2.62:1. The ones that were not were fixed:
+  `.perm-no` at 1.74, `.cal-cell.is-outside` at 1.91, `.pd-stat-lbl` at 2.29 and
+  `.slot-chip.is-current` at 2.14.
+- **A palette check cannot find those.** Three of the four were the *sanctioned* pairing
+  with something dimming it afterwards — an `opacity` on the rule or on an ancestor — and
+  arithmetic over two token values has no way to see that. `check-contrast.mjs` asserts
+  what this file writes down and runs on every pull request; `contrast:sweep` finds what
+  nobody wrote down, and is run by a person.
 - **Every clickable surface is keyboard-operable.** 126 controls on the board view alone
-  were `div` and `tr` elements with click handlers and no `tabindex`, `role` or
-  Enter/Space handling. A new clickable element that is not a `button` or a link needs all
-  three, or it does not ship.
-- **One global `:focus-visible` ring** — Vibe's 2px primary — switching to white inside the
-  dark top bar and the assistant dock header. `outline: none` without a replacement is the
-  defect that produced this rule.
+  were `div` and `tr` elements with click handlers and no `tabindex`, `role` or Enter/Space
+  handling. A new clickable that is not a `button` or a link needs all three, or it does
+  not ship.
 - **Touch targets ≥24px** — the WCAG 2.2 AA floor (2.5.8) — most 32px. Asserted by
   `cd app && npm run responsive`, which also asserts **no page scrolls sideways** at five
   real device sizes.
-- Skip link, `banner`/`nav`/`main`/`contentinfo` landmarks, an `aria-live` region
-  announcing filter results, focus trap in the modal and drawer, every icon-only control
-  labelled.
+- Skip link, `banner`/`nav`/`main`/`contentinfo` landmarks, an `aria-live` region announcing
+  filter results, focus trap in the modal and drawer, every icon-only control labelled.
+- `prefers-reduced-motion: reduce` is honoured.
 
-## The two interface must-haves
+### Where the palette falls short
 
-Given by Amber on 3 September as must-haves rather than preferences. They are written up in
-full, with the mechanisms, in **Interface Must-Haves** in [`PRODUCT.md`](PRODUCT.md) —
-which owns them. In short:
+Four pairings do **not** meet the floor — six measurements, since three are checked in both
+themes. They are recorded in `app/scripts/check-contrast.mjs` at their measured value, so the
+check fails if any gets worse, and prints them on every run so they stay visible rather than
+becoming normal. None is a value this repo chose: two are the owner's brand decision, two are
+the design system's.
 
-1. **Every table sorts and filters.** Every column carrying a comparable value sorts
-   (`app/src/components/SortableTable.tsx`; blanks sort last in both directions). Every
-   table about jobs, projects or processes carries at minimum team, team member, build
-   lifecycle stage, search by job # / project #, and a date-range picker.
-2. **Every record opens in the slideout.** One shell —
-   `app/src/components/SidePanel.tsx` — down the right, over a list that stays readable. It
-   expands to full width, is width-adjustable and remembers the width, closes on Escape,
-   and the selection rides the URL. **A detail column beside the list is not this**: it
-   halves the list, cannot expand and cannot be dragged. That shape (`.contacts-grid`) was
-   deleted rather than left available to copy.
+| Pairing | Measured | Needs | |
+| --- | --- | --- | --- |
+| **White on filled Crisp Orange** (both themes) | **2.62:1** | 4.5:1 | The brand rule. Below the 3:1 large-text floor too. Toasts, tipseens, filled labels |
+| **White on a filled primary button** (both themes) | **2.62:1** | 4.5:1 | Amber, 9 September: *"Make sure buttons are crisp orange"*, chosen with this number in front of her. The pressed step (4.54:1) held this row from 7 to 9 September and is one line away |
+| **A hovered button's Crisp Orange ink on white** (light) | **2.62:1** | 4.5:1 | The same decision, other state: the fill drops out and Crisp Orange is the text and line. On dark the same ink is 5.95:1 |
+| `--placeholder-color` `#8a898d` on white | **3.47:1** | 4.5:1 | The design system calls this "example text only, never a label", which narrows the exposure but does not clear it. `#757478` would, at 4.64:1. Open question 9 in `docs/open-questions.md` |
 
-Where a screen does not meet these yet, it is listed in [`HANDOFF.md`](HANDOFF.md) rather
-than left to be discovered.
+**The button rows are a decision, not an oversight.** The pressed step was applied on
+7 September and the button cleared AA for two days; on 9 September, offered the pressed step
+again with the inverted hover on it, Amber chose Crisp Orange. So every filled-orange surface
+that carries text — buttons, toasts, tipseens, filled labels — sits at 2.62:1, and the palette
+has one honest answer for all of them: the pressed step, or a ground that white survives on,
+if the owner ever asks.
+
+**Two dark-mode shortfalls closed on 7 September, from the design side.** White on the
+lifted Eco Green was 4.26:1 at `#1f8791`; the design project moved the fill to `#20707a`
+(5.74:1) and added a separate ink step for green as text. The dark control boundary was
+2.28:1 at `#5a595c`; it is `#807f74` now (3.86:1). Both were fixed where a palette changes —
+in the design project, then synced into the mirror — which is the arrangement Amber chose
+(*Answered*, 7 September, in `docs/open-questions.md`), and both are ordinary assertions in
+`check-contrast.mjs` now rather than recorded shortfalls. The placeholder is the one of the
+three still open.
+
+**The design system's contrast card now agrees with measurement.** Its `a11y-contrast.html`
+used to overstate six pairings, one of them in the unsafe direction. On this sync every
+figure it prints — 10.3:1 for Foundation Black on white, 6.8:1 for black on warning, 5.7:1
+for white on the dark green, 3.9:1 for the dark boundary, 7.9:1 for muted text on the dark
+surface — matches what `check-contrast.mjs` measures, to one decimal place.
+
+## Iconography
+
+`@vibe/icons` for the 277 Vibe glyphs. `loftyIcons.tsx` for eight Lofty construction glyphs
+Vibe does not ship — Approval, Company, Costs, Delivery, Drawings, Estimating, Materials,
+Safety. Filled 20×20, painting from `currentColor`, so an icon always inherits its context.
+
+**Sizes** 14 xs controls · 16 buttons, table cells, menu items · 18 nav, attention boxes ·
+20 default · 24 empty states. **Colour** neutral by default; orange only when the icon *is*
+the action; status colours only inside status contexts.
+
+**No emoji, no icon font, no Unicode glyph standing in for an icon**, in UI copy or
+anywhere else.
+
+Seven further Lofty glyphs exist in the design project but are **not usable**: they are SVG
+wrappers around a PNG rather than vectors — checked again on the 7 September sync, when
+`Projects.svg` and `JobHouse.svg` were still a single `<image>` element, by then with no
+`href` at all — so they render nothing and cannot take `currentColor`. They need
+re-exporting. `houseIcons.tsx` covers the three the app actually uses in the meantime.
+
+## Words are design material
+
+Australian English — *organise*, *utilisation*, *kilometre*.
+
+- **Buttons are verbs**, and name the object where it fits: "Create job", "Publish
+  schedule". Not "Submit", "OK", "Yes".
+- **Labels are nouns**, one to three words: "Job name", "Crew", "Due".
+- **Second person, active voice.** "Assign a crew before publishing the schedule", not
+  "The crew must be assigned". The product never says "I".
+- **Empty and error states say what to do next.** "Enter a valid work email", not "Invalid
+  input".
+- **Numbers are concrete and unrounded** — "128 jobs", "91% on time". No vague intensifiers.
+- **No exclamation marks**, and no exclamatory congratulation. A completed action gets a
+  plain toast: "Schedule published".
+- **Helper text is one sentence.** It explains the constraint, then stops.
 
 ## Empty is a design decision
 
-**Never fill a gap with a plausible value.** A value whose table is not built yet renders
-as a `{{table.column}}` token, so an unbound field is visible rather than silently blank.
-An invented default is worse than a blank, because a blank invites configuring and a guess
-gets quoted back as though it were agreed. Reports once showed "45% on track" computed from
-a fixed array; the job template showed 36 checkpoints nobody at Lofty wrote.
+**Never fill a gap with a plausible value.** A value whose table is not built yet renders as
+a `{{table.column}}` token, so an unbound field is visible rather than silently blank. An
+invented default is worse than a blank, because a blank invites configuring and a guess gets
+quoted back as though it were agreed. Reports once showed "45% on track" computed from a
+fixed array; the job template showed 36 checkpoints nobody at Lofty wrote.
 
 Milestones are a **boolean and never a percentage** for the same reason: "68% complete"
 implies a weighting that does not exist.
 
+## The interface must-haves
+
+Given by Amber as must-haves rather than preferences — the first three on 3 September, the
+rest on 10 September — and written up in full in **Interface Must-Haves** in
+[`PRODUCT.md`](PRODUCT.md), which owns them. That section also carries **the checklist for
+a new screen**, which is where to start before drawing one.
+
+Before all of them: **a screen is built from the design system**, which is the
+`loftybrand` repository inheriting from Vibe, with the colour and contrast contract below
+over the top. Use the component that exists; never invent a Lofty control.
+
+1. **Every table sorts and filters.** Every column carrying a comparable value sorts
+   (`app/src/components/SortableTable.tsx`; blanks sort last in both directions), and Sort
+   by and Group by reach any property, not only the columns switched on. Every table about
+   jobs, projects or processes carries at minimum team, team member, build lifecycle stage,
+   search by job # / project #, and a date-range picker. Every date filter is
+   `DateRangeFilter` (`app/src/components/DateRange.tsx`) — Amber, 1 September: *"this is
+   the default way for every date picker in the app"*.
+2. **The filter bar is persistent, inline and compact.** `app/src/components/Toolbar.tsx`,
+   at the top of the screen, one wrapping row of controls with a single **Advanced** row
+   under it. Never a filter panel, a drawer or a sidebar; a filter must not take the
+   screen the results are supposed to be on.
+3. **Every record opens in the slideout.** One shell — `app/src/components/SidePanel.tsx` —
+   down the right, over a list that stays readable. It expands to full width, is
+   width-adjustable and remembers the width, closes on Escape, and the selection rides the
+   URL. **A detail column beside the list is not this**: it halves the list, cannot expand
+   and cannot be dragged. That shape (`.contacts-grid`) was deleted rather than left
+   available to copy.
+4. **A screen of records is four views** — Board, Table, Gantt, Calendar — over one
+   dataset and one toolbar, **and a kanban column that is a settable value takes a drop**.
+   Where a drop has no write behind it the cards do not drag and the board says so.
+5. **Selection and bulk edit on every list.** A tick box on every row and every card, a
+   select-all, and one bulk bar that reassigns and edits — the bar belongs to the
+   selection, not to the view it was made in.
+6. **A screen ships with its stand-in.** The empty state says what the screen is for and
+   what to do next and offers the control to do it; "nothing here yet" and "nothing
+   matches" are different sentences; an unbound value is a token naming its column and
+   never a plausible-looking guess.
+
+Where a screen does not meet these yet, it is listed in [`HANDOFF.md`](HANDOFF.md) rather
+than left to be discovered.
+
 ## Known limitations
 
-- **`Dropdown` in the prototype is a native `<select>`** styled to Vibe's field geometry.
-  Vibe's own Dropdown has search, multi-select and grouping. The React app uses the real
-  component; the prototype does not.
-- **The UX writing pass is partial.** New copy follows Vibe's handbook; the ~400 strings
-  predating the evaluation have not been reviewed against it.
-- **26 Vibe components are built to spec but unused** — Loader, Skeleton, Slider, Combobox
-  and the rest. No surface needs them yet.
-- **The fake SharePoint popup keeps its Microsoft-style styling on purpose.** It is
-  imitating an external system, not part of the Lofty UI.
+- **The UX writing pass is partial.** New copy follows the rules above; the ~400 strings
+  that predate them have not been reviewed.
+- **The design system's ~50 JSX components are not used.** The app uses the real
+  `@vibe/core`, which is the more complete implementation of the same contract. The design
+  project ships its own because it renders without a bundler.
+- **No photography exists**, and none was generated. Where a photo would sit, use a flat
+  brand-colour panel or one of the brand silhouettes. If real photography arrives it should
+  be warm-neutral and un-filtered to sit alongside Crisp Orange.
+- **The brand silhouettes are not in the app.** Six organic shapes exist in the design
+  project in three colourways; no screen has a surface for them yet.
+
+The record of how these rules were arrived at — the July 2026 evaluation of the prototype
+against Vibe, with the before/after measurements — is
+[`docs/history/design-system-evaluation.md`](docs/history/design-system-evaluation.md), and
+the component-by-component audit is
+[`docs/history/vibe-catalog-status.md`](docs/history/vibe-catalog-status.md). Both describe
+the prototype, not this app.

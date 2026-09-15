@@ -49,7 +49,30 @@ export type AuState = (typeof AU_STATES)[number];
  */
 export interface Address {
   id: Uuid;
-  lotNumber: string | null;
+  /**
+   * The residence number on the plan. Leads the consolidated address when set:
+   * "Res 1, Lot 3, 13 Tester Street, Testville, SA, 5000".
+   *
+   * A number, like the lot number and unlike the street number — Amber, 10 September:
+   * *"a lot number or res number is only a number … however a street number can be
+   * something like 100-105 (as text) or 12B"* (`0110`).
+   *
+   * Usually null on a project's address and never forbidden on one: `0105` offered the
+   * field on a job only and Amber corrected it the same day — *"on a project you might
+   * update the res number there as well"*.
+   */
+  resNumber: number | null;
+  /**
+   * The lot as it appears on the plan of division.
+   *
+   * **A number since `0110`**, and the reason it was text before is worth knowing so
+   * nobody reinstates it: `0034` and the dictionary both claimed *"12A, 5-7 and Lot 3
+   * are as common as 12"*, and the split dialog said *"2B as readily as 2"* on screen.
+   * All three were wrong about which number carries the letters. Every one of the 13
+   * lot numbers in the database is digits only; all twelve ranged or suffixed values
+   * are STREET numbers.
+   */
+  lotNumber: number | null;
   streetNumber: string | null;
   street1: string;
   street2: string | null;
@@ -227,6 +250,10 @@ export interface Project {
    *
    * The id alone is what every project screen had, which is why they all rendered
    * {{project_display.current_address}} over an address the database was holding.
+   *
+   * Moving it moves the project's live jobs too, where they had not moved on their own
+   * (0118) — so a caller showing the jobs re-reads them after `setProjectCurrentAddress`
+   * rather than assuming only this row changed.
    */
   currentAddress: string | null;
   /** The original address as text — null until the project has been renamed away from it. */
@@ -312,6 +339,19 @@ export interface JobPatch {
    * shows — the drawer.
    */
   titleType?: TitleType | null;
+  /**
+   * The date this job is being worked towards, and the day it actually finished (0113).
+   *
+   * Two, not one, because Amber asked for both: *"project date and job dates are
+   * separate and [it] depends [on] each other. [Both] are needed and relevant"*. The
+   * record's **Completion date** shows the target while the job runs and the actual once
+   * it is done, which is what the design draws. Null clears either.
+   *
+   * A PROJECT'S completion is not here and never will be: it is derived from all of its
+   * jobs being completed, and a column for it would be a second answer that can go stale.
+   */
+  targetCompletion?: IsoDate | null;
+  endDate?: IsoDate | null;
 }
 
 /** The joined shape the cards read — `project_display`. */
@@ -361,7 +401,14 @@ export interface Job {
    * job that existed before the column.
    */
   titleType: TitleType | null;
-  /** Same pair as projects, for the same reason. */
+  /**
+   * Same pair as projects, for the same reason — and since 0118 the current one is not
+   * only set by hand. A job standing at its project's address when the project is
+   * repointed follows it, keeping any lot and res number of its own: "Lot 1, 14 Brodie
+   * Road" becomes "Lot 1, 28 Corner Street". A job re-addressed on its own since, once
+   * its title issued, keeps what it was given. The rule is a trigger, so this id can
+   * change without the app having written it.
+   */
   originalAddressId: Uuid | null;
   currentAddressId: Uuid;
   /** The same set as projects. Not health — health is calculated, and not yet built. */
@@ -413,6 +460,59 @@ export interface Job {
   currentAddress: string;
   originalAddress: string | null;
   projectCurrentAddress: string;
+
+  /**
+   * The council of the job's OWN current address — `job_display.job_council`, added by
+   * 0108, and read off `cur` rather than `pcur`: a job that has been moved off its
+   * project's site can sit in a different LGA, and that is exactly the case worth being
+   * able to see.
+   *
+   * NOT part of `currentAddress`. Amber, 10 September: *"the council area still needs
+   * to be recorded, but just not in the full address line. it stays as a property
+   * field."* `build_consolidated_address()` has never composed it in, and this field is
+   * how the drawer shows it beside the address instead. Until 0108 the app could SET a
+   * job's council — the change-address form carries the picker — and had nowhere to
+   * show it back.
+   *
+   * Null is real: the council is optional since 0073, because four SA suburbs span two
+   * of them and a guess on a lodged application is worse than a blank.
+   */
+  council: SaCouncil | null;
+  /**
+   * The job's own completion dates (0113): the date being worked towards, and the day it
+   * actually finished. Both null until somebody sets them.
+   *
+   * Two columns rather than one because Amber asked for both — *"[both] are needed and
+   * relevant"* — and because collapsing them loses the distinction the moment a job
+   * finishes on a different day from the one planned, which is most jobs. `projects`
+   * learned this in 0028 and its comment still says it: *"actual, as opposed to target"*.
+   */
+  targetCompletion: IsoDate | null;
+  endDate: IsoDate | null;
+  /**
+   * The third date (0119), and the one nobody types.
+   *
+   * Amber, 14 September, asked for *"the realistic calculated date based on slas"* to sit
+   * beside the target somebody committed to and the day it actually finished, *"for
+   * process optimisation"*. So the trio reads: what we promised, what the SLAs say, what
+   * happened.
+   *
+   * The longest path through `process_dependencies` in **calendar days**, with every start
+   * floored at today — an overrun is sunk rather than pushed forward, which is her rule
+   * and not an accident of the arithmetic.
+   *
+   * **Null is the normal answer today, and `calculatedCompletionMissing` says why.** All
+   * 38 Pre-construction processes carry no estimate, so until those are filled in the
+   * forecast refuses to answer rather than projecting from the third of the pipeline that
+   * is populated. A partial number presented as a whole one is the failure this repository
+   * already shipped once. Null with a count is a to-do; a number built on a gap is a lie.
+   *
+   * Both are null rather than 0 when the job is not live: a completed job has an end date,
+   * and a forecast beside it would be noise.
+   */
+  calculatedCompletion: IsoDate | null;
+  /** How many of the job's processes have no estimate. 0 when the forecast is real, null when the job is not live. */
+  calculatedCompletionMissing: number | null;
 
   // + fields
   createdAt: IsoDateTime;
@@ -1091,6 +1191,14 @@ export type { FieldChange };
 
 export interface RecordActivity {
   id: string;
+  /**
+   * The maintenance issue this line is about (0120), or null for the job and project feeds.
+   *
+   * Until 0120 an issue kept no history at all: a repair that changed hands, or a booking
+   * date that moved twice, left nothing behind — and that is the thing people argue about
+   * afterwards.
+   */
+  maintenanceRequestId: Uuid | null;
   at: IsoDateTime;
   /** '1042' or '1042-03' — what the line is about, since a project feed shows both. */
   subject: string;
@@ -1186,6 +1294,16 @@ export interface Task {
   /** Exactly one of these is set. Most work hangs off a job; some belongs to the site. */
   jobId: string | null;
   projectId: number | null;
+  /**
+   * The maintenance issue this task is the work for (0120), or null for ordinary work.
+   *
+   * NOT one of the two above — a qualifier beside them. The Tasks board reads by job, so a
+   * repair keeps its `jobId` and turns up beside everything else a supervisor is planning,
+   * which is the whole reason Amber chose this over a maintenance-only list. The database
+   * refuses a task whose job and issue disagree, so this can never point at a repair to a
+   * different house.
+   */
+  maintenanceRequestId: Uuid | null;
   name: string;
   description: string | null;
   /** Sub-tasks, for the steps that are really several. */
@@ -1195,6 +1313,8 @@ export interface Task {
   assigneeId: Uuid | null;
   status: TaskStatus;
   dueDate: IsoDate | null;
+  /** When it is planned to be worked, as distinct from `dueDate` (0102). Does not feed health. */
+  scheduledDate: IsoDate | null;
   /** The single source of truth for "is it done". There is no boolean beside it. */
   completedAt: IsoDateTime | null;
   completedBy: Uuid | null;
@@ -1259,6 +1379,19 @@ export interface TaskEntry extends Task {
   checklistDone: number;
   subtaskTotal: number;
   subtaskDone: number;
+  /** Who typed it in, or who moved the stage that instantiated it (0102). */
+  createdByName: string | null;
+  /**
+   * The process template it was instantiated from, resolved (0102) — null for a
+   * typed-in task. The Tasks board's Process column and its "system-generated vs
+   * typed in" distinction both read this rather than the bare `processRunId`.
+   */
+  processId: Uuid | null;
+  processName: string | null;
+  /** The job's address, or the project's name — whichever the task sits on (0102). */
+  recordName: string | null;
+  /** The job's or the project's current lifecycle stage (0102). */
+  recordStage: StageName | null;
 }
 
 /** What `task_display` derives from today against the two dates. Never stored. */
@@ -1316,11 +1449,20 @@ export interface StageCompletion {
 export interface NewTask {
   jobId?: string;
   projectId?: number;
+  /**
+   * The maintenance issue this task is the work for (0120). Amber, 14 September: *"an issue
+   * becomes a task"*.
+   *
+   * Sent WITH `jobId`, never instead of it — the database refuses a pair that disagree, and
+   * the job is what puts the task on the board.
+   */
+  maintenanceRequestId?: Uuid;
   name: string;
   description?: string | null;
   owningTeam?: TeamId | null;
   assigneeId?: Uuid | null;
   dueDate?: IsoDate | null;
+  scheduledDate?: IsoDate | null;
   isExternal?: boolean;
   parentTaskId?: Uuid | null;
   expectedDays?: number | null;
@@ -1335,6 +1477,7 @@ export interface TaskPatch {
   owningTeam?: TeamId | null;
   assigneeId?: Uuid | null;
   dueDate?: IsoDate | null;
+  scheduledDate?: IsoDate | null;
   isExternal?: boolean;
   position?: number;
   startedAt?: IsoDateTime | null;
@@ -1440,6 +1583,14 @@ export interface RecordRef {
   jobId: string | null;
   taskId: Uuid | null;
   variationId: Uuid | null;
+  /**
+   * The maintenance issue, since 0120 — Amber chose to *"join the general tables"* so an
+   * issue is a record like any other rather than something with its own parallel thread.
+   *
+   * Exactly one of these is set, and the database is what enforces it: `comments` grew a
+   * SIXTH parent the way `feedback_id` made a fifth in 0064.
+   */
+  maintenanceRequestId: Uuid | null;
 }
 
 /**
@@ -1456,6 +1607,29 @@ export interface Doc {
   description: string | null;
   /** Nullable: a row can exist for a document Lofty expects but has not received. */
   storagePath: string | null;
+  /**
+   * Which bucket `storagePath` is a path in (0119), and therefore how to read it.
+   *
+   * `job-documents` is PRIVATE — every read is a signed URL, asked for when somebody
+   * clicks, gone in five minutes. `maintenance-media` is PUBLIC — a permanent URL you can
+   * put straight in an `src` or an email. Amber, 14 September, reversing her own 0c
+   * answer: *"No videos or photos are private accept video and photos with permanent
+   * links"*, so a generated maintenance sheet points at a picture instead of embedding it
+   * or watching it expire.
+   *
+   * **Read it, never assume it.** Twelve photographs filed before 0119 are in the private
+   * bucket and stay there; the same list can hold both, so a reader that hard-codes one
+   * renders half the pictures as broken images.
+   */
+  storageBucket: StorageBucket;
+  /**
+   * Where it is when Lofty does not hold the bytes — a SharePoint link (0103).
+   *
+   * Independent of `storagePath`, not an alternative to it: an upload has a path, a link
+   * has a URL, a document that is expected but has not arrived has neither, and one the
+   * coming integration has synced may have both.
+   */
+  url: string | null;
   mimeType: string | null;
   sizeBytes: number | null;
   category: DocumentCategory;
@@ -1471,9 +1645,29 @@ export interface Doc {
   updatedBy: Uuid | null;
 }
 
+/**
+ * The two buckets a document's bytes can be in (0119), and they behave oppositely.
+ *
+ * Contracts, permits and published documents go to `job-documents`, which is private.
+ * Maintenance photos and videos go to `maintenance-media`, which is public: anyone holding
+ * the URL can fetch it, with no sign-in, for good. That is the cost Amber accepted for a
+ * sheet whose pictures still work when it reaches a contractor, and it is stated here
+ * because a name alone does not say it.
+ *
+ * `report-images` is a third public bucket and is deliberately NOT in this union — it is
+ * owned by a document or a library entry rather than by a `documents` row, and reached
+ * through `uploadReportImage`.
+ */
+export const STORAGE_BUCKETS = ["job-documents", "maintenance-media"] as const;
+export type StorageBucket = typeof STORAGE_BUCKETS[number];
+
 export const DOCUMENT_CATEGORIES = [
   "contract", "drawing", "permit", "certificate",
-  "photo", "invoice", "report", "correspondence", "other"
+  // `video` joined the vocabulary in 0119, when the bucket first accepted one. It is a
+  // category rather than a MIME-type test because the generated maintenance sheet shows a
+  // photo and links a video, and two places to ask "is this a video" is one place to get a
+  // different answer.
+  "photo", "video", "invoice", "report", "correspondence", "other"
 ] as const;
 export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number];
 
@@ -2056,7 +2250,9 @@ export interface ProcessRunPatch {
  * would be the app leaking its own schema into a form.
  */
 export interface NewAddress {
-  lotNumber?: string | null;
+  /** The residence number — see `Address.resNumber`. Offered on every address form. */
+  resNumber?: number | null;
+  lotNumber?: number | null;
   streetNumber?: string | null;
   /**
    * Optional since `0037`, and that is the whole point of it.
@@ -2240,13 +2436,35 @@ export const MAX_SPLIT = 60;
  * rather than a number and why the batch is a list rather than a count and a start.
  */
 export interface SplitLot {
-  /** As it appears on the plan of division — "1", "2B", "14A". */
+  /**
+   * As typed into the row — a string, because that is what a text input holds, and the
+   * seam parses it. The COLUMN is an integer since `0110`: a lot number is only ever a
+   * number, and "2B" is a street number, not a lot (Amber, 10 Sep). Anything that is
+   * not digits is refused at the seam with a message rather than sent and rejected.
+   */
   lotNumber: string;
   /**
-   * The number this job has in SiteBook or Trello, when it is a job that already exists
-   * there. Unique across `jobs`, and nullable — jobs created here have none.
+   * The number this job has in the old system, when it is a job that already exists
+   * there. Unique across `jobs`, and nullable — jobs created here have none. NOT the
+   * SiteBook number: SiteBook does not issue one until construction (Amber, 10 Sep).
    */
   jobNumberOld?: string | null;
+  /**
+   * The street number this lot has, when it has one.
+   *
+   * Amber, 10 September: *"jobs are not showing the street number on the address. they
+   * are only showing lot number."* The split used to hard-code this to null on every
+   * job it created, on the reasoning that *"a lot has a lot number, not a street
+   * number — the street number arrives when the titles do"*. That is true of a lot on a
+   * plan of division and false of the address people use: before titles issue, Lot 3 is
+   * still AT 28 Corner Street, and dropping the number left every job reading
+   * "Lot 3, Corner Street" with no number in it at all.
+   *
+   * Blank inherits the project's street number, which is what the rest of the address
+   * already does. Typed, it wins — which is what a lot that has been given its own
+   * number needs, and it is the field Amber asked for at project creation.
+   */
+  streetNumber?: string | null;
   /**
    * Community or Torrens (0054). Seeded from the project's intended mix — the first
    * N rows community, the rest Torrens — and editable per row, because which lots take
@@ -2306,6 +2524,12 @@ export interface NewJob {
   address?: NewAddress;
   stage?: StageName;
   status?: RecordStatus;
+  /**
+   * The number this job has in SiteBook, when it already exists there — the same column
+   * the split's per-lot rows and the drawer write (`jobs.job_number_old`). Optional and
+   * blank-as-null, because a job that is new here has none.
+   */
+  jobNumberOld?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -2354,6 +2578,21 @@ export interface Company {
   approvedBy: Uuid | null;
   primaryEmail: string | null;
   primaryPhone: string | null;
+  /**
+   * The person you ring, flagged on `company_contacts` and only while they still work
+   * there (0117). Null when nobody is flagged — the screen says so rather than promoting
+   * the longest-serving employee, which would be a guess quoted back as a fact.
+   *
+   * Their email and phone are their OWN, separate from `primaryEmail` and `primaryPhone`
+   * above, which are the company's. A mobile and a switchboard are different facts.
+   */
+  primaryContactId: Uuid | null;
+  primaryContactName: string | null;
+  primaryContactRole: string | null;
+  primaryContactEmail: string | null;
+  primaryContactPhone: string | null;
+  /** On its own beside `address`, because a contractor list is scanned by area. */
+  suburb: string | null;
   classificationIds: string[];
   peopleCount: number;
   openParties: number;
@@ -2615,6 +2854,47 @@ export type MaintenanceSource = (typeof MAINTENANCE_SOURCES)[number];
 export const MAINTENANCE_SOURCE_LABELS: Record<MaintenanceSource, string> = {
   email: "Email", phone: "Phone call", form: "Web form", portal: "Portal", api: "API", staff: "Logged by staff"
 };
+/**
+ * Where the issue was identified (0114). Amber's list, in her order and her wording — the
+ * four one-off inspections, then the four scheduled ones, then Other. A CHECK on the column
+ * rather than a lookup table, because nothing edits the list yet; HANDOFF.md records the
+ * swap to make when it matters.
+ */
+export const MAINTENANCE_IDENTIFIED_AT = [
+  "pci", "building_inspector_client", "building_inspector_house_inspect", "handover_inspection",
+  "site_inspection", "inspection_1_month", "inspection_2_month", "inspection_3_month", "other"
+] as const;
+export type MaintenanceIdentifiedAt = (typeof MAINTENANCE_IDENTIFIED_AT)[number];
+export const MAINTENANCE_IDENTIFIED_AT_LABELS: Record<MaintenanceIdentifiedAt, string> = {
+  pci: "PCI",
+  building_inspector_client: "Building Inspector (Client)",
+  building_inspector_house_inspect: "Building Inspector (House Inspect)",
+  handover_inspection: "Handover Inspection",
+  site_inspection: "Site Inspection",
+  inspection_1_month: "1 Month Inspection",
+  inspection_2_month: "2 Month Inspection",
+  inspection_3_month: "3 Month Inspection",
+  other: "Other"
+};
+/** The grouping Amber drew: a divider before the scheduled inspections and before Other. */
+export const MAINTENANCE_IDENTIFIED_AT_GROUPS: readonly (readonly MaintenanceIdentifiedAt[])[] = [
+  ["pci", "building_inspector_client", "building_inspector_house_inspect", "handover_inspection"],
+  ["site_inspection", "inspection_1_month", "inspection_2_month", "inspection_3_month"],
+  ["other"]
+];
+
+/**
+ * Who is fixing it (0114). Amber: *"Assigned to: Internal / External — (radio select enum
+ * type that defaults to internal)"*. Internal names a Lofty person, external names a trade
+ * or contractor company; the database refuses the other half of the pair.
+ *
+ * This is NOT an offer. `MaintenanceAssignment` is the offer — the accept link, the expiry,
+ * the decline that keeps its row. This is the plain answer to whose job it is.
+ */
+export const MAINTENANCE_ASSIGNEE_KINDS = ["internal", "external"] as const;
+export type MaintenanceAssigneeKind = (typeof MAINTENANCE_ASSIGNEE_KINDS)[number];
+export const MAINTENANCE_ASSIGNEE_KIND_LABELS: Record<MaintenanceAssigneeKind, string> = { internal: "Internal", external: "External" };
+
 export const MAINTENANCE_STATUSES = ["new", "triaged", "in_progress", "waiting_on_contractor", "waiting_on_client", "completed", "closed", "rejected"] as const;
 export type MaintenanceStatus = (typeof MAINTENANCE_STATUSES)[number];
 export const MAINTENANCE_STATUS_LABELS: Record<MaintenanceStatus, string> = {
@@ -2672,6 +2952,15 @@ export interface MaintenanceRequest {
   number: string;
   sequence: number;
   source: MaintenanceSource;
+  /** The day it was identified, as opposed to the moment it was logged (0114). Clearable. */
+  identifiedOn: IsoDate | null;
+  /** Where it was identified — PCI, a building inspector, one of the scheduled inspections. */
+  identifiedAt: MaintenanceIdentifiedAt | null;
+  /** The issues typed into one drawer share this, and the report groups a section on it. */
+  batchId: Uuid | null;
+  /** The Lofty person who reported it (0114) — separate from the homeowner contact below. */
+  reportedByProfileId: Uuid | null;
+  reportedByProfileName: string | null;
   reportedByContactId: Uuid | null;
   reportedByName: string | null;
   reportedByEmail: string | null;
@@ -2688,6 +2977,23 @@ export interface MaintenanceRequest {
   health: MaintenanceHealth;
   ownerProfileId: Uuid | null;
   ownerName: string | null;
+  /** Internal or external (0114); defaults to internal and decides which assignee is set. */
+  assigneeKind: MaintenanceAssigneeKind;
+  assigneeProfileId: Uuid | null;
+  assigneeName: string | null;
+  assignedCompanyId: Uuid | null;
+  assignedCompanyName: string | null;
+  /**
+   * When the repair is booked in, the day it was actually done, and when to chase it.
+   * Per issue, and nothing derives any of them.
+   *
+   * `completedOn` is NOT the status and NOT `closedAt`: a request can carry a completion
+   * date while its status is still In progress, because the tradesperson finishing and
+   * the ticket being closed are two events (0116).
+   */
+  bookedOn: IsoDate | null;
+  completedOn: IsoDate | null;
+  followUpOn: IsoDate | null;
   closedAt: IsoDateTime | null;
   closedReason: string | null;
   externalRef: string | null;
@@ -2708,13 +3014,28 @@ export interface MaintenanceRequest {
 export interface NewMaintenanceRequest {
   jobId: string;
   summary: string;
-  source: MaintenanceSource;
+  /**
+   * Optional since 0114: the drawer stopped asking how it arrived, so a request logged by
+   * hand takes the column's own default of `staff`. Email, form and portal intake still
+   * pass their own.
+   */
+  source?: MaintenanceSource;
   description?: string | null;
   priority?: MaintenancePriority;
   reportedByContactId?: Uuid | null;
+  reportedByProfileId?: Uuid | null;
   reportedAt?: IsoDateTime | null;
+  identifiedOn?: IsoDate | null;
+  identifiedAt?: MaintenanceIdentifiedAt | null;
+  batchId?: Uuid | null;
   categoryId?: string | null;
   ownerProfileId?: Uuid | null;
+  assigneeKind?: MaintenanceAssigneeKind;
+  assigneeProfileId?: Uuid | null;
+  assignedCompanyId?: Uuid | null;
+  bookedOn?: IsoDate | null;
+  completedOn?: IsoDate | null;
+  followUpOn?: IsoDate | null;
 }
 export interface MaintenanceRequestPatch {
   summary?: string;
@@ -2725,6 +3046,16 @@ export interface MaintenanceRequestPatch {
   dueOn?: IsoDate | null;
   ownerProfileId?: Uuid | null;
   reportedByContactId?: Uuid | null;
+  reportedByProfileId?: Uuid | null;
+  identifiedOn?: IsoDate | null;
+  identifiedAt?: MaintenanceIdentifiedAt | null;
+  assigneeKind?: MaintenanceAssigneeKind;
+  assigneeProfileId?: Uuid | null;
+  assignedCompanyId?: Uuid | null;
+  bookedOn?: IsoDate | null;
+  /** The day the repair was done. Independent of the status, by 0116's decision. */
+  completedOn?: IsoDate | null;
+  followUpOn?: IsoDate | null;
   closedReason?: string | null;
   externalRef?: string | null;
 }
@@ -2845,18 +3176,55 @@ export interface ReportTemplateLayout {
 export const EMPTY_REPORT_TEMPLATE_LAYOUT: ReportTemplateLayout = { widgets: [] };
 
 /**
- * A whole template, or a reusable section dropped into one.
+ * A snippet's wording, in and out of the layout it is stored in.
+ *
+ * A snippet is one `text` widget and nothing else (0098). Storing it that way rather than
+ * in a column of its own is what lets the same CHECK guard it, the same builder edit it
+ * and the same library list it — but it means every reader would otherwise repeat the
+ * same reach into `widgets[0].options.html`, and the first one to write `widgets[0].html`
+ * instead would get `undefined` and store a blank snippet without anything complaining.
+ *
+ * So the reach lives here once, in both directions.
+ *
+ * `snippetHtml` returns "" for a layout that is not a snippet's — a missing widget, a
+ * widget of another kind, a non-string html. Empty, not a stand-in: a snippet with no
+ * wording is a snippet somebody has yet to write, and the screen says so.
+ */
+export function snippetHtml(layout: ReportTemplateLayout | null | undefined): string {
+  const first = layout?.widgets?.[0];
+  if (!first || first.kind !== "text") return "";
+  const html = first.options?.html;
+  return typeof html === "string" ? html : "";
+}
+
+export function snippetLayout(html: string, id = "w_snippet"): ReportTemplateLayout {
+  return { widgets: [{ id, kind: "text", options: { html } }] };
+}
+
+/**
+ * A whole template, a reusable section dropped into one, or a snippet of wording.
  *
  * Same table, same sign-off, same scope rules — the discriminator is what decides where
- * it is offered: a template starts a document, a section is inserted into one by the
- * "Library section" block.
+ * it is offered, and WHEN it is read:
+ *
+ *   template — starts a document. Copied once, at the moment somebody makes one.
+ *   section  — a live reference. The "Library section" block resolves it every time the
+ *              document is opened, so editing the section changes every template using it.
+ *   snippet  — wording, copied into a text block at the caret and then that document's
+ *              own. Edit the snippet afterwards and letters already written keep what
+ *              they were given (0098).
+ *
+ * The difference between the last two is the reason a snippet is not just a section:
+ * "Please find attached our progress report for" is a line somebody adjusts per client,
+ * and if that edit rewrote it in forty other letters nobody would dare touch it.
  */
-export const REPORT_TEMPLATE_KINDS = ["template", "section"] as const;
+export const REPORT_TEMPLATE_KINDS = ["template", "section", "snippet"] as const;
 export type ReportTemplateKind = (typeof REPORT_TEMPLATE_KINDS)[number];
 
 export const REPORT_TEMPLATE_KIND_LABELS: Record<ReportTemplateKind, string> = {
   template: "Template",
-  section: "Section"
+  section: "Section",
+  snippet: "Snippet"
 };
 
 /**
@@ -2959,11 +3327,86 @@ export interface ReportDocument {
    * screen in the app renders. The shared page fetches it from the endpoint by token.
    */
   hasShareSnapshot: boolean;
+  /**
+   * DRAFT UNTIL PUBLISHED (0104).
+   *
+   * Amber, 10 September: *"have a DRAFT watermark across it while editable and saved to
+   * the job. and as soon as it is ready to share or publish it, you choose the sharepoint
+   * location to save it to"*.
+   *
+   * `publishedAt` null is the ordinary state and is what the watermark reads — on screen,
+   * in print, in the .html and in the .docx. It is never typed: the database stamps it,
+   * and the same trigger clears it the moment the layout or title changes, because
+   * *"if editing it in the app it reverts to draft"*.
+   */
+  publishedAt: IsoDateTime | null;
+  publishedBy: Uuid | null;
+  /**
+   * Where it was sent. Survives an edit on purpose, so re-publishing can pre-fill the
+   * place it went last time.
+   *
+   * A URL with `publishedAt` null is therefore a real and readable state: this went to
+   * SharePoint, somebody has edited it since, and what is up there is out of date.
+   */
+  publishedUrl: string | null;
+  /**
+   * PUBLISHED TO THE JOB, rather than to a link (0110).
+   *
+   * Amber, 10 September: *"until Documents are integrated to Sharepoint, please allow the
+   * option of saving to Job in the system and/or downloading it and adding a link to that
+   * document file"*. Until the integration lands, a link means somebody has to have a
+   * SharePoint folder set up and to have put the file there themselves — so this is the
+   * other half: the file saved against the record, in Lofty's own storage.
+   *
+   * The id of a row in `documents`, so the published file appears in this record's
+   * Documents list beside everything else filed on it rather than in a place of its own.
+   *
+   * "AND/OR" IS LITERAL. Either satisfies published, both together is an ordinary state,
+   * and neither with `publishedAt` set is refused by constraint.
+   *
+   * Survives an edit, exactly as `publishedUrl` does and for the same reason. Goes null if
+   * the file itself is deleted — and if that was the only answer to "where did it go", the
+   * publication goes with it, because a document cannot stay published as a file that no
+   * longer exists.
+   */
+  publishedDocumentId: Uuid | null;
   createdAt: IsoDateTime;
   createdBy: Uuid | null;
   updatedAt: IsoDateTime;
   updatedBy: Uuid | null;
 }
+
+/**
+ * What a built document is, in one word, for a chip on a row.
+ *
+ * Derived from `publishedAt` rather than stored — 0104 records at length why the database
+ * has no `status` column, and the same argument applies here: two places holding "is this
+ * published" is one place for them to disagree.
+ */
+export type ReportDocumentState = "draft" | "published" | "edited-since-published";
+
+export function reportDocumentState(d: {
+  publishedAt: string | null;
+  publishedUrl: string | null;
+  publishedDocumentId?: string | null;
+}): ReportDocumentState {
+  if (d.publishedAt) return "published";
+  // The third state is worth naming rather than folding into "draft": both carry the
+  // watermark and neither is safe to send, but only this one means there is a stale copy
+  // somebody may still be reading — sitting in SharePoint, or saved on the job here.
+  //
+  // Both are asked about (0110). A document published by saving the file to the job and
+  // then edited is in exactly the same position as one published to a link and then
+  // edited, and reading only the URL would have called it a plain draft — quietly the
+  // wrong answer for the half of the documents that never go near SharePoint.
+  return d.publishedUrl || d.publishedDocumentId ? "edited-since-published" : "draft";
+}
+
+export const REPORT_DOCUMENT_STATE_LABELS: Record<ReportDocumentState, string> = {
+  draft: "Draft",
+  published: "Published",
+  "edited-since-published": "Draft — edited since publishing"
+};
 
 export interface NewReportDocument {
   title: string;
@@ -3014,4 +3457,215 @@ export interface NewReportDocumentShare {
   expiresAt: IsoDateTime;
   snapshot: ReportShareSnapshot;
   passwordHash?: string | null;
+}
+
+/**
+ * A document as it appears on a record: the file or link, plus the attachment that put it
+ * there.
+ *
+ * Two rows, flattened for the panel that shows them. `id` is the document — the thing that
+ * is held once, however many records point at it — and `linkId` is this record's
+ * attachment, which is what "Remove" removes. Keeping both is what lets the same
+ * SharePoint contract sit on project 1042 and on job 1042-01 and be one document.
+ */
+export interface RecordDocument extends Doc {
+  linkId: Uuid;
+  /** Which record this attachment is for. Exactly one, by 0032's constraint. */
+  jobId: string | null;
+  projectId: number | null;
+  /**
+   * The maintenance issue this attachment is for (0115). A photo of a cracked tile is
+   * filed twice — once against the job, so it appears in the job's Documents list, and
+   * once against the issue, so the issue knows its own pictures. Two links, one document:
+   * 0032's design rather than a workaround.
+   */
+  maintenanceRequestId: Uuid | null;
+  attachedAt: IsoDateTime;
+}
+
+/**
+ * Filing a document that lives in SharePoint.
+ *
+ * Amber, 10 September: *"when adding a document I need to be able to save it as a url in
+ * sharepoint (integration coming) but for now I need to be able to add and delete them"*.
+ *
+ * Exactly one of `jobId` and `projectId`; 0032's `document_links_one_parent` refuses the
+ * rest. `category` is 0032's existing vocabulary and defaults to `other` — it is offered
+ * because the column is already there with its values decided, not invented for this.
+ */
+export interface NewDocumentUrl {
+  name: string;
+  url: string;
+  description?: string | null;
+  category?: DocumentCategory;
+  jobId?: string | null;
+  projectId?: number | null;
+}
+
+/**
+ * One row of "what has been written lately" — the dashboard's Recent documents panel.
+ *
+ * Both kinds in one list, because "has anything been filed on my jobs this week" is one
+ * question and answering it from two panels means reading two lists and merging them by
+ * eye. `kind` is what decides where the row goes when you click it: a built document opens
+ * in the Document Builder, a link opens in SharePoint, in a new tab.
+ *
+ * `at` is the later of created and updated, so a document edited today sorts above one
+ * filed last week — "recent documents or changes" was the ask, and a list ordered by
+ * creation alone answers only the first half of it.
+ */
+export interface RecentDocument {
+  id: Uuid;
+  kind: "built" | "filed";
+  title: string;
+  /** Where a filed document lives. Null for a built one, which has no URL of its own. */
+  url: string | null;
+  jobId: string | null;
+  projectId: number | null;
+  at: IsoDateTime;
+  /** Whether `at` is when it was filed or when it was last touched. */
+  change: "added" | "changed";
+  /** Who last touched it, resolved to a name where the profile is readable. */
+  byName: string | null;
+}
+
+// ------------------------------------------------------------------ global search
+
+/**
+ * What a hit in the header's search is about.
+ *
+ * The kinds are the things somebody types a name into the box hoping to reach. They are
+ * NOT every table in the app: nobody searches for a property definition or a saved view
+ * by name from the header, and offering them would push the hit they wanted below the
+ * fold.
+ */
+export type SearchHitKind = "job" | "project" | "contact" | "company" | "document" | "maintenance";
+
+export const SEARCH_HIT_LABELS: Record<SearchHitKind, string> = {
+  job: "Job",
+  project: "Project",
+  contact: "Contact",
+  company: "Company",
+  document: "Document",
+  maintenance: "Request"
+};
+
+/**
+ * Written out rather than made by appending an "s". One of the six is "Companies", and a
+ * heading reading "Companys" is the sort of thing that gets noticed by everybody and fixed
+ * by nobody.
+ */
+export const SEARCH_HIT_PLURALS: Record<SearchHitKind, string> = {
+  job: "Jobs",
+  project: "Projects",
+  contact: "Contacts",
+  company: "Companies",
+  document: "Documents",
+  maintenance: "Requests"
+};
+
+/**
+ * One row in the dropdown, and one row on the results page — the same shape for both, so
+ * the two can never rank or word the same hit differently.
+ *
+ * `href` is resolved by the repository rather than by the component. Where a record lives
+ * is a fact about the app's routes, and having six components each build a URL from a
+ * kind and an id is six places to get `/jobs/1042-01` wrong.
+ */
+export interface SearchHit {
+  kind: SearchHitKind;
+  /** Stable within a kind. Two kinds may share one — the key is `kind` plus this. */
+  id: string;
+  /** The line you read: "1042-01", "Brodie Court", "Deanna Rowe". */
+  title: string;
+  /** The second line: the address, the stage, the company. Null when there is nothing to add. */
+  detail: string | null;
+  href: string;
+  /**
+   * True when the only thing that matched was an address the record no longer uses.
+   *
+   * Worth surfacing rather than swallowing, exactly as the in-page matchers do: a hit on
+   * an *original* address means whoever searched is working from something out of date —
+   * an old email, a contract, a note in a file.
+   */
+  onPreviousAddress?: boolean;
+  /** Opened in a new tab rather than routed to. Only a document link is. */
+  external?: boolean;
+}
+
+/**
+ * A page somebody has bookmarked into the rail (0112).
+ *
+ * Amber, 11 September, asked what Pinned pins: *"pinned is new and allows people to
+ * save/bookmark a page"* — **any page**, a URL with a name. A filtered board, a settings
+ * screen, a job, a report.
+ *
+ * **No status.** The mockup draws pinned rows as projects with an 8px health dot; a URL
+ * has no health, and a second weaker list of projects beside the Projects destination is
+ * not what was asked for. The rail draws an icon for the KIND of page instead, and the
+ * kind is derived from the path rather than stored — see `pinKind` below.
+ */
+export interface PinnedPage {
+  id: Uuid;
+  label: string;
+  /** An in-app path with its query string. The database refuses anything else. */
+  url: string;
+  /** 1..5. The slot is the cap and the order, in one constraint. */
+  position: number;
+}
+
+/** What a pinned page points at, worked out from its path. Drives the row's icon. */
+export type PinKind = "job" | "project" | "board" | "report" | "settings" | "page";
+
+/**
+ * The kind of thing a pinned URL names.
+ *
+ * Derived, never stored: the path already says which, and a `pinned_page_kind` column
+ * would be a second source for the same fact that could disagree with the first the
+ * moment somebody edited one. A record route is recognised by having a segment after the
+ * board — `/jobs/1209-002` is a job, `/jobs?saved=live` is a board of them.
+ */
+export function pinKind(url: string): PinKind {
+  const path = url.split("?")[0].replace(/\/+$/, "");
+  const [, head, tail] = path.split("/");
+  if (head === "jobs") return tail ? "job" : "board";
+  if (head === "projects") return tail ? "project" : "board";
+  if (head === "maintenance" || head === "tasks" || head === "contacts") return "board";
+  if (head === "reports" || head === "report") return "report";
+  if (head === "setup" || head === "settings" || head === "admin") return "settings";
+  return "page";
+}
+
+/**
+ * The three numbers the navigation rail carries — Amber, 11 September.
+ *
+ * Three, and only three. The handoff draws a count on every flyout row as well ("All
+ * projects 9", "Pre-construction 3"), and she chose not to have them: three options were
+ * put up — one `rail_counts` view, live per-flyout fetches, or the rail's own six rows
+ * alone — and the third was taken. So the flyout lists its views and stage groupings with
+ * no number beside them, and this is the whole of what the rail counts.
+ *
+ * **Each number is what you land on**, not a row count of the table behind it. Click Jobs
+ * and the board opens on its "All jobs" view, which excludes Closed — so `jobs` excludes
+ * Closed too. Maintenance opens on the open queue, so `maintenance` counts the open
+ * queue. A badge that disagrees with the screen it takes you to is worse than no badge:
+ * the first thing anybody does is click it and count.
+ *
+ * **Inbox and Tasks carry no number**, and a `myOpenTasks` count was added here on
+ * 11 September and removed the same day. Amber: *"until counts are verified and tested
+ * remove"* — the two she wants are new-since-you-last-looked on Inbox, which nothing in
+ * the schema records yet, and open tasks on Tasks, which had not been checked against a
+ * real board. A query on every navigation for a number nobody renders is a cost with no
+ * reader, so it went with the badge.
+ *
+ * Reports, Contacts and Tools carry no number, in the design and here. They are not
+ * queues — nothing is waiting in them — so a count would be decoration.
+ */
+export interface RailCounts {
+  /** Projects at every lifecycle phase, matching the board's "All Projects" view. */
+  projects: number;
+  /** Jobs at every phase except Closed, matching the board's "All jobs" view. */
+  jobs: number;
+  /** Maintenance requests that are neither closed nor rejected — the default queue. */
+  maintenance: number;
 }

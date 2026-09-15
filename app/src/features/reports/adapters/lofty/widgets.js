@@ -26,6 +26,12 @@
 
 import { helpers } from '../../core/registry.js';
 import {
+  MAINTENANCE_ASSIGNEE_KIND_LABELS,
+  MAINTENANCE_HEALTH_LABELS,
+  MAINTENANCE_IDENTIFIED_AT,
+  MAINTENANCE_IDENTIFIED_AT_LABELS,
+  MAINTENANCE_STATUSES,
+  MAINTENANCE_STATUS_LABELS,
   PROCESS_RUN_HEALTH_LABELS,
   PROJECT_TYPE_LABELS,
   RECORD_STATUS_LABELS
@@ -37,7 +43,7 @@ import { formatValue, hasValue } from '../../../../data/propertyFormat';
 
 /** Palette order. Core's text blocks land in 'Text & layout'. */
 export const LOFTY_GROUPS = [
-  'Text & layout', 'Library', 'Job & project', 'Portfolio', 'Jobs', 'Projects', 'People'
+  'Text & layout', 'Library', 'Job & project', 'Portfolio', 'Jobs', 'Projects', 'Maintenance', 'People'
 ];
 
 // ─── Reading the context ─────────────────────────────────────────────
@@ -61,6 +67,8 @@ const sectionsOf = (ctx) => ctx.sections || [];
  * rendering blank.
  */
 const subjectOf = (ctx) => ctx.subject || null;
+/** Every maintenance issue the reader may see, open and closed (0114). */
+const maintenanceOf = (ctx) => ctx.maintenance || [];
 
 /** Active teams only, in display order — the same set every picker in the app offers. */
 const activeTeams = (ctx) => teamsOf(ctx).filter(t => t.isActive).sort((a, b) => a.position - b.position);
@@ -181,6 +189,110 @@ const recordPickers = () => ([
 ]);
 
 const notFinished = (r) => !['completed', 'cancelled', 'archived'].includes(r.status);
+
+// ─── Maintenance helpers ─────────────────────────────────────────────
+//
+// Shared by the two Maintenance blocks so a filter means the same thing in both. A table
+// and a detail list that disagree about what "only these repairers" includes is the kind
+// of thing nobody notices until a contractor is sent a list with somebody else's job on it.
+
+/** A date as the app writes it everywhere else, or an em dash. Never today's date. */
+const onDate = (v) => (v ? new Date(v).toLocaleDateString() : DASH);
+
+/** Who is fixing it: the Lofty person, or the company, whichever the kind allows. */
+const repairerName = (r) =>
+  (r.assigneeKind === 'external' ? r.assignedCompanyName : r.assigneeName) || null;
+
+/**
+ * The repairer filter's options, built from the issues themselves rather than from the
+ * whole staff list and the whole company list.
+ *
+ * Deliberate: a picker offering 46 people and every company, when four of them have ever
+ * been given an issue, is a picker nobody can use. The value is the name, because an
+ * internal profile id and a company id are different keyspaces and one filter has to
+ * match both — and two issues assigned to the same name are the same repairer.
+ */
+const repairerOptions = (ctx) => {
+  const seen = new Map();
+  for (const r of maintenanceOf(ctx)) {
+    const name = repairerName(r);
+    if (name && !seen.has(name)) {
+      seen.set(name, MAINTENANCE_ASSIGNEE_KIND_LABELS[r.assigneeKind] || null);
+    }
+  }
+  return [...seen].sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([name, kind]) => ({ value: name, label: kind ? `${name} — ${kind}` : name }));
+};
+
+const CLOSED_STATUSES = ['closed', 'rejected'];
+
+/**
+ * Every filter both blocks offer, applied in one place.
+ *
+ * The date comparison is on `identifiedOn` FALLING BACK to the report timestamp's date,
+ * which is the same thing the queue's Identified column shows. Comparing on the timestamp
+ * alone would drop every issue whose identification date somebody cleared — a filter that
+ * silently hides rows is worse than one that finds none.
+ */
+const narrowMaintenance = (all, o) => {
+  const jobIds = Array.isArray(o.jobIds) ? o.jobIds : [];
+  const projectIds = new Set((Array.isArray(o.projectIds) ? o.projectIds : []).map(String));
+  const wantedJobs = new Set(jobIds.map(String));
+  const statuses = new Set(Array.isArray(o.statuses) ? o.statuses : []);
+  const places = new Set(Array.isArray(o.identifiedAt) ? o.identifiedAt : []);
+  const repairers = new Set(Array.isArray(o.assignedTo) ? o.assignedTo : []);
+  const since = String(o.since || '').trim();
+  const until = String(o.until || '').trim();
+
+  const dayOf = (r) => String(r.identifiedOn || r.reportedAt || '').slice(0, 10);
+
+  return all.filter(r => {
+    if (!o.includeClosed && CLOSED_STATUSES.includes(r.status)) return false;
+    if ((wantedJobs.size || projectIds.size) &&
+        !wantedJobs.has(String(r.jobId)) && !projectIds.has(String(r.projectId))) return false;
+    if (statuses.size && !statuses.has(r.status)) return false;
+    if (places.size && !places.has(r.identifiedAt)) return false;
+    if (repairers.size && !repairers.has(repairerName(r))) return false;
+    const day = dayOf(r);
+    if (since && day && day < since) return false;
+    if (until && day && day > until) return false;
+    return true;
+  }).sort((a, b) => (dayOf(b).localeCompare(dayOf(a))) || String(a.number).localeCompare(String(b.number)));
+};
+
+/**
+ * Which nothing this is. Four of them, and telling them apart is the difference between
+ * "there is nothing to report" and "this block is pointed at the wrong thing".
+ */
+const noMaintenanceReason = (all, o) => {
+  if (!all.length) return 'No maintenance issues have been logged yet.';
+  const open = all.filter(r => !CLOSED_STATUSES.includes(r.status));
+  if (!o.includeClosed && !open.length) {
+    return 'Every maintenance issue you can see is closed or rejected. Tick "Include closed…" to show them.';
+  }
+  if (o.jobIds?.length || o.projectIds?.length) {
+    return 'Nothing to show for the jobs and projects this block is pointed at.';
+  }
+  return 'No maintenance issue matches these filters.';
+};
+
+/**
+ * Status to chip tone. Every one of the eight is mapped: an unmapped status would fall
+ * back to grey and read as "waiting", which is a different fact.
+ */
+const MAINTENANCE_STATUS_TONES = {
+  new: 'orange',
+  triaged: 'blue',
+  in_progress: 'blue',
+  waiting_on_contractor: 'amber',
+  waiting_on_client: 'amber',
+  completed: 'green',
+  closed: 'grey',
+  rejected: 'grey'
+};
+const maintenanceStatusCell = (s) =>
+  (s ? { text: MAINTENANCE_STATUS_LABELS[s] || DASH, chip: MAINTENANCE_STATUS_TONES[s] || 'grey' } : DASH);
+
 
 // ─── Headline numbers ────────────────────────────────────────────────
 //
@@ -474,13 +586,42 @@ export const LOFTY_WIDGETS = {
         return h.forExport ? [] : [helpers.info('Choose a record in this block’s settings.')];
       }
 
-      const rows = valuesOf(ctx).filter(v =>
-        jobId ? v.jobId === jobId : String(v.projectId) === String(projectId)
-      );
+      /**
+       * A JOB READS ITS PROJECT'S VALUES THROUGH.
+       *
+       * Amber, 5 September: *"jobs inherit project proerties so they should be available
+       * to select on the job"*. They were already available to SELECT — the picker lists
+       * every definition, project-scoped ones included — and selecting one on a job
+       * printed nothing, because this filter took job rows or project rows and never
+       * both. Available and inert is worse than absent.
+       *
+       * The app has always done it the other way: `PropertySlots` shows a job the
+       * project's value read through, and `property_values` is documented as sparse for
+       * exactly this reason — "the project's own value is the one read through otherwise".
+       * The report was the odd one out, and a report that disagrees with the drawer it
+       * was taken from is the failure this whole feature is built to avoid.
+       *
+       * The job's own row wins where there is one, which is the same precedence the
+       * drawer uses: a pushed copy is an answer somebody gave for THIS job.
+       */
+      const job = jobId ? jobsOf(ctx).find(j => j.jobNumber === jobId) : null;
+      const ownProject = jobId
+        ? String(job?.projectId ?? job?.projectNumber ?? "")
+        : String(projectId);
+      const rows = valuesOf(ctx).filter(v => {
+        if (!jobId) return String(v.projectId) === String(projectId);
+        if (v.jobId === jobId) return true;
+        // Inherited: a project row, and only from the project this job belongs to.
+        return v.jobId == null && ownProject !== "" && String(v.projectId) === ownProject;
+      });
       const label = jobId ? `job ${jobId}` : `project ${projectId}`;
 
       const byKey = new Map(defs.map(d => [d.key, d]));
-      const valueFor = new Map(rows.map(v => [v.propertyKey, v.value]));
+      // Project rows first, then the job's own over the top: `Map.set` keeps the last
+      // write, and the rows arrive in whatever order the query returned them.
+      const valueFor = new Map();
+      rows.filter(v => v.jobId == null).forEach(v => valueFor.set(v.propertyKey, v.value));
+      rows.filter(v => v.jobId != null).forEach(v => valueFor.set(v.propertyKey, v.value));
       const people = peopleOf(ctx).map(pr => ({ id: pr.id, name: pr.fullName }));
       const optionsFor = (key) => optionsOf(ctx).filter(op => op.propertyKey === key);
 
@@ -680,6 +821,204 @@ export const LOFTY_WIDGETS = {
       for (const [group, groupRows] of groups) {
         blocks.push({ type: 'subheading', text: `${group} (${groupRows.length})` });
         blocks.push({ type: 'table', headers, rows: groupRows.map(toRow) });
+      }
+      return blocks;
+    }
+  },
+
+  // ─── Maintenance ─────────────────────────────────────────────────
+  //
+  // Amber, 14 September, setting out the report work in three stages: *"stage 1 is
+  // building a section in the report builder that allows you to add in a maintenance
+  // section which is a maintenance requests with details. This can be saved as a
+  // template."* These two blocks are that stage.
+  //
+  // ONE ISSUE IS ONE REQUEST, which is the shape she chose on the same day: three defects
+  // from one PCI walk are 1042-01-M3, -M4 and -M5. So a "maintenance section" is a set of
+  // requests, and the filters below are the questions somebody actually asks of them —
+  // which job, which status, who is fixing it, where it was identified, and when.
+  //
+  // PHOTOS ARE COUNTED, NOT SHOWN, and that is a limitation rather than a choice.
+  // `job-documents` is private (Amber, 14 September), so a photo has no permanent URL and
+  // has to be signed at the moment it is read — and `resolve` is synchronous, so a block
+  // cannot fetch one while it renders. A count is the honest thing to print; a broken
+  // image is not. HANDOFF.md records what solving it needs.
+
+  maintenanceTable: {
+    label: 'Maintenance issues',
+    group: 'Maintenance',
+    hint: 'Every issue you can see, filtered and grouped — the table for a summary page',
+    defaults: () => ({
+      groupBy: 'none',
+      includeClosed: false,
+      statuses: [],
+      identifiedAt: [],
+      assignedTo: [],
+      since: '',
+      until: '',
+      columns: ['address', 'issue', 'identified', 'assignee', 'status', 'booked']
+    }),
+    compactable: true,
+    settings: [
+      {
+        key: 'groupBy', type: 'select', label: 'Group by', allowEmpty: false,
+        options: [
+          { value: 'none', label: 'No grouping' },
+          { value: 'job', label: 'Job' },
+          { value: 'status', label: 'Status' },
+          { value: 'assignee', label: 'Who is fixing it' },
+          { value: 'identifiedAt', label: 'Where it was identified' }
+        ]
+      },
+      {
+        key: 'columns', type: 'multiselect', label: 'Columns', reorderable: true,
+        hint: 'The issue number is always the first column.',
+        options: () => [
+          { value: 'address', label: 'Address' },
+          { value: 'job', label: 'Job' },
+          { value: 'issue', label: 'Issue' },
+          { value: 'identified', label: 'Identified' },
+          { value: 'identifiedAt', label: 'Identified at' },
+          { value: 'reportedBy', label: 'Reported by' },
+          { value: 'assignee', label: 'Assigned to' },
+          { value: 'status', label: 'Status' },
+          { value: 'booked', label: 'Date booked' },
+          { value: 'followUp', label: 'Follow-up' },
+          { value: 'health', label: 'Against SLA' }
+        ]
+      },
+      {
+        key: 'statuses', type: 'multiselect', label: 'Only these statuses', emptyMeansAll: true,
+        hint: 'Leave empty for every status.',
+        options: () => MAINTENANCE_STATUSES.map(v => ({ value: v, label: MAINTENANCE_STATUS_LABELS[v] }))
+      },
+      {
+        key: 'identifiedAt', type: 'multiselect', label: 'Only these inspections', emptyMeansAll: true,
+        options: () => MAINTENANCE_IDENTIFIED_AT.map(v => ({ value: v, label: MAINTENANCE_IDENTIFIED_AT_LABELS[v] }))
+      },
+      {
+        key: 'assignedTo', type: 'multiselect', label: 'Only these repairers', emptyMeansAll: true,
+        hint: 'Lofty people and contractors, from the issues you can see.',
+        options: (ctx) => repairerOptions(ctx)
+      },
+      { key: 'since', type: 'text', label: 'Identified on or after', hint: 'yyyy-mm-dd. Leave empty for no earliest date.' },
+      { key: 'until', type: 'text', label: 'Identified on or before', hint: 'yyyy-mm-dd. Leave empty for no latest date.' },
+      { key: 'includeClosed', type: 'checkbox', label: 'Include closed and rejected issues' },
+      ...recordPickers()
+    ],
+    resolve: (o, ctx) => {
+      const rows = narrowMaintenance(maintenanceOf(ctx), o);
+      if (!rows.length) return [helpers.info(noMaintenanceReason(maintenanceOf(ctx), o))];
+
+      const COLUMNS = {
+        address: { header: 'Address', cell: (r) => or(r.jobAddress) },
+        job: { header: 'Job', cell: (r) => or(r.jobId) },
+        issue: { header: 'Issue', cell: (r) => or(r.summary) },
+        identified: { header: 'Identified', cell: (r) => onDate(r.identifiedOn ?? r.reportedAt) },
+        identifiedAt: { header: 'Identified at', cell: (r) => or(r.identifiedAt ? MAINTENANCE_IDENTIFIED_AT_LABELS[r.identifiedAt] : null) },
+        reportedBy: { header: 'Reported by', cell: (r) => or(r.reportedByProfileName ?? r.reportedByName) },
+        assignee: { header: 'Assigned to', cell: (r) => or(repairerName(r)) },
+        status: { header: 'Status', cell: (r) => maintenanceStatusCell(r.status) },
+        booked: { header: 'Date booked', cell: (r) => onDate(r.bookedOn) },
+        followUp: { header: 'Follow-up', cell: (r) => onDate(r.followUpOn) },
+        health: { header: 'Against SLA', cell: (r) => or(MAINTENANCE_HEALTH_LABELS[r.health]) }
+      };
+      const chosen = (o.columns || []).filter(k => COLUMNS[k]);
+      const headers = ['Issue no.', ...chosen.map(k => COLUMNS[k].header)];
+      const toRow = (r) => [r.number, ...chosen.map(k => COLUMNS[k].cell(r))];
+
+      if (o.groupBy === 'none') return [{ type: 'table', headers, rows: rows.map(toRow) }];
+
+      const key = {
+        job: (r) => (r.jobAddress ? `${r.jobId} — ${r.jobAddress}` : String(r.jobId)),
+        status: (r) => or(MAINTENANCE_STATUS_LABELS[r.status]),
+        assignee: (r) => or(repairerName(r)),
+        identifiedAt: (r) => or(r.identifiedAt ? MAINTENANCE_IDENTIFIED_AT_LABELS[r.identifiedAt] : null)
+      }[o.groupBy];
+      if (!key) return [{ type: 'table', headers, rows: rows.map(toRow) }];
+
+      const blocks = [];
+      for (const [group, groupRows] of [...groupBy(rows, key)].sort((a, b) => a[0].localeCompare(b[0]))) {
+        blocks.push({ type: 'subheading', text: `${group} (${groupRows.length})` });
+        blocks.push({ type: 'table', headers, rows: groupRows.map(toRow) });
+      }
+      return blocks;
+    }
+  },
+
+  maintenanceDetail: {
+    label: 'Maintenance issues in detail',
+    group: 'Maintenance',
+    hint: 'One block per issue — the facts, the details somebody wrote, and a page of its own',
+    defaults: () => ({
+      includeClosed: false,
+      statuses: [],
+      identifiedAt: [],
+      assignedTo: [],
+      since: '',
+      until: '',
+      pageEach: true,
+      showDescription: true,
+      limit: 0
+    }),
+    settings: [
+      {
+        key: 'pageEach', type: 'checkbox',
+        label: 'Start each issue on a new page when printing'
+      },
+      { key: 'showDescription', type: 'checkbox', label: 'Include the details somebody typed' },
+      {
+        key: 'limit', type: 'number', label: 'At most this many issues',
+        hint: '0 for no limit. A walk that turned up forty defects is forty pages.'
+      },
+      {
+        key: 'statuses', type: 'multiselect', label: 'Only these statuses', emptyMeansAll: true,
+        options: () => MAINTENANCE_STATUSES.map(v => ({ value: v, label: MAINTENANCE_STATUS_LABELS[v] }))
+      },
+      {
+        key: 'identifiedAt', type: 'multiselect', label: 'Only these inspections', emptyMeansAll: true,
+        options: () => MAINTENANCE_IDENTIFIED_AT.map(v => ({ value: v, label: MAINTENANCE_IDENTIFIED_AT_LABELS[v] }))
+      },
+      {
+        key: 'assignedTo', type: 'multiselect', label: 'Only these repairers', emptyMeansAll: true,
+        options: (ctx) => repairerOptions(ctx)
+      },
+      { key: 'since', type: 'text', label: 'Identified on or after', hint: 'yyyy-mm-dd.' },
+      { key: 'until', type: 'text', label: 'Identified on or before', hint: 'yyyy-mm-dd.' },
+      { key: 'includeClosed', type: 'checkbox', label: 'Include closed and rejected issues' },
+      ...recordPickers()
+    ],
+    resolve: (o, ctx) => {
+      let rows = narrowMaintenance(maintenanceOf(ctx), o);
+      if (!rows.length) return [helpers.info(noMaintenanceReason(maintenanceOf(ctx), o))];
+      const capped = Number(o.limit) > 0 && rows.length > Number(o.limit);
+      if (capped) rows = rows.slice(0, Number(o.limit));
+
+      const blocks = [];
+      rows.forEach((r, at) => {
+        // The break goes BEFORE each issue but the first, not after each one: after the
+        // last it leaves a blank page, which is the tell of a report built by a machine.
+        if (o.pageEach && at > 0) blocks.push({ type: 'divider', pageBreak: true });
+        blocks.push({ type: 'subheading', text: `${r.number} — ${r.summary}` });
+        blocks.push({
+          type: 'keyValues',
+          items: [
+            { label: 'Job', value: r.jobAddress ? `${r.jobId} — ${r.jobAddress}` : String(r.jobId) },
+            { label: 'Identified', value: onDate(r.identifiedOn ?? r.reportedAt) },
+            { label: 'Identified at', value: or(r.identifiedAt ? MAINTENANCE_IDENTIFIED_AT_LABELS[r.identifiedAt] : null) },
+            { label: 'Reported by', value: or(r.reportedByProfileName ?? r.reportedByName) },
+            { label: 'Assigned to', value: or(repairerName(r)) },
+            { label: 'Status', value: or(MAINTENANCE_STATUS_LABELS[r.status]) },
+            { label: 'Date booked', value: onDate(r.bookedOn) },
+            { label: 'Follow-up', value: onDate(r.followUpOn) }
+          ]
+        });
+        if (o.showDescription && r.description) {
+          blocks.push({ type: 'paragraph', text: r.description });
+        }
+      });
+      if (capped) {
+        blocks.push(helpers.info(`Showing the first ${o.limit}. Raise or clear the limit to include the rest.`));
       }
       return blocks;
     }
@@ -1081,6 +1420,20 @@ export const LOFTY_SEEDS = [
       { kind: 'teamWorkload', options: {} },
       { kind: 'heading', options: { text: 'Recommended actions' } },
       { kind: 'text', options: { html: '<ul><li>First action</li><li>Second action</li></ul>' } }
+    ]
+  },
+  {
+    key: 'maintenance',
+    label: 'Maintenance report',
+    hint: 'The open issues as a table, then each one in detail on its own page',
+    build: () => [
+      { kind: 'heading', options: { text: 'Maintenance' } },
+      { kind: 'text', options: { html: '<p>Who this is for, and what you want done. Write it here.</p>' } },
+      { kind: 'maintenanceTable', options: { groupBy: 'job' } },
+      { kind: 'heading', options: { text: 'The issues' } },
+      // pageEach on, because "each issue being its own page" is what Amber asked the
+      // report for. It is a tick box, so a summary-only report is one click away.
+      { kind: 'maintenanceDetail', options: { pageEach: true, showDescription: true } }
     ]
   },
   {

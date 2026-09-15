@@ -29,7 +29,10 @@ import {
 import { createReportRegistry } from "../src/features/reports/core/registry.js";
 import { createReportEngine } from "../src/features/reports/core/widgetEngine.js";
 import { LOFTY_THEME, LOFTY_THEME_QUIET } from "../src/features/reports/adapters/lofty/theme.js";
+import { makeFillTextTokens, makeFillTokens, tokensFor } from "../src/features/reports/adapters/lofty/tokens.js";
 import { HOUSE_COLOURS } from "../src/data/export/houseFormat.ts";
+import { snippetHtml, snippetLayout } from "../src/data/types.ts";
+import { parseSubject, subjectOptionsFor } from "../src/pages/documentSubject.ts";
 import { execFileSync } from "node:child_process";
 // Dev-only, and dependency-free itself. It is here to answer the one question none of the
 // assertions below could: not "do the two drawings agree" but "does a phone read it".
@@ -118,7 +121,9 @@ const propertyDefs = [
   { key: "slab_cost", label: "Slab cost", format: "currency", stageName: "Construction", position: 2 },
   { key: "council_approved", label: "Council approved", format: "checkbox", stageName: "Pre-Construction", position: 1 },
   { key: "cladding", label: "Cladding", format: "single select", stageName: "Design", position: 1 },
-  { key: "never_filled_in", label: "Nobody has filled this in", format: "text", stageName: "Design", position: 2 }
+  { key: "never_filled_in", label: "Nobody has filled this in", format: "text", stageName: "Design", position: 2 },
+  // Project-scoped: recorded once for the site, read through by every job on it.
+  { key: "council", label: "Council", format: "text", stageName: "Pre-Construction", position: 2 }
 ];
 const propertyOptions = [
   { propertyKey: "cladding", key: "brick", label: "Brick veneer", position: 1, isActive: true }
@@ -128,7 +133,9 @@ const propertyValues = [
   { id: "v2", propertyKey: "slab_cost", format: "currency", jobId: "1042-001", projectId: null, value: { number: 18400 } },
   { id: "v3", propertyKey: "council_approved", format: "checkbox", jobId: "1042-001", projectId: null, value: { bool: true } },
   { id: "v4", propertyKey: "cladding", format: "single select", jobId: "1042-001", projectId: null, value: { optionKey: "brick" } },
-  { id: "v5", propertyKey: "slab_cost", format: "currency", jobId: null, projectId: 1042, value: { number: 51000 } }
+  { id: "v5", propertyKey: "slab_cost", format: "currency", jobId: null, projectId: 1042, value: { number: 51000 } },
+  // Only the project has this one, and only project 1042 — so a job on 1043 must not see it.
+  { id: "v6", propertyKey: "council", format: "text", jobId: null, projectId: 1042, value: { text: "Tea Tree Gully" } }
 ];
 
 /** One approved library section, holding two blocks. */
@@ -171,9 +178,60 @@ const expandSection = (section, h) => {
   }
 };
 
+// Who is on the record (10 September). Two purchasers on the one house, because a letter
+// addressed to one of the two people who own it is the failure the joining rule exists to
+// prevent; a company party with no contact, because the council is a party too; and one
+// who has ENDED, because a purchaser who pulled out in March is not who September writes
+// to. Nothing here is a placeholder — these are the shapes record_parties actually holds.
+const partyRoles = [
+  { id: "purchaser", name: "Purchaser" },
+  { id: "council", name: "Council" },
+  { id: "surveyor", name: "Surveyor" },
+  { id: "real_estate_agent", name: "Real estate agent" }
+];
+const parties = [
+  { roleId: "purchaser", contactName: "Mary Ashby", companyName: null, isPrimary: false, endedOn: null },
+  { roleId: "purchaser", contactName: "John Ashby", companyName: null, isPrimary: true, endedOn: null },
+  { roleId: "purchaser", contactName: "Priya Raman", companyName: null, isPrimary: false, endedOn: "2026-03-14" },
+  { roleId: "council", contactName: null, companyName: "Tea Tree Gully Council", isPrimary: true, endedOn: null }
+];
+
+/**
+ * Three maintenance issues on two jobs (0114): one assigned to a contractor, one to a
+ * Lofty person, one closed. THREE, not one, and each difference is load-bearing —
+ * without the contractor the repairer filter passes whether or not it reads the external
+ * half, without the closed one "Include closed…" passes whether or not it is honoured,
+ * and without the second job "group by job" makes one heading whatever it groups on.
+ *
+ * `identifiedOn` is null on the third on purpose: the date filter falls back to the
+ * report timestamp, and a filter that silently drops rows whose identification date
+ * somebody cleared is worse than one that finds none.
+ */
+const maintenance = [
+  { id: "m1", number: "1042-001-M1", jobId: "1042-001", projectId: 1042, jobAddress: "28 Corner Street",
+    summary: "Ensuite tap leaking", description: "Drips overnight, worse when the shower runs.",
+    identifiedOn: "2026-09-10", identifiedAt: "pci", reportedAt: "2026-09-12T00:30:00Z",
+    reportedByProfileName: "Deanna Rowe", reportedByName: null,
+    assigneeKind: "external", assigneeName: null, assignedCompanyName: "Ace Plumbing",
+    status: "in_progress", bookedOn: "2026-09-18", followUpOn: null, health: "no_sla" },
+  { id: "m2", number: "1042-001-M2", jobId: "1042-001", projectId: 1042, jobAddress: "28 Corner Street",
+    summary: "Laundry tile cracked", description: null,
+    identifiedOn: "2026-09-10", identifiedAt: "pci", reportedAt: "2026-09-12T00:30:00Z",
+    reportedByProfileName: "Deanna Rowe", reportedByName: null,
+    assigneeKind: "internal", assigneeName: "Ketan Shah", assignedCompanyName: null,
+    status: "new", bookedOn: null, followUpOn: "2026-09-21", health: "no_sla" },
+  { id: "m3", number: "1002-001-M1", jobId: "1002-001", projectId: 1002, jobAddress: "3 Wandoo Road",
+    summary: "Garage door sticks", description: "Only in the mornings.",
+    identifiedOn: null, identifiedAt: "inspection_3_month", reportedAt: "2026-08-02T00:30:00Z",
+    reportedByProfileName: null, reportedByName: null,
+    assigneeKind: "internal", assigneeName: null, assignedCompanyName: null,
+    status: "closed", bookedOn: null, followUpOn: null, health: "closed" }
+];
+
 const full = {
   projects, jobs, teams, stageNames, people, processes,
   propertyDefs, propertyValues, propertyOptions,
+  partyRoles, parties, maintenance,
   sections, expandSection,
   subject: { jobId: "1042-001", projectId: null },
   // The document's own widget list, which compileReport and the builder both supply.
@@ -198,6 +256,7 @@ const full = {
 const empty = {
   projects: [], jobs: [], teams, stageNames, people: [], processes: [],
   propertyDefs: [], propertyValues: [], propertyOptions: [],
+  partyRoles: [], parties: [], maintenance: [],
   sections: [], expandSection, subject: null
 };
 /** What `expandSection` resolves against; the screen keeps this in a ref for the same reason. */
@@ -601,10 +660,11 @@ console.log("--- the Lofty theme is the house document format, role for role");
     LOFTY_THEME_QUIET.colors.ink.toLowerCase() === HOUSE_COLOURS.ink.toLowerCase()
     && LOFTY_THEME_QUIET.colors.heading.toLowerCase() === HOUSE_COLOURS.green.toLowerCase(),
     `${LOFTY_THEME_QUIET.colors.ink} / ${LOFTY_THEME_QUIET.colors.heading}`);
-  // Helvetica first, never Arial — the Word writer's rule, and core/docx.js takes the
-  // first family in the stack and writes it into the file.
-  ok("the document font is Helvetica first, and Arial appears nowhere",
-    /^Helvetica\b/.test(LOFTY_THEME.fonts.body) && !/Arial/i.test(LOFTY_THEME.fonts.body),
+  // Montserrat first — the house font since 9 September, and core/docx.js takes the first
+  // family in the stack and writes it into the file. Helvetica, Calibri and Aptos are the
+  // faces the brand says are never substituted, so none may appear anywhere in the stack.
+  ok("the document font is Montserrat first, and Helvetica appears nowhere",
+    /^Montserrat\b/.test(LOFTY_THEME.fonts.body) && !/Helvetica|Calibri|Aptos/i.test(LOFTY_THEME.fonts.body),
     LOFTY_THEME.fonts.body);
 }
 
@@ -807,6 +867,444 @@ console.log("--- the Lofty theme is the house document format, role for role");
     LOFTY_WIDGETS.qrCode.settings.length === 3
     && LOFTY_WIDGETS.qrCode.settings.map(s => s.key).join(",") === "url,caption,size",
     LOFTY_WIDGETS.qrCode.settings.map(s => s.key).join(","));
+}
+
+// ─── 17. A job reads its project's properties through ────────────────────
+//
+// Amber, 5 September: *"jobs inherit project proerties so they should be available to
+// select on the job"*. They were always available to SELECT — the picker lists every
+// definition — and selecting a project property on a job printed nothing, because the
+// resolver took job rows or project rows and never both.
+//
+// The app has always done it the other way round: `PropertySlots` shows a job the
+// project's value read through, and the type for `property_values` says so in as many
+// words. The report was the odd one out, and a report that disagrees with the drawer it
+// was taken from is the failure this feature exists to prevent.
+{
+  // It emits a definition list, not a table — `[0].items` of {label, value}, which is
+  // how every other assertion on this block reads it.
+  const itemsOf = (opts) => engine.resolve(
+    { id: "wI", kind: "recordProperties", options: { propertyKeys: [], showBlanks: false, ...opts } },
+    full
+  )[0]?.items ?? [];
+  const find = (items, label) => items.find(i => i.label === label);
+
+  // Broken by putting the old `jobId ? v.jobId === jobId : …` filter back: Council
+  // vanishes from the job while staying on the project.
+  const onJob = itemsOf({ source: "job", jobId: "1042-001" });
+  ok("a job shows a property only its project carries",
+    !!find(onJob, "Council"),
+    onJob.map(i => i.label).join(" | "));
+
+  // Broken by dropping the two-pass `valueFor` build back to one `new Map(rows.map(…))`:
+  // whichever row the fixture happens to list last wins, which is the project's.
+  const slab = find(onJob, "Slab cost");
+  ok("and the job's own value beats the project's for the same property",
+    !!slab && /18[,.]?400/.test(String(slab.value)),
+    slab ? String(slab.value) : "no Slab cost row");
+
+  // The one that stops "inherit" meaning "from any project". Broken by dropping the
+  // `String(v.projectId) === ownProject` test: 1043-001 picks up Tea Tree Gully.
+  const otherProject = itemsOf({ source: "job", jobId: "1043-001" });
+  ok("a job on another project inherits nothing from this one",
+    !find(otherProject, "Council"),
+    otherProject.map(i => i.label).join(" | "));
+
+  // A project still reads only its own. Broken by letting job rows through when no
+  // jobId is set: the project would show 1042-001's site start date as its own.
+  const ownOnly = itemsOf({ source: "project", projectId: "1042" });
+  ok("a project reads its own values and not its jobs'",
+    !!find(ownOnly, "Council") && !find(ownOnly, "Site start date"),
+    ownOnly.map(i => i.label).join(" | "));
+}
+
+// ─── 18. Placeholders in prose ───────────────────────────────────────────
+//
+// Amber, 5 September: *"i want to be able to add properties in rich text and save them
+// so i can create a letter with proeprties as placeholders"*.
+{
+  const fill = makeFillTokens(full);
+  const strip = (h) => String(h).replace(/<[^>]*>/g, "");
+
+  // Broken by having `makeFillTokens` return the html untouched: the letter goes out
+  // saying "booked for {{site_start_date}}".
+  ok("a placeholder becomes the value",
+    /1 October 2026|1\/10\/2026|2026/.test(strip(fill("<p>Booked for {{site_start_date}}.</p>", { forExport: true }))),
+    strip(fill("<p>{{site_start_date}}</p>", { forExport: true })));
+
+  // The whole point of using formatValue: a currency is A$18,400 in a letter because it
+  // is A$18,400 in the drawer. Broken by returning `v.number` raw.
+  ok("and it is formatted the way the drawer formats it",
+    /A\$18[,.]?400/.test(strip(fill("<p>{{slab_cost}}</p>", { forExport: true }))),
+    strip(fill("<p>{{slab_cost}}</p>", { forExport: true })));
+
+  // Inherited, same as the block. Broken by dropping the project fallback in valuesFor.
+  ok("a job's letter can use a property only its project carries",
+    /Tea Tree Gully/.test(strip(fill("<p>{{council}}</p>", { forExport: true }))),
+    strip(fill("<p>{{council}}</p>", { forExport: true })));
+
+  // Recorded nothing → an em dash, never a blank. CLAUDE.md: never fill a gap with a
+  // plausible value, and a blank in a sentence reads as a typo.
+  ok("a property nobody has filled in is an em dash, not a gap",
+    strip(fill("<p>[{{never_filled_in}}]</p>", { forExport: true })) === "[—]",
+    strip(fill("<p>[{{never_filled_in}}]</p>", { forExport: true })));
+
+  // A TYPO IS LEFT STANDING. Broken by treating an unknown key like a blank: "booked
+  // for {{slab_dat}}" silently becomes "booked for", which is a sentence somebody sends.
+  ok("a token naming no field is left visible rather than deleted",
+    strip(fill("<p>Booked for {{slab_dat}}.</p>", { forExport: true })) === "Booked for {{slab_dat}}.",
+    strip(fill("<p>Booked for {{slab_dat}}.</p>", { forExport: true })));
+
+  // Escaped, because a property is user-entered text going into html. Broken by
+  // dropping `esc`: an address containing a tag becomes markup in the document.
+  const nasty = makeFillTokens({
+    ...full,
+    jobs: [{ ...full.jobs[0], currentAddress: '28 <b>Corner</b> & Co' }]
+  });
+  ok("a value carrying markup is escaped, not rendered",
+    !/<b>/.test(nasty("<p>{{address}}</p>", { forExport: true }))
+    && /&amp;/.test(nasty("<p>{{address}}</p>", { forExport: true })),
+    nasty("<p>{{address}}</p>", { forExport: true }));
+
+  // On the canvas it is marked; in an export it is a sentence. Broken by rendering the
+  // canvas markup in both: a client letter with highlighted words is a draft.
+  ok("the marks are on the canvas and not in the export",
+    /rb-token/.test(fill("<p>{{slab_cost}}</p>", { forExport: false }))
+    && !/rb-token/.test(fill("<p>{{slab_cost}}</p>", { forExport: true })),
+    "canvas and export render the same");
+
+  // Untouched html must come back identical — the fast path, and the common case.
+  const plain = "<p>No placeholders here at all.</p>";
+  ok("prose with no placeholders is returned unchanged", fill(plain) === plain);
+
+  // The menu the editor offers. Broken by dropping the record basics: a letter cannot
+  // open with the job number, which is the first thing every letter says.
+  const menu = tokensFor(full);
+  ok("the insert menu offers the record's own facts as well as its properties",
+    menu.some(t => t.value === "job_number") && menu.some(t => t.value === "address")
+    && menu.some(t => t.value === "slab_cost"),
+    `${menu.length} fields`);
+
+  // ── who is on the record (10 September) ──────────────────────────────────
+  //
+  // Amber wrote the letter as *"dear [Owner Name] your property [property address] has
+  // just received planning approval on [planning approval date]"*. There is no `owner`
+  // role, so there is a token per role instead and nobody has to guess which one a letter
+  // opens to. Broken by dropping partyTokensFor from the menu: the field simply is not
+  // offered and the letter goes out with a name typed by hand that nobody updates.
+  ok("the insert menu offers a field for every contact role",
+    ["purchaser_name", "council_name", "surveyor_name", "real_estate_agent_name"]
+      .every(k => menu.some(t => t.value === k)),
+    menu.filter(t => t.group === "Contacts").map(t => t.value).join(", "));
+
+  // The group carries the app's own word. "Parties" is the table's name and appears on no
+  // screen; a menu that used it would be the schema leaking into the editor.
+  ok("and files them under the word the app uses for these people",
+    menu.filter(t => t.group === "Contacts").length === partyRoles.length,
+    [...new Set(menu.map(t => t.group))].join(" · "));
+
+  // TWO PURCHASERS, JOINED — the whole reason this is not "the primary one". Broken by
+  // returning only the row marked primary: the letter about somebody's house is addressed
+  // to one of the two people who own it, which reads as correct and is not.
+  ok("two purchasers are both named, primary first",
+    strip(fill("<p>Dear {{purchaser_name}},</p>", { forExport: true })) === "Dear John Ashby and Mary Ashby,",
+    strip(fill("<p>{{purchaser_name}}</p>", { forExport: true })));
+
+  // AND THE ONE WHO PULLED OUT IS NOT AMONG THEM. Broken by dropping the endedOn filter —
+  // Priya Raman comes back into a letter written six months after she left.
+  ok("a party who has ended is not in the letter",
+    !/Priya/.test(fill("<p>{{purchaser_name}}</p>", { forExport: true })),
+    strip(fill("<p>{{purchaser_name}}</p>", { forExport: true })));
+
+  // A COMPANY PARTY, where there is no contact at all.
+  ok("a company party resolves to the company's name",
+    strip(fill("<p>{{council_name}}</p>", { forExport: true })) === "Tea Tree Gully Council",
+    strip(fill("<p>{{council_name}}</p>", { forExport: true })));
+
+  // A REAL ROLE WITH NOBODY IN IT IS A BLANK, not a standing token — the same as a
+  // property nobody has filled in. The two facts are different and the letter says so:
+  // "nobody is filed as the surveyor" is not "you typed a field that does not exist".
+  ok("a role with nobody in it is an em dash, not a standing token",
+    strip(fill("<p>[{{surveyor_name}}]</p>", { forExport: true })) === "[—]",
+    strip(fill("<p>[{{surveyor_name}}]</p>", { forExport: true })));
+
+  // And a role that does not exist still reads as a typo.
+  ok("a role token naming no role is left visible",
+    strip(fill("<p>{{owner_name}}</p>", { forExport: true })) === "{{owner_name}}",
+    strip(fill("<p>{{owner_name}}</p>", { forExport: true })));
+
+  // NO TWO TOKENS MAY SHARE A KEY. A property definition ending `_name` would collide with
+  // a role token and one would silently shadow the other — the letter then says a
+  // surveyor's name where somebody meant a property, or the reverse, with nothing on
+  // screen to show it happened. Asserted rather than assumed, so the day somebody adds
+  // such a property is the day this reports.
+  const keys = menu.map(t => t.value);
+  ok("no two insertable fields share a key",
+    new Set(keys).size === keys.length,
+    keys.filter((k, i) => keys.indexOf(k) !== i).join(", ") || `${keys.length} unique`);
+
+  // ── the same placeholders in a TABLE (10 September) ──────────────────────
+  //
+  // Amber: "how do i add a single property … in rich text dropin or in a table or when
+  // creating a snippet". A cell is text and not html, which is the whole reason this is
+  // a second function: broken by pointing ctx.fillTextTokens at makeFillTokens, and the
+  // cell then prints `<span class="rb-token">A$18,400</span>` as characters.
+  const fillText = makeFillTextTokens(full);
+
+  ok("a placeholder in a table cell becomes the value",
+    /A\$18[,.]?400/.test(fillText("{{slab_cost}}")),
+    fillText("{{slab_cost}}"));
+
+  ok("and it carries no markup into the cell",
+    !/[<>]/.test(fillText("{{slab_cost}}")),
+    fillText("{{slab_cost}}"));
+
+  // NOT escaped, because a cell prints what it is given. Broken by reusing the html
+  // filler's `esc`: an address for "Smith & Sons" arrives in the table as
+  // "Smith &amp; Sons", which is what a reader sees.
+  const ampersand = makeFillTextTokens({
+    ...full,
+    jobs: [{ ...full.jobs[0], currentAddress: '28 Corner Street, Smith & Sons' }]
+  });
+  ok("a value with an ampersand in it is not html-escaped in a cell",
+    ampersand("{{address}}").endsWith("Smith & Sons"),
+    ampersand("{{address}}"));
+
+  // The same three outcomes as prose, so a table and a letter cannot disagree about
+  // what an unrecorded field looks like.
+  ok("an unfilled field is an em dash in a cell too",
+    fillText("{{never_filled_in}}") === "—", fillText("{{never_filled_in}}"));
+  ok("and a token naming no field is left standing in a cell",
+    fillText("{{slab_dat}}") === "{{slab_dat}}", fillText("{{slab_dat}}"));
+
+  // Through the widget, which is what the document actually renders — the resolver has
+  // to pass ctx down to freeTable, and it did not until this was added.
+  const tableWidget = createReportRegistry().get("freeTable").resolve(
+    { headers: ["Item", "{{address}}"], rows: [["Slab", "{{slab_cost}}"]] },
+    { ...full, fillTextTokens: fillText }
+  );
+  ok("a table resolves placeholders in its cells",
+    /A\$18[,.]?400/.test(tableWidget[0].rows[0][1]),
+    tableWidget[0].rows[0][1]);
+  ok("and in its column headers",
+    /Corner Street/.test(tableWidget[0].headers[1]),
+    tableWidget[0].headers[1]);
+
+  // A header carrying a placeholder must not change how many columns a row has.
+  ok("a placeholder in a header does not change the shape of the table",
+    tableWidget[0].headers.length === 2 && tableWidget[0].rows[0].length === 2,
+    `${tableWidget[0].headers.length} headers, ${tableWidget[0].rows[0].length} cells`);
+}
+
+// ── A snippet's wording, in and out of the layout it hides in ──────────────
+//
+// A snippet is one text widget (0098), which means every reader has to reach into
+// `widgets[0].options.html`. `snippetHtml` is that reach, written once — and the reason
+// it is worth asserting is that EVERY WAY OF GETTING IT WRONG RETURNS UNDEFINED rather
+// than throwing. A snippet saved through a typo'd path is a menu entry that inserts
+// nothing, with no error anywhere to say why.
+{
+  const wording = '<p>Kind regards,<br><b>Lofty</b></p>';
+
+  // The round trip, which is the only path the app actually uses.
+  ok("a snippet's wording survives the layout it is stored in",
+    snippetHtml(snippetLayout(wording)) === wording);
+
+  // The shape the CHECK constraint requires is the shape this writes. Broken by returning
+  // `widgets` as an object rather than an array of one: the round trip above breaks too,
+  // but this is the one that names WHY — `report_templates_layout_has_widgets` refuses
+  // the row, at save time, which is the harder place to work out what went wrong.
+  //
+  // It does NOT catch html written at the top level instead of in `options` — that shape
+  // is a perfectly legal layout and the database takes it happily. The round trip above
+  // is what catches that one. Both mutations were run.
+  const made = snippetLayout(wording);
+  ok("and it is written as a layout the database will accept",
+    Array.isArray(made.widgets) && made.widgets.length === 1
+    && made.widgets[0].kind === "text",
+    JSON.stringify(made));
+
+  // The four ways it is not a snippet, all of which must be "" rather than undefined —
+  // the page filters on `.trim() !== ""`, and `undefined.trim()` is the crash that would
+  // take the whole builder down when one bad row arrives.
+  const notSnippets = [
+    ["null", null],
+    ["no widgets", { widgets: [] }],
+    ["a widget of another kind", { widgets: [{ id: "w", kind: "table", options: {} }] }],
+    ["html that is not a string", { widgets: [{ id: "w", kind: "text", options: { html: 42 } }] }]
+  ];
+  ok("anything that is not a snippet reads as empty, not as undefined",
+    notSnippets.every(([, layout]) => snippetHtml(layout) === ""),
+    notSnippets.map(([name, l]) => `${name}: ${JSON.stringify(snippetHtml(l))}`).join(", "));
+}
+
+// ── Which record a document is about ───────────────────────────────────────
+//
+// The bug this guards is not a crash. Every mechanical part was right and the feature
+// was simply unreachable: one list of 75 jobs and 117 projects, sorted by label, with
+// every project below every job. 8 documents existed; 0 were on a project.
+{
+  // The real shape of the live database on 7 September, which is the whole point —
+  // at 3 jobs and 2 projects nothing about this is visible.
+  const jobs = Array.from({ length: 75 }, (_, i) =>
+    ({ number: `1042-${String(i + 1).padStart(3, "0")}`, currentAddress: "28 Corner Street" }));
+  const projects = Array.from({ length: 117 }, (_, i) =>
+    ({ number: String(1002 + i), currentAddress: "28 Corner Street" }));
+
+  // THE REGRESSION ITSELF, reproduced rather than described.
+  //
+  // `Select` sorts by label with numeric collation unless told not to. Under the old
+  // labels — projects prefixed "Project " — that comparator puts every project after
+  // every job, so the 117th project is 192 rows down. This asserts the bug was real;
+  // if it ever stops holding, the note above is wrong and should be corrected.
+  const collate = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+  const oldLabels = [
+    ...jobs.map(j => j.number),
+    ...projects.map(p => `Project ${p.number}`)
+  ].sort(collate);
+  const firstProjectAt = oldLabels.findIndex(l => l.startsWith("Project"));
+  ok("the old single list really did bury every project below every job",
+    firstProjectAt === jobs.length,
+    `first project sat at index ${firstProjectAt} of ${oldLabels.length}`);
+
+  // And the fix: one kind per list, all of it, nothing of the other.
+  const projectOpts = subjectOptionsFor("project", jobs, projects);
+  ok("choosing Project offers every project and no jobs",
+    projectOpts.length === 117 && projectOpts.every(o => o.value.startsWith("project:")),
+    `${projectOpts.length} options`);
+
+  const jobOpts = subjectOptionsFor("job", jobs, projects);
+  ok("choosing Job offers every job and no projects",
+    jobOpts.length === 75 && jobOpts.every(o => o.value.startsWith("job:")),
+    `${jobOpts.length} options`);
+
+  // The label no longer carries the word that caused the sort. Broken by putting
+  // "Project " back on the front: it sorts away from the number people search by.
+  ok("a project is labelled by its number, not by the word Project",
+    projectOpts[0].label.startsWith("1002"), JSON.stringify(projectOpts[0].label));
+
+  // What the picker emits has to survive the round trip into what the insert wants.
+  // A project id is a NUMBER — project_id is `integer` and a string would be refused
+  // by the foreign key rather than silently linking to nothing.
+  const asProject = parseSubject("project:1042");
+  ok("a picked project becomes a numeric project id and no job id",
+    asProject?.projectId === 1042 && asProject.jobId === null, JSON.stringify(asProject));
+
+  const asJob = parseSubject("job:1042-001");
+  ok("a picked job keeps its full number, colons and all",
+    asJob?.jobId === "1042-001" && asJob.projectId === null, JSON.stringify(asJob));
+
+  // `?for=` arrives from a URL, so it is somebody else's input. Null, not a half-filled
+  // subject that would create a document attached to nothing.
+  const junk = ["", null, undefined, "project:", "nonsense:1042", "1042", "project:abc"];
+  ok("anything that is not one of ours parses to null rather than a broken subject",
+    junk.every(v => parseSubject(v) === null),
+    junk.map(v => `${JSON.stringify(v)}→${JSON.stringify(parseSubject(v))}`).join(" "));
+}
+
+// ─── 18. The maintenance blocks answer the questions somebody asks ───────
+//
+// Amber, 14 September: *"stage 1 is building a section in the report builder that allows
+// you to add in a maintenance section which is a maintenance requests with details."*
+// One issue is one request (0114), so a maintenance section is a set of requests and the
+// filters below are the questions worth asking of them.
+//
+// The generic sweeps above already cover the two blocks — they resolve, they stay quiet
+// when there is nothing, and they read `ctx` rather than a copy. **That last one failed
+// first**: with no `maintenance` in either fixture both contexts produced the same
+// callout and section 3 reported "the resolver is not reading ctx". The fixtures are
+// three issues on two jobs precisely so these assertions cannot pass for the wrong
+// reason. What each difference is load-bearing for is written on the fixture itself.
+console.log("--- the maintenance blocks filter, group and page the way Amber asked");
+{
+  const table = LOFTY_WIDGETS.maintenanceTable;
+  const detail = LOFTY_WIDGETS.maintenanceDetail;
+  const tableWith = (o) => table.resolve({ ...table.defaults(), ...o }, full);
+  const detailWith = (o) => detail.resolve({ ...detail.defaults(), ...o }, full);
+  const rowsOf = (blocks) => blocks.find(b => b.type === "table")?.rows ?? [];
+  const flat = (row) => row.map(c => (c && typeof c === "object" ? c.text : c));
+
+  // The tick box has to be honoured in both directions, which is why both are asserted:
+  // a resolver that ignored it would give the same count twice.
+  ok("a closed issue is left out until it is asked for",
+    rowsOf(tableWith({})).length === 2 && rowsOf(tableWith({ includeClosed: true })).length === 3,
+    `${rowsOf(tableWith({})).length} then ${rowsOf(tableWith({ includeClosed: true })).length}`);
+
+  // The two assignee columns are one question on the page and two columns underneath.
+  // Watched by reading only `assigneeName`: the contractor's row went to an em dash.
+  const names = rowsOf(tableWith({})).map(flat).flat();
+  ok("a contractor and a Lofty person are both named in the one column",
+    names.includes("Ace Plumbing") && names.includes("Ketan Shah"), JSON.stringify(names));
+
+  // One filter across both keyspaces. A profile id and a company id cannot be compared,
+  // which is why the filter's value is the name. Watched failing by the same break as
+  // above: with only the internal half read, the contractor was unfilterable.
+  ok("the repairer filter narrows across internal and external alike",
+    rowsOf(tableWith({ assignedTo: ["Ace Plumbing"] })).length === 1);
+
+  // Newest first, so a report opens on what was found last rather than in insertion order.
+  // The fixture is in that order already, so this guards the sort against being removed
+  // rather than against being wrong — which is what it is for.
+  ok("issues are ordered by when they were identified, newest first",
+    flat(rowsOf(tableWith({}))[0])[0] === "1042-001-M1");
+
+  // Four different nothings, and the sentence has to say which. A filter that found
+  // nothing and a block pointed at the wrong job are different problems for the reader.
+  ok("a filter that matches nothing says which nothing it is",
+    /no maintenance issue matches/i.test(tableWith({ statuses: ["rejected"] })[0].text || ""),
+    JSON.stringify(tableWith({ statuses: ["rejected"] })[0]));
+  ok("a date window that excludes everything says so rather than drawing an empty grid",
+    tableWith({ since: "2026-09-11" })[0].type === "callout");
+
+  // The third issue has no identification date, so the window falls back to the report
+  // timestamp. BOTH directions, and the second is the one that matters.
+  //
+  //   The first assertion alone passed against a broken `dayOf` that read `identifiedOn`
+  //   only — it returns '' for that issue, `if (since && day && ...)` skips on the empty
+  //   string, and the row is kept for every window. Green, for precisely the wrong
+  //   reason. The August window is satisfied by a filter that cannot exclude it at all.
+  //
+  //   So the second asserts a window that must EXCLUDE it. Watched failing by that same
+  //   break: 3 rows instead of 2, because an issue reported in August sat in a report of
+  //   September onwards.
+  ok("an issue whose identification date was cleared still answers a date filter",
+    rowsOf(tableWith({ includeClosed: true, since: "2026-08-01", until: "2026-08-31" })).length === 1);
+  ok("and is excluded by a window it falls outside",
+    rowsOf(tableWith({ includeClosed: true, since: "2026-09-01" })).length === 2,
+    `${rowsOf(tableWith({ includeClosed: true, since: "2026-09-01" })).length} rows`);
+
+  ok("grouping by job makes one heading per job",
+    tableWith({ groupBy: "job", includeClosed: true }).filter(b => b.type === "subheading").length === 2);
+
+  // "Each issue being its own page" — the break goes BEFORE each issue but the first.
+  // Watched failing by putting it after each instead: two issues gave two breaks and the
+  // printed report ended on a blank page, which is the tell of a report built by a
+  // machine.
+  const pages = detailWith({});
+  ok("two issues give one page break, not two",
+    pages.filter(b => b.type === "divider" && b.pageBreak).length === 1);
+  ok("the first block is the issue, not a page break", pages[0].type === "subheading");
+  ok("one facts block per issue", pages.filter(b => b.type === "keyValues").length === 2);
+  ok("only the issue somebody wrote details on gets a paragraph",
+    pages.filter(b => b.type === "paragraph").length === 1);
+
+  // CLAUDE.md's rule, in the one place a report would break it: an unset field is an em
+  // dash. Watched failing by returning the raw value — the follow-up date on an issue
+  // nobody has set one for printed the word "null" into a document meant for a client.
+  const kv = pages.find(b => b.type === "keyValues");
+  ok("every fact has a value — an unset one is an em dash, never blank and never null",
+    kv.items.every(i => typeof i.value === "string" && i.value.trim() !== "" && i.value !== "null"),
+    JSON.stringify(kv.items));
+  ok("the inspection is named in Amber's words, not as a slug",
+    kv.items.some(i => i.label === "Identified at" && i.value === "PCI"),
+    JSON.stringify(kv.items.find(i => i.label === "Identified at")));
+
+  // Forty defects from one walk is forty pages, so the cap exists — and a cap that hides
+  // rows without saying so is the silent-filter fault this file exists to catch.
+  const capped = detailWith({ limit: 1 });
+  ok("the limit caps the issues and says that it did",
+    capped.filter(b => b.type === "keyValues").length === 1 &&
+    capped.some(b => b.type === "callout" && /showing the first/i.test(b.text || "")));
 }
 
 console.log(failures === 0

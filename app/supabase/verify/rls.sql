@@ -58,13 +58,43 @@ insert into comments (feedback_id, comment_body, comment_is_internal)
 select feedback_id, '__rls_probe_internal__', true
   from feedback where feedback_title = '__rls_probe_parent__';
 
-\echo '=== an ANONYMOUS visitor sees nothing ==='
-set role anon;
-select 'jobs: '     || count(*) from jobs;
-select 'projects: ' || count(*) from projects;
-select 'profiles: ' || count(*) from profiles;
-select 'teams: '    || count(*) from teams;
-reset role;
+\echo '=== an ANONYMOUS visitor is refused, not answered ==='
+-- These used to print `jobs: 0`, `projects: 0` and so on — RLS on, no policy reaching anon,
+-- zero rows. Since 0101 anon holds no privilege on any table in `public`, so the same
+-- statement is refused before RLS gets a say, and a probe that expects an answer of zero
+-- would abort this file on the first `permission denied`. The distinction is the point:
+-- "0 rows" left the table's name and columns discoverable through pg_graphql; "refused"
+-- does not. Each probe below prints ok on the refusal and FAIL on an answer of any size.
+do $$
+declare
+  n int;
+  t text;
+begin
+  foreach t in array array['jobs', 'projects', 'profiles', 'teams', 'maintenance_message_secrets']
+  loop
+    begin
+      set local role anon;
+      execute format('select count(*) from public.%I', t) into n;
+      reset role;
+      raise warning 'FAIL: anon was answered on % (% rows) — the table is back on the map', t, n;
+    exception
+      when insufficient_privilege then
+        reset role;
+        raise notice 'ok  anon is refused on % at the privilege, not by RLS', t;
+    end;
+  end loop;
+
+  -- The whole schema, not four names: one table with a stray grant is one table
+  -- discoverable, and a probe over a fixed list would not notice the eighty-ninth.
+  select string_agg(table_name || ':' || privilege_type, ', ' order by table_name) into t
+    from information_schema.role_table_grants
+   where grantee = 'anon' and table_schema = 'public';
+  if t is null then
+    raise notice 'ok  anon holds no privilege on any table or view in public';
+  else
+    raise warning 'FAIL: anon still holds a privilege in public: %', t;
+  end if;
+end $$;
 
 -- Deliberately at `user`, not admin: these probes are about what an ORDINARY signed-in
 -- person can do, and the test profile is seeded as an admin, which would pass several of
@@ -128,6 +158,34 @@ begin
     end if;
     delete from saved_views where saved_view_name = '__rls_probe__';
   exception when others then raise warning 'FAIL: unexpected on your own saved view (%)', sqlerrm;
+  end;
+
+  -- 0112: a pinned page is private, and the two halves matter for the same reason
+  -- saved_views' do. A person's bookmarks are a map of what they work on — which jobs
+  -- they are watching, which settings screen they keep going back to — so the USING
+  -- half is not a formality.
+  begin
+    insert into pinned_pages (profile_id, pinned_page_label, pinned_page_url, pinned_page_position)
+    values ((select profile_id from profiles
+              where profile_email <> 'behaviour-test@lofty.com.au' limit 1),
+            '__rls_probe__', '/jobs', 1);
+    raise warning 'FAIL: a pinned page was written onto somebody else';
+  exception
+    when insufficient_privilege then raise notice 'ok  pinned_pages refused a pin written onto another person';
+    when others then raise warning 'FAIL: unexpected writing another person''s pin (%)', sqlerrm;
+  end;
+
+  begin
+    insert into pinned_pages (profile_id, pinned_page_label, pinned_page_url, pinned_page_position)
+    values ((select profile_id from profiles where profile_email = 'behaviour-test@lofty.com.au'),
+            '__rls_probe__', '/jobs', 1);
+    if (select count(*) from pinned_pages where pinned_page_label = '__rls_probe__') = 1 then
+      raise notice 'ok  pinned_pages: your own pin is yours to read';
+    else
+      raise warning 'FAIL: a person could not read the pin they just made';
+    end if;
+    delete from pinned_pages where pinned_page_label = '__rls_probe__';
+  exception when others then raise warning 'FAIL: unexpected on your own pin (%)', sqlerrm;
   end;
 
   -- 0049's demo gate is probed AFTER this block — see the note below. It cannot live in
@@ -802,6 +860,49 @@ begin
     delete from notification_rules
      where notification_type_id = 'task_overdue' and notification_rule_audience = 'managers';
   exception when others then raise warning 'FAIL: a manager could not write a notification rule (%)', sqlerrm;
+  end;
+
+  -- 7. But NOT what kinds of notification exist. 0097 split what 0096 had bundled: a rule
+  --    is who hears a thing (probe 6, a manager's), a type is whether that kind of thing
+  --    exists at all (this one, admin's). These two probes are the whole of 0097 — 6 must
+  --    keep passing while 7 refuses, and a single policy change that moved both would
+  --    break one of them whichever way it went.
+  begin
+    insert into notification_types (notification_type_id, notification_type_name, notification_type_position)
+    values ('__rls_probe_type__', 'RLS probe type', 999);
+    raise warning 'FAIL: a manager invented a notification type — that is the vocabulary, not the automation';
+    delete from notification_types where notification_type_id = '__rls_probe_type__';
+  exception
+    when insufficient_privilege then raise notice 'ok  a manager writes notification rules but cannot create a type (0097)';
+    when others then raise warning 'FAIL: unexpected creating a notification type as manager (%)', sqlerrm;
+  end;
+
+  -- 8. And a manager CAN still change an existing type's defaults. This is the probe that
+  --    guards against the obvious wrong version of 0097: one `for all ... >= 'admin'`
+  --    policy instead of three split by command. `saveNotificationType()` is an UPDATE and
+  --    it is what Settings -> Automations is made of, so a single admin-only policy would
+  --    have taken that screen away from every manager with nobody asking for it.
+  declare
+    timing_before text;
+    timing_after  text;
+  begin
+    select notification_type_default_timing into timing_before
+      from notification_types where notification_type_id = 'task_overdue';
+    update notification_types
+       set notification_type_default_timing = case when timing_before = 'digest' then 'immediate' else 'digest' end
+     where notification_type_id = 'task_overdue';
+    select notification_type_default_timing into timing_after
+      from notification_types where notification_type_id = 'task_overdue';
+    if timing_after is distinct from timing_before then
+      raise notice 'ok  a manager still sets an existing type''s defaults (0097 keeps UPDATE at manager)';
+    else
+      raise warning 'FAIL: a manager''s update to a notification type did not take';
+    end if;
+    -- Put it back: a probe that leaves a real type reconfigured is a side effect, not a test.
+    update notification_types set notification_type_default_timing = timing_before
+     where notification_type_id = 'task_overdue';
+  exception when others then
+    raise warning 'FAIL: a manager could not change a notification type''s defaults — 0097 is too tight (%)', sqlerrm;
   end;
 end $$;
 reset role;
@@ -1808,6 +1909,32 @@ end $$;
 reset role;
 reset request.jwt.claim.sub;
 
+-- ─────────────────────────────────────────────────────────────────────────
+-- EVERY KIND IS COVERED BY THE SAME FOUR POLICIES, AND THAT IS LOAD-BEARING.
+--
+-- 0098 added `snippet` as a third kind with one value on one CHECK and no policy work at
+-- all. That was only correct because none of the four policies on this table look at
+-- `report_template_kind` — a snippet therefore inherits the visibility bands, the
+-- sign-off and the delete rules already proved above, rather than arriving unguarded.
+--
+-- The assumption is invisible in the diff that relies on it, so it is asserted here. The
+-- day somebody writes "…and templates may also be read by…", the next kind added the
+-- 0098 way is a row nothing protects, and this is what says so.
+do $$
+declare kinded text;
+begin
+  select string_agg(polname, ', ') into kinded
+    from pg_policy
+   where polrelid = 'report_templates'::regclass
+     and (coalesce(pg_get_expr(polqual, polrelid), '') like '%report_template_kind%'
+       or coalesce(pg_get_expr(polwithcheck, polrelid), '') like '%report_template_kind%');
+  if kinded is null then
+    raise notice 'ok  no policy on report_templates branches on kind, so a new kind inherits the sign-off';
+  else
+    raise warning 'FAIL: these policies branch on kind, so a new kind is not covered by what was proved above: %', kinded;
+  end if;
+end $$;
+
 \echo '=== documents: a user makes and edits one; deleting somebody else''s is not theirs ==='
 -- Somebody else's document, planted as the owner for the same reason as above.
 insert into report_documents (report_document_title, report_document_created_by)
@@ -1847,12 +1974,208 @@ begin
   if n = 1 then raise notice 'ok  a user deletes their own document';
   else raise warning 'FAIL: a user could not delete their own document'; end if;
 end $$;
+
+-- ---- publication, and the edit that takes it back (0104) --------------------
+-- HERE rather than in the migration, and the reason is the whole point of this file:
+-- guard_report_document_publication() returns early when auth.uid() is null, which is
+-- every statement in a migration. A probe there would watch nothing happen and report a
+-- pass. This runs as `authenticated` with a real subject, which is the only place the
+-- trigger's body is reached at all.
+do $$
+declare
+  doc uuid;
+  pub timestamptz;
+  who uuid;
+  url text;
+  file_doc uuid;
+  second_file uuid;
+  still_named uuid;
+begin
+  insert into report_documents (report_document_title, report_document_layout)
+  values ('__rls__ publication', '{"widgets": []}'::jsonb)
+  returning report_document_id into doc;
+
+  -- Publishing. The caller sends an arbitrary timestamp and no publisher; the guard is
+  -- supposed to overwrite the first and fill in the second from the session.
+  update report_documents
+     set report_document_published_url = 'https://lofty.sharepoint.com/sites/jobs/1103/report.docx',
+         report_document_published_at = timestamptz '2001-01-01'
+   where report_document_id = doc;
+  select report_document_published_at, report_document_published_by
+    into pub, who from report_documents where report_document_id = doc;
+
+  if pub is null then
+    raise warning 'FAIL: publishing a document did not stamp it';
+  elsif pub = timestamptz '2001-01-01' then
+    raise warning 'FAIL: the guard took the caller''s word for when a document was published';
+  else raise notice 'ok  publishing stamps the time from the database, not the caller'; end if;
+
+  if who = current_profile_id() then raise notice 'ok  the publisher is read from the session';
+  else raise warning 'FAIL: published_by was % rather than the session''s profile', who; end if;
+
+  -- THE RULE OF 0104. Amber, 10 Sep: "if editing it in the app it reverts to draft".
+  -- The layout changes and nothing else; the publication must go with it.
+  update report_documents
+     set report_document_layout = '{"widgets": [{"id": "a", "kind": "text", "options": {}}]}'::jsonb
+   where report_document_id = doc;
+  select report_document_published_at, report_document_published_url
+    into pub, url from report_documents where report_document_id = doc;
+
+  if pub is null then raise notice 'ok  editing the layout reverts a published document to draft';
+  else raise warning 'FAIL: a published document survived being edited'; end if;
+
+  -- And the address stays, so re-publishing can pre-fill it. This is the half that would
+  -- be lost by writing the revert as "clear everything", which is the obvious way to
+  -- write it.
+  if url is not null then raise notice 'ok  the SharePoint address survives the revert';
+  else raise warning 'FAIL: the revert threw away where the document had been published'; end if;
+
+  -- The title is the other edit that counts.
+  update report_documents
+     set report_document_published_at = now(), report_document_published_url = 'https://lofty.sharepoint.com/x'
+   where report_document_id = doc;
+  update report_documents set report_document_title = '__rls__ publication, renamed'
+   where report_document_id = doc;
+  select report_document_published_at into pub from report_documents where report_document_id = doc;
+  if pub is null then raise notice 'ok  renaming it reverts it too';
+  else raise warning 'FAIL: a published document survived being renamed'; end if;
+
+  -- And what must NOT revert it: sharing. A share link changes who can see the document,
+  -- not what it says, and treating that as an edit would take the publication back every
+  -- time somebody sent one — which is the moment they most need it to stand.
+  update report_documents
+     set report_document_published_at = now(), report_document_published_url = 'https://lofty.sharepoint.com/x'
+   where report_document_id = doc;
+  -- With a snapshot, because 0095 makes a share without one unwritable — which is the
+  -- point of that migration and not an obstacle to work around here.
+  update report_documents
+     set report_document_share_token = '__rls__token',
+         report_document_share_expires_at = now() + interval '7 days',
+         report_document_share_snapshot = '{"report": {"title": "__rls__", "sections": []}}'::jsonb
+   where report_document_id = doc;
+  select report_document_published_at into pub from report_documents where report_document_id = doc;
+  if pub is not null then raise notice 'ok  sharing a published document does not revert it';
+  else raise warning 'FAIL: sharing took the publication back'; end if;
+
+  -- 0110. Amber, 10 Sep: "allow the option of saving to Job in the system and/or
+  -- downloading it and adding a link". Published as a FILE and nothing else — the case
+  -- 0104's constraint refused outright, proved here as a real signed-in user rather than
+  -- as the owner, because that is who will be doing it.
+  insert into documents (document_name, document_storage_path)
+  values ('__rls__ published file', 'jobs/1103/__rls__.docx')
+  returning document_id into file_doc;
+
+  update report_documents
+     set report_document_published_url = null,
+         report_document_published_at = now(),
+         report_document_published_document_id = file_doc
+   where report_document_id = doc;
+  select report_document_published_at, report_document_published_by
+    into pub, who from report_documents where report_document_id = doc;
+
+  if pub is null then raise warning 'FAIL: a document could not be published to the job alone';
+  else raise notice 'ok  a document is published by saving the file to the job, with no link'; end if;
+  if who = current_profile_id() then raise notice 'ok  publishing to the job stamps the publisher too';
+  else raise warning 'FAIL: published_by was % when publishing to the job', who; end if;
+
+  -- And the revert does not branch on HOW it was published. A guard that only knew about
+  -- URLs would leave a file-published document flying the published flag over content that
+  -- has changed underneath it — the one failure the watermark exists to prevent.
+  update report_documents
+     set report_document_layout = '{"widgets": [{"id": "b", "kind": "text", "options": {}}]}'::jsonb
+   where report_document_id = doc;
+  select report_document_published_at, report_document_published_document_id
+    into pub, still_named from report_documents where report_document_id = doc;
+  if pub is null then raise notice 'ok  editing reverts a job-published document too';
+  else raise warning 'FAIL: a document published to the job survived being edited'; end if;
+
+  -- The file pointer survives the revert for the same reason the URL does: re-publishing
+  -- should not make somebody find the place again.
+  if still_named is not null then raise notice 'ok  the saved file survives the revert, as the address does';
+  else raise warning 'FAIL: the revert threw away the file the document was published as'; end if;
+
+  -- 0111. Amber, 10 Sep: *"only onver version of the document. if they want another copy
+  -- they can download it"*. Publishing again replaces the copy on the record rather than
+  -- adding one beside it — and as an ORDINARY USER, which is the half that cannot be
+  -- proved in the migration: deleting a documents row is admin-only by 0032, so without
+  -- SECURITY DEFINER on the trigger this silently deletes nothing for everybody except an
+  -- admin and the job quietly accumulates copies.
+  insert into documents (document_name, document_storage_path)
+  values ('__rls__ published file 2', 'jobs/1103/__rls__2.docx')
+  returning document_id into second_file;
+
+  update report_documents
+     set report_document_published_at = now(),
+         report_document_published_document_id = second_file
+   where report_document_id = doc;
+
+  if exists (select 1 from documents where document_id = file_doc) then
+    raise warning 'FAIL: a user publishing again left the previous copy on the record';
+  else raise notice 'ok  publishing again replaces the copy a user saved last time'; end if;
+  if exists (select 1 from documents where document_id = second_file) then
+    raise notice 'ok  and keeps the one it has just saved';
+  else raise warning 'FAIL: publishing again removed the copy it had just saved'; end if;
+
+  delete from report_documents where report_document_id = doc;
+end $$;
 reset role;
 reset request.jwt.claim.sub;
 
 update profiles set profile_permission = 'admin' where profile_email = 'behaviour-test@lofty.com.au';
 set role authenticated;
 set request.jwt.claim.sub = :'uid';
+-- 0110. Reaping a stored file is admin work (0032), so this is the only place the reap
+-- trigger's real path can be watched: a signed-in admin deletes the file, and the document
+-- that was published AS it goes back to being a draft rather than the delete being refused.
+do $$
+declare
+  doc uuid;
+  file_doc uuid;
+  kept_doc uuid;
+  kept_file uuid;
+  pub timestamptz;
+begin
+  insert into documents (document_name, document_storage_path)
+  values ('__rls__ reap only copy', 'jobs/1103/__rls__only.docx')
+  returning document_id into file_doc;
+
+  insert into report_documents (report_document_title, report_document_layout)
+  values ('__rls__ reap', '{"widgets": []}'::jsonb)
+  returning report_document_id into doc;
+  update report_documents
+     set report_document_published_at = now(), report_document_published_document_id = file_doc
+   where report_document_id = doc;
+
+  -- The one that also went to SharePoint: its publication must NOT go, because the copy
+  -- people were sent is still where it was sent.
+  insert into documents (document_name, document_storage_path)
+  values ('__rls__ reap second copy', 'jobs/1103/__rls__both.docx')
+  returning document_id into kept_file;
+
+  insert into report_documents (report_document_title, report_document_layout)
+  values ('__rls__ reap kept', '{"widgets": []}'::jsonb)
+  returning report_document_id into kept_doc;
+  update report_documents
+     set report_document_published_at = now(),
+         report_document_published_url = 'https://lofty.sharepoint.com/sites/jobs/1103/r.docx',
+         report_document_published_document_id = kept_file
+   where report_document_id = kept_doc;
+
+  begin
+    delete from documents where document_id in (file_doc, kept_file);
+  exception when others then
+    raise warning 'FAIL: an admin could not delete a published file — % / %', sqlstate, sqlerrm;
+  end;
+
+  select report_document_published_at into pub from report_documents where report_document_id = doc;
+  if pub is null then raise notice 'ok  deleting the only copy takes a document back to draft';
+  else raise warning 'FAIL: a document is still published as a file that was deleted'; end if;
+
+  select report_document_published_at into pub from report_documents where report_document_id = kept_doc;
+  if pub is not null then raise notice 'ok  deleting Lofty''s copy leaves a SharePoint publication standing';
+  else raise warning 'FAIL: deleting the stored copy un-published a document that also went to SharePoint'; end if;
+end $$;
+
 do $$
 declare n integer;
 begin

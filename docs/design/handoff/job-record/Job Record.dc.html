@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics="">
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/tokens/colors.css">
+<link rel="stylesheet" href="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/tokens/typography.css">
+<link rel="stylesheet" href="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/tokens/spacing.css">
+<link rel="stylesheet" href="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/tokens/radius.css">
+<link rel="stylesheet" href="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/tokens/shadows.css">
+<link rel="stylesheet" href="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/tokens/motion.css">
+<link rel="stylesheet" href="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/tokens/base.css">
+<link rel="stylesheet" href="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/styles.css">
+<script src="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/_ds_bundle.js"></script>
+<style>
+body{margin:0;background:var(--page-tint-color);font-family:var(--font-family);color:var(--primary-text-color)}
+a{color:var(--link-color);text-decoration:underline;text-underline-offset:2px}
+a:hover{color:var(--link-hover-color)}
+.dv-turn{padding:40px 44px 32px;border-bottom:1px solid rgba(65,64,66,.1);scroll-margin-top:16px}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 8px}
+.dv-tid{font:600 10px/1 ui-monospace,Menlo,monospace;padding:4px 7px;background:#414042;color:#fff;border-radius:4px;text-decoration:none}
+.dv-tname{font:600 13px/1.2 var(--font-family);color:#414042}
+.dv-intro{margin:0 0 24px;max-width:78ch;font:400 14px/20px var(--font-family);color:#67666a;text-wrap:pretty}
+.dv-opts{display:flex;flex-wrap:wrap;gap:40px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px}
+.dv-oid{font:600 10.5px/1 ui-monospace,Menlo,monospace;padding:4px 7px;background:rgba(65,64,66,.08);color:#414042;border-radius:5px;text-decoration:none}
+.dv-olabel{display:flex;align-items:baseline;gap:8px;max-width:64ch;font:400 12px/1.5 var(--font-family);color:#67666a}
+.dv-card{background:#fff;border:1px solid #c6c5ba;border-radius:8px;box-shadow:0 1px 3px rgba(65,64,66,.06);overflow:hidden}
+.dv-opt:target .dv-oid{background:var(--lofty-foundation-black);color:#fff}
+.dv-next{margin:26px 0 0;font:400 12px/1.6 var(--font-family);color:#67666a}
+nav[aria-label="Main"]{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.35) var(--lofty-foundation-black)}
+nav[aria-label="Main"]::-webkit-scrollbar{width:8px}
+nav[aria-label="Main"]::-webkit-scrollbar-track{background:var(--lofty-foundation-black)}
+nav[aria-label="Main"]::-webkit-scrollbar-thumb{background:rgba(255,255,255,.32);border-radius:100px;border:2px solid var(--lofty-foundation-black)}
+nav[aria-label="Main"]::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.48)}
+</style>
+</helmet>
+
+<section class="dv-turn" id="t2">
+  <div class="dv-thd"><a class="dv-tid" href="#t2">2</a><span class="dv-tname">Round two — the job record, denser, on the reference patterns</span></div>
+  <p class="dv-intro">One field system: a 32px row, a 16px icon, a 14px label at 136px, the value inline, and <code>Empty</code> where there is no value rather than a missing row. Six key properties sit above <strong>Show all</strong>; everything process-specific sits in its own block, where a step is a checkbox row that opens into the fields that step owns. <a href="#6a">6a</a> and <a href="#6b">6b</a> are the same record in a panel and on a full page — the only difference is that the page has room to dock the conversation. <a href="#6c">6c</a> is the column picker the same rule implies. The remaining four screens follow this system once you pick one.</p>
+
+  <div class="dv-opts">
+
+    <!-- ============ 6a ============ -->
+    <div class="dv-opt" id="6a">
+      <div class="dv-olabel"><a class="dv-oid" href="#6a">6a</a><span>Panel. 460px, everything reachable without leaving the board. Comments are a tab at the foot, so the record and the conversation trade places rather than compete.</span></div>
+      <div class="dv-card" data-screen-label="6a job panel" style="width:460px;height:860px;display:flex;flex-direction:column">
+        <div style="height:48px;flex:none;display:flex;align-items:center;gap:8px;padding:0 8px 0 16px;border-bottom:1px solid #c6c5ba">
+          <div style="flex:1;min-width:0;display:flex;align-items:center;gap:6px;font:400 12px/16px var(--font-family);color:#67666a"><span style="text-decoration-line: underline">Jobs</span><span style="color:#8a898d">›</span><span style="text-decoration-line: underline">1209</span><span style="color:#8a898d">›</span><span style="color:var(--secondary-text-color)">1209-002</span></div>
+          <x-import component-from-global-scope="LoftyDesignSystem_491d68.IconButton" hint-size="32px,32px" icon="Fullscreen" ariaLabel="Open as a full page" size="small" iconBasePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import>
+          <x-import component-from-global-scope="LoftyDesignSystem_491d68.IconButton" hint-size="32px,32px" icon="CloseSmall" ariaLabel="Close" size="small" iconBasePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import>
+        </div>
+        <div style="flex:1;min-height:0;overflow:auto;padding:16px">
+          <div style="display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <h1 style="margin:0;flex:1;min-width:0;font:600 16px/22px var(--title-font-family);letter-spacing:-0.1px"><a href="#6b" style="color:inherit;text-decoration:underline;text-decoration-color:#c6c5ba;text-decoration-thickness:1px;text-underline-offset:3px" title="Open project 1209 Evanston Park">1209</a>-002 - EVANSTON PARK, 14/24 Wandoo Road</h1>
+            <span style="display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:0 10px;border-radius:100px;background:var(--warning-color-selected);font:600 12px/16px var(--font-family);color:#414042"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="14px,14px" name="Warning" size="{{ 14 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import>At risk</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;min-height:32px;padding:0 4px;border:1px solid #c6c5ba;border-radius:4px;background:#f4f3ee">
+            <x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="Warning" size="{{ 16 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons" color="var(--negative-color)"></x-import>
+            <span style="font:400 14px/20px var(--font-family);color:#67666a">Blocked by</span>
+            <span style="flex:1;font:400 14px/20px var(--font-family);color:#414042">Slab booked — waiting on the site survey</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px;padding:0 4px">
+            <button type="button" onClick="{{ toggleStage }}" style="display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;cursor:pointer;padding:4px;text-align:left" style-hover="background:rgba(65,64,66,.04)"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="{{ chevStage }}" size="{{ 16 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import><span style="font:600 14px/20px var(--font-family);color:var(--primary-text-color)">Job Stage</span><span style="flex:1"></span><span style="font:400 12px/16px var(--font-family);color:var(--secondary-text-color)">Stage 2 of 5 · 22 days</span></button>
+            <sc-if value="{{ openStage }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;align-items:flex-end;gap:12px;padding:4px 0 2px"><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px"><span style="font:400 12px/16px var(--font-family);color:#67666a;text-wrap:pretty">Acquisition &amp; Development</span><div style="align-self:stretch;height:4px;border-radius:100px;background:var(--lofty-foundation-black)"></div><span style="display:flex;align-items:center;gap:3px;font:400 12px/16px var(--font-family);color:#67666a"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="12px,12px" name="NavigationChevronRight" size="{{ 12 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import>02/06/2026</span></div><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px"><span style="font:600 12px/16px var(--font-family);color:#414042;text-wrap:pretty">Pre-construction</span><div style="align-self:stretch;height:4px;border-radius:100px;background:var(--warning-color-selected)"></div><span style="display:flex;align-items:center;gap:3px;font:400 12px/16px var(--font-family);color:#67666a"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="12px,12px" name="NavigationChevronRight" size="{{ 12 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import>20/08/2026</span></div><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;align-items:center"><span style="font:400 12px/16px var(--font-family);color:#67666a;text-wrap:pretty;text-align:center">Construction</span><div style="align-self:stretch;height:4px;border-radius:100px;background:#e1e1d9"></div><span style="font:400 12px/16px var(--font-family);color:#8a898d;text-align:center">—</span></div><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;align-items:center"><span style="font:400 12px/16px var(--font-family);color:#67666a;text-wrap:pretty;text-align:center">Maintenance</span><div style="align-self:stretch;height:4px;border-radius:100px;background:#e1e1d9"></div><span style="font:400 12px/16px var(--font-family);color:#8a898d;text-align:center">—</span></div><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;align-items:center"><span style="font:400 12px/16px var(--font-family);color:#67666a;text-wrap:pretty;text-align:center">Complete</span><div style="align-self:stretch;height:4px;border-radius:100px;background:#e1e1d9"></div><span style="font:400 12px/16px var(--font-family);color:#8a898d;text-align:center">—</span></div></div>
+            </sc-if>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;border-top:1px solid #c6c5ba;padding-top:16px;">
+            <button type="button" onClick="{{ toggleKey }}" style="display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;cursor:pointer;padding:4px;text-align:left" style-hover="background:rgba(65,64,66,.04)"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="{{ chevKey }}" size="{{ 16 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import><span style="font:600 14px/20px var(--font-family);color:var(--primary-text-color)">Key properties</span></button>
+            <sc-if value="{{ openKey }}" hint-placeholder-val="{{ true }}">
+            <div style="display:grid;grid-template-columns:120px minmax(0,1fr);align-items:center;gap:8px;min-height:32px;padding:0 4px"><span style="font:400 14px/20px var(--font-family);color:var(--secondary-text-color)">Current address</span><span style="display:flex;align-items:center;gap:8px"><span style="flex:1;min-width:0"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Dropdown" iconBasePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons" hint-size="100%,32px" size="small" options="{{ addressOptions }}" value="{{ currentAddress }}" onChange="{{ noop }}"></x-import></span><button type="button" aria-label="Add a new address" onClick="{{ toggleAddr }}" style="width:28px;height:28px;flex:none;display:flex;align-items:center;justify-content:center;border:0;border-radius:4px;background:var(--lofty-crisp-orange);cursor:pointer" style-hover="background:var(--lofty-orange-hover)"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="Add" size="{{ 16 }}" color="var(--lofty-finisher-white)" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import></button></span></div>
+            <sc-if value="{{ addrEdit }}" hint-placeholder-val="{{ false }}">
+              <div style="margin:4px;padding:12px;background:var(--lofty-flint-50);border:1px solid #c6c5ba;border-radius:8px;display:flex;flex-direction:column;gap:8px">
+                <span style="font:600 12px/16px var(--font-family);color:#67666a;letter-spacing:.06em">UPDATE ADDRESS</span>
+                <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+                  <x-import component-from-global-scope="LoftyDesignSystem_491d68.TextField" iconBasePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons" hint-size="100%,56px" label="Res #" value="1" onChange="{{ noop }}"></x-import>
+                  <x-import component-from-global-scope="LoftyDesignSystem_491d68.TextField" iconBasePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons" hint-size="100%,56px" label="Lot #" value="3" onChange="{{ noop }}"></x-import>
+                  <x-import component-from-global-scope="LoftyDesignSystem_491d68.TextField" iconBasePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons" hint-size="100%,56px" label="Street number" value="13" onChange="{{ noop }}"></x-import>
+                </div>
+                <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px">
+                  <x-import component-from-global-scope="LoftyDesignSystem_491d68.TextField" iconBasePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons" hint-size="100%,56px" label="Street" value="Tester Street" onChange="{{ noop }}"></x-import>
+                  <x-import component-from-global-scope="LoftyDesignSystem_491d68.TextField" iconBasePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons" hint-size="100%,56px" label="Suburb" value="Testville" onChange="{{ noop }}"></x-import>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                  <x-import component-from-global-scope="LoftyDesignSystem_491d68.TextField" iconBasePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons" hint-size="100%,56px" label="State" value="SA" onChange="{{ noop }}"></x-import>
+                  <x-import component-from-global-scope="LoftyDesignSystem_491d68.TextField" iconBasePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons" hint-size="100%,56px" label="Postcode" value="5000" onChange="{{ noop }}"></x-import>
+                </div>
+                <x-import component-from-global-scope="LoftyDesignSystem_491d68.Dropdown" iconBasePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons" hint-size="100%,56px" label="Or reinstate a previous address" options="{{ prevAddresses }}" value="{{ prevAddressValue }}" onChange="{{ noop }}"></x-import>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <x-import component-from-global-scope="LoftyDesignSystem_491d68.Button" hint-size="auto,32px" size="small" onClick="{{ toggleAddr }}">Save address</x-import>
+                  <x-import component-from-global-scope="LoftyDesignSystem_491d68.Button" hint-size="auto,32px" size="small" kind="tertiary" onClick="{{ toggleAddr }}">Cancel</x-import>
+                  <span style="flex:1"></span>
+                  <span style="font:400 12px/16px var(--font-family);color:#8a898d">The old address is kept on the job and stays selectable.</span>
+                </div>
+              </div>
+            </sc-if>
+            <div style="display:grid;grid-template-columns:120px minmax(0,1fr);align-items:center;gap:8px;min-height:32px;padding:0 4px"><span style="font:400 14px/20px var(--font-family);color:var(--secondary-text-color)">Council</span><span style="max-width:240px"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Dropdown" iconBasePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons" hint-size="100%,32px" size="small" options="{{ councils }}" value="{{ councilValue }}" onChange="{{ noop }}"></x-import></span></div>
+            <div style="display:grid;grid-template-columns:120px minmax(0,1fr);align-items:center;gap:8px;min-height:32px;padding:0 4px"><span style="font:400 14px/20px var(--font-family);color:var(--secondary-text-color)">Currently with</span><span style="display:flex;align-items:center;gap:8px;width:100%"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Avatar" hint-size="24px,24px" text="BS" size="small" backgroundColor="var(--lofty-foundation-black)"></x-import><span style="flex:1;min-width:0;max-width:300px"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Dropdown" iconBasePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons" hint-size="100%,32px" size="small" options="{{ assignees }}" value="{{ assigneeValue }}" onChange="{{ noop }}"></x-import></span></span></div>
+            <div style="display:grid;grid-template-columns:120px minmax(0,1fr);align-items:center;gap:8px;min-height:32px;padding:0 4px"><span style="font:400 14px/20px var(--font-family);color:var(--secondary-text-color)">Next milestone</span><span style="font:400 14px/20px var(--font-family);color:var(--primary-text-color)">Orders stage 1 requested · 18/09/2026</span></div>
+            <div style="display:grid;grid-template-columns:120px minmax(0,1fr);align-items:center;gap:8px;min-height:32px;padding:0 4px"><span style="font:400 14px/20px var(--font-family);color:var(--secondary-text-color)">Handover date</span><span style="display:inline-flex;align-items:center;gap:6px;width:160px;height:32px;padding:0 8px;border:1px solid #c6c5ba;border-radius:4px;background:#fff;font:400 14px/20px var(--font-family);color:var(--placeholder-color);cursor:pointer" style-hover="border-color:#8a898d"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="Calendar" size="{{ 16 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import>dd/mm/yyyy</span></div>
+            <div style="display:grid;grid-template-columns:120px minmax(0,1fr);align-items:center;gap:8px;min-height:32px;padding:0 4px"><span style="font:400 14px/20px var(--font-family);color:var(--secondary-text-color)">SharePoint folder</span><span style="display:flex;align-items:center;gap:6px;font:400 14px/20px var(--font-family);color:var(--primary-text-color);width:100%"><a href="#6a" style="display:inline-flex;align-items:center;gap:6px;min-width:0;color:inherit;text-decoration:underline;text-decoration-color:#c6c5ba;text-underline-offset:3px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">1209-002 — 24 Wandoo Road</span><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="14px,14px" name="ExternalPage" size="{{ 14 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import></a></span></div>
+            <div style="display:flex;align-items:center;gap:8px;min-height:32px;padding:0 4px;border-top:1px solid #e1e1d9"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="MoreBelow" size="{{ 16 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import><span style="font:600 14px/20px var(--font-family);color:var(--lofty-foundation-black)">Show all</span><span style="font:400 12px/16px var(--font-family);color:#8a898d">7 more, empties included</span></div>
+            </sc-if>
+            
+          </div>
+                    <div style="display:flex;flex-direction:column;gap:8px;border-top:1px solid #c6c5ba;padding-top:16px;">
+            <button type="button" onClick="{{ toggleProc }}" style="display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;cursor:pointer;padding:4px;text-align:left" style-hover="background:rgba(65,64,66,.04)"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="{{ chevProc }}" size="{{ 16 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import><span style="font:600 14px/20px var(--font-family);color:var(--primary-text-color)">Process</span></button>
+            <sc-if value="{{ openProc }}" hint-placeholder-val="{{ true }}">
+            <div style="background:var(--lofty-flint-50);border:1px solid #c6c5ba;border-radius:8px;overflow:hidden">
+              <div style="height:4px;background:#e1e1d9"><div style="width:{{ p6bar }};height:100%;background:#f47e63"></div></div>
+              <sc-for list="{{ p6rows }}" as="st" hint-placeholder-count="5">
+                <div style="border-bottom:1px solid #e1e1d9;background:{{ st.rowBg }}">
+                  <div style="display:flex;align-items:center;gap:12px;min-height:36px;padding:2px 12px">
+                    <button type="button" aria-label="Show step details" onClick="{{ st.openMe }}" style="width:24px;height:24px;flex:none;display:flex;align-items:center;justify-content:center;border:0;border-radius:4px;background:transparent;cursor:pointer" style-hover="background:rgba(65,64,66,.08)"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="{{ st.chev }}" size="{{ 16 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import></button><x-import component-from-global-scope="LoftyDesignSystem_491d68.Checkbox" hint-size="20px,20px" checked="{{ st.done }}" onChange="{{ st.toggle }}"></x-import>
+                    <span style="{{ st.nameStyle }}" onClick="{{ st.openMe }}">{{ st.name }}</span>
+                    <span style="{{ st.dateStyle }}">{{ st.dateText }}</span>
+                    <x-import component-from-global-scope="LoftyDesignSystem_491d68.Avatar" hint-size="24px,24px" text="{{ st.who }}" size="small" backgroundColor="#414042"></x-import>
+                  </div>
+                  <sc-if value="{{ st.open }}" hint-placeholder-val="{{ true }}">
+                    <div style="display:flex;flex-direction:column;padding:0 12px 8px 44px">
+                      <sc-for list="{{ st.fields }}" as="f" hint-placeholder-count="3">
+                        <div style="display:grid;grid-template-columns:132px minmax(0,1fr);align-items:center;gap:8px;min-height:36px"><span style="font:400 14px/20px var(--font-family);color:var(--secondary-text-color)">{{ f.label }}</span><span style="{{ f.valueStyle }}"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ f.value }}</span><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="14px,14px" name="{{ f.icon }}" size="{{ 14 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import></span></div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                </div>
+              </sc-for>
+              <div style="display:flex;align-items:center;gap:8px;min-height:36px;padding:0 12px"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="DropdownChevronUp" size="{{ 16 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import><span style="font:600 14px/20px var(--font-family);color:var(--lofty-foundation-black)">Show all 9 steps</span></div>
+            </div>
+            </sc-if>
+          </div>
+          <div style="display:flex;flex-direction:column">
+            <div style="display:flex;align-items:center;gap:8px;min-height:32px;padding:0 4px;border-top:1px solid #e1e1d9"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="DropdownChevronRight" size="{{ 16 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="Item" size="{{ 16 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import><span style="flex:1;font:600 14px/20px var(--font-family);color:#414042">Properties</span><span style="font:400 12px/16px var(--font-family);color:#8a898d">24 properties</span></div>
+                        <div style="display:flex;align-items:center;gap:8px;min-height:32px;padding:0 4px;border-top:1px solid #e1e1d9"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="DropdownChevronRight" size="{{ 16 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="Dependency" size="{{ 16 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import><span style="flex:1;font:600 14px/20px var(--font-family);color:#414042">Contacts &amp; Companies</span><span style="font:400 12px/16px var(--font-family);color:#8a898d">6 linked</span></div>
+                      </div>
+        </div>
+        </div>
+        <div style="flex:none;margin-top:12px;border-top:1px solid #c6c5ba;background:#f4f3ee;padding:12px 12px 12px">
+          <div style="display:flex;border-bottom:1px solid #c6c5ba;padding:4px 4px 0;background:var(--lofty-flint-100)">
+              <span style="display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 16px;font:400 14px/20px var(--font-family);color:#67666a;cursor:pointer" style-hover="background:rgba(65,64,66,.04)">Tasks<span style="display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:100px;background:var(--lofty-flint-200);font:600 12px/16px var(--font-family);color:#414042">5</span></span>
+              <span style="display:inline-flex;align-items:center;height:36px;padding:0 16px;border:1px solid #c6c5ba;border-bottom:0;border-radius:4px 4px 0 0;background:#fff;font:600 14px/20px var(--font-family);color:#414042;box-shadow:inset 0 -3px 0 var(--lofty-crisp-orange);cursor:pointer">Comments</span>
+              <span style="display:inline-flex;align-items:center;height:36px;padding:0 16px;border-left:1px solid #e1e1d9;font:400 14px/20px var(--font-family);color:#67666a;cursor:pointer" style-hover="background:rgba(65,64,66,.04)">Activity Log</span>
+              <span style="flex:1"></span>
+              <span style="display:inline-flex;align-items:center;height:36px;padding:0 4px;font:400 12px/16px var(--font-family);color:#67666a;cursor:pointer">Oldest</span>
+            </div>
+          <div style="padding-top:12px">
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;gap:8px">
+                <x-import component-from-global-scope="LoftyDesignSystem_491d68.Avatar" hint-size="24px,24px" text="IW" size="small" backgroundColor="#414042"></x-import>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+                  <div style="display:flex;gap:8px;align-items:baseline;justify-content:space-between"><span style="font:600 14px/20px var(--font-family)">Isla Ward</span><span style="font:400 12px/16px var(--font-family);color:#67666a">Today 09:14</span></div>
+                  <span style="font:400 14px/20px var(--font-family);color:#414042">Supplier confirmed the truss lead time is four weeks, so stage 1 has to go in this week.</span>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px">
+                <x-import component-from-global-scope="LoftyDesignSystem_491d68.Avatar" hint-size="24px,24px" text="BS" size="small" backgroundColor="#414042"></x-import>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+                  <div style="display:flex;gap:8px;align-items:baseline;justify-content:space-between"><span style="font:600 14px/20px var(--font-family)">Ben Sultana</span><span style="font:400 12px/16px var(--font-family);color:#67666a">Yesterday 16:40</span></div>
+                  <span style="font:400 14px/20px var(--font-family);color:#414042">Quotes are in. Waiting on the survey before I release the order.</span>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <span style="width:24px;display:flex;justify-content:center"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="Activity" size="{{ 16 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import></span>
+                <span style="font:400 12px/16px var(--font-family);color:#67666a">Ben Sultana moved this job to Pre-construction · 16/08/2026</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;min-height:40px;padding:4px 4px 0">
+              <x-import component-from-global-scope="LoftyDesignSystem_491d68.Avatar" hint-size="24px,24px" text="AB" size="small" backgroundColor="var(--lofty-crisp-orange)"></x-import>
+              <span style="flex:1;display:flex;align-items:center;height:32px;padding:0 8px;border:1px solid #8a898d;border-radius:4px;font:400 14px/20px var(--font-family);color:#8a898d">Add a comment</span>
+              <x-import component-from-global-scope="LoftyDesignSystem_491d68.Button" hint-size="auto,32px" size="small" kind="secondary">Comment</x-import>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 6b ============ -->
+    <div class="dv-opt" id="6b">
+      <div class="dv-olabel"><a class="dv-oid" href="#6b">6b</a><span>Full page. Same rows, same order, nothing new — the tail fields are already open because there is room, and the conversation gets a column instead of a tab.</span></div>
+      <div class="dv-card" data-screen-label="6b job page" style="width:1180px;height:860px;display:flex;flex-direction:column">
+        <div style="height:56px;flex:none;display:flex;align-items:center;gap:12px;padding:0 12px 0 24px;border-bottom:1px solid #c6c5ba;background:#fff">
+          <div style="flex:1;min-width:0;display:flex;align-items:center;gap:6px;font:400 12px/16px var(--font-family);color:var(--secondary-text-color)"><span style="text-decoration-line: underline">Jobs</span><span style="color:#8a898d">›</span><a href="#6b" style="color: inherit; text-decoration-line: underline" style-hover="color:var(--lofty-foundation-black)">1209</a><span style="color:#8a898d">›</span><span style="color:var(--lofty-foundation-black);font-weight:600">1209-002</span></div>
+          <div style="width:220px"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Search" iconBasePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons" hint-size="100%,32px" size="small" placeholder="Search in this job" onChange="{{ noop }}"></x-import></div>
+          <button type="button" aria-label="Minimise to panel" style="width:32px;height:32px;flex:none;display:flex;align-items:center;justify-content:center;border:0;border-radius:4px;background:transparent;cursor:pointer" style-hover="background:rgba(65,64,66,.08)"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="20px,20px" name="Collapse" size="{{ n20 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import></button>
+          <button type="button" aria-label="Close" style="width:32px;height:32px;flex:none;display:flex;align-items:center;justify-content:center;border:0;border-radius:4px;background:transparent;cursor:pointer" style-hover="background:rgba(65,64,66,.08)"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="20px,20px" name="CloseSmall" size="{{ n20 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import></button>
+        </div>
+        <div style="flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 400px">
+          <div style="min-width:0;overflow:auto;padding:24px 32px;background:#fff">
+            <div style="display:flex;flex-direction:column;gap:20px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <h1 style="margin:0;flex:1;min-width:0;font:600 20px/26px var(--title-font-family);letter-spacing:-0.1px"><a href="#6b" style="color:inherit;text-decoration:underline;text-decoration-color:#c6c5ba;text-decoration-thickness:1px;text-underline-offset:3px" title="Open project 1209 Evanston Park">1209</a>-002 - EVANSTON PARK, 14/24 Wandoo Road</h1>
+            <span style="display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:0 10px;border-radius:100px;background:var(--warning-color-selected);font:600 12px/16px var(--font-family);color:#414042"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="14px,14px" name="Warning" size="{{ 14 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import>At risk</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;min-height:32px;padding:0 4px;border:1px solid #c6c5ba;border-radius:4px;background:#f4f3ee">
+            <x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="Warning" size="{{ 16 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons" color="var(--negative-color)"></x-import>
+            <span style="font:400 14px/20px var(--font-family);color:#67666a">Slab booked and waiting on the site survey</span>
+            
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;padding:4px 4px 0">
+            <button type="button" onClick="{{ toggleStage }}" style="display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;cursor:pointer;padding:4px;text-align:left" style-hover="background:rgba(65,64,66,.04)"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="{{ chevStage }}" size="{{ 16 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import><span style="font:600 14px/20px var(--font-family);color:#414042">Job Stage</span><span style="flex:1"></span><span style="font:400 12px/16px var(--font-family);color:#67666a">Stage 2 of 5 · 22 days in Pre-construction</span></button>
+            <sc-if value="{{ openStage }}" hint-placeholder-val="{{ true }}">
+            <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));align-items:start"><div style="min-width:0;display:flex;flex-direction:column;gap:8px"><div style="display:flex;align-items:center;justify-content:center;text-align:center;min-height:32px;padding:4px 8px;border-radius:4px 0 0 4px;background:var(--lofty-foundation-black);font:400 12px/16px var(--font-family);color:var(--lofty-finisher-white);white-space:normal;text-wrap:pretty">Acquisition &amp; Development</div><div style="display:flex;flex-direction:column;gap:2px;padding-right:8px"><div style="display:flex;justify-content:space-between;gap:8px;font:400 12px/16px var(--font-family)"><span style="color:var(--primary-text-color);font-weight:600">Job started</span><span style="color:var(--secondary-text-color);font-weight:400;text-align:right">02/06/26</span></div><div style="display:flex;justify-content:space-between;gap:8px;font:400 12px/16px var(--font-family)"><span style="color:var(--primary-text-color);font-weight:600">Days in stage</span><span style="color:var(--secondary-text-color)">79</span></div></div></div><div style="min-width:0;display:flex;flex-direction:column;gap:8px"><div style="display:flex;align-items:center;justify-content:center;text-align:center;min-height:32px;padding:4px 8px;border-radius:0 0 0 0;border-left:1px solid var(--lofty-finisher-white);background:var(--warning-color-selected);font:600 12px/16px var(--font-family);color:#414042;white-space:normal;text-wrap:pretty">Pre-construction</div><div style="display:flex;flex-direction:column;gap:2px;padding-right:8px"><div style="display:flex;justify-content:space-between;gap:8px;font:400 12px/16px var(--font-family)"><span style="color:var(--primary-text-color);font-weight:600">Started</span><span style="color:var(--secondary-text-color);font-weight:400;text-align:right">20/08/26</span></div><div style="display:flex;justify-content:space-between;gap:8px;font:400 12px/16px var(--font-family)"><span style="color:var(--primary-text-color);font-weight:600">Days in stage</span><span style="color:var(--secondary-text-color)">22</span></div></div></div><div style="min-width:0;display:flex;flex-direction:column;gap:8px"><div style="display:flex;align-items:center;justify-content:center;text-align:center;min-height:32px;padding:4px 8px;border-radius:0 0 0 0;border-left:1px solid var(--lofty-finisher-white);background:#e1e1d9;font:400 12px/16px var(--font-family);color:#414042;white-space:normal;text-wrap:pretty">Construction</div><div style="display:flex;flex-direction:column;gap:2px;padding-right:8px"><div style="display:flex;justify-content:space-between;gap:8px;font:400 12px/16px var(--font-family)"><span style="color:var(--primary-text-color);font-weight:600">Target completion</span><span style="color:var(--secondary-text-color)">14/11/26</span></div><div style="display:flex;justify-content:space-between;gap:8px;font:400 12px/16px var(--font-family)"><span style="color:var(--primary-text-color);font-weight:600">Days in stage</span><span style="color:var(--secondary-text-color)">0</span></div></div></div><div style="min-width:0;display:flex;flex-direction:column;gap:8px"><div style="display:flex;align-items:center;justify-content:center;text-align:center;min-height:32px;padding:4px 8px;border-radius:0 0 0 0;border-left:1px solid var(--lofty-finisher-white);background:#e1e1d9;font:400 12px/16px var(--font-family);color:#414042;white-space:normal;text-wrap:pretty">Maintenance</div><div style="display:flex;flex-direction:column;gap:2px;padding-right:8px"><div style="display:flex;justify-content:space-between;gap:8px;font:400 12px/16px var(--font-family)"><span style="color:var(--primary-text-color);font-weight:600">Open jobs</span><span style="color:var(--secondary-text-color)">0</span></div><div style="display:flex;justify-content:space-between;gap:8px;font:400 12px/16px var(--font-family)"><span style="color:var(--primary-text-color);font-weight:600">Completed jobs</span><span style="color:var(--secondary-text-color)">0</span></div></div></div><div style="min-width:0;display:flex;flex-direction:column;gap:8px"><div style="display:flex;align-items:center;justify-content:center;text-align:center;min-height:32px;padding:4px 8px;border-radius:0 4px 4px 0;border-left:1px solid var(--lofty-finisher-white);background:#e1e1d9;font:400 12px/16px var(--font-family);color:#414042;white-space:normal;text-wrap:pretty">Complete</div><div style="display:flex;flex-direction:column;gap:2px;padding-right:8px"><div style="display:flex;justify-content:space-between;gap:8px;font:400 12px/16px var(--font-family)"><span style="color:var(--primary-text-color);font-weight:600">Target completion</span><span style="color:var(--secondary-text-color)">28/02/27</span></div><div style="display:flex;justify-content:space-between;gap:8px;font:400 12px/16px var(--font-family)"><span style="color:var(--primary-text-color);font-weight:600">Total days</span><span style="color:var(--secondary-text-color)">101</span></div></div></div></div>
+            </sc-if>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;border-top:1px solid #c6c5ba;padding-top:16px;">
+            <button type="button" onClick="{{ toggleKey }}" style="display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;cursor:pointer;padding:4px;text-align:left" style-hover="background:rgba(65,64,66,.04)"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="{{ chevKey }}" size="{{ 16 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import><span style="font:600 14px/20px var(--font-family);color:#414042">Key properties</span></button>
+            <sc-if value="{{ openKey }}" hint-placeholder-val="{{ true }}">
+            <div style="display:grid;grid-template-columns:136px minmax(0,1fr);align-items:center;justify-items:end;gap:8px;min-height:32px;padding:0 4px"><span style="justify-self:start;font:400 14px/20px var(--font-family);color:var(--secondary-text-color)">Current address</span><span style="display:flex;align-items:center;gap:8px;box-sizing:border-box;width:100%;max-width:440px"><span style="flex:1;min-width:0"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Dropdown" iconBasePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons" hint-size="100%,32px" size="small" options="{{ addressOptions }}" value="{{ currentAddress }}" onChange="{{ noop }}"></x-import></span><button type="button" aria-label="Add a new address" onClick="{{ toggleAddr }}" style="width:28px;height:28px;flex:none;display:flex;align-items:center;justify-content:center;border:0;border-radius:4px;background:var(--lofty-crisp-orange);cursor:pointer" style-hover="background:var(--lofty-orange-hover)"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="Add" size="{{ 16 }}" color="var(--lofty-finisher-white)" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import></button></span></div>
+            <sc-if value="{{ addrEdit }}" hint-placeholder-val="{{ false }}">
+              <div style="margin:4px;padding:12px;background:var(--lofty-flint-50);border:1px solid #c6c5ba;border-radius:8px;display:flex;flex-direction:column;gap:8px">
+                <span style="font:600 12px/16px var(--font-family);color:#67666a;letter-spacing:.06em">UPDATE ADDRESS</span>
+                <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+                  <x-import component-from-global-scope="LoftyDesignSystem_491d68.TextField" iconBasePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons" hint-size="100%,56px" label="Res #" value="1" onChange="{{ noop }}"></x-import>
+                  <x-import component-from-global-scope="LoftyDesignSystem_491d68.TextField" iconBasePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons" hint-size="100%,56px" label="Lot #" value="3" onChange="{{ noop }}"></x-import>
+                  <x-import component-from-global-scope="LoftyDesignSystem_491d68.TextField" iconBasePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons" hint-size="100%,56px" label="Street number" value="13" onChange="{{ noop }}"></x-import>
+                </div>
+                <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px">
+                  <x-import component-from-global-scope="LoftyDesignSystem_491d68.TextField" iconBasePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons" hint-size="100%,56px" label="Street" value="Tester Street" onChange="{{ noop }}"></x-import>
+                  <x-import component-from-global-scope="LoftyDesignSystem_491d68.TextField" iconBasePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons" hint-size="100%,56px" label="Suburb" value="Testville" onChange="{{ noop }}"></x-import>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                  <x-import component-from-global-scope="LoftyDesignSystem_491d68.TextField" iconBasePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons" hint-size="100%,56px" label="State" value="SA" onChange="{{ noop }}"></x-import>
+                  <x-import component-from-global-scope="LoftyDesignSystem_491d68.TextField" iconBasePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons" hint-size="100%,56px" label="Postcode" value="5000" onChange="{{ noop }}"></x-import>
+                </div>
+                <x-import component-from-global-scope="LoftyDesignSystem_491d68.Dropdown" iconBasePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons" hint-size="100%,56px" label="Or reinstate a previous address" options="{{ prevAddresses }}" value="{{ prevAddressValue }}" onChange="{{ noop }}"></x-import>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <x-import component-from-global-scope="LoftyDesignSystem_491d68.Button" hint-size="auto,32px" size="small" onClick="{{ toggleAddr }}">Save address</x-import>
+                  <x-import component-from-global-scope="LoftyDesignSystem_491d68.Button" hint-size="auto,32px" size="small" kind="tertiary" onClick="{{ toggleAddr }}">Cancel</x-import>
+                  <span style="flex:1"></span>
+                  <span style="font:400 12px/16px var(--font-family);color:#8a898d">The old address is kept on the job and stays selectable.</span>
+                </div>
+              </div>
+            </sc-if>
+            <div style="display:grid;grid-template-columns:136px minmax(0,1fr);align-items:center;justify-items:end;gap:8px;min-height:32px;padding:0 4px"><span style="justify-self:start;font:400 14px/20px var(--font-family);color:var(--secondary-text-color)">Council</span><span style="box-sizing:border-box;width:100%;max-width:440px;display:block"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Dropdown" iconBasePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons" hint-size="100%,32px" size="small" options="{{ councils }}" value="{{ councilValue }}" onChange="{{ noop }}"></x-import></span></div>
+            
+            <div style="display:grid;grid-template-columns:136px minmax(0,1fr);align-items:center;justify-items:end;gap:8px;min-height:32px;padding:0 4px"><span style="justify-self:start;font:400 14px/20px var(--font-family);color:var(--secondary-text-color)">Currently with</span><span style="display:flex;align-items:center;gap:8px;box-sizing:border-box;width:100%;max-width:440px"><span style="flex:1;min-width:0"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Dropdown" iconBasePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons" hint-size="100%,32px" size="small" options="{{ assignees }}" value="{{ assigneeValue }}" onChange="{{ noop }}"></x-import></span></span></div>
+            
+            <div style="display:grid;grid-template-columns:136px minmax(0,1fr);align-items:center;justify-items:end;gap:8px;min-height:32px;padding:0 4px"><span style="justify-self:start;font:400 14px/20px var(--font-family);color:var(--secondary-text-color)">Next milestone</span><span style="display:flex;align-items:center;box-sizing:border-box;width:100%;max-width:440px;height:32px;padding:0 8px;font:400 14px/20px var(--font-family);color:var(--primary-text-color)">Orders stage 1 requested · 18/09/2026</span></div>
+            <div style="display:grid;grid-template-columns:136px minmax(0,1fr);align-items:center;justify-items:end;gap:8px;min-height:32px;padding:0 4px"><span style="justify-self:start;font:400 14px/20px var(--font-family);color:var(--secondary-text-color)">Handover date</span><span style="display:inline-flex;align-items:center;gap:6px;box-sizing:border-box;width:100%;max-width:440px;height:32px;padding:0 8px;border:1px solid #c6c5ba;border-radius:4px;background:#fff;font:400 14px/20px var(--font-family);color:var(--placeholder-color);cursor:pointer" style-hover="border-color:#8a898d"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="Calendar" size="{{ 16 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import>dd/mm/yyyy</span></div>
+            <div style="display:grid;grid-template-columns:136px minmax(0,1fr);align-items:center;justify-items:end;gap:8px;min-height:32px;padding:0 4px"><span style="justify-self:start;font:400 14px/20px var(--font-family);color:var(--secondary-text-color)">SharePoint folder</span><span style="display:flex;align-items:center;gap:6px;box-sizing:border-box;width:100%;max-width:440px;height:32px;padding:0 8px;font:400 14px/20px var(--font-family);color:var(--primary-text-color)"><a href="#6b" style="display:inline-flex;align-items:center;gap:6px;color:inherit;text-decoration:underline;text-decoration-color:#c6c5ba;text-underline-offset:3px">1209-002 — 24 Wandoo Road<x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="14px,14px" name="ExternalPage" size="{{ 14 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import></a></span></div>
+            </sc-if>
+          </div>
+                    <div style="display:flex;flex-direction:column;gap:8px;border-top:1px solid #c6c5ba;padding-top:16px;">
+            <button type="button" onClick="{{ toggleProc }}" style="display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;cursor:pointer;padding:4px;text-align:left" style-hover="background:rgba(65,64,66,.04)"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="{{ chevProc }}" size="{{ 16 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import><span style="font:600 14px/20px var(--font-family);color:#414042">Process</span><span style="flex:1"></span></button>
+            <sc-if value="{{ openProc }}" hint-placeholder-val="{{ true }}">
+            <div style="background:var(--lofty-flint-50);border:1px solid #c6c5ba;border-radius:8px;overflow:hidden">
+              <div style="height:4px;background:#e1e1d9"><div style="width:{{ p6bar }};height:100%;background:var(--lofty-crisp-orange)"></div></div>
+              <sc-for list="{{ p6rows }}" as="st" hint-placeholder-count="5">
+                <div style="border-bottom:1px solid #e1e1d9;background:{{ st.rowBg }}">
+                  <div style="display:flex;align-items:center;gap:12px;min-height:36px;padding:2px 12px">
+                    <button type="button" aria-label="Show step details" onClick="{{ st.openMe }}" style="width:24px;height:24px;flex:none;display:flex;align-items:center;justify-content:center;border:0;border-radius:4px;background:transparent;cursor:pointer" style-hover="background:rgba(65,64,66,.08)"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="{{ st.chev }}" size="{{ 16 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import></button><x-import component-from-global-scope="LoftyDesignSystem_491d68.Checkbox" hint-size="20px,20px" checked="{{ st.done }}" onChange="{{ st.toggle }}"></x-import>
+                    <span style="{{ st.nameStyle }}" onClick="{{ st.openMe }}">{{ st.name }}</span>
+                    <span style="{{ st.dateStyle }}">{{ st.dateText }}</span>
+                    <x-import component-from-global-scope="LoftyDesignSystem_491d68.Avatar" hint-size="24px,24px" text="{{ st.who }}" size="small" backgroundColor="#414042"></x-import>
+                  </div>
+                  <sc-if value="{{ st.open }}" hint-placeholder-val="{{ true }}">
+                    <div style="display:flex;flex-direction:column;padding:0 12px 8px 44px">
+                      <sc-for list="{{ st.fields }}" as="f" hint-placeholder-count="3">
+                        <div style="display:grid;grid-template-columns:132px minmax(0,1fr);align-items:center;gap:8px;min-height:36px"><span style="font:400 14px/20px var(--font-family);color:var(--secondary-text-color)">{{ f.label }}</span><span style="{{ f.valueStyle }}"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ f.value }}</span><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="14px,14px" name="{{ f.icon }}" size="{{ 14 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import></span></div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                </div>
+              </sc-for>
+              <div style="display:flex;align-items:center;gap:8px;min-height:36px;padding:0 12px"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="DropdownChevronUp" size="{{ 16 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import><span style="font:600 14px/20px var(--font-family);color:var(--lofty-foundation-black)">Show all 9 steps</span></div>
+            </div>
+            </sc-if>
+          </div>
+          <div style="display:flex;flex-direction:column">
+            <div style="display:flex;align-items:center;gap:8px;min-height:32px;padding:0 4px;border-top:1px solid #e1e1d9"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="DropdownChevronRight" size="{{ 16 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="Doc" size="{{ 16 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import><span style="flex:1;font:600 14px/20px var(--font-family);color:#414042">Documents &amp; Files</span><span style="font:400 12px/16px var(--font-family);color:#8a898d">14 files</span></div>
+            <div style="display:flex;align-items:center;gap:8px;min-height:32px;padding:0 4px;border-top:1px solid #e1e1d9"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="DropdownChevronRight" size="{{ 16 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="Maintenance" size="{{ 16 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import><span style="flex:1;font:600 14px/20px var(--font-family);color:#414042">Maintenance</span><span style="font:400 12px/16px var(--font-family);color:#8a898d">2 open requests</span></div>
+                        <div style="display:flex;align-items:center;gap:8px;min-height:32px;padding:0 4px;border-top:1px solid #e1e1d9"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="DropdownChevronRight" size="{{ 16 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="Dependency" size="{{ 16 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import><span style="flex:1;font:600 14px/20px var(--font-family);color:#414042">Contacts &amp; Companies</span><span style="font:400 12px/16px var(--font-family);color:#8a898d">6 linked</span></div>
+                      </div>
+        </div>
+          </div>
+          <div style="min-width:0;display:flex;flex-direction:column;border-left:1px solid #c6c5ba;background:#fff">
+            <div style="flex:none;padding:12px 16px 0">
+              <div style="display:flex;border-bottom:1px solid #c6c5ba;padding:4px 4px 0;background:var(--lofty-flint-100)">
+              <span style="display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 16px;font:400 14px/20px var(--font-family);color:#67666a;cursor:pointer" style-hover="background:rgba(65,64,66,.04)">Tasks<span style="display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:100px;background:var(--lofty-flint-200);font:600 12px/16px var(--font-family);color:#414042">5</span></span>
+              <span style="display:inline-flex;align-items:center;height:36px;padding:0 16px;border:1px solid #c6c5ba;border-bottom:0;border-radius:4px 4px 0 0;background:#fff;font:600 14px/20px var(--font-family);color:#414042;box-shadow:inset 0 -3px 0 var(--lofty-crisp-orange);cursor:pointer">Comments</span>
+              <span style="display:inline-flex;align-items:center;height:36px;padding:0 16px;border-left:1px solid #e1e1d9;font:400 14px/20px var(--font-family);color:#67666a;cursor:pointer" style-hover="background:rgba(65,64,66,.04)">Activity Log</span>
+              <span style="flex:1"></span>
+              <span style="display:inline-flex;align-items:center;height:36px;padding:0 4px;font:400 12px/16px var(--font-family);color:#67666a;cursor:pointer">Oldest</span>
+            </div>
+            </div>
+            <div style="flex:1;min-height:0;overflow:auto;padding:16px">
+              <div style="display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;gap:8px">
+                <x-import component-from-global-scope="LoftyDesignSystem_491d68.Avatar" hint-size="24px,24px" text="IW" size="small" backgroundColor="#414042"></x-import>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+                  <div style="display:flex;gap:8px;align-items:baseline;justify-content:space-between"><span style="font:600 14px/20px var(--font-family)">Isla Ward</span><span style="font:400 12px/16px var(--font-family);color:#67666a">Today 09:14</span></div>
+                  <span style="font:400 14px/20px var(--font-family);color:#414042">Supplier confirmed the truss lead time is four weeks, so stage 1 has to go in this week.</span>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px">
+                <x-import component-from-global-scope="LoftyDesignSystem_491d68.Avatar" hint-size="24px,24px" text="BS" size="small" backgroundColor="#414042"></x-import>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+                  <div style="display:flex;gap:8px;align-items:baseline;justify-content:space-between"><span style="font:600 14px/20px var(--font-family)">Ben Sultana</span><span style="font:400 12px/16px var(--font-family);color:#67666a">Yesterday 16:40</span></div>
+                  <span style="font:400 14px/20px var(--font-family);color:#414042">Quotes are in. Waiting on the survey before I release the order.</span>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <span style="width:24px;display:flex;justify-content:center"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="16px,16px" name="Activity" size="{{ 16 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import></span>
+                <span style="font:400 12px/16px var(--font-family);color:#67666a">Ben Sultana moved this job to Pre-construction · 16/08/2026</span>
+              </div>
+            </div>
+            </div>
+            <div style="flex:none;padding:8px 16px 16px;border-top:1px solid #c6c5ba;background-color:var(--lofty-flint-100)">
+              <div style="display:flex;align-items:center;gap:8px;min-height:40px;padding:4px 4px 0">
+              <x-import component-from-global-scope="LoftyDesignSystem_491d68.Avatar" hint-size="24px,24px" text="AB" size="small" backgroundColor="var(--lofty-crisp-orange)"></x-import>
+              <span style="flex:1;display:flex;align-items:center;height:32px;padding:0 8px;border:1px solid #8a898d;border-radius:4px;font:400 14px/20px var(--font-family);color:#8a898d">Add a comment</span>
+              <x-import component-from-global-scope="LoftyDesignSystem_491d68.Button" hint-size="auto,32px" size="small" kind="secondary">Comment</x-import>
+            </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 6c ============ -->
+    <div class="dv-opt" id="6c">
+      <div class="dv-olabel"><a class="dv-oid" href="#6c">6c</a><span>The column picker the field rule implies. The toggle is the same decision as <code>Empty</code> in the record — on a board you hide empty columns, in a record you show them, because a record is a form and a board is a comparison.</span></div>
+      <div class="dv-card" data-screen-label="6c column picker" style="width:470px;height:700px;display:flex;flex-direction:column">
+        <div style="height:48px;flex:none;display:flex;align-items:center;gap:8px;padding:0 8px 0 16px;border-bottom:1px solid #c6c5ba">
+          <span style="flex:1;font:600 14px/20px var(--font-family)">Columns</span>
+          <x-import component-from-global-scope="LoftyDesignSystem_491d68.IconButton" hint-size="32px,32px" icon="CloseSmall" ariaLabel="Close" size="small" iconBasePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import>
+        </div>
+        <div style="flex:none;padding:12px 16px;display:flex;flex-direction:column;gap:12px;border-bottom:1px solid #e1e1d9">
+          <x-import component-from-global-scope="LoftyDesignSystem_491d68.Search" hint-size="100%,32px" size="small" placeholder="Find a column" iconBasePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import>
+          <label style="display:flex;align-items:center;gap:12px;min-height:32px;cursor:pointer">
+            <span style="flex:1;font:400 14px/20px var(--font-family);color:#414042">Show only columns with values</span>
+            <x-import component-from-global-scope="LoftyDesignSystem_491d68.Toggle" hint-size="41px,24px" checked="{{ true }}" ariaLabel="Show only columns with values"></x-import>
+          </label>
+          <span style="font:400 12px/16px var(--font-family);color:#67666a">17 of 41 columns have a value on this board.</span>
+        </div>
+        <div style="flex:1;min-height:0;overflow:auto;padding:8px 16px 16px">
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="display:flex;align-items:center;min-height:32px;font:600 12px/16px var(--font-family);color:#67666a">Identity</div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:32px" style-hover="background:rgba(65,64,66,.04)"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Checkbox" hint-size="20px,20px" checked="{{ true }}"></x-import><span style="flex:1;min-width:0;font:400 14px/20px var(--font-family);color:#414042;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Job number</span><span style="width:150px;flex:none;display:flex;align-items:center;justify-content:flex-end;height:28px;padding:0 8px;font:400 13px/18px var(--font-family);color:#8a898d">Locked</span></div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:32px" style-hover="background:rgba(65,64,66,.04)"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Checkbox" hint-size="20px,20px" checked="{{ true }}"></x-import><span style="flex:1;min-width:0;font:400 14px/20px var(--font-family);color:#414042;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Site address</span><span style="width:150px;flex:none;display:flex;align-items:center;height:28px;padding:0 8px;border:1px solid #c6c5ba;border-radius:4px;background:#fff;font:400 13px/18px var(--font-family);color:#414042;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" style-hover="border-color:#8a898d">24 Wandoo Road</span></div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:32px" style-hover="background:rgba(65,64,66,.04)"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Checkbox" hint-size="20px,20px" checked="{{ true }}"></x-import><span style="flex:1;min-width:0;font:400 14px/20px var(--font-family);color:#414042;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Suburb</span><span style="width:150px;flex:none;display:flex;align-items:center;gap:6px;height:28px;padding:0 8px;border:1px solid #c6c5ba;border-radius:4px;background:#fff;font:400 13px/18px var(--font-family);color:#414042" style-hover="border-color:#8a898d"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Evanston Park</span><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="14px,14px" name="DropdownChevronDown" size="{{ 14 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import></span></div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:32px" style-hover="background:rgba(65,64,66,.04)"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Checkbox" hint-size="20px,20px"></x-import><span style="flex:1;min-width:0;font:400 14px/20px var(--font-family);color:#67666a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Old job number</span><span style="width:150px;flex:none;display:flex;align-items:center;height:28px;padding:0 8px;border:1px solid #c6c5ba;border-radius:4px;background:#fff;font:400 13px/18px var(--font-family);color:#8a898d;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" style-hover="border-color:#8a898d">Enter text</span></div>
+            <div style="display:flex;align-items:center;min-height:32px;font:600 12px/16px var(--font-family);color:#67666a;padding-top:8px">Programme</div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:32px" style-hover="background:rgba(65,64,66,.04)"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Checkbox" hint-size="20px,20px" checked="{{ true }}"></x-import><span style="flex:1;min-width:0;font:400 14px/20px var(--font-family);color:#414042;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Stage</span><span style="width:150px;flex:none;display:flex;align-items:center;gap:6px;height:28px;padding:0 8px;border:1px solid #c6c5ba;border-radius:4px;background:#fff;font:400 13px/18px var(--font-family);color:#414042" style-hover="border-color:#8a898d"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Pre-construction</span><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="14px,14px" name="DropdownChevronDown" size="{{ 14 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import></span></div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:32px" style-hover="background:rgba(65,64,66,.04)"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Checkbox" hint-size="20px,20px" checked="{{ true }}"></x-import><span style="flex:1;min-width:0;font:400 14px/20px var(--font-family);color:#414042;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Next milestone</span><span style="width:150px;flex:none;display:flex;align-items:center;gap:6px;height:28px;padding:0 8px;border:1px solid #c6c5ba;border-radius:4px;background:#fff;font:400 13px/18px var(--font-family);color:#414042" style-hover="border-color:#8a898d"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="14px,14px" name="Calendar" size="{{ 14 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import>18/09/2026</span></div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:32px" style-hover="background:rgba(65,64,66,.04)"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Checkbox" hint-size="20px,20px" checked="{{ true }}"></x-import><span style="flex:1;min-width:0;font:400 14px/20px var(--font-family);color:#414042;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Days in stage</span><span style="width:150px;flex:none;display:flex;align-items:center;justify-content:flex-end;height:28px;padding:0 8px;font:400 13px/18px var(--font-family);color:#8a898d">22</span></div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:32px" style-hover="background:rgba(65,64,66,.04)"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Checkbox" hint-size="20px,20px"></x-import><span style="flex:1;min-width:0;font:400 14px/20px var(--font-family);color:#67666a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Adjusted forecast date</span><span style="width:150px;flex:none;display:flex;align-items:center;gap:6px;height:28px;padding:0 8px;border:1px solid #c6c5ba;border-radius:4px;background:#fff;font:400 13px/18px var(--font-family);color:#8a898d" style-hover="border-color:#8a898d"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="14px,14px" name="Calendar" size="{{ 14 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import>dd/mm/yyyy</span></div>
+            <div style="display:flex;align-items:center;min-height:32px;font:600 12px/16px var(--font-family);color:#67666a;padding-top:8px">People</div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:32px" style-hover="background:rgba(65,64,66,.04)"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Checkbox" hint-size="20px,20px" checked="{{ true }}"></x-import><span style="flex:1;min-width:0;font:400 14px/20px var(--font-family);color:#414042;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Owner</span><span style="width:150px;flex:none;display:flex;align-items:center;gap:6px;height:28px;padding:0 4px 0 8px;border:1px solid #c6c5ba;border-radius:4px;background:#fff;font:400 13px/18px var(--font-family);color:#414042" style-hover="border-color:#8a898d"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Ben Sultana</span><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="14px,14px" name="DropdownChevronDown" size="{{ 14 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import></span></div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:32px" style-hover="background:rgba(65,64,66,.04)"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Checkbox" hint-size="20px,20px" checked="{{ true }}"></x-import><span style="flex:1;min-width:0;font:400 14px/20px var(--font-family);color:#414042;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Sales consultant</span><span style="width:150px;flex:none;display:flex;align-items:center;gap:6px;height:28px;padding:0 4px 0 8px;border:1px solid #c6c5ba;border-radius:4px;background:#fff;font:400 13px/18px var(--font-family);color:#414042" style-hover="border-color:#8a898d"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Imogen Wills</span><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="14px,14px" name="DropdownChevronDown" size="{{ 14 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import></span></div>
+            <div style="display:flex;align-items:center;gap:12px;min-height:32px" style-hover="background:rgba(65,64,66,.04)"><x-import component-from-global-scope="LoftyDesignSystem_491d68.Checkbox" hint-size="20px,20px"></x-import><span style="flex:1;min-width:0;font:400 14px/20px var(--font-family);color:#67666a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Site manager</span><span style="width:150px;flex:none;display:flex;align-items:center;gap:6px;height:28px;padding:0 4px 0 8px;border:1px solid #c6c5ba;border-radius:4px;background:#fff;font:400 13px/18px var(--font-family);color:#8a898d" style-hover="border-color:#8a898d"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Assign</span><x-import component-from-global-scope="LoftyDesignSystem_491d68.Icon" hint-size="14px,14px" name="DropdownChevronDown" size="{{ 14 }}" basePath="_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons"></x-import></span></div>
+          </div>
+        </div>
+        <div style="flex:none;display:flex;align-items:center;gap:8px;padding:12px 16px;border-top:1px solid #c6c5ba;background:#f4f3ee">
+          <span style="flex:1;font:400 12px/16px var(--font-family);color:#67666a">Saved to this view only</span>
+          <x-import component-from-global-scope="LoftyDesignSystem_491d68.Button" hint-size="auto,32px" kind="tertiary" size="small">Reset</x-import>
+          <x-import component-from-global-scope="LoftyDesignSystem_491d68.Button" hint-size="auto,32px" size="small">Apply</x-import>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <p class="dv-next">Next, once you pick: the same 32px field system and disclosure rule across the board, Gantt, reports and Settings → Processes, plus the shell pass.</p>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { jobTab: "overview", viewTab: "board", railB: "projects", flyC: "projects",
+    p6: [
+      { name: "Selections finalised", done: true, date: "07/09/2026", who: "IW", fields: [
+        { label: "Signed by client", value: "Renee Cho" }, { label: "Signed on", value: "07/09/2026" } ] },
+      { name: "Quotes requested", done: true, date: "13/09/2026", who: "BS", fields: [
+        { label: "Quotes received", value: "3 of 3" } ] },
+      { name: "Orders stage 1 requested", done: false, date: null, who: "BS", due: "Due 18/09/2026", fields: [
+        { label: "Supplier", value: null }, { label: "Ordered on", value: null, type: "date" },
+        { label: "Order value", value: "$18,400" }, { label: "Approval", value: "Awaiting Ben Sultana" } ] },
+      { name: "Stage 1 orders complete", done: false, date: null, who: "—", fields: [
+        { label: "All orders confirmed", value: null }, { label: "Completed on", value: null, type: "date" } ] },
+      { name: "Orders stage 2 requested", done: false, date: null, who: "—", fields: [
+        { label: "Supplier", value: null }, { label: "Ordered on", value: null, type: "date" } ] }
+    ], p6open: 2 };
+  renderVals() {
+    const noop = () => {};
+    const panels = {
+      home: { title: "Home", newLabel: "New job", views: [{ label: "My week", count: "12" }, { label: "Assigned to me", count: "8" }, { label: "Watching", count: "5" }], groupLabel: "SHORTCUT", groups: [{ label: "Overdue", count: "3" }, { label: "Due today", count: "2" }, { label: "Waiting on me", count: "4" }] },
+      projects: { title: "Projects", newLabel: "New project", views: [{ label: "All projects", count: "9" }, { label: "Current projects", count: "6" }, { label: "New projects", count: "2" }, { label: "Archived", count: "14" }], groupLabel: "STAGE", groups: [{ label: "Acquisition & Development", count: "2" }, { label: "Pre-construction", count: "3" }, { label: "Construction", count: "2" }, { label: "Maintenance", count: "1" }, { label: "Complete", count: "1" }] },
+      jobs: { title: "Jobs", newLabel: "New job", views: [{ label: "All jobs", count: "128" }, { label: "My jobs", count: "12" }, { label: "Blocked", count: "4" }], groupLabel: "TEAM", groups: [{ label: "Estimating", count: "18" }, { label: "Design", count: "24" }, { label: "Sales Admin", count: "31" }, { label: "Construction", count: "55" }] },
+      maintenance: { title: "Maintenance", newLabel: "New request", views: [{ label: "Open requests", count: "23" }, { label: "Scheduled", count: "9" }, { label: "Closed", count: "61" }], groupLabel: "PRIORITY", groups: [{ label: "Urgent", count: "4" }, { label: "Standard", count: "12" }, { label: "Low", count: "7" }] },
+      reports: { title: "Reports", newLabel: "New report", views: [{ label: "Portfolio overview", count: "" }, { label: "Leadership summary", count: "" }, { label: "Job report", count: "" }], groupLabel: "SAVED VIEW", groups: [{ label: "Q3 handovers", count: "" }, { label: "Estimating throughput", count: "" }] },
+      contacts: { title: "Contacts", newLabel: "New contact", views: [{ label: "All contacts", count: "312" }, { label: "Companies", count: "48" }, { label: "Crews", count: "16" }], groupLabel: "TYPE", groups: [{ label: "Client", count: "184" }, { label: "Supplier", count: "86" }, { label: "Subcontractor", count: "42" }] },
+      mywork: { title: "My work", newLabel: "New task", views: [{ label: "My week", count: "" }, { label: "Inbox", count: "3" }, { label: "Tasks", count: "12" }], groupLabel: "FILTER", groups: [{ label: "Overdue", count: "3" }, { label: "Due today", count: "2" }, { label: "Waiting on me", count: "4" }] },
+      pinned: { title: "Pinned", newLabel: "Pin a record", views: [{ label: "1209 Evanston Park", count: "" }, { label: "1215 Mawson Lakes", count: "" }, { label: "1203 Blakeview", count: "" }, { label: "1188 Seaford Rise", count: "" }, { label: "1221 Golden Grove", count: "" }], groupLabel: "RECENT", groups: [{ label: "1209-002", count: "" }, { label: "1215-004", count: "" }] },
+      tools: { title: "Tools", newLabel: "New estimate", views: [{ label: "Estimating", count: "" }, { label: "Measure-up", count: "" }, { label: "Drawings", count: "" }], groupLabel: "RECENT", groups: [{ label: "1209-002 takeoff", count: "" }, { label: "1215 slab estimate", count: "" }] },
+      settings: { title: "Settings", newLabel: "New process", views: [{ label: "Processes", count: "9" }, { label: "Fields", count: "41" }, { label: "Templates", count: "12" }], groupLabel: "ADMIN AREA", groups: [{ label: "Users & teams", count: "" }, { label: "Permissions", count: "" }, { label: "Integrations", count: "" }] }
+    };
+    const p = panels[this.state.railB] || panels.projects;
+    const flyouts = {
+      projects: { title: "Projects", items: ["All projects", "Current projects", "New projects", "Archived"] },
+      jobs: { title: "Jobs", items: ["All jobs", "My jobs", "Blocked", "Handover this month"] },
+      reports: { title: "Reports", items: ["Portfolio overview", "Leadership summary", "Job report"] }
+    };
+    const f = flyouts[this.state.flyC] || flyouts.projects;
+    const sel = "#fae4d5";
+    const selDark = "rgba(255,255,255,.20)";
+    const ns = window.LoftyDesignSystem_491d68 || {};
+    const addIcon = ns.Icon ? React.createElement(ns.Icon, { name: "Add", size: 16, basePath: "_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons" }) : null;
+    const docIcon = ns.Icon ? React.createElement(ns.Icon, { name: "Doc", size: 16, basePath: "_ds/lofty-s-app-design-system-491d6888-cf3b-4d56-bdaa-4ac8a6948e99/assets/icons" }) : null;
+    const today = "11/09/2026";
+    const toggleStep = (i) => this.setState(s => {
+      const p6 = s.p6.map((st, n) => n !== i ? st : ({ ...st, done: !st.done, date: !st.done ? (st.date || today) : null }));
+      return { p6, p6open: !s.p6[i].done ? Math.min(i + 1, p6.length - 1) : i };
+    });
+    const openStep = (i) => this.setState(s => ({ p6open: s.p6open === i ? -1 : i }));
+    const p6rows = this.state.p6.map((st, i) => {
+      const open = this.state.p6open === i;
+      return {
+        name: st.name, done: st.done, who: st.who, open,
+        chev: open ? "DropdownChevronDown" : "DropdownChevronRight",
+        toggle: () => toggleStep(i), openMe: () => openStep(i),
+        rowBg: open ? "var(--lofty-flint-100)" : "transparent",
+        nameStyle: st.done
+          ? "flex:1;min-width:0;font:400 14px/20px var(--font-family);color:#67666a;text-decoration:line-through;text-decoration-color:#c6c5ba"
+          : (open ? "flex:1;min-width:0;font:600 14px/20px var(--font-family);color:#414042" : "flex:1;min-width:0;font:400 14px/20px var(--font-family);color:#414042"),
+        dateText: st.done ? st.date : (st.due || "Not set"),
+        dateStyle: st.done
+          ? "font:400 14px/20px var(--font-family);color:#67666a"
+          : (st.due ? "font:600 14px/20px var(--font-family);color:var(--lofty-foundation-black)" : "font:400 14px/20px var(--font-family);color:#8a898d"),
+        fields: st.fields.map(f => {
+          const isDate = f.type === "date" || /\bon\b|date/i.test(f.label);
+          const isPick = /supplier|approval|signed by/i.test(f.label);
+          return {
+            label: f.label,
+            value: f.value || (isDate ? "dd/mm/yyyy" : isPick ? "Select" : "Enter text"),
+            icon: isDate ? "Calendar" : isPick ? "DropdownChevronDown" : "Edit",
+            valueStyle: "display:flex;align-items:center;gap:6px;box-sizing:border-box;width:100%;max-width:220px;min-width:0;height:28px;padding:0 8px;border:1px solid #c6c5ba;border-radius:4px;background:#fff;cursor:pointer;font:400 14px/20px var(--font-family);color:"
+              + (f.value ? "#414042" : "#8a898d")
+          };
+        })
+      };
+    });
+    const doneCount = this.state.p6.filter(s => s.done).length;
+    return {
+      noop,
+      addIcon,
+      docIcon,
+      p6rows,
+      p6summary: "Residential build · " + doneCount + " of 9 steps",
+      p6bar: Math.round((doneCount / 9) * 100) + "%",
+      n14: 14, n16: 16, n18: 18, n20: 20,
+      whiteInk: { color: "var(--lofty-finisher-white)" },
+      flipX: { transform: "scaleX(-1)" },
+      openStage: this.state.gStage !== false,
+      openKey: this.state.gKey !== false,
+      openProc: this.state.gProc !== false,
+      chevStage: this.state.gStage === false ? "DropdownChevronRight" : "DropdownChevronDown",
+      chevKey: this.state.gKey === false ? "DropdownChevronRight" : "DropdownChevronDown",
+      chevProc: this.state.gProc === false ? "DropdownChevronRight" : "DropdownChevronDown",
+      toggleStage: () => this.setState(s => ({ gStage: s.gStage === false })),
+      toggleKey: () => this.setState(s => ({ gKey: s.gKey === false })),
+      toggleProc: () => this.setState(s => ({ gProc: s.gProc === false })),
+      openMyWork: this.state.gMyWork === true,
+      openWorkspace: this.state.gWorkspace !== false,
+      openPinned: this.state.gPinned === true,
+      chevMyWork: this.state.gMyWork === true ? "NavigationChevronDown" : "NavigationChevronRight",
+      chevWorkspace: this.state.gWorkspace === false ? "NavigationChevronRight" : "NavigationChevronDown",
+      chevPinned: this.state.gPinned === true ? "NavigationChevronDown" : "NavigationChevronRight",
+      toggleMyWork: () => this.setState(s => ({ gMyWork: s.gMyWork !== true })),
+      toggleWorkspace: () => this.setState(s => ({ gWorkspace: s.gWorkspace === false })),
+      togglePinned: () => this.setState(s => ({ gPinned: s.gPinned !== true })),
+      panelTitle: p.title, panelNew: p.newLabel, panelViews: p.views, panelGroupLabel: p.groupLabel, panelGroups: p.groups,
+      railB: this.state.railB,
+      setRailHome: () => this.setState({ railB: "home" }),
+      setRailProjects: () => this.setState({ railB: "projects" }),
+      setRailJobs: () => this.setState({ railB: "jobs" }),
+      setRailMaint: () => this.setState({ railB: "maintenance" }),
+      setRailReports: () => this.setState({ railB: "reports" }),
+      setRailContacts: () => this.setState({ railB: "contacts" }),
+      setRailTools: () => this.setState({ railB: "tools" }),
+      setRailMyWork: () => this.setState({ railB: "mywork" }),
+      setRailPinned: () => this.setState({ railB: "pinned" }),
+      bgMyWork: this.state.railB === "mywork" ? selDark : "transparent",
+      bgPinned: this.state.railB === "pinned" ? selDark : "transparent",
+      n24: 24,
+      setRailSettings: () => this.setState({ railB: "settings" }),
+      bgTools: this.state.railB === "tools" ? selDark : "transparent",
+      bgSettings: this.state.railB === "settings" ? selDark : "transparent",
+      bgHome: this.state.railB === "home" ? selDark : "transparent",
+      bgProjects: this.state.railB === "projects" ? selDark : "transparent",
+      bgJobs: this.state.railB === "jobs" ? selDark : "transparent",
+      bgMaint: this.state.railB === "maintenance" ? selDark : "transparent",
+      bgReports: this.state.railB === "reports" ? selDark : "transparent",
+      bgContacts: this.state.railB === "contacts" ? selDark : "transparent",
+      flyTitle: f.title, flyItems: f.items,
+      flyProjects: () => this.setState({ flyC: "projects" }),
+      flyJobs: () => this.setState({ flyC: "jobs" }),
+      flyReports: () => this.setState({ flyC: "reports" }),
+      cBgProjects: this.state.flyC === "projects" ? selDark : "transparent",
+      cBgJobs: this.state.flyC === "jobs" ? selDark : "transparent",
+      cBgReports: this.state.flyC === "reports" ? selDark : "transparent",
+      addrEdit: !!this.state.addrEdit,
+      toggleAddr: () => this.setState(s => ({ addrEdit: !s.addrEdit })),
+      assignees: ["Ben Sultana · Owner · Northline", "Isla Ward · Selections · Northline", "Mia Fenton · Estimating · Southline", "Ravi Prakash · Site · Northline"],
+      assigneeValue: "Ben Sultana · Owner · Northline",
+      councils: ["City of Onkaparinga", "City of Playford", "City of Salisbury", "Town of Gawler", "Light Regional Council"],
+      councilValue: "City of Onkaparinga",
+      addressOptions: ["Res 1, Lot 3, 13 Tester Street, Testville, SA, 5000", "Lot 302, Wandoo Road, Evanston Park, SA, 5116", "Lot 302, Wandoo Road (as titled), Evanston Park, SA, 5116"],
+      currentAddress: "Res 1, Lot 3, 13 Tester Street, Testville, SA, 5000",
+      prevAddresses: ["Res 1, Lot 3, 13 Tester Street, Testville, SA, 5000", "Lot 302, Wandoo Road, Evanston Park, SA, 5116"],
+      prevAddressValue: "Lot 302, Wandoo Road, Evanston Park, SA, 5116",
+      tokSlab: "{{jobs.slab_booked_on}}",
+      tokSla: "{{jobs.sla_met}}",
+      stages: ["Acquisition & Development", "Pre-construction", "Construction", "Maintenance", "Completed", "Closed", "Cancelled"],
+      teams: ["Acquisition & Development", "Pre-construction Admin", "Design", "Estimating", "Sales Admin", "Construction", "Maintenance"],
+      people: ["Aisha Khan", "Han Le", "Isla Ward", "Priya Nair", "Renee Cho", "Todd Ferris"],
+      projects: ["1201 Andrews Farm land release", "1202 Angle Vale build programme", "1209 Evanston Park build programme", "1210 Gawler East build programme", "1215 Mawson Lakes build programme"],
+      projectTypes: ["Residential", "Commercial", "Land division"],
+      dateRanges: ["Any date", "Next 7 days", "Next 30 days", "This quarter", "Custom range"],
+      groupBys: ["Group: stage", "Group: phase", "Group: team", "Group: project"],
+      stageValue: "Pre-construction",
+      teamValue: "Estimating",
+      ownerValue: "Renee Cho",
+      assignValue: "Aisha Khan",
+      projectValue: "1201 Andrews Farm land release",
+      typeValue: "Residential",
+      dateRangeValue: "This quarter",
+      groupByValue: "Group: stage",
+      jobTabs: [{ id: "overview", label: "Overview" }, { id: "processes", label: "Processes" }, { id: "comments", label: "Comments" }, { id: "documents", label: "Documents" }],
+      viewTabs: [{ id: "board", label: "Board" }, { id: "table", label: "Table" }, { id: "gantt", label: "Gantt" }],
+      reportTabs: [{ id: "portfolio", label: "Portfolio overview" }, { id: "leadership", label: "Leadership summary" }, { id: "job", label: "Job report" }],
+      processTabs: [{ id: "pipeline", label: "Pipeline" }, { id: "table", label: "Table" }],
+      reportTab: "portfolio",
+      processTab: "pipeline",
+      ganttTab: "gantt",
+      jobTab: this.state.jobTab,
+      viewTab: this.state.viewTab,
+      setJobTab: (id) => this.setState({ jobTab: id }),
+      setViewTab: (id) => this.setState({ viewTab: id })
+    };
+  }
+}
+</script>
+</body>
+</html>

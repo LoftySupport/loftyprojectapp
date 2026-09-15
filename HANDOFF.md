@@ -5,44 +5,103 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 134 changes since then —
-- Fixed: The privacy policy named Netlify as the host serving the app; Vercel serves it
-- Fixed: The changelog generator no longer reports "Changelog: skip" as a mistake, so its check can pass again
-- Added: A table of contents block, listing the document's section headings in order
-- Added: A block can be pointed at particular jobs, projects or teams instead of covering everything
-- Added: Long dropdowns in a block's settings narrow as you type
-- …and 129 more.
+Unreleased: 284 changes since then —
+- Fixed: the workbook import no longer stops at the first community-title job
+- Fixed: deleting a job removes its report documents again, as it did before 0120
+- Changed: A maintenance issue is edited in the same layout it was logged in, with tasks, comments, activity and documents beneath it
+- Added: Community title jobs now carry a "c" in the job number itself — 1004-003c. Mark a job community title and its number updates everywhere it is used; correct it back and the c goes away. The project number and the three-digit job code never change, and the numbering still runs straight through both title types.
+- Added: A maintenance issue keeps a history of who changed what, including the photos, tasks and comments on it
+- …and 279 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
 
-**Phase A is done and applied, and so is the property-and-process half of Phase C (`0076`–`0079`, 1 September).
-The spine review is done too — Amber, 4 September — so the one thing that had to happen before
-any data was loaded has happened.
+## 14 September — START HERE IF YOU ARE A NEW CHAT: the maintenance drawer, and the rethink coming after it
 
-Next job: [Phase B, the import](#next-phase-b-the-import), and nothing is in front of it now.**
-It starts with a person-checked spreadsheet of the ~200 live jobs, grouped into projects and
-sequenced by lot; the order of work is set out in that section.
+Amber, 14 September, ending the session: *"An issue becomes a task … I am rethinking the
+process/properties/task alignment and how they work together but that is a new car. Get the
+drawer right and do handoff for new chat as I might need to refactor and redefine how these
+work together."*
 
-### Two standing decisions, so nobody spends an afternoon reopening them
+**Read this section, then `docs/open-questions.md`, then the three migration entries in
+`docs/schema/schema-plan.md` (`0119`, `0120`, `0121`). Everything below is on
+[PR #89](https://github.com/LoftySupport/loftyprojectapp/pull/89) and all three migrations
+are applied to the live project.**
 
-**`amberbeaumont/modules` is out of scope. Ignore it.** Amber, 4 September: *"ignore the
-amberbeaumont repositry now. it is not needed and done is prupose"*. The report-builder module
-was installed here and the app's copy is now the only copy that matters — the QR code, the
-table of contents and the record pickers live in `app/src/features/reports/` and are not going
-upstream. Do not raise PRs against that repo, and do not treat the two copies as needing to
-agree.
+### What is built and live
 
-**`report-share` is deployed and inert until one secret is set.** Deployed 4 September to
-`gmekuqdjemrfuurxhuib`, `verify_jwt` off, and answering — a POST returns
-`503 "Sharing is not switched on."` because `SHARE_ALLOWED_ORIGINS` has no value yet. That is
-the designed default, not a fault: the secret is a comma-separated origin allowlist with no
-fallback, so a deploy made before somebody decides the domains answers nothing. Set it in
-Project Settings → Edge Functions → Secrets and the Share button starts producing links that
-open. Until then it produces links that do not, so it is worth doing before anybody is shown
-the feature.
+| Piece | Where | State |
+| --- | --- | --- |
+| Maintenance photos and video on permanent links | `0119`, public `maintenance-media` bucket | Live |
+| An issue as a parent of comments, activity and tasks | `0120` | Live |
+| The audit trail stamping the issue, backfilled | `0121` | Live, 43 rows across 17 issues |
+| The edit drawer: new-request layout, plus Tasks, Comments, Activity and Documents | `MaintenancePage.tsx` → `RequestDetail` | On the branch |
 
-Last updated: 2026-09-15.
+### The decision that sets up the rethink
+
+**"An issue becomes a task."** That is the answer to the question `0120` deliberately left
+open: an issue could carry both `maintenance_items` (the defect by trade, with cost and a
+done-stamp) and `tasks` (scheduled work on the board), and nothing said which was the truth.
+
+The drawer now reads **tasks**. `maintenance_items` is **not deleted and nothing is migrated
+off it** — she said in the same breath that the alignment is being reconsidered, and tearing
+out a table on the strength of a rule about to be revisited is how you do the work twice.
+**`maintenance_items` is the first thing to look at when the rethink lands.**
+
+### What the rethink has to decide, stated as questions rather than guesses
+
+Nobody has answered these and nothing in the code assumes an answer:
+
+1. **Does `maintenance_items` survive at all**, or does an issue's breakdown-by-trade become
+   sub-tasks? Items carry cost and a done-stamp that `tasks` does not.
+2. **What creates the task** — a person pressing *Add task* in the drawer, which is what is
+   built, or an issue generating one automatically when it is logged or booked? Automatic
+   creation was NOT built, because "becomes" could mean either and inventing it would be a
+   plausible value.
+3. **Where do properties sit** on maintenance work — `process_properties` binds properties to
+   processes, and a maintenance issue is not in a process today.
+4. **Does a repair belong to a process run?** `tasks.process_run_id` exists. A maintenance
+   task currently has none, so it is a task outside every process.
+
+### The two shapes to keep in mind before refactoring
+
+- **`tasks.maintenance_request_id` is a QUALIFIER, not a parent.** `tasks_one_parent` still
+  requires exactly one of `job_id` and `project_id`, because the Tasks board reads by job and
+  a task parented only to an issue would vanish from it. A composite foreign key ties the
+  issue to the same job, so a repair cannot land on another house's board.
+- **`comments` and `activity_events` took the issue as a genuine extra parent**, the way
+  `feedback_id` became a fifth in `0064`.
+
+### Two mistakes from this session, both fixed, both worth not repeating
+
+- **`0120` widened `activity_events`, which nothing in the app reads.** The Activity panel
+  reads `activity_audit`. Adding a parent to the table that *models* a feed is not the same as
+  adding it to the table that *feeds* it. `0121` fixed it.
+- **Two proof blocks proved nothing and still reported green.** One skipped every assertion
+  because the replay database had no jobs; one had a break that changed nothing because the
+  row already carried the field by another route. **If a deliberate break does not turn a
+  check red, the check was not testing what you think.**
+
+### Still not started
+
+- **The generated documents.** A maintenance request sheet per issue with its pictures, and an
+  overall document per job with every issue sorted by how it was identified, named
+  `<job number> - maintenance request`, linked from the job card, the project card and the
+  issue drawer. **The report builder is person-driven today** — a document is something
+  somebody *builds* from the library and publishes. Autogenerating one, and re-generating it
+  when an issue changes, is new machinery rather than a new widget. Agree the shape with Amber
+  before writing it; the unanswered part is what happens to a sheet already sent when the
+  issue behind it changes.
+- **A photo package to SharePoint when a job closes.** Recorded from *"It would be good to
+  maybe…"* — a maybe, not a commitment.
+- **The twelve photographs filed before `0119`** are still in the private bucket, so a sheet
+  generated for them carries pictures that expire. Moving them is ~20 lines through the
+  Storage API and a change to live data, so it waits on Amber's yes.
+- **`0118` IS applied** — ledger entry `20260914145252`, verified live on 14 September with a
+  rolled-back probe: a standing job followed the project's move, a job with its own lot kept
+  that lot, and a job re-addressed since stayed put. Earlier notes in this file said it was
+  not applied; that came from a migration list read before it landed and then repeated. **The
+  ledger is the answer to "is it applied", not a list read earlier in the session.**
 
 ---
 
@@ -81,6 +140,22 @@ somebody save a file from their phone or File Explorer and have it appear in the
   department whose nominated channel is private needs a standard one, or email.
 - **Milestones already exist** — `processes.process_is_milestone` (`0078`) plus `stage_completion`
   (`0081`). Amber's "all milestones reached on a job go to general" needs no new definition.
+
+### Corrected after this branch merged main, 253 commits behind
+
+Two claims in the first version of this section were stale, and are worth knowing before anybody
+plans the Files step:
+
+- **Documents are live and wired, not dormant.** `0103` already lets a document *be* a SharePoint
+  URL, with Amber writing *"(integration coming)"* at the time. **This work is that integration.**
+  So the drive and item ids go beside `document_sharepoint_url` on `documents`, not into a parallel
+  structure, and the Files step teaches an existing system to reach Graph rather than building one.
+- **The next free migration number is `0123`,** not `0097`. `0119` and `0120` each have two files
+  deliberately; do not tidy them.
+
+**And the folder namer must read `job_id`, never rebuild it.** `0120` put a `c` in a community
+title job's number and `0122` exists because one place had composed the number by hand instead of
+reading it back. A folder name is `job_id` as the database made it, plus the suburb and address.
 
 ### The schema is moving, so this does not touch projects or jobs
 
@@ -133,6 +208,1237 @@ should confirm a POST with no secret set returns 503 before trusting that.
 
 ---
 
+## 14 September — the audit trail knows which issue it is about (`0121`), correcting `0120`
+
+**Where it stands:** same branch, applied live and verified. **This fixes a mistake I made in
+`0120` and it is worth reading before trusting that migration's Activity half.**
+
+`0120` gave `activity_events` a maintenance parent. Nothing in the app reads
+`activity_events` — the Activity panel reads `activity_audit`. So `0120` widened the table
+that *models* the feed and left the one that *feeds* it alone. `0121` adds
+`activity_audit_maintenance_request_id`, teaches `private.audit_record_ids` to resolve it and
+`log_activity_audit` to stamp it, and **backfills**: 43 rows across 17 issues and 4 tables on
+the live project, so an issue's history does not start today.
+
+A jsonb filter would have needed no migration and was still wrong twice over: `0080` removed
+exactly those scans on purpose, and it would have shown only rows about the request itself —
+not the photo, the task or the comment, which all belong in the issue's history.
+
+**One break reported nothing the first time**, which is the part worth keeping: removing the
+"carry the job up from the issue" branch changed nothing, because a `maintenance_requests` row
+already holds `job_id`. The branch exists for rows that name **only** the issue. The assertion
+now uses a comment, and the break bites.
+
+**What is left of Amber's ask:** the drawer itself. The data layer is done and verified —
+`listComments`, `addComment`, `listRecordActivity` and `listTasks` all take a
+`maintenanceRequestId` now. What remains is UI: `RequestDetail` laid out like `NewRequests`,
+and the four panels pointed at the issue.
+
+---
+
+## 14 September — a maintenance issue becomes a record you can work on (`0120`)
+
+**Where it stands:** same branch as `0119`, stacked on it. **Applied to the live project and
+verified there.** This is the schema half of the drawer; the drawer itself is next.
+
+**The finding that set the size of the job.** Amber asked for *"tasks activity comments
+documents … the same format as on the bottom of a job or project drawer"*. Only **documents**
+already worked. `comments`, `activity_events` and `tasks` take a project, a job, a task or a
+variation — a maintenance request is none of those. **The drawer was never the missing piece;
+the parent column was.**
+
+**Her answer to the fork.** An issue already has its own `maintenance_items` and
+`maintenance_messages`, so the choice was to render those in the panels' shape and change no
+schema, or to let the general tables take a maintenance request. She chose **"Join the general
+tables"**, for the Tasks board: a repair booked for Tuesday should sit beside everything else a
+supervisor is planning.
+
+| Table | Shape | Why |
+| --- | --- | --- |
+| `comments` | A sixth parent, as `0064` made a fifth | The thread is about the issue |
+| `activity_events` | A fifth parent | The one panel with no source at all |
+| `tasks` | A **qualifier**, not a parent | The board reads by job; a task parented only to an issue would vanish from it |
+
+**The composite foreign key is the interesting part.** A maintenance task keeps its job, which
+leaves one way to be wrong: a task on `1042-01` pointing at an issue on `1055-01` — a repair to
+one house on another house's board, looking entirely normal.
+`tasks_maintenance_request_is_on_this_job` references the **pair**, so it cannot happen.
+
+**`task_display` had to be dropped and recreated**, not replaced: it names its columns rather
+than selecting `t.*`, and `create or replace view` can only append.
+
+**Three things worth knowing:**
+
+- **RLS is unchanged, and that was checked rather than assumed.** Every policy on the three
+  tables is parent-agnostic. "No policy change" in a migration adding a parent column is
+  normally a red flag; here it is a finding.
+- **The first proof block proved nothing.** It looked for two jobs already carrying issues,
+  found none on the replay database, and skipped every assertion while `replay.sh` said ALL
+  MIGRATIONS APPLIED CLEANLY. It builds its own fixtures now.
+- **The `security_invoker` sweep repaired last session caught the view rebuild losing it** —
+  `FAIL: view(s) executing as owner: task_display`. That fix paid for itself the same day.
+
+**Still Amber's to settle:** an issue can now carry both `maintenance_items` and `tasks`, and
+nothing says which is the truth when somebody records a repair as both. She has been told a
+rule is needed; none is invented here.
+
+**Six assertions watched failing**, listed in `docs/schema/schema-plan.md`.
+
+---
+
+## 14 September — photos and videos get permanent links (`0119`), and what the maintenance rebuild still needs
+
+**Where it stands:** on `claude/sleepy-mendel-0birzy-mdrawer`, off `main`. **`0119` is applied
+to the live project and verified there.** This is the first of three pieces; the other two are
+named at the bottom and neither is started.
+
+### The decision, because it reverses one of yours
+
+Amber, 14 September, asked twice with the cost stated both times: *"Keep them forever and there
+may be videos as well. It is essential to keep these as a record"*, then *"No videos or photos
+are private accept video and photos with permanent links"*.
+
+That reverses **`0c`**, answered earlier the same day, which put a defect photo in the private
+`job-documents` bucket. **A photograph of a defect inside somebody's house is now fetchable by
+anyone who ever sees the URL, with no sign-in, for good** — the terms `report-images` has
+carried since 7 September. It was put to her before she chose it, weighed against a sheet whose
+pictures break minutes after it is emailed. The `0c` row is kept in
+[`docs/open-questions.md`](docs/open-questions.md) rather than rewritten.
+
+### What `0119` does
+
+- A public **`maintenance-media`** bucket: 200 MB rather than 25, and four video types beside
+  `0115`'s five image ones. Still an allowlist — `0110`'s reason, that `image/*` makes a bucket
+  a drive, has not changed.
+- **`documents.document_storage_bucket`**, defaulting to `job-documents`. The path never said
+  which bucket it was in because there was only one; two makes that a guess, and a wrong guess
+  is a broken image rather than an error anybody notices.
+- **`video` joins `0032`'s category vocabulary**, because the sheet shows a photo and links a
+  video, and deriving that from the MIME type would put the same question in two places.
+- `repo.documentUrl(doc)` asks the row which bucket it is in and signs or links accordingly.
+  `OpenStoredFile` and the maintenance drawer both go through it now.
+- `FileDrop` accepts video. Its comment used to end *"a check that was meant for a video"* —
+  that is corrected in place rather than deleted, and so is the check assertion that used a
+  `.mov` as its example of a refused type.
+
+**`job-documents` is untouched**: still private, still 25 MB, still holding the contracts.
+Making it public was never an option — `public` is a flag on the bucket, not the object.
+
+### The twelve already filed, and what you need to decide
+
+Twelve photographs sit in `job-documents` today, on jobs `1002-001` and `1991-001`. **`0119`
+does not move them and cannot** — the bytes are storage objects and no SQL statement copies
+them. They keep `document_storage_bucket = 'job-documents'`, which is true of them, and the app
+signs a private one and links a public one, so both keep working. **But a sheet generated for
+those twelve will carry pictures that expire.** Moving them is a copy through the Storage API,
+about twenty lines, and it is a change to live data — so it is **yours to say yes to**, not
+something a migration does behind you.
+
+### Watched failing
+
+Five through `replay.sh`: the default changed away from the old bucket (the twelve break), the
+check dropped (a typo'd bucket accepted), the column made nullable, the category check left as
+`0032` wrote it (`video` refused), the vocabulary replaced rather than widened (`contract`
+refused). Three through `check:file-drop`: the video MIME types removed, the video extensions
+removed, and the allowlist opened to everything (the `.zip` got through). Live, inside a rolled
+back transaction: the default holds, both checks bite, `video` is accepted, nothing written.
+
+### Still to build, and neither is started
+
+- **The maintenance edit drawer.** Amber: *"when you click on a maintenance job to edit it you
+  have same type of format that is when you add a new job but at the additional fields for
+  status booked in and they tasks activity comments documents that are the same format as on
+  the bottom of a job or project drawer"*. `RequestDetail` in `MaintenancePage.tsx` is the
+  screen; the panels to reuse are the ones at the bottom of the job and project drawers.
+- **The generated documents — a large chunk, flagged as one.** A maintenance request sheet per
+  issue with its pictures, and an overall document per job with every issue sorted by how it
+  was identified (PCI, site inspection, and the rest), named `<job number> - maintenance
+  request`, linked from the job card, the project card and the issue's own drawer. The report
+  builder is person-driven today: a document is something somebody *builds* from the library.
+  **Autogenerating one is new machinery, not a new widget**, and it is the piece to check the
+  shape of with Amber before it is written.
+- **A photo package when a job closes**, to SharePoint. Amber: *"It would be good to maybe when
+  a job closes to have the ability to download all jobs photos in a package and save to
+  SharePoint"* — a *maybe*, recorded here rather than acted on.
+## 14 September, evening — where this stops, and what the next thread picks up
+
+**Amber is rethinking how properties, processes and tasks fit together, and is starting a
+new thread for it.** This section is the state she is leaving, written so the next session
+does not have to reconstruct it from the log.
+
+### What is live, and what is only on the branch
+
+| | State |
+| --- | --- |
+| `0118` a project's address moves its jobs | **Applied to the live database**, `20260914145252` |
+| `0119` the calculated completion date | On the branch. **Not applied** |
+| `0120` the community-title `c` in the job number | On the branch. **Not applied** |
+
+Everything else on branch `claude/keen-bohr-oy74gn` is documentation. The pull request is
+**[#88](https://github.com/LoftySupport/loftyprojectapp/pull/88), still a draft** — deliberately,
+because two of its three migrations are unapplied and the model underneath them is what
+Amber is about to reconsider.
+
+Applying `0119` and `0120` is one command each and neither depends on the other. `0120`
+renames nine live jobs; `0119` changes no data at all.
+
+### The sixteen decisions taken on 14 September
+
+They are in [`docs/open-questions.md`](docs/open-questions.md) with her own words. The four
+that matter most to the next thread, because they are the ones the rethink touches:
+
+- **Every fixed column gets a property definition.** Not just the ones a process gates —
+  a definition is what carries `property_def_owning_team` and `property_def_stage`, so a
+  field without one cannot be assigned to a team or a stage at all.
+- **Four fields became derived**: owning team from the active process, assignee from the
+  tasks in it, stage from the processes, status from the dates. One tie-break covers all
+  four — *the earliest unfinished process in the job's stage*.
+- **Which processes a job runs is a function of the job's own facts**, not a fixed list:
+  the title type selects them, and a process can be optional.
+- **Overriding the active team is a handshake, not a reassignment** — request, the current
+  team's manager releases or refuses, the board flags who asked. Amber parked it into
+  Automations.
+
+### What is blocked on a build rather than an answer
+
+In dependency order. None of it is started.
+
+1. **`property_def_scope` must widen** past `project` and `job`. The council belongs to the
+   address; Amber also names task, maintenance and contact properties shown on job cards.
+   Open as question **0e**, with a recommendation and no answer.
+2. **`processes` needs an optional flag.** PWA is not on every job; planning approval and
+   working drawings are. Load-bearing for the owning-team rule, and for `0119`'s forecast,
+   which currently counts every process including ones nobody will run.
+3. **The four derivations.** All read from process runs and tasks.
+4. **The Override Active Team handshake.** No automations backlog exists to park it in.
+5. **A SiteBook ID column and the process that collects it.** Neither exists.
+
+### Two open questions, both with recommendations and neither answered
+
+- **0e** — does `property_def_scope` just widen, or does a property gain a separate
+  *shown on* fact? Recommendation: the second, because it is the only one that can answer
+  *what appears on a job card* from data rather than from a component.
+- **0f** — when a job number changes, should the old one stay findable? `0120` made the
+  number move; `address_history` keeps superseded addresses searchable and job numbers have
+  no equivalent. Recommendation: make search ignore the suffix rather than build a table.
+
+### Things that are wrong and are nobody's current task
+
+- **`app/supabase/verify/constraints.sql` reports 26 `FAIL:` lines on `main`.** Unchanged by
+  any of this work — 26 before, 26 after. They are probe fixtures planting a job at a
+  locality-only address, which `guard_job_address_is_a_street` correctly refuses while the
+  harness's expected-error matcher does not recognise the message. **`check.sh` therefore
+  exits non-zero for everyone**, which is how a harness stops being trusted. Its own branch.
+- **All 38 Pre-construction processes carry no SLA estimate**, as do both Acquisition &
+  Development ones. Only Construction is populated. `0119` is built and deliberately returns
+  nothing until Amber fills them in; `job_calculated_completion_missing` counts what is
+  outstanding.
+- **67 of 83 jobs have no title type set**, so most read without a `c` regardless of what
+  they are.
+- **Project number 1992 will never exist.** `0118`'s proof block creates a project and
+  deletes it, which consumes a number from the identity sequence. `0114` and `0081` did the
+  same. It is the standing price of a proof block that inserts into `projects`.
+
+### One correction Amber made to the repository
+
+There are **seven** lifecycle stages, not five — Closed and Cancelled are still stages.
+Checked against `jobs_stage_is_a_lifecycle_stage`, which admits seven. `supabaseRepository.ts`
+calling Acquisition & Development *"the first of the five lifecycle phases"* is the loose
+part, and is still there.
+
+---
+
+## 14 September — seven checks that ran nowhere, and one that asked the wrong question
+
+**Where it stands:** on `claude/sleepy-mendel-0birzy-checks`, off `main`. No migration, and
+nothing in the app changes. Amber, 14 September: *"check branches that have open tasks and
+check now all. fix issues"*.
+
+**First, the branches.** Four remain on the remote — `…-0birzy`, `…-braindump`, `…-drawer`,
+`…-maintenance`. Every commit on all four is already in `main` (`git cherry` reports `-` for
+each), and the only lines they hold that `main` lacks are older versions of text `main` has
+since rewritten, including an `open-questions.md` where 0c is still open and `main` has it
+answered. **Nothing is stranded.** They are safe to delete whenever you want them gone; they
+have been left alone because deleting is yours to say.
+
+**Then every check, run against `main`.** All of them pass: lint, typecheck, build, the
+twenty `check:*` scripts, the responsive sweep (216 page/size combinations), `./build.sh` and
+its five promised files, `check.sh` (79 constraint checks all biting, RLS holds, embeds
+resolve, seeds agree), documentation links, and the generated docs. The live database carries
+every migration through `0117`, and both `maintenance_request_display` and `company_display`
+carry every column the Maintenance page selects — the failure that broke that page twice this
+week is not present.
+
+### The first real finding: seven checks CI never ran
+
+| Check | What it guards |
+| --- | --- |
+| `check:pipeline` | what a job is up to |
+| `check:pipeline-order` | the stage order |
+| `check:process-move` | a record dropped on a column landing where it was dropped |
+| `check:report-widgets` | a report block resolving, reading live data, staying quiet when empty |
+| `check:share-password` | a malformed hash locking a share link rather than opening it |
+| `check:maintenance-draft` | a half-typed request kept, and never restored onto the wrong house |
+| `check:file-drop` | a real `DataTransfer` drop, including `dragover` being prevented |
+
+All seven passed when finally run, which is the point. Nothing would have reported the day one
+stopped being true. Six needed no browser and joined the `app` job; `check:file-drop` needs
+Chromium and joined the `browser` job.
+
+**And the class, not just the instance.** `npm run check:ci-coverage`
+(`app/scripts/check-ci-runs-every-check.mjs`) reads `package.json` against
+`.github/workflows/ci.yml` and fails when a `check:*` script is run by neither its npm name
+nor the file it points at. It holds itself to its own rule: before its workflow step existed,
+running it printed its own name. **Watched failing both ways** — a new check added to
+`package.json` and not to CI, and an existing check's CI step deleted.
+
+### The second: the one assertion that guards RLS was asking the wrong question
+
+`behaviour.sql`'s view sweep — the one written after `0055` silently dropped
+`security_invoker` from `job_display` and returned all 60 jobs to an account held at the demo
+gate — matched the **substring** `security_invoker=` in `reloptions`. That tests the option is
+*present* and says nothing about its value. A view created `with (security_invoker = false)`
+carries `{security_invoker=false}`, contains the substring, and **passed the one check written
+to catch exactly that**. Watched: a probe view with the protection deliberately off was
+reported `ok  every view in public sets security_invoker`.
+
+It now reads the option through `pg_options_to_table` and **casts it to boolean**, which is how
+Postgres itself reads it. That matters beyond the `false` case: Postgres stores the spelling
+you wrote, and this schema uses both — `{security_invoker=on}` on `feedback_display` and
+`job_latest_update`, `{security_invoker=true}` on the other nineteen. Any comparison against
+one literal marks the other as a hole, which is exactly the false alarm that turned this up.
+
+**Three proofs**, each run through `check.sh` against the replayed schema:
+
+| Case | Result |
+| --- | --- |
+| A view with `security_invoker = false` | `FAIL: view(s) executing as owner` |
+| A view with no option at all (the original `0055` failure) | `FAIL: view(s) executing as owner` |
+| A view spelt `on` rather than `true` | `ok` — the fix does not cry wolf |
+
+**To be clear about what was NOT found:** there is no open `security_invoker` hole. All 21
+views run as their caller, and every table in `public` has RLS enabled. The bug was in the
+check, and it was live for eleven days.
+
+### Two things that are yours, not code
+
+- **Leaked-password protection is off** in Supabase Auth. It checks new passwords against
+  HaveIBeenPwned. One toggle in the dashboard, and there is no reason not to.
+- **The `self-heal` job's push has still not run.** It has fired twice on `main` and taken the
+  no-op path both times, because each branch was hand-resolved before it merged. The first
+  merge that genuinely leaves the docs behind is the one that proves the push — and if that
+  run goes red on a 403, it is **Settings → Actions → General → Workflow permissions**.
+
+**Not touched, and still waiting on you:** photos in the printed report (blocked on the
+signed-URL decision), report stages 2 and 3, open questions 0b and 0d.
+
+---
+
+## 14 September — a colon in a pasted line splits the issue from its details
+
+**Where it stands:** on `claude/sleepy-mendel-0birzy-braindump2`, off `main`. Two files,
+`app/src/data/brainDump.ts` and the paste panel in `app/src/pages/MaintenancePage.tsx`, plus
+the check.
+
+Amber, 14 September: *"if a new line is added and it has ':' in it e.g. 'bathroom silicone
+fix: fix the silicone in the shower screen' … everything before the ':' is the issue and
+everything after is the description … if no ':' then just add it all to the issue"*.
+
+`splitBrainDump` now returns `{ issue, description }` rather than a string. The shape was
+already in the paste — a name, then what is wrong with it — and the drawer was throwing the
+second half away.
+
+**Three judgements the instruction did not cover, made here and open to being overruled:**
+
+| The line | What it does | Why |
+| --- | --- | --- |
+| `Ensuite: tap leaking: replace the washer` | Splits at the **first** colon; the rest stays in the details | Splitting at the last would make the issue a sentence and the details a fragment |
+| `Site inspection 9:30 tap leaking` | Does **not** split | A colon between two digits is a time. The split would give an issue called "Site inspection 9" |
+| `Tile cracked, see https://lofty.au/…` | Does **not** split | A colon followed by `/` is a URL, and the issue would be called "https" |
+
+Two smaller ones: `Kitchen:` becomes the issue *Kitchen* with no details, because at that
+point the colon is separator punctuation and nothing else; `: tap leaking` does not split at
+all, because there is no issue name to take and inventing one is the thing this repository
+does not do.
+
+**What was watched failing.** Five deliberate breaks, each one reported by
+`npm run check:brain-dump`: splitting on the last colon instead of the first (1 failure),
+dropping the digit guard (2), dropping the slash guard (1), allowing an empty issue name (2),
+and not trimming either side of the colon (5).
+
+**That check now runs in CI**, in the `app` job. It had been running nowhere but a
+developer's machine, which is the same as not running. **Six others are still in that
+position** and none of them needs a browser: `check:pipeline`, `check:pipeline-order`,
+`check:process-move`, `check:report-widgets`, `check:share-password` and `check:file-drop`.
+Wiring them in is a separate small job, and worth doing — a check nobody runs is a check that
+silently stops being true.
+## 14 September — the four generated files repair themselves on `main`
+
+**Where it stands:** **merged** ([PR #84](https://github.com/LoftySupport/loftyprojectapp/pull/84)).
+One file changed, `.github/workflows/ci.yml`. Nothing in `app/` moved.
+
+**The problem, stated plainly.** `CHANGELOG.md`, the ticks in `ROADMAP.md` and the
+`generated:shipped` blocks in `README.md` and `HANDOFF.md` are built by walking `git log`.
+They are therefore a function of the history *at the moment they were written*. A branch cut
+on Monday carries Monday's `CHANGELOG.md`, and every pull request merged after it leaves that
+file one merge further behind — through nobody's fault, and with no way for the branch to know.
+
+On 14 September that produced the same conflict, in the same four files, four separate times
+(#78, #80, #81, #82). Every one was resolved the same way: discard both sides and run the
+generator against the merged history. One of those resolutions went wrong in a way worth
+recording — the session's clone was shallow, 299 of 615 commits, so regenerating *deleted*
+87 lines of `CHANGELOG.md` that the missing commits had written. `git fetch --unshallow`
+fixed it, but the lesson is that a human resolving this by hand is a human who can get it
+wrong quietly.
+
+**What changed.** Amber, asked which of three fixes to take, chose the third:
+*"Stop it recurring — make the generated files self-heal"*.
+
+- A **`self-heal` job** runs on `push` to `main` only. It takes `main` as it now is, runs
+  `node scripts/changelog.mjs`, and if any of the four files moved, commits them with
+  `Changelog: skip` and pushes. On a rejected push — somebody merged while it ran — it throws
+  its attempt away, takes the new `main`, and regenerates from there; three attempts, then it
+  fails loudly rather than forcing. Rebasing instead would fight a conflict in exactly the
+  four files the job exists to settle.
+- The **PR-side `generated` check is now advisory**. It still runs, on the PR's own head, and
+  still names what drifted — it emits a `::warning::` instead of a red tick. A stale generated
+  file on a branch is a fact about the order merges happened in, not a defect in the branch.
+
+**No loop:** a push authenticated with `GITHUB_TOKEN` does not start a workflow run. Were that
+ever to change, the second run would regenerate, find nothing, and stop — the fixpoint is one
+commit deep, and that path is proved below.
+
+**What was watched failing.** The job's step body was extracted from the YAML and run against a
+throwaway clone of this repository, so the test ran the same text the runner will:
+
+| Break | What it did |
+| --- | --- |
+| `main` carrying a `CHANGELOG.md` 132 lines behind | Regenerated, committed, pushed; the file came back to 285 lines |
+| Run again with nothing stale | `"already match the trailers. Nothing to push."`, exit 0, **no empty commit** |
+| A `pre-receive` hook rejecting the first push | `"Push rejected — main moved… (1 of 3)"`, took the new `main`, regenerated, `"Pushed on attempt 2."` |
+
+**One thing to check, and it is a repository setting rather than code.** The push needs
+`GITHUB_TOKEN` to have write access. The job asks for it (`permissions: contents: write`), but
+a job can only ask up to the repository's ceiling: if **Settings → Actions → General →
+Workflow permissions** is set to *Read repository contents*, the push returns 403 three times
+and the job goes red with the error message it prints. `main` is **not** a protected branch, so
+nothing else stands in the way. If that job's first run on `main` fails on a 403, that setting
+is why.
+
+**What this does not do.** It does not fix a branch's generated files *before* the merge, and
+it does not need to — after the merge, `main` is right within a minute, which is the only place
+the files are read from. An **unreadable** trailer (`Changelog: fixt: …`) still fails, and
+still should: that is a change that never reaches the changelog.
+
+---
+
+## 14 September — the maintenance report, stage 1 of three
+
+**Where it stands:** on `claude/sleepy-mendel-0birzy-report`, off `main`. It depends on
+nothing else outstanding — `0114` is merged **and applied to the live project**.
+
+Amber set the report work out in three stages:
+
+> *"stage 1 is building a section in the report builder that allows you to add in a
+> maintenance section which is a maintenance requests with details. This can be saved as a
+> template. stage 2 is creating a report that is saved that shows all maintenance issues
+> with filters by job, project, contractor date or status etc… stage 3 is automating this
+> and reporting on it."*
+
+### Stage 1 is two blocks and a seed, and nothing in `core/`
+
+`features/reports/README.md` draws the line: *"if a change needs `core/` to know about a
+job or a project, it is in the wrong file — the thing missing is a widget"*. So this is
+entirely `adapters/lofty/widgets.js` plus one query in `TemplateBuilderPage`.
+
+| Block | What it is |
+| --- | --- |
+| **Maintenance issues** | The table. Filter by job, project, status, inspection, repairer and a date window; group by job, status, repairer or inspection; eleven columns to choose from |
+| **Maintenance issues in detail** | One block per issue — the facts, the details somebody typed, and **a page of its own**, which is what "each issue being its own page" asks for |
+| **Maintenance report** (seed) | A starting draft: the table grouped by job, then every issue in detail. Saved as a template like any other, which is Amber's *"this can be saved as a template"* |
+
+**One issue is one request** (`0114`), so a maintenance section is a set of requests and
+`listMaintenanceItems` is not read at all.
+
+### The repairer filter is by NAME, and that is not laziness
+
+A Lofty person is a `profile_id` and a contractor is a `company_id` — two keyspaces, and
+one filter has to match both. The options are built **from the issues themselves** rather
+than from the whole staff list and every company: a picker offering 46 people when four
+have ever been given an issue is a picker nobody uses.
+
+### Photos are counted, not shown, and this is the thing to solve next
+
+`job-documents` is private, so a photo has to be **signed at the moment it is read** — and
+`resolve` in the report builder is **synchronous**, so a block cannot fetch a signed URL
+while it renders. Printing a broken image would be worse than saying nothing.
+
+Three ways out, none chosen: resolve signed URLs into `ctx` before the compile; read the
+bytes into `data:` URLs at compile time, which is what a shared snapshot would need
+anyway; or give the bucket a narrow public path for maintenance photos, which reverses the
+choice Amber made on 14 September. **Ask her before building any of them.**
+
+### Stages 2 and 3 are not built
+
+- **Stage 2** — *"filters in maintenance section and then a create report button which
+  would set a report based on the custom filters that are there in the table"*. The
+  Maintenance queue's own toolbar does not yet carry filters for contractor, date or
+  inspection, and there is no button that turns a filtered table into a saved report. The
+  block options above are the same set of questions, so the work is a translation from the
+  table's filter state into a widget's options rather than a second filter model.
+- **Stage 3** — automation. Nothing exists.
+## 14 September — the maintenance drawer, and the two things left for Amber to decide
+
+**Where it stands:** on `claude/sleepy-mendel-0birzy` (schema, [PR #76](https://github.com/LoftySupport/loftyprojectapp/pull/76)) and
+`claude/sleepy-mendel-0birzy-drawer` (the drawer, PR #77). Amber asked for **small PRs**,
+one bit at a time, because she is low on credits — so the work is four, in this order:
+schema, drawer, attachments, report.
+
+### An issue is a request, and the header is typed once
+
+Amber: *"each one of these issues have its own record id but you only enter the job number,
+reported by, identifies at, date once so you can then have a status, date booked, and
+followup for each"*. Asked which shape, she chose **a request per issue** — so one drawer
+posts N requests, `1042-01-M3`, `-M4`, `-M5`, sharing a `maintenance_request_batch_id`.
+
+The form is now: **Job · Date identified · Identified at · Reported by**, then a repeating
+block of **Issue · Details · Assigned to · Attach files**, then **+ Add**. *How it arrived*,
+*Trade*, *Priority* and *Owner* came off it. The columns stay, because email and form intake
+still set them.
+
+**What that costs, and it is visible:** no trade means no SLA, so everything logged here
+reads **No SLA** in the queue. That is what the health derivation has always said about a
+request with no category, not a new fault.
+
+### Attachments are built, and a defect photo is a document about the job
+
+Asked where the photos should live, Amber chose **`job-documents`, private** (question 0c,
+answered 14 September). So each file is written three times, and all three matter: the
+object into `jobs/<job>/…`, one `documents` row, and **two `document_links`** — one to the
+job, so it appears in that job's Documents list, and one to the request, so the issue knows
+its own pictures. A document is held once and attached as many times as it is about
+something; that is `0032`'s design, not a workaround.
+
+`0115` is the whole schema change: `job-documents` was created by `0110` with an
+`allowed_mime_types` list covering PDF, Word, HTML, Markdown and text, **and no image type
+at all** — so Storage refused a phone photo at the door before any policy was consulted.
+Five image types were added, HEIC among them because an iPhone's camera roll is HEIC.
+
+**The cost of private, written down before it surprises anybody:** a private object has no
+permanent URL. The report below cannot point at these images the way a shared document
+points at `report-images` — it has to embed the bytes or sign at the moment of building,
+and a signed link in an email stops working.
+
+### One reading left open
+
+**"Trades or contractors" is read as the `contractor` classification**, because it is the
+only one in the system that means a trade — `classifications` holds client, contractor,
+supplier, consultant, authority, other. Companies already on the job are offered whatever
+they are classified as, since being the plumber on 1042-01 is stronger evidence. **Question
+0d** asks whether Lofty wants a separate *Trade* classification.
+
+### The slideout's forms were condensed, everywhere
+
+Amber, 14 September: *"fix the spacing on the slideout drawer by removing the separator
+between each row so it is condensed and ensuring all fillable properties are same width and
+aligned and allow the details section to have more space to write with. remove descriptions
+and placeholder text"*.
+
+Scoped to `.side-panel`, **not** to Maintenance: every slideout draws the same `Field` rows,
+and fixing one would leave Contacts, Setup and the job drawer looking like a different app.
+A page's own forms keep the dashed rule, because down a full-width page it is what stops a
+long list of rows reading as one block. The control column is a **fixed 240px** rather than
+a minimum, which is what makes a date, a dropdown and a text box line up; it goes full width
+below 520px. Two smaller things fell out of it: `textarea.pf-input` was inheriting a 32px
+height and silently ignoring its own `rows`, and the date field's ✕ moved to the left of the
+box, because a native date input's right-hand end is the browser's calendar button and the
+✕ after it left that one row 27px short of the column.
+
+### Identified at is a CHECK, not a lookup table
+
+The nine values are Amber's, in her order. Making the list editable means a lookup table,
+a Setup screen and a migration — the swap to make when adding a tenth matters, and not
+before. The drawer sorts nothing: PCI → the inspectors → handover → 1, 2 and 3 month is a
+sequence, so the picker is `ordered`.
+
+### Still to build
+
+- **The maintenance report** — the last piece. Amber: select one or more jobs or projects, or
+  everything assigned to one person, and print or email a report with **each issue on its
+  own page**: job details, date reported, pictures, comments. Nothing of it is built.
+- **Date booked and follow-up have columns and no UI.** `0114` added
+  `maintenance_request_booked_on` and `_followup_on`; the request drawer does not yet show
+  them, so today they can only be set through the repository.
+
+## 14 September — the form is kept when the drawer closes
+
+Amber: *"ensure the form persists on job drawer when pulling out"*. Reproduced before it
+was fixed: one stray click on the scrim beside the panel, or one Escape, unmounts
+`NewRequests` and takes every field with it. With a pasted list of twelve issues that is
+the whole entry, lost to a mis-click. **Expanding the drawer was never the problem** — that
+only toggles a class — which is worth knowing before hunting in `SidePanel`.
+
+`app/src/data/maintenanceDraft.ts` keeps it in `localStorage`, saved on every change and
+cleared when the issues are logged. It survives a scrim click, Escape, a navigation and a
+reload, and there is a **Discard** button so a draft nobody wants is not a trap.
+
+### The key carries the scope, and two wrong designs are why
+
+A draft must never restore into a drawer opened from another job's record — that logs a
+defect against somebody else's house and looks completely normal. Two attempts failed, and
+**both were caught by the checks rather than by reading the code**:
+
+1. One draft with a comparison in `readDraft`. A draft with no job set still passed into a
+   job's drawer.
+2. The comparison tightened. Now the other job's drawer started blank and the save-on-change
+   effect wrote that blank form **over the stored draft** — opening the wrong drawer for a
+   second destroyed work that had not been lost before.
+
+So the storage key carries the drawer's scope: `…:1042-01` for a drawer opened from that
+job, `…:none` for one opened from the Maintenance page. Neither can see or overwrite the
+other, which makes the guard structural rather than a comparison somebody has to remember.
+
+### Attachments are named, not kept
+
+A `File` is a handle to bytes the page was granted; it cannot be serialised and cannot be
+re-granted without the person choosing the file again. The draft keeps the **names** and the
+issue block says which to attach again. Silently losing them would be the worse half of the
+bug wearing a fix's coat.
+
+`npm run check:maintenance-draft` guards the rules that can put a defect on the wrong house.
+Four breaks were watched failing.
+
+## 12 September, late — every job and project field has to belong to a process
+
+**Where it stands:** on `claude/tender-mayer-q39ffz`, in [PR #75](https://github.com/LoftySupport/loftyprojectapp/pull/75).
+
+Amber: *"all properties should belong to a process if it is job or project and if they don't
+they should be flagged as orphaned in the properties setting unless they are the primary key.
+This should have all properties including properties not on the properties table eg
+address."* And, clarifying: *"a system property such as a primary key, a user property or
+contact property or task or maintenance property don't need to belong to a process but may
+belong to an automation."*
+
+### The last sentence of the first message is the whole difficulty
+
+A sweep of `property_defs` reports a clean board while the address, the council, the owning
+team, the assignee, the SharePoint folder and both completion dates are collected by nothing
+— they are **columns on `jobs` and `projects`**, not property rows. So the second source is
+the **data dictionary**, which already carries one entry per column with its meaning.
+
+**Setup → Properties now carries both**: an orphan count and an *Only orphaned* filter on the
+property table, and below it *Fields that are not properties* — thirty-three columns nothing
+can collect, and sixteen system fields listed with the reason each is exempt rather than
+silently dropped.
+
+### The classifier is a list, and that is deliberate
+
+The first version read the dictionary's prose for *assigned by* / *maintained by* / *bumped
+by*. It split the siblings — `jobs.job_stage_entered_at` says *maintained by the trigger*,
+`projects.project_stage_entered_at` says *moved by a trigger* — and widening it to catch both
+swept in `job_stage` and `project_stage`, which a person sets. The exemptions are written out
+one at a time now, each with its reason, and the screen shows the System group in full so a
+wrong one is visible. `npm run check:orphan-properties` guards both ends of that mistake and
+CI runs it.
+
+### What a new session should pick up
+
+**Thirty-three fields cannot be attached to a process at all.**
+`process_properties.property_key` points at `property_defs`, so a column has nowhere for the
+attachment to hang. Whether the fixed columns get definitions — and if so whether the values
+move — is **question 0** in [`docs/open-questions.md`](docs/open-questions.md), with three
+options and a recommendation. Reading the list of thirty-three is the next step, not writing
+a migration.
+
+**Amber's third clause is not built.** *"May belong to an automation"* — there is no
+automation model to attach one to yet.
+
+## 12 September, evening — the boards fold, tasks can be created, and the record matches the design
+
+**Where it stands:** on `claude/tender-mayer-q39ffz`, after PR #72 merged. Four corrections
+from Amber, all with a browser check that was watched failing first.
+
+### Kanban columns collapse
+
+*"On Kanban boards can you make them collapsible so they have a narrow view like the side
+navigation with completed closed cancelled and acquisitions and development closed by
+default."*
+
+Collapsed is a **48px strip**, not a hidden column: the name runs down it, the count stays
+on it, and a card dropped on it lands and opens it. The four are matched **by name**, so the
+rule holds on every board those words appear on rather than needing a per-board list, and a
+person's own choice is remembered per board and per column.
+
+It needed **one `BoardColumn` component** first. Jobs, Projects and Tasks each wrote the
+same forty lines — the accented `<section>`, the head with the grouping above the value, the
+count chip, the "No jobs" / "No projects" / "No tasks" line. Three copies is how a fix lands
+on one board and not the other two. The drag handlers stayed on the pages, because what a
+drop MEANS differs per board.
+
+### The Tasks board can create a task
+
+*"On tasks you can't add a new task and assign it to a person or team or job and project.
+There is no button."*
+
+`createTask` has taken all four since `0102`, and `TasksPanel` calls it from inside a job —
+so a task typed by hand could only be created from the record it hung off, and the board
+built to show every task across every job was a report rather than a place to work.
+
+**+ New task** opens a `SidePanel` asking for the task, a detail line, a job **or** a
+project, a team, an assignee, a due date and a planned date. Only the name is required.
+**Closed tasks** joins the six scopes that were already there, and the job-or-project-number
+filter moved onto the bar from behind Advanced.
+
+### The job record matches the screen design
+
+*"Why is the job sideboard not matching the screen type? The process section should have the
+processes like the mockup then the contacts maintenance that that was in screen design."*
+
+The **Process** section drew a read-only five-step preview while the list you could act on
+was a panel eight sections below. `ProcessesPanel` has a `bare` mode now and IS that
+section's body. The tail reads Contacts → Maintenance → Project properties → Job properties
+→ Documents → Job details → Departments, which is 6a's *"Properties and Contacts & Companies
+— collapsed rows with counts"*.
+
+**Not done, and the next thing a session should pick up:** the mockup draws Process as a
+Flint 50 card with a progress bar and one 36px row per step — chevron, tick box, name, date,
+owner avatar — expanding to that step's own typed fields. `ProcessSteps` is that card, and is
+what the section used to draw. `ProcessesPanel` has the data and the actions but not the
+shape. Merging the two means teaching `ProcessSteps` to complete a run through the seam,
+with its rules about attempts, dependencies and who may.
+
+### A date can be taken back, and the footer folds
+
+Earlier the same evening, and in the same branch — see `docs/open-questions.md`, 12 Sep.
+
+## 12 September — the rail, the job record, and a day of mobile corrections (PR #72)
+
+**Where it stands:** merged, 12 September ([PR #72](https://github.com/LoftySupport/loftyprojectapp/pull/72)). Everything above the record corrections below is in `main`.
+
+**Built from the 11 September handoff:** the navigation rail (224 / 64 / flyout), Pinned
+(`0112`), the slim top bar, the job record as a 460px drawer and a full page (`0113`), and
+the column picker as a 470px panel. `app/src/components/record/` carries the design
+system's own names — `RecordDrawer`, `RecordSection`, `FieldRow`, `ProcessSteps`,
+`StageTrack` — so the app and the library converge rather than being reconciled later.
+
+**Then a day of corrections from Amber, looking at it on a phone.** The full screen record
+sits INSIDE the frame now (a `#panel-dock` between the main area and the footer, so the
+rail, the bar and the footer all stay); clone is back as an icon on the job line in a
+project; the phone's navigation control is a real hamburger in the top right with the
+wordmark top left; every page lost the sentence under its heading; the filters fold to one
+row behind Advanced below 720px with an 84px label column so they line up; the create
+button rides the heading's line; the footer is one line at both sizes; and search is back
+on the top bar.
+
+**Then, the same evening, the record itself.** Three more corrections, all from Amber
+looking at job 1002-001 on a phone:
+
+| Amber said | What it was, and what it is now |
+| --- | --- |
+| *"if I hit the completion date by accident u can't undo it. You should be able to x it out"* | A bare `<input type="date">`, and the browser's own clear is not a promise — Chrome draws a small ✕, Safari draws nothing, a phone gives you a wheel with no way back to empty. `DateField` draws its own. And every property of format `date` had a clear that silently did nothing: `onChange` read `if (e.target.value)`, so emptying the field told nobody |
+| *"the bottom section with task and actions also needs to be able to collapse on mobile so it isn't sticky"* | Below 720px the docked footer starts shut and is a 37px tab strip; a chevron opens it, and tapping a tab opens it on that tab. The panel is unmounted when shut rather than hidden, so a comment thread nobody is looking at stops polling |
+| *"there is so much on there that isn't on the mockup. The bottom areas attached are all duplicates. The processes should just be in order like the mockup"* | Four panels below the record re-stated what the record above them already said. They are gone; see below |
+
+### The four panels that went, and where their unique halves are now
+
+`JobRecord` renders the handoff's record — title and health, Job Stage, Key properties,
+Process — and `JobDrawer` still rendered the tail it had before that existed. So:
+
+| Panel | What duplicated | What was only there |
+| --- | --- | --- |
+| Numbers & addresses | the job number (the title), the current address and the council (Key properties), and a Change button doing what the `+` beside that address does | the old Lofty number, the title type, the address the job was created as |
+| Who it's with | an assignee picker writing the same column as Currently with | the owning team |
+| Folders | the job folder, which Key properties links | the project's folder |
+| Phase & stage | the phase and the days in it, which the stage strip and its meta line both carry | moving the job to a later stage |
+
+The five survivors are one **Job details** panel. The stage move went up beside the strip
+it moves, through a new `stageAction` slot on `JobRecord`. **Processes moved up** to sit
+directly under the record's Process section rather than eight panels below it. The
+add-address form came up under the record too — it used to render inside the panel that
+is now gone, so pressing `+` appeared to do nothing.
+
+**`saveWho`'s "Saving…" and its errors now report under the record.** They were inside
+the *Who it's with* panel, which is shut by default and is now gone, so a refused
+reassign said nothing at all.
+
+### What a new session most needs to know
+
+1. **Health is half-answered, and nothing is built from it.** Amber, 12 September: *"Job at
+   risk is when the process is overdue which is set by the days marked in the process which
+   says it's at risk."* No new column is needed — `expected_days`, `at_risk_lead_days`,
+   `due_date`, `at_risk_date` and a computed per-run `health` all exist. **What makes a job
+   *overdue* rather than at risk is still open**, with three readings and a recommendation
+   in [`docs/open-questions.md`](docs/open-questions.md) §8. The record's pill still reads
+   `job_status`, a column somebody sets.
+2. **Inbox and Tasks carry no badge**, on purpose. They want *new since you last looked* and
+   *open tasks*; the first has nowhere to come from (nothing records when you last saw the
+   dashboard). `InboxProvider` and the badge styles stay, unused, for when it is settled.
+3. **The element sweep's E02 matcher fires on anything containing "head"** — it counted a
+   logo, a button and a readout as page headers in one day, and each cost a re-baseline.
+   Tightening `measure()` is the fix; see [`docs/design/element-sweep.md`](docs/design/element-sweep.md).
+4. **One number was lost, not moved:** the Projects heading used to read "118 projects · 79
+   jobs" and the job total is no longer on that page.
+5. **Expanded side panels still cover the footer** — only the job record was docked.
+6. **`npm run check:date-clear` is new, and CI runs it.** Two date controls mounted alone,
+   asserting on what the caller was *told* rather than on what the input shows — a control
+   that empties on screen and reports nothing looks fixed in a screenshot. It cannot go
+   through the app: `stubRepository.updateJob` throws, so a date typed into a job reverts
+   before a check can see it. See [`app/scripts/README.md`](app/scripts/README.md).
+
+**Phase A is done and applied, and so is the property-and-process half of Phase C (`0076`–`0079`, 1 September).**
+
+**Phase B — the import — is CLOSED, 7 September, without ever running.** Amber: *"i don't
+need any jobs imported from spreadsheets. all jobs that need to be created from now on will
+be created from the projects in the app"*, and *"everything that is in supabase now is
+correct"*. Jobs and projects are created in the app, from the project, by the people who
+own them. There is no spreadsheet load coming, so the seven colliding sites that stopped
+the load on 3 September stopped mattering rather than getting resolved.
+
+**Nothing was removed from the database, deliberately.** `import_staging_jobs` and its 801
+rows, `import_spine()`, `unimport_spine()` and `private.import_team_for_person()` are all
+still there, inert. Amber: *"if I need to import other areas I will let you know as
+properties may change between now and then"* — so the machinery has a plausible future job
+even though jobs and projects are not it. It never ran: the load rolled back whole on its
+first write, so no project, job or address in the app came from it.
+
+## 10 September, later still — the three numbers in an address, and 64 wrong ones
+
+Amber: *"a lot number or res number is only a number not a number and digitl. however a
+street number can be something like 100-105 (as text) or 12B"* — correcting `0105`, and
+behind it `0034` and the split dialog's own on-screen text, which had all claimed since
+August that it was the LOT number carrying the letters.
+
+The live data settled it: 13 of 13 lot numbers are digits; 12 of 178 street numbers are
+not, and they are exactly her examples (`2-4`, `337-339`, `3&5`, `4-11/9`, `83a`). So
+`0106` makes `address_lot_number` and `address_res_number` integers and leaves
+`address_street_number` text, with the measurement on file so nobody reinstates the old
+claim. Typing "Lot 3" still works — that tolerance moved from the trigger to the app,
+because an integer column rejects the cast before any trigger could run.
+
+**`0107` is the one worth knowing about.** *"check against Brodie ave project"* — project
+1002 is **14 Brodie Road** and its three jobs read `1 Brodie Road`, `2 Brodie Road`,
+`3 Brodie Road`. Those are other people's houses. It was **64 of 79 jobs**: the lot
+number was in the street-number column and the project's street number had never been
+carried down. Every affected project's jobs run 1..n from 1 — thirty consecutive
+"houses" on Awoonga Road for a project at 83a — which is what makes it a plan of
+division rather than a street. `1002-001` now reads `Lot 1, 14 Brodie Road, Reynella,
+SA, 5161`.
+
+That fix does **not** claim all 64 are subdivisions: a genuine infill of three houses at
+1, 2 and 3 grouped under a project at 14 would have been caught too. Nothing in the data
+tells them apart, and reversing it is the same statement with the columns swapped.
+
+Also settled, both previously flagged as guesses: addresses as their own table displayed
+on a job or project is *"correct"*; `street_2` *"is important"* and stays; and the res
+number is **not** job-only — *"on a project you might update the res number there as
+well"* — so every address form offers it.
+
+### The council, and two things the verify suite caught (`0108`, `0109`)
+
+Amber: *"the council area still needs to be recorded, but just not in the full address
+line. it stays as a property field"*, and *"the council is in the lookup table in
+supabase and already connected and working."* Both halves of that were already true —
+`addresses.address_council` is the `sa_council` value filled from the LGA list, and
+`build_consolidated_address()` has never composed it into the line. Nothing was rebuilt
+and no property definition was added.
+
+What was **not** true: a job's council could be set and never read. The drawer's
+change-address form carries the picker, and `job_display` never selected the column, so
+the value went in and vanished. `0108` appends `job_council` to the view — off the job's
+**own** address, since a job moved off its project's site can sit in a different LGA —
+and the job drawer shows "Council region" beside the address, never inside it.
+
+**`0109` is the one to know about.** `verify/check.sh` — not review — found that `0106`
+had left `import_spine()` unable to insert a row: it passes `sp ->> 'lot_number'`, which
+is text, into a column that became an integer. The import is closed and inert by Amber's
+7 September decision, so nothing was pending and no data is affected; the fix is one
+cast, and it matters because *"if I need to import other areas I will let you know"* is
+a call on a function that currently contradicts its own table. Two lessons already
+written down and worth repeating: a migration set that *replays* is not a schema that
+*works*, and `check.sh` needs running whenever a column changes type, not only when a
+table is added.
+
+## 10 September — a job's address carries a Res number (`0105`)
+
+Amber gave the shape of an address at each level, with a worked example that settled more
+than it looked like it would:
+
+> *"A project needs to record the following address details at a project level: Lot # /
+> Street Number / Street Name / Suburb / Postcode / State / Council. A Job needs to record
+> all of that information PLUS Res # … e.g Res 1, Lot 3, 13 Tester Street, Testville, SA,
+> 5000"*
+
+**The column is on `addresses`, not on `jobs`** — she describes it as one of the address
+details a job records, and the seven it joins are all there. Putting it on `jobs` would
+take the rendering away from `build_consolidated_address()` and make the app compose
+`"Res 1, "` in front of a database-built string everywhere an address is shown, exported
+or searched.
+
+**The database does not forbid one on a project's address**, and that is a decision: an
+address row is not owned by one record — `address_history` exists because addresses move
+between records — so there is nothing on the row to hang "this belongs to a job" from.
+The app draws the line, with `AddressFields`' `showResNumber` flag.
+
+**Text, though she wrote "(number)"** — she wrote it against Lot # too, and
+`address_lot_number` is text because "2B" is a real lot number (`0034`).
+
+**Her example settled two things nobody had asked about:** suburb, state and postcode are
+comma-separated now (they were space-separated), and the trailing `, AU` is gone. The
+country column stays; only the rendering changed. `address_street_2` — the unit line — is
+not in her list and was *not* dropped: it holds real data, and hiding a populated column
+is worse than placing it by the rule already in force.
+
+**Applied to the live database.** All 197 addresses rebuilt through the trigger: none
+still carries `, AU`, none carries a res number yet, and the five probes rolled back
+leaving nothing behind. **The migration is applied and the app code is not deployed yet**
+— that order is deliberate and forward-compatible: the column exists and nothing reads it
+until this merges. The reverse order would have broken every address read, because
+`ADDRESS_COLUMNS` now names the column.
+
+**Watched failing, and one probe earned its place.** With the res normalisation removed,
+the bare-`1` probes pass happily and only the probe that types `Res 1` catches
+`Res Res 1`. A probe set without it would have reported green on a real bug.
+
+**`setJobCurrentAddress` came with it** — *"A project address needs to be updatable. A Job
+address needs to be updatable."* Only the project half existed, which is the wrong way
+round: a job's address is the one that moves. The job drawer now has the same Change
+control, the same words and the same warning as the project panel.
+
+## 10 September — a job's address gets its street number back
+
+Amber: *"jobs are not showing the street number on the address. they are only showing
+lot number."* One line in `splitProject` did it, and it was deliberate:
+
+```
+address_lot_number: lot.lotNumber,
+// A lot has a lot number, not a street number — the street number arrives when
+// the titles do, which is exactly the rename the address history exists for.
+address_street_number: null,
+```
+
+True of a lot on a plan of division, and false of the address anybody uses. It was also
+the one field the split singled out — street, suburb, state, postcode and council are
+all copied from the project's address, and the street number alone was thrown away. So
+every job created by splitting a project read **"Lot 3, Corner Street, Wandi SA 6167"**:
+an address with no number in it.
+
+**The trigger was never at fault.** `build_consolidated_address()` has always rendered
+`coalesce(new.address_street_number || ' ', '')`, and its own expression, run against
+the live database with literals, says so:
+
+| | reads |
+| --- | --- |
+| lot only (what the split produced) | `Lot 3, Corner Street, Wandi SA 6167, AU` |
+| lot + the project's number | `Lot 3, 28 Corner Street, Wandi SA 6167, AU` |
+| a lot given its own number | `Lot 3, 30 Corner Street, Wandi SA 6167, AU` |
+| titles issued, no lot | `28 Corner Street, Wandi SA 6167, AU` |
+
+**Nothing needs backfilling.** Of 197 addresses in the live database, 178 carry a street
+number only, 13 a lot number only, and **none carries both** — which is the fingerprint
+of this bug plus the fact that Phase B never ran. The 13 are project addresses that
+genuinely have only a lot number, which is their real data rather than a symptom. There
+are no jobs yet, so no job address was written wrong and then kept.
+
+**Street # is now a field per lot on the split**, which is the half of Amber's earlier
+*"add Lot #, Res # Street # at project creation"* that needed no schema change: blank
+inherits the project's number, typed wins. **Res # is still open question 20** — it is
+in no table, it is not a rename of either existing column, and adding it changes both
+`addresses_has_a_number` and the trigger above, so it waits on an answer rather than a
+guess.
+
+## 10 September — the Tasks board becomes a board, and the screen rules get written down
+
+Amber, in two messages: *"fix the filters in the app for dropdown on tasks so it is inline
+and all filters are available as well as advanced filters where you can sort and group by
+any properties"*, and *"always allow selection and editing on a screen for the ability to
+select multiple jobs or properties at once and reassign or edit and ensure kanban boards
+are always able to drag and drop"* — preceded by the rule the whole thing hangs off:
+new screens follow the brand guide and the design system, list screens get all four views,
+filters stay persistent and inline and never take the screen, columns sort and filter,
+dates get date pickers, and a screen ships with a stand-in showing what to do *"like on
+the document template"*.
+
+**The rules are written down first**, because a rule that lives in a pull request gets
+re-litigated on the next screen. *Interface Must-Haves* in [PRODUCT.md](PRODUCT.md) now
+carries six rather than three, and ends with **the checklist for a new screen**;
+[DESIGN.md](DESIGN.md) and [CLAUDE.md](CLAUDE.md) point at it. In the design system
+repository the same rules are `guidelines/pattern-screen.html` — drawn in place rather
+than described — and a **Screens** section in its `SKILL.md`, which was the one thing that
+system described component by component and never as a whole.
+
+**Tasks was the screen that met almost none of them**, being the newest: a table with four
+dropdowns over it, one order unless you clicked a header, no board, no Gantt, no calendar,
+and no way to change five tasks at once. It now uses the same `Toolbar`, `Board`, column
+picker, bulk bar and URL rules the Jobs board does.
+
+- **Four views** — Board, Table, Gantt, Calendar — over one read. `TasksGantt` draws each
+  task's start-to-due window; `TasksCalendar` places the two dates a task carries (due,
+  and scheduled-to-be-worked) and labels which is which.
+- **Filters inline and complete.** Status, Assignee, Team and Process on the bar; Health,
+  Stage, job/project number, Due, Scheduled, Raised by, Waiting on and Created by in the
+  Advanced row. Both date filters are the app's standard range picker.
+- **Sort by any property, from the toolbar**, including a property whose column is
+  switched off — because three of the four views have no header to click. The header
+  click and the control are one state in the URL, so they cannot disagree.
+- **Group by any property**, and the board's columns are that grouping.
+- **Selection and bulk edit on the rows and on the cards**, with one bar: set status,
+  assign, set team, set a due date, unassign.
+- **Drag and drop** where the column is a value somebody can set — status, team, assignee.
+  Grouped by anything derived, the cards do not drag and the board says which grouping to
+  switch to.
+
+**Two things the fixtures caught that had been green by not being tested.** The responsive
+sweep measured `/tasks` and the calendar with nothing in them, so it had never laid either
+out: with task fixtures in `scripts/tracker-fixtures.ts` it found calendar entries at 20px
+and month arrows at 21px — both under the 24px WCAG 2.2 AA floor, both on the *jobs*
+calendar too — and a month grid that pushed a 320px page sideways by 73px. All three are
+fixed in `ui.css`, and the sweep now covers 165 combinations rather than 150.
+
+## 10 September, later — a document is a draft until you publish it
+
+Amber, after #65 merged. Documents built in the app are editable and pull in live record
+data, but the thing that gets sent lives in SharePoint — so until it is published, a
+document is a **draft** and says so on every copy of itself.
+
+- **`0104`** puts `published_at` / `published_by` / `published_url` on `report_documents`,
+  with a trigger that stamps the publisher from the session and **clears the publication
+  whenever the layout or title changes**. Editing reverts it to draft, and the database
+  enforces that rather than each caller remembering to.
+- **The DRAFT watermark** reaches all four renderers — screen, Print/Save PDF, the `.html`
+  download and the `.docx`. `npm run check:watermark` proves all four and proves a
+  published document comes out clean; it runs in CI.
+- **Publish** takes the SharePoint address, pre-filled from the record's own folder
+  (`0040`), and drops the watermark. Re-publishing after an edit pre-fills where it went
+  last time.
+- **Deleting a built document was impossible until now** — `deleteReportDocument()` and its
+  author-or-admin policy both existed and nothing in the app called them. The Documents
+  panel has Delete on every built row.
+
+**Two known limits, stated rather than left to be found.** The screen and print mark is a
+fixed tiled layer: Chromium repeats it on every printed page, **Firefox paints it on the
+first page only**. And Word gets a spaced stamp in the page header rather than a diagonal
+ghost, because the `docx` package exposes no VML shape.
+
+**One thing Amber asked for that is not built, and cannot be yet.** *"you can choose to
+open it in the app document builder or in the document native file (eg word, pdf. viewer
+etc, but it still edits and saves it)"*. Opening the **published** file does exactly that —
+the SharePoint link opens in Word Online or the desktop app and saves back, with Microsoft
+doing the round trip. A **draft** has no file to open: downloading a `.docx` gives a copy
+that does not save back here, so the panel offers the builder and nothing else until the
+document is published. That is open question 18.
+
+## 10 September — documents can be links, and search leaves the page it is on
+
+Three things Amber asked for on 10 September, all shipped together because they are the
+same complaint from three directions: a record's paperwork was hard to reach.
+
+- **A document can be a URL** (`0103`). One column on `documents`, not a new table — `0032`
+  had already built `documents` + `document_links` for exactly this, and the first draft of
+  the migration rebuilt it under the same name before anybody noticed. The Documents panel
+  on a job or project now files a SharePoint link and takes one off again. The SharePoint
+  *integration* is not built and none of its columns are guessed at; see open question 16.
+- **The dashboard has Recent documents and Recent changes.** Both read across the whole
+  company rather than your own jobs — the panels above already cover "yours", and a document
+  filed on somebody else's job is the thing you would not otherwise hear about.
+- **The header search does two things now.** It still filters the view you are looking at,
+  exactly as before; it *also* offers matches from everywhere else in a dropdown, and Enter
+  opens `/search?q=` with the lot. That is the fix for "brodie" on the Projects page
+  narrowing 117 projects to none and saying so, when Brodie Court is a job.
+
+**What has not been seen against real data.** `0093` put 113 real projects in the database
+and there are still no jobs, so every check here ran against the replay harness and the
+fixtures in `verify/behaviour.sql`. Four things worth clicking on `hub.lofty.au`: file a
+SharePoint link on a project; file the same link on a second project and confirm it is one
+document on two records rather than two; remove one of them and confirm the other survives;
+and search "reynella" from any page — three projects carry it (1050, 1103, 1108).
+
+**Amber's own search example does not match anything yet, and that is not the search's
+fault.** "brodie" is 24 and 14 Brodie Road, Reynella — projects 1116 and 1120, six jobs
+between them — and all of it is in `import_staging_jobs`, the table Phase B never loaded.
+Nothing in `projects` or `jobs` carries the word. The search reads the live tables and will
+find those the day somebody creates them in the app.
+
+## Where it stands, and what is next — 7 September, evening
+
+**Live on `hub.lofty.au`, all merged to `main` today with CI green on every merge (the
+responsive sweep included, now that it runs there):**
+
+- #48 — Roadmap and Changelog off Admin; Phase B closed.
+- #49 — Amber's eight first-week fixes; the responsive sweep and the generated-files check in CI.
+- #51 — undo at the repository seam; filters mirror Group by with one Advanced row; a job or
+  project number box; any property as a table column.
+- #50 — nine more from the same list, in a parallel session: the drawer collapses and is
+  findable, the board's cards separate, the header loses its pink, the rail tooltip stops
+  eating its first letter, and `0097` makes a notification *type* admin's again.
+
+**In review: the design-system sync of 7 September, evening.** The design project moved
+under the app during the day and the mirror was re-synced: **Flint** replaces the cool greys
+and the warm tones as the one neutral family (Flint 100 page, Flint 300 rules), **Montserrat**
+replaces Poppins for titles, and two of the three dark-mode contrast shortfalls are closed
+from the design side — the dark Eco Green fill and the dark control boundary — leaving the
+placeholder as open question 9. `DESIGN.md` carries the detail; `check-contrast.mjs` asserts
+the new values rather than recording them as shortfalls.
+
+**Next, in order.** Nothing here needs a schema change.
+
+1. **Amber clicks through what the harness could not.** Every check today ran against a
+   fixture repository, never the live database. The four things to try on `hub.lofty.au`:
+   change a project's target date and undo it; change a task's status and undo it; move a
+   request's stage on Updates and undo it; turn on a property column with real values on the
+   Jobs table. If any of them misbehaves, the seam (`undoableRepository.ts`) is where undo
+   lives now — there is no longer a per-screen registration to look for.
+2. **Work the open-questions queue**, top question first — `docs/open-questions.md`. Six
+   questions were added today by this line of work; the first (Bugs and Ideas off Admin) was
+   asked and answered the same evening, and #54 put three security-advisor questions at the
+   top, of which the first (anon and the GraphQL schema) was answered and became `0101`, so
+   eleven remain. Numbers 3–6 are the cheap confirmations of decisions made under time
+   pressure; asked once, they stop being risks. Number 7 is the one that BLOCKS something:
+   cloning a job has no entry point since the button left the drawer (#50) and nothing on
+   the Projects side has taken it yet.
+3. **Small follow-ups that fell out of today, none blocking:**
+   - The column picker will list every property — eighty-odd once the definitions are all
+     active. It has no search box. Add one when it gets unwieldy, not before.
+   - The undo bar is hidden below 600px to keep the phone header usable. Ctrl+Z has no phone
+     equivalent, so a phone has no undo at all. A long-press on the toast is the obvious home.
+   - `PersonSelect` offers active people only. A job already assigned to somebody deactivated
+     still shows their name read-only; whether the picker should offer them was not asked.
+   - The deep-link case: a write on a record the page has not listed (tasks, runs, property
+     values, feedback) goes through unrecorded, because the seam has no "before" for it.
+     Every screen today lists before it edits, so nothing hits this; the fallback is honest.
+4. **Still queued from earlier sessions**: the sortable-header table further down this file,
+   and the notification worker. `SHARE_ALLOWED_ORIGINS` has come OFF this list — it was set
+   in Supabase several PRs ago and this file did not know (see below).
+5. **Planned, not built — an API, an MCP server and an in-app Ask box.** Amber asked for the
+   plan on 8 September; it is `docs/integrations/api-and-mcp-plan.md`; the readable version is
+   <https://claude.ai/code/artifact/0a1cfce5-b719-426c-819f-4dd12352453d>. Its six decisions were **asked and answered the same day** (open-questions.md → Answered,
+   rows 14–19): Anthropic only; Microsoft 365 Copilot; one Xero organisation with purchase
+   orders pulled from SiteBook now and pushed to Xero later; SiteBook has an API and an MCP
+   server, details unknown; a superadmin connects approved sources organisation-wide and
+   nobody connects a personal AI client; Ask is read-only first. Two narrower questions are open
+   questions 13 and 14. The `anon` GraphQL shape (`0101`) is closed, so Phase 0 waits on nothing.
+
+### Two standing decisions, so nobody spends an afternoon reopening them
+
+**`amberbeaumont/modules` is out of scope. Ignore it.** Amber, 4 September: *"ignore the
+amberbeaumont repositry now. it is not needed and done is prupose"*. The report-builder module
+was installed here and the app's copy is now the only copy that matters — the QR code, the
+table of contents and the record pickers live in `app/src/features/reports/` and are not going
+upstream. Do not raise PRs against that repo, and do not treat the two copies as needing to
+agree.
+
+**`report-share` is deployed AND switched on.** Deployed 4 September to
+`gmekuqdjemrfuurxhuib`, `verify_jwt` off, and `SHARE_ALLOWED_ORIGINS` set — Amber, 10
+September: *"Supabase has the share allowed origins set in edge functions secrets several
+prs ago"*. **This paragraph said the opposite until then**, and so did three other documents,
+because the secret was set outside a session and nothing here was told.
+
+Checked rather than believed, on 10 September, by asking the live endpoint:
+
+```
+Origin: https://hub.lofty.au  → 404 {"error":"This link is not valid."}
+                                 access-control-allow-origin: https://hub.lofty.au
+Origin: https://example.com   → 403 {"error":"This link cannot be opened from here."}
+                                 access-control-allow-origin: null
+```
+
+A 404 on a token that does not exist is the endpoint working; the 503 this file used to
+describe would mean the secret was still empty. So the allowlist is live and enforcing, and
+the Share button produces links that open.
+
+**A secret set outside the repository is invisible to it**, which is the thing worth taking
+from this rather than the correction itself: nothing in CI, in the migrations or in these
+documents can see an edge-function secret, so a claim about one goes stale silently. The
+probe above is the only way to know, and it takes one curl.
+
+Historic, kept because the reasoning still applies to the next secret: the allowlist is a
+comma-separated list with no fallback, so a deploy made before somebody decides the domains
+answers nothing — which is the designed default rather than a fault. It was worth doing
+the feature.
+
+Last updated: 2026-09-07.
+
+---
+
+## Session of 2026-09-07 — eight bugs from Amber's first week on it
+
+Amber's list, in her order, and what each turned out to be. None of it touched the schema —
+every fix is in `app/src`, and the one repository method added (`setFeedbackKind`) writes a
+column that already existed under a policy that already allowed it.
+
+| she said | it was | now |
+|---|---|---|
+| "new job creation not working on project tab" | The split-into-jobs panel rendered BEFORE the project's panel in the tree; same z-index, so it opened behind the project. Escape also closed both. | Rendered after, so it stacks on top; `SidePanel` keeps a stack and only the topmost hears Escape. "Jobs on this project" is the first section of the drawer, **+ Create jobs** in its head. A SiteBook number can be typed per lot at creation (the column was already there as "old job number"; it is named for what people call it). |
+| "all drop downs alphabetical … typing a name auto selects … team first, then people with their team" | `Select` sorted; `MultiSelect` did not. The people pickers were Vibe dropdowns — filter, but no auto-select, no team. | `MultiSelect` sorts. New `TypeaheadSelect` (the suburb field's shape for any closed list) and `PersonSelect` on it: every name with their team beside it; the record's own team first under its name, then "Other teams"; one unambiguous match is taken on Tab or on leaving the field. Used for every assignee/owner/person control. |
+| "sidebar text not persisting" | The report panel closes on any click outside it — including the nav — and unmounted the form. | `FeedbackProvider` owns the draft (kind, title, detail, requested-by in `sessionStorage`; files in memory). Sending clears it. |
+| "updates page is duplicated with the bugs/ideas/roadmap/changelog pages in admin" | Four Admin tabs rendering Updates' components and a second triage table. | Gone, with `FeedbackList.tsx`. `/admin/{bugs,ideas,roadmap,changelog}` redirect to the matching Updates view. Admin's head says where they went. |
+| "user settings notifications cut off" | A six-column table in one third of an auto-fit grid. | Two-column page: details with "where you land" beneath on the left, notifications beside. The toggles lost their "Off"/"On" words, which were a third of the table's width. |
+| "add the undo and redo bar to the top navigation" | There was no undo anywhere. | `UndoProvider` + two header arrows, Ctrl/⌘+Z and Shift+Z. A screen registers a step with its inverse at the moment it writes; the drawer's team/assignee/title/SiteBook number, a project's team/assignee, property values, inline user edits, restore/let-in, and a request's stage/phase/kind do. Lifecycle moves and deactivation do not — the first is forwards-only by rule, the second confirms. Hidden below 600px. |
+| "users settings row cut off, can't edit or save; name should open the side panel" | Save sat in the last column of a row wider than the screen; the panel held a stale `Profile` object. | Save/Cancel in the spanning row beneath, sticky to the left edge. The name opens the edit panel, with View activity / Deactivate / Hold at gate under the form. The panel resolves the person by id from the latest read, so an inline save shows in it. |
+| "can't change an idea to a bug in updates" | No control wrote `feedback_kind`. | "Filed as" in the request panel, admin+, under the existing UPDATE policy; undoable. |
+
+**Seen rendered this time**, against a fixture build (the responsive harness's signed-in stub
+with six people and three notification types added): Settings, Admin → Users reading and
+editing, the person panel, the project drawer with the split panel over it, the assignee
+typeahead grouped by team, the request panel with "Filed as", and the draft surviving a page
+change. Not seen: a real write going through, since there is no database in the harness — the
+undo steps were exercised only as far as the toast.
+
+**Undo moved to the repository seam the same evening.** Amber, an hour after the bar shipped:
+*"the undo and redo doesn't work when i made an update it didn't let me undo it"*. The first
+version registered a step at six call sites; the app has fifty places that write, and her edit
+was one of the forty-four that recorded nothing. `undoableRepository.ts` now wraps every
+patch-shaped write — read the record, write the patch, record the inverse — and
+`DataProvider` bumps a version every `useQuery` depends on, so the screen re-reads after an
+undo without knowing which screen it is. Lifecycle moves, creates and deletes stay out on
+purpose. Seen working in the fixture harness: assign → undo → redo → Ctrl+Z, with the writes
+logged to prove the inverse carried the OLD value (the first cut built it after the write and
+re-applied the new one; the harness caught it).
+
+**The toolbar's filters are the Group-by fields, and the rest is one Advanced row.** Amber,
+later the same day: *"filters on jobs and projects should be same as the group ones and then you
+can add in the extra detail like an advanced not clicking a million times to get new filters up.
+you also need to be able to enter a job number and columns should be able to add any property in
+the job (including project properties as they are inherited by the job) to the column."* Three
+changes, all in `Toolbar`, `filtering.ts`, `boardModel.ts` and the two pages:
+
+- **Filters.** The chips and "+ Add filter" are gone. Jobs shows Stage, Team, Status and Process
+  from the start; Projects shows Stage, Job stage, Type and Status. One **Advanced** button opens
+  a second row with every other filter at once — number, project, type, moved date, process
+  health, property, recorded — and carries a count when one of them is narrowing the board while
+  folded. A filter reading "Any" is not in the URL.
+- **Job stage is its own filter on Projects.** The projects board groups by the project's phase
+  and by its jobs' stages, so it now filters by both: `?stage=` is the project's own
+  (`project_stage`, 0039) and `?jobstage=` is "has a job in this stage", which is what `?stage=`
+  used to mean there. A saved projects view carrying `?stage=` changes meaning accordingly.
+- **A number box.** "Job or project number", prefix-matched against the job number, the old
+  SiteBook number and the project number — `1042` is every job on the project, `1042-003` is one.
+- **Property columns.** `BoardJob.properties` and `BoardProject.properties` carry every recorded
+  value the reader may see (the job's own over its project's, exactly as the drawer reads
+  through), and `propertyColumnDefs` turns every active readable definition into a column, off by
+  default, labelled "(project)" on the jobs table where the two scopes mix. Cells are
+  `formatValue`, the drawer's and the reports' sentence; figures and dates sort as what they are.
+
+**Two checks CI now runs that it did not** (Amber, same day: *"should there be a check for
+this"*): the responsive sweep, because it caught the 16px link and nobody but a person at a
+terminal would have; and `changelog.mjs --check` on every PR's own head, because this PR's
+first commit landed with the four generated files stale and only the post-commit hook —
+which is opt-in — noticed. The check runs on pull requests only; see the comment in
+`.github/workflows/ci.yml` for why a red `main` after a merge is the hook's to repair.
+*(Superseded 14 September: the hook never repaired it, because every merge here is made with
+GitHub's merge button and no hook runs on anybody's machine. A `self-heal` job on `main` does
+it now, and this check is advisory — see the entry at the top of this file.)*
+
+**Open, and hers to decide:**
+
+- The undo bar is hidden below 600px to keep the phone header usable. If phone undo matters,
+  it needs a home — a long-press on the toast is the obvious one.
+- `PersonSelect` lists active people only. A job already assigned to somebody deactivated still
+  shows their name read-only; whether the picker should offer them too was not asked.
+- The old `Admin → Bugs/Ideas` export (page, error, screenshot count in one file) is now the
+  Requests table's export, which carries the same columns except the screenshot count.
+
+---
+
 ## Session of 2026-09-04 (later) — Settings is the managers', Admin is behind a cog
 
 Amber, in two sentences that move one line: Setup becomes **Settings** and managers and above
@@ -152,11 +1458,26 @@ diagram, and the three questions still open at the end. The decision log entry i
 
 | Settings — `/setup`, manager+ | Admin — `/admin`, admin+ |
 |---|---|
-| Properties, Processes, Contacts, Maintenance, Automations | Users, Teams, Permissions, Dictionary, Wiring, Bugs, Ideas, Roadmap, Changelog |
+| Properties, Processes, Contacts, Maintenance, Automations | Users, Teams, Permissions, Dictionary, Wiring, ~~Bugs, Ideas, Roadmap, Changelog~~ |
 
-Ten tabs became five and nine. Roadmap and Changelog on Admin are the **same components**
-Updates renders, imported rather than copied — Updates stays in the footer for everybody,
-because `0060`'s whole point is that the people who filed a request can read the queue.
+Ten tabs became five and nine, and on 7 September five and **five**. Roadmap and Changelog on
+Admin were the **same components** Updates renders, imported rather than copied — Amber:
+*"there is duplication on footer and other page"*, so they came out (#48). Bugs and Ideas
+followed the same day, in a second session — *"the updates page is duplicated with the
+bugs/ideas/roadmap/changelog pages in admin. this only needs to be one page"*. Being one
+component underneath was a fact about the code, not about the experience: two doors to
+identical rows is still a thing a person has to check. All four old addresses forward to the
+matching view of Updates, because those URLs were shareable and somebody has shared them.
+Asked that evening whether taking Bugs and Ideas off too was the intent, Amber confirmed it:
+Updates only.
+Updates itself stays in the footer for everybody, because `0060`'s whole point is that the
+people who filed a request can read the queue.
+
+**The bug manager is still admin's**, which is the other sentence from that day — *"only
+admins and super admin get to see the bug manager"*. The manager is the controls: stage,
+phase, kind, merge, planning, and those are `can("admin")` and superadmin inside Updates
+exactly as they were on the Admin tabs. Filing is not triage — `ReportForm` has no permission
+gate, so anybody with app access including a viewer can send one.
 
 ### 0096 is the half that stops the rename being decoration
 
@@ -309,7 +1630,9 @@ palette, so they cannot drift apart again.
 - **Nothing has been saved from a browser to the real database.** The stores are proved
   through the repository seam and the policies are proved in `verify/`; the round trip
   between them is not.
-- **Every data block is in its empty state until Phase B lands.** Correct, not broken.
+- **Every data block is in its empty state until real jobs exist.** Correct, not broken. They
+  now arrive as people create them in the app, a project at a time, rather than all at once
+  from an import — so the empty states matter for longer and are seen by more people.
 
 ---
 
@@ -387,10 +1710,11 @@ behind signed URLs; the file carries the count and says where to look.
   a re-parse of the bytes (and the `.docx` is recognised by `file` as a Word 2007+ document
   with every XML part well-formed), which is a different claim from "Excel and Word on
   Amber's laptop are happy". First thing to do with a real machine.
-- **The empty tables are the ones that will look wrong first.** With Phase B unimported,
-  most screens have nothing to export and the button is disabled. The shapes to check after
-  the import are the grouped exports on Jobs (a sheet per stage, empty groups dropped) and
-  the job report's four sections.
+- **The empty tables are the ones that will look wrong first.** With no jobs yet, most
+  screens have nothing to export and the button is disabled. The shapes to check once real
+  jobs exist are the grouped exports on Jobs (a sheet per stage, empty groups dropped) and
+  the job report's four sections. There is no longer a single import moment to check them
+  after, so check them as soon as the first project has a few jobs in it.
 
 ---
 
@@ -437,9 +1761,10 @@ is a PR of its own by the one-table rule.
 
 ## The interface must-haves, and where they are not met yet
 
-Amber, 3 September, gave three rules as **must-haves**. All three are written up in full
-in [PRODUCT.md](PRODUCT.md) under *Interface Must-Haves*; this is the state of play
-against them, so a gap is a listed item rather than something the next person discovers.
+Amber gave three rules as **must-haves** on 3 September and three more on 10 September.
+All six are written up in full in [PRODUCT.md](PRODUCT.md) under *Interface Must-Haves*,
+which also ends with the checklist a new screen is built against; this is the state of
+play, so a gap is a listed item rather than something the next person discovers.
 
 ### What has an order is dragged into it — DONE on Processes, and only there
 
@@ -503,13 +1828,64 @@ Admin → Users, Updates.
 | Admin → Permissions | permission, capability | — |
 | Admin → Dictionary | name, table, column, status | table, status |
 | Admin → Wiring | method, table, wired | wired / not wired |
-| Updates → Bugs / Ideas (`FeedbackList`) | title, stage, votes, comments, reported | stage, kind, reporter |
+| Updates → Requests, table view | title, kind, stage, phase, votes, from, moved — sorts already | stage, kind, reporter |
 | Reports | whatever each report's table holds | the report's own controls |
 
-The date-range picker is the one piece with no shared component yet: Jobs and Projects
-have a range control in their filter bar, and the tables above would each need it wired
-to their own date column. That is the next thing to build for this must-have, not a
-per-page reinvention.
+The date-range picker is **not** the missing piece it was described as here on 3
+September: `app/src/components/DateRange.tsx` has been the shared control since 1
+September and Jobs, Projects and Tasks all use it. What the tables above need is that
+component wired to their own date column, which is a line of props each — not a
+per-page reinvention, and not a component to build.
+
+### The filter bar is persistent, inline and compact — DONE on the three boards
+
+`app/src/components/Toolbar.tsx` is the one implementation: Jobs, Projects and Tasks all
+use it, so the language and the geometry cannot drift. The screens in the table above
+have hand-rolled filter rows; adopting `Toolbar` is what "carries the filters it should"
+means for each of them.
+
+### A screen of records is four views, and the kanban drags — DONE on Jobs and Tasks
+
+| screen | views | drop writes |
+| --- | --- | --- |
+| Jobs | Board, Table, Gantt, Calendar | stage move (confirmed), process move (confirmed) |
+| **Projects** | Board, Table, Gantt, **Calendar** | — a project's stage follows its jobs (0041) |
+| **Tasks** | **Board, Table, Gantt, Calendar** | **status, team, assignee** |
+| Maintenance, Contacts, Settings → Properties | table only | — |
+
+Maintenance is the strongest candidate for the four: a maintenance item has a reported
+date, a next visit and an owner, so a board, a timeline and a month all have something
+true to draw. Contacts and the Settings tables are configuration and lookups, which is
+the "unless specified otherwise" case — a Gantt of a lookup table is a chart of nothing.
+
+**The projects calendar is new, and the way it was missing is worth writing down.** Amber:
+*"calendar view has also disappeared"*. The projects board offered three views — and
+`/projects?view=Calendar` was still a URL that resolved, because `useBoardParams`
+validated `?view=` against the app-wide `VIEWS` list rather than against what the page
+could draw. So that link rendered the toolbar with an **empty View control and nothing at
+all underneath it**: a blank board, reached by a link that looked legitimate. Both halves
+are fixed — `ProjectsCalendar` places the three real dates a project carries (start,
+target completion, end, each labelled), and a board may now tell `useBoardParams` which
+views it actually has, so an unknown one falls back to the default instead of drawing
+nothing. `?view=Nonsense` lands on Board.
+
+Neither the projects Gantt (26 August) nor the new calendar had ever been in the
+responsive sweep. Both are now, and `FIXTURE_PROJECT` carries dates relative to today so
+the month grid is populated when it is measured rather than showing its empty state —
+fixed dates would have gone stale into the same false pass within weeks.
+
+### Selection and bulk edit — DONE on Jobs and Tasks
+
+Rows and cards both, one bulk bar per screen, writes one at a time so a refusal names its
+record. Not yet on Contacts, Maintenance or Settings → Properties — Amber's *"select
+multiple jobs or properties at once"* names properties explicitly, so Settings →
+Properties is the next one.
+
+### A screen ships with its stand-in — PART DONE
+
+`NothingYet`, `NoResults` and `LoadProblem` in `app/src/components/SearchNotices.tsx` are
+the three sentences, and Jobs, Projects and Tasks each say the right one. The screens in
+the sorting table above mostly render a bare "nothing here" line with no way out of it.
 
 ---
 
@@ -1243,7 +2619,8 @@ scope model; the shape is in `docs/schema/supabase-schema.md`.
 **This split was by SUBJECT, and the 4 September one is by WHO ASKS.** Setup is now
 **Settings**, manager and above, holding Properties, Processes, Contacts, Maintenance and
 Automations; Admin is behind the header cog, admin and above, and took Permissions,
-Dictionary, Wiring, Bugs, Ideas, Roadmap and Changelog with it. See *Session of
+Dictionary, Wiring, Bugs, Ideas, Roadmap and Changelog with it — **Roadmap and Changelog
+came back out again on 7 September as duplication; see the top of this file.** See *Session of
 2026-09-04 (later)* at the top, and `docs/schema/schema-plan.md` → *4 September — Settings is the
 managers', Admin is the administrators'*. The reasoning below is kept because it explains
 why the tabs sit where they do at all; the table is no longer what the app does.
@@ -1366,8 +2743,10 @@ a `VITE_` prefix, because that key bypasses RLS entirely and would be published 
 way. Never add one.
 
 Both `VITE_` variables are set for every environment, so **preview deployments point at
-production Supabase**. Fine while there are no jobs; scope them per environment at Phase B,
-when a preview branch can write to real records.
+production Supabase**. This was going to be fixed "at Phase B", which is now never — so it
+needs its own moment. Scope them per environment **before real jobs accumulate**, because
+from now on data arrives gradually and there is no longer a load date to schedule it
+against. Every preview branch can already write to real records.
 
 ### `SUPABASE_ACCESS_TOKEN`, and the environment it has to be in
 
@@ -1593,10 +2972,19 @@ re-asked in six months:
 
 ---
 
-## Next: Phase B, the import
+## Phase B, the import — closed 7 September without running
 
-Phase A is structure. Phase B is the first real data, and it is also the **checkpoint** —
-anything structurally wrong surfaces here, while changing it is still cheap.
+> **This section is a record, not a plan.** Amber closed the import on 7 September:
+> *"i don't need any jobs imported from spreadsheets. all jobs that need to be created from
+> now on will be created from the projects in the app"*. Nothing below is work anybody is
+> going to do. It is kept because the reasoning is still load-bearing — the spine review it
+> forced was done and applied, and the two hazards it names (projects reconstructed from
+> addresses; sequence following lot order, not old-number order) are now **things a person
+> gets right in the app, by hand, one project at a time**, rather than things a generator
+> gets right in bulk. The hazard did not go away with the importer.
+
+Phase A is structure. Phase B was to be the first real data, and also the **checkpoint** —
+anything structurally wrong would surface there, while changing it was still cheap.
 
 ### What the import actually is
 

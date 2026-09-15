@@ -58,6 +58,24 @@
 }
 
 /*
+ * The builder is a white sheet whatever theme the app is in — every panel, card and menu
+ * in `components/` is `bg-white` and every field is inked `#00393f`, and the module ships
+ * no dark variant. `index.html` declares `color-scheme: light dark` for the app, so on a
+ * dark OS the browser paints any native control that sets no background of its own with
+ * its dark field colour: watched in Chromium, `rgb(59, 59, 59)` under `#00393f` text in
+ * every settings-panel input, textarea and select — black on black, unreadable. Declaring
+ * the light scheme on the builder's root tells the browser what the panels already say,
+ * and native fields, `<option>` lists and scrollbars inside it render for a white ground.
+ *
+ * Not `bg-white` on each input: that would fix the ones listed today, in the vendored
+ * files, and miss the next control the module adds. Not on `body`: the rest of the app
+ * has a real dark theme and wants dark controls.
+ */
+.nokey {
+  color-scheme: light;
+}
+
+/*
  * Preflight also normalises the elements the module's classes assume have been
  * normalised: headings and paragraphs with no browser margin or size of their own, form
  * controls inheriting the page's font, bare buttons.
@@ -153,4 +171,32 @@
   .shared-doc { background: #ffffff; padding: 0; }
   .shared-doc-sheet { box-shadow: none; border-radius: 0; padding: 0; max-width: none; }
   .shared-doc-foot { color: #8a898d; }
+}
+
+/* ── Placeholders in prose ────────────────────────────────────────────────
+   `{{site_start_date}}` in a letter, the value when it renders.
+
+   Marked ON THE CANVAS ONLY — `forExport` renders the plain value, because a client
+   letter with highlighted words in it is a letter that looks like a draft. What the
+   author needs is to see at a glance which words are coming from the record and which
+   of them have nothing behind them yet; what the client needs is a sentence. */
+.rb-token {
+  background: rgba(0, 80, 88, 0.08);
+  border-bottom: 1px solid rgba(0, 80, 88, 0.35);
+  border-radius: 2px;
+  padding: 0 2px;
+}
+/* Nobody has recorded it. An em dash, marked, so it reads as a gap rather than a typo. */
+.rb-token-blank {
+  background: rgba(255, 181, 159, 0.3);
+  border-bottom-color: #b8482a;
+}
+/* No such field — a typo in the token itself. Left standing and obvious: deleting it
+   would turn "booked for {{slab_dat}}" into "booked for", which is a sentence somebody
+   sends. */
+.rb-token-unknown {
+  background: rgba(179, 38, 30, 0.12);
+  border-bottom-color: #b3261e;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
 }

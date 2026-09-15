@@ -28,7 +28,12 @@ import "../components/ui.css";
 const SECTIONS = [
   { slug: "document-builder", label: "Document Builder", lane: "documents" },
   { slug: "template-library", label: "Template Library", lane: "template" },
-  { slug: "section-library", label: "Section Library", lane: "section" }
+  { slug: "section-library", label: "Section Library", lane: "section" },
+  // Snippets are wording rather than blocks, but they are the same library row with the
+  // same sign-off (0098), so they are managed in the same place. Saving one happens in
+  // the editor; this lane is where a manager signs it off, renames it or retires it —
+  // without which a user's snippet would be saved and then invisible forever.
+  { slug: "snippet-library", label: "Snippet Library", lane: "snippet" }
 ] as const;
 
 /** Where the old single-tool URL goes. Links to it exist in Teams messages and bookmarks. */

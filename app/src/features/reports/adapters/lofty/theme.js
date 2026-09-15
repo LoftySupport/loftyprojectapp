@@ -19,6 +19,7 @@
 
 import {
   HOUSE_COLOURS,
+  HOUSE_FONT_STACK,
   HOUSE_RULE_PT
 } from '../../../../data/export/houseFormat';
 import { createTheme } from '../../core/theme.js';
@@ -41,19 +42,13 @@ const LOGO = {
 };
 
 /**
- * The house stack, and the reasoning is the Word writer's, quoted rather than re-decided:
- * the brand face is **Fieldwork Geo**, but embedding it in a .docx needs Word's
- * embed-fonts option, so **Helvetica is the template's only approved fallback — never
- * Arial**.
- *
- * Helvetica is therefore first, not second. `core/docx.js` takes the first family in the
- * stack and writes it into the document, so putting Fieldwork Geo there would produce a
- * .docx asking for a font the reader does not have, and Word would substitute something
- * the brand kit has not approved. Naming it after Helvetica keeps it documented without
- * letting it reach a file.
+ * The house stack, imported rather than re-decided: Montserrat, the brand's substitute for
+ * Fieldwork, since 9 September (`houseFormat.ts` carries Amber's words). `core/docx.js`
+ * takes the first family in the stack and writes it into the document, so Montserrat is
+ * first and the brand face is not in the stack at all — a .docx asking for Fieldwork would
+ * have Word substitute something the brand kit has not approved.
  */
-const HOUSE_SANS =
-  "Helvetica, 'Fieldwork Geo', 'Helvetica Neue', ui-sans-serif, system-ui, sans-serif";
+const HOUSE_SANS = HOUSE_FONT_STACK;
 
 export const LOFTY_THEME = createTheme({
   key: 'lofty',

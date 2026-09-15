@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { changeSentence } from "../data/auditNarrative";
 import {
@@ -45,12 +45,14 @@ const EMPTY: NewProfile = {
 
 /** Create when `profile` is null, edit when it is not. One form, because it is one form. */
 export function UserDialog({
-  show, profile, onClose, onSaved
+  show, profile, onClose, onSaved, actions
 }: {
   show: boolean;
   profile: Profile | null;
   onClose: () => void;
   onSaved: () => void;
+  /** What can be done to this person besides editing — rendered under the form, when editing. */
+  actions?: ReactNode;
 }) {
   const repo = useRepository();
   const { toast } = useToasts();
@@ -59,7 +61,9 @@ export function UserDialog({
   const [error, setError] = useState<string | null>(null);
 
   // Re-seed whenever the dialog opens on a different person, or the previous person's
-  // details would show under the new one's name.
+  // details would show under the new one's name — and whenever THAT person's row is
+  // re-read, so a change saved inline shows here too (Amber, 7 Sep). The re-read only
+  // follows a save, so this does not fight somebody mid-edit.
   useEffect(() => {
     if (!show) return;
     setError(null);
@@ -152,6 +156,18 @@ export function UserDialog({
           </Field>
         </div>
         {error && <Problem>{error}</Problem>}
+        {profile && (
+          <div className="create-preview">
+            <Text type="text3" color="secondary" element="div" ellipsis={false}>
+              {/* The facts the form does not edit — derived, not set. */}
+              {profile.active ? "Active" : "Inactive"}
+              {profile.isDemo ? " · held at the gate" : ""}
+              {" · last signed in "}
+              {profile.lastLoginAt ? new Date(profile.lastLoginAt).toLocaleDateString() : "never"}
+            </Text>
+            {actions}
+          </div>
+        )}
         {!profile && (
           <div className="create-preview">
             <Text type="text3" color="secondary" ellipsis={false}>

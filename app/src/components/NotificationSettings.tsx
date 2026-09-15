@@ -65,8 +65,11 @@ export function NotificationSettings() {
         not chosen, the default shown applies. SMS is listed for when a provider is set up; nothing sends by SMS yet.
       </Text>
       {problem && <Problem>{problem}</Problem>}
+      {/* `notif-table`: the cells wrap and the timing controls stack, so the table fits
+          the panel rather than needing a sideways scroll to reach the last column — which
+          is what "notifications are cut off" was (Amber, 7 Sep). */}
       <div className="data-table-wrap">
-        <table className="data-table">
+        <table className="data-table notif-table">
           <thead>
             <tr>
               <th>When</th>
@@ -87,15 +90,21 @@ export function NotificationSettings() {
                     const p = effective(t, ch);
                     return (
                       <td key={ch}>
+                        {/* No "Off"/"On" either side: the column heading names the channel
+                            and the switch shows the state, and the two words were a third of
+                            the table's width — the reason it did not fit its panel. */}
                         <Toggle size="small" isSelected={p.isEnabled} aria-label={`${t.name} by ${NOTIFICATION_CHANNEL_LABELS[ch]}`}
+                          onOverrideText="" offOverrideText=""
                           disabled={ch === "sms"} onChange={on => save({ ...p, isEnabled: on })} />
                         {ch === "sms" && <div className="slot-sub">no provider yet</div>}
                       </td>
                     );
                   })}
                   <td>
-                    <div className="field-inline" style={{ flexWrap: "wrap" }}>
-                      <Select aria-label={`Timing for ${t.name}`} value={timing}
+                    <div className="notif-timing">
+                      {/* `ordered`: now-then-later is the sequence, and a–z would put
+                          the digest first. */}
+                      <Select ordered aria-label={`Timing for ${t.name}`} value={timing}
                         options={[{ value: "immediate", label: "Immediately" }, { value: "digest", label: "In my digest" }]}
                         onChange={v => setTiming(t, v as "immediate" | "digest")} />
                       {timing === "digest" && (

@@ -31,16 +31,14 @@ export function WiringPage() {
     wired: repo.wired.has(method as keyof typeof repo)
   }));
 
-  const fromSupabase = rows.filter(r => r.wired && configured).length;
-  const byTable = [...new Set(rows.map(r => r.table))];
+  // The "N methods across N tables · N reading from Supabase" line these two fed was the
+  // page's subtitle, and subtitles went from every page on 12 September. The numbers are
+  // still on the page, in the panel below and in each section's own count.
   const records = rows.filter(r => !r.isLookup);
   const lookups = rows.filter(r => r.isLookup);
 
   return (
-    <PageShell
-      title="Wiring"
-      subtitle={`${rows.length} methods across ${byTable.length} tables · ${fromSupabase} reading from Supabase`}
-    >
+    <PageShell title="Wiring">
       <div className="panel" style={{ marginBottom: "var(--space-16)" }}>
         <Text type="text2">
           {configured

@@ -189,9 +189,11 @@ export function ReportsPage() {
 
   return (
     <>
+      {/* No line under the heading. Amber, 12 September: *"on all pages remove
+          descriptive line text under page header … we need the most above the fold
+          possible"*. */}
       <div className="page-head">
         <Heading type="h2" weight="bold">Reports</Heading>
-        <Text type="text2" color="secondary">Portfolio health, from the jobs in view.</Text>
       </div>
 
       {/* NO TOOLBAR ON THE BUILDER TAB.
@@ -204,6 +206,8 @@ export function ReportsPage() {
         filters={filters}
         onFiltersChange={setFilters}
         optionsFor={optionsFor}
+        primary={["Stage", "Team", "Type"]}
+        advanced={["Number", "Process", "Date", "Process health", "Property", "Recorded"]}
         count={`Showing ${jobs.length} of ${all.length} jobs`}
         /* Named for the tab, because that is what it downloads. The Processes tab carries
            its own Export button, next to the figures it exports, so nothing here. */

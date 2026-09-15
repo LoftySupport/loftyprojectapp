@@ -22,7 +22,8 @@ import { toXlsx } from "../src/data/export/xlsx.ts";
 import { toDocx } from "../src/data/export/docx.ts";
 import { toPdf } from "../src/data/export/pdf.ts";
 import { FORMAT_LABELS, FORMAT_NOUNS } from "../src/data/export/index.ts";
-import { encode, truncate, widthOf, widthOfBytes } from "../src/data/export/helvetica.ts";
+import { encode, truncate, widthOf, widthOfBytes } from "../src/data/export/typeface.ts";
+import { REGULAR, SEMIBOLD } from "../src/data/export/montserrat.ts";
 import { fileStem, tableFromFields, type ExportDocument } from "../src/data/export/table.ts";
 
 let failures = 0;
@@ -327,10 +328,11 @@ ok("a blank cell is an empty paragraph", /<w:tc><w:tcPr>[^<]*(<w:tcMar>.*?<\/w:t
 // Provenance in the place Word shows it under File → Info. Watched by dropping the title
 // from core.xml: the file's properties then read "Document1" whatever the download was.
 ok("the document's title is recorded in its properties", wordPart("docProps/core.xml").includes("<dc:title>Jobs · at risk</dc:title>"));
-// Helvetica specifically, not Word's default: the house document format names it the only
-// approved fallback for the .docx a client edits (never Arial, Calibri or Aptos). Watched
-// by leaving Calibri in place, which is what the writer shipped before the brand kit.
-ok("the default font is Helvetica", wordPart("word/styles.xml").includes(`w:ascii="Helvetica"`));
+// Montserrat specifically, not Word's default: the house format names it (9 September) as
+// the face for the .docx a client edits, and the brand says Helvetica, Calibri and Aptos are
+// never substituted. Watched by leaving Calibri in place, which is what the writer shipped
+// before the brand kit, and by the Helvetica it set until the decision.
+ok("the default font is Montserrat", wordPart("word/styles.xml").includes(`w:ascii="Montserrat"`));
 
 section("the Word document wears the Lofty house format");
 // The wordmark rides in the running header as a picture. Watched by dropping the drawing:
@@ -542,8 +544,8 @@ section("what the writer can encode, and what it admits it cannot");
 // Watched by writing the raw UTF-8 bytes into the string: an em dash then comes out as
 // "â€" in every viewer, which is exactly how this app's dashes looked before WinAnsi.
 ok("an em dash survives as one character", raw.includes("\\227"));
-// Watched by passing unencodable text through: Helvetica has no glyph, so the viewer
-// drops it and the width the layout reserved is wrong for the rest of the row.
+// Watched by passing unencodable text through: the embedded subset has no glyph, so the
+// viewer drops it and the width the layout reserved is wrong for the rest of the row.
 ok("a character with no glyph becomes a question mark", encode("中")[0] === 0x3f);
 // The property behind that: whatever goes in, every byte that comes out has a width.
 // Watched by mapping one character in `HIGH` to a code WinAnsi leaves empty — the text
@@ -562,12 +564,27 @@ ok(
 const cut = truncate("A very long address indeed, longer than its column", 60, 8.5);
 ok("a truncated cell says it was truncated", cut.endsWith("…"), cut);
 ok("a truncated cell fits its column", widthOf(cut, 8.5) <= 60, `${widthOf(cut, 8.5).toFixed(2)}pt`);
-// Watched against the AFM tables the widths were read from, arithmetic done by hand:
-// "1042-01" is six digits at 556 plus a hyphen at 333, which is 3669 units of 1/1000 em,
-// so 33.021pt at 9pt. A width table that had been remembered rather than read would miss
-// this by a few units per character and nothing else in this file would notice.
+// Watched against the font's own hmtx table, arithmetic done by hand: Montserrat's digits
+// are not tabular, so "1042-01" is 361 + 662 + 661 + 568 for the first four, a hyphen at
+// 382, then 662 + 361 — 3657 units of 1/1000 em, so 32.913pt at 9pt. A width table that
+// had been remembered rather than read would miss this by a few units per character and
+// nothing else in this file would notice.
 const measured = widthOf("1042-01", 9);
-ok("a string measures what the metrics say", Math.abs(measured - 33.021) < 0.0001, `${measured}pt`);
+ok("a string measures what the metrics say", Math.abs(measured - 32.913) < 0.0001, `${measured}pt`);
+// The width table the layout measures with and the one the PDF hands the viewer are the
+// same array — so a column sized here is a column that fits there. Watched by scaling one
+// copy: text then overruns its cell in the viewer while every check here still passes.
+ok("the PDF's /Widths are the layout's widths",
+  raw.includes(`/BaseFont /${REGULAR.name} /FirstChar 32 /LastChar 255 /Widths [${REGULAR.widths.join(" ")}]`)
+  && raw.includes(`/BaseFont /${SEMIBOLD.name} /FirstChar 32 /LastChar 255 /Widths [${SEMIBOLD.widths.join(" ")}]`));
+// Both programmes ride in the file, uncompressed, with /Length1 saying how long each is —
+// the one thing a viewer needs to find the tables. Watched by dropping /Length1: Acrobat
+// then reports the font as damaged and falls back to a system face, silently.
+const programmes = [...raw.matchAll(/\/FontFile2 (\d+) 0 R/g)].map(m => Number(m[1]));
+ok("two font programmes are embedded, and each declares its length",
+  programmes.length === 2
+  && programmes.every(id => new RegExp(`\\n${id} 0 obj\\n<< /Length (\\d+) /Length1 \\1 >>\\nstream\\n`).test(raw)),
+  programmes.join(","));
 
 section("the file name says which download this is");
 // Watched by dropping the date: four exports of the same board in a downloads folder are

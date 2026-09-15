@@ -98,11 +98,11 @@ export function MonthCalendar({ rows, expectedDaysByStage, onOpen }: {
     <div className="panel">
       <div className="panel-head">
         <Text type="text2" weight="bold">{monthLabel}</Text>
-        <div className="field-inline">
+        <div className="field-inline cal-head">
           <Text type="text3" color="secondary">
             grey = entered its stage · orange = due out (SLA)
           </Text>
-          <Button size="small" kind="tertiary" onClick={() => move(-1)} aria-label="Previous month">‹</Button>
+          <Button size="small" kind="tertiary" className="cal-nav" onClick={() => move(-1)} aria-label="Previous month">‹</Button>
           <Button
             size="small"
             kind="tertiary"
@@ -110,7 +110,7 @@ export function MonthCalendar({ rows, expectedDaysByStage, onOpen }: {
           >
             Today
           </Button>
-          <Button size="small" kind="tertiary" onClick={() => move(1)} aria-label="Next month">›</Button>
+          <Button size="small" kind="tertiary" className="cal-nav" onClick={() => move(1)} aria-label="Next month">›</Button>
         </div>
       </div>
 

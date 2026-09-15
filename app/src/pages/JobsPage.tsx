@@ -7,7 +7,12 @@ import {
 import {
   LINEAR_STAGES, PROJECT_TYPES, PROJECT_TYPE_LABELS, RECORD_STATUS_LABELS, RECORD_STATUSES
 } from "../data/types";
-import { useProcesses, usePropertyAccess, usePropertyDefs, useStages, useTeams, useTemplatePhases } from "../data/useLookups";
+import { useProcesses, usePropertyAccess, usePropertyDefs, usePropertyOptions, useStages, useTeams, useTemplatePhases } from "../data/useLookups";
+import { propertyColumnDefs } from "../data/propertyColumns";
+// The app already has one date formatter. A second one here would be a second way
+// to draw a date, which is exactly what the element sweep counts and refuses.
+import { fmtDate } from "../data/propertyFormat";
+
 import { useAuth } from "../data/AuthProvider";
 import { useBoardRecords, type BoardJob } from "../data/boardModel";
 import { jobMatchesQuery, matchedOnPreviousAddress, useSearch } from "../data/SearchProvider";
@@ -27,6 +32,7 @@ import {
 import { ExportMenu } from "../components/ExportMenu";
 import { tableFromFields, type ExportDocument } from "../data/export";
 import { Board } from "../components/Board";
+import { BoardColumn } from "../components/BoardColumn";
 import { JobsGantt } from "../components/JobsGantt";
 import { MonthCalendar } from "../components/MonthCalendar";
 import { useQuery, useRepository } from "../data/DataProvider";
@@ -40,8 +46,24 @@ import { readPrefs } from "../data/preferences";
 import { Token, token } from "../components/Token";
 import { Toolbar } from "../components/Toolbar";
 import { Problem, Result } from "../components/Form";
+import { PersonSelect } from "../components/PersonSelect";
 import { Select, toOptions } from "../components/Select";
 import "../components/ui.css";
+
+/**
+ * Why the calculated completion date is blank, in the cell where the date would be.
+ *
+ * Never "—". A blank here is not "no value", it is "nobody has estimated part of this
+ * job's pipeline yet", and those read identically in an empty cell while meaning
+ * completely different things. All 38 Pre-construction processes carry no estimate
+ * today, so this is what the column says on most jobs until the SLAs are filled in.
+ */
+function missingEstimates(j: BoardJob): string {
+  const n = j.calculatedCompletionMissing;
+  if (n == null) return "Not live";
+  if (n === 0) return "Not calculated";
+  return `No estimate on ${n} process${n === 1 ? "" : "es"}`;
+}
 
 /**
  * The jobs screen — one dataset, four views, the same toolbar over all of them.
@@ -55,12 +77,18 @@ import "../components/ui.css";
  * me what you are looking at" is a link rather than a list of instructions.
  */
 export function JobsPage() {
-  const { stages, stageNames } = useStages();
+  // `stages` (the full list, for the "across N stages" line) went with the subtitle on
+  // 12 September; the names are what the filters and the board still need.
+  const { stageNames } = useStages();
   const { teams, teamNames } = useTeams();
   // For the Process / Property filter chips (0077, 0078).
   const { processes } = useProcesses();
   const { propertyDefs } = usePropertyDefs();
   const { access: filterAccess } = usePropertyAccess();
+  // For the property columns: a select's labels, and a person-format value's name.
+  const { byProperty: optionsByProperty } = usePropertyOptions();
+  const { data: profiles } = useQuery(r => r.listProfiles(), []);
+  const people = useMemo(() => profiles.map(p => ({ id: p.id, name: p.fullName })), [profiles]);
   const { expectedDaysByStage } = useTemplatePhases();
   // No create state and no project list any more: nothing is created from this page, so
   // there is nothing to re-read after and no picker to feed. Both went with the New job
@@ -69,7 +97,7 @@ export function JobsPage() {
   // column rather than where the stale list left it — the same mechanism the create
   // dialogs use on the projects page.
   const [reloadKey, setReloadKey] = useState(0);
-  const { jobs: all, loading, error } = useBoardRecords(reloadKey);
+  const { jobs: all, projects: allProjects, loading, error } = useBoardRecords(reloadKey);
   const { can } = usePermission();
   const repo = useRepository();
 
@@ -209,6 +237,9 @@ export function JobsPage() {
       case "Process health": return PROCESS_HEALTH_FILTER_OPTIONS;
       case "Property": return propertyDefs.filter(d => d.isActive && filterAccess(d.key).canRead).map(d => ({ value: d.key, label: `${d.label} (${d.scope})` }));
       case "Recorded": return RECORDED_FILTER_OPTIONS;
+      // The board groups by project, so it filters by one too — number and address, so
+      // it can be found by either.
+      case "Project": return allProjects.map(p => ({ value: p.projectNumber, label: `${p.projectNumber} · ${p.currentAddress ?? "no address yet"}` }));
       default: return [];
     }
   };
@@ -239,7 +270,6 @@ export function JobsPage() {
     [jobKey]
   );
 
-  const { data: profiles } = useQuery(r => r.listProfiles(), []);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkNote, setBulkNote] = useState<{ ok: string | null; err: string | null }>({ ok: null, err: null });
@@ -430,7 +460,7 @@ export function JobsPage() {
   const jobColumnDefs = useMemo<ColumnDef<BoardJob>[]>(() => [
     // The job number cannot be turned off. A table of jobs with no job number in it is
     // a table nobody can act on; everything else is somebody's call.
-    { key: "job", label: "Job", fixed: true, className: "nowrap",
+    { key: "job", group: "Identity", label: "Job", fixed: true, className: "nowrap",
       sort: j => j.jobNumber,
       // "1042-01" breaking into "1042-" / "01" is unreadable as an identifier, and the
       // identifier is what this column is — hence `nowrap`.
@@ -438,12 +468,12 @@ export function JobsPage() {
     // Exported as text, not as the number it sorts on: a project number is an
     // identifier, and 1042 in a spreadsheet column of numbers invites somebody to
     // average it.
-    { key: "project", label: "Project", sort: j => Number(j.projectNumber),
+    { key: "project", group: "Identity", label: "Project", sort: j => Number(j.projectNumber),
       cell: j => j.projectNumber, text: j => j.projectNumber },
-    { key: "address", label: "Address", sort: j => j.currentAddress ?? null,
+    { key: "address", group: "Identity", label: "Address", sort: j => j.currentAddress ?? null,
       cell: j => j.currentAddress ?? <Token>addresses.consolidated_address</Token>,
       text: j => j.currentAddress ?? token("addresses.consolidated_address") },
-    { key: "type", label: "Type",
+    { key: "type", group: "Identity", label: "Type",
       sort: j => (j.projectType ? PROJECT_TYPE_LABELS[j.projectType] : null),
       cell: j => (j.projectType
         ? PROJECT_TYPE_LABELS[j.projectType]
@@ -453,25 +483,25 @@ export function JobsPage() {
         : token("job_display.project_type")) },
     // Pipeline position, not the alphabet — "Construction" before "Pre-construction"
     // alphabetically would be the lifecycle backwards.
-    { key: "stage", label: "Stage",
+    { key: "stage", group: "Programme", label: "Stage",
       sort: j => { const at = viewStages.indexOf(j.stage); return at === -1 ? null : at; },
       cell: j => j.stage, text: j => j.stage },
-    { key: "team", label: "Team", sort: j => j.team, cell: j => j.team, text: j => j.team },
+    { key: "team", group: "People", label: "Team", sort: j => j.team, cell: j => j.team, text: j => j.team },
     // The dash is for the screen only: a blank table cell reads as a rendering fault,
     // where a blank spreadsheet cell reads as "nobody", which is what it means.
-    { key: "assignee", label: "Assigned to", sort: j => j.assigneeName ?? null,
+    { key: "assignee", group: "People", label: "Assigned to", sort: j => j.assigneeName ?? null,
       cell: j => j.assigneeName ?? "—", text: j => j.assigneeName ?? null },
     // Off by default since 28 August, when it came off the cards for the same reason:
     // who typed a job in months ago is not what anybody scans a list for. Still here
     // for the person who does want it, which is what the picker is for.
-    { key: "createdBy", label: "Created by", offByDefault: true, className: "muted",
+    { key: "createdBy", group: "People", label: "Created by", offByDefault: true, className: "muted",
       sort: j => j.createdBy ?? null, cell: j => j.createdBy ?? "—",
       text: j => j.createdBy ?? null },
     // Same rule as the board's Process columns — one helper, so a job cannot be in the
     // "Working Drawings" column and read "Selections" here. Null is said as null: most
     // of these jobs were worked before the app existed, and an empty run list means the
     // app was not there, not that the job has done nothing.
-    { key: "process", label: "Up to",
+    { key: "process", group: "Programme", label: "Up to",
       sort: j => { const n = currentProcessName(j, processes); return n === null ? null : pipelineOrder.indexOf(n); },
       cell: j => {
         const name = currentProcessName(j, processes);
@@ -481,13 +511,47 @@ export function JobsPage() {
       // because the app was not there when the job was worked, which is worth saying in a
       // file rather than leaving as a blank that reads as "not checked".
       text: j => currentProcessName(j, processes) ?? "Nothing recorded" },
-    { key: "days", label: "Days in stage", className: "num",
+    { key: "days", group: "Programme", label: "Days in stage", className: "num",
       sort: j => j.daysInStage, cell: j => j.daysInStage, text: j => j.daysInStage },
+    /* The three dates, side by side, which is the whole reason the calculated one exists.
+       Amber, 14 September: *"management can look at targeted completion date (when they
+       want it to be done) versus the realistic calculated date based on slas and then the
+       actual date it was completed for process optimisation"*.
+
+       Columns rather than a seventh row in the drawer's Key properties: she settled on
+       11 September that those *"will always be those key 6"*, and comparing three dates
+       ACROSS jobs is a table's job anyway, not a drawer's.
+
+       Off by default. A column nobody asked for that is blank on every row today is worse
+       than one they turn on the day the SLAs are in. */
+    { key: "targetCompletion", group: "Programme", label: "Target completion", offByDefault: true,
+      sort: j => j.targetCompletion ?? null,
+      cell: j => j.targetCompletion ? fmtDate(j.targetCompletion) : <span className="muted">Not set</span>,
+      text: j => j.targetCompletion ? fmtDate(j.targetCompletion) : "Not set" },
+    { key: "calculatedCompletion", group: "Programme", label: "Calculated completion", offByDefault: true,
+      sort: j => j.calculatedCompletion ?? null,
+      /* Never a date it cannot stand behind. When the forecast is null the cell says how
+         many processes have no estimate, so an empty column reads as work to do rather
+         than as a feature that does not work. */
+      cell: j => j.calculatedCompletion
+        ? fmtDate(j.calculatedCompletion)
+        : <span className="muted">{missingEstimates(j)}</span>,
+      text: j => j.calculatedCompletion ? fmtDate(j.calculatedCompletion) : missingEstimates(j) },
+    { key: "endDate", group: "Programme", label: "Actually completed", offByDefault: true,
+      sort: j => j.endDate ?? null,
+      cell: j => j.endDate ? fmtDate(j.endDate) : <span className="muted">Not finished</span>,
+      text: j => j.endDate ? fmtDate(j.endDate) : "Not finished" },
     // The pill has no text in it at all — this column is the reason `text` is
     // required rather than derived from the cell.
-    { key: "status", label: "Status", sort: j => RECORD_STATUS_LABELS[j.status],
-      cell: j => <StatusPill status={j.status} />, text: j => RECORD_STATUS_LABELS[j.status] }
-  ], [viewStages, processes, pipelineOrder]);
+    { key: "status", group: "Programme", label: "Status", sort: j => RECORD_STATUS_LABELS[j.status],
+      cell: j => <StatusPill status={j.status} />, text: j => RECORD_STATUS_LABELS[j.status] },
+    // Every property the reader may see, job's own and the project's it inherits — off
+    // until asked for, in the picker (Amber, 7 Sep). See data/propertyColumns.tsx.
+    ...propertyColumnDefs<BoardJob>({
+      defs: propertyDefs, scopes: ["job", "project"], canRead: k => filterAccess(k).canRead,
+      optionsByProperty, people, labelScope: true
+    })
+  ], [viewStages, processes, pipelineOrder, propertyDefs, filterAccess, optionsByProperty, people]);
 
   const jobLayout = useColumnLayout("jobs", jobColumnDefs);
 
@@ -570,15 +634,12 @@ export function JobsPage() {
 
   return (
     <>
+      {/* No line under the heading. Amber, 12 September: *"on all pages remove
+          descriptive line text under page header … we need the most above the fold
+          possible"*. The count this line carried is said again by the
+          toolbar — "Showing 3 of 3 jobs" — and the view's name by the tab under it. */}
       <div className="page-head">
         <Heading type="h2" weight="bold">Jobs</Heading>
-        <Text type="text2" color="secondary">
-          {loading
-            ? "Loading…"
-            : saved.stages.length === 0
-              ? `${all.length} job${all.length === 1 ? "" : "s"} across ${stages.length} stages`
-              : `${inView.length} of ${all.length} jobs · ${saved.label}, ${viewStages.length} of ${stages.length} stages`}
-        </Text>
       </div>
 
       <SavedViewTabs
@@ -620,6 +681,10 @@ export function JobsPage() {
         filters={filters}
         onFiltersChange={setFilters}
         optionsFor={optionsFor}
+        /* The same fields as Group by (Amber, 7 Sep). Team member is deliberately not a
+           filter: the Team filter matches membership (26 Aug). */
+        primary={["Stage", "Team", "Status", "Process"]}
+        advanced={["Number", "Project", "Type", "Date", "Process health", "Property", "Recorded"]}
         count={`Showing ${rows.length} of ${inView.length} jobs`}
         actions={
           <>
@@ -688,10 +753,32 @@ export function JobsPage() {
       {view === "Board" && !noMatches && !loading && all.length > 0 && (
         <Board>
           {groups.map((g, gi) => (
-            <section
-              className="board-column"
+            <BoardColumn
+              board="jobs"
               key={g.key}
-              style={accentStyle(columnAccent(grouping, g.key, gi))}
+              name={g.key}
+              grouping={grouping}
+              count={g.jobs.length}
+              empty="No jobs"
+              accent={accentStyle(columnAccent(grouping, g.key, gi))}
+              /* The Jobs board is the one column head that does more than read: drilling
+                 into a stage turns the columns into that stage's processes. */
+              head={grouping === "Stage" ? (
+                <button
+                  type="button"
+                  className="board-col-drill"
+                  title={`Open ${g.key} as its processes, each job in the one it is up to`}
+                  onClick={() =>
+                    setMany({
+                      grouping: "Process",
+                      filters: [...filters.filter(f => f.field !== "Stage"), { field: "Stage", value: g.key }]
+                    })
+                  }
+                >
+                  <Text type="text3" color="secondary">{grouping}</Text>
+                  <Text type="text2" weight="medium">{g.key} ›</Text>
+                </button>
+              ) : undefined}
               /**
                * Why the refusal is explained on ENTER rather than on drop.
                *
@@ -724,52 +811,7 @@ export function JobsPage() {
                 else askProcessMove([job], g.key);
               }}
             >
-              <div className="board-column-head">
-                {/* Drill-down (G8), as navigation rather than a page of its own: filter
-                    to the stage, regroup, and put both in the URL like everything else.
-                    
-                    It regrouped by TEAM, which answered "who holds what inside this
-                    phase". Amber asked for the other question — "how do i see the
-                    processes in the jobs view, eg what process a job is up to" — and
-                    showed the prototype's answer: drilling into a stage turned the
-                    columns into that stage's steps, with each job in the one it had
-                    reached. That is what this does now, for every stage rather than the
-                    one the prototype hardcoded. Team is still a click away in Group by. */}
-                {grouping === "Stage" ? (
-                  <button
-                    type="button"
-                    className="board-col-drill"
-                    title={`Open ${g.key} as its processes, each job in the one it is up to`}
-                    onClick={() =>
-                      setMany({
-                        grouping: "Process",
-                        filters: [...filters.filter(f => f.field !== "Stage"), { field: "Stage", value: g.key }]
-                      })
-                    }
-                  >
-                    <Text type="text3" color="secondary">{grouping}</Text>
-                    <Text type="text2" weight="medium">{g.key} ›</Text>
-                  </button>
-                ) : grouping === "None" ? (
-                  // Ungrouped: one column, and naming it "None" would be a heading that
-                  // says nothing. The count still shows, because how many is still news.
-                  <div><Text type="text3" color="secondary">All jobs</Text></div>
-                ) : (
-                  <div>
-                    <Text type="text3" color="secondary">{grouping}</Text>
-                    <Text type="text2" weight="medium">{g.key}</Text>
-                  </div>
-                )}
-                {/* Ink-on-tint, per the accent rule — the one place the column's colour
-                    repeats, so the chip and the strip read as one system. */}
-                <span className="col-count">{g.jobs.length}</span>
-              </div>
-
-              {g.jobs.length === 0 ? (
-                <div className="board-column-empty">
-                  <Text type="text3" color="secondary">No jobs</Text>
-                </div>
-              ) : (
+              {(
                 g.jobs.map(j => (
                   <div
                     key={j.jobNumber}
@@ -812,7 +854,7 @@ export function JobsPage() {
                   </div>
                 ))
               )}
-            </section>
+            </BoardColumn>
           ))}
         </Board>
       )}
@@ -864,21 +906,26 @@ export function JobsPage() {
                     if (v) bulkApply("moved to the team", selectedJobs, j => repo.updateJob(j.jobNumber, { owningTeam: v as TeamId }));
                   }}
                 />
-                <Select
+                <PersonSelect
                   aria-label="Assign the selected jobs to a person"
                   placeholder="Assign to…"
-                  options={[
-                    { value: "— nobody —", label: "— nobody —" },
-                    ...profiles.map(p => ({ value: p.id, label: p.fullName }))
-                  ]}
+                  clearable={false}
                   value={null}
                   onChange={v => {
                     if (!v) return;
-                    const id = v === "— nobody —" ? null : v;
-                    bulkApply(id ? "assigned" : "unassigned", selectedJobs,
-                      j => repo.updateJob(j.jobNumber, { assigneeId: id }));
+                    bulkApply("assigned", selectedJobs,
+                      j => repo.updateJob(j.jobNumber, { assigneeId: v }));
                   }}
                 />
+                <Button
+                  size="small"
+                  kind="tertiary"
+                  disabled={selectedJobs.every(j => !j.assigneeId)}
+                  onClick={() => bulkApply("unassigned", selectedJobs,
+                    j => repo.updateJob(j.jobNumber, { assigneeId: null }))}
+                >
+                  Unassign
+                </Button>
               </div>
               {bulkBusy && <Text type="text3" color="secondary">Saving…</Text>}
               {bulkNote.ok && <Result>{bulkNote.ok}</Result>}

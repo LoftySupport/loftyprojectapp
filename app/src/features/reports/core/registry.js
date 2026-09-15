@@ -24,7 +24,9 @@
 // Settings field:
 //   { key, type, label, hint?, options?, visible?(options, ctx), ... }
 //   type: 'text' | 'textarea' | 'richtext' | 'number' | 'checkbox'
-//       | 'select' | 'multiselect' | 'table'
+//       | 'select' | 'multiselect' | 'table' | 'image'
+//   'image' offers a file picker and a drop target as well as a URL box, and only when
+//   the host provides ctx.uploadImage(file) => Promise<url>. It stores a URL either way.
 //   `options` is an array of { value, label } or a function (ctx) => that.
 //   `visible` hides a field until another option makes it relevant.
 
@@ -68,22 +70,46 @@ export const CORE_WIDGETS = {
     hint: 'Free-form rich text: summaries, recommendations, context',
     defaults: () => ({ html: '' }),
     settings: [{ key: 'html', type: 'richtext', label: 'Content' }],
-    resolve: (o, ctx, h) => (isEmptyHtml(o?.html)
-      ? (h.forExport ? [] : [helpers.info('Empty text block. Select it and start typing.')])
-      : [{ type: 'richText', html: o.html }]),
+    /**
+     * PLACEHOLDERS, WITHOUT THIS MODULE KNOWING WHAT ONE IS.
+     *
+     * `ctx.fillTokens` is supplied by the host, the same way `ctx.expandSection` is. It
+     * takes the html and gives back html; everything about WHICH tokens exist and what
+     * they resolve to belongs to the app, because a token is a name for one of that
+     * app's own fields. This package would be wrong to have an opinion about it.
+     *
+     * `forExport` is passed through so the host can render an unfilled placeholder one
+     * way on the canvas, where it is a thing to go and fix, and another in a document
+     * somebody is about to send.
+     */
+    resolve: (o, ctx, h) => {
+      if (isEmptyHtml(o?.html)) {
+        return h.forExport ? [] : [helpers.info('Empty text block. Select it and start typing.')];
+      }
+      const html = typeof ctx?.fillTokens === 'function'
+        ? ctx.fillTokens(o.html, { forExport: !!h.forExport })
+        : o.html;
+      return [{ type: 'richText', html }];
+    },
   },
 
   image: {
     label: 'Image',
     group: TEXT_GROUP,
-    hint: 'Image from a URL: logo, screenshot, diagram',
+    hint: 'A picture: logo, site photo, screenshot, diagram',
     defaults: () => ({ url: '', caption: '' }),
     settings: [
-      { key: 'url', type: 'text', label: 'Image URL', placeholder: 'https://…' },
+      /**
+       * `image` rather than `text`, which is what makes the control offer an upload —
+       * but only when the host supplies `ctx.uploadImage`. Without it the field renders
+       * as the URL box it has always been, so a host with nowhere to put a file is not
+       * shown a button that cannot work.
+       */
+      { key: 'url', type: 'image', label: 'Image', placeholder: 'https://…' },
       { key: 'caption', type: 'text', label: 'Caption' },
     ],
     resolve: (o, ctx, h) => (!o?.url
-      ? (h.forExport ? [] : [helpers.info('Set an image URL in this block’s settings.')])
+      ? (h.forExport ? [] : [helpers.info('No image yet. Select this block and drop one in, or paste a URL.')])
       : [{ type: 'image', src: o.url, caption: o.caption || '' }]),
   },
 
@@ -94,10 +120,22 @@ export const CORE_WIDGETS = {
     defaults: () => ({ headers: ['Column 1', 'Column 2'], rows: [['', ''], ['', '']] }),
     settings: [{ key: 'rows', type: 'table', label: 'Table contents' }],
     compactable: true,
-    resolve: (o) => {
-      const headers = o?.headers?.length ? o.headers : ['Column 1'];
-      const rows = (o?.rows || []).map(r => headers.map((_, i) => r?.[i] ?? ''));
-      return [{ type: 'table', headers, rows }];
+    // PLACEHOLDERS IN CELLS, on the same terms as the text widget above: the module
+    // does not know what a token is, only that a host may offer `ctx.fillTextTokens`.
+    // A separate hook from `fillTokens` because a cell is text and that one produces
+    // html — see the note on makeFillTextTokens in the Lofty adapter.
+    //
+    // Headers as well as cells. "Approved on {{planning_approval_date}}" is as likely to
+    // be a column title as a value, and a hook that filled one and not the other would
+    // be a rule nobody could remember.
+    resolve: (o, ctx) => {
+      const fill = typeof ctx?.fillTextTokens === 'function' ? ctx.fillTextTokens : (v) => v;
+      // The stored headers decide how many columns each row has, so they are counted
+      // before they are filled — a placeholder in a header must not change the shape of
+      // the table it titles.
+      const cols = o?.headers?.length ? o.headers : ['Column 1'];
+      const rows = (o?.rows || []).map(r => cols.map((_, i) => fill(r?.[i] ?? '')));
+      return [{ type: 'table', headers: cols.map(fill), rows }];
     },
   },
 

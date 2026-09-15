@@ -15,7 +15,11 @@ on conflict (profile_email) do nothing;
 -- locality". The guard was right; the fixture was the thing that was wrong.
 insert into addresses (address_lot_number, address_street_1, address_suburb,
                        address_postcode, address_council, address_created_by)
-select 'Lot 3','Corner Street','Golden Grove','5125','City of Tea Tree Gully', profile_id from profiles where profile_email='behaviour-test@lofty.com.au';
+-- 3, not 'Lot 3'. This fixture typed the label until 0106 made `address_lot_number` an
+-- integer — Amber, 10 Sep: "a lot number or res number is only a number" — and the cast
+-- happens when the INSERT is parsed, before any trigger could strip it. The tolerance
+-- moved to the app, where input tolerance belongs; the refusal is asserted at step 36.
+select 3,'Corner Street','Golden Grove','5125','City of Tea Tree Gully', profile_id from profiles where profile_email='behaviour-test@lofty.com.au';
 
 \echo '--- 1. consolidated address includes lot number and postcode'
 select address_consolidated from addresses where address_street_1 = 'Corner Street';
@@ -298,6 +302,55 @@ select d.document_name,
 from documents d join document_links l using (document_id)
 where d.document_name like 'Soil report%' group by d.document_name;
 
+\echo '--- 30b. a document can be a URL, and one URL is one document (0103)'
+-- The other shape of document row: no bytes in Storage, an https address instead.
+insert into documents (document_name, document_category, document_url)
+values ('Contract — 9106','contract','https://lofty.sharepoint.com/sites/projects/9106/contract.pdf');
+insert into document_links (document_id, project_id)
+select document_id, 9106 from documents where document_name = 'Contract — 9106';
+
+-- Filing the SAME address against the job as well is a second ATTACHMENT rather than a
+-- second document. That is the whole premise of "held once" and it is what the unique
+-- index on the URL enforces — without it, filing the project's contract on its job would
+-- make two rows that then disagree about the name the day somebody corrects one.
+insert into document_links (document_id, job_id)
+select document_id, '9106-002' from documents where document_name = 'Contract — 9106';
+select case when count(*) = 1 then 'ok  one SharePoint address is one document, on two records'
+  else 'FAIL: ' || count(*) || ' document rows for one URL' end
+from documents where document_url like '%9106/contract.pdf';
+
+\echo '--- 30c. the reaper: a pointer goes with its last link, an upload does not'
+-- Off the job. It is still on the project, so nothing should be reaped — the probe that
+-- stops the reaper passing its own test by deleting on every detach.
+delete from document_links l using documents d
+ where l.document_id = d.document_id and d.document_name = 'Contract — 9106' and l.job_id = '9106-002';
+select case when count(*) = 1 then 'ok  a pointer survives a detach while a link is left'
+  else 'FAIL: a pointer was reaped while another link still pointed at it' end
+from documents where document_name = 'Contract — 9106';
+
+-- Off the project too. That was the last one, and a pointer nothing points at is
+-- reachable from nowhere — nobody below admin could list it, open it or remove it.
+delete from document_links l using documents d
+ where l.document_id = d.document_id and d.document_name = 'Contract — 9106';
+select case when count(*) = 0 then 'ok  a pointer is reaped when its last link goes'
+  else 'FAIL: an unreachable pointer survived losing every link' end
+from documents where document_name = 'Contract — 9106';
+
+-- And the soil report, which HAS a storage path, does not go: 0032's rule that detaching
+-- is not deleting. This is the half that makes the reaper's guard mean something —
+-- without it the reaper would pass the probe above by deleting everything.
+--
+-- INSIDE a transaction that rolls back, for the reason the report_documents block at the
+-- foot of this file records at length: a check that destroys the fixture the next check
+-- needs turns one assertion into a page of false alarms.
+begin;
+delete from document_links l using documents d
+ where l.document_id = d.document_id and d.document_name like 'Soil report%';
+select case when count(*) = 1 then 'ok  an uploaded document survives losing every link'
+  else 'FAIL: an upload was reaped when it was merely detached' end
+from documents where document_name like 'Soil report%';
+rollback;
+
 \echo '--- 31. superseding a drawing: the chain says which is current'
 insert into documents (document_name, document_category) values ('Working drawing rev A','drawing');
 insert into documents (document_name, document_category, document_supersedes_id)
@@ -366,35 +419,62 @@ order by login_activity_event_type;
 --
 -- 0034 asserts this too, at the moment it changes the function. This asserts it of the
 -- FINAL state, which is the version that survives somebody editing the function again.
+-- Rewritten for 0105 and 0106, which changed the format and two of the three types:
+--   * `Res N, ` leads when there is one, after the unit line — Amber's worked example,
+--     "Res 1, Lot 3, 13 Tester Street, Testville, SA, 5000";
+--   * the tail is comma-separated, "Golden Grove, SA, 5125", not "Golden Grove SA 5125";
+--   * ", AU" is gone — every address here is Australian and her example has no country;
+--   * the lot number is an INTEGER, so the typed "Lot 4" this fixture used to carry is
+--     no longer a thing the table can hold. It is asserted below as a REFUSAL instead,
+--     which is the stronger statement: the old row proved the trigger stripped a label,
+--     this proves the column cannot be talked into taking one.
 begin;
-insert into addresses (address_lot_number, address_street_number, address_street_2,
-                       address_street_1, address_suburb, address_state,
+insert into addresses (address_res_number, address_lot_number, address_street_number,
+                       address_street_2, address_street_1, address_suburb, address_state,
                        address_postcode, address_council)
 -- Ironbark Road, not Corner Street: step 1 already put a fixture on Corner Street, and
 -- an assertion that sweeps up rows it did not create tells you about the wrong thing.
--- "Lot 3" typed with its label is in here on purpose — that is how people enter it, and
--- prefixing a value that already says Lot produced "Lot Lot 3".
-values ('1',     null, null,     'Ironbark Road', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully'),
-       (null,   '28',  null,     'Ironbark Road', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully'),
-       ('3',    '28',  null,     'Ironbark Road', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully'),
-       ('Lot 4', null, null,     'Ironbark Road', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully'),
-       ('3',    '28',  'Unit 2', 'Ironbark Road', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully');
+values (null, 1,    null, null,     'Ironbark Road', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully'),
+       (null, null, '28', null,     'Ironbark Road', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully'),
+       (null, 3,    '28', null,     'Ironbark Road', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully'),
+       (1,    3,    '28', null,     'Ironbark Road', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully'),
+       (null, 3,    '28', 'Unit 2', 'Ironbark Road', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully');
 
+-- `collate "C"` on the ordering, not the database's own: the expected array below is
+-- written in byte order, and a locale that sorts punctuation differently would fail this
+-- for a reason that has nothing to do with addresses.
 select case
-  when array_agg(address_consolidated order by address_consolidated) =
+  when array_agg(address_consolidated order by address_consolidated collate "C") =
        array[
-         '28 Ironbark Road, Golden Grove SA 5125, AU',
-         'Lot 1, Ironbark Road, Golden Grove SA 5125, AU',
-         'Lot 3, 28 Ironbark Road, Golden Grove SA 5125, AU',
-         'Lot 4, Ironbark Road, Golden Grove SA 5125, AU',
-         'Unit 2, Lot 3, 28 Ironbark Road, Golden Grove SA 5125, AU'
+         '28 Ironbark Road, Golden Grove, SA, 5125',
+         'Lot 1, Ironbark Road, Golden Grove, SA, 5125',
+         'Lot 3, 28 Ironbark Road, Golden Grove, SA, 5125',
+         'Res 1, Lot 3, 28 Ironbark Road, Golden Grove, SA, 5125',
+         'Unit 2, Lot 3, 28 Ironbark Road, Golden Grove, SA, 5125'
        ]
-  then 'ok  lot, street, both, unit and a typed "Lot 4" all render distinguishably'
+  then 'ok  lot, street, both, a res number and a unit all render distinguishably'
   else 'FAIL: consolidated address format — ' ||
-       array_to_string(array_agg(address_consolidated order by address_consolidated), ' / ')
+       array_to_string(array_agg(address_consolidated order by address_consolidated collate "C"), ' / ')
 end
 from addresses
 where address_street_1 = 'Ironbark Road';
+
+-- And the negative 0106 is for. Without it this step would pass just as happily with the
+-- lot number still text, which is how "2B is a lot number" survived from August.
+do $$
+begin
+  begin
+    insert into addresses (address_lot_number, address_street_1, address_suburb,
+                           address_state, address_postcode, address_council)
+    values ('Lot 4', 'Ironbark Road', 'Golden Grove', 'SA', '5125', 'City of Tea Tree Gully');
+    raise warning 'FAIL: the lot number accepted "Lot 4" — the column is not an integer';
+  exception
+    when invalid_text_representation then
+      raise notice 'ok  a lot number with a label in it is refused by the column';
+    when others then
+      raise warning 'FAIL: unexpected on the typed lot number (%)', sqlerrm;
+  end;
+end $$;
 rollback;
 
 \echo '--- 37. a project follows its slowest job, and only forwards'
@@ -553,21 +633,40 @@ rollback;
 --
 -- Written as one assertion over pg_class rather than a probe per view, so a view added
 -- next month is covered without anybody remembering to extend this.
+--
+-- 14 September: this asked the WRONG QUESTION for eleven days. It matched the substring
+-- `security_invoker=` in reloptions, which tests that the option is PRESENT and says
+-- nothing about its value — so a view created `with (security_invoker = false)` carries
+-- `{security_invoker=false}`, contains the substring, and sailed through the one check
+-- written to catch exactly that. Watched: a probe view with the protection deliberately
+-- turned off was reported `ok  every view in public sets security_invoker`.
+--
+-- Postgres also stores the spelling you wrote rather than a normalised value, and this
+-- schema uses both — `{security_invoker=on}` on two views, `{security_invoker=true}` on
+-- nineteen. Any comparison against one literal marks the other as a hole. So the option
+-- is read through pg_options_to_table and CAST TO BOOLEAN, which is how Postgres itself
+-- reads it: `on`, `true`, `yes` and `1` all mean the same thing to the server and must
+-- mean the same thing here.
+--
+-- `is not true` rather than `= false`: a view with no option at all yields NULL from the
+-- subquery, and that is the original 0055 failure — it must fail, not disappear.
 -- ============================================================================
 select case
   when not exists (
     select 1 from pg_class c
     join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'public' and c.relkind = 'v'
-      and coalesce(array_to_string(c.reloptions, ','), '') not like '%security_invoker=%'
+      and coalesce((select option_value::boolean from pg_options_to_table(c.reloptions)
+                    where option_name = 'security_invoker'), false) is not true
   )
-  then 'ok  every view in public sets security_invoker'
+  then 'ok  every view in public runs as its caller, not as its owner'
   else 'FAIL: view(s) executing as owner, past every policy underneath: ' || (
     select string_agg(c.relname, ', ' order by c.relname)
     from pg_class c
     join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'public' and c.relkind = 'v'
-      and coalesce(array_to_string(c.reloptions, ','), '') not like '%security_invoker=%'
+      and coalesce((select option_value::boolean from pg_options_to_table(c.reloptions)
+                    where option_name = 'security_invoker'), false) is not true
   )
 end;
 

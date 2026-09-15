@@ -3,8 +3,13 @@ import type {
   ActivityEntry,
   AddressHistoryEntry,
   CloneOptions,
+  NewDocumentUrl,
+  Doc,
+  RecordDocument,
   NewReportDocument,
   NewReportDocumentShare,
+  RecentDocument,
+  SearchHit,
   NewReportTemplate,
   ReportDocument,
   ReportDocumentPatch,
@@ -31,9 +36,11 @@ import type {
   NewProject,
   NewAddress,
   NewPropertyDef,
+  PinnedPage,
   Profile,
   Project,
   ProjectPatch,
+  RailCounts,
   RecordActivity,
   LatestUpdate,
   StagePeriod,
@@ -134,6 +141,50 @@ export interface Repository {
   listJobs(opts?: { projectId?: string }): Promise<Job[]>;
   getJob(id: string): Promise<Job | null>;
 
+  /**
+   * The three numbers on the navigation rail, in one read.
+   *
+   * It exists because the rail is on every screen and nothing else on the page can
+   * supply them. Every other count in this app comes out of a list the screen had
+   * already loaded — the board counts its own rows — and the rail has no list: it draws
+   * beside the Contacts page as readily as beside Jobs.
+   *
+   * **Three counts, one round trip, and never the rows.** Each is a `head: true` count,
+   * so Postgres answers with a number and sends no data; three of those cost less than
+   * one `listJobs()`, which is the alternative and would pull every job on every
+   * navigation to put one integer in a badge.
+   *
+   * RLS still applies — a count is a SELECT — so the number is what the person asking
+   * may see, which is the only number worth showing them.
+   */
+  railCounts(): Promise<RailCounts>;
+
+  // ---- the rail's Pinned section (0112) ----------------------------------
+  /**
+   * The five pages this person has bookmarked, in slot order.
+   *
+   * Amber, 11 September: *"pinned is new and allows people to save/bookmark a page"* —
+   * any page, a URL with a name. Private by RLS, so this returns the caller's own and
+   * there is no parameter for whose.
+   */
+  listMyPins(): Promise<PinnedPage[]>;
+
+  /**
+   * Bookmark a page into the first free slot, and hand back the whole list.
+   *
+   * The list rather than the row, for the reason `saveView` returns one: the database is
+   * the authority on what exists, and a list assembled in the component would be a second
+   * answer that can disagree with it after a refusal.
+   *
+   * **Five is the database's rule, not this method's.** `pinned_page_position` is CHECKed
+   * to 1..5 and UNIQUE per person, so a sixth pin has nowhere to go — a count here would
+   * be a courtesy that two browser tabs could both pass.
+   */
+  pinPage(label: string, url: string): Promise<PinnedPage[]>;
+
+  /** Take a bookmark off the rail. Returns the list that is left. */
+  unpinPage(id: string): Promise<PinnedPage[]>;
+
   listProfiles(): Promise<Profile[]>;
   currentProfile(): Promise<Profile | null>;
   getProfile(id: string): Promise<Profile | null>;
@@ -156,7 +207,7 @@ export interface Repository {
    * "latest update". Exactly one of the two refs, matching the CHECK on `comments`.
    */
   listComments(
-    ref: { projectId?: number; jobId?: string; feedbackId?: string },
+    ref: { projectId?: number; jobId?: string; feedbackId?: string; maintenanceRequestId?: string },
     limit?: number
   ): Promise<CommentEntry[]>;
 
@@ -174,7 +225,7 @@ export interface Repository {
    * in `comment_mentions`, which is what the bell reads.
    */
   addComment(
-    ref: { projectId?: number; jobId?: string; feedbackId?: string },
+    ref: { projectId?: number; jobId?: string; feedbackId?: string; maintenanceRequestId?: string },
     body: string,
     mentions?: string[],
     /**
@@ -282,6 +333,22 @@ export interface Repository {
    */
   setProjectCurrentAddress(id: number, address: NewAddress): Promise<Project>;
 
+  /**
+   * The same for a job — Amber, 10 September: *"A project address needs to be
+   * updatable. A Job address needs to be updatable."*
+   *
+   * Only the project half existed. A job's address could be set at creation and never
+   * changed after it, which is the wrong way round: a job's address is the one that
+   * moves, from "Lot 3" to "13 Tester Street" when titles issue, and it is where a res
+   * number is added months into a build.
+   *
+   * Same rules as the project's, and they come from the database rather than from
+   * here: `guard_original_address` leaves the original alone, the `0042` trigger files
+   * the outgoing current address in `address_history`, and
+   * `guard_job_address_is_a_street` refuses to leave a job at a locality.
+   */
+  setJobCurrentAddress(jobNumber: string, address: NewAddress): Promise<Job>;
+
   /** Every address a record has had and when it stopped applying. Newest first. */
   listAddressHistory(ref: { projectId?: number; jobId?: string }): Promise<AddressHistoryEntry[]>;
 
@@ -352,7 +419,7 @@ export interface Repository {
    * admin-only, and this panel would have rendered empty for almost everybody while
    * looking right to whoever built it.
    */
-  listRecordActivity(opts: { projectId?: number; jobId?: string; limit?: number }): Promise<RecordActivity[]>;
+  listRecordActivity(opts: { projectId?: number; jobId?: string; maintenanceRequestId?: string; limit?: number }): Promise<RecordActivity[]>;
 
   /**
    * The newest comment on each of these jobs, keyed by job number (0059).
@@ -381,14 +448,22 @@ export interface Repository {
 
   // ---- tasks (built in Phase A, wired now) -------------------------------
   /**
-   * What has to be done on one job or one project, in order.
+   * What has to be done — on one job or one project, in order; or across every record
+   * at once, for the Tasks board (0102).
    *
-   * The `tasks` table has existed since the first migration and no screen has ever read
-   * it — name, description, owning team, assignee, status, due date, sub-tasks, and a
-   * completion the database stamps. Empty until somebody adds one, which is a different
-   * statement from "not built" and is what the empty state says.
+   * Exactly one of five scopes, never none: a job, a project, an assignee, a team, or
+   * `all` said explicitly. Asking with nothing would quietly return every task in the
+   * company — fine for the board's "All tasks" tab, which is why it exists, but not a
+   * thing any caller should reach by omission.
    */
-  listTasks(opts: { jobId?: string; projectId?: number }): Promise<TaskEntry[]>;
+  listTasks(opts: {
+    jobId?: string; projectId?: number; assigneeId?: string; teams?: TeamId[]; all?: boolean;
+    /**
+     * The tasks on one maintenance issue (0120). Narrows within a job rather than replacing
+     * it: a maintenance task keeps its `jobId`, which is what puts it on the board.
+     */
+    maintenanceRequestId?: string;
+  }): Promise<TaskEntry[]>;
 
   /**
    * Add one. Only the name is required — a checklist that demands six fields per line
@@ -535,6 +610,12 @@ export interface Repository {
 
   /** Plan a request into a roadmap phase, or take it out of one. Admin+, by policy. */
   setFeedbackPhase(id: string, phaseId: string | null): Promise<FeedbackItem[]>;
+  /**
+   * Re-file a request as a bug or as an idea (Amber, 7 Sep: "you can't change an idea to
+   * a bug in updates"). Admin's, under the same UPDATE policy as the phase — the kind is
+   * a triage judgement, and the person who filed it is the one most often wrong about it.
+   */
+  setFeedbackKind(id: string, kind: FeedbackKind): Promise<FeedbackItem[]>;
 
   /**
    * Thumbs up, or take it back. One per person per request, and the primary key on
@@ -588,6 +669,31 @@ export interface Repository {
    * than a broken image.
    */
   attachmentUrl(path: string): Promise<string | null>;
+
+  /**
+   * Put an image in the report-images bucket and give back the URL to render it by.
+   *
+   * A PERMANENT PUBLIC URL, and that is the decision rather than an accident. Amber,
+   * 7 September, after the alternative was put to her: *"upload to public bucket that
+   * stores in the document only"*. The alternative was a signed URL written into the
+   * share snapshot with the link's own expiry, so revoking a shared document revoked its
+   * pictures. **The consequence of the choice made: an image in a shared document stays
+   * fetchable after the link expires.** `0100` records why that was accepted.
+   *
+   * Contrast `attachmentUrl` above, which signs every read because that bucket is
+   * private. These two are the app's only two storage paths and they behave oppositely
+   * on purpose; neither is the pattern to copy without reading which is which.
+   *
+   * `owner` says which record the file is filed under — the object path becomes
+   * `documents/<id>/…` or `library/<id>/…`. That is for auditing and prefix-listing only.
+   * **The document's layout is the record of what images it carries**, which is what
+   * "stores in the document only" means: there is no attachments table here, because the
+   * block already holds the URL and a second copy of that fact could disagree with it.
+   */
+  uploadReportImage(input: {
+    file: File;
+    owner: { kind: "document" | "library"; id: Uuid };
+  }): Promise<string>;
 
   // ---- the roadmap (0063) -------------------------------------------------
   /** The phases, in their stored order. Everybody reads; superadmin writes. */
@@ -800,6 +906,180 @@ export interface Repository {
   shareReportDocument(id: string, input: NewReportDocumentShare): Promise<ReportDocument>;
   /** Revoke the link. The snapshot survives, so "what did we send them" does too. */
   unshareReportDocument(id: string): Promise<ReportDocument>;
+  /**
+   * Send a built document somewhere, and stop it being a draft (0104).
+   *
+   * Amber, 10 September: *"as soon as it is ready to share or publish it, you choose the
+   * sharepoint location to save it to (which should default to job file) … until
+   * integration is in place add in the draft watermark and when ready to publish you have
+   * to add in the sharepoint link which replaces the draft document"*.
+   *
+   * TWO WAYS, AND AT LEAST ONE OF THEM (0110). Amber, 10 September, once 0104 had shipped:
+   * *"until Documents are integrated to Sharepoint, please allow the option of saving to
+   * Job in the system and/or downloading it and adding a link to that document file"*.
+   *
+   *   `url`  — where it went, outside Lofty. Records a fact rather than performing a
+   *            transfer: somebody has saved the file into SharePoint themselves and is
+   *            writing down where. This is the shape the integration will keep.
+   *   `file` — the file itself, saved against the record. Uploaded to the `job-documents`
+   *            bucket, filed in `documents` and attached to the job or project this
+   *            document is about, so it lands in that record's Documents list beside
+   *            everything else rather than in a place of its own.
+   *
+   * Both is an ordinary state, not a contradiction: the copy saved on the job IS what was
+   * sent, and the SharePoint address is where the version people edit lives. Neither is
+   * refused — by this method and, underneath it, by constraint.
+   *
+   * `file` needs the document to be about a job or a project. A portfolio report is about
+   * the whole book of work and there is no record to file a copy against, so the control
+   * says so rather than offering a button that fails.
+   *
+   * THERE IS NO `unpublish`. Editing the document is what takes the publication back, and
+   * the database does it (0104's trigger) rather than the caller: the builder autosaves,
+   * the panel writes and the importer writes, and a rule each of them has to remember is
+   * a rule the next one will forget.
+   *
+   * ONE COPY, NOT A HISTORY (0111). Amber, 10 September: *"only onver version of the
+   * document. if they want another copy they can download it"* — so a `file` given here
+   * REPLACES the copy the previous publish saved on the record, rather than adding one
+   * beside it. The database does the replacing, not this method: a trigger, for the same
+   * reason the revert is one. The exception is a copy somebody has since filed on another
+   * record, which is left where they put it and only unpointed.
+   *
+   * Nor is there an unpublish hiding in the file's deletion. Deleting the saved copy takes
+   * the publication back only when it was the ONLY answer to "where did it go" (0110's
+   * trigger) — a document that also went to SharePoint stays published, because the copy
+   * people were sent is still where it was sent.
+   */
+  publishReportDocument(
+    id: string,
+    input: { url?: string | null; file?: File | null }
+  ): Promise<ReportDocument>;
+
+  /**
+   * A link to open a file Lofty itself holds for a record (0110).
+   *
+   * Every `documents` row with a `storagePath` rather than a URL — which today means the
+   * copies saved when a document is published to the job, and will mean whatever the
+   * import brings.
+   *
+   * Signed and short-lived: `job-documents` is private, so there is no permanent URL to
+   * hold and every read is asked for at the moment somebody clicks. Null when storage
+   * refuses — the row then says the copy is gone rather than offering a link that opens
+   * on an error page.
+   *
+   * The same shape as `attachmentUrl`, and deliberately NOT `uploadReportImage`'s
+   * permanent public URL. Which of those two a bucket gets is a decision per bucket, and
+   * this one holds contracts.
+   */
+  jobDocumentUrl(path: string): Promise<string | null>;
+
+  /**
+   * How to read ONE document, whichever bucket it turned out to be in (0119).
+   *
+   * There are two now and they behave oppositely: `job-documents` is private and every read
+   * is a signed URL good for five minutes; `maintenance-media` is public and its URL is
+   * permanent. A caller holding a list can hold both — the twelve photographs filed before
+   * 0119 are in the private one and the ones taken since are in the public one — so this
+   * asks the row rather than assuming, and every screen that opens a document goes through
+   * it instead of picking a bucket itself.
+   *
+   * Null when there is nothing to open: a row with no stored bytes (a document Lofty expects
+   * but has not received), or storage refusing. The caller shows "the copy is gone" rather
+   * than a link that opens on an error page.
+   *
+   * Synchronous callers cannot use this — signing is a round trip. That is the reason the
+   * generated maintenance sheet can only carry media from the PUBLIC bucket, and why 0119
+   * exists at all.
+   */
+  documentUrl(doc: Pick<Doc, "storagePath" | "storageBucket">): Promise<string | null>;
+
+  /**
+   * The documents attached to one job or one project — 0032's `documents` joined through
+   * `document_links`.
+   *
+   * Not the same list as `listReportDocuments`, and the two are deliberately separate:
+   * one is what somebody BUILT in the Document Builder, this is what somebody FILED. The
+   * Documents panel shows both, because "what is on this job" is one question.
+   */
+  listRecordDocuments(opts: { jobId?: string; projectId?: number }): Promise<RecordDocument[]>;
+  /**
+   * The photos and files on one maintenance issue (0115).
+   *
+   * Read off the request's own links, so taking a photo off the issue leaves the job's
+   * copy filed — which is what attaching one document twice is for.
+   */
+  listMaintenanceDocuments(requestId: Uuid): Promise<RecordDocument[]>;
+  /**
+   * Attach photos and files to a maintenance issue (0115).
+   *
+   * Amber, 14 September: *"add in a section to upload one or multiple a image, photo,
+   * file, pdfs, or take a photo"* — and, asked where they should live, **`job-documents`,
+   * private**: a defect photo is a document about the job, so it is filed against the job
+   * as well as against the issue and appears in that job's Documents list.
+   *
+   * Every read is a short-lived signed URL through `jobDocumentUrl`. There is no permanent
+   * address, deliberately — a photograph of somebody's house is not a thing to make
+   * public to anyone who ever sees a link.
+   *
+   * File by file, so eight photos from a walk do not all fail because the seventh was a
+   * video. What was refused is reported by name with the database's own words.
+   */
+  attachMaintenanceFiles(input: { requestId: Uuid; jobId: string; files: File[] }): Promise<RecordDocument[]>;
+  /**
+   * File a document that lives in SharePoint, as a URL (0103).
+   *
+   * Amber, 10 September: *"when adding a document I need to be able to save it as a url
+   * in sharepoint (integration coming) but for now I need to be able to add and delete
+   * them"*.
+   *
+   * Two rows: the document, and the attachment to this record. If the URL is already
+   * filed elsewhere it is the SAME document — a second attachment, not a second copy —
+   * which is what `documents_one_row_per_url` and the whole "held once" design are for.
+   *
+   * The app never fetches the document itself. It stores the address; Microsoft governs
+   * the file, so filing a link is not a way of sharing one.
+   */
+  addDocumentUrl(input: NewDocumentUrl): Promise<RecordDocument>;
+  /**
+   * Take a document off this record. `user` and above — 0032: *"detaching is not
+   * deleting: the link goes, the file stays"*.
+   *
+   * The exception is a document nothing else points at and Lofty holds no bytes for: the
+   * database reaps that row itself (0103's trigger), because a pointer with no links is
+   * reachable from nowhere. Nothing in SharePoint is ever touched either way.
+   */
+  removeRecordDocument(linkId: string): Promise<void>;
+
+  /**
+   * Both kinds of document, newest first — what the dashboard's Recent documents panel
+   * reads.
+   *
+   * One method rather than two lists merged by the screen: "has anything been filed on my
+   * jobs this week" is one question, and two panels answering halves of it means merging
+   * by eye. Ordered by the later of created and updated, so a document edited today sorts
+   * above one filed last week — the ask was "recent documents **or changes**".
+   */
+  listRecentDocuments(opts?: { limit?: number }): Promise<RecentDocument[]>;
+
+  /**
+   * The header's search, across every kind of record somebody types a name into a box
+   * hoping to reach.
+   *
+   * Distinct from the in-page search, which narrows the board or table you are looking at
+   * and is pure client-side matching in `SearchProvider`. Both exist and neither replaces
+   * the other: on the Jobs page "brodie" should narrow the table AND offer the contact
+   * called Brodie, because only one of those is what you meant and the app cannot tell
+   * which.
+   *
+   * Every term must appear somewhere in a record for it to match — the same AND rule the
+   * in-page matchers use, so "brodie court" narrows rather than widening.
+   *
+   * `limit` is PER KIND, not overall. A query matching forty jobs must not push the one
+   * matching contact off the end of the list, which is exactly what a single overall cap
+   * would do.
+   */
+  search(query: string, opts?: { limit?: number }): Promise<SearchHit[]>;
 }
 
 export type RepositoryMethod = Exclude<keyof Repository, "name" | "wired">;
@@ -809,6 +1089,10 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "getProject",
   "listJobs",
   "getJob",
+  "railCounts",
+  "listMyPins",
+  "pinPage",
+  "unpinPage",
   "listProfiles",
   "currentProfile",
   "getProfile",
@@ -830,6 +1114,7 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "moveProjectStage",
   "updateProject",
   "setProjectCurrentAddress",
+  "setJobCurrentAddress",
   "listAddressHistory",
   "listStages",
   "listTeams",
@@ -925,6 +1210,7 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "listFeedback",
   "setFeedbackStage",
   "setFeedbackPhase",
+  "setFeedbackKind",
   "setFeedbackVote",
   "setCommentStanding",
   "mergeFeedback",
@@ -935,6 +1221,7 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "listFeedbackVoters",
   "searchFeedback",
   "attachmentUrl",
+  "uploadReportImage",
   "listRoadmapPhases",
   "createRoadmapPhase",
   "updateRoadmapPhase",
@@ -998,7 +1285,17 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "updateReportDocument",
   "deleteReportDocument",
   "shareReportDocument",
-  "unshareReportDocument"
+  "unshareReportDocument",
+  "publishReportDocument",
+  "jobDocumentUrl",
+  "documentUrl",
+  "listRecordDocuments",
+  "listMaintenanceDocuments",
+  "attachMaintenanceFiles",
+  "addDocumentUrl",
+  "removeRecordDocument",
+  "listRecentDocuments",
+  "search"
 ];
 
 /** Human labels for the wiring checklist on the Status page. */
@@ -1007,6 +1304,10 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   getProject: "projects",
   listJobs: "jobs",
   getJob: "jobs",
+  railCounts: "projects + job_display + maintenance_request_display",
+  listMyPins: "pinned_pages",
+  pinPage: "pinned_pages",
+  unpinPage: "pinned_pages",
   listProfiles: "profiles",
   currentProfile: "profiles",
   getProfile: "profiles",
@@ -1026,6 +1327,7 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   moveProjectStage: "projects",
   updateProject: "projects",
   setProjectCurrentAddress: "projects + addresses",
+  setJobCurrentAddress: "jobs + addresses",
   listAddressHistory: "address_history",
   // Both became tables — `teams` in 0026, `pipeline_stages` in 0029. The labels
   // said "enum" long after that stopped being true, on the one screen whose entire
@@ -1125,6 +1427,7 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   listFeedback: "feedback_display",
   setFeedbackStage: "feedback",
   setFeedbackPhase: "feedback",
+  setFeedbackKind: "feedback",
   setFeedbackVote: "feedback_votes",
   setCommentStanding: "comments",
   mergeFeedback: "feedback",
@@ -1135,6 +1438,7 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   listFeedbackVoters: "feedback_votes",
   searchFeedback: "feedback_display",
   attachmentUrl: "storage: feedback-screenshots",
+  uploadReportImage: "storage: report-images",
   listRoadmapPhases: "roadmap_phases",
   createRoadmapPhase: "roadmap_phases",
   updateRoadmapPhase: "roadmap_phases",
@@ -1199,5 +1503,18 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   updateReportDocument: "report_documents",
   deleteReportDocument: "report_documents",
   shareReportDocument: "report_documents",
-  unshareReportDocument: "report_documents"
+  unshareReportDocument: "report_documents",
+  publishReportDocument: "report_documents + documents + document_links + storage: job-documents",
+  jobDocumentUrl: "storage: job-documents",
+  documentUrl: "storage: job-documents + maintenance-media",
+  listMaintenanceDocuments: "document_links",
+  attachMaintenanceFiles: "documents + document_links + storage: job-documents",
+  listRecordDocuments: "documents + document_links",
+  addDocumentUrl: "documents + document_links",
+  removeRecordDocument: "document_links",
+  // Both kinds in one list, so the Wiring page names the pair rather than half of it.
+  listRecentDocuments: "report_documents + documents",
+  // Six reads behind one method. Named as the spine it searches; the rest are listed in
+  // the method's own comment rather than crammed into a cell.
+  search: "job_display + project_display + …"
 };

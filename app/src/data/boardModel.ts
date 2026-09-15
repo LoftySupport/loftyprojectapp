@@ -2,7 +2,8 @@ import { useMemo } from "react";
 import { useQuery } from "./DataProvider";
 import { useTeams } from "./useLookups";
 import {
-  teamName, type ProcessRunHealth, type ProcessRunStatus, type ProjectType, type RecordStatus, type TeamId, type TitleType
+  teamName, type ProcessRunHealth, type ProcessRunStatus, type ProjectType, type PropertyValueData,
+  type RecordStatus, type TeamId, type TitleType
 } from "./types";
 
 /**
@@ -32,7 +33,17 @@ import {
  */
 
 export interface BoardJob {
-  /** '1042-01' — the job number and the primary key are the same thing. */
+  /**
+   * '1042-01' — the job number and the primary key are the same thing, and since 0120 it
+   * carries the community-title `c`: '1042-01c'.
+   *
+   * One value, not two. The suffix is part of the key rather than a display column beside
+   * it (Amber, 14 September: *"can it be updated that is also linked so it show the c on
+   * the end … but the project 4 digits and 3 digit job code always remains"*), so what
+   * routes, what is printed and what somebody reads off a card are all the same string.
+   * It moves when the title type is corrected, and the cascade carries every child row
+   * with it.
+   */
   jobNumber: string;
   /**
    * The old Lofty number — "12345". SiteBook, Trello and everyone's memory link by
@@ -104,6 +115,31 @@ export interface BoardJob {
   /** The site the job belongs to. Read through from the project, never copied. */
   projectAddress?: string | null;
   /**
+   * The council of the job's own current address (0108). Deliberately NOT inside
+   * `currentAddress` — Amber, 10 September: *"the council area still needs to be
+   * recorded, but just not in the full address line. it stays as a property field."*
+   * Null when nobody has said, which is a real state since 0073.
+   */
+  council?: string | null;
+  /**
+   * The job's own completion dates (0113) — the date being worked towards, and the day
+   * it actually finished. Both null until somebody sets them, which is a real state and
+   * draws as the date field's own `dd/mm/yyyy` rather than as a stand-in.
+   *
+   * On the board's job rather than fetched by the drawer, because `job_display` carries
+   * them and the drawer already holds this object: a second read for two dates the row
+   * in hand already has is a query nobody needs.
+   */
+  targetCompletion?: string | null;
+  endDate?: string | null;
+  /**
+   * What the SLAs say, beside what was promised and what happened (0119). Computed by
+   * `job_display`, never stored, and null while any process still to run has no estimate
+   * — `calculatedCompletionMissing` is how many, so the blank says why it is blank.
+   */
+  calculatedCompletion?: string | null;
+  calculatedCompletionMissing?: number | null;
+  /**
    * The latest attempt of every process run on this job (0078) — what the Process and
    * Process health chips filter on, and what the card can summarise.
    */
@@ -114,6 +150,13 @@ export interface BoardJob {
    * so an absence filter here is only ever asked of a property the person may read.
    */
   recordedKeys: string[];
+  /**
+   * Every recorded value the reader may see, by property key — the job's own rows with
+   * its project's read through underneath, exactly as the drawer shows them (Amber,
+   * 7 Sep: columns should take "any property in the job (including project properties as
+   * they are inherited by the job)"). Built from rows RLS already let through.
+   */
+  properties: Record<string, PropertyValueData>;
 }
 
 export interface BoardProject {
@@ -156,6 +199,8 @@ export interface BoardProject {
   startDate: string | null;
   endDate: string | null;
   sharepointUrl: string | null;
+  /** The project's own recorded values, by property key — see BoardJob.properties. */
+  properties: Record<string, PropertyValueData>;
 }
 
 const DAY = 86_400_000;
@@ -218,9 +263,17 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
     });
     const keysByJob = new Map<string, Set<string>>();
     const keysByProject = new Map<number, Set<string>>();
+    const valuesByJob = new Map<string, Record<string, PropertyValueData>>();
+    const valuesByProject = new Map<number, Record<string, PropertyValueData>>();
     values.forEach(v => {
-      if (v.jobId) (keysByJob.get(v.jobId) ?? keysByJob.set(v.jobId, new Set()).get(v.jobId)!).add(v.propertyKey);
-      if (v.projectId != null) (keysByProject.get(v.projectId) ?? keysByProject.set(v.projectId, new Set()).get(v.projectId)!).add(v.propertyKey);
+      if (v.jobId) {
+        (keysByJob.get(v.jobId) ?? keysByJob.set(v.jobId, new Set()).get(v.jobId)!).add(v.propertyKey);
+        (valuesByJob.get(v.jobId) ?? valuesByJob.set(v.jobId, {}).get(v.jobId)!)[v.propertyKey] = v.value;
+      } else if (v.projectId != null) {
+        // A project's own row, not a job's — the read-through is composed per job below.
+        (keysByProject.get(v.projectId) ?? keysByProject.set(v.projectId, new Set()).get(v.projectId)!).add(v.propertyKey);
+        (valuesByProject.get(v.projectId) ?? valuesByProject.set(v.projectId, {}).get(v.projectId)!)[v.propertyKey] = v.value;
+      }
     });
 
     const boardJobs: BoardJob[] = jobs.map(j => ({
@@ -244,8 +297,16 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
       currentAddress: j.currentAddress,
       originalAddress: j.originalAddress,
       projectAddress: j.projectCurrentAddress,
+      council: j.council,
+      targetCompletion: j.targetCompletion,
+      endDate: j.endDate,
+      calculatedCompletion: j.calculatedCompletion,
+      calculatedCompletionMissing: j.calculatedCompletionMissing,
       processRuns: [...(runsByJob.get(j.id)?.values() ?? [])].map(({ processKey, status, health }) => ({ processKey, status, health })),
-      recordedKeys: [...new Set([...(keysByJob.get(j.id) ?? []), ...(keysByProject.get(j.projectId) ?? [])])]
+      recordedKeys: [...new Set([...(keysByJob.get(j.id) ?? []), ...(keysByProject.get(j.projectId) ?? [])])],
+      // The project's values underneath, the job's own on top — the same read-through
+      // the drawer's slot list shows.
+      properties: { ...(valuesByProject.get(j.projectId) ?? {}), ...(valuesByJob.get(j.id) ?? {}) }
     }));
 
     const byProject = new Map<string, BoardJob[]>();
@@ -279,7 +340,8 @@ export function useBoardRecords(reloadKey: number = 0): BoardRecords {
       startDate: p.startDate,
       endDate: p.endDate,
       sharepointUrl: p.sharepointUrl,
-      status: p.status
+      status: p.status,
+      properties: valuesByProject.get(p.id) ?? {}
     }));
 
     return {

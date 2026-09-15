@@ -4,6 +4,13 @@ Everything that is not one of the seven files at the repository root. The root h
 new person reads; this holds the reference they read next and the record of how it was
 decided.
 
+## `open-questions.md` — the queue
+
+[`open-questions.md`](open-questions.md) holds the decisions only Amber can make, **asked
+one at a time**, with every answer recorded against its date. It is current, not history:
+where it says something is undecided, nothing should be built that assumes an answer.
+`CLAUDE.md` carries the convention.
+
 ## `schema/` — the data model
 
 | File | What it is |
@@ -16,6 +23,26 @@ decided.
 The authority above all four is `app/supabase/migrations/` and the live database.
 `app/supabase/verify/check.sh` replays every migration into a throwaway database and proves
 the schema *behaves*.
+
+## `design/` — the approved design, and what to build from it
+
+| File | What it is |
+| --- | --- |
+| [`design/handoff/README.md`](design/handoff/README.md) | **The rail and the job record, as handed over on 11 September.** Both packages marked high fidelity by their author, plus the ten decisions that answer the gaps in them and the four corrections found in review |
+| [`design/handoff/BUILD-BRIEF.md`](design/handoff/BUILD-BRIEF.md) | Everything a build needs in one file — what to read, what is decided, what to correct, the order, and the two things still open |
+| [`design/handoff/sidebar-navigation/`](design/handoff/sidebar-navigation/) | The left rail: four states, every measurement, screenshots, the Lofty glyphs |
+| [`design/handoff/job-record/`](design/handoff/job-record/) | The drawer, the full page and the column picker |
+| [`design/element-sweep.md`](design/element-sweep.md) | **How the design rules are held.** The twelve element families, the ratchet that stops a fixed one drifting back, and why a rule written as a behaviour raised compliance while consistency fell |
+
+The `.dc.html` files in there are **design references, not production code** — they carry an
+in-house template runtime that does not come across. The design system itself is
+`app/src/design-system/tokens/`, mirrored from Lofty's App Design System.
+
+## `integrations/` — connecting the outside
+
+| File | What it is |
+| --- | --- |
+| [`integrations/api-and-mcp-plan.md`](integrations/api-and-mcp-plan.md) | **The plan for an API, an MCP server and an in-app Ask box** — one gateway, three doors, every call running as the caller under RLS. Recommendations, the phases, and a review of its own pitfalls. Nothing in it is built; its six open decisions are questions 14–19 in `open-questions.md` |
 
 ## `history/` — the record
 

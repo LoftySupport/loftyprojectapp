@@ -18,6 +18,11 @@
 }
 /* Focus is a ring from the palette, not the browser's default blue. The same ring the
    saved-view controls draw, so a keyboard user sees one signal everywhere. */
+/* A textarea is not a 32px box. `.pf-input` sets a height for the text inputs it was
+   written for, and a textarea inheriting it silently ignores its own `rows` — the
+   maintenance drawer's Details asked for six lines and drew one. Contacts sets its own
+   height inline and is unaffected either way. */
+textarea.pf-input { height: auto; padding: var(--space-4) var(--space-8); line-height: 1.45; resize: vertical; }
 .pf-input:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; border-color: var(--primary-color); }
 .pf-input::placeholder { color: var(--secondary-text-color); }
 .pf-input:disabled { cursor: not-allowed; }
@@ -51,7 +56,12 @@
    the status pills already use, so a chip and a pill saying "trouble" are the same red. */
 .slot-chip.is-pushed  { background: var(--lofty-orange-tint); color: var(--lofty-orange-strong); }
 .slot-chip.is-differs { background: var(--negative-color-selected); color: var(--negative-ink); }
-.slot-chip.is-current { background: var(--primary-selected-color); color: var(--primary-color); }
+/* --primary-color is Crisp Orange, and DESIGN.md's brand rule is that Crisp Orange is a
+   fill, never ink on light. As ink on the selected tint it measured 2.14:1 — the lowest
+   reading in the whole rendered sweep. --lofty-orange-strong is the step the rule names
+   and the one `.is-pushed` directly above already uses: 3.70:1 on the same ground. The
+   fix was sitting two lines up. */
+.slot-chip.is-current { background: var(--primary-selected-color); color: var(--lofty-orange-strong); }
 .slot-meta { font: var(--font-text3-normal); color: var(--secondary-text-color); margin-top: 2px; }
 .slot-history { margin-top: var(--space-12); border-top: 1px dashed var(--layout-border-color); padding-top: var(--space-8); }
 .slot-history-list { list-style: none; margin: var(--space-4) 0 0; padding: 0; }
@@ -82,6 +92,26 @@
 .proc-list { margin: 0; padding: 0 var(--space-12) var(--space-8); list-style: none; }
 .proc-row { padding: var(--space-8) 0; border-top: 1px dashed var(--layout-border-color); }
 .proc-row-head { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; }
+/* The tick that marks a process off. 18px rather than the browser default 13: it is the
+   control on this row people reach for most, and the 24px tap target the responsive
+   sweep asserts comes from the row's own height around it. `flex: none` so it never
+   shrinks when a long process name wraps beside it. */
+.proc-tick {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--primary-color);
+  cursor: pointer;
+}
+.proc-tick:disabled { cursor: default; opacity: 0.5; }
+/* Done reads as done at a glance, the way the mockup strikes a completed step through. */
+.proc-row:has(.proc-tick:checked) .proc-name > span > span:first-child,
+.proc-row:has(.proc-tick:checked) .proc-name > span:first-child {
+  text-decoration: line-through;
+  text-decoration-color: var(--lofty-flint-400);
+  color: var(--secondary-text-color);
+}
 .proc-name { flex: 1 1 200px; min-width: 0; display: flex; flex-direction: column; }
 .proc-name .proc-sub { font: var(--font-text3-normal); color: var(--secondary-text-color); }
 .proc-controls { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; }

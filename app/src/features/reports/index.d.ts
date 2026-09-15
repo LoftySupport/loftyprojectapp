@@ -169,6 +169,17 @@ export interface ReportStoreRow {
   updatedAt: string;
   createdBy?: string | null;
   updatedBy?: string | null;
+  /**
+   * Publication, on a document row only (0104). Optional because a LIBRARY row — a
+   * template or a section — has none: only a document is published to SharePoint.
+   *
+   * Carried here rather than looked up so the builder can decide the watermark from the
+   * row it just saved. Its own autosave is what reverts a published document to a draft,
+   * and reading a list that has not refreshed yet would show a clean preview of something
+   * that had become a draft a moment earlier.
+   */
+  publishedAt?: string | null;
+  publishedUrl?: string | null;
 }
 
 export interface ReportStore {
@@ -198,6 +209,8 @@ export const ReportBuilder: ComponentType<{
   shareUrlBase?: string;
   canSaveTemplate?: boolean;
   themes?: ReportThemeSet;
+  /** Forwarded to the overlay this builder opens for Preview & export (0104). */
+  watermark?: string;
 }>;
 
 export const ReportOverlay: ComponentType<{
@@ -210,6 +223,15 @@ export const ReportOverlay: ComponentType<{
   themes?: ReportThemeSet;
   initialTheme?: string;
   onThemeChange?: (key: string) => void;
+  /**
+   * The word a document wears until it is published — "DRAFT", or nothing (0104).
+   *
+   * Passed in rather than worked out: this module knows nothing about jobs or
+   * publications. It reaches all four renderers — screen, print, the .html download and
+   * the .docx — because a document watermarked in three of them is worse than one
+   * watermarked in none, since somebody will send the fourth.
+   */
+  watermark?: string;
 }>;
 
 export const ReportSharePanel: ComponentType<Record<string, unknown>>;
@@ -221,7 +243,43 @@ export const REPORT_STYLES: Record<string, unknown>;
 export const PAGE_SIZES: Record<string, unknown>;
 export function themePresentation(theme: string | ReportTheme): Record<string, unknown>;
 export function reportFilename(title: string): string;
-export function sanitizeHtml(html: string): string;
+export function sanitizeHtml(
+  html: string,
+  opts?: {
+    /**
+     * Keep the rb-token / rb-token-blank / rb-token-unknown marks fillTokens puts on a
+     * placeholder. RENDERING ONLY — the editor's save path must strip them, or a span
+     * pasted out of a preview becomes frozen text wearing a live placeholder's badge.
+     */
+    keepTokenMarks?: boolean;
+  }
+): string;
+
+/**
+ * A Word, PDF or HTML file turned into builder blocks.
+ *
+ * `notes` is not decoration — it is what the conversion could not carry, and the screen
+ * shows it. A PDF's headings are inferred from text size rather than read from the file,
+ * and its tables arrive as text; `notes` is where that is said.
+ */
+export function documentToWidgets(file: File): Promise<{
+  widgets: ReportWidget[];
+  notes: string[];
+}>;
+
+/**
+ * The html half on its own, for a host that already has markup rather than a file.
+ *
+ * `keepImageUrls` decides what an `<img>` becomes: an Image block when the src is an
+ * absolute URL (html), or a counted omission (a .docx, whose images are embedded bytes
+ * that would otherwise land in the layout as base64).
+ */
+export function htmlToWidgets(html: string, opts?: { keepImageUrls?: boolean }): {
+  widgets: ReportWidget[];
+  notes: string[];
+};
+
+export function sniffKind(file: File): Promise<"docx" | "pdf" | "html" | null>;
 
 // ─── Serialisers ─────────────────────────────────────────────────────
 
@@ -265,7 +323,7 @@ export const LOFTY_THEME_SPECS: Record<string, ReportTheme>;
  * document store also implements `saveTemplate`, which is how "Save as template" becomes
  * a proposal into the library rather than a second kind of save.
  */
-export function createLibraryStore(repo: unknown, kind?: "template" | "section"): ReportStore;
+export function createLibraryStore(repo: unknown, kind?: "template" | "section" | "snippet"): ReportStore;
 export function createDocumentStore(
   repo: unknown,
   subject?: { jobId?: string | null; projectId?: number | null },
@@ -302,5 +360,24 @@ export interface LoftyDocumentStore extends ReportStore {
     projectId?: number | null;
   }): Promise<ReportStoreRow>;
 }
+
+/**
+ * Placeholders in prose. `tokensFor` is the list the rich-text editor offers; the
+ * function `makeFillTokens` returns is what `ctx.fillTokens` should be set to.
+ *
+ * Both take the resolved report context — they need the subject, the jobs and the
+ * property values to answer anything.
+ */
+export function tokensFor(ctx: unknown): { value: string; label: string; group: string }[];
+export function makeFillTokens(
+  ctx: unknown
+): (html: string, opts?: { forExport?: boolean }) => string;
+
+/**
+ * The same placeholders filled into PLAIN TEXT — what `ctx.fillTextTokens` should be set
+ * to, and what a table cell resolves through. Separate from the html one on purpose: a
+ * cell prints what it is given, so escaping and the marking spans would both show.
+ */
+export function makeFillTextTokens(ctx: unknown): (text: string) => string;
 
 export type { ReactNode };

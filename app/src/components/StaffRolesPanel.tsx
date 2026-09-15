@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Button, Text } from "@vibe/core";
 import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
+import { PersonSelect } from "../components/PersonSelect";
 import { Select } from "./Select";
 import { Problem } from "./Form";
 import type { RecordStaffRole } from "../data/types";
@@ -22,7 +23,6 @@ export function StaffRolesPanel({ projectId, jobId }: { projectId?: number; jobI
   const [reload, setReload] = useState(0);
   const { data: held, loading } = useQuery<RecordStaffRole[]>(r => r.listRecordStaffRoles({ projectId, jobId }), [], [projectId, jobId, reload]);
   const { data: roles } = useQuery(r => r.listStaffRoles(), []);
-  const { data: profiles } = useQuery(r => r.listProfiles(), []);
   const [roleId, setRoleId] = useState<string | null>(null);
   const [profileId, setProfileId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -82,8 +82,7 @@ export function StaffRolesPanel({ projectId, jobId }: { projectId?: number; jobI
         <div className="party-add">
           <Select aria-label="Project role" placeholder="Role…" clearable value={roleId} onChange={setRoleId}
             options={roles.filter(r => r.isActive).map(r => ({ value: r.id, label: `${r.abbreviation} · ${r.name}` }))} />
-          <Select aria-label="Person" placeholder="Person…" clearable value={profileId} onChange={setProfileId}
-            options={profiles.filter(p => p.active).map(p => ({ value: p.id, label: p.fullName }))} />
+          <PersonSelect aria-label="Person" placeholder="Person…" value={profileId} onChange={setProfileId} />
           <Button size="small" disabled={busy || !roleId || !profileId} onClick={() => run(async () => {
             await repo.addRecordStaffRole({ projectId, jobId, roleId: roleId!, profileId: profileId! });
             setRoleId(null); setProfileId(null);

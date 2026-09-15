@@ -8,6 +8,7 @@
 import { cellText } from './blocks.js';
 import { qrSvg } from './qr.js';
 import { resolveTheme, logoForSurface, isDarkColour } from './theme.js';
+import { watermarkBackground, watermarkLayerCssText } from './watermark.js';
 
 // ─── HTML serialiser ─────────────────────────────────────────────────
 // Generates a standalone, self-contained HTML document from the report model.
@@ -100,7 +101,7 @@ export function blockToHtml(b) {
  * @param {string} [options.accent]  legacy override, applied over the theme
  * @param {string} [options.dark]    legacy override, applied over the theme
  */
-export function reportToHtml(report, { theme = null, branding = '', brandingUrl = '', accent = null, dark = null } = {}) {
+export function reportToHtml(report, { theme = null, branding = '', brandingUrl = '', accent = null, dark = null, watermark = '' } = {}) {
   const t = resolveTheme(theme);
   const c = t.colors;
   // The two loose parameters this function used to take still work, so a
@@ -132,6 +133,7 @@ export function reportToHtml(report, { theme = null, branding = '', brandingUrl 
 <title>${title}</title>
 <style>
   *,*::before,*::after{box-sizing:border-box}
+  ${watermarkLayerCssText(watermarkBackground(watermark))}
   body{font-family:${fontBody};font-size:14px;line-height:1.6;color:${c.ink};background:${c.surfaceAlt};margin:0;padding:0}
   .report-header{background:${darkColor};color:${c.onInverse};padding:2rem 3rem;border-bottom:4px solid ${accentColor}}
   .report-header h1{margin:0 0 .25rem;font-size:2rem;font-family:${fontHeading};font-weight:${headingWeight}}

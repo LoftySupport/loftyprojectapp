@@ -43,6 +43,23 @@ export const HOUSE_COLOURS = {
 
 export type HouseColour = keyof typeof HOUSE_COLOURS;
 
+/**
+ * The document face, and the reasoning. Montserrat — Amber, 9 September: *"exported
+ * documents in Montserrat unless it has fonts embedded in it for print then it will be
+ * brand font"*. Montserrat is the brand kit's own print substitute for Fieldwork, and the
+ * face every title on screen already uses, so a document and the screen it came from read
+ * as one family. Neither writer embeds the brand face: the Word file cannot without Word's
+ * embed-fonts option, and Fieldwork's licence for distribution is unconfirmed (question 16
+ * in docs/open-questions.md). Before 9 September the writers set Helvetica, on the earlier
+ * template's rule; the brand now says Helvetica, Calibri and Aptos are never substituted.
+ *
+ * `HOUSE_FONT` is the one name Word is given (`docx.ts`) and the PDF embeds (`pdf.ts`);
+ * `HOUSE_FONT_STACK` is the CSS form for the report builder's theme, which takes the first
+ * family for the .docx it writes and the rest for the screen preview.
+ */
+export const HOUSE_FONT = "Montserrat";
+export const HOUSE_FONT_STACK = "Montserrat, Arial, sans-serif";
+
 /** What the footer says on every page, in both writers. */
 export const HOUSE_CONFIDENCE = "Commercial in confidence";
 

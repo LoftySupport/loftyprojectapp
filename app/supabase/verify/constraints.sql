@@ -35,6 +35,20 @@ BEGIN
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  projects_number_floor rejected 999';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  projects_number_floor rejected 999)', SQLERRM; END;
 
+  -- 0113: a job cannot have finished before it existed. Probed HERE rather than in the
+  -- migration's own block, and the reason is worth writing down: the migration's version
+  -- is guarded with `if a_job is null` because a replay from empty has no jobs, so on a
+  -- rebuild it printed "skipped" and the rule was never watched. A probe that quietly
+  -- tests nothing is the failure this whole directory exists to prevent, so the probe
+  -- moved to where behaviour.sql has already made a job.
+  BEGIN
+    UPDATE jobs
+       SET job_end_date = (job_created_at AT TIME ZONE 'UTC')::date - 1
+     WHERE job_id = '9106-002';
+    RAISE WARNING 'FAIL: a job finished before it was created';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  jobs_end_date_is_not_before_the_job rejected a finish before creation';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  jobs_end_date_is_not_before_the_job)', SQLERRM; END;
+
   BEGIN
     UPDATE jobs SET job_engaged_teams = ARRAY['design','not_a_team'] WHERE job_id LIKE '9106-%';
     RAISE WARNING 'FAIL: unknown team accepted into job_engaged_teams';
@@ -254,6 +268,37 @@ BEGIN
     RAISE WARNING 'FAIL: a document link with two parents was accepted';
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a document link has exactly one parent';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on document link parents (%)', SQLERRM; END;
+
+  -- 0103. What people actually paste when they have the document open rather than the
+  -- link: a path off the file server.
+  BEGIN
+    INSERT INTO documents (document_name, document_url)
+    VALUES ('Contract', '\\lofty-fs01\projects\9106\contract.pdf');
+    RAISE WARNING 'FAIL: a Windows path was accepted as a document URL';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  documents_url_is_https rejected a network path';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on document URL shape (%)', SQLERRM; END;
+
+  -- Its own probe rather than trusting the regex to be read correctly: `^https://` also
+  -- refuses `http://`, but only because of the anchor, and an unanchored version would
+  -- accept it inside a longer string.
+  BEGIN
+    INSERT INTO documents (document_name, document_url)
+    VALUES ('Contract', 'http://lofty.sharepoint.com/x');
+    RAISE WARNING 'FAIL: an http document URL was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  documents_url_is_https rejected http';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on http document URL (%)', SQLERRM; END;
+
+  -- One SharePoint address is one document. A partial unique index over a nullable column
+  -- is exactly the shape that silently enforces nothing when its WHERE clause is wrong, so
+  -- it is watched rather than assumed.
+  BEGIN
+    INSERT INTO documents (document_name, document_url)
+    VALUES ('__probe__ first', 'https://lofty.sharepoint.com/probe/one.pdf');
+    INSERT INTO documents (document_name, document_url)
+    VALUES ('__probe__ second', 'https://lofty.sharepoint.com/probe/one.pdf');
+    RAISE WARNING 'FAIL: the same document URL was accepted twice';
+  EXCEPTION WHEN unique_violation THEN RAISE NOTICE 'ok  documents_one_row_per_url rejected a duplicate address';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected on duplicate document URL (%)', SQLERRM; END;
 
   BEGIN
     INSERT INTO comments (comment_body) VALUES ('Attached to nothing');

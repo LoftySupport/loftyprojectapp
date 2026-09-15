@@ -1,5 +1,26 @@
 # Phase B — importing the jobs
 
+> ## Closed, 7 September 2026. Nothing here is going to run.
+>
+> Amber: *"i don't need any jobs imported from spreadsheets. all jobs that need to be
+> created from now on will be created from the projects in the app"*, and *"no new importing
+> for job or projects"*.
+>
+> **The load never ran.** It rolled back whole on its first write (see *What stopped the
+> live load* below), so no project, job or address in the app came from this tooling. The
+> seven colliding sites that stopped it stopped mattering rather than being resolved — there
+> is no second copy to argue about, because there is no import.
+>
+> **Nothing was removed from the database, on purpose.** `import_staging_jobs` and its 801
+> rows, `import_spine()`, `unimport_spine()` and `private.import_team_for_person()` are all
+> still applied and inert. Amber: *"everything that is in supabase now is correct. If I need
+> to import other areas I will let you know as properties may change between now and then."*
+> So the two-layer staging design has a plausible future job — just not jobs or projects.
+>
+> **If you are here to import something:** ask first. The tooling below reads a specific
+> workbook shape and writes projects and jobs in bulk; running it now would create records
+> nobody asked for, beside records real people have since made by hand.
+
 Two generations of tooling live here. The first (the template) was built before Amber
 grouped the jobs herself; the second (the generator) reads her grouping. Both are kept:
 the template is still the right shape for a *future* batch nobody has grouped yet.
@@ -96,7 +117,13 @@ What the seven hold, beyond the jobs themselves: two comments (*"Job cancelled"*
 *"here is a test update"* on job 1002-001). No tasks, parties, staff roles, documents,
 property values, process runs, variations or maintenance requests.
 
-**This is Amber's decision, and the load waits on it.** Three ways:
+**Decided, 7 September: none of the three.** The import is closed, so the question
+dissolved rather than being answered — there is no second copy of those seven sites because
+nothing was ever loaded. The three options are kept below because they are the clearest
+statement of what the collision actually was, and because the same hazard now belongs to
+whoever creates those jobs by hand: the app is the record, and the workbook is not.
+
+The three ways it *could* have gone:
 
 1. **The workbook is the record.** Delete the seven hand-made projects, then load all 801
    rows: 116 projects, 796 jobs, one source for every site. Costs the two test comments

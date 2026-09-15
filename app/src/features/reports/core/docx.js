@@ -9,10 +9,13 @@
 import { cellText, stripHtml } from './blocks.js';
 import { qrPng } from './qr.js';
 import { resolveTheme, hexForDocx, logoForSurface } from './theme.js';
+import { docxWatermarkText, WATERMARK_COLOUR } from './watermark.js';
 import {
+  AlignmentType,
   BorderStyle,
   Document,
   ExternalHyperlink,
+  Header,
   HeadingLevel,
   ImageRun,
   Packer,
@@ -349,6 +352,9 @@ async function imageBytes(src) {
  */
 export async function reportToDocxBlob(report, {
   orientation = 'portrait', pageSize = 'a4', theme = null, styleKey = null, branding = '',
+  // 'DRAFT', or nothing. See core/watermark.js for why Word gets a header rather than the
+  // diagonal tile the other three renderers share.
+  watermark = '',
 } = {}) {
   const preset = docxPresetFromTheme(theme || styleKey);
 
@@ -402,6 +408,32 @@ export async function reportToDocxBlob(report, {
   const base = DOCX_PAGE_SIZES[pageSize] || DOCX_PAGE_SIZES.a4;
   const pageDims = isLandscape ? { width: base.height, height: base.width } : base;
 
+  // Word repeats a header on every page by itself, which is the property being borrowed
+  // here — the `docx` package exposes no VML shape, so the diagonal ghost the other three
+  // renderers draw is not available. Spaced out and set large so it reads as a stamp
+  // rather than as a line of running head, and left out entirely when there is nothing to
+  // stamp: an empty header still eats 14mm of every page.
+  const stamp = docxWatermarkText(watermark);
+  const headers = stamp
+    ? {
+        default: new Header({
+          children: [
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 0 },
+              children: [new TextRun({
+                text: stamp,
+                bold: true,
+                size: 36,
+                color: hexForDocx(WATERMARK_COLOUR),
+                font: preset.headingFont,
+              })],
+            }),
+          ],
+        }),
+      }
+    : undefined;
+
   const doc = new Document({
     creator: branding || 'Report builder',
     description: report.subtitle || report.title || 'Report',
@@ -412,6 +444,7 @@ export async function reportToDocxBlob(report, {
           size: { ...pageDims, orientation: isLandscape ? PageOrientation.LANDSCAPE : PageOrientation.PORTRAIT },
         },
       },
+      ...(headers ? { headers } : {}),
       children,
     }],
     styles: {

@@ -1,5 +1,6 @@
 import { HOUSE_COLOURS, pdfRgb } from "./houseFormat";
-import { encode, truncate, widthOf } from "./helvetica";
+import { encode, truncate, widthOf } from "./typeface";
+import { REGULAR, SEMIBOLD, type EmbeddedFace } from "./montserrat";
 import { LOGO_RGB } from "./logo";
 import { stamp, type ExportCell, type ExportDocument, type ExportTable } from "./table";
 
@@ -22,11 +23,17 @@ import { stamp, type ExportCell, type ExportDocument, type ExportTable } from ".
  * stay small; the one raster is the wordmark, decoded ahead of time (see `logo.ts`) because
  * a PDF has no PNG filter and this writer has no zlib.
  *
- * ON THE TYPEFACE. The template's rounded display face cannot be used here without
- * embedding a TrueType font and its metrics — weeks of writer for a wordmark's worth of
- * glyphs — so the PDF sets Helvetica, one of the fourteen standard faces, and carries the
- * brand in the logo, the palette and the layout instead. The Word document, which names
- * fonts rather than embedding them, uses the real family.
+ * ON THE TYPEFACE. Montserrat, embedded — Regular for cells and SemiBold for headings —
+ * since 9 September, when Amber decided that *"exported documents [are] in Montserrat"*:
+ * the brand's own print substitute for Fieldwork, and the face every Lofty title already
+ * uses on screen. Before that the PDF set Helvetica, one of the fourteen faces a viewer
+ * supplies, and carried no font at all. Montserrat is not one of the fourteen, so each file
+ * carries a subset of both faces — about 41 kB each, cut to the WinAnsi repertoire by
+ * `scripts/build-montserrat.mjs`, which is also where the width tables in `typeface.ts`
+ * come from. Embedding is what makes the file the same on every machine; the price is
+ * about 83 kB on every download — less than the uncompressed wordmark already costs — which
+ * for a document that is sent, not streamed, is the right trade. Fieldwork is not embedded: its
+ * licence for distribution beyond the private repository is unconfirmed (question 16).
  *
  * WHAT IT DELIBERATELY DOES NOT DO: wrap. A cell that does not fit its column is truncated
  * with an ellipsis, and every row is one line tall. Wrapping means rows of different
@@ -112,6 +119,40 @@ function trackedText(ops: string[], value: string, x: number, y: number, size: n
   ops.push(
     `BT ${colour} rg /F2 ${size} Tf ${tracking} Tc ${x.toFixed(2)} ${y.toFixed(2)} Td ${pdfString(value, true)} Tj ET 0 Tc`
   );
+}
+
+/**
+ * The font dictionary for one embedded face. `/FirstChar 32 /LastChar 255` with the same
+ * width table `typeface.ts` measures with, so what the viewer draws and what the layout
+ * reserved are one set of numbers; `/Encoding /WinAnsiEncoding` because that is the byte
+ * `encode` produces. The descriptor and the programme are the next two objects.
+ */
+function fontObject(face: EmbeddedFace, descriptorId: number): string {
+  return (
+    `<< /Type /Font /Subtype /TrueType /BaseFont /${face.name} /FirstChar 32 /LastChar 255` +
+    ` /Widths [${face.widths.join(" ")}] /Encoding /WinAnsiEncoding /FontDescriptor ${descriptorId} 0 R >>`
+  );
+}
+
+/**
+ * The FontDescriptor and the FontFile2 stream for one face. Flags 32 is "nonsymbolic" —
+ * a Latin text face whose glyphs are found by name through the encoding, which is what
+ * lets WinAnsiEncoding do its work. StemV is nominal (no viewer uses it for rendering a
+ * TrueType) and the metrics are the face's own, in 1/1000 em. The programme is written
+ * uncompressed, like the logo: this writer has no zlib, and 41 kB is small enough.
+ */
+function fontProgramme(face: EmbeddedFace, fileId: number): ObjectBody[] {
+  const programme = base64ToBytes(face.base64);
+  return [
+    `<< /Type /FontDescriptor /FontName /${face.name} /Flags 32 /FontBBox [${face.bbox.join(" ")}]` +
+      ` /ItalicAngle 0 /Ascent ${face.ascent} /Descent ${face.descent} /CapHeight ${face.capHeight}` +
+      ` /XHeight ${face.xHeight} /StemV ${face.name.endsWith("SemiBold") ? 120 : 80} /FontFile2 ${fileId} 0 R >>`,
+    {
+      head: `<< /Length ${programme.length} /Length1 ${programme.length} >>\nstream\n`,
+      bytes: programme,
+      tail: `\nendstream`
+    }
+  ];
 }
 
 function rect(ops: string[], x: number, y: number, w: number, h: number, colour: string) {
@@ -390,15 +431,17 @@ function assemble(title: string, pages: string[], takenAt: Date): Uint8Array {
 
   // The wordmark, decoded once in `logo.ts`, as an uncompressed DeviceRGB image XObject.
   const logoBytes = base64ToBytes(LOGO_RGB.base64);
-  const LOGO_OBJ = 6; // 1 catalog, 2 pages, 3 F1, 4 F2, 5 info, 6 image
-  const FIRST_PAGE = 7;
+  // 1 catalog, 2 pages, 3 F1, 4 F2, 5 info, 6 image, then each face's descriptor and
+  // programme (7–8 Regular, 9–10 SemiBold), then the pages.
+  const LOGO_OBJ = 6;
+  const FIRST_PAGE = 11;
   const pageIds = pages.map((_p, i) => FIRST_PAGE + i * 2);
 
   const objects: ObjectBody[] = [
     `<< /Type /Catalog /Pages 2 0 R >>`,
     `<< /Type /Pages /Count ${pages.length} /Kids [${pageIds.map(id => `${id} 0 R`).join(" ")}] >>`,
-    `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>`,
-    `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>`,
+    fontObject(REGULAR, 7),
+    fontObject(SEMIBOLD, 9),
     `<< /Title ${pdfString(title)} /Producer ${pdfString("Lofty")} /CreationDate ${pdfString(pdfDate(takenAt))} >>`,
     {
       head:
@@ -406,7 +449,9 @@ function assemble(title: string, pages: string[], takenAt: Date): Uint8Array {
         ` /ColorSpace /DeviceRGB /BitsPerComponent 8 /Length ${logoBytes.length} >>\nstream\n`,
       bytes: logoBytes,
       tail: `\nendstream`
-    }
+    },
+    ...fontProgramme(REGULAR, 8),
+    ...fontProgramme(SEMIBOLD, 10)
   ];
 
   pages.forEach((content, i) => {

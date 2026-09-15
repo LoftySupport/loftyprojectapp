@@ -13,8 +13,16 @@ import { maintenanceMethods } from "./supabaseMaintenanceRepository";
 import { MAX_SPLIT, OPENING_TEAM, teamSlug } from "./types";
 import { projectDisplayName } from "./types";
 import { EMPTY_REPORT_TEMPLATE_LAYOUT } from "./types";
+import { matchedAddress } from "./SearchProvider";
 import type {
   ActivityEntry,
+  DocumentCategory,
+  StorageBucket,
+  NewDocumentUrl,
+  Doc,
+  RecordDocument,
+  RecentDocument,
+  SearchHit,
   NewReportDocument,
   NewReportDocumentShare,
   NewReportTemplate,
@@ -47,9 +55,11 @@ import type {
   NewPropertyDef,
   NewJob,
   NewProject,
+  PinnedPage,
   Profile,
   Project,
   ProjectPatch,
+  RailCounts,
   RecordActivity,
   LatestUpdate,
   StagePeriod,
@@ -111,18 +121,19 @@ const WIRED: RepositoryMethod[] = [
   "listProcessTasks", "createProcessTask", "updateProcessTask", "deleteProcessTask",
   "listProcessTaskDependencies", "setProcessTaskDependencies",
   "listProcessRuns", "startProcessRun", "updateProcessRun", "deleteProcessRun", "instantiateProcessTasks",
-  "listProjects", "getProject", "listJobs", "getJob",
+  "listProjects", "getProject", "listJobs", "getJob", "railCounts",
+  "listMyPins", "pinPage", "unpinPage",
   "createProject", "createJob", "createJobsFromSplit", "deleteJob", "deleteProject",
   "moveJobStage",
   "updateJob",
   "currentProfile", "listProfiles",
   "createProfile", "updateProfile", "setProfileActive", "listActivity",
   "listComments", "addComment", "updateProject", "moveProjectStage",
-  "setProjectCurrentAddress", "listAddressHistory",
+  "setProjectCurrentAddress", "setJobCurrentAddress", "listAddressHistory",
   "listStages", "listTeams", "updateTeam", "createTeam", "listTemplatePhases", "updateStageSla",
   "listSavedViews", "saveView", "deleteSavedView", "shareSavedView",
-  "submitFeedback", "listFeedback", "setFeedbackStage", "setFeedbackPhase",
-  "setFeedbackVote", "attachmentUrl",
+  "submitFeedback", "listFeedback", "setFeedbackStage", "setFeedbackPhase", "setFeedbackKind",
+  "setFeedbackVote", "attachmentUrl", "uploadReportImage",
   "listRoadmapPhases", "createRoadmapPhase", "updateRoadmapPhase", "deleteRoadmapPhase",
   "moveRoadmapPhase", "listReleases", "createRelease", "deleteRelease",
   "cloneJob", "listRecordActivity",
@@ -190,7 +201,7 @@ const PROJECT_COLUMNS =
 //
 // Writes still go to `jobs` — a view is not the place to insert through.
 const JOB_COLUMNS =
-  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_sharepoint_url, job_created_at, job_created_by, job_updated_at, job_updated_by, job_current_address, job_original_address, project_current_address, project_sharepoint_url, project_type, job_title_type";
+  "job_id, project_id, job_sequence, job_number_old, job_original_address_id, job_current_address_id, job_status, job_stage, job_stage_entered_at, job_owning_team, job_engaged_teams, job_assignee_id, job_sharepoint_url, job_created_at, job_created_by, job_updated_at, job_updated_by, job_current_address, job_original_address, project_current_address, project_sharepoint_url, project_type, job_title_type, job_council, job_target_completion, job_end_date, job_calculated_completion, job_calculated_completion_missing";
 
 /**
  * `""` and `"   "` are how a browser reports a field somebody did not fill in, and they
@@ -209,6 +220,56 @@ const TEAM_COLUMNS = "team_id, team_name, team_position, team_is_active";
  * asked for at the moment a card is opened — there is no permanent link to hold.
  */
 const SCREENSHOT_BUCKET = "feedback-screenshots";
+
+/**
+ * The PUBLIC bucket report images go into (0100). Public, so the URL is permanent and
+ * needs no session — which is what lets a client open a shared document and see the
+ * pictures, and equally what means those pictures outlive the link. Amber chose that
+ * trade with the alternative in front of her; 0100 records it.
+ */
+const REPORT_IMAGE_BUCKET = "report-images";
+
+/**
+ * The PRIVATE bucket a document published to the job goes into (0110).
+ *
+ * The opposite call to REPORT_IMAGE_BUCKET above, and the two sit together so nobody
+ * copies the wrong one: a picture inside a report is decoration a client is being sent
+ * anyway, and a published document is the work product — a contract, a report, a letter,
+ * with real addresses, names and figures in it. Read by signed URL, like the screenshots.
+ */
+const JOB_DOCUMENT_BUCKET = "job-documents";
+/**
+ * Where a maintenance photo or video goes (0119), and it behaves OPPOSITELY to the one
+ * above: this bucket is public, so its objects have permanent URLs and nothing is signed.
+ * Amber, 14 September, reversing her own 0c answer — *"No videos or photos are private
+ * accept video and photos with permanent links"* — so a generated sheet can point at a
+ * picture that still works when it reaches a contractor.
+ *
+ * Contracts, permits and published documents keep going to `JOB_DOCUMENT_BUCKET`. Read
+ * `documents.document_storage_bucket` to know which one a row is in; do not infer it.
+ */
+const MAINTENANCE_MEDIA_BUCKET = "maintenance-media";
+
+/**
+ * `photo`, `video`, or null for anything that is neither — a PDF quote, a Word scope.
+ *
+ * The extension fallback is the same one `FileDrop` carries and for the same reason: HEIC
+ * off a phone and a file dragged out of some mail clients arrive with an empty `type`, and
+ * refusing a real photograph because the browser did not label it is the wrong failure.
+ * Both lists are small and deliberately not `image/*` — see 0110 on why an allowlist is the
+ * cheapest guard against a bucket becoming a drive.
+ */
+function mediaKind(file: File): "photo" | "video" | null {
+  const type = file.type || EXTENSION_MEDIA[file.name.split(".").pop()?.toLowerCase() ?? ""] || "";
+  if (type.startsWith("image/")) return "photo";
+  if (type.startsWith("video/")) return "video";
+  return null;
+}
+const EXTENSION_MEDIA: Record<string, string> = {
+  jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp",
+  heic: "image/heic", heif: "image/heif",
+  mp4: "video/mp4", mov: "video/quicktime", webm: "video/webm", mpeg: "video/mpeg", mpg: "video/mpeg"
+};
 
 /**
  * What the tracker reads off `feedback_display` (0061, widened by 0068).
@@ -264,13 +325,14 @@ const toFeedbackItem = (
  * names its constraint — the PGRST201 rule, same as everywhere else.
  */
 const COMMENT_COLUMNS =
-  "comment_id, project_id, job_id, task_id, variation_id, feedback_id, comment_body, comment_is_pinned, comment_is_internal, comment_feedback_stage, parent_comment_id, comment_edited_at, comment_created_at, comment_created_by, comment_updated_at, comment_updated_by, author:profiles!comments_comment_created_by_fkey(profile_full_name)";
+  "comment_id, project_id, job_id, task_id, variation_id, feedback_id, maintenance_request_id, comment_body, comment_is_pinned, comment_is_internal, comment_feedback_stage, parent_comment_id, comment_edited_at, comment_created_at, comment_created_by, comment_updated_at, comment_updated_by, author:profiles!comments_comment_created_by_fkey(profile_full_name)";
 
 type CommentRow = {
   comment_id: string;
   project_id: number | null; job_id: string | null;
   task_id: string | null; variation_id: string | null;
   feedback_id?: string | null;
+  maintenance_request_id?: string | null;
   comment_is_pinned?: boolean | null;
   comment_is_internal?: boolean | null;
   comment_feedback_stage?: string | null;
@@ -287,21 +349,24 @@ type CommentRow = {
  * `tasks`, and re-read the row through the view.
  */
 const TASK_COLUMNS =
-  "task_id, job_id, project_id, task_name, task_description, parent_task_id, task_position, task_owning_team, task_assignee_id, task_status, task_due_date, task_completed_at, task_completed_by, task_is_external, process_run_id, process_task_id, task_started_at, task_expected_days, task_at_risk_lead_days, task_created_at, task_created_by, task_updated_at, task_updated_by, task_assignee_name, task_completed_by_name, task_due_effective, task_at_risk_date, task_health, task_checklist_total, task_checklist_done, task_subtask_total, task_subtask_done";
+  "task_id, job_id, project_id, maintenance_request_id, task_name, task_description, parent_task_id, task_position, task_owning_team, task_assignee_id, task_status, task_due_date, task_scheduled_date, task_completed_at, task_completed_by, task_is_external, process_run_id, process_task_id, task_started_at, task_expected_days, task_at_risk_lead_days, task_created_at, task_created_by, task_updated_at, task_updated_by, task_assignee_name, task_completed_by_name, task_created_by_name, task_process_id, task_process_name, task_record_name, task_record_stage, task_due_effective, task_at_risk_date, task_health, task_checklist_total, task_checklist_done, task_subtask_total, task_subtask_done";
 
 type TaskRow = {
   task_id: string; job_id: string | null; project_id: number | null;
+  maintenance_request_id?: string | null;
   task_name: string; task_description: string | null;
   parent_task_id: string | null; task_position: number;
   task_owning_team: string | null; task_assignee_id: string | null;
-  task_status: string; task_due_date: string | null;
+  task_status: string; task_due_date: string | null; task_scheduled_date: string | null;
   task_completed_at: string | null; task_completed_by: string | null;
   task_is_external: boolean;
   process_run_id: string | null; process_task_id: string | null;
   task_started_at: string | null; task_expected_days: number | null; task_at_risk_lead_days: number | null;
   task_created_at: string; task_created_by: string | null;
   task_updated_at: string; task_updated_by: string | null;
-  task_assignee_name: string | null; task_completed_by_name: string | null;
+  task_assignee_name: string | null; task_completed_by_name: string | null; task_created_by_name: string | null;
+  task_process_id: string | null; task_process_name: string | null;
+  task_record_name: string | null; task_record_stage: string | null;
   task_due_effective: string | null; task_at_risk_date: string | null;
   task_health: TaskEntry["health"];
   task_checklist_total: number; task_checklist_done: number;
@@ -354,6 +419,7 @@ function toTask(r: TaskRow): TaskEntry {
     id: r.task_id,
     jobId: r.job_id,
     projectId: r.project_id,
+    maintenanceRequestId: r.maintenance_request_id ?? null,
     name: r.task_name,
     description: r.task_description,
     parentTaskId: r.parent_task_id,
@@ -363,6 +429,7 @@ function toTask(r: TaskRow): TaskEntry {
     assigneeName: r.task_assignee_name,
     status: r.task_status as TaskStatus,
     dueDate: r.task_due_date,
+    scheduledDate: r.task_scheduled_date,
     completedAt: r.task_completed_at,
     completedBy: r.task_completed_by,
     completedByName: r.task_completed_by_name,
@@ -381,6 +448,11 @@ function toTask(r: TaskRow): TaskEntry {
     processTaskId: r.process_task_id,
     createdAt: r.task_created_at,
     createdBy: r.task_created_by,
+    createdByName: r.task_created_by_name,
+    processId: r.task_process_id,
+    processName: r.task_process_name,
+    recordName: r.task_record_name,
+    recordStage: r.task_record_stage as StageName | null,
     updatedAt: r.task_updated_at,
     updatedBy: r.task_updated_by
   };
@@ -391,6 +463,7 @@ function toComment(r: CommentRow): CommentEntry {
     id: r.comment_id,
     projectId: r.project_id,
     jobId: r.job_id,
+    maintenanceRequestId: r.maintenance_request_id ?? null,
     taskId: r.task_id,
     variationId: r.variation_id,
     body: r.comment_body,
@@ -409,7 +482,7 @@ function toComment(r: CommentRow): CommentEntry {
 }
 
 const ADDRESS_COLUMNS =
-  "address_id, address_lot_number, address_street_number, address_street_1, address_street_2, address_suburb, address_state, address_postcode, address_council";
+  "address_id, address_res_number, address_lot_number, address_street_number, address_street_1, address_street_2, address_suburb, address_state, address_postcode, address_council";
 
 /** One `activity_audit` row, as this file reads it (the pre-0080 shape `auditNarrative` diffs). */
 type AuditRow = {
@@ -432,7 +505,7 @@ type AuditRow = {
  * `fromAuditRow`, so the rename touched one place in the app rather than four.
  */
 const AUDIT_COLUMNS =
-  "activity_audit_id, activity_audit_table, activity_audit_operation, activity_audit_at, activity_audit_jwt_sub, activity_audit_old_row, activity_audit_new_row, activity_audit_profile_id, activity_audit_job_id, activity_audit_project_id, activity_audit_origin";
+  "activity_audit_id, activity_audit_table, activity_audit_operation, activity_audit_at, activity_audit_jwt_sub, activity_audit_old_row, activity_audit_new_row, activity_audit_profile_id, activity_audit_job_id, activity_audit_project_id, activity_audit_maintenance_request_id, activity_audit_origin";
 
 interface AuditDbRow {
   activity_audit_id: number;
@@ -557,7 +630,10 @@ function narrate(r: AuditRow, lookup: NameLookup, names: SubjectNames): RecordAc
     // An integration is an actor with a name, not "system" (0080's origin column).
     ?? (r.origin && r.origin !== "app" ? `${r.origin} sync` : null);
   const verb = headline(r);
-  const base = { id: String(r.id), at: r.changed_at, subject, href, who };
+  // The audit feed is about a row in a table, not about a maintenance issue: this null is
+  // honest rather than a stub. 0120's own activity_events rows carry the issue; this
+  // function reads the audit tables, which key by table and row id.
+  const base = { id: String(r.id), at: r.changed_at, subject, href, who, maintenanceRequestId: null };
 
   if (verb) return { ...base, summary: verb, changes: [] };
 
@@ -775,7 +851,11 @@ export function createSupabaseRepository(): Repository {
     const { data, error } = await db
       .from("addresses")
       .insert({
-        address_lot_number: emptyToNull(a.lotNumber),
+        // Null on a project's address — the form does not offer it there. `0105`
+        // explains why the database does not forbid it rather than checking it.
+        // Numbers since 0110 — `emptyToNull` is for the text fields below it.
+        address_res_number: a.resNumber ?? null,
+        address_lot_number: a.lotNumber ?? null,
         address_street_number: emptyToNull(a.streetNumber),
         address_street_1: emptyToNull(a.street1),
         address_street_2: emptyToNull(a.street2),
@@ -870,6 +950,123 @@ export function createSupabaseRepository(): Repository {
       const { data, error } = await query.order("project_id").order("job_sequence");
       if (error) throw error;
       return (data ?? []).map(r => toJob(r as unknown as JobRow));
+    },
+
+    /**
+     * Three counts, three `head: true` requests, in parallel.
+     *
+     * `head: true` is the whole reason this is cheap: PostgREST answers with a
+     * `Content-Range` and no body, so nothing is serialised and nothing crosses the wire
+     * but a number. The obvious alternative — `listJobs().length` — pulls every job on
+     * every navigation to render one badge.
+     *
+     * Each filter matches the screen the row navigates to, because the first thing
+     * anybody does with a number in a nav rail is click it and count. Jobs excludes
+     * Closed and Maintenance excludes closed and rejected, exactly as `JOB_VIEWS.all` and
+     * `listMaintenanceRequests({ queue: "open" })` do. Projects has no filter, because
+     * the Projects board's "All Projects" view has none either.
+     *
+     * A FOURTH COUNT WAS HERE AND IS NOT ANY MORE
+     *
+     *   `myOpenTasks` — tasks assigned to you, neither done nor cancelled — was added on
+     *   11 September for the rail's Tasks badge and removed the same day with it
+     *   (*"until counts are verified and tested remove"*). Kept as a note rather than as
+     *   dead code: the query was one more `head: true` in this same `Promise.all`, so
+     *   putting it back is four lines, and the thing that needs deciding first is what
+     *   the number means rather than how to fetch it.
+     *
+     * `Promise.all`, so the three are one round of latency rather than three. A refusal
+     * from any of them rejects the lot and the rail shows no numbers at all — which is
+     * the right failure: a rail that silently drew 0 next to Jobs would be reporting an
+     * empty company.
+     */
+    async railCounts(): Promise<RailCounts> {
+      const [projects, jobs, maintenance] = await Promise.all([
+        client.from("projects").select("project_id", { count: "exact", head: true }),
+        client.from("job_display").select("job_id", { count: "exact", head: true })
+          .neq("job_stage", "Closed"),
+        client.from("maintenance_request_display")
+          .select("maintenance_request_id", { count: "exact", head: true })
+          .not("maintenance_request_status", "in", "(closed,rejected)")
+      ]);
+      for (const r of [projects, jobs, maintenance]) if (r.error) throw r.error;
+      return {
+        projects: projects.count ?? 0,
+        jobs: jobs.count ?? 0,
+        maintenance: maintenance.count ?? 0
+      };
+    },
+
+    // ---- the rail's Pinned section (0112) --------------------------------
+
+    /** In slot order, which is the order the rail draws them. RLS returns only yours. */
+    async listMyPins(): Promise<PinnedPage[]> {
+      const { data, error } = await client
+        .from("pinned_pages")
+        .select("pinned_page_id, pinned_page_label, pinned_page_url, pinned_page_position")
+        .order("pinned_page_position", { ascending: true });
+      if (error) throw error;
+      return (data ?? []).map(r => ({
+        id: r.pinned_page_id,
+        label: r.pinned_page_label,
+        url: r.pinned_page_url,
+        position: r.pinned_page_position
+      }));
+    },
+
+    /**
+     * Into the lowest free slot of five.
+     *
+     * Read-then-write, and the race is handled by the database rather than by trying to
+     * avoid it: `unique (profile_id, pinned_page_position)` means two tabs that both pick
+     * slot 3 produce one insert and one 23505, and the loser is told the pin was not
+     * saved rather than silently overwriting the winner. A counting trigger would have
+     * let both through.
+     *
+     * The messages name the actual rule. "Refused by the database" is true of every
+     * failure and useless in all of them.
+     */
+    async pinPage(label: string, url: string): Promise<PinnedPage[]> {
+      const name = label.trim();
+      if (!name) throw new Error("A pinned page needs a name.");
+      // Checked here as well as in the database: this one is worth a sentence rather
+      // than a constraint violation, because it is the commonest thing to hit.
+      if (!url.startsWith("/") || url.startsWith("//")) {
+        throw new Error("Only a page inside Lofty Hub can be pinned.");
+      }
+      const me = await repo.currentProfile();
+      if (!me) throw new Error("Pinning a page needs you to be signed in.");
+
+      const taken = new Set((await repo.listMyPins()).map(p => p.position));
+      const free = [1, 2, 3, 4, 5].find(n => !taken.has(n));
+      if (!free) throw new Error("Five pages are pinned already — unpin one to make room.");
+
+      const { error } = await client.from("pinned_pages").insert({
+        profile_id: me.id,
+        pinned_page_label: name,
+        pinned_page_url: url,
+        pinned_page_position: free
+      });
+      if (error) {
+        if (error.code === "23505") {
+          throw new Error("That page is already pinned, or a slot was taken — try again.");
+        }
+        throw error;
+      }
+      return await repo.listMyPins();
+    },
+
+    async unpinPage(id: string): Promise<PinnedPage[]> {
+      const { data, error } = await client
+        .from("pinned_pages")
+        .delete()
+        .eq("pinned_page_id", id)
+        .select("pinned_page_id");
+      if (error) throw error;
+      // RLS makes another person's pin unreachable rather than forbidden, so a delete
+      // that matched nothing is the only signal that it was not yours (or is gone).
+      if (!data?.length) throw new Error("That pin was not removed — it no longer exists.");
+      return await repo.listMyPins();
     },
 
     /** `maybeSingle`, not `single`: a job that is not there is null, not an error. */
@@ -1145,7 +1342,7 @@ export function createSupabaseRepository(): Repository {
     },
 
     async listComments(
-      ref: { projectId?: number; jobId?: string; feedbackId?: string }, limit = 50
+      ref: { projectId?: number; jobId?: string; feedbackId?: string; maintenanceRequestId?: string }, limit = 50
     ): Promise<CommentEntry[]> {
       let q = client.from("comments").select(COMMENT_COLUMNS);
       // Exactly one ref, the same rule the CHECK enforces — asking with neither would
@@ -1153,7 +1350,8 @@ export function createSupabaseRepository(): Repository {
       if (ref.projectId != null) q = q.eq("project_id", ref.projectId);
       else if (ref.jobId != null) q = q.eq("job_id", ref.jobId);
       else if (ref.feedbackId != null) q = q.eq("feedback_id", ref.feedbackId);
-      else throw new Error("listComments needs a projectId, a jobId or a feedbackId.");
+      else if (ref.maintenanceRequestId != null) q = q.eq("maintenance_request_id", ref.maintenanceRequestId);
+      else throw new Error("listComments needs a projectId, a jobId, a feedbackId or a maintenanceRequestId.");
 
       const { data, error } = await q
         // Pinned first — the official answer sits above the discussion (0064). Then
@@ -1169,13 +1367,13 @@ export function createSupabaseRepository(): Repository {
     },
 
     async addComment(
-      ref: { projectId?: number; jobId?: string; feedbackId?: string },
+      ref: { projectId?: number; jobId?: string; feedbackId?: string; maintenanceRequestId?: string },
       body: string,
       mentions: string[] = [],
       standing: { internal?: boolean; stage?: FeedbackStage } = {}
     ): Promise<CommentEntry> {
-      if (ref.projectId == null && ref.jobId == null && ref.feedbackId == null) {
-        throw new Error("addComment needs a projectId, a jobId or a feedbackId.");
+      if (ref.projectId == null && ref.jobId == null && ref.feedbackId == null && ref.maintenanceRequestId == null) {
+        throw new Error("addComment needs a projectId, a jobId, a feedbackId or a maintenanceRequestId.");
       }
       // The author is NOT sent: comments_stamp_created_by fills it from the session,
       // which is the only version of "who wrote this" a client cannot forge.
@@ -1185,6 +1383,7 @@ export function createSupabaseRepository(): Repository {
           project_id: ref.projectId ?? null,
           job_id: ref.jobId ?? null,
           feedback_id: ref.feedbackId ?? null,
+          maintenance_request_id: ref.maintenanceRequestId ?? null,
           comment_body: body,
           // Both refused below admin by guard_comment_standing_on_insert(), so a
           // non-admin sending them gets 42501 rather than a comment that quietly is
@@ -1381,6 +1580,7 @@ export function createSupabaseRepository(): Repository {
         const { data: address, error: addressError } = await client
           .from("addresses")
           .insert({
+            address_res_number: input.address.resNumber ?? null,
             address_lot_number: input.address.lotNumber ?? null,
             address_street_number: input.address.streetNumber ?? null,
             address_street_1: input.address.street1,
@@ -1418,11 +1618,24 @@ export function createSupabaseRepository(): Repository {
           // enum to text with a check — so a wrong value here is a constraint violation
           // naming itself rather than a type error.
           job_stage: input.stage ?? "Acquisition & Development",
-          job_status: input.status ?? "on_track"
+          job_status: input.status ?? "on_track",
+          // The old job number, when the job already exists elsewhere (Amber, 7 Sep: "you
+          // should be able to add a sitebook number as well at the time"). Trimmed and
+          // blank-to-null for the reason updateJob gives: the column is unique over
+          // non-nulls. Omitted from the row entirely when not given, so the column's own
+          // default stands.
+          ...(input.jobNumberOld?.trim() ? { job_number_old: input.jobNumberOld.trim() } : {})
         })
         .select("*")
         .single();
-      if (error) throw error;
+      if (error) {
+        if (error.code === "23505" && input.jobNumberOld?.trim()) {
+          throw new Error(
+            `Old job number ${input.jobNumberOld.trim()} is already on another job — search it to see which.`
+          );
+        }
+        throw error;
+      }
       return toJob(data);
     },
 
@@ -1489,7 +1702,7 @@ export function createSupabaseRepository(): Repository {
        * text and why the mapping back from inserted addresses no longer sorts them
        * numerically.
        */
-      const lots: { lotNumber: string; jobNumberOld?: string | null; titleType?: TitleType | null }[] =
+      const lots: { lotNumber: string; jobNumberOld?: string | null; streetNumber?: string | null; titleType?: TitleType | null }[] =
         input.lots?.length
           ? input.lots
           : Array.from({ length: input.count }, (_, i) => ({ lotNumber: String(firstLot + i) }));
@@ -1497,6 +1710,23 @@ export function createSupabaseRepository(): Repository {
       if (lots.some(l => !l.lotNumber.trim())) {
         throw new Error("Every job needs a lot number.");
       }
+      /**
+       * A lot number is only ever a number (`0110`). The column is an integer, so
+       * "2B" would come back as a Postgres cast error naming a type nobody typed —
+       * refused here instead, in the words of the thing that is wrong. A typed "Lot 3"
+       * is stripped rather than refused: people write the label, and the database can
+       * no longer clean it up on their behalf.
+       */
+      const asLot = (typed: string): number => {
+        const bare = typed.trim().replace(/^lot[\s.:#-]*/i, "").trim();
+        if (!/^\d+$/.test(bare)) {
+          throw new Error(
+            `"${typed.trim()}" is not a lot number — a lot number is only digits. ` +
+            "A number with a letter or a dash in it is a street number, not a lot."
+          );
+        }
+        return Number(bare);
+      };
       const duplicate = lots.find((l, i) => lots.findIndex(o => o.lotNumber === l.lotNumber) !== i);
       if (duplicate) {
         throw new Error(`Lot ${duplicate.lotNumber} is listed twice — each job needs its own lot number.`);
@@ -1505,10 +1735,28 @@ export function createSupabaseRepository(): Repository {
       // address_consolidated is left out: build_consolidated_address() composes it, and
       // a value sent from here would be overwritten anyway — or worse, not be.
       const rows = lots.map(lot => ({
-        address_lot_number: lot.lotNumber,
-        // A lot has a lot number, not a street number — the street number arrives when
-        // the titles do, which is exactly the rename the address history exists for.
-        address_street_number: null,
+        address_lot_number: asLot(lot.lotNumber),
+        /**
+         * The lot's own street number, or the project's.
+         *
+         * THIS WAS HARD-CODED TO NULL, and the comment defending it read: *"A lot has a
+         * lot number, not a street number — the street number arrives when the titles
+         * do, which is exactly the rename the address history exists for."* True of a
+         * lot on a plan of division, and false of the address anybody uses. Amber, 10
+         * September: *"jobs are not showing the street number on the address. they are
+         * only showing lot number."*
+         *
+         * It was also the one field the split singled out: street, suburb, state,
+         * postcode and council are all copied from the project's address, and the
+         * street number alone was thrown away — so a job at 28 Corner Street read
+         * "Lot 3, Corner Street, Adelaide SA 5000", an address with no number in it.
+         *
+         * Inherited rather than invented: the value comes from the project's own
+         * address row. A lot that has been given its own number carries it instead,
+         * which is the per-lot field on the split dialog. The address history still
+         * records the rename when titles issue — that mechanism is untouched.
+         */
+        address_street_number: emptyToNull(lot.streetNumber ?? null) ?? source.address_street_number,
         address_street_1: source.address_street_1,
         address_street_2: source.address_street_2,
         address_suburb: source.address_suburb,
@@ -1536,7 +1784,7 @@ export function createSupabaseRepository(): Repository {
 
       const created: Job[] = [];
       for (const lot of lots) {
-        const addressId = byLot.get(lot.lotNumber);
+        const addressId = byLot.get(asLot(lot.lotNumber));
         if (!addressId) throw new Error(`Lot ${lot.lotNumber} did not get an address.`);
         const { data, error } = await client
           .from("jobs")
@@ -1628,6 +1876,10 @@ export function createSupabaseRepository(): Repository {
       if ("jobNumberOld" in patch) row.job_number_old = patch.jobNumberOld?.trim() || null;
       // Null clears it back to "nobody has said", which is a real answer here.
       if ("titleType" in patch) row.job_title_type = patch.titleType ?? null;
+      // 0113. Null clears either — an unset completion date is a real state, and the
+      // record draws it as an empty date box rather than as a guess.
+      if ("targetCompletion" in patch) row.job_target_completion = patch.targetCompletion ?? null;
+      if ("endDate" in patch) row.job_end_date = patch.endDate ?? null;
       if (Object.keys(row).length === 0) {
         const { data, error } = await client
           .from("job_display").select(JOB_COLUMNS).eq("job_id", id).single();
@@ -1701,8 +1953,18 @@ export function createSupabaseRepository(): Repository {
 
     async setProjectCurrentAddress(id: number, address: NewAddress): Promise<Project> {
       const addressId = await insertAddress(address);
-      // The repoint. guard_original_address leaves the original alone, and the 0042
-      // trigger records the outgoing current address's stint in address_history.
+      // The repoint. guard_original_address leaves the original alone, the 0042 trigger
+      // records the outgoing current address's stint in address_history, and the 0118
+      // trigger carries the project's live jobs across where they were still standing at
+      // the address being left — each keeping any lot and res number of its own.
+      //
+      // None of those three is written here, and that is the point: a job is moved by a
+      // rule the import and a hand-written UPDATE obey too. Re-implementing the match in
+      // TypeScript would be a second opinion that can disagree with the database, which
+      // is the same reason setJobCurrentAddress checks nothing itself.
+      //
+      // readProject returns the project alone, so a caller showing the jobs re-reads —
+      // ProjectsPage's `refresh` does, which is how the jobs list shows the new street.
       const { data: updated, error } = await client
         .from("projects")
         .update({ project_current_address_id: addressId })
@@ -1713,6 +1975,40 @@ export function createSupabaseRepository(): Repository {
         throw new Error(`Project ${id} was not updated — it no longer exists, or you do not have permission.`);
       }
       return await readProject(id);
+    },
+
+    /**
+     * Give a job a new current address (0105).
+     *
+     * The project half of this has existed since the record page grew an "add another
+     * address"; the job half never did, so a job's address was set once at the split
+     * and frozen. That is the wrong way round — the job's address is the one that
+     * moves, from "Lot 3" to "13 Tester Street" when titles issue, and it is where the
+     * res number arrives months into a build.
+     *
+     * Deliberately the same three lines as `setProjectCurrentAddress`: insert the new
+     * address, repoint, read back. Every rule that makes it safe is a trigger rather
+     * than a check written here — `guard_original_address` protects the original,
+     * `0042` files the outgoing address in `address_history`, and
+     * `guard_job_address_is_a_street` refuses a job left at a locality, which is the
+     * one a job has and a project does not. Re-implementing any of them here would be
+     * a second opinion that can disagree with the database.
+     */
+    async setJobCurrentAddress(jobNumber: string, address: NewAddress): Promise<Job> {
+      const addressId = await insertAddress(address);
+      const { data: updated, error } = await client
+        .from("jobs")
+        .update({ job_current_address_id: addressId })
+        .eq("job_id", jobNumber)
+        .select("job_id");
+      if (error) throw error;
+      if (!updated?.length) {
+        throw new Error(`Job ${jobNumber} was not updated — it no longer exists, or you do not have permission.`);
+      }
+      const { data, error: readError } = await client
+        .from("job_display").select(JOB_COLUMNS).eq("job_id", jobNumber).single();
+      if (readError) throw readError;
+      return toJob(data as unknown as JobRow);
     },
 
     async listAddressHistory(ref: { projectId?: number; jobId?: string }): Promise<AddressHistoryEntry[]> {
@@ -1979,6 +2275,7 @@ export function createSupabaseRepository(): Repository {
         const { data: made, error: writeError } = await client
           .from("addresses")
           .insert({
+            address_res_number: from.address_res_number,
             address_lot_number: from.address_lot_number,
             address_street_number: from.address_street_number,
             address_street_1: from.address_street_1,
@@ -2044,11 +2341,14 @@ export function createSupabaseRepository(): Repository {
      * its jobs' rows. The two jsonb-path scans 0058 needed are gone with it.
      */
     async listRecordActivity(
-      opts: { projectId?: number; jobId?: string; limit?: number }
+      opts: { projectId?: number; jobId?: string; maintenanceRequestId?: string; limit?: number }
     ): Promise<RecordActivity[]> {
       const limit = opts.limit ?? 50;
       let q = client.from("activity_audit").select(AUDIT_COLUMNS);
-      if (opts.jobId) q = q.eq("activity_audit_job_id", opts.jobId);
+      // The issue first: it is the narrowest scope, and an issue's rows also carry their
+      // job (0121), so asking by job would swamp the drawer with the whole house's history.
+      if (opts.maintenanceRequestId) q = q.eq("activity_audit_maintenance_request_id", opts.maintenanceRequestId);
+      else if (opts.jobId) q = q.eq("activity_audit_job_id", opts.jobId);
       else if (opts.projectId != null) q = q.eq("activity_audit_project_id", opts.projectId);
       else return [];
       const { data, error } = await q.order("activity_audit_at", { ascending: false }).limit(limit);
@@ -2166,18 +2466,30 @@ export function createSupabaseRepository(): Repository {
 
     // ---- tasks -----------------------------------------------------------
 
-    async listTasks(opts: { jobId?: string; projectId?: number }): Promise<TaskEntry[]> {
+    async listTasks(opts: {
+      jobId?: string; projectId?: number; assigneeId?: string; teams?: TeamId[]; all?: boolean;
+      maintenanceRequestId?: string;
+    }): Promise<TaskEntry[]> {
       let q = client.from("task_display").select(TASK_COLUMNS);
-      // Exactly one parent, the same rule the CHECK enforces. Asking with neither would
-      // quietly return every task in the company.
-      if (opts.jobId != null) q = q.eq("job_id", opts.jobId);
+      // Exactly one scope. Asking with none would quietly return every task in the
+      // company — the Tasks board's "All tasks" tab does exactly that, which is why
+      // `all` exists, but only as an explicit ask rather than the fallthrough.
+      // Narrows WITHIN a job rather than replacing it (0120): a maintenance task keeps its
+      // job_id, which is what puts it on the board, so this is checked first and the job
+      // filter below is the broader question.
+      if (opts.maintenanceRequestId != null) q = q.eq("maintenance_request_id", opts.maintenanceRequestId);
+      else if (opts.jobId != null) q = q.eq("job_id", opts.jobId);
       else if (opts.projectId != null) q = q.eq("project_id", opts.projectId);
-      else throw new Error("listTasks needs a jobId or a projectId.");
+      else if (opts.assigneeId != null) q = q.eq("task_assignee_id", opts.assigneeId);
+      else if (opts.teams != null) q = q.in("task_owning_team", opts.teams);
+      else if (opts.all) { /* every task — nothing to filter by */ }
+      else throw new Error("listTasks needs a scope: a job, a project, an assignee, a team, or all.");
 
       const { data, error } = await q
         // Position first because somebody chose it; created_at breaks the tie, so two
         // tasks added at position 0 stay in the order they were typed rather than
-        // swapping places between reads.
+        // swapping places between reads. Meaningless across records (the Tasks board
+        // sorts itself), harmless as a tiebreak.
         .order("task_position", { ascending: true })
         .order("task_created_at", { ascending: true });
       if (error) throw error;
@@ -2195,11 +2507,15 @@ export function createSupabaseRepository(): Repository {
         .insert({
           job_id: task.jobId ?? null,
           project_id: task.projectId ?? null,
+          // 0120: a qualifier beside the parent, not instead of it. The composite foreign
+          // key refuses a pair that disagree, so a task cannot carry another job's issue.
+          maintenance_request_id: task.maintenanceRequestId ?? null,
           task_name: name,
           task_description: task.description?.trim() || null,
           task_owning_team: task.owningTeam ?? null,
           task_assignee_id: task.assigneeId ?? null,
           task_due_date: task.dueDate ?? null,
+          task_scheduled_date: task.scheduledDate ?? null,
           task_is_external: task.isExternal ?? false,
           parent_task_id: task.parentTaskId ?? null,
           task_expected_days: task.expectedDays ?? null,
@@ -2221,6 +2537,7 @@ export function createSupabaseRepository(): Repository {
       if (patch.owningTeam !== undefined) row.task_owning_team = patch.owningTeam;
       if (patch.assigneeId !== undefined) row.task_assignee_id = patch.assigneeId;
       if (patch.dueDate !== undefined) row.task_due_date = patch.dueDate;
+      if (patch.scheduledDate !== undefined) row.task_scheduled_date = patch.scheduledDate;
       if (patch.isExternal !== undefined) row.task_is_external = patch.isExternal;
       if (patch.position !== undefined) row.task_position = patch.position;
       if (patch.startedAt !== undefined) row.task_started_at = patch.startedAt;
@@ -2493,6 +2810,22 @@ export function createSupabaseRepository(): Repository {
     },
 
     /**
+     * Bug or idea. The same policy as the phase — `admins triage feedback` — and no
+     * trigger stands in the way: the kind is not the stage, so `guard_feedback_stage_change`
+     * lets it through at admin, which is where re-filing belongs.
+     */
+    async setFeedbackKind(id: string, kind: FeedbackKind): Promise<FeedbackItem[]> {
+      const { data, error } = await client
+        .from("feedback")
+        .update({ feedback_kind: kind })
+        .eq("feedback_id", id)
+        .select("feedback_id");
+      if (error) throw error;
+      if (!data?.[0]) throw new Error("That was not changed — re-filing a request needs admin.");
+      return await repo.listFeedback();
+    },
+
+    /**
      * A vote, and taking one back.
      *
      * The insert cannot double up — `(feedback_id, profile_id)` is the primary key — so a
@@ -2728,6 +3061,31 @@ export function createSupabaseRepository(): Repository {
       // guard_comment_standing() raises 42501 below admin — the author's own edit policy
       // would otherwise have let them pin their own comment.
       if (error) throw error;
+    },
+
+    async uploadReportImage(input: {
+      file: File;
+      owner: { kind: "document" | "library"; id: string };
+    }): Promise<string> {
+      // The same sanitising as attachScreenshots, and for the same reason: a filename
+      // arrives from somebody's machine and `../` in an object path is the oldest trick
+      // there is. Anything that is not a letter, number, dot or dash becomes a dash, and
+      // the uuid in front keeps two files called "site.jpg" apart.
+      const safe = input.file.name.replace(/[^a-zA-Z0-9.-]/g, "-").slice(-80) || "image";
+      const folder = input.owner.kind === "document" ? "documents" : "library";
+      const path = `${folder}/${input.owner.id}/${crypto.randomUUID()}-${safe}`;
+
+      const { error } = await db.storage
+        .from(REPORT_IMAGE_BUCKET)
+        .upload(path, input.file, { contentType: input.file.type || undefined, upsert: false });
+      // Thrown rather than swallowed into a null. An image that silently did not upload
+      // is a block that stays empty with nothing saying why — and the two failures worth
+      // telling apart, too big and wrong type, both arrive here with their own message.
+      if (error) throw error;
+
+      const { data } = db.storage.from(REPORT_IMAGE_BUCKET).getPublicUrl(path);
+      if (!data?.publicUrl) throw new Error("The image uploaded but has no public URL.");
+      return data.publicUrl;
     },
 
     async attachmentUrl(path: string): Promise<string | null> {
@@ -3399,6 +3757,687 @@ export function createSupabaseRepository(): Repository {
       return toReportDocument(data[0] as unknown as ReportDocumentRow);
     },
 
+    // ---- what is filed on a record, and where it lives (0032 / 0103) ------
+
+    /**
+     * The documents attached to one record.
+     *
+     * An embed rather than two round trips: `document_links` has exactly one foreign key
+     * to `documents`, so `documents(...)` is unambiguous here — this is not the PGRST201
+     * shape that the address embeds are (0036), because that one has TWO keys to the same
+     * table and this has one.
+     */
+    async listRecordDocuments(opts): Promise<RecordDocument[]> {
+      let q = client.from("document_links").select(RECORD_DOCUMENT_COLUMNS);
+      if (opts.jobId) q = q.eq("job_id", opts.jobId);
+      else if (opts.projectId != null) q = q.eq("project_id", opts.projectId);
+      // Neither: the caller asked for the documents belonging to no record, and 0032's
+      // `document_links_one_parent` makes that row impossible. Answering with EVERY
+      // attachment in the company would be the unfiltered-query bug that
+      // listReportDocuments' `mine` branch already guards against.
+      else return [];
+      const { data, error } = await q.order("document_link_created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? [])
+        .map(r => toRecordDocument(r as unknown as RecordDocumentRow))
+        // A link whose document the caller's RLS did not return. Filtered rather than
+        // rendered as a blank row: 0032's policies on the two tables are the same today,
+        // so this cannot happen — and a row with no name would be the first sign that
+        // somebody had narrowed one of them without the other.
+        .filter((d): d is RecordDocument => d !== null);
+    },
+
+    /**
+     * The photos and files on one maintenance issue (0115).
+     *
+     * Read off the request's own links, so a photo taken off the issue disappears from
+     * here while the job's copy stays filed — which is what two links mean.
+     */
+    async listMaintenanceDocuments(requestId: string): Promise<RecordDocument[]> {
+      const { data, error } = await client
+        .from("document_links")
+        .select(RECORD_DOCUMENT_COLUMNS)
+        .eq("maintenance_request_id", requestId)
+        .order("document_link_created_at", { ascending: true });
+      if (error) throw error;
+      return (data ?? [])
+        .map(r => toRecordDocument(r as unknown as RecordDocumentRow))
+        .filter((d): d is RecordDocument => d !== null);
+    },
+
+    /**
+     * Attach photos and files to a maintenance issue (0115).
+     *
+     * Amber, 14 September: *"add in a section to upload one or multiple a image, photo,
+     * file, pdfs, or take a photo"*, and — asked where they should live — **`job-documents`,
+     * private**: a defect photo is a document about the job.
+     *
+     * SO EACH FILE IS WRITTEN THREE TIMES, AND ALL THREE ARE THE POINT
+     *
+     *   1. The object, into `job-documents` under `jobs/<job>/…` — the path shape 0110's
+     *      storage policy enforces. Images reach that bucket at all because 0115 widened
+     *      its mime allowlist; before that Storage refused a photograph at the door.
+     *   2. One `documents` row, category `photo` for an image and `other` otherwise. The
+     *      vocabulary is 0032's, not invented here.
+     *   3. Two `document_links`: one to the job, so it appears in the job's Documents list
+     *      the way Amber asked, and one to the request, so the issue knows its own
+     *      pictures. A document is held once and attached as many times as it is about
+     *      something.
+     *
+     * NOT A TRANSACTION, the same real limitation `addDocumentUrl` records: PostgREST has
+     * no client-side transaction. The order is chosen so a failure leaves the least
+     * confusing state — object, then row, then links — and a file that uploaded but failed
+     * to file is reported by name rather than swallowed. FILE BY FILE, so eight photos
+     * from a walk do not all fail because the seventh was a video.
+     */
+    async attachMaintenanceFiles(input: { requestId: string; jobId: string; files: File[] }): Promise<RecordDocument[]> {
+      const made: RecordDocument[] = [];
+      const refused: string[] = [];
+      for (const file of input.files) {
+        try {
+          // The same sanitising as every other upload here: a filename arrives from
+          // somebody's phone and `../` in an object path is the oldest trick there is.
+          // The uuid keeps two photos both called IMG_0042.jpg apart.
+          const safe = file.name.replace(/[^a-zA-Z0-9.-]/g, "-").slice(-80) || "attachment";
+          const path = `jobs/${input.jobId}/${crypto.randomUUID()}-${safe}`;
+          // Media goes to the public bucket, everything else stays private (0119). A photo
+          // and a video are evidence somebody outside Lofty has to be able to open from an
+          // emailed sheet; a PDF quote attached to the same issue is not, and putting it on
+          // a permanent URL because it arrived through the same drop zone would be a
+          // privacy decision nobody made.
+          const kind = mediaKind(file);
+          const bucket: StorageBucket = kind ? MAINTENANCE_MEDIA_BUCKET : JOB_DOCUMENT_BUCKET;
+          const up = await db.storage
+            .from(bucket)
+            .upload(path, file, { contentType: file.type || undefined, upsert: false });
+          if (up.error) throw up.error;
+
+          const doc = await client
+            .from("documents")
+            .insert({
+              document_name: file.name,
+              document_storage_path: path,
+              document_storage_bucket: bucket,
+              document_mime_type: file.type || null,
+              document_size_bytes: file.size,
+              document_category: kind ?? "other"
+            })
+            .select("document_id")
+            .single();
+          if (doc.error) throw documentError(doc.error);
+          const documentId = (doc.data as { document_id: string }).document_id;
+
+          const links = await client
+            .from("document_links")
+            .insert([
+              { document_id: documentId, job_id: input.jobId },
+              { document_id: documentId, maintenance_request_id: input.requestId }
+            ])
+            .select(RECORD_DOCUMENT_COLUMNS);
+          if (links.error) throw documentError(links.error);
+          const onRequest = (links.data ?? [])
+            .map(r => toRecordDocument(r as unknown as RecordDocumentRow))
+            .find(d => d?.maintenanceRequestId === input.requestId);
+          if (onRequest) made.push(onRequest);
+        } catch (e) {
+          refused.push(`${file.name} — ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+      // Named, not counted. "3 files failed" sends somebody to look at all eight; the file
+      // and the database's own words say which one and why — too big, or a type the bucket
+      // does not take, which are the two that actually happen.
+      if (refused.length) {
+        throw Object.assign(
+          new Error(`${made.length} attached. These were not: ${refused.join("; ")}`),
+          { attached: made }
+        );
+      }
+      return made;
+    },
+
+    /**
+     * File a document that lives in SharePoint.
+     *
+     * TWO WRITES, AND THE FIRST ONE MAY FIND RATHER THAN CREATE. `documents_one_row_per_url`
+     * says one SharePoint address is one document, so filing the project's contract
+     * against a job as well must attach the existing row rather than make a second. The
+     * lookup is done first and explicitly rather than by catching the unique violation,
+     * because an insert that fails still consumes a sequence and, more to the point, the
+     * "already there" case is ordinary rather than exceptional.
+     *
+     * NOT A TRANSACTION, and that is a real limitation rather than an oversight. PostgREST
+     * has no client-side transaction, so a document row can be created and its link then
+     * refused — leaving a pointer with no attachments. 0103's reaper does not help there:
+     * it fires on DELETE of a link, and no link was ever made. The honest fallback is to
+     * report the failure with the document named, which is what the catch below does; the
+     * row is then reachable by URL, so refiling it attaches rather than duplicating.
+     */
+    async addDocumentUrl(input: NewDocumentUrl): Promise<RecordDocument> {
+      const url = input.url.trim();
+      const name = input.name.trim();
+      // Checked here as well as by the constraint, because a constraint's message goes on
+      // screen verbatim and "violates check constraint documents_url_is_https" does not
+      // tell somebody who pasted a network path what to do instead.
+      if (!name) throw new Error("Give the document a name — that is what the list shows.");
+      if (!/^https:\/\/\S+$/.test(url)) {
+        throw new Error(
+          "That does not look like a link. Open the document in SharePoint, copy the address from the browser bar, and paste it here — it starts with https://."
+        );
+      }
+      if (!input.jobId && input.projectId == null) {
+        throw new Error("A document has to be filed against a job or a project.");
+      }
+
+      const existing = await client
+        .from("documents")
+        .select("document_id")
+        .eq("document_url", url)
+        .maybeSingle();
+      if (existing.error) throw existing.error;
+
+      let documentId = (existing.data as { document_id: string } | null)?.document_id ?? null;
+
+      if (!documentId) {
+        const made = await client
+          .from("documents")
+          .insert({
+            document_name: name,
+            document_description: emptyToNull(input.description),
+            document_url: url,
+            document_category: input.category ?? "other"
+          })
+          .select("document_id")
+          .single();
+        if (made.error) throw documentError(made.error);
+        documentId = (made.data as { document_id: string }).document_id;
+      }
+
+      const link = await client
+        .from("document_links")
+        .insert({
+          document_id: documentId,
+          job_id: input.jobId ?? null,
+          project_id: input.jobId ? null : input.projectId ?? null
+        })
+        .select(RECORD_DOCUMENT_COLUMNS)
+        .single();
+      if (link.error) throw documentError(link.error);
+
+      const filed = toRecordDocument(link.data as unknown as RecordDocumentRow);
+      if (!filed) throw new Error("The document was filed but could not be read back.");
+      return filed;
+    },
+
+    /**
+     * Take a document off this record.
+     *
+     * The link only. 0032: *"detaching is not deleting: the link goes, the file stays"* —
+     * and where nothing else points at the document and Lofty holds no bytes for it,
+     * 0103's trigger removes the row too, inside this same delete. Nothing in SharePoint
+     * is touched either way, which is what the screen says before it asks.
+     */
+    async removeRecordDocument(linkId: string): Promise<void> {
+      const { data, error } = await client
+        .from("document_links")
+        .delete()
+        .eq("document_link_id", linkId)
+        .select("document_link_id");
+      if (error) throw error;
+      if (!data?.length) {
+        throw new Error("That document was not removed from this record — it is no longer attached, or you do not have permission.");
+      }
+    },
+
+    /**
+     * Both kinds of document, newest first.
+     *
+     * Two reads rather than a view over both: `report_documents` and `documents` have
+     * different shapes, different delete rules and different reasons to exist, and a UNION
+     * view would have to be recreated every time either one changed.
+     *
+     * A FILED document is joined back to the record it is on, because the panel is the
+     * only place it is otherwise reachable and "Site survey" with nothing beside it does
+     * not tell you whose site. A document on several records appears once per record,
+     * which is right: what changed is the filing, and each one is its own event.
+     *
+     * `limit` is applied to each read AND to the merge, so a week of filing cannot push
+     * every built document off the list.
+     *
+     * Names are resolved from `listProfiles()` rather than embedded. Both tables carry two
+     * foreign keys to profiles (the audit quartet), which is precisely the PGRST201
+     * ambiguity `verify/embeds.sh` exists to catch — 0094 records the same decision.
+     */
+    async listRecentDocuments(opts = {}): Promise<RecentDocument[]> {
+      const limit = opts.limit ?? 8;
+
+      const [built, filed, people] = await Promise.all([
+        client
+          .from("report_documents")
+          .select("report_document_id, report_document_title, job_id, project_id, report_document_created_at, report_document_updated_at, report_document_updated_by, report_document_created_by")
+          .order("report_document_updated_at", { ascending: false })
+          .limit(limit),
+        client
+          .from("document_links")
+          .select(RECORD_DOCUMENT_COLUMNS)
+          .order("document_link_created_at", { ascending: false })
+          .limit(limit),
+        repo.listProfiles()
+      ]);
+      if (built.error) throw built.error;
+      if (filed.error) throw filed.error;
+
+      const nameOf = (id: string | null | undefined) =>
+        (id && people.find(p => p.id === id)?.fullName) || null;
+
+      // "Added" only while nothing has touched it since. The two timestamps are set
+      // together on insert and the touch trigger moves one of them, so a gap of more than
+      // a second means it has genuinely been edited — a tolerance rather than an equality
+      // test, because the column default and the trigger do not fire in the same statement
+      // and can land a millisecond apart.
+      const change = (createdAt: string, updatedAt: string): RecentDocument["change"] =>
+        Math.abs(Date.parse(updatedAt) - Date.parse(createdAt)) > 1000 ? "changed" : "added";
+
+      const rows: RecentDocument[] = [
+        ...(built.data ?? []).map(r => {
+          const d = r as unknown as {
+            report_document_id: string; report_document_title: string;
+            job_id: string | null; project_id: number | null;
+            report_document_created_at: string; report_document_updated_at: string;
+            report_document_updated_by: string | null; report_document_created_by: string | null;
+          };
+          return {
+            id: d.report_document_id,
+            kind: "built" as const,
+            title: d.report_document_title,
+            url: null,
+            jobId: d.job_id,
+            projectId: d.project_id,
+            at: d.report_document_updated_at,
+            change: change(d.report_document_created_at, d.report_document_updated_at),
+            byName: nameOf(d.report_document_updated_by ?? d.report_document_created_by)
+          };
+        }),
+        ...(filed.data ?? [])
+          .map(r => toRecordDocument(r as unknown as RecordDocumentRow))
+          .filter((d): d is RecordDocument => d !== null)
+          .map(d => ({
+            // The LINK, not the document: the same contract filed on a project and on a
+            // job is two events on this list, and two rows sharing a React key would have
+            // one of them silently disappear.
+            id: d.linkId,
+            kind: "filed" as const,
+            title: d.name,
+            url: d.url,
+            jobId: d.jobId,
+            projectId: d.projectId,
+            // When it was filed HERE. A document uploaded in July and attached to this job
+            // today is news today, and its own updated_at would sort it out of sight.
+            at: d.attachedAt,
+            change: "added" as const,
+            byName: nameOf(d.createdBy)
+          }))
+      ];
+
+      return rows.sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, limit);
+    },
+
+    /**
+     * The header's search, across six kinds at once.
+     *
+     * SIX QUERIES IN PARALLEL, NOT ONE. A single `search_everything` view over six tables
+     * would need a UNION whose column list is the widest of them, recreated every time
+     * any one changes, and — because each table's RLS differs — a `security_invoker`
+     * chain nobody could reason about. Six narrow reads under the caller's own session
+     * keep each table's own policy doing its own job, which is the same argument 0103
+     * makes for not merging document links into report_documents.
+     *
+     * EVERY TERM MUST APPEAR, WHICH IS WHY THE FILTERS ARE CHAINED. Each `.or()` is one
+     * term across that table's searchable columns; PostgREST ANDs the top-level filters
+     * together, so "brodie court" is (brodie somewhere) AND (court somewhere). An OR
+     * across terms would widen the result the moment somebody typed a second word, which
+     * is the opposite of what they were doing — the same rule `matchesTerms` follows for
+     * the in-page search, deliberately, so the two never disagree about what matches.
+     *
+     * Three terms at most. Beyond that the filter string grows past what a URL should
+     * carry, and nobody narrows a search four words at a time.
+     */
+    async search(query: string, opts = {}): Promise<SearchHit[]> {
+      const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean).slice(0, 3);
+      // One character matches most of the database. The caller debounces; this is the
+      // floor that makes a stray keystroke free rather than a six-query round trip.
+      if (!terms.length || query.trim().length < 2) return [];
+      const limit = opts.limit ?? 6;
+      const raw = query.trim();
+
+      /** One term, across several columns — the OR half of the AND-of-ORs above. */
+      const anyOf = (columns: string[], term: string) =>
+        columns.map(c => `${c}.ilike.${ilike(term)}`).join(",");
+
+      let jobQ = client
+        .from("job_display")
+        .select("job_id, project_id, job_number_old, job_stage, job_owning_team, job_current_address, job_original_address")
+        .limit(limit);
+      for (const t of terms) {
+        jobQ = jobQ.or(anyOf(["job_id", "job_number_old", "job_current_address", "job_original_address"], t));
+      }
+
+      let projectQ = client
+        .from("project_display")
+        .select("project_id, project_name, project_status, project_current_address, project_original_address")
+        .limit(limit);
+      for (const t of terms) {
+        const parts = [anyOf(["project_name", "project_current_address", "project_original_address"], t)];
+        // `project_id` is an integer and PostgREST will not ilike one, so a numeric term
+        // is matched exactly instead. Without this, typing a project number found the
+        // project only if its address happened to contain the digits.
+        if (/^\d+$/.test(t)) parts.push(`project_id.eq.${Number(t)}`);
+        projectQ = projectQ.or(parts.join(","));
+      }
+
+      let builtQ = client
+        .from("report_documents")
+        .select("report_document_id, report_document_title, job_id, project_id")
+        .limit(limit);
+      for (const t of terms) builtQ = builtQ.or(anyOf(["report_document_title"], t));
+
+      // The FILED documents (0032). Searched on the document rather than on its links, so
+      // a contract on a project and on three of its jobs is one hit rather than four of
+      // the same name — the panel on the record is where you pick which copy you meant.
+      let filedQ = client
+        .from("documents")
+        .select("document_id, document_name, document_description, document_url, document_category, document_storage_path")
+        .limit(limit);
+      for (const t of terms) filedQ = filedQ.or(anyOf(["document_name", "document_description"], t));
+
+      // Contacts, companies and maintenance go through their own list methods rather
+      // than a query written again here: each already has a search that knows which of
+      // its columns are worth matching, and two copies of that would drift.
+      const [jobs, projects, built, filed, contacts, companies, requests] = await Promise.all([
+        jobQ,
+        projectQ,
+        builtQ,
+        filedQ,
+        repo.listContacts({ search: raw }),
+        repo.listCompanies({ search: raw }),
+        repo.listMaintenanceRequests({ search: raw, queue: "all", limit })
+      ]);
+      if (jobs.error) throw jobs.error;
+      if (projects.error) throw projects.error;
+      if (built.error) throw built.error;
+      if (filed.error) throw filed.error;
+
+      const hits: SearchHit[] = [];
+
+      for (const r of (jobs.data ?? []) as unknown as {
+        job_id: string; project_id: number; job_number_old: string | null;
+        job_stage: string | null; job_owning_team: string | null;
+        job_current_address: string | null; job_original_address: string | null;
+      }[]) {
+        hits.push({
+          kind: "job",
+          id: r.job_id,
+          title: r.job_current_address ?? r.job_id,
+          detail: [r.job_id, r.job_stage].filter(Boolean).join(" · ") || null,
+          href: `/jobs/${encodeURIComponent(r.job_id)}`,
+          onPreviousAddress:
+            matchedAddress(r.job_current_address, r.job_original_address, terms) === "original"
+        });
+      }
+
+      for (const r of (projects.data ?? []) as unknown as {
+        project_id: number; project_name: string | null; project_status: string | null;
+        project_current_address: string | null; project_original_address: string | null;
+      }[]) {
+        hits.push({
+          kind: "project",
+          id: String(r.project_id),
+          title: r.project_current_address ?? r.project_name ?? `Project ${r.project_id}`,
+          detail: `Project ${r.project_id}`,
+          href: `/projects/${r.project_id}`,
+          onPreviousAddress:
+            matchedAddress(r.project_current_address, r.project_original_address, terms) === "original"
+        });
+      }
+
+      for (const c of contacts.slice(0, limit)) {
+        hits.push({
+          kind: "contact",
+          id: c.id,
+          title: c.fullName,
+          detail: c.companyName ?? c.primaryEmail ?? null,
+          href: `/contacts?person=${encodeURIComponent(c.id)}`
+        });
+      }
+
+      for (const c of companies.slice(0, limit)) {
+        hits.push({
+          kind: "company",
+          id: c.id,
+          title: c.name,
+          detail: c.tradingName ?? null,
+          href: `/contacts?tab=companies&company=${encodeURIComponent(c.id)}`
+        });
+      }
+
+      for (const m of requests.slice(0, limit)) {
+        hits.push({
+          kind: "maintenance",
+          id: m.id,
+          title: m.summary,
+          detail: [m.number, m.jobAddress].filter(Boolean).join(" · ") || null,
+          // `queue=all` so a closed request found by search actually renders. Without it
+          // the page opens on the open queue and the row the link names is filtered out,
+          // which reads as a broken link rather than as a filter.
+          href: `/maintenance?queue=all&request=${encodeURIComponent(m.id)}`
+        });
+      }
+
+      for (const r of (built.data ?? []) as unknown as {
+        report_document_id: string; report_document_title: string;
+        job_id: string | null; project_id: number | null;
+      }[]) {
+        hits.push({
+          kind: "document",
+          id: r.report_document_id,
+          title: r.report_document_title,
+          detail: r.job_id ?? (r.project_id != null ? `Project ${r.project_id}` : null),
+          href: `/tools/document-builder?open=${encodeURIComponent(r.report_document_id)}`
+        });
+      }
+
+      for (const r of (filed.data ?? []) as unknown as {
+        document_id: string; document_name: string; document_description: string | null;
+        document_url: string | null; document_category: string;
+        document_storage_path: string | null;
+      }[]) {
+        // A document with a URL opens where it lives — there is no screen in this app that
+        // renders one, and routing somebody to a record and making them find the row again
+        // is a worse answer than opening the thing they searched for.
+        //
+        // One WITHOUT a URL is 0032's other two states: an upload, or a document Lofty is
+        // still waiting on. Neither has anywhere to go yet — the upload viewer is not
+        // built and a document that has not arrived has no destination at all — so those
+        // are left out rather than offered as a row that does nothing when clicked.
+        if (!r.document_url) continue;
+        hits.push({
+          kind: "document",
+          id: r.document_id,
+          title: r.document_name,
+          detail: r.document_category === "other" ? r.document_description : r.document_category,
+          href: r.document_url,
+          external: true
+        });
+      }
+
+      return hits;
+    },
+
+    /**
+     * Record that a document has been saved into SharePoint, and stop it being a draft.
+     *
+     * `published_at` is sent as a value the trigger then OVERWRITES with `now()` — it has
+     * to be non-null for the guard to recognise a publication, and the guard refuses to
+     * take the caller's word for when. `published_by` is not sent at all: it is read from
+     * the session, the same rule as every other "who did this" column in this schema.
+     *
+     * A re-publish after an edit is the same call. There is deliberately no separate
+     * method for it: from here the two are indistinguishable, and the only thing that
+     * differs — whether a URL was already there — is something the DIALOG uses to
+     * pre-fill, not something the write needs to know.
+     */
+    async publishReportDocument(
+      id: string,
+      input: { url?: string | null; file?: File | null }
+    ): Promise<ReportDocument> {
+      const url = (input.url ?? "").trim();
+      const file = input.file ?? null;
+
+      if (!url && !file) {
+        throw new Error(
+          "Say where this went before publishing it: save a copy to the job, paste the SharePoint address, or both."
+        );
+      }
+      // Checked here as well as by the constraint, because a constraint's message reaches
+      // the screen verbatim and "violates check constraint
+      // report_documents_published_url_is_https" tells somebody who pasted a network path
+      // nothing they can act on.
+      if (url && !/^https:\/\/\S+$/.test(url)) {
+        throw new Error(
+          "That does not look like a SharePoint address. Save the document into SharePoint, copy the address from the browser bar, and paste it here — it starts with https://."
+        );
+      }
+
+      // ---- the file half (0110) -----------------------------------------
+      // Uploaded and FILED before the publication is written, in that order and not the
+      // other way round. If any of it fails the document is still a draft, which is true;
+      // publishing first and then failing to save the copy would leave a document flying
+      // a published flag over a file that was never stored.
+      let publishedDocumentId: string | null = null;
+      if (file) {
+        // WHICH RECORD this document is about. Read from the row rather than taken as an
+        // argument: the caller would be reading the same row, and two places holding
+        // "which job is this for" is one place for them to disagree.
+        const about = await client
+          .from("report_documents")
+          .select("report_document_title, job_id, project_id")
+          .eq("report_document_id", id)
+          .maybeSingle();
+        if (about.error) throw about.error;
+        const row = about.data as { report_document_title: string; job_id: string | null; project_id: number | null } | null;
+        if (!row) {
+          throw new Error("That document was not published — it no longer exists, or you do not have permission to change it.");
+        }
+        if (!row.job_id && row.project_id == null) {
+          throw new Error(
+            "This document is not about a job or a project, so there is nowhere on a record to save the copy. Paste a SharePoint address instead."
+          );
+        }
+
+        // The path shape 0110's storage policy enforces: `jobs/<job key>/…` or
+        // `projects/<number>/…`. Kept the same on both sides deliberately — a policy the
+        // app does not match is a refusal nobody can read, and a path the policy does not
+        // check is a bucket that becomes a flat pile.
+        //
+        // The same sanitising as uploadReportImage, and for the same reason: a filename
+        // arrives from somebody's machine and `../` in an object path is the oldest trick
+        // there is. The uuid keeps two copies of "Site Report.docx" apart.
+        const safe = file.name.replace(/[^a-zA-Z0-9.-]/g, "-").slice(-80) || "document";
+        const folder = row.job_id ? `jobs/${row.job_id}` : `projects/${row.project_id}`;
+        const path = `${folder}/${crypto.randomUUID()}-${safe}`;
+
+        const up = await db.storage
+          .from(JOB_DOCUMENT_BUCKET)
+          .upload(path, file, { contentType: file.type || undefined, upsert: false });
+        // Thrown rather than swallowed: the two failures worth telling apart — too big,
+        // and a type the bucket does not take — both arrive here with their own message.
+        if (up.error) throw up.error;
+
+        const made = await client
+          .from("documents")
+          .insert({
+            // The document's own title, not the filename. The list reads as the documents
+            // people made rather than as whatever their browser called the download.
+            document_name: row.report_document_title,
+            document_storage_path: path,
+            document_mime_type: file.type || null,
+            document_size_bytes: file.size,
+            // 0032's existing vocabulary. `report` because that is what this is — a built
+            // document, published. Not a value invented for this.
+            document_category: "report"
+          })
+          .select("document_id")
+          .single();
+        if (made.error) throw documentError(made.error);
+        publishedDocumentId = (made.data as { document_id: string }).document_id;
+
+        // And attached to the record, which is the whole of "saving to Job in the system":
+        // without this the file is held but appears nowhere anybody would look for it.
+        const link = await client
+          .from("document_links")
+          .insert({
+            document_id: publishedDocumentId,
+            job_id: row.job_id,
+            project_id: row.job_id ? null : row.project_id
+          })
+          .select("document_link_id")
+          .single();
+        if (link.error) throw documentError(link.error);
+      }
+
+      // `published_at` is sent as a value the trigger then OVERWRITES with `now()` — it
+      // has to be non-null for the guard to recognise a publication, and the guard refuses
+      // to take the caller's word for when. `published_by` is not sent at all: it is read
+      // from the session, the same rule as every other "who did this" column here.
+      //
+      // Only what was given is written. A publish that pastes an address must not blank
+      // the copy saved on the job last time, and one that saves a copy must not blank the
+      // address — "and/or" reads both ways.
+      const patch: Record<string, unknown> = {
+        report_document_published_at: new Date().toISOString()
+      };
+      if (url) patch.report_document_published_url = url;
+      if (publishedDocumentId) patch.report_document_published_document_id = publishedDocumentId;
+
+      const { data, error } = await client
+        .from("report_documents")
+        .update(patch)
+        .eq("report_document_id", id)
+        .select(REPORT_DOCUMENT_COLUMNS);
+      if (error) throw error;
+      if (!data?.length) {
+        throw new Error("That document was not published — it no longer exists, or you do not have permission to change it.");
+      }
+      return toReportDocument(data[0] as unknown as ReportDocumentRow);
+    },
+
+    /**
+     * A link to open a file Lofty holds for a record (0110).
+     *
+     * Signed and short-lived, because `job-documents` is private — the same shape as
+     * `attachmentUrl` above and deliberately NOT `uploadReportImage`'s permanent public
+     * URL. Null when storage refuses, which the row renders as the copy being gone rather
+     * than as a link that opens on an error page.
+     */
+    async documentUrl(doc: Pick<Doc, "storagePath" | "storageBucket">): Promise<string | null> {
+      if (!doc.storagePath) return null;
+      // Public: the URL is permanent and there is nothing to sign, so no round trip.
+      if (doc.storageBucket === MAINTENANCE_MEDIA_BUCKET) {
+        const { data } = db.storage.from(MAINTENANCE_MEDIA_BUCKET).getPublicUrl(doc.storagePath);
+        return data?.publicUrl ?? null;
+      }
+      return this.jobDocumentUrl(doc.storagePath);
+    },
+
+    async jobDocumentUrl(path: string): Promise<string | null> {
+      const { data, error } = await client.storage
+        .from(JOB_DOCUMENT_BUCKET)
+        // Long enough to open the file and read it, short enough that a copied URL is not
+        // a permanent public link to a contract.
+        .createSignedUrl(path, 300);
+      if (error) return null;
+      return data?.signedUrl ?? null;
+    },
+
     async deletePropertyDef(key: string): Promise<void> {
       const { data, error } = await client
         .from("property_defs")
@@ -3563,6 +4602,11 @@ type JobRow = {
   project_current_address: string;
   project_sharepoint_url: string | null;
   project_type: Job["projectType"];
+  job_council: Job["council"];
+  job_target_completion: Job["targetCompletion"];
+  job_end_date: Job["endDate"];
+  job_calculated_completion: Job["calculatedCompletion"];
+  job_calculated_completion_missing: Job["calculatedCompletionMissing"];
 };
 
 function toJob(r: JobRow): Job {
@@ -3589,6 +4633,17 @@ function toJob(r: JobRow): Job {
     currentAddress: r.job_current_address,
     originalAddress: r.job_original_address,
     projectCurrentAddress: r.project_current_address,
+    // The job's OWN address's council, not its project's — 0108 widened the view for
+    // it. Amber, 10 Sep: "the council area still needs to be recorded, but just not in
+    // the full address line." It never was in the line; it was simply never read back.
+    council: r.job_council,
+    targetCompletion: r.job_target_completion,
+    endDate: r.job_end_date,
+    // 0119. Computed by the view, never written — the repository could not set these if
+    // it wanted to, which is the point: one implementation of the critical path, in the
+    // database, where the import and a hand-written query read the same answer.
+    calculatedCompletion: r.job_calculated_completion,
+    calculatedCompletionMissing: r.job_calculated_completion_missing,
     projectSharepointUrl: r.project_sharepoint_url,
     // Inherited from the project through the view, never stored on the job. `job_display`
     // has exposed it since 0028; this read simply never asked for it, so every card and
@@ -3607,7 +4662,7 @@ const REPORT_TEMPLATE_COLUMNS =
 // adds a column later — `hasSharePassword` below is computed from a boolean the database
 // sends instead. A hash in a browser response is a hash somebody can attack offline.
 const REPORT_DOCUMENT_COLUMNS =
-  "report_document_id, report_document_title, report_document_layout, report_template_id, job_id, project_id, report_document_share_token, report_document_share_expires_at, report_document_has_share_password, report_document_has_share_snapshot, report_document_created_at, report_document_created_by, report_document_updated_at, report_document_updated_by";
+  "report_document_id, report_document_title, report_document_layout, report_template_id, job_id, project_id, report_document_share_token, report_document_share_expires_at, report_document_has_share_password, report_document_has_share_snapshot, report_document_published_at, report_document_published_by, report_document_published_url, report_document_published_document_id, report_document_created_at, report_document_created_by, report_document_updated_at, report_document_updated_by";
 
 type ReportTemplateRow = {
   report_template_id: string;
@@ -3626,6 +4681,109 @@ type ReportTemplateRow = {
   report_template_updated_by: string | null;
 };
 
+/**
+ * A LIKE pattern from something a person typed.
+ *
+ * `%`, `,`, `(` and `)` are stripped rather than escaped: the first two are LIKE
+ * wildcards that would turn a typo into "match everything", and the last three are what
+ * PostgREST uses to delimit an `or=(…)` filter — a comma in a search term silently
+ * becomes a second condition. The same shape, and the same reasoning, as the helper in
+ * supabasePartyRepository.ts; it is duplicated rather than exported because a two-line
+ * string function shared across modules is a dependency for no benefit.
+ */
+const ilike = (s: string) => `%${s.replace(/[%_,()]/g, " ").trim()}%`;
+
+/**
+ * An attachment with its document embedded — one link row and the file or URL it points at.
+ *
+ * THE FOREIGN KEY IS NAMED, and the first version of this did not name it on the reasoning
+ * that `document_links` has exactly one key to `documents` so there is nothing to
+ * disambiguate. `verify/embeds.sh` refused it, and it was right to: `documents` itself
+ * carries three foreign keys (two to profiles, one to itself for the supersedes chain), so
+ * PostgREST has more than one relationship to weigh and answers PGRST201. That is the same
+ * shape that took sign-in down on 21 August, found here by a check rather than by a user.
+ */
+const RECORD_DOCUMENT_COLUMNS =
+  "document_link_id, document_id, job_id, project_id, maintenance_request_id, document_link_created_at, document_link_created_by, documents!document_links_document_id_fkey(document_id, document_name, document_description, document_storage_path, document_storage_bucket, document_url, document_mime_type, document_size_bytes, document_category, document_supersedes_id, document_created_at, document_created_by, document_updated_at, document_updated_by)";
+
+type RecordDocumentRow = {
+  document_link_id: string;
+  document_id: string;
+  job_id: string | null;
+  project_id: number | null;
+  maintenance_request_id: string | null;
+  document_link_created_at: string;
+  document_link_created_by: string | null;
+  documents: {
+    document_id: string;
+    document_name: string;
+    document_description: string | null;
+    document_storage_path: string | null;
+    document_storage_bucket: StorageBucket;
+    document_url: string | null;
+    document_mime_type: string | null;
+    document_size_bytes: number | null;
+    document_category: DocumentCategory;
+    document_supersedes_id: string | null;
+    document_created_at: string;
+    document_created_by: string | null;
+    document_updated_at: string;
+    document_updated_by: string | null;
+  } | null;
+};
+
+/**
+ * Null when the embed came back empty — a link whose document the caller's RLS did not
+ * return. 0032's policies on the two tables are identical today, so this cannot happen;
+ * it returns null rather than a half-built row so that the day somebody narrows one policy
+ * without the other, the panel shows one fewer row instead of a nameless one.
+ */
+function toRecordDocument(r: RecordDocumentRow): RecordDocument | null {
+  const d = r.documents;
+  if (!d) return null;
+  return {
+    id: d.document_id,
+    linkId: r.document_link_id,
+    jobId: r.job_id,
+    projectId: r.project_id,
+    maintenanceRequestId: r.maintenance_request_id,
+    attachedAt: r.document_link_created_at,
+    name: d.document_name,
+    description: d.document_description,
+    storagePath: d.document_storage_path,
+    storageBucket: d.document_storage_bucket,
+    url: d.document_url,
+    mimeType: d.document_mime_type,
+    sizeBytes: d.document_size_bytes,
+    category: d.document_category,
+    supersedesId: d.document_supersedes_id,
+    createdAt: d.document_created_at,
+    createdBy: r.document_link_created_by ?? d.document_created_by,
+    updatedAt: d.document_updated_at,
+    updatedBy: d.document_updated_by
+  };
+}
+
+/**
+ * The constraints on `documents` and `document_links` somebody can hit by typing, turned
+ * into sentences. Everything else surfaces as it comes: an unexpected error dressed up as
+ * a friendly one is how a real fault gets ignored for a week.
+ */
+function documentError(error: { code?: string; message: string }): Error {
+  if (error.code === "23505" && /once_per_/.test(error.message)) {
+    return new Error("That document is already filed against this record.");
+  }
+  if (error.code === "23505") {
+    return new Error("That link is already filed under another name. Find it on the record it is on rather than filing it twice.");
+  }
+  if (error.code === "23514" && /url_is_https/.test(error.message)) {
+    return new Error(
+      "That does not look like a link. Open the document in SharePoint, copy the address from the browser bar, and paste it here — it starts with https://."
+    );
+  }
+  return error instanceof Error ? error : new Error(error.message);
+}
+
 type ReportDocumentRow = {
   report_document_id: string;
   report_document_title: string;
@@ -3640,6 +4798,10 @@ type ReportDocumentRow = {
   // every row of a list nobody is rendering.
   report_document_has_share_password: boolean;
   report_document_has_share_snapshot: boolean;
+  report_document_published_at: string | null;
+  report_document_published_by: string | null;
+  report_document_published_url: string | null;
+  report_document_published_document_id: string | null;
   report_document_created_at: string;
   report_document_created_by: string | null;
   report_document_updated_at: string;
@@ -3680,6 +4842,10 @@ function toReportDocument(r: ReportDocumentRow): ReportDocument {
     shareExpiresAt: r.report_document_share_expires_at,
     hasSharePassword: r.report_document_has_share_password,
     hasShareSnapshot: r.report_document_has_share_snapshot,
+    publishedAt: r.report_document_published_at,
+    publishedBy: r.report_document_published_by,
+    publishedUrl: r.report_document_published_url,
+    publishedDocumentId: r.report_document_published_document_id,
     createdAt: r.report_document_created_at,
     createdBy: r.report_document_created_by,
     updatedAt: r.report_document_updated_at,

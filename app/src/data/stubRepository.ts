@@ -7,8 +7,10 @@ import type {
   CommentEntry,
   Job,
   Profile,
+  PinnedPage,
   Project,
   PropertyDef,
+  RailCounts,
   Stage,
   Team,
   TemplateMilestone,
@@ -93,6 +95,20 @@ export function createStubRepository(): Repository {
     async listJobs(): Promise<Job[]> { return []; },
     async getJob(): Promise<Job | null> { return null; },
 
+    /** Zero, because there is nothing — the honest answer, not a placeholder. */
+    async railCounts(): Promise<RailCounts> { return { projects: 0, jobs: 0, maintenance: 0 }; },
+
+    // Pinned is a real table (0112); with no backend there is nothing in it, and a
+    // refusal is the truthful answer to being asked to write to a database that is
+    // not there — the same shape every other write in this file takes.
+    async listMyPins(): Promise<PinnedPage[]> { return []; },
+    async pinPage(): Promise<PinnedPage[]> {
+      throw new Error("Pinning a page needs Supabase.");
+    },
+    async unpinPage(): Promise<PinnedPage[]> {
+      throw new Error("Unpinning a page needs Supabase.");
+    },
+
 
     async listProfiles(): Promise<Profile[]> { return []; },
     async currentProfile(): Promise<Profile | null> { return null; },
@@ -157,6 +173,9 @@ export function createStubRepository(): Repository {
       throw new Error("Editing a project needs Supabase.");
     },
     async setProjectCurrentAddress(): Promise<Project> {
+      throw new Error("Adding an address needs Supabase.");
+    },
+    async setJobCurrentAddress(): Promise<Job> {
       throw new Error("Adding an address needs Supabase.");
     },
     async listAddressHistory(): Promise<AddressHistoryEntry[]> { return []; },
@@ -316,10 +335,16 @@ export function createStubRepository(): Repository {
     async setFeedbackPhase(): Promise<never> {
       throw new Error("Planning a request into a phase needs Supabase.");
     },
+    async setFeedbackKind(): Promise<never> {
+      throw new Error("Re-filing a request needs Supabase.");
+    },
     async setFeedbackVote(): Promise<never> {
       throw new Error("Voting needs Supabase.");
     },
     async attachmentUrl(): Promise<null> { return null; },
+    // Throws rather than returning a fake URL: a stub that handed back a plausible
+    // link would put a broken image in the document and look like a working upload.
+    async uploadReportImage(): Promise<never> { throw new Error("Uploading an image needs Supabase."); },
 
     // The Canny round (0064–0068). Reads answer empty, writes say what they need.
     async searchFeedback(): Promise<never[]> { return []; },
@@ -471,6 +496,27 @@ export function createStubRepository(): Repository {
     async updateReportDocument(): Promise<never> { throw new Error("Saving a document needs Supabase."); },
     async deleteReportDocument(): Promise<never> { throw new Error("Removing a document needs Supabase."); },
     async shareReportDocument(): Promise<never> { throw new Error("Creating a share link needs Supabase."); },
-    async unshareReportDocument(): Promise<never> { throw new Error("Revoking a share link needs Supabase."); }
+    async unshareReportDocument(): Promise<never> { throw new Error("Revoking a share link needs Supabase."); },
+    async publishReportDocument(): Promise<never> { throw new Error("Publishing a document needs Supabase."); },
+    // Null rather than a throw: the row asks for this to decide whether to offer a link,
+    // and a stub that throws would take the whole panel down on a screen that has no
+    // published documents in it anyway.
+    async jobDocumentUrl(): Promise<string | null> { return null; },
+    async documentUrl(): Promise<string | null> { return null; },
+
+    // ---- what is filed on a record, and where it lives (0032 / 0103) ------
+    // Same stance again: nothing to read, and a write that says what it needs. An
+    // in-memory list would let somebody file the contract, close the tab and lose it.
+    async listRecordDocuments() { return []; },
+    async listMaintenanceDocuments() { return []; },
+    async attachMaintenanceFiles(): Promise<never> { throw new Error("Attaching files needs Supabase."); },
+    async addDocumentUrl(): Promise<never> { throw new Error("Filing a document needs Supabase."); },
+    async removeRecordDocument(): Promise<never> { throw new Error("Removing a document needs Supabase."); },
+    async listRecentDocuments() { return []; },
+
+    // No records behind a stub run, so nothing matches anything. Empty rather than a
+    // handful of plausible hits — a search that invents results is the fastest way to
+    // make somebody trust a screen that is lying to them.
+    async search() { return []; }
   };
 }

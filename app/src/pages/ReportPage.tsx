@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button, Heading, Text } from "@vibe/core";
 import { ReportForm } from "../components/ReportForm";
+import { ToastsProvider } from "../components/Toasts";
 import { useAuth } from "../data/AuthProvider";
 import "../components/ui.css";
 import "./ReportPage.css";
@@ -33,12 +34,20 @@ import "./ReportPage.css";
  * No shell, no nav. Somebody arriving on this link either cannot use the rest of the app
  * or has been sent here to do one thing, and a full navigation frame around a single form
  * is an invitation to wander off into screens that will refuse them.
+ *
+ * No shell also means no `ToastsProvider` — `AppShell` mounts it for every other screen,
+ * and the form's `useToasts()` throws without one. From the day this page was added until
+ * 7 September it threw on first render: the link Amber shares with people who cannot get
+ * into the app opened on a blank page. Found by a browser check of the sign-in round trip,
+ * not by anyone reporting it, because the people it failed for are the ones with no way to
+ * report anything. The provider is mounted here, on the page that needs it.
  */
 export function ReportPage() {
   const { profile } = useAuth();
   const [sent, setSent] = useState(false);
 
   return (
+    <ToastsProvider>
     <main className="report-page">
       <div className="report-card">
         <Heading type="h2">Tell Lofty what you need</Heading>
@@ -77,5 +86,6 @@ export function ReportPage() {
         {profile?.isDemo && " · your account is set up for a walkthrough, so the rest of the app is closed for now"}
       </Text>
     </main>
+    </ToastsProvider>
   );
 }

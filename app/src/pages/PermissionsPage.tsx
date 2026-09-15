@@ -22,13 +22,11 @@ export function PermissionsPage() {
 
   return (
     <>
+      {/* No line under the heading. Amber, 12 September: *"on all pages remove
+          descriptive line text under page header … we need the most above the fold
+          possible"*. The ladder rule is in the table's own head. */}
       <div className="page-head">
         <Heading type="h2" weight="bold">Permissions</Heading>
-        <Text type="text2" color="secondary" ellipsis={false}>
-          What each level may do. A ladder, not a set — every rung has everything to its
-          left, because <code>permission_level</code> is an ordered enum and the policies
-          compare against it with <code>&gt;=</code>.
-        </Text>
       </div>
 
       <section className="panel">

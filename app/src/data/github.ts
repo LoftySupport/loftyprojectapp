@@ -7,6 +7,21 @@ import { useEffect, useState } from "react";
  * request has been complete"*, and, on which ones: *"merged PRs that have a @changelog in
  * the description and have everything at the start of that row."*
  *
+ * ---------------------------------------------------------- every merged PR now, by default
+ * That was the whole feed until this changed: only a pull request that opted in with an
+ * explicit `@changelog` line appeared at all, on the reasoning that most of fifty-odd merged
+ * pull requests are refactors and typo fixes nobody asked to read about. The later request
+ * was the opposite — every finalised (merged) pull request should show, using its own
+ * `@changelog` line where it wrote one, and its title otherwise, so a merge with no explicit
+ * note is a fact reported by default rather than one silently dropped.
+ *
+ * Free, and not a second API call: this repository merges by squashing, so the one commit a
+ * merge produces already carries `<title> (#N)` as its subject and the pull request's own
+ * description as its body verbatim — the "commit message" and the "description" are the same
+ * text GitHub already returned from `/pulls`. Nothing here fetches per-pull-request commits;
+ * that would cost one request per row against the same 60-an-hour budget the comment below
+ * describes, for text this endpoint already hands over.
+ *
  * ============================================================================
  * WHY THIS IS NOT ON THE REPOSITORY SEAM
  *
@@ -49,15 +64,20 @@ import { useEffect, useState } from "react";
 
 export const CHANGELOG_REPO = "LoftySupport/loftyprojectapp";
 
-/** One merged pull request that declared something for the changelog. */
+/** One merged pull request, shown in the changelog with its declared or default note. */
 export interface PullRequestNote {
   number: number;
   title: string;
   url: string;
   mergedAt: string;
   author: string | null;
-  /** The `@changelog` lines from the description, in the order they were written. */
+  /**
+   * The `@changelog` lines from the description, in the order they were written — or, when
+   * it wrote none, the pull request's own title as the one default note.
+   */
   notes: string[];
+  /** True when `notes` came from an explicit `@changelog` line rather than the title. */
+  declared: boolean;
 }
 
 /**
@@ -93,12 +113,15 @@ interface GhPull {
   user?: { login?: string } | null;
 }
 
-// v3. v1 holds pull requests read from `amberbeaumont/loftyprojectapp`; v2 was keyed to
+// v4. v1 holds pull requests read from `amberbeaumont/loftyprojectapp`; v2 was keyed to
 // `LoftyGroup/loftyprojectapp`, which was private and so most likely never held anything —
-// but "most likely" is not a reason to let one repository's key answer for another. The
-// cache is sessionStorage with a ten-minute life so it would clear itself, but "would
-// clear itself" is ten minutes of a tab showing the wrong repository's history as this one's.
-const CACHE_KEY = "lofty.changelog.pulls.v3";
+// but "most likely" is not a reason to let one repository's key answer for another. v3
+// carried only pull requests with a declared `@changelog` note and no `declared` field; a
+// tab still holding that shape for its last eight minutes would show a shorter list than a
+// fresh load, which is the same "stale cache reads as current" fault the v1→v2 move fixed.
+// The cache is sessionStorage with a ten-minute life so it would clear itself, but "would
+// clear itself" is ten minutes of a tab showing the wrong list as this one's.
+const CACHE_KEY = "lofty.changelog.pulls.v4";
 /** Ten minutes. Long enough that clicking between tabs costs nothing against the 60/hour. */
 const CACHE_MS = 10 * 60 * 1000;
 
@@ -143,15 +166,21 @@ async function fetchPulls(): Promise<PullRequestNote[]> {
   const raw = (await res.json()) as GhPull[];
   return raw
     .filter(p => p.merged_at)
-    .map(p => ({
-      number: p.number,
-      title: p.title,
-      url: p.html_url,
-      mergedAt: p.merged_at as string,
-      author: p.user?.login ?? null,
-      notes: parseChangelogNotes(p.body)
-    }))
-    .filter(p => p.notes.length > 0)
+    .map(p => {
+      const declaredNotes = parseChangelogNotes(p.body);
+      // The default action: nothing declared a `@changelog` line is not nothing to report —
+      // it is a merged pull request whose only summary is the title it merged under.
+      const declared = declaredNotes.length > 0;
+      return {
+        number: p.number,
+        title: p.title,
+        url: p.html_url,
+        mergedAt: p.merged_at as string,
+        author: p.user?.login ?? null,
+        notes: declared ? declaredNotes : [p.title],
+        declared
+      };
+    })
     .sort((a, b) => Date.parse(b.mergedAt) - Date.parse(a.mergedAt));
 }
 

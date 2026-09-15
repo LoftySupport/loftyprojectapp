@@ -8,6 +8,7 @@ import { usePermission } from "../data/PermissionProvider";
 import { useFeedback } from "../components/Feedback";
 import { Field, Problem } from "../components/Form";
 import { Select } from "../components/Select";
+import { PersonSelect } from "../components/PersonSelect";
 import { SidePanel } from "../components/SidePanel";
 import { LoadProblem } from "../components/SearchNotices";
 import {
@@ -17,6 +18,7 @@ import {
   DateRangeFilter, matchesRange, parseRange, serialiseRange
 } from "../components/DateRange";
 import { SortHeader, useTableSort } from "../components/SortableTable";
+import { CappedList } from "../components/CappedList";
 import { ExportMenu } from "../components/ExportMenu";
 import { tableFromFields, type ExportDocument } from "../data/export";
 import { useChangelogPulls } from "../data/github";
@@ -72,11 +74,11 @@ export function UpdatesPage() {
 
   return (
     <>
+      {/* No line under the heading. Amber, 12 September: *"on all pages remove
+          descriptive line text under page header … we need the most above the fold
+          possible"*. The three tabs under it say the same thing. */}
       <div className="page-head">
         <Heading type="h2" weight="bold">Updates</Heading>
-        <Text type="text2" color="secondary">
-          What has been asked for, what is planned, and what has shipped.
-        </Text>
       </div>
 
       <TabList activeTabId={index} onTabChange={i => navigate(`/updates/${SECTIONS[i].slug}`)}>
@@ -678,7 +680,6 @@ function RequestPanel({
   const [shots, setShots] = useState<Record<string, string>>({});
   const [note, setNote] = useState("");
   const [showVoters, setShowVoters] = useState(false);
-  const { data: people } = useQuery(r => r.listProfiles(), [], []);
   /**
    * Opening it IS having seen it — the same rule the bell uses for a mention.
    *
@@ -839,16 +840,12 @@ function RequestPanel({
               {canPlan && (
                 <li>
                   <div className="select-wrap">
-                    <Select
-                      options={people
-                        .filter(p => p.active && !voters.some(v => v.profileId === p.id))
-                        .map(p => ({ value: p.id, label: p.fullName }))}
+                    <PersonSelect
+                      exclude={voters.map(v => v.profileId)}
                       value={null}
-                      clearable
                       placeholder="Add somebody who asked for this…"
                       onChange={v => v && void run(() => repo.addVoteFor(item.id, v))}
                       aria-label="Add a voter"
-                      size="small"
                     />
                   </div>
                   <Text type="text3" color="secondary" element="div" ellipsis={false}>
@@ -869,6 +866,7 @@ function RequestPanel({
                 options={FEEDBACK_STAGES.map(s => ({ value: s, label: FEEDBACK_STAGE_LABELS[s] }))}
                 value={item.stage}
                 onChange={v => void run(async () => {
+                  // Undoable from the header — the repository records the step.
                   const result = await repo.setFeedbackStage(item.id, v as FeedbackStage, note);
                   setNote("");
                   return result;
@@ -904,6 +902,31 @@ function RequestPanel({
                 placeholder="Not planned into a phase"
                 onChange={v => void run(() => repo.setFeedbackPhase(item.id, v))}
                 aria-label="Roadmap phase"
+                className={busy ? "is-busy" : undefined}
+              />
+            </Field>
+          )}
+
+          {canPlan && (
+            <Field
+              label="Filed as"
+              hint="A bug is something that does not work; an idea is something that would. Re-file it when the reporter picked the other one."
+            >
+              {/* Amber, 7 Sep: "you can't change an idea to a bug in updates". The radio
+                  on the report form is the reporter's guess; this is the triage call, at
+                  the rung that already plans the request. `ordered` because bug-then-idea
+                  is the form's order, and a two-item list sorted a–z would swap them. */}
+              <Select
+                ordered
+                options={[
+                  { value: "bug", label: "A bug or an error" },
+                  { value: "idea", label: "An idea or a feature request" }
+                ]}
+                value={item.kind}
+                onChange={v => void run(async () => {
+                  if (v !== item.kind) await repo.setFeedbackKind(item.id, v as FeedbackKind);
+                })}
+                aria-label="Filed as"
                 className={busy ? "is-busy" : undefined}
               />
             </Field>
@@ -1287,14 +1310,22 @@ function PhasesTable({ phases, items }: { phases: RoadmapPhase[]; items: Feedbac
 /**
  * What has been merged, straight from GitHub (Amber, 31 Aug).
  *
- * Only pull requests carrying a `@changelog` line in their description, which is the
- * filter she chose and the right one: the repository has had fifty-odd pull requests and
- * most are refactors, typo fixes and work in progress. A feed of all of them would be a
- * git log on a page people came to for "what changed for me".
+ * WAS only pull requests carrying an explicit `@changelog` line — the filter she asked for
+ * first, on the reasoning that most of fifty-odd merged pull requests are refactors, typo
+ * fixes and work in progress. THE DEFAULT NOW is every finalised pull request: one still
+ * uses its own `@changelog` line where it wrote one, but a merge that declared nothing is
+ * reported using its title rather than dropped, so nothing that shipped goes unrecorded
+ * because nobody remembered the marker. `github.ts` explains why that costs no extra
+ * GitHub call — this repository squashes on merge, so the title and description it already
+ * fetched are the same text the merge commit carries.
  *
  * Deliberately BELOW the published releases and separately headed. A merged pull request
  * is a developer saying what they did; a release is Amber saying what Lofty shipped. They
  * are different claims and the page should not blur them into one list.
+ *
+ * Capped at five, like every other list here past that count (Amber, 7 Sep) — this feed no
+ * longer stops at the pull requests worth reading about, so nothing else stops it growing
+ * past a screen.
  */
 function MergedPullRequests() {
   const pulls = useChangelogPulls();
@@ -1326,9 +1357,7 @@ function MergedPullRequests() {
       <section className="updates-ended">
         <Text type="text2" weight="bold" element="div">Merged from the build</Text>
         <Text type="text3" color="secondary" element="div" ellipsis={false}>
-          Nothing merged recently declared a changelog line. A pull request joins this list
-          by putting <code>@changelog</code> at the start of a row in its description — the
-          rest of that row is what appears here.
+          Nothing has been merged yet.
         </Text>
       </section>
     );
@@ -1338,24 +1367,28 @@ function MergedPullRequests() {
     <section className="updates-ended">
       <Text type="text2" weight="bold" element="div">Merged from the build</Text>
       <Text type="text3" color="secondary" element="div" ellipsis={false}>
-        Pull requests that declared a <code>@changelog</code> line, newest first. Read live
-        from GitHub — this is the work itself, not a release Amber has published.
+        Every finalised pull request, newest first — its own <code>@changelog</code> line
+        where it wrote one, its title otherwise. Read live from GitHub — this is the work
+        itself, not a release Amber has published.
       </Text>
       <ul className="updates-ended-list">
-        {pulls.pulls.map(p => (
-          <li key={p.number}>
-            {p.notes.map((n, i) => (
-              <div key={i}>
-                <Text type="text2" element="span" ellipsis={false}>{n}</Text>
-              </div>
-            ))}
-            <Text type="text3" color="secondary" element="span">
-              <a href={p.url} target="_blank" rel="noreferrer">#{p.number}</a>
-              {" "}· merged {shortDate(p.mergedAt)}
-              {p.author ? ` · ${p.author}` : ""}
-            </Text>
-          </li>
-        ))}
+        <CappedList items={pulls.pulls} noun="merged pull requests">
+          {p => (
+            <li key={p.number}>
+              {p.notes.map((n, i) => (
+                <div key={i}>
+                  <Text type="text2" element="span" ellipsis={false}>{n}</Text>
+                </div>
+              ))}
+              <Text type="text3" color="secondary" element="span">
+                <a href={p.url} target="_blank" rel="noreferrer">#{p.number}</a>
+                {" "}· merged {shortDate(p.mergedAt)}
+                {p.author ? ` · ${p.author}` : ""}
+                {!p.declared && " · from the title, no @changelog line"}
+              </Text>
+            </li>
+          )}
+        </CappedList>
       </ul>
     </section>
   );

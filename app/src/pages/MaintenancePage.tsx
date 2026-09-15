@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button, Heading, Text, TextField } from "@vibe/core";
 import { useQuery, useRepository } from "../data/DataProvider";
@@ -6,13 +6,28 @@ import { usePermission } from "../data/PermissionProvider";
 import { useAuth } from "../data/AuthProvider";
 import { supabaseUrl } from "../data/supabaseEnv";
 import { SidePanel } from "../components/SidePanel";
+import { useOneLine } from "../components/Toolbar";
 import { Field, Problem } from "../components/Form";
+import { CommentsPanel } from "../components/CommentsPanel";
+import { ActivityFeed } from "../components/ActivityFeed";
+import { PersonSelect } from "../components/PersonSelect";
 import { Select } from "../components/Select";
+import { splitBrainDump } from "../data/brainDump";
+import { clearDraft, draftIsEmpty, readDraft, writeDraft, type DraftIssue } from "../data/maintenanceDraft";
+import { DateField } from "../components/DateField";
+import { FileDrop } from "../components/FileDrop";
+import { TypeaheadSelect } from "../components/TypeaheadSelect";
 import { LoadProblem } from "../components/SearchNotices";
 import {
-  MAINTENANCE_ASSIGNMENT_STATUS_LABELS, MAINTENANCE_HEALTH_LABELS, MAINTENANCE_ITEM_STATUS_LABELS, MAINTENANCE_PRIORITIES, MAINTENANCE_PRIORITY_LABELS,
-  MAINTENANCE_SOURCES, MAINTENANCE_SOURCE_LABELS, MAINTENANCE_STATUSES, MAINTENANCE_STATUS_LABELS,
-  type MaintenanceItem, type MaintenanceMessage, type MaintenancePriority, type MaintenanceRequest, type MaintenanceSource, type MaintenanceStatus
+  type TaskEntry,
+  type Doc,
+  MAINTENANCE_ASSIGNEE_KINDS, MAINTENANCE_ASSIGNEE_KIND_LABELS,
+  MAINTENANCE_ASSIGNMENT_STATUS_LABELS, MAINTENANCE_HEALTH_LABELS,
+  MAINTENANCE_IDENTIFIED_AT, MAINTENANCE_IDENTIFIED_AT_LABELS,
+  MAINTENANCE_ITEM_STATUS_LABELS, MAINTENANCE_PRIORITIES, MAINTENANCE_PRIORITY_LABELS,
+  MAINTENANCE_SOURCE_LABELS, MAINTENANCE_STATUSES, MAINTENANCE_STATUS_LABELS,
+  type Company, type MaintenanceAssigneeKind, type MaintenanceIdentifiedAt, type MaintenanceItem, type MaintenanceMessage,
+  type MaintenancePriority, type MaintenanceRequest, type MaintenanceStatus
 } from "../data/types";
 import "../components/ui.css";
 import "../components/processes.css";
@@ -41,6 +56,8 @@ import "../components/processes.css";
 export function MaintenancePage() {
   const [params, setParams] = useSearchParams();
   const { can } = usePermission();
+  /** Below 720px the create button moves onto the heading's line — see `useOneLine`. */
+  const oneLine = useOneLine();
   const { profile } = useAuth();
   const selected = params.get("request");
   const jobFilter = params.get("job");
@@ -80,16 +97,20 @@ export function MaintenancePage() {
   return (
     <>
       <div className="page-head page-head-row">
+        {/* No line under the heading (12 September). The counts beside it stay — they
+            are a readout, on the heading's own line. */}
         <div>
           <Heading type="h2" weight="bold">Maintenance</Heading>
-          <Text type="text2" color="secondary" ellipsis={false}>
-            What homeowners have reported after handover, who is fixing it, and whether it is inside the time we promised.
-          </Text>
         </div>
         {!loading && dbQueue === "open" && (
-          <Text type="text3" color="secondary">
+          <Text type="text3" color="secondary" className="page-head-count">
             {counts.open} open · {counts.overdue} over SLA · {counts.atRisk} at risk · {counts.waiting} awaiting a contractor
           </Text>
+        )}
+        {/* The create button rides the heading's line on a phone and stays in the
+            toolbar at a desk — Amber, 12 September. One or the other, never both. */}
+        {oneLine && can("user") && (
+          <Button size="small" className="page-head-action" onClick={() => setParam({ new: "1", request: null })}>+ New request</Button>
         )}
       </div>
 
@@ -103,7 +124,7 @@ export function MaintenancePage() {
         {jobFilter && (
           <Button size="small" kind="tertiary" onClick={() => setParam({ job: null })}>Job {jobFilter} only — show all</Button>
         )}
-        {can("user") && <Button size="small" onClick={() => setParam({ new: "1", request: null })}>+ New request</Button>}
+        {!oneLine && can("user") && <Button size="small" onClick={() => setParam({ new: "1", request: null })}>+ New request</Button>}
       </div>
 
       {error && <LoadProblem error={error} />}
@@ -116,7 +137,10 @@ export function MaintenancePage() {
           <div className="data-table-wrap">
             <table className="data-table">
               <thead>
-                <tr><th>Request</th><th>Address</th><th>What</th><th>Reported</th><th>Trade</th><th>Owner</th><th className="num">Items</th><th>Health</th><th>Next visit</th></tr>
+                {/* Booked and Completed sit beside the identification date, so the three
+                    dates of an issue read left to right: found, booked, done. Amber,
+                    14 September: "add in the date booked, date completed into UI". */}
+                <tr><th>Request</th><th>Address</th><th>What</th><th>Identified</th><th>Booked</th><th>Completed</th><th>Assigned to</th><th className="num">Items</th><th>Health</th><th>Next visit</th></tr>
               </thead>
               <tbody>
                 {rows.map(r => (
@@ -129,9 +153,20 @@ export function MaintenancePage() {
                     </td>
                     <td>{r.jobAddress}</td>
                     <td>{r.summary}{r.isWarranty && <span className="slot-chip" style={{ marginLeft: 6 }}>warranty</span>}</td>
-                    <td className="muted nowrap">{new Date(r.reportedAt).toLocaleDateString()} · {MAINTENANCE_SOURCE_LABELS[r.source]}</td>
-                    <td className="muted">{r.categoryName ?? "—"}</td>
-                    <td className="muted">{r.ownerName ?? "—"}</td>
+                    {/* The identified date and place when somebody recorded them, and the
+                        logged date and channel when nobody did. Showing "Logged by staff"
+                        beside a request that says PCI would hide the fact that was typed. */}
+                    <td className="muted nowrap">
+                      {new Date(r.identifiedOn ?? r.reportedAt).toLocaleDateString()}
+                      {" · "}
+                      {r.identifiedAt ? MAINTENANCE_IDENTIFIED_AT_LABELS[r.identifiedAt] : MAINTENANCE_SOURCE_LABELS[r.source]}
+                    </td>
+                    <td className="muted nowrap">{r.bookedOn ? new Date(r.bookedOn).toLocaleDateString() : "—"}</td>
+                    <td className="muted nowrap">{r.completedOn ? new Date(r.completedOn).toLocaleDateString() : "—"}</td>
+                    {/* Who is fixing it, whichever side of the radio it came from. Replaces
+                        Trade and Owner, which the new drawer stops asking for and which read
+                        as an em dash on every issue logged since. */}
+                    <td className="muted">{(r.assigneeKind === "external" ? r.assignedCompanyName : r.assigneeName) ?? "—"}</td>
                     <td className="num">{r.itemsTotal ? `${r.itemsDone} / ${r.itemsTotal}` : <span className="muted">—</span>}</td>
                     <td><span className={`health is-${r.health}`}>{MAINTENANCE_HEALTH_LABELS[r.health]}</span>{r.offersOpen > 0 && <div className="slot-sub">{r.offersOpen} offer{r.offersOpen === 1 ? "" : "s"} unanswered</div>}</td>
                     <td className="muted nowrap">{r.nextVisit ? new Date(r.nextVisit).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : "—"}</td>
@@ -149,7 +184,9 @@ export function MaintenancePage() {
 
       {creating && (
         <SidePanel open title="New maintenance request" onClose={() => setParam({ new: null })}>
-          <NewRequest jobId={jobFilter} onDone={id => { bump(); setParam({ new: null, request: id }); }} />
+          {/* One issue opens on save; several do not, because opening the first of five is
+              a choice nobody made — the queue behind the drawer is already showing them. */}
+          <NewRequests jobId={jobFilter} onDone={ids => { bump(); setParam({ new: null, request: ids.length === 1 ? ids[0] : null }); }} />
         </SidePanel>
       )}
       {/* The number and the summary come from the row that was clicked, so the head says
@@ -165,67 +202,392 @@ export function MaintenancePage() {
 }
 
 // -----------------------------------------------------------------------------------------
-function NewRequest({ jobId, onDone }: { jobId: string | null; onDone: (id: string) => void }) {
+/**
+ * One drawer, one header, as many issues as the walk turned up.
+ *
+ * Amber, 14 September: *"each one of these issues have its own record id but you only
+ * enter the job number, reported by, identifies at, date once so you can then have a
+ * status, date booked, and followup for each"* — and, asked which shape that should take,
+ * she chose **a request per issue**. So this form types the header once and posts N
+ * requests, all carrying the same `batchId`, all numbered by the database.
+ *
+ * WHAT CAME OFF THE FORM, AND WHAT THAT COSTS
+ *
+ *   How it arrived, the trade, the priority and the owner are gone (Amber, item 2). The
+ *   columns are still there and email, form and portal intake still set them. The visible
+ *   consequence: no trade means no SLA, so the queue reads **No SLA** for everything logged
+ *   here. That is the readout the health derivation has always given a request with no
+ *   category, and it is better than a priority nobody chose being quoted back as agreed.
+ *
+ * THE POST IS SEQUENTIAL, NOT PARALLEL
+ *
+ *   `assign_maintenance_request_number()` takes the next number by bumping
+ *   `jobs.job_maintenance_seq_high_water`. Five inserts on one job at once are five
+ *   updates contending for one row; one at a time is both correct and, on five rows, not
+ *   slower in any way a person can see. A failure part-way through is reported as what it
+ *   is — the ones that landed stay landed, and only the rest are left in the form.
+ */
+interface IssueDraft {
+  /** React's key. The record id is the database's, and it does not exist until save. */
+  key: string;
+  summary: string;
+  description: string;
+  assigneeKind: MaintenanceAssigneeKind;
+  assigneeProfileId: string | null;
+  assignedCompanyId: string | null;
+  /** Chosen, not uploaded. The request has no id to attach them to until it is saved. */
+  files: File[];
+  /**
+   * Files a restored draft could not keep. A `File` is a handle to bytes the page was
+   * granted; it cannot be stored and cannot be re-granted without the person picking it
+   * again, so the draft keeps the names and the block says which to attach again.
+   */
+  lostFiles: string[];
+}
+
+let issueSeed = 0;
+const blankIssue = (): IssueDraft => ({
+  key: `issue-${++issueSeed}`, summary: "", description: "",
+  assigneeKind: "internal", assigneeProfileId: null, assignedCompanyId: null, files: [], lostFiles: []
+});
+
+/** `yyyy-mm-dd` for the browser's own day, which at Lofty is the Adelaide day. */
+function todayIso(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/** The two teams Amber named for an internal repairer. Anyone already chosen stays offered. */
+const REPAIR_TEAMS = ["maintenance", "construction"] as const;
+
+function NewRequests({ jobId, onDone }: { jobId: string | null; onDone: (ids: string[]) => void }) {
   const repo = useRepository();
   const { data: jobs } = useQuery(r => r.listJobs(), []);
-  const { data: contacts } = useQuery(r => r.listContacts(), []);
-  const { data: categories } = useQuery(r => r.listMaintenanceCategories(), []);
-  const { data: profiles } = useQuery(r => r.listProfiles(), []);
-  const [job, setJob] = useState<string | null>(jobId);
-  const [summary, setSummary] = useState("");
-  const [description, setDescription] = useState("");
-  const [source, setSource] = useState<MaintenanceSource>("phone");
-  const [priority, setPriority] = useState<MaintenancePriority>("normal");
-  const [reporter, setReporter] = useState<string | null>(null);
-  const [category, setCategory] = useState<string | null>(null);
-  const [owner, setOwner] = useState<string | null>(null);
+  const [companyReload, setCompanyReload] = useState(0);
+  const { data: companies } = useQuery(r => r.listCompanies(), [], [companyReload]);
+
+  /**
+   * The draft, read ONCE on mount. Amber: *"ensure the form persists on job drawer when
+   * pulling out"* — one click on the scrim beside the panel unmounts this component, and
+   * before this every field went with it.
+   *
+   * In a `useState` initialiser rather than an effect: an effect would render the blank
+   * form first and then replace it, which flashes and loses a keystroke typed in between.
+   */
+  const [restored] = useState(() => readDraft(jobId));
+
+  const [job, setJob] = useState<string | null>(restored?.job ?? jobId);
+  // Today, and clearable — both halves are Amber's: "default to today's date, but can be
+  // cleared or edited". Which is why the column behind it is nullable.
+  const [identifiedOn, setIdentifiedOn] = useState<string | null>(restored ? restored.identifiedOn : todayIso());
+  const [identifiedAt, setIdentifiedAt] = useState<MaintenanceIdentifiedAt | null>((restored?.identifiedAt as MaintenanceIdentifiedAt | null) ?? null);
+  const [reportedBy, setReportedBy] = useState<string | null>(restored?.reportedBy ?? null);
+  const [issues, setIssues] = useState<IssueDraft[]>(() =>
+    restored?.issues.length
+      ? restored.issues.map(i => ({ ...blankIssue(), ...i, files: [], lostFiles: i.fileNames ?? [] }))
+      : [blankIssue()]);
+  const [dump, setDump] = useState(restored?.dump ?? "");
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const submit = async () => {
-    if (!job || !summary.trim()) return;
-    setBusy(true); setProblem(null);
+  // The companies on this job come first in the external picker — Amber: "prioritising
+  // those who are linked to the job". Only while a job is chosen; there is nothing to
+  // prioritise by before that.
+  const { data: parties } = useQuery(r => job ? r.listRecordParties({ jobId: job }) : Promise.resolve([]), [], [job]);
+  const onThisJob = useMemo(() => {
+    const m = new Map<string, string>();
+    parties.forEach(p => { if (p.companyId && !p.endedOn) m.set(p.companyId, p.roleName); });
+    return m;
+  }, [parties]);
+
+  /**
+   * Trades and contractors, with the ones already on the job at the top.
+   *
+   * `contractor` is the only classification in the system that means "a trade" — there is
+   * no separate Trade classification, and inventing one here would be a value nobody set.
+   * A company on the job is offered whatever it is classified as, because being the
+   * plumber on 1042-01 is the stronger evidence.
+   */
+  const companyOptions = useMemo(() => {
+    const pool = companies.filter(c => c.isActive && (c.classificationIds.includes("contractor") || onThisJob.has(c.id)));
+    const opt = (c: typeof pool[number]) => ({
+      value: c.id,
+      label: c.name,
+      // Role on this job, or the suburb — whichever says more about which contractor this
+      // is. A list of twelve plumbers is told apart by where they are.
+      sub: onThisJob.get(c.id) ?? c.suburb ?? null,
+      group: onThisJob.has(c.id) ? "On this job" : "Other contractors"
+    });
+    // Group order follows first appearance, so the job's companies are listed first here.
+    return [...pool.filter(c => onThisJob.has(c.id)), ...pool.filter(c => !onThisJob.has(c.id))].map(opt);
+  }, [companies, onThisJob]);
+
+  const patch = (key: string, change: Partial<IssueDraft>) =>
+    setIssues(list => list.map(i => i.key === key ? { ...i, ...change } : i));
+
+  /**
+   * A company typed into the picker that matches nothing. Amber: *"if it isn't there they
+   * can type in and it can says 'Add new company' when no results and by pressing enter it
+   * will add that company in as typed as contractor"*. It is a real `companies` row, with
+   * the contractor classification and nothing else invented — a manager still approves it,
+   * which is what `company_approved_at` has been for since 0082.
+   */
+  const addCompany = async (key: string, name: string) => {
+    setProblem(null);
     try {
-      const r = await repo.createMaintenanceRequest({ jobId: job, summary: summary.trim(), description: description.trim() || null, source, priority, reportedByContactId: reporter, categoryId: category, ownerProfileId: owner });
-      onDone(r.id);
+      const made = await repo.createCompany({ name, classificationIds: ["contractor"] });
+      setCompanyReload(n => n + 1);
+      patch(key, { assignedCompanyId: made.id });
     } catch (e) { setProblem(e instanceof Error ? e.message : String(e)); }
-    finally { setBusy(false); }
+  };
+
+  /**
+   * Saved on every change, so a drawer closed by a mis-click loses nothing. An effect
+   * rather than a save on close: the close path is `onClose` on a panel that also closes
+   * from the scrim, from Escape and from a navigation, and a save hung off one of those
+   * three is a save that misses the other two.
+   *
+   * `draftIsEmpty` inside `writeDraft` stops an untouched form from overwriting a real
+   * draft — opening the drawer to look at it and closing again must not wipe what was
+   * typed yesterday.
+   */
+  useEffect(() => {
+    writeDraft(jobId, {
+      job, identifiedOn, identifiedAt, reportedBy, dump,
+      issues: issues.map<DraftIssue>(i => ({
+        summary: i.summary, description: i.description,
+        assigneeKind: i.assigneeKind,
+        assigneeProfileId: i.assigneeProfileId, assignedCompanyId: i.assignedCompanyId,
+        // What is on the form now, plus what a previous draft could not keep — otherwise
+        // reopening twice quietly forgets that anything was ever attached.
+        fileNames: [...i.files.map(f => f.name), ...i.lostFiles]
+      }))
+    });
+  }, [jobId, job, identifiedOn, identifiedAt, reportedBy, dump, issues]);
+
+  /** Recomputed as it is typed, so the button can say how many are coming. */
+  const dumpItems = useMemo(() => splitBrainDump(dump), [dump]);
+
+  const ready = issues.filter(i => i.summary.trim() !== "");
+  const canSave = Boolean(job) && ready.length > 0 && !busy;
+
+  const submit = async () => {
+    if (!job || ready.length === 0) return;
+    setBusy(true); setProblem(null);
+    const batchId = crypto.randomUUID();
+    const made: string[] = [];
+    const landed = new Set<string>();
+    const refusedFiles: string[] = [];
+    try {
+      for (const i of ready) {
+        const r = await repo.createMaintenanceRequest({
+          jobId: job,
+          summary: i.summary.trim(),
+          description: i.description.trim() || null,
+          identifiedOn, identifiedAt,
+          reportedByProfileId: reportedBy,
+          batchId,
+          assigneeKind: i.assigneeKind,
+          assigneeProfileId: i.assigneeKind === "internal" ? i.assigneeProfileId : null,
+          assignedCompanyId: i.assigneeKind === "external" ? i.assignedCompanyId : null
+        });
+        made.push(r.id);
+        landed.add(i.key);
+        // After the request, because the attachment needs its id. A file that will not
+        // upload must not undo a request that saved: the issue is logged either way and
+        // the failure is reported with the file named, rather than the whole batch
+        // reading as refused because somebody picked a video.
+        if (i.files.length) {
+          try { await repo.attachMaintenanceFiles({ requestId: r.id, jobId: job, files: i.files }); }
+          catch (e) { refusedFiles.push(e instanceof Error ? e.message : String(e)); }
+        }
+      }
+      // Logged, so the draft has done its job. Cleared here rather than in `onDone` so a
+      // partial failure below keeps it — the rows that did not land are still in the form.
+      clearDraft(jobId);
+      if (refusedFiles.length) {
+        // Every issue landed; some files did not. Said here rather than swallowed, and the
+        // drawer stays open so the files can be picked again on the request itself.
+        setProblem(`${made.length} logged. ${refusedFiles.join(" ")}`);
+        return;
+      }
+      onDone(made);
+    } catch (e) {
+      // Half a batch is a real state and the form says so rather than pretending nothing
+      // happened. What landed is taken out of the form, so pressing the button again
+      // finishes the job instead of logging the first ones twice.
+      const said = e instanceof Error ? e.message : String(e);
+      setProblem(made.length
+        ? `${made.length} of ${ready.length} logged. The next one was refused: ${said}`
+        : said);
+      if (made.length) setIssues(list => list.filter(i => !landed.has(i.key)));
+    } finally { setBusy(false); }
   };
 
   return (
     <div className="stack">
-      <Text type="text3" color="secondary" ellipsis={false} element="p">
-        Logged by hand — a call, a walk-in, an email you are copying in. The number is given on save; the due date comes from the trade's SLA.
-      </Text>
       {problem && <Problem>{problem}</Problem>}
+
+      {/* The header is a panel too, so its controls sit at the same inset as the issue
+          cards' and the whole column lines up — Amber, 14 September: "ensuring all
+          fillable properties are same width and aligned". Two cards at different insets
+          is what "aligned" rules out. */}
+      <section className="panel">
       <Field label="Job" required>
-        <Select aria-label="Job" clearable placeholder="Job…" value={job} onChange={setJob}
+        <Select aria-label="Job" clearable value={job} onChange={setJob}
           options={jobs.map(j => ({ value: j.id, label: `${j.id} · ${j.currentAddress}` }))} />
       </Field>
-      <Field label="What is wrong" required>
-        <TextField size="small" id="new-request-summary" inputAriaLabel="Summary" placeholder="One line — leaking ensuite tap" value={summary} onChange={setSummary} />
+      <Field label="Date identified">
+        <DateField value={identifiedOn} onChange={setIdentifiedOn} ariaLabel="Date identified" />
       </Field>
-      <Field label="Details">
-        <textarea className="pf-input" rows={3} aria-label="Details" value={description} onChange={e => setDescription(e.target.value)} placeholder="What the homeowner said, when it started, anything a contractor should know" />
+      {/* `ordered`: Amber's list runs PCI → the inspectors → handover → the 1, 2 and 3
+          month inspections. That sequence is the information, so it is not sorted. */}
+      <Field label="Identified at">
+        <Select aria-label="Identified at" clearable ordered
+          value={identifiedAt} onChange={v => setIdentifiedAt(v as MaintenanceIdentifiedAt | null)}
+          options={MAINTENANCE_IDENTIFIED_AT.map(k => ({ value: k, label: MAINTENANCE_IDENTIFIED_AT_LABELS[k] }))} />
       </Field>
-      <Field label="How it arrived">
-        <Select aria-label="Source" value={source} onChange={v => setSource(v as MaintenanceSource)} options={MAINTENANCE_SOURCES.filter(s => s !== "api").map(s => ({ value: s, label: MAINTENANCE_SOURCE_LABELS[s] }))} />
+      <Field label="Reported by">
+        <PersonSelect aria-label="Reported by" placeholder="" value={reportedBy} onChange={setReportedBy} />
       </Field>
-      <Field label="Reported by" hint="A contact — add them under Contacts first if they are new">
-        <Select aria-label="Reported by" clearable placeholder="Contact…" value={reporter} onChange={setReporter}
-          options={contacts.map(c => ({ value: c.id, label: c.fullName + (c.primaryEmail ? ` · ${c.primaryEmail}` : "") }))} />
-      </Field>
-      <Field label="Trade" hint={categories.length === 0 ? "No categories yet — set them in Setup → Maintenance" : undefined}>
-        <Select aria-label="Trade" clearable placeholder="Trade…" value={category} onChange={setCategory} options={categories.map(c => ({ value: c.id, label: c.name }))} />
-      </Field>
-      <Field label="Priority">
-        <Select aria-label="Priority" value={priority} onChange={v => setPriority(v as MaintenancePriority)} options={MAINTENANCE_PRIORITIES.map(p => ({ value: p, label: MAINTENANCE_PRIORITY_LABELS[p] }))} />
-      </Field>
-      <Field label="Owner">
-        <Select aria-label="Owner" clearable placeholder="Lofty person…" value={owner} onChange={setOwner} options={profiles.filter(p => p.active).map(p => ({ value: p.id, label: p.fullName }))} />
-      </Field>
+      </section>
+
+      {issues.map((issue, n) => (
+        <section key={issue.key} className="panel">
+          <div className="field-inline" style={{ justifyContent: "space-between", marginBottom: "var(--space-8)" }}>
+            <Text type="text2" weight="medium" element="h3">Issue {n + 1}</Text>
+            {issues.length > 1 && (
+              <Button size="small" kind="tertiary" onClick={() => setIssues(list => list.filter(i => i.key !== issue.key))}>
+                Remove
+              </Button>
+            )}
+          </div>
+          <Field label="Issue" required>
+            <TextField size="small" id={`${issue.key}-summary`} inputAriaLabel={`Issue ${n + 1}`}
+              value={issue.summary} onChange={v => patch(issue.key, { summary: v })} />
+          </Field>
+          <Field label="Details">
+            {/* Six rows, not three — Amber: "allow the details section to have more space
+                to write with". The width stays the column's so it lines up with the rest. */}
+            <textarea className="pf-input" rows={6} aria-label={`Details for issue ${n + 1}`}
+              value={issue.description} onChange={e => patch(issue.key, { description: e.target.value })} />
+          </Field>
+          <Field label="Assigned to">
+            <div className="stack-tight">
+              <div className="field-inline" role="radiogroup" aria-label={`Assigned to, issue ${n + 1}`}>
+                {MAINTENANCE_ASSIGNEE_KINDS.map(kind => (
+                  <label key={kind} className="issue-draft-radio">
+                    <input type="radio" name={`${issue.key}-kind`} value={kind}
+                      checked={issue.assigneeKind === kind}
+                      // The other half is cleared with the switch: the database refuses a
+                      // row that names a person AND a company, and clearing here means the
+                      // refusal never reaches somebody who cannot act on it.
+                      onChange={() => patch(issue.key, { assigneeKind: kind, assigneeProfileId: null, assignedCompanyId: null })} />
+                    <Text type="text2" element="span">{MAINTENANCE_ASSIGNEE_KIND_LABELS[kind]}</Text>
+                  </label>
+                ))}
+              </div>
+              {issue.assigneeKind === "internal" ? (
+                <PersonSelect aria-label={`Internal assignee, issue ${n + 1}`} placeholder=""
+                  only={REPAIR_TEAMS} emptyText="Nobody on Maintenance or Construction by that name"
+                  value={issue.assigneeProfileId} onChange={v => patch(issue.key, { assigneeProfileId: v })} />
+              ) : (
+                <TypeaheadSelect aria-label={`Contractor, issue ${n + 1}`} clearable placeholder=""
+                  options={companyOptions} value={issue.assignedCompanyId}
+                  onChange={v => patch(issue.key, { assignedCompanyId: v })}
+                  emptyText="No contractor by that name"
+                  createLabel={typed => `Add new company “${typed}”`}
+                  onCreate={name => { void addCompany(issue.key, name); }} />
+              )}
+            </div>
+          </Field>
+          {/* Chosen or dropped, and uploaded after the request exists to hold them.
+              `FileDrop` keeps no `capture` attribute on its input on purpose: without it
+              an iPhone offers Photo Library, Take Photo and Browse, and adding it would
+              force the camera and take away choosing a photo already taken. */}
+          <Field label="Attach files">
+            <div className="issue-files">
+              <FileDrop
+                ariaLabel={`Attach files to issue ${n + 1}`}
+                onFiles={picked => patch(issue.key, { files: [...issue.files, ...picked] })} />
+              {issue.lostFiles.length > 0 && (
+                <Text type="text3" color="secondary" element="span" ellipsis={false}>
+                  Not kept when the drawer closed: {issue.lostFiles.join(", ")}. Attach again.
+                </Text>
+              )}
+              {issue.files.map((f, at) => (
+                <div className="issue-file" key={`${f.name}-${at}`}>
+                  <Text type="text3" color="secondary" element="span">{f.name}</Text>
+                  <Button size="xs" kind="tertiary"
+                    onClick={() => patch(issue.key, { files: issue.files.filter((_, i) => i !== at) })}>
+                    Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </Field>
+        </section>
+      ))}
+
+      {/* Paste a list, get an issue per line. The count is live so the number of issues
+          about to appear is visible BEFORE the button is pressed — a button that says
+          "Add" and quietly makes nineteen is one nobody presses twice.
+
+          Each line lands in the Issue field of a block, and where the line carried a colon
+          the text after it lands in Details — Amber, 14 September: "everything before the
+          ':' is the issue and everything after is the description". Assignee and files are
+          still per issue. It adds rather than replaces, and an untouched empty block is
+          consumed rather than left stranded above the new ones. */}
+      <section className="panel">
+        <div className="panel-head">
+          <Text type="text2" weight="bold">Paste a list</Text>
+          {dumpItems.length > 0 && (
+            <Text type="text3" color="secondary">{dumpItems.length} issue{dumpItems.length === 1 ? "" : "s"}</Text>
+          )}
+        </div>
+        <textarea className="pf-input" rows={4} aria-label="Paste a list of issues"
+          style={{ width: "100%" }}
+          value={dump} onChange={e => setDump(e.target.value)} />
+        <div className="field-inline" style={{ justifyContent: "space-between", marginTop: "var(--space-8)" }}>
+          <Text type="text3" color="secondary" ellipsis={false} element="span">One line, one issue. Anything after a colon becomes the details.</Text>
+          <Button size="small" kind="tertiary" disabled={dumpItems.length === 0} onClick={() => {
+            setIssues(list => {
+              const kept = list.filter(i => i.summary.trim() !== "" || i.description.trim() !== "" || i.files.length > 0);
+              return [...kept, ...dumpItems.map(d => ({ ...blankIssue(), summary: d.issue, description: d.description }))];
+            });
+            setDump("");
+          }}>
+            {dumpItems.length > 0 ? `Add ${dumpItems.length} issue${dumpItems.length === 1 ? "" : "s"}` : "Add"}
+          </Button>
+        </div>
+      </section>
+
+      <div className="field-inline">
+        <Button size="small" kind="tertiary" onClick={() => setIssues(list => [...list, blankIssue()])}>
+          + Add
+        </Button>
+      </div>
+
+      {/* A way out. Persistence without one is its own trap: a draft that reappears every
+          time the drawer opens, with no way to be rid of it, is worse than losing it. */}
       <div className="field-inline" style={{ justifyContent: "flex-end" }}>
-        <Button size="small" disabled={busy || !job || !summary.trim()} onClick={submit}>Log request</Button>
+        {!draftIsEmpty({ job, identifiedOn, identifiedAt, reportedBy, dump,
+                         issues: issues.map(i => ({ summary: i.summary, description: i.description,
+                           assigneeKind: i.assigneeKind, assigneeProfileId: i.assigneeProfileId,
+                           assignedCompanyId: i.assignedCompanyId,
+                           fileNames: [...i.files.map(f => f.name), ...i.lostFiles] })) }) && (
+          <Button size="small" kind="tertiary" disabled={busy} onClick={() => {
+            clearDraft(jobId);
+            setJob(jobId); setIdentifiedOn(todayIso()); setIdentifiedAt(null);
+            setReportedBy(null); setDump(""); setIssues([blankIssue()]); setProblem(null);
+          }}>
+            Discard
+          </Button>
+        )}
+        <Button size="small" disabled={!canSave} onClick={submit}>
+          {ready.length > 1 ? `Log ${ready.length} issues` : "Log issue"}
+        </Button>
       </div>
     </div>
   );
@@ -241,13 +603,41 @@ function RequestDetail({ id, onChanged }: { id: string; onChanged: () => void })
   const { data: items } = useQuery<MaintenanceItem[]>(r => r.listMaintenanceItems(id), [], [id, reload]);
   const { data: messages } = useQuery<MaintenanceMessage[]>(r => r.listMaintenanceMessages(id), [], [id, reload]);
   const { data: categories } = useQuery(r => r.listMaintenanceCategories(), []);
-  const { data: profiles } = useQuery(r => r.listProfiles(), []);
   const [problem, setProblem] = useState<string | null>(null);
   const [closeReason, setCloseReason] = useState("");
   const [note, setNote] = useState("");
   const [newItem, setNewItem] = useState({ description: "", location: "", categoryId: null as string | null });
+  const [newTask, setNewTask] = useState("");
+  const { data: tasks } = useQuery<TaskEntry[]>(r2 => r2.listTasks({ maintenanceRequestId: id }), [], [id, reload]);
 
   const bump = () => { setReload(n => n + 1); onChanged(); };
+  const { data: files } = useQuery(r => r.listMaintenanceDocuments(id), [], [id, reload]);
+  /**
+   * The contractor an external issue is with, fetched for their details rather than for
+   * their name — the name is already on the request through the view's join. Amber,
+   * 14 September: *"with the assigned contact to maintenance can you display company name,
+   * primary contact, email and phone and suburb"*.
+   *
+   * One company by id, not the whole list: this is a lookup of the one already chosen, and
+   * loading every contractor to find it would be a round trip that grows with the
+   * contractor list. Skipped entirely on an internal issue.
+   */
+  const assignedCompanyId = request?.assigneeKind === "external" ? request.assignedCompanyId : null;
+  const { data: assignedCompany } = useQuery<Company | null>(
+    r => assignedCompanyId ? r.getCompany(assignedCompanyId) : Promise.resolve(null), null, [assignedCompanyId]
+  );
+  /**
+   * Which bucket a file is in decides how it is opened, so the row is asked rather than
+   * assumed (0119): a photo or video taken since then is in the public bucket and its URL
+   * is permanent; a PDF on the same issue, and the twelve photographs filed before 0119,
+   * are private and signed for five minutes. Null when storage refuses, which says the
+   * copy is gone rather than opening an error page.
+   */
+  const openFile = async (doc: Pick<Doc, "storagePath" | "storageBucket"> | null) => {
+    if (!doc?.storagePath) return;
+    const url = await repo.documentUrl(doc);
+    if (url) window.open(url, "_blank", "noopener");
+  };
   async function run(fn: () => Promise<unknown>) {
     setProblem(null);
     try { await fn(); bump(); }
@@ -281,36 +671,78 @@ function RequestDetail({ id, onChanged }: { id: string; onChanged: () => void })
           {!r.dueOn && <span className="slot-chip muted">No SLA — pick a trade with one, or type a due date</span>}
         </div>
 
-        <div className="field-inline" style={{ flexWrap: "wrap", gap: "var(--space-12)", marginTop: "var(--space-8)" }}>
-          <label className="field-inline"><Text type="text3" element="span">Status</Text>
+        {/* THE SAME LAYOUT AS THE NEW-REQUEST DRAWER, and that was the ask — Amber,
+            14 September: *"when you click on a maintenance job to edit it you have same
+            type of format that is when you add a new job but at the additional fields for
+            status booked in"*.
+
+            `Field` rather than the hand-rolled `label.field-inline` row this used to be:
+            one label column, one control column, every control the same width. The old row
+            wrapped wherever it ran out of space, so Status sat beside Priority on a laptop
+            and under it on a phone, and nothing lined up with the drawer somebody had
+            filled in ten minutes earlier.
+
+            Every control writes on change. There is no Save: the record exists, so a
+            half-finished edit is not a state worth inventing. */}
+        <div style={{ marginTop: "var(--space-8)" }}>
+          <Field label="Status">
             {canWrite ? (
               <Select aria-label="Status" value={r.status} onChange={v => run(() => repo.updateMaintenanceRequest(r.id, { status: v as MaintenanceStatus }))}
                 options={MAINTENANCE_STATUSES.filter(s => s !== "closed").map(s => ({ value: s, label: MAINTENANCE_STATUS_LABELS[s] }))} />
             ) : <Text type="text3" element="span">{MAINTENANCE_STATUS_LABELS[r.status]}</Text>}
-          </label>
-          <label className="field-inline"><Text type="text3" element="span">Priority</Text>
+          </Field>
+          <Field label="Priority">
             {canWrite ? (
               <Select aria-label="Priority" value={r.priority} onChange={v => run(() => repo.updateMaintenanceRequest(r.id, { priority: v as MaintenancePriority }))}
                 options={MAINTENANCE_PRIORITIES.map(p => ({ value: p, label: MAINTENANCE_PRIORITY_LABELS[p] }))} />
             ) : <Text type="text3" element="span">{MAINTENANCE_PRIORITY_LABELS[r.priority]}</Text>}
-          </label>
-          <label className="field-inline"><Text type="text3" element="span">Trade</Text>
+          </Field>
+          {/* The three dates of an issue, editable in the drawer — Amber, 14 September:
+              "add in the date booked, date completed into UI and drawer when clicked on."
+              Follow-up joins them because 0114 added it at the same time on her earlier
+              ask and nothing has ever shown it.
+
+              Each writes on change and clears to null: DateField draws its own ✕ because
+              the browser's is not a promise (12 September). None of the three is derived
+              from the status and none derives it — a repair finished on Tuesday that
+              nobody has closed shows a completion date and In progress, which is true. */}
+          <Field label="Booked">
+            {canWrite ? (
+              <DateField value={r.bookedOn} ariaLabel="Date booked"
+                onChange={v => run(() => repo.updateMaintenanceRequest(r.id, { bookedOn: v }))} />
+            ) : <Text type="text3" element="span">{r.bookedOn ? new Date(r.bookedOn).toLocaleDateString() : "—"}</Text>}
+          </Field>
+          <Field label="Completed">
+            {canWrite ? (
+              <DateField value={r.completedOn} ariaLabel="Date completed"
+                onChange={v => run(() => repo.updateMaintenanceRequest(r.id, { completedOn: v }))} />
+            ) : <Text type="text3" element="span">{r.completedOn ? new Date(r.completedOn).toLocaleDateString() : "—"}</Text>}
+          </Field>
+          <Field label="Follow-up">
+            {canWrite ? (
+              <DateField value={r.followUpOn} ariaLabel="Follow-up date"
+                onChange={v => run(() => repo.updateMaintenanceRequest(r.id, { followUpOn: v }))} />
+            ) : <Text type="text3" element="span">{r.followUpOn ? new Date(r.followUpOn).toLocaleDateString() : "—"}</Text>}
+          </Field>
+          <Field label="Trade">
             {canWrite ? (
               <Select aria-label="Trade" clearable placeholder="Trade…" value={r.categoryId} onChange={v => run(() => repo.updateMaintenanceRequest(r.id, { categoryId: v }))}
                 options={categories.map(c => ({ value: c.id, label: c.name }))} />
             ) : <Text type="text3" element="span">{r.categoryName ?? "—"}</Text>}
-          </label>
-          <label className="field-inline"><Text type="text3" element="span">Owner</Text>
+          </Field>
+          <Field label="Owner">
             {canWrite ? (
-              <Select aria-label="Owner" clearable placeholder="Lofty person…" value={r.ownerProfileId} onChange={v => run(() => repo.updateMaintenanceRequest(r.id, { ownerProfileId: v }))}
-                options={profiles.filter(p => p.active).map(p => ({ value: p.id, label: p.fullName }))} />
+              <PersonSelect aria-label="Owner" placeholder="Lofty person…" value={r.ownerProfileId} onChange={v => run(() => repo.updateMaintenanceRequest(r.id, { ownerProfileId: v }))} />
             ) : <Text type="text3" element="span">{r.ownerName ?? "—"}</Text>}
-          </label>
+          </Field>
           {canWrite && (
-            <label className="field-inline"><Text type="text3" element="span">Due</Text>
-              <input type="date" className="date-input" aria-label="Due date" defaultValue={r.dueOn ?? ""} key={r.dueOn ?? "none"}
-                onBlur={e => { const v = e.target.value || null; if (v !== r.dueOn) run(() => repo.updateMaintenanceRequest(r.id, { dueOn: v })); }} />
-            </label>
+            <Field label="Due">
+              {/* A DateField like the three above, rather than the bare input this was.
+                  The browser's own clear is not a promise (12 September), and a due date
+                  taken back by accident used to be a due date you were stuck with. */}
+              <DateField value={r.dueOn} ariaLabel="Due date"
+                onChange={v => run(() => repo.updateMaintenanceRequest(r.id, { dueOn: v }))} />
+            </Field>
           )}
         </div>
 
@@ -325,6 +757,147 @@ function RequestDetail({ id, onChanged }: { id: string; onChanged: () => void })
           ) : <Text type="text3" color="secondary" ellipsis={false} element="p">Nobody recorded — the closing email has nowhere to go until a contact is set.</Text>}
           {r.description && <Text type="text2" ellipsis={false} element="p" style={{ whiteSpace: "pre-wrap" }}>{r.description}</Text>}
         </div>
+      </section>
+
+      {/* Who the issue is with. For a contractor that is five facts rather than a name —
+          Amber, 14 September — and the person's email and phone are THEIR OWN, held
+          separately from the company's by 0117, because a mobile and a switchboard are
+          different things to ring. Where the person has neither, the company's is shown
+          and labelled as the company's rather than passed off as theirs.
+
+          Nothing is invented: a company with nobody flagged primary says so. */}
+      {(r.assigneeKind === "external" ? r.assignedCompanyName : r.assigneeName) && (
+        <section className="panel">
+          <div className="panel-head">
+            <Text type="text2" weight="bold">Assigned to</Text>
+            <Text type="text3" color="secondary">{MAINTENANCE_ASSIGNEE_KIND_LABELS[r.assigneeKind]}</Text>
+          </div>
+          {r.assigneeKind === "internal" ? (
+            <Text type="text2" ellipsis={false} element="p">{r.assigneeName}</Text>
+          ) : (
+            <div className="stack-tight">
+              <Text type="text2" weight="medium" ellipsis={false} element="p">
+                {r.assignedCompanyName}
+                {assignedCompany?.suburb && <span className="slot-chip" style={{ marginLeft: 6 }}>{assignedCompany.suburb}</span>}
+              </Text>
+              {assignedCompany && (
+                assignedCompany.primaryContactName ? (
+                  <Text type="text3" color="secondary" ellipsis={false} element="p">
+                    {assignedCompany.primaryContactName}
+                    {assignedCompany.primaryContactRole && ` · ${assignedCompany.primaryContactRole}`}
+                  </Text>
+                ) : (
+                  <Text type="text3" color="secondary" ellipsis={false} element="p">
+                    No primary contact set — add one on the company under Contacts.
+                  </Text>
+                )
+              )}
+              {assignedCompany && (() => {
+                // The person's own, or the company's said to be the company's. Never the
+                // company's shown as though it were the person's.
+                const email = assignedCompany.primaryContactEmail ?? assignedCompany.primaryEmail;
+                const phone = assignedCompany.primaryContactPhone ?? assignedCompany.primaryPhone;
+                const theirs = (v: string | null, own: string | null) => v && v !== own ? "" : " (company)";
+                if (!email && !phone) {
+                  return <Text type="text3" color="secondary" ellipsis={false} element="p">No email or phone on file.</Text>;
+                }
+                return (
+                  <Text type="text3" ellipsis={false} element="p">
+                    {email && <a href={`mailto:${email}`} className="tap-link">{email}</a>}
+                    {email && <span className="muted">{theirs(assignedCompany.primaryContactEmail, email)}</span>}
+                    {email && phone && " · "}
+                    {phone && <a href={`tel:${phone.replace(/\s/g, "")}`} className="tap-link">{phone}</a>}
+                    {phone && <span className="muted">{theirs(assignedCompany.primaryContactPhone, phone)}</span>}
+                  </Text>
+                );
+              })()}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* The photos and files on this issue (0115). Opened through a signed URL asked for
+          at the moment somebody clicks — `job-documents` is private and has no permanent
+          address, which is the choice Amber made on 14 September. Removing one here takes
+          it off the ISSUE; the copy filed against the job stays, because they are two
+          links to one document. */}
+      <section className="panel">
+        <div className="panel-head">
+          <Text type="text2" weight="bold">Photos and files</Text>
+          <Text type="text3" color="secondary">{files.length === 0 ? "none yet" : `${files.length} attached`}</Text>
+        </div>
+        {files.length === 0 && <Text type="text3" color="secondary" ellipsis={false} element="p">Nothing attached. Add photos when the issue is logged, or here.</Text>}
+        {files.map(f => (
+          <div key={f.linkId} className="issue-file" style={{ padding: "var(--space-4) 0" }}>
+            <button type="button" className="link-button tap-link" onClick={() => void openFile(f)}>{f.name}</button>
+            {canWrite && (
+              <Button size="xs" kind="tertiary" onClick={() => run(() => repo.removeRecordDocument(f.linkId))}>Remove</Button>
+            )}
+          </div>
+        ))}
+        {canWrite && !isClosed && (
+          <div style={{ marginTop: "var(--space-8)" }}>
+            {/* The same control as the drawer's, so a file reaches an issue the same way
+                whether it is being logged or looked at later. Here it uploads at once —
+                the request already exists to hold it. */}
+            <FileDrop
+              ariaLabel="Attach files to this issue"
+              onFiles={picked => void run(() => repo.attachMaintenanceFiles({ requestId: r.id, jobId: r.jobId, files: picked }))} />
+          </div>
+        )}
+      </section>
+
+      {/* ------------------------------------------------------------------ the four panels
+          Amber, 14 September: *"tasks activity comments documents that are the same format
+          as on the bottom of a job or project drawer"*. They are literally those components,
+          pointed at the issue — `0120` and `0121` made a maintenance request a parent the
+          general tables accept, which is what lets one CommentsPanel serve a job, a project,
+          a tracker request and now an issue rather than four that drift apart.
+
+          `bare` on the two shared ones: they sit under their own headings here, and a panel
+          that draws its own title inside a titled section says everything twice. */}
+      <section className="panel">
+        <div className="panel-head">
+          <Text type="text2" weight="bold">Tasks</Text>
+          <Text type="text3" color="secondary">{tasks.length === 0 ? "none yet" : `${tasks.filter(t => t.status === "done").length} of ${tasks.length} done`}</Text>
+        </div>
+        <Text type="text3" color="secondary" ellipsis={false} element="p">
+          Amber, 14 September: <em>an issue becomes a task</em>. A task added here carries this
+          job, so it shows on the Tasks board beside everything else being planned.
+        </Text>
+        {tasks.map(t => (
+          <div key={t.id} className="issue-file" style={{ padding: "var(--space-4) 0" }}>
+            <Link to={`/tasks?task=${t.id}`} className="tap-link">{t.name}</Link>
+            <span className={`health is-${t.health}`}>{t.status}</span>
+            {t.dueEffective && <span className="muted">due {new Date(t.dueEffective).toLocaleDateString()}</span>}
+            {t.assigneeName && <span className="muted">{t.assigneeName}</span>}
+          </div>
+        ))}
+        {canWrite && !isClosed && (
+          <div className="field-inline" style={{ flexWrap: "wrap", marginTop: "var(--space-8)" }}>
+            <TextField size="small" id={`task-${r.id}`} inputAriaLabel="New task" placeholder="What has to be done…" value={newTask} onChange={setNewTask} />
+            <Button size="small" disabled={!newTask.trim()} onClick={() => run(async () => {
+              await repo.createTask({ jobId: r.jobId, maintenanceRequestId: r.id, name: newTask.trim() });
+              setNewTask("");
+            })}>Add task</Button>
+          </div>
+        )}
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <Text type="text2" weight="bold">Comments</Text>
+          <Text type="text3" color="secondary">Lofty talking to itself about this defect</Text>
+        </div>
+        <CommentsPanel maintenanceRequestId={r.id} bare />
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <Text type="text2" weight="bold">Activity</Text>
+          <Text type="text3" color="secondary">who changed what, and when</Text>
+        </div>
+        <ActivityFeed maintenanceRequestId={r.id} bare />
       </section>
 
       <section className="panel">

@@ -197,6 +197,17 @@ function SortableWidget({ widget, engine, ctx, allWidgets, theme, selected, onSe
             minHeight={96}
             maxHeight={420}
             saveDebounceMs={300}
+            /* INTEGRATION EDIT — the same fields the settings panel offers.
+               This is the editor people actually write in: the settings panel is for
+               blocks that need configuring, and a text block is one you type into on the
+               page. Wiring the menu into one and not the other meant "Insert field"
+               existed and was nowhere near the writing. */
+            tokens={ctx?.textTokens || []}
+            /* And the saved wording, from the same place. `onSaveSnippet` is absent when
+               the host has nowhere to put one, which hides the button rather than
+               offering a save that goes nowhere. */
+            snippets={ctx?.textSnippets || []}
+            onSaveSnippet={ctx?.saveTextSnippet}
           />
         </div>
       ) : (
@@ -387,6 +398,10 @@ export default function ReportBuilder({
   report, engine, store, ctx, onClose, onSaved,
   branding = '', shareUrlBase = '', canSaveTemplate = true,
   themes = BUILT_IN_THEMES,
+  // Forwarded straight to the overlay. The builder is where a document is edited, so it
+  // is where the DRAFT mark matters most: every Preview & export from here is a copy
+  // somebody could send (0104).
+  watermark = '',
 }) {
   const [title, setTitle] = useState(report.title || 'Untitled report');
   const [widgets, setWidgets] = useState(() => (report.layout?.widgets || []));
@@ -797,6 +812,7 @@ export default function ReportBuilder({
           themes={themes}
           initialTheme={themeKey}
           onThemeChange={setThemeKey}
+          watermark={watermark}
         />
       )}
     </div>,
