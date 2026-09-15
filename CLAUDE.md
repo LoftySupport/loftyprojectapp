@@ -128,6 +128,22 @@ cd app && npm run check:elements    # always — CI runs it too
 app/supabase/verify/check.sh        # if a migration changed
 ```
 
+**And every `check:*` script in `app/package.json`, whenever a change touches what one of
+them reads.** CI runs all of them — `check:ci-coverage` exists to make sure of it — so the
+list above is the short version, not the whole job. The way to be sure is to run them:
+
+```bash
+cd app && for s in $(node -e "console.log(Object.keys(require('./package.json').scripts).filter(k=>k.startsWith('check:')).join(' '))"); do
+  npm run $s >/dev/null 2>&1 && echo "PASS $s" || echo "FAIL $s"
+done
+```
+
+`check:import` and `responsive` need Chromium: in a container that has it under a version
+Playwright does not know, point at it with `LOFTY_CHROMIUM=/opt/pw-browsers/chromium-*/chrome-linux/chrome`.
+
+This was learnt on `0127`: the four lines above were run and green, and CI failed on
+`check:pipeline-order`, which builds its fixtures from the module the change had rewritten.
+
 CI runs the first two of those, the element sweep, and `./build.sh`, which is what Vercel runs.
 
 **The element sweep counts how many different ways the app draws each thing**, and fails when a
