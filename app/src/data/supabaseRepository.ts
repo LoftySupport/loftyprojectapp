@@ -1613,10 +1613,11 @@ export function createSupabaseRepository(): Repository {
           project_id: input.projectId,
           job_owning_team: input.owningTeam,
           job_current_address_id: addressId,
-          // The first of the five lifecycle phases. 0035 cut the list from nine after
-          // Lofty confirmed what the lifecycle actually is, and moved the column from an
-          // enum to text with a check — so a wrong value here is a constraint violation
-          // naming itself rather than a type error.
+          // The first of the seven lifecycle stages `jobs_stage_is_a_lifecycle_stage` admits
+          // (0076 has the list). 0035 cut it from nine to five after Lofty confirmed what the
+          // lifecycle actually is, later migrations grew it to seven, and the column moved
+          // from an enum to text with a check — so a wrong value here is a constraint
+          // violation naming itself rather than a type error.
           job_stage: input.stage ?? "Acquisition & Development",
           job_status: input.status ?? "on_track",
           // The old job number, when the job already exists elsewhere (Amber, 7 Sep: "you

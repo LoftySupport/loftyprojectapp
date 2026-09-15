@@ -61,6 +61,28 @@ export function missingMigrations(repoMigrations, appliedRows) {
 }
 
 /**
+ * Two files must not share a number — with three exceptions that already do.
+ *
+ * `0073`, `0119` and `0120` each have two files: two branches took the next free number on
+ * the same day, and the live column comments name those numbers, so renaming a file would
+ * make the repository and the database disagree about what "0119" is (schema-plan.md, 14
+ * September). They are allowed by name here and nowhere else. A FOURTH repeat is refused,
+ * because the 10 September session collided three times in one day and nothing stopped it;
+ * this does. Pure, so it can be proved without a database.
+ */
+const KNOWN_SHARED_NUMBERS = new Set(["0073", "0119", "0120"]);
+
+export function repeatedNumbers(repoMigrations, known = KNOWN_SHARED_NUMBERS) {
+  const byNumber = new Map();
+  for (const m of repoMigrations) {
+    byNumber.set(m.number, [...(byNumber.get(m.number) ?? []), m.file ?? m.name]);
+  }
+  return [...byNumber]
+    .filter(([number, files]) => files.length > 1 && !known.has(number))
+    .map(([number, files]) => ({ number, files }));
+}
+
+/**
  * Prove the comparison, with no credentials and no network.
  *
  * Runs in CI on every push, because the credentialed half cannot: a check that only ever
@@ -99,7 +121,27 @@ function selfTest() {
   check("a row with no name at all is not silently treated as a match",
     missingMigrations([{ number: "0001", name: "core" }], [{ name: null }]).length, 1);
 
-  if (!process.exitCode) console.log("\nmigration check: 6 assertions, all passing");
+  // The number check. The three known pairs pass; a new pair is refused; and the refusal
+  // names the number, so a reader is told which two files to look at.
+  check("two files sharing a number nobody has shared before are refused",
+    repeatedNumbers([
+      { number: "0130", name: "one", file: "0130_one.sql" },
+      { number: "0130", name: "two", file: "0130_two.sql" }
+    ]).length, 1);
+  check("the refusal names the shared number",
+    repeatedNumbers([
+      { number: "0130", name: "one", file: "0130_one.sql" },
+      { number: "0130", name: "two", file: "0130_two.sql" }
+    ])[0].number, "0130");
+  check("the three pairs the repository already carries are allowed",
+    repeatedNumbers([
+      { number: "0119", name: "the_date_the_slas_say", file: "0119_the_date_the_slas_say.sql" },
+      { number: "0119", name: "a_defect_photo_is_evidence_you_can_link_to", file: "0119_a_defect_photo_is_evidence_you_can_link_to.sql" }
+    ]).length, 0);
+  check("distinct numbers are not reported",
+    repeatedNumbers([{ number: "0001", name: "core" }, { number: "0002", name: "x" }]).length, 0);
+
+  if (!process.exitCode) console.log("\nmigration check: 10 assertions, all passing");
 }
 
 const repo = readdirSync(migrationsDir)
@@ -115,6 +157,17 @@ if (process.argv.includes("--self-test")) {
 
 if (!repo.length) {
   console.error("No migrations found — is the path right?");
+  process.exit(1);
+}
+
+// Runs with or without credentials: a shared number is a fact about the files, and it is the
+// one thing here CI can refuse on every push rather than only on a machine with a token.
+const repeats = repeatedNumbers(repo);
+if (repeats.length) {
+  for (const r of repeats) {
+    console.error(`FAIL: migration number ${r.number} is used by ${r.files.length} files: ${r.files.join(", ")}`);
+  }
+  console.error("Take the next number after the highest, not the next after the one you remember.");
   process.exit(1);
 }
 
